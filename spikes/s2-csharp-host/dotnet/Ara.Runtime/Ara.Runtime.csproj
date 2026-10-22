@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The C# side of the S2 host: ABI exports, system dispatch, in-process Roslyn reload. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Emits Ara.Runtime.runtimeconfig.json and lets hostfxr resolve Roslyn from deps.json. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>Ara</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- S2 finding: optimizable (Release-IL) methods with loops JIT'd at tier 0 pin their collectible
+         ALC forever. Loop methods go straight to optimized JIT instead, and ALCs unload. -->
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+    <!-- Release builds default this to false, which disables MetadataUpdater.ApplyUpdate (L1). -->
+    <MetadataUpdaterSupport>true</MetadataUpdaterSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+  </ItemGroup>
+</Project>
