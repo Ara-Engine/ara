@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ara — research synthesis &amp; decision record (v2)</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --panel: #111113;
+    --text: #f2f2f3;
+    --muted: #9a9aa2;
+    --faint: #6b6b73;
+    --border: #26262b;
+    --accent: #8ab4f8;
+    --warn: #e8b86b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 48px 0 12px; padding-top: 20px; border-top: 1px solid var(--border); }
+  h3 { font-size: 15px; margin: 24px 0 8px; color: var(--text); }
+  p { margin: 0 0 12px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+  code { font: 13px/1.4 ui-monospace, "Cascadia Code", Consolas, monospace; color: #d6d6db; background: #1a1a1e; padding: 1px 5px; border-radius: 4px; }
+  ul, ol { margin: 0 0 12px; padding-left: 20px; }
+  li { margin: 3px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td:first-child { white-space: nowrap; }
+  .wrap td:first-child { white-space: normal; }
+  .summary { border: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--panel); padding: 18px 20px; border-radius: 6px; margin: 0 0 8px; }
+  .summary p:last-child { margin-bottom: 0; }
+  .todo { border: 1px solid var(--border); border-left: 3px solid var(--warn); background: var(--panel); padding: 16px 20px; border-radius: 6px; margin: 16px 0 0; }
+  .todo h3 { margin-top: 0; color: var(--warn); }
+  .todo ol { margin-bottom: 0; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); margin-left: 6px; vertical-align: 1px; }
+  .tag.open { color: var(--warn); border-color: #4a3d26; }
+  .tag.locked { color: var(--accent); border-color: #2c3a52; }
+  figure { margin: 12px 0 8px; }
+  figcaption { color: var(--faint); font-size: 12px; margin-top: 6px; }
+  svg { width: 100%; height: auto; display: block; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  @media (max-width: 720px) {
+    .grid2 { grid-template-columns: 1fr; }
+    td:first-child { white-space: normal; }
+    main { padding: 32px 16px 64px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Ara — research synthesis &amp; decision record</h1>
+<div class="meta">v2 · 2026-10-23 · Built from 10 research reports (R01–R10, Claude Opus 5.5 + GPT-6.1 Sol) and your decisions during the research. Full text: <code>docs/research/00-synthesis.md</code> · decision log: <code>docs/decisions.md</code> · plan: <code>docs/plan/milestones.md</code>. The research used the working name "snengine"; the engine is now <strong>Ara</strong>.</div>
+
+<div class="summary">
+  <p><strong>The answer.</strong> Ara is a <strong>Rust</strong> engine whose real API is a <strong>typed schema + command/query system over a text-first world</strong>. The native editor, the <code>ara</code> CLI, C# gameplay code, AI agents (via MCP) and the netcode are all clients of that one core. Every edit is a typed, undoable, attributed, reviewable command; every asset is diffable text with stable IDs; the simulation is fixed-tick and deterministic enough to test, replay and network.</p>
+  <p>Rendering runs on our own thin <strong>Vulkan 1.3 + Metal 4</strong> layer with <strong>Slang</strong> shaders. One <strong>native UI system</strong> (UI Toolkit-like: web-shaped, not a browser) draws the editor, HUDs and world UI. <strong>C#</strong> is the single scripting language (confirmed), with measured sub-100 ms hot reload on your machine. Rust is the Burst-class tier for hot systems. Multiplayer is server-authoritative with selective prediction, built in from day one.</p>
+  <p class="muted">Same layering as Unity (native core → UI Toolkit → C#), rebuilt in Rust and designed around agents from the start. Nothing is cut; the roadmap is build order only.</p>
+</div>
+
+<div class="todo">
+  <h3>Next: M0 spikes</h3>
+  <p>All open questions are answered (table below). Work starts with spikes S1–S8, which prove the GPU layer, C# hosting and reload, native UI, netcode, play-mode process, physics, export, and DOTS-class performance. Each spike ends with a written result and a decision-log entry.</p>
+</div>
+
+<h2>Questions answered</h2>
+<table class="wrap">
+  <tr><th>Question</th><th>Answer</th></tr>
+  <tr><td>Scripting language</td><td><strong>C# confirmed</strong>, checked against R10's reversal conditions at spikes S2 and S7</td></tr>
+  <tr><td>First dogfood game</td><td><strong>Outpost</strong> (my pick): 1–4 player co-op third-person salvage run with shared doors, private inventories, drones and dusk-to-night lighting. It exercises every pillar.</td></tr>
+  <tr><td>Team</td><td>You + agents</td></tr>
+  <tr><td>License</td><td>Not decided; the repo is private</td></tr>
+  <tr><td>Hardware floors</td><td>Intel Macs dropped for now; the other floors stand until revisited</td></tr>
+  <tr><td>Mac hardware</td><td>MacBook Pro M5 (Apple10: hardware RT + mesh shading) for Metal, macOS and iOS</td></tr>
+</table>
+
+<h2>Locked decisions</h2>
+<table class="wrap">
+  <tr><th>#</th><th>Decision</th></tr>
+  <tr><td>D1</td><td>Core in <strong>Rust</strong>; performance top-notch.</td></tr>
+  <tr><td>D2</td><td><strong>Agents build the engine</strong>; agents and humans <strong>use it</strong> to make games.</td></tr>
+  <tr><td>D3</td><td>Windows, Linux, macOS first (PC on top); Android, iOS second; no consoles for now.</td></tr>
+  <tr><td>D4</td><td>Native multiplayer from day one; single-player pays nothing.</td></tr>
+  <tr><td>D5</td><td>Game UI native (UI Toolkit-like), one system for screen and world UI.</td></tr>
+  <tr><td>D6</td><td>Editor UI native, on the same UI system.</td></tr>
+  <tr><td>D7</td><td>No scope cuts — roadmaps are build order.</td></tr>
+  <tr><td>D8</td><td>2D supported, secondary. No Unity import for now.</td></tr>
+  <tr><td>D9</td><td>No CI for now; gates run locally (<code>ara test</code>, <code>ara check</code>).</td></tr>
+  <tr><td>D10</td><td>Agents may study Flax / Unity / Unreal code for ideas and write their own; Godot / O3DE may be copied with attribution.</td></tr>
+  <tr><td>D11</td><td><strong>C#</strong> is the one scripting language (gameplay, UI logic, editor extensions, agent scripts).</td></tr>
+  <tr><td>D12</td><td><strong>Own native GPU backends from the start</strong>: Vulkan 1.3 + Metal 4, no wgpu, D3D12 only on evidence.</td></tr>
+  <tr><td>D13</td><td>Team: you + agents.</td></tr>
+  <tr><td>D14</td><td>License not decided; private repo.</td></tr>
+  <tr><td>D15</td><td>Apple silicon only; the MacBook Pro M5 is the Metal and Mac/iOS build machine.</td></tr>
+  <tr><td>D16</td><td>Dogfood game: <strong>Outpost</strong>.</td></tr>
+</table>
+
+<h2>Architecture</h2>
+<figure>
+<svg viewBox="0 0 900 470" role="img" aria-label="Ara architecture: Rust core, Engine Protocol, and its clients">
+  <defs>
+    <style>
+      .box { fill: #111113; stroke: #2e2e34; stroke-width: 1; }
+      .core { fill: #0f1319; stroke: #8ab4f8; stroke-width: 1.2; }
+      .t { fill: #f2f2f3; font: 600 13px system-ui, sans-serif; }
+      .s { fill: #9a9aa2; font: 12px system-ui, sans-serif; }
+      .a { fill: #8ab4f8; font: 600 12px system-ui, sans-serif; }
+      .ln { stroke: #3a3a42; stroke-width: 1; }
+    </style>
+  </defs>
+  <rect class="core" x="10" y="10" width="880" height="250" rx="8"/>
+  <text class="a" x="28" y="34">Ara core — Rust</text>
+
+  <rect class="box" x="28" y="48" width="272" height="94" rx="6"/>
+  <text class="t" x="42" y="70">Schema DB</text>
+  <text class="s" x="42" y="90">reflection · units · docs · replication</text>
+  <text class="s" x="42" y="108">→ serialization, inspector, C# bindings,</text>
+  <text class="s" x="42" y="126">  JSON Schema, MCP catalog, net codecs</text>
+
+  <rect class="box" x="314" y="48" width="272" height="94" rx="6"/>
+  <text class="t" x="328" y="70">Documents + op log</text>
+  <text class="s" x="328" y="90">typed commands → ops → transactions</text>
+  <text class="s" x="328" y="108">auto-inverse undo · human/agent attribution</text>
+  <text class="s" x="328" y="126">canonical JSON files · @path#id refs</text>
+
+  <rect class="box" x="600" y="48" width="272" height="94" rx="6"/>
+  <text class="t" x="614" y="70">Simulation</text>
+  <text class="s" x="614" y="90">bevy_ecs · fixed tick · seeded RNG</text>
+  <text class="s" x="614" y="108">sessions: local / listen / dedicated</text>
+  <text class="s" x="614" y="126">replication + selective prediction</text>
+
+  <rect class="box" x="28" y="154" width="200" height="90" rx="6"/>
+  <text class="t" x="42" y="176">Renderer</text>
+  <text class="s" x="42" y="196">render graph → ara-gpu</text>
+  <text class="s" x="42" y="214">Vulkan 1.3 · Metal 4</text>
+  <text class="s" x="42" y="232">Slang · material AST · tiers</text>
+
+  <rect class="box" x="240" y="154" width="200" height="90" rx="6"/>
+  <text class="t" x="254" y="176">Native UI runtime</text>
+  <text class="s" x="254" y="196">Taffy layout · Parley text</text>
+  <text class="s" x="254" y="214">markup + CSS subset</text>
+  <text class="s" x="254" y="232">editor + HUD + world UI</text>
+
+  <rect class="box" x="452" y="154" width="200" height="90" rx="6"/>
+  <text class="t" x="466" y="176">C# host</text>
+  <text class="s" x="466" y="196">CoreCLR (dev) · NativeAOT (ship)</text>
+  <text class="s" x="466" y="214">chunk-batched spans over ECS</text>
+  <text class="s" x="466" y="232">hot reload L0–L4</text>
+
+  <rect class="box" x="664" y="154" width="208" height="90" rx="6"/>
+  <text class="t" x="678" y="176">Assets · platform · subsystems</text>
+  <text class="s" x="678" y="196">importers → CAS cache · packs</text>
+  <text class="s" x="678" y="214">SDL3 · Jolt · Kira + Steam Audio</text>
+  <text class="s" x="678" y="232">diagnostics bus · capture/replay</text>
+
+  <rect x="10" y="282" width="880" height="40" rx="6" fill="#0f1319" stroke="#8ab4f8" stroke-width="1"/>
+  <text class="a" x="28" y="307">Engine Protocol — JSON-RPC 2.0 · WebSocket / stdio · localhost + per-project token · used by the editor itself</text>
+
+  <line class="ln" x1="80" y1="322" x2="80" y2="352"/>
+  <line class="ln" x1="230" y1="322" x2="230" y2="352"/>
+  <line class="ln" x1="380" y1="322" x2="380" y2="352"/>
+  <line class="ln" x1="530" y1="322" x2="530" y2="352"/>
+  <line class="ln" x1="680" y1="322" x2="680" y2="352"/>
+  <line class="ln" x1="822" y1="322" x2="822" y2="352"/>
+
+  <rect class="box" x="10" y="352" width="140" height="108" rx="6"/>
+  <text class="t" x="22" y="374">ara editor</text>
+  <text class="s" x="22" y="394">native UI</text>
+  <text class="s" x="22" y="412">same process</text>
+  <text class="s" x="22" y="430">review overlay</text>
+
+  <rect class="box" x="160" y="352" width="140" height="108" rx="6"/>
+  <text class="t" x="172" y="374">ara CLI / daemon</text>
+  <text class="s" x="172" y="394">headless</text>
+  <text class="s" x="172" y="412">check · test · export</text>
+  <text class="s" x="172" y="430">offline file ops</text>
+
+  <rect class="box" x="310" y="352" width="140" height="108" rx="6"/>
+  <text class="t" x="322" y="374">MCP adapter</text>
+  <text class="s" x="322" y="394">~12 generated tools</text>
+  <text class="s" x="322" y="412">schema search</text>
+  <text class="s" x="322" y="430">capture · play · test</text>
+
+  <rect class="box" x="460" y="352" width="140" height="108" rx="6"/>
+  <text class="t" x="472" y="374">ara_run worker</text>
+  <text class="s" x="472" y="394">C# agent scripts</text>
+  <text class="s" x="472" y="412">out of process</text>
+  <text class="s" x="472" y="430">writes = ops only</text>
+
+  <rect class="box" x="610" y="352" width="140" height="108" rx="6"/>
+  <text class="t" x="622" y="374">ara-player</text>
+  <text class="s" x="622" y="394">play mode child proc</text>
+  <text class="s" x="622" y="412">client / server</text>
+  <text class="s" x="622" y="430">shipping runtime</text>
+
+  <rect class="box" x="760" y="352" width="130" height="108" rx="6"/>
+  <text class="t" x="772" y="374">ara-bridge</text>
+  <text class="s" x="772" y="394">in dev builds</text>
+  <text class="s" x="772" y="412">logs · screenshots</text>
+  <text class="s" x="772" y="430">on every device</text>
+</svg>
+<figcaption>One core, one protocol. There is no separate "AI API": agents, the editor and the CLI all go through the same registries.</figcaption>
+</figure>
+
+<h2>Decisions by area</h2>
+<table>
+  <tr><th>Area</th><th>Decision</th><th>From</th></tr>
+  <tr><td>Object model</td><td>Entities in a hierarchy with plain reflected components in <code>bevy_ecs</code>. <em>Behaviours</em> (MonoBehaviour-like, no authoritative fields) plus <em>Systems</em> (batched, declared reads/writes, auto-parallel). ID-addressed prefab overrides, nesting, variants.</td><td>R01 R10</td></tr>
+  <tr><td>Schema DB</td><td>One source of truth (Rust derives plus C# source generators) with units, ranges, docs (required) and replication policy. Generates serialization, inspector, bindings, JSON Schema, the MCP catalog, docs and net codecs.</td><td>R01 R03 R07</td></tr>
+  <tr><td>Files</td><td>Canonical strict JSON, defaults omitted, flat entity map keyed by short IDs, <code>@path#id</code> references, <code>ara fmt</code> and <code>ara merge</code>. Binary only for source media; derived data in a content-addressed cache.</td><td>R01 R03</td></tr>
+  <tr><td>Mutation</td><td>Typed command → validated ops with auto-inverse → attributed transaction. Agent edits apply live but show as unreviewed (outlines, before/after values and captures, accept/revert per turn). Network gameplay commands are intents, never edits.</td><td>R01 R03 R04 R09</td></tr>
+  <tr><td>AI layer</td><td>About 12 MCP tools over the Engine Protocol; capture API with entity labels and legend; deterministic play with action-level input; diagnostics with stable codes and runnable fixes; generated docs and skills; arabench run locally.</td><td>R03</td></tr>
+  <tr><td>Processes</td><td>One engine library: <code>ara editor</code>, <code>ara</code> (CLI/daemon), <code>ara-player</code>. Play runs in a child process (gate: boot under 1 s, live patch under 50 ms; fallback in-process simulate). Importers in worker processes.</td><td>R01 R03 R04</td></tr>
+  <tr><td>Scripting <span class="tag locked">confirmed</span></td><td><strong>C# 14 / .NET 10.</strong> CoreCLR in dev, NativeAOT to ship (iOS supported; Android experimental, proven early). State lives only in ECS columns. Reload L0 ≤30 ms · L1 ≤100 ms p95 · L3 ≤450 ms p95 · L4 1–5 s. Analyzers catch Unity-isms, statics, non-determinism, allocations and AOT-unsafe code.</td><td>R10</td></tr>
+  <tr><td>UI</td><td>Retained tree: Taffy plus Parley (HarfBuzz via FFI where needed), engine display lists, AccessKit. HTML-like markup and a CSS-subset stylesheet with typed C# bindings; a lossless visual designer; CommonUI-style focus; world UI on the same tree; the editor built on it.</td><td>R05 R04 R10</td></tr>
+  <tr><td>Editor</td><td>Unity-style property contract with provenance. v1 panels: scene and game viewports, hierarchy, inspector, assets, console, agents/history, material graph, UI designer, profiler, command palette. Shared graph framework stored as text. Local / Host+N / Dedicated+N play.</td><td>R04</td></tr>
+  <tr><td>Rendering</td><td>Own <code>ara-gpu</code> (Vulkan 1.3 + Metal 4; D3D12 on evidence). SM6.6-style bindless, explicit barriers, multi-queue. Slang compiles to SPIR-V for Vulkan and to DXIL → Metal Shader Converter for Apple. One material AST shown as text and as graph. Tiers RT / Raster / Mobile.</td><td>R02 R08</td></tr>
+  <tr><td>Platforms</td><td>SDL3 platform layer. Floors: Win10 x64 · Linux / Steam Deck · macOS 26 Apple silicon · iOS 26 A14+ · Android 10 Vulkan 1.1 + descriptor indexing. BCn / ASTC, Opus, deterministic packs.</td><td>R08</td></tr>
+  <tr><td>Export</td><td><code>ara doctor / export / run / device</code> with NDJSON events and fixes; ara-bridge on devices. C# game code compiled per platform: Windows local, Linux via WSL/container, Apple via a Mac agent (to verify in S7).</td><td>R08 R10</td></tr>
+  <tr><td>Multiplayer</td><td>Server-authoritative snapshots, interpolation, selective owner prediction. Local session = one world, zero serialization. Schema policies, stable net IDs, intent commands. Lightyear + Replicon behind our schemas. Net-condition simulation, per-field profiler, divergence replay, headless bots.</td><td>R09</td></tr>
+  <tr><td>Reuse</td><td>Bevy 0.20 crates (no fork) · Jolt (lean) or Rapier · Rapier2D / Box2D · Kira + Steam Audio · gltf / ufbx / meshopt / KTX2 · Recast · Tracy · Sentry minidumps.</td><td>R06 R07</td></tr>
+  <tr><td>Building with agents</td><td>Cargo workspace, per-crate <code>AGENTS.md</code>, ADRs. Agent loop: <code>cargo check -p</code> → clippy → nextest; insta snapshots. Performance contract (no <code>Arc&lt;Mutex&gt;</code> or <code>clone()</code> per frame; Tracy and benchmarks from day one). Local gates, no CI.</td><td>R06 R07</td></tr>
+</table>
+
+<h3>Rendering fidelity sequence <span class="tag locked">nothing cut</span></h3>
+<ol>
+  <li>Clustered deferred + forward, PBR/IBL, shadows, baked GI + probes, TAA, exposure/tonemap.</li>
+  <li>Hardware-RT DDGI, RT reflections/shadows, denoising, DLSS / FSR / XeSS / MetalFX, reference path tracer.</li>
+  <li>Persistent GPU scene, GPU culling and indirect draws, texture streaming, Niagara-style VFX stacks, HDR output.</li>
+  <li>Virtualized geometry (meshlets, cluster LOD, streaming), virtual shadow maps, ReSTIR many-lights.</li>
+  <li>Layered materials, skin/hair, volumetrics, foliage, PCG, realtime path tracing, frame generation.</li>
+</ol>
+
+<h2>Performance tiers: Unity DOTS-class</h2>
+<table>
+  <tr><th>Unity piece</th><th>Ara equivalent</th><th>Status</th></tr>
+  <tr><td>Entities</td><td><code>bevy_ecs</code> tables: tight per-type component arrays in chunks, plain struct components, built-in change ticks</td><td>By design</td></tr>
+  <tr><td>Jobs</td><td>Systems declare reads/writes and run in parallel automatically. Safety is checked at compile time in Rust; C# systems get generated read/write sets. Chunk batches spread across cores.</td><td>By design</td></tr>
+  <tr><td>Burst</td><td><strong>Rust is the Burst tier</strong>: the same LLVM backend, <code>&amp;mut</code> gives no-alias, <code>glam</code> gives SIMD. C# uses RyuJIT plus explicit <code>Vector128</code>/<code>Vector256</code> and NativeAOT.</td><td>C# gap measured: 1.74 vs 1.09 ns/entity on a scalar loop</td></tr>
+  <tr><td>No GC on hot paths</td><td>State lives only in ECS columns; C# uses <code>ref</code> over spans; analyzers flag allocations</td><td>By design</td></tr>
+</table>
+<p class="muted">A Burst-like compiler for a C# subset through LLVM is in the build order (M4). Spike S8 decides whether it's needed by benchmarking Unity DOTS, <code>bevy_ecs</code>, C# JIT and C# NativeAOT on four workloads.</p>
+
+<h2>Conflicts resolved</h2>
+<table class="wrap">
+  <tr><th>Topic</th><th>Positions</th><th>Resolution</th></tr>
+  <tr><td>Core language</td><td>R06 C++20 · R07 / you Rust</td><td><strong>Rust</strong>. Consoles are excluded, so C++'s strongest argument is gone. Metal is needed; Rust derives give reflection without a codegen tool; memory safety matters for agent-written code.</td></tr>
+  <tr><td>GPU backend</td><td>R02 NVRHI · R07 wgpu + ash · R08 own Vulkan + Metal 4</td><td><strong>Own ara-gpu</strong> (decided, D12). NVRHI has no Metal and is C++. wgpu has one queue, no Metal / DX12 pipeline cache, and doesn't fit the Slang → converter path.</td></tr>
+  <tr><td>Windows API</td><td>R02 D3D12 · R08 Vulkan</td><td><strong>Vulkan first</strong>, D3D12 on evidence. The native editor removes the Electron-interop reason for D3D12.</td></tr>
+  <tr><td>Scripting</td><td>R03 R06 R07 TypeScript · R10 C#</td><td><strong>C#</strong> (confirmed, D11). Native UI removes TypeScript's synergy, iOS gets full AOT speed, and value types map onto ECS columns.</td></tr>
+  <tr><td>Editor shell</td><td>R04 Electron · R07 Tauri · you native</td><td><strong>Native on our UI</strong>. One UI system; the viewport-embedding risk disappears.</td></tr>
+  <tr><td>UI authoring</td><td>R05 restricted TSX</td><td><strong>HTML-like markup + CSS subset + C# bindings.</strong></td></tr>
+  <tr><td>Layout / text</td><td>Yoga + HarfBuzz · Taffy + Parley</td><td><strong>Taffy + Parley</strong>, HarfBuzz via FFI wherever coverage is missing.</td></tr>
+  <tr><td>ECS · physics · platform</td><td>flecs / bevy_ecs · Jolt / Rapier · winit / SDL3</td><td><strong>bevy_ecs · lean Jolt (spike S6) · SDL3.</strong></td></tr>
+  <tr><td>Multiplayer timing</td><td>R07 defer · R09 / you day one</td><td><strong>Day-one contracts.</strong></td></tr>
+  <tr><td>Refs / JSON dialect</td><td><code>{id,path}</code> vs <code>@path#id</code> · JSONC vs strict</td><td><strong><code>@path#id</code>, strict JSON.</strong></td></tr>
+  <tr><td>CI, scanning, scope</td><td>R03 R06 R08: CI and scanning · R06: "UE parity not realistic"</td><td><strong>No CI for now; study of reference code allowed; no cuts.</strong></td></tr>
+  <tr><td>iOS NativeAOT</td><td>R08 experimental · R10 supported</td><td><strong>Supported since .NET 9</strong> (R10 checked the current platform table); Android still experimental.</td></tr>
+  <tr><td>Export with C#</td><td>R08 no compile at export · R10 per-platform AOT</td><td><strong>Per-platform compile of game code</strong>; cross-OS options verified in spike S7.</td></tr>
+</table>
+
+<h2>Spikes first</h2>
+<table class="wrap">
+  <tr><th>#</th><th>Spike</th><th>Pass criteria</th></tr>
+  <tr><td>S1</td><td>ara-gpu foundation: bindless material + RT-query pass from one Slang source on Vulkan (Windows) and Metal 4 (MacBook Pro M5)</td><td>Same scene on both backends, async compute, PSO caching, validation clean</td></tr>
+  <tr><td>S2</td><td>C# host on <code>bevy_ecs</code> chunks, L3 then L1 reload</td><td>L1 p95 ≤100 ms, L3 p95 ≤450 ms on your machine</td></tr>
+  <tr><td>S3</td><td>Native UI: inspector, pause menu, virtualized inventory, world panel</td><td>120 fps, correct bidi / IME / emoji, lossless designer round-trip; compare with RmlUi</td></tr>
+  <tr><td>S4</td><td>Lightyear + Replicon behind our schemas</td><td>Character / door / inventory consistent in local, listen and dedicated; late join; packet loss; replay</td></tr>
+  <tr><td>S5</td><td>Play mode in a child process</td><td>Boot under 1 s, live patch under 50 ms</td></tr>
+  <tr><td>S6</td><td>Physics: Jolt binding vs Rapier</td><td>Character controller, stacking, vehicles, determinism, performance</td></tr>
+  <tr><td>S7</td><td>Export: C# NativeAOT on every target, iOS via the MacBook, desktop R2R from Windows</td><td>Signed builds launch; ara-bridge reachable</td></tr>
+  <tr><td>S8</td><td>DOTS-class benchmark: Unity DOTS vs <code>bevy_ecs</code> vs C# JIT vs C# NativeAOT (integrate, boids, SIMD particles, spawn churn)</td><td>Numbers on your machine; decides the C# performance tier</td></tr>
+</table>
+
+<h2>Build order</h2>
+<p class="muted">Phases are dependency order. Nothing is dropped.</p>
+<div class="grid2">
+  <div>
+    <h3>0 · Spikes</h3>
+    <p>S1–S7 above.</p>
+    <h3>1 · Kernel</h3>
+    <p>Schema DB · documents / ops / undo · Engine Protocol, CLI, MCP · file formats · asset pipeline and cache · ECS with fixed tick and local sessions · C# host (L3 → L1) · diagnostics · capture and replay · ara-gpu Vulkan with a baseline renderer.</p>
+    <h3>2 · Editor v0 + multiplayer foundations</h3>
+    <p>Native UI runtime, docking, hierarchy, inspector, viewport and gizmos, assets, console, agents panel · play in a child process · Local / Host+N / Dedicated+N · replication and prediction · physics, audio, input · <strong>Outpost v0 (gray-box co-op), built largely by agents.</strong></p>
+  </div>
+  <div>
+    <h3>3 · Fidelity + authoring</h3>
+    <p>Full render graph · material AST and graph editor · DDGI / RT · upscalers · reference path tracer · UI designer, stories, semantic tests · animation, navigation, VFX stacks · Metal 4 and the macOS editor · Linux.</p>
+    <h3>4 · Scale + reach</h3>
+    <p>GPU-driven scene · virtualized geometry · virtual shadow maps · streaming · terrain and foliage · HDR output · 2D toolset · full export to all five platforms with ara-bridge · mobile tier · C# performance tier from S8.</p>
+    <h3>5 · UE-class and beyond</h3>
+    <p>ReSTIR many-lights · layered materials · skin / hair · volumetrics · PCG · realtime path tracing · frame generation · rollback, lockstep, shared authority, host migration · visual scripting · Sequencer-class timeline · multi-user editing.</p>
+  </div>
+</div>
+
+<h2>Hardest to change later</h2>
+<ol>
+  <li>Object model and identity (runtime / file / network IDs).</li>
+  <li>Schema DB vocabulary and generation pipeline.</li>
+  <li>On-disk formats and addressing.</li>
+  <li>Mutation model and Engine Protocol.</li>
+  <li>Simulation contract: fixed tick, input-driven, restorable state, scoped determinism.</li>
+  <li>Rust↔C# ABI, with state only in ECS columns.</li>
+  <li>RHI binding/sync model and shader pipeline.</li>
+  <li>Material semantics (one AST for text and graph).</li>
+  <li>UI runtime contract, one system for game and editor.</li>
+  <li>Pack format, asset identity and platform floors.</li>
+</ol>
+
+<h2>Reports</h2>
+<table>
+  <tr><th>#</th><th>Report</th><th>Model</th></tr>
+  <tr><td>R01</td><td>Core architecture</td><td>Opus 5.5</td></tr>
+  <tr><td>R02</td><td>Rendering &amp; fidelity</td><td>GPT-6.1 Sol</td></tr>
+  <tr><td>R03</td><td>AI-native design</td><td>Opus 5.5</td></tr>
+  <tr><td>R04</td><td>Editor UX &amp; tools</td><td>GPT-6.1 Sol</td></tr>
+  <tr><td>R05</td><td>Game UI framework</td><td>GPT-6.1 Sol</td></tr>
+  <tr><td>R06</td><td>Stack, reuse &amp; strategy</td><td>Opus 5.5</td></tr>
+  <tr><td>R07</td><td>Rust path</td><td>GPT-6.1 Sol</td></tr>
+  <tr><td>R08</td><td>Platforms &amp; export</td><td>Opus 5.5</td></tr>
+  <tr><td>R09</td><td>Multiplayer</td><td>GPT-6.1 Sol</td></tr>
+  <tr><td>R10</td><td>C# scripting (with benchmarks on your machine)</td><td>Opus 5.5</td></tr>
+</table>
+<p class="muted">All reports are in <code>docs/research/</code> in the repo. Reference engine clones (Godot, Flax, O3DE, UnityCsReference) are in <code>.refs/</code>.</p>
+
+</main>
+</body>
+</html>

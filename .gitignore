@@ -1,0 +1,15 @@
+# Build output
+/target/
+/spikes/*/target/
+
+# Reference engine clones (study only, fetched locally; see AGENTS.md)
+/.refs/
+
+# Engine-local caches
+.sn/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

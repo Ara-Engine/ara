@@ -1,0 +1,81 @@
+# AGENTS.md: Ara
+
+Ara is a Rust game engine. AI agents build it, and agents and humans use it to make games. Pillars:
+- AI-native;
+- Unreal-level fidelity;
+- Unity-level ease;
+- a great native editor;
+- great authoring tools for both AI and humans.
+
+**Read first:**
+- [`docs/decisions.md`](docs/decisions.md): the locked decisions.
+- [`docs/plan/milestones.md`](docs/plan/milestones.md): what is being built now.
+- [`docs/research/`](docs/research/00-synthesis.md): the evidence behind both.
+
+## Status
+
+Pre-M0. The repo is initialized and the research is done. Next up: the M0 spikes (S1–S8).
+
+## Layout
+
+```
+crates/          Rust workspace members (engine crates; `ara` CLI)
+spikes/          M0 throwaway experiments, outside the workspace; each ends with RESULT.md
+docs/            decisions.md, plan/, research/
+reports/         HTML reports published to Snist
+.refs/           reference engine clones (NOT committed; see below)
+```
+
+## Commands
+
+- `cargo check -p <crate>`: the fast loop. Check only the crates you touched.
+- `cargo clippy -p <crate> --all-targets`: no new warnings.
+- `cargo test -p <crate>`: tests for the crates you touched.
+- `cargo fmt --all`
+
+There is no CI (D9). These local commands are the only gates, so run them before you call a task done.
+
+## Rules
+
+- **Locked decisions are not re-argued inside a task.** If you think one is wrong, say so in your summary and keep following it until a new entry in `docs/decisions.md` supersedes it.
+- **No scope cuts.** Plans and docs describe build order, never dropping features.
+- **Every authoring mutation is a typed command that produces ops.** No side-channel writes to documents, from the editor or from plugins.
+- **Gameplay state lives in ECS components only.** Never in C# objects, Rust statics or globals.
+- **Simulation code is deterministic:**
+  - fixed tick;
+  - RNG from the context only;
+  - no wall-clock time;
+  - no iteration order that affects results unless that order is defined.
+- **Every public reflected type and field has a doc comment.** These become inspector tooltips, docs and agent tool descriptions.
+- **Text formats go through the canonical writer.** Never hand-order keys. References are `@path#id`.
+- **Performance contract:**
+  - In per-frame code, never silence the borrow checker with `Arc<Mutex<_>>`, `Rc<RefCell<_>>` or `.clone()`. Use owned types, handles and short ECS borrows.
+  - Measure (Tracy or a benchmark) before and after any hot-path change.
+- **No `unwrap()` outside tests.** Use `expect("…")` only to state a real invariant. Every `unsafe` block gets a `// SAFETY:` comment.
+- **Keep crates and files small**, split along real dependency boundaries. Each crate has an `AGENTS.md` of 150 lines or fewer: purpose, public API, how to test, gotchas.
+- **Comments:** short doc comments on types and functions explaining how they are used. Update them whenever you change the behaviour.
+- **Spikes:** `spikes/<id>-<name>/`, own `Cargo.toml` (not a workspace member), throwaway. They finish with `RESULT.md` (numbers, findings, recommendation) and an entry in `docs/decisions.md`.
+
+## Reference code (`.refs/`, not committed)
+
+| Source | How it may be used |
+|---|---|
+| Godot (MIT), O3DE (Apache-2.0 / MIT) | May be copied. Keep the original headers and add an entry to `THIRD_PARTY_NOTICES.md`. |
+| Flax, UnityCsReference, Unreal | Study them for patterns, then write our own implementation. Never transcribe. |
+| s&box (MIT) | Prior art for C# hotload, the API whitelist and Razor UI. Clone it on demand. |
+
+Fetch the clones (shallow, with LFS skipped):
+
+```sh
+mkdir -p .refs && cd .refs && export GIT_LFS_SKIP_SMUDGE=1
+git clone --depth 1 https://github.com/godotengine/godot.git godot
+git clone --depth 1 https://github.com/FlaxEngine/FlaxEngine.git flax
+git clone --depth 1 https://github.com/o3de/o3de.git o3de
+git clone --depth 1 https://github.com/Unity-Technologies/UnityCsReference.git unity-cs-reference
+```
+
+## Machines
+
+- **Windows (primary, RTX GPU):** Vulkan development and the main editor host.
+- **MacBook Pro M5:** Metal 4, macOS and iOS builds.
+- Line endings are LF everywhere (`.gitattributes`).
