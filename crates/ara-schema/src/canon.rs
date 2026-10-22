@@ -10,6 +10,47 @@ use serde_json::{Map, Value};
 use crate::{SchemaDb, Shape, TypeDesc, ValueType};
 
 impl SchemaDb {
+    /// Calls `f` with every typed value inside `v` (including `v` itself), outermost
+    /// first, with its field path. Values the schema doesn't describe are skipped.
+    pub fn visit(
+        &self,
+        ty: &ValueType,
+        v: &Value,
+        path: &str,
+        f: &mut dyn FnMut(&ValueType, &Value, &str),
+    ) {
+        f(ty, v, path);
+        match (ty, v) {
+            (ValueType::Option(inner), v) if !v.is_null() => self.visit(inner, v, path, f),
+            (ValueType::List(item), Value::Array(items)) => {
+                for (i, it) in items.iter().enumerate() {
+                    self.visit(item, it, &format!("{path}[#{i}]"), f);
+                }
+            }
+            (ValueType::Keyed(item), Value::Array(items)) => {
+                for it in items {
+                    let id = it.get("id").and_then(Value::as_str).unwrap_or("?");
+                    self.visit(item, it, &format!("{path}[{id}]"), f);
+                }
+            }
+            (ValueType::Map(item), Value::Object(o)) => {
+                for (k, it) in o {
+                    self.visit(item, it, &format!("{path}[{k}]"), f);
+                }
+            }
+            (ValueType::Named(n), Value::Object(o)) => {
+                if let Some(t) = self.get(n) {
+                    for field in t.fields() {
+                        if let Some(fv) = o.get(&field.name) {
+                            self.visit(&field.ty, fv, &join(path, &field.name), f);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// The canonical form of a value of type `ty`: struct keys in reflection order with
     /// defaults omitted, map keys sorted, recursively. Keys the schema doesn't know are
     /// kept, sorted, after the known ones, so no data is ever dropped.

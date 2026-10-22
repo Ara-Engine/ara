@@ -29,7 +29,8 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
   `type_json_schema(t)` / `doc_json_schema(kind)` (JSON Schema 2020-12).
 - Data: `Validator` (values, structs, records, components → diagnostics),
   `canonical_value` / `canonical_struct` (reflection order, defaults omitted),
-  `normalize_record` / `normalize_component` (aliases + upgrade hooks).
+  `normalize_record` / `normalize_component` (aliases + upgrade hooks),
+  `visit` (walk every typed value with its path).
 - Paths: `FieldPath` (`Transform.position.x`, `overrides[m4tz/Light]`,
   `Inventory.slots[s_7c].count`), `db.resolve_path(record_type, &path)` →
   `Resolved { steps, ty, field }`, and `path::{get, get_effective, set}`.

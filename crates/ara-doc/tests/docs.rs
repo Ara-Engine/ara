@@ -184,3 +184,26 @@ fn structure_problems_are_reported() {
         ]
     );
 }
+
+#[test]
+fn dangling_entity_references_warn_with_a_fix() {
+    let db = common::db();
+    let scene = r#"{"$schema": "ara://schema/scene/1", "id": "sc_1", "records": {
+        "e_a": {"Follow": {"target": "e_b"}}, "e_b": {}, "e_c": {"Follow": {"target": "e_gone"}}}}"#;
+    let diags = read(scene, "t", &db, None).diags;
+    assert_eq!(diags.len(), 1, "{diags:#?}");
+    let d = &diags[0];
+    assert_eq!(
+        (
+            d.code,
+            d.location.record.as_deref(),
+            d.location.path.as_deref()
+        ),
+        (
+            codes::DANGLING_ENTITY_REF,
+            Some("e_c"),
+            Some("Follow.target")
+        )
+    );
+    assert!(!d.is_error(), "dangling references don't block edits");
+}

@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 
 use crate::document::Document;
 use crate::refs::{AssetIndex, repair_record};
-use crate::validate::{check_record, check_structure, record_type};
+use crate::validate::{check_entity_refs, check_record, check_structure, record_type};
 use crate::{AssetId, RecordId};
 
 /// Top-level keys, in canonical order.
@@ -233,6 +233,7 @@ fn read_inner(
         doc.insert_unchecked(rid, rec);
     }
     check_structure(&doc, &kind, base, out);
+    check_entity_refs(db, &doc, base, out);
     Some(doc)
 }
 

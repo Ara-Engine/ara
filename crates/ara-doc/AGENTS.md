@@ -39,7 +39,8 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
 - `Edit` → `doc.apply(edit, &db) -> Result<Op, Diagnostic>`; `Op::inverse()`,
   `Op::to_edit()`, `Op::touches()`; `doc.revert(&op, &db)` (rollback).
 - `refs::{AssetIndex, resolve, repair_record}`; `prefab::{resolve, DocLookup,
-  ResolvedEntity}`; `validate::{check_record, check_structure, record_type}`.
+  ResolvedEntity}`; `validate::{check_record, check_structure, check_entity_refs,
+  record_type}` (dangling `entity` fields are warnings, `ARA1212`).
 - `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`.
 - `IdGen` (seedable SplitMix64): `record_id`, `asset_id`, `token`.
 - `OrderKey`, `key_between(a, b)`.
@@ -66,5 +67,5 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
 `cargo test -p ara-doc`. Fixture project: `tests/fixtures/` (types, two prefabs
 with nesting, one scene, one messy input). `tests/docs.rs`: byte-identical round
 trip, normalization and repair (snapshot), syntax positions, prefab resolution
-(snapshot), override/removal errors, structure errors. `tests/inverse.rs`: property
+(snapshot), override/removal errors, structure errors, dangling entity references. `tests/inverse.rs`: property
 test that apply → undo (inverse edits, and rollback) restores the document.

@@ -11,6 +11,14 @@
         "color": { "type": "color", "doc": "Linear color." }
       }
     },
+    "Follow": {
+      "kind": "component",
+      "doc": "Keeps the entity near another one.",
+      "fields": {
+        "target": { "type": "entity", "doc": "The entity to follow." },
+        "distance": { "type": "f32", "doc": "Distance to keep.", "unit": "m", "default": 2, "range": [0, null] }
+      }
+    },
     "LightKind": {
       "kind": "enum",
       "doc": "Shape of a light.",

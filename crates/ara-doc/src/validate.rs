@@ -1,8 +1,10 @@
 //! Document-level validation: records against the schema plus the rules the schema
-//! can't express (order keys, instance shape, parents, cycles, root count).
+//! can't express (order keys, instance shape, parents, cycles, root count, entity
+//! references).
 
 use ara_diag::{Diagnostic, FixAction, Location, codes};
-use ara_schema::{DocKindDesc, SchemaDb, TypeDesc, Validator};
+use ara_schema::{DocKindDesc, SchemaDb, TypeDesc, Validator, ValueType};
+use serde_json::Value;
 
 use crate::document::{Document, Record, field, is_component_key, order_of, parent_of, prefab_of};
 use crate::{OrderKey, RecordId};
@@ -169,4 +171,51 @@ pub fn in_cycle(doc: &Document, id: &RecordId) -> bool {
         }
     }
     false
+}
+
+/// Warns about `entity` fields in components that point at records the document
+/// doesn't have (typically left behind by a delete).
+pub fn check_entity_refs(
+    db: &SchemaDb,
+    doc: &Document,
+    base: &Location,
+    out: &mut Vec<Diagnostic>,
+) {
+    for (id, rec) in doc.records() {
+        for (key, v) in rec.iter().filter(|(k, _)| is_component_key(k)) {
+            if !db.get(key).is_some_and(TypeDesc::is_component) {
+                continue;
+            }
+            db.visit(
+                &ValueType::Named(key.clone()),
+                v,
+                key,
+                &mut |ty, v, path| {
+                    let (ValueType::Entity, Value::String(target)) = (ty, v) else {
+                        return;
+                    };
+                    let head = target.split('/').next().unwrap_or(target);
+                    if doc.record(head).is_none() {
+                        out.push(
+                            Diagnostic::warning(
+                                codes::DANGLING_ENTITY_REF,
+                                format!("`{target}` does not exist"),
+                            )
+                            .record(id.as_str())
+                            .path(path)
+                            .within(base)
+                            .with_fix(
+                                "Clear the reference",
+                                FixAction::Set {
+                                    record: Some(id.to_string()),
+                                    path: path.to_owned(),
+                                    value: Value::Null,
+                                },
+                            ),
+                        );
+                    }
+                },
+            );
+        }
+    }
 }

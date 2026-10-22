@@ -9,7 +9,7 @@ use ara_schema::grammar::parse_ref;
 use crate::document::Document;
 use crate::prefab::{DocLookup, Resolved, resolve};
 use crate::refs::AssetIndex;
-use crate::validate::{check_record, check_structure};
+use crate::validate::{check_entity_refs, check_record, check_structure};
 use crate::{AssetId, RecordId};
 
 /// Loaded documents keyed by asset ID, each with its project-relative path.
@@ -123,6 +123,7 @@ impl Workspace {
             }
         }
         check_structure(doc, kind, &base, &mut out);
+        check_entity_refs(db, doc, &base, &mut out);
         resolve(doc, db, self, &base, &mut out);
         out
     }
