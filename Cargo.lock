@@ -62,6 +62,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-merge"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "insta",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-ops"
 version = "0.0.0"
 dependencies = [

@@ -1,0 +1,21 @@
+[package]
+name = "ara-merge"
+description = "Semantic three-way merge of Ara documents over their flat record maps, with field-level conflicts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-json.workspace = true
+ara-schema.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-components.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,36 @@
+---
+source: crates/ara-merge/tests/merge.rs
+expression: text
+---
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_merge001",
+  "$conflicts": [
+    {
+      "record": "e_a",
+      "path": "Transform.position",
+      "base": [0, 0, 0],
+      "ours": [1, 0, 0],
+      "theirs": [5, 0, 0],
+      "reason": "both sides changed this differently (kept ours)"
+    }
+  ],
+  "records": {
+    "e_a": {
+      "name": "A",
+      "order": "a0",
+      "Transform": {
+        "position": [1, 0, 0]
+      }
+    },
+    "e_b": {
+      "name": "B",
+      "parent": "e_a",
+      "order": "a0"
+    },
+    "e_c": {
+      "name": "C2",
+      "order": "a1"
+    }
+  }
+}
