@@ -6,5 +6,19 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[dependencies]
+ara-cmd.workspace = true
+ara-components.workspace = true
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-json.workspace = true
+ara-merge.workspace = true
+ara-schema.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
 [lints]
 workspace = true

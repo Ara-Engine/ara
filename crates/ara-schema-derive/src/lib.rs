@@ -481,7 +481,8 @@ fn is_option(ty: &Type) -> bool {
     matches!(ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Option"))
 }
 
-/// Joins `///` lines, dropping the single space after each `///`.
+/// Joins `///` lines into the doc text: soft-wrapped lines join with a space;
+/// blank lines (paragraphs) and list items keep their line breaks.
 fn doc_of(attrs: &[Attribute]) -> Option<String> {
     let lines: Vec<String> = attrs
         .iter()
@@ -495,12 +496,30 @@ fn doc_of(attrs: &[Attribute]) -> Option<String> {
             },
             _ => None,
         })
+        .flat_map(|chunk| {
+            chunk
+                .lines()
+                .map(|l| l.strip_prefix(' ').unwrap_or(l).trim_end().to_owned())
+                .collect::<Vec<_>>()
+        })
         .collect();
-    let text = lines
-        .iter()
-        .map(|l| l.strip_prefix(' ').unwrap_or(l))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut text = String::new();
+    for line in &lines {
+        let list_item = line.starts_with("- ") || line.starts_with("* ");
+        if text.is_empty() {
+            text.push_str(line);
+        } else if line.is_empty() {
+            text.push_str("\n\n");
+        } else if text.ends_with('\n') || list_item {
+            if !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(line);
+        } else {
+            text.push(' ');
+            text.push_str(line);
+        }
+    }
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_owned())
 }

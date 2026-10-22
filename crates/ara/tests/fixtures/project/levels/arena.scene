@@ -1,0 +1,40 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_arena001",
+  "records": {
+    "e_flr1": {
+      "name": "Floor",
+      "order": "a0",
+      "Transform": {
+        "scale": [40, 0.5, 40]
+      }
+    },
+    "e_lmp1": {
+      "name": "Lamp",
+      "parent": "e_stk2/e_c001",
+      "order": "a0",
+      "Light": {
+        "kind": "spot",
+        "intensity": 800
+      },
+      "Transform": {
+        "position": [0, 1, 0]
+      }
+    },
+    "e_stk2": {
+      "name": "Crates",
+      "order": "a1",
+      "prefab": "@prefabs/stack.prefab#pf_stack001",
+      "overrides": {
+        "Transform.position": [4, 0, -2],
+        "e_c001/e_lid1/MeshRenderer.tint": [0.2, 0.9, 0.2, 1],
+        "e_c002/Light": {
+          "intensity": 200
+        }
+      },
+      "removed": [
+        "e_c002/e_lid1"
+      ]
+    }
+  }
+}

@@ -61,7 +61,10 @@ pub fn resolve(
     };
     let resolved = ctx.doc(doc, base, Some(out));
     for (addr, e) in &resolved {
+        // Plain parents are checked with the document's structure; only addresses
+        // inside instances need the prefabs.
         if let Some(p) = &e.parent
+            && p.contains('/')
             && !resolved.contains_key(p)
             && e.source.0 == doc.id
             && !addr.contains('/')
