@@ -1,0 +1,10 @@
+{
+    "os":  "Microsoft Windows 11 Pro 10.0.26300",
+    "cpu":  "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "logicalProcessors":  16,
+    "ramBytes":  33410686976,
+    "gpu":  "NVIDIA GeForce RTX 4070 SUPER",
+    "gpuDriver":  "32.0.16.1714",
+    "rustc":  "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "defenderRealtime":  true
+}
