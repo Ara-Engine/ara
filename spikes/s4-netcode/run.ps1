@@ -1,3 +1,4 @@
+# Renet reference workflow. Use rerun.ps1 for the Rust 1.99.1 stack comparison.
 # Run from any directory. All output and processes stay inside this spike.
 $ErrorActionPreference = 'Stop'
 $env:CARGO_BUILD_JOBS = '4'

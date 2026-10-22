@@ -1,34 +1,77 @@
 //! Real UDP server and bot processes. Gameplay mutations occur only in Simulation::step.
 
 use crate::{
-    adapter::{self, Prediction, Registry, RemoteView, Snapshot},
-    gameplay::{self, Command, Frame, MoveInput, Simulation, State},
+    adapter::Snapshot,
+    gameplay::{Frame, State},
     local,
 };
+#[cfg(feature = "renet-stack")]
+use crate::{
+    adapter::{self, Prediction, Registry, RemoteView},
+    gameplay::{self, Command, MoveInput, Simulation},
+};
+#[cfg(feature = "renet-stack")]
 use renet::{DefaultChannel, RenetClient, RenetServer};
+#[cfg(feature = "renet-stack")]
 use renet_netcode::{
     ClientAuthentication, ConnectToken, NetcodeClientTransport, NetcodeServerTransport,
     ServerAuthentication, ServerConfig, generate_random_bytes,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "renet-stack")]
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
-    net::{SocketAddr, UdpSocket},
-    path::Path,
+    net::UdpSocket,
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use std::{fs, net::SocketAddr, path::Path};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[cfg(feature = "renet-stack")]
 const PROTOCOL: u64 = 0xa4a0_0004;
 pub const TICKS: u32 = 600;
+#[cfg(feature = "renet-stack")]
 const STEP: Duration = Duration::from_nanos(1_000_000_000 / 60);
+#[cfg(feature = "renet-stack")]
 const UNRELIABLE: u8 = DefaultChannel::Unreliable as u8;
+#[cfg(feature = "renet-stack")]
 const RELIABLE: u8 = DefaultChannel::ReliableOrdered as u8;
+
+/// Backend choice is session configuration, never gameplay policy.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Stack {
+    #[default]
+    Renet,
+    Lightyear,
+}
+
+pub fn run_server(directory: &Path) -> Result<()> {
+    match read_json::<Config>(directory.join("config.json"))?.stack {
+        #[cfg(feature = "renet-stack")]
+        Stack::Renet => server(directory),
+        #[cfg(feature = "lightyear-stack")]
+        Stack::Lightyear => crate::ly::server(directory),
+        #[allow(unreachable_patterns)]
+        _ => Err("requested stack is not compiled into this binary".into()),
+    }
+}
+pub fn run_client(directory: &Path, player: usize) -> Result<()> {
+    match read_json::<Config>(directory.join("config.json"))?.stack {
+        #[cfg(feature = "renet-stack")]
+        Stack::Renet => client(directory, player),
+        #[cfg(feature = "lightyear-stack")]
+        Stack::Lightyear => crate::ly::client(directory, player),
+        #[allow(unreachable_patterns)]
+        _ => Err("requested stack is not compiled into this binary".into()),
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub stack: Stack,
     pub proxies: Vec<SocketAddr>,
     pub listen: bool,
     pub clients: usize,
@@ -39,12 +82,14 @@ pub struct Config {
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
+#[cfg(feature = "renet-stack")]
 struct InputSample {
     tick: u32,
     input: MoveInput,
 }
 
 #[derive(Serialize, Deserialize)]
+#[cfg(feature = "renet-stack")]
 enum ClientMessage {
     Ready,
     Inputs(Vec<InputSample>),
@@ -53,6 +98,7 @@ enum ClientMessage {
 }
 
 #[derive(Serialize, Deserialize)]
+#[cfg(feature = "renet-stack")]
 enum ServerMessage {
     Baseline(Snapshot),
     Snapshot(Snapshot),
@@ -84,11 +130,24 @@ pub struct ServerReport {
     pub late_inputs: u32,
     pub late_commands_scheduled: u32,
     pub nonzero_input_ticks: u32,
-    pub bytes_encoded: u64,
+    pub bytes_encoded: Option<u64>,
     pub host_direct_input_ticks: u32,
     pub host_projection: Option<Snapshot>,
     pub all_final_acks: bool,
     pub elapsed_seconds: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct NativeDiagnostics {
+    pub rollback_events: u32,
+    pub replayed_ticks: u32,
+    pub faults_injected: u32,
+    pub predicted_entities: usize,
+    pub interpolated_entities: usize,
+    pub prediction_histories: usize,
+    pub private_inventory_components: usize,
+    pub world_resources: usize,
+    pub world_entities: usize,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -104,9 +163,11 @@ pub struct ClientReport {
     pub checked_prediction_checkpoints: u32,
     pub corrections_mm: Vec<f64>,
     pub resimulated_ticks: u32,
-    pub final_predicted_motor: gameplay::Motor,
+    pub final_predicted_motor: crate::gameplay::Motor,
     pub interpolation_samples: u32,
-    pub bytes_encoded: u64,
+    pub bytes_encoded: Option<u64>,
+    #[serde(default)]
+    pub native: Option<NativeDiagnostics>,
 }
 
 pub fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -> Result<()> {
@@ -118,11 +179,13 @@ pub fn read_json<T: for<'a> Deserialize<'a>>(path: impl AsRef<Path>) -> Result<T
     Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
 
+#[cfg(feature = "renet-stack")]
 fn now() -> Result<Duration> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?)
 }
 
 /// One authority world; listen's local endpoint submits the same typed action frames.
+#[cfg(feature = "renet-stack")]
 pub fn server(directory: &Path) -> Result<()> {
     let config: Config = read_json(directory.join("config.json"))?;
     let socket = UdpSocket::bind("127.0.0.1:0")?;
@@ -344,7 +407,7 @@ pub fn server(directory: &Path) -> Result<()> {
             .flat_map(|frame| frame.inputs)
             .filter(|input| *input != MoveInput::default())
             .count() as u32,
-        bytes_encoded: registry.bytes_encoded,
+        bytes_encoded: Some(registry.bytes_encoded),
         host_direct_input_ticks: if config.listen { TICKS } else { 0 },
         host_projection: config.listen.then(|| registry.project(&state, 0)),
         state,
@@ -366,6 +429,7 @@ pub fn server(directory: &Path) -> Result<()> {
 }
 
 /// A headless owner endpoint with input history, resimulation and remote interpolation.
+#[cfg(feature = "renet-stack")]
 pub fn client(directory: &Path, player: usize) -> Result<()> {
     let config: Config = read_json(directory.join("config.json"))?;
     let lead = config.prediction_lead_ticks;
@@ -551,7 +615,8 @@ pub fn client(directory: &Path, player: usize) -> Result<()> {
             resimulated_ticks: prediction.resimulated_ticks,
             final_predicted_motor,
             interpolation_samples,
-            bytes_encoded: registry.bytes_encoded,
+            bytes_encoded: Some(registry.bytes_encoded),
+            native: None,
         },
     )?;
     Ok(())

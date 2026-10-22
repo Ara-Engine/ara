@@ -1,0 +1,12 @@
+{
+  "ticks": 600,
+  "state_hash": "e013eb0e61ea0d88",
+  "gameplay_bytes_serialized": 0,
+  "ecs_resources": 1,
+  "baseline_ecs_resources": 1,
+  "network_resources": 0,
+  "transport_objects": 0,
+  "prediction_history_entries": 0,
+  "accepted_commands": 5,
+  "rejected_commands": 1
+}

@@ -1,14 +1,19 @@
-//! Renet fallback: schema registration, bounded codecs, visibility and prediction.
-//! Lightyear/Replicon failed the pinned toolchain probe; see compatibility/.
+//! Shared Ara policy registration and projections, plus the Renet reference predictor.
+//! The sibling `ly` adapter uses native Lightyear/Replicon facilities instead.
 
+#[cfg(feature = "renet-stack")]
+use crate::gameplay::MoveInput;
 use crate::{
-    gameplay::{self, Door, Inventory, Item, Motor, MoveInput, PickUp, State, ToggleDoor},
+    gameplay::{self, Door, Inventory, Item, Motor, PickUp, State, ToggleDoor},
     schema::{Audience, IntentSchema, Interpolation, NetSchema, Policy, Quantization},
 };
+#[cfg(feature = "renet-stack")]
 use bevy_ecs::prelude::{Entity, World};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "renet-stack")]
 use std::collections::BTreeMap;
 
+#[cfg(feature = "renet-stack")]
 pub const MAX_MESSAGE: usize = 16_384;
 
 /// Full visible baseline. There is no field capable of containing all inventories.
@@ -25,6 +30,7 @@ pub struct Snapshot {
 pub struct Registry {
     policies: Vec<Policy>,
     intents: Vec<(u16, &'static str, u16)>,
+    #[cfg(feature = "renet-stack")]
     pub bytes_encoded: u64,
 }
 
@@ -33,6 +39,7 @@ impl Registry {
         let mut result = Self {
             policies: Vec::new(),
             intents: Vec::new(),
+            #[cfg(feature = "renet-stack")]
             bytes_encoded: 0,
         };
         result.register::<Motor>();
@@ -108,6 +115,7 @@ impl Registry {
         }
     }
 
+    #[cfg(feature = "renet-stack")]
     pub fn encode<T: Serialize>(&mut self, value: &T) -> Result<Vec<u8>, String> {
         let bytes = postcard::to_allocvec(value).map_err(|error| error.to_string())?;
         if bytes.len() > MAX_MESSAGE {
@@ -118,6 +126,7 @@ impl Registry {
     }
 }
 
+#[cfg(feature = "renet-stack")]
 pub fn decode<T: for<'a> Deserialize<'a>>(bytes: &[u8]) -> Result<T, String> {
     if bytes.len() > MAX_MESSAGE {
         return Err("received message exceeds bound".into());
@@ -127,6 +136,7 @@ pub fn decode<T: for<'a> Deserialize<'a>>(bytes: &[u8]) -> Result<T, String> {
 
 /// Restore a checkpoint, then run precisely the same step over retained owner inputs.
 /// Histories belong to this network-only adapter, never to LocalSession.
+#[cfg(feature = "renet-stack")]
 pub struct Prediction {
     world: World,
     entity: Entity,
@@ -138,6 +148,7 @@ pub struct Prediction {
     pub resimulated_ticks: u32,
 }
 
+#[cfg(feature = "renet-stack")]
 impl Prediction {
     pub fn new() -> Self {
         let mut world = World::new();
@@ -212,11 +223,13 @@ impl Prediction {
 }
 
 /// Network-only presentation checkpoints, sampled without touching gameplay state.
+#[cfg(feature = "renet-stack")]
 pub struct RemoteView {
     older: Option<Snapshot>,
     newer: Option<Snapshot>,
 }
 
+#[cfg(feature = "renet-stack")]
 impl RemoteView {
     pub fn new() -> Self {
         Self {
@@ -288,7 +301,7 @@ pub fn first_difference(expected: &Snapshot, actual: &Snapshot) -> Option<String
     None
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "renet-stack"))]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;

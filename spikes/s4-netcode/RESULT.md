@@ -1,10 +1,10 @@
 # S4 — Schema-owned headless netcode
 
-Date: 2026-10-23. **Behavioral gates PASS using the permitted Renet fallback. The requested Lightyear 0.31 / Replicon 0.45.2 integration FAILS compatibility with the pinned Rust 1.96 toolchain.** This is evidence for a toolchain decision and the schema/session boundary, not approval to ship this throwaway replication implementation.
+Date: 2026-10-23. **Current result: all six gates PASS for Lightyear 0.31 + Replicon 0.45.2 and the Renet reference on Rust 1.99.1. Recommend Lightyear + Replicon behind Ara's schemas.** See **Lightyear rerun** and the revised **Proposed decision** below. The earlier sections retain the original Rust 1.96 measurements and compatibility finding as history; D17 supersedes that toolchain blocker.
 
-## Compatibility finding
+## Compatibility finding — original Rust 1.96 run
 
-`compatibility/` is an isolated, locked dependency probe for the exact requested stack. `cargo check --locked` exits 1 before compiling our code:
+`compatibility/` is an isolated, locked dependency probe for the exact requested stack. On Rust 1.96, `cargo check --locked` exited 1 before compiling our code:
 
 ```text
 error: rustc 1.96.0 is not supported by the following packages:
@@ -14,9 +14,9 @@ error: rustc 1.96.0 is not supported by the following packages:
   ...
 ```
 
-The complete stderr is [artifacts/lightyear-rust196.txt](artifacts/lightyear-rust196.txt). Replicon uses the umbrella `bevy` crate even with its default features disabled. In contrast, **`bevy_ecs = 0.20.0` itself builds on 1.96**, and is used by the working fallback. There was no toolchain upgrade, MSRV bypass, dependency patch or downgrade of Bevy ECS.
+The complete stderr is [artifacts/lightyear-rust196.txt](artifacts/lightyear-rust196.txt). Replicon uses the umbrella `bevy` crate even with its default features disabled. In contrast, **`bevy_ecs = 0.20.0` itself builds on 1.96**, and is used by the working fallback. During that original run there was no toolchain upgrade, MSRV bypass, dependency patch or downgrade of Bevy ECS.
 
-Consequently, no Lightyear/Replicon runtime, registration adapter, built-in predictor, visibility integration or link conditioner was validated here. Their API/performance suitability remains unproved. We did not claim an empty dependency probe implements those features. Naia/Quinn were not needed: Renet 2.0.0 + renet_netcode 2.0.0 resolved and passed the behavioral tests.
+At that point, no Lightyear/Replicon runtime, registration adapter, built-in predictor or visibility integration had been validated. The Rust 1.99.1 rerun below now supplies that evidence. Naia/Quinn were not needed: Renet 2.0.0 + renet_netcode 2.0.0 resolved and passed the initial behavioral tests.
 
 Primary package references: [Lightyear 0.31.0](https://crates.io/crates/lightyear/0.31.0), [Replicon 0.45.2](https://crates.io/crates/bevy_replicon/0.45.2), [Bevy ECS 0.20.0](https://crates.io/crates/bevy_ecs/0.20.0), [Renet 2.0.0](https://crates.io/crates/renet/2.0.0), [Renet netcode 2.0.0](https://crates.io/crates/renet_netcode/2.0.0). Cargo.lock and the actual compiler probe, rather than version metadata alone, establish the result.
 
@@ -67,7 +67,7 @@ cargo run --locked --release -- harness dedicated4-live impaired 21668 artifacts
 $run = Get-Content -Raw artifacts/dedicated4-impaired.json | ConvertFrom-Json
 cargo run --locked --release -- replay (Join-Path $run.runtime_artifacts 'replay.json')
 
-# Expected failure on the unchanged pinned toolchain:
+# Historical failure on 1.96; this now succeeds under D17 / Rust 1.99.1:
 cargo check --locked --manifest-path compatibility/Cargo.toml
 ```
 
@@ -145,7 +145,7 @@ Eight retained paired samples, 200,000 ticks/sample, first sample discarded. Fou
 
 Local is **1.345×** the bare four-motor loop with networking compiled out: roughly **12 ns/tick** of simulation contract/clock work, not wire processing. The session wrapper is within measurement noise of identical direct simulation. Cross-build timing differences reflect code generation and shared-host noise; they are not evidence that linking networking speeds anything up. No universal zero-CPU-overhead claim is made. The meaningful D4 result is zero mandatory networking work/allocation/serialization on the ordinary Local path.
 
-## Findings and limits
+## Original findings and limits
 
 1. **The compiler/toolchain boundary is the first upstream blocker.** This spike does not establish a runtime defect in Lightyear or Replicon. A parent-owned toolchain decision is required before evaluating that exact stack. Older Lightyear releases would evaluate a different architecture, so they were not silently substituted.
 2. **Policy and session boundaries work without backend names in gameplay.** The fallback's policy table validates this exact four-component scene and manually projects its fixed layout. M2 should generate registrations, field codecs and recipient projections from the schema DB; this is not a completed derive system or script binding generator.
@@ -156,9 +156,9 @@ Local is **1.345×** the bare four-motor loop with networking compiled out: roug
 7. **Replay scope is same-build/same-machine gameplay.** Schema identity/version is checked; the initial scene is the deterministic constructor. It is not a general replay container with build/asset hashes, arbitrary initial world snapshots or captured packet scheduling. FNV-1a is a diagnostic hash, not cryptographic integrity.
 8. **The fallback predictor is intentionally disposable.** In particular, replaying matching checkpoints is wasteful, and the six-tick run exposes its primitive clock/input buffering. Do not grow it into a second generic prediction framework before the requested upstream stack has a fair supported-toolchain evaluation.
 
-## Recommendation and proposed M2 boundary
+## Original recommendation and proposed M2 boundary
 
-Keep D4 and A10: one schema-owned gameplay model, server authority, selective owner prediction, remote presentation interpolation, and Local/Listen/Dedicated session semantics. The fallback proves these can coexist while Local excludes networking entirely. **Do not lock Lightyear/Replicon based on S4**, because its integration was not runnable on the agreed toolchain. First decide Rust >=1.97.1 (in parent-owned files), then rerun these exact gates against Lightyear/Replicon behind the same schema seam. Retain Renet as a demonstrated lower-layer fallback, not a recommendation to ship this custom predictor.
+The original recommendation was to retain D4/A10 and rerun the library evaluation after a parent-owned toolchain decision. D17 has now made that decision and the rerun is complete below. The proposed crate boundary and Rust API sketch remain applicable; the revised recommendation selects Lightyear/Replicon as the private implementation.
 
 Proposed crate responsibilities:
 
@@ -237,8 +237,123 @@ session.submit(player, ToggleDoor { target: door });
 
 Replication audience, quantization, interpolation and rollback must remain independent policies. Owner identity comes from authenticated session context, not the inventory's payload or an arbitrary client-supplied caller. The adapter compiles schema policy to upstream registrations and filters; it does not become a second schema source. Changing backend must preserve schema IDs, action semantics, same-tick checkpoints and test artifacts.
 
+## Lightyear rerun
+
+### Implementation and reproduction
+
+Merged local `main` (fast-forward to `c44ac6b`) and used D17's Rust **1.99.1**, Cargo 1.99.1, LLVM **23.1.1**, on the same Windows/Ryzen/RAM hardware. All Cargo work used **four jobs**. Only the owned spike changed after that merge.
+
+`src/ly.rs` and `src/ly/{server,client}.rs` are a sibling adapter. `--stack lightyear|renet` selects it in the shared process harness; Cargo features also allow **separate binaries with no dependency on the competing stack**. `Scene` now exposes the existing simulation through a caller-owned ECS world: Local owns a plain `World`; the native network authority owns that same scene inside a minimal `bevy_app::App`. There is no authoritative-world-to-replication-world mirror.
+
+The four component and two intent declarations, validators, scene, scripts, state hash and replay format are shared. Gameplay imports no networking library. The input type gains conditional Bevy reflection; its backend-required `MapEntities` implementation is outside gameplay. The adapter validates the same Ara policy table before registering types upstream.
+
+This is an actual library evaluation, not Lightyear carrying the old snapshot messages:
+
+- Motor/door/inventory/item components and stable IDs are registered with Lightyear/Replicon. Replicon supplies baselines, changed-component replication and acknowledgement tracking. The final control message contains **only a digest**; a client can acknowledge it only when its replicated ECS components and native predicted motor converge. Clients never apply an expected-state artifact to repair themselves.
+- Lightyear's native `InputPlugin<MoveInput>`, `ActionState`, input buffers, synchronized timeline, `PredictionManager`, `PredictionHistory`, confirmed histories, rollback detection and FixedUpdate replay are used. The custom Renet predictor is not compiled into a Lightyear-only binary.
+- `PredictionTarget` selects the owner; `InterpolationTarget` selects the other recipients. Each final client is asserted to have **one predicted entity, one prediction history, three interpolated motors and one private inventory component**. Door/inventory do not participate in motor rollback.
+- Owner-only inventory uses a Replicon `VisibilityFilter` with `SingleComponent<Inventory>` scope. This hides the private component without hiding the public character. Register the filter only on the server: a client-only App has no server `FilterRegistry`. A focused test constructs both roles and checks owner/other/missing-identity predicates.
+- Listen uses the same direct in-process host endpoint as the Renet reference; remote clients use the actual library stack. Local constructs neither adapter nor App. Both stacks use the **same external seeded UDP conditioner**, below encrypted transport and reliability, rather than different message-level simulators.
+
+From repository root:
+
+```powershell
+& .\spikes\s4-netcode\rerun.ps1
+python .\spikes\s4-netcode\summarize.py
+```
+
+The first command runs gates, separate fresh-target builds, Local measurements and five process scenarios per stack. The second aggregates the raw results and asserts all six gates for both stacks. It uses Python's standard library only. Individual examples from `spikes/s4-netcode/`:
+
+```powershell
+$env:CARGO_BUILD_JOBS = '4'
+cargo run --locked --release --no-default-features --features lightyear-stack -- harness dedicated4 impaired 21668 artifacts/rust199/lightyear-dedicated4-impaired.json --stack lightyear
+cargo run --locked --release --no-default-features --features renet-stack -- harness dedicated4 impaired 21668 artifacts/rust199/renet-dedicated4-impaired.json --stack renet
+cargo run --locked --release --no-default-features -- local
+```
+
+`rerun.ps1` records executable SHA-256 hashes and runs scenarios from those exact binaries. It captures build logs, bounds each build to ten minutes and samples available RAM. Lowest sampled availability was **2,320,656 KiB (2.21 GiB)** during the Lightyear build. Builds/scenarios were sequential, with no compiler competing with the measured Local loops or socket scenarios. The PC remains shared; this is not an isolated performance laboratory.
+
+### Six gates, both stacks
+
+| Gate | Lightyear + Replicon | Ara reference over Renet |
+|---|---|---|
+| Local / Listen / Dedicated mode parity | **PASS** | **PASS** |
+| Late join after door and pickups changed | **PASS** | **PASS** |
+| 100 ms nominal RTT, ±20 ms one-way jitter, 5% directional loss; convergence after flush | **PASS** | **PASS** |
+| Authoritative replay hash, all 600 tick checkpoints | **PASS** | **PASS** |
+| Inventory privacy | **PASS** | **PASS** |
+| Local zero serialization / network resources | **PASS** | **PASS** |
+
+All primary four-player modes end at **`e013eb0e61ea0d88`**, matching Local. Dedicated-three matches the three-player Local script at **`65aa66aa3f856001`**. Both stacks consume all **840 non-neutral input ticks** in the primary four-player impaired run, accept five intents and reject the rapid second door toggle. Both replay the persisted trace independently, not just its in-memory copy.
+
+Impaired late baseline: Lightyear dedicated tick **220**, listen **218**; Renet dedicated **198**, listen **197**. Every late baseline has an open door, exactly three collected pickups and only its recipient's inventory; player 3 subsequently receives its own pickup. Extra Lightyear connection/replication setup explains a different join tick; no join-latency target was specified.
+
+`cargo check --all-features --all-targets`, Clippy with warnings denied (all features and network-free), **7 all-feature tests + 3 network-free tests**, and **10 socket/process scenarios** passed. The old compatibility probe now succeeds: [compiler record](artifacts/rust199/compatibility-check.txt).
+
+Raw data and computed gates: [summary.json](artifacts/rust199/summary.json). All native counts, including selective prediction and rollback events, are embedded in the committed per-client reports; runtime logs/replays remain in the ignored per-run directories.
+
+### Bandwidth and corrections
+
+Same four players, 50 logical replicated entities, 60 Hz simulation, 20 Hz replication and authority seconds 5–9 measurement window. Units and header exclusions are the same as the original measurement: **offered encrypted UDP payload bytes/s**, including protocol/ACK overhead, before impairment; no IP/UDP/Ethernet headers. Forty-five pickups are static during this window. Renet sends full snapshots; Replicon uses change tracking, so this compares complete candidate stacks, not only raw transport efficiency.
+
+| Client | Lightyear down / up, bytes/s | Renet down / up, bytes/s |
+|---|---:|---:|
+| 0 | 2,991.7 / 4,837.3 | 4,352.1 / 8,823.1 |
+| 1 | 2,959.7 / 4,828.3 | 4,319.6 / 8,779.9 |
+| 2 | 2,956.7 / 4,859.0 | 4,312.1 / 8,784.9 |
+| 3 | 2,991.9 / 4,802.0 | 4,302.6 / 8,791.9 |
+| Mean | **2,975.0 / 4,831.6** | **4,321.6 / 8,795.0** |
+
+Lightyear used **31.2% less downstream and 45.1% less upstream traffic** in this workload. Native input sequence encoding and changed-component replication are functionality the Renet reference does not implement. This is not a fundamental bandwidth limitation of Renet. Actual whole-run losses were Lightyear **5.12% down / 5.20% up**, Renet **4.44% down / 5.41% up**. A seed chooses impairment samples, not identical packet counts across different protocols.
+
+Primary correction magnitudes/frequency: **both zero** (Lightyear **685** checked owner checkpoints, Renet **715**). To avoid declaring prediction proved by an error-free trajectory, the extra Lightyear live-profile probe perturbs owner 0's prediction by **250 mm at tick 330**. Its native metrics show **one rollback, 12 replayed ticks**, and one same-tick **250 mm** correction among **677** checked checkpoints; the final authoritative hash still matches Local. Other owners had zero corrections. No custom restore or final snap was applied.
+
+The Renet reference's six-tick stress profile records **224/707** nonzero corrections, mean **48.44 mm**, maximum **125 mm**; only **406/840** intended moving-input ticks arrive on time. Its final state differs from the ideal trajectory but converges and replays exactly (`f66b2ff29b644d38`). Lightyear's corresponding tighter-jitter-margin profile consumes all 840 and preserves the ideal result. These stress figures are **not an identical-timing-policy correction benchmark**: the reference uses fixed lead/neutral fallback, while native synchronization adapts its timeline and predicts missing input, and the native probe adds the deliberate prediction fault. The primary scenarios and conditioner are shared; these extra probes characterize and verify each predictor.
+
+The legacy `prediction_lead_ticks` report field selects the harness's normal/tight profile. It is a fixed lead in the reference, **not a fixed Lightyear prediction depth**. Native settings are no input delay, jitter safety margin 6 ticks normally / 1 tick in the extra probe, with library RTT/jitter synchronization. The API allows input delay and prediction-window bounds independently. M2 must expose deliberate timing policy, not present these profile labels as measured lead.
+
+### Clean build, size and Local cost
+
+Fresh, previously nonexistent target directory per configuration; **offline cached registry/toolchain**, incremental compilation disabled, four jobs, identical release profile (`opt-level=3`, `debug=1`, no added LTO/stripping). No compiler wrapper or custom Rust flags were set. Wall time includes Cargo/process overhead. PDB files are reported separately and excluded from executable size.
+
+| Build | Clean time | Executable bytes | PDB bytes | Normal dependency packages |
+|---|---:|---:|---:|---:|
+| Lightyear-only | **171.07 s** | **12,296,704** | 68,448,256 | 189 |
+| Renet-only | **32.97 s** | **1,257,984** | 6,582,272 | 93 |
+| Local-only, networking excluded | **27.85 s** | **422,912** | 3,534,848 | 63 |
+
+[Build settings, hashes and RAM samples](artifacts/rust199/builds.json); adjacent `build-*.stderr.txt` files preserve compiler output. Lightyear's cold build is **5.19×** and its executable **9.78×** this small Renet reference. The reference implements much less general netcode; these costs are real but do not establish an equally capable custom stack would retain the reference's size.
+
+Local reports in **all three binaries** have zero gameplay serialization, zero network resources, zero transport objects and zero history entries; ECS resources equal the fresh-World baseline of one. The network-free graph has neither `bevy`, `bevy_app`, Lightyear, Replicon nor Renet. Thus a Local-only export can exclude the networking build and binary cost as well as runtime facilities. A multiplayer-capable executable retains its larger linked binary even when running Local; do not claim otherwise.
+
+Same Local microbenchmark as before (8 retained samples × 200,000 ticks):
+
+| Binary | Bare motor loop, ns/tick | Identical direct simulation, ns/tick | Local, ns/tick | Local / direct |
+|---|---:|---:|---:|---:|
+| Local-only | 30.920 | 43.744 | **43.877** | **1.003×** |
+| Renet-capable | 36.834 | 56.249 | 59.754 | 1.062× |
+| Lightyear-capable | 31.692 | 47.123 | 46.432 | 0.985× |
+
+Cross-build differences and the 6% reference-wrapper variation are shared-host/code-generation noise, not a claim that one linked library accelerates Local or that every wrapper is provably cycle-free. Structural absence of network work is the D4 guarantee; the bare loop also omits simulation validation and clock work.
+
+### Fit and remaining gaps
+
+**R09's simulation feature fits.** Ara declares typed `MoveInput`, complete restorable `Motor` and one `step_motor`; native systems call it in FixedUpdate on authority and predicting owner, and the upstream rollback pipeline calls it again during replay. Scope assertions and the injected-error recovery demonstrate selective owner prediction rather than prediction of the entire scene. Non-motor state stays server-authoritative. Lightyear does not prove the completeness/purity of arbitrary gameplay state: Ara must enforce declared dependencies, deterministic context and ECS-only script state.
+
+**Local can avoid App/runtime machinery; a network build cannot avoid all transitive Bevy crates.** Our code imports selected crates, never umbrella `bevy`, and enables no DefaultPlugins, renderer, window or GPU integration. Replicon's published dependency still brings the minimal umbrella facade and `bevy_internal`, plus App/time/state/reflection, input, transform, math/shape/curve and diagnostics crates. Neither network graph includes `wgpu`, `bevy_render` or `bevy_winit`. Removing that facade entirely would require an upstream dependency change; it is not a runtime cost paid by `LocalSession`. The measured native client has **69 resources and 256 total ECS entities**, including observers/transport bookkeeping, with **50 game replicas**; Local has none of this setup.
+
+**Delta and priority are present in these releases.** Do not repeat the old migration note as a current blanket feature gap. Published source exposes `replicate_diff` / `predict_diff`; diffs require explicit `EntityDiffExt::apply_diff` mutation tracking. This spike uses ordinary changed-component replication, not that diff writer path. Replicon also has actual entity/per-client mutation priorities (`ReplicatePriority`, `PriorityMap`), distinct from replication-rule precedence. Lightyear adds channel/message priorities and packet bandwidth admission. These APIs were inspected, not subjected to a congestion/starvation benchmark here; Ara still needs generated policy bindings and budget tests.
+
+**Authority migration is not established.** Server authority and input ownership are separate. `ControlledBy`/prediction-target reassignment is not a tested trusted-authority handoff or host migration implementation. One explicit `ReplicationMode::Server` routing branch remains `unimplemented!` for server-scoped membership in the pinned source. Keep M5's authority-switching/host-migration work and tests; it is not a blocker for the proved single-authority M2 model.
+
+Other M2 work remains: generated field codecs/IDs and protocol version compatibility, arbitrary initial-world replay snapshots, dynamic entity generations/lifecycle, reconnects, interest transitions, bounded adversarial decode/queues, physics/C# prediction and scale. Mixed public/private fields inside one logical Ara type need generated scoped wire components/projections; the proved visibility scope here is a whole inventory component. Upstream machinery does not eliminate Ara's schema, validation, session or replay responsibilities.
+
+Source inspection is of the **published pinned crates**, not floating main. Lightyear package VCS commit: `8a926d6fece6a0cf04c2747de90c01258524fe0d`. The `.cargo_vcs_info.json` files identify these upstream source paths: [native inputs](https://github.com/cBournhonesque/lightyear/tree/8a926d6fece6a0cf04c2747de90c01258524fe0d/crates/inputs/inputs_native), [prediction configuration](https://github.com/cBournhonesque/lightyear/blob/8a926d6fece6a0cf04c2747de90c01258524fe0d/crates/replication/prediction/src/manager.rs), [diff registration](https://github.com/cBournhonesque/lightyear/blob/8a926d6fece6a0cf04c2747de90c01258524fe0d/crates/replication/replication/src/registry/replication.rs). See also [Replicon visibility/priority documentation](https://docs.rs/bevy_replicon/0.45.2/bevy_replicon/).
+
+**Recommendation: adopt Lightyear + Replicon for M2.** It passes the same behavioral gates with the same declarations, provides the actual input/history/rollback/interpolation/lifecycle substrate, reduces traffic in the measured scene and keeps Local independent. The substantial cold-build/binary cost is isolated behind optional `ara-net`. Building an equally capable Ara layer on Renet/Quinn would take ownership of much more netcode than this reference proves. Keep the Renet spike for regression/comparison, not as a second shipping replicator or a growing generic prediction framework.
+
 ## Proposed decision
 
-> **S4: preserve schema-owned multiplayer and an independent Local simulation path.** The Local/Listen/Dedicated character, shared-door, private-inventory, late-join, adverse-link and same-machine replay gates pass with Bevy ECS 0.20 + Renet 2.0/netcode. Local creates no network resources or gameplay serialization. The exact Lightyear 0.31 + Replicon 0.45.2 stack cannot be evaluated on pinned Rust 1.96 because Lightyear and umbrella Bevy require Rust 1.97.1. Defer selection of that runtime stack until an explicit toolchain decision and a rerun of these gates. M2's `ara-net` is optional and private behind `ara-schema` / `ara-sim`; no upstream networking types enter gameplay declarations. Keep the spike's custom replication/prediction disposable.
+> **S4: adopt Lightyear 0.31 + Replicon 0.45.2 behind Ara-owned schemas for M2 Multiplayer v1, on D17's Rust 1.99.1.** Local/Listen/Dedicated character, door, private inventory, late join, adverse-link convergence, privacy and same-machine replay gates pass for both candidates. Use upstream native input buffering, selective owner prediction/rollback, interpolation and Replicon component replication; gameplay imports no backend types. Keep `ara-sim` independent and `ara-net` optional: ordinary Local allocates no network resources/history and serializes no gameplay state, while Local-only builds exclude the network/App dependency graph. Generate registrations, recipient filters and codecs from `ara-schema`, retaining server-side typed-intent validation. Accept the measured native cold-build/binary cost for the capability and reduced integration ownership. Diff/priority APIs exist but still need Ara bindings and scale tests; authority switching/host migration remain M5 work. Keep the Renet reference disposable and the same scenario/replay gates as the adapter contract.
 
-This section is proposed text for the parent agent. No locked decision, milestone, root README or AGENTS file was edited.
+This is proposed text for the parent agent. No locked decision, milestone, root README or AGENTS file was edited after merging `main`.

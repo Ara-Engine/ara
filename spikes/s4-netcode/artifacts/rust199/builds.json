@@ -1,0 +1,73 @@
+{
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "jobs":  4,
+    "incremental":  false,
+    "registry_cached":  true,
+    "os":  "Microsoft Windows 11 Pro",
+    "cpu":  "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "ram_bytes":  33410686976,
+    "builds":  [
+                   {
+                       "stack":  "renet",
+                       "seconds":  32.966929199999996,
+                       "exe_bytes":  1257984,
+                       "pdb_bytes":  6582272,
+                       "sha256":  "24657CF2BFFC89D5C24A913EFA0ED04D8EDCB937341C2B92292A58854DA9CB7A",
+                       "minimum_free_ram_kb":  4633908,
+                       "target":  "target/clean-renet-20261022T231533",
+                       "executable":  "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-renet-20261022T231533\\release\\ara-s4-netcode.exe",
+                       "arguments":  [
+                                         "build",
+                                         "--offline",
+                                         "--locked",
+                                         "--release",
+                                         "--no-default-features",
+                                         "--target-dir",
+                                         "target/clean-renet-20261022T231533",
+                                         "--features",
+                                         "renet-stack"
+                                     ]
+                   },
+                   {
+                       "stack":  "lightyear",
+                       "seconds":  171.0694881,
+                       "exe_bytes":  12296704,
+                       "pdb_bytes":  68448256,
+                       "sha256":  "6422345C796F12D179476E1124B52EC8C8E10E0215787EAD20F8E4976049564D",
+                       "minimum_free_ram_kb":  2320656,
+                       "target":  "target/clean-lightyear-20261022T231533",
+                       "executable":  "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-lightyear-20261022T231533\\release\\ara-s4-netcode.exe",
+                       "arguments":  [
+                                         "build",
+                                         "--offline",
+                                         "--locked",
+                                         "--release",
+                                         "--no-default-features",
+                                         "--target-dir",
+                                         "target/clean-lightyear-20261022T231533",
+                                         "--features",
+                                         "lightyear-stack"
+                                     ]
+                   },
+                   {
+                       "stack":  "local",
+                       "seconds":  27.846196,
+                       "exe_bytes":  422912,
+                       "pdb_bytes":  3534848,
+                       "sha256":  "5AB5D52FF1563DDD0C65DF2C7278B0F49561B7B485F5E0A54757671AA1CDD6EF",
+                       "minimum_free_ram_kb":  4481708,
+                       "target":  "target/clean-local-20261022T231533",
+                       "executable":  "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-local-20261022T231533\\release\\ara-s4-netcode.exe",
+                       "arguments":  [
+                                         "build",
+                                         "--offline",
+                                         "--locked",
+                                         "--release",
+                                         "--no-default-features",
+                                         "--target-dir",
+                                         "target/clean-local-20261022T231533"
+                                     ]
+                   }
+               ]
+}

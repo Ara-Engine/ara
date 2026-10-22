@@ -3,7 +3,7 @@ use crate::{
     adapter::{self, Registry},
     conditioner::{DirectionStats, Link},
     gameplay,
-    session::{self, ClientReport, Config, ServerReport},
+    session::{self, ClientReport, Config, ServerReport, Stack},
 };
 use serde::Serialize;
 use std::{
@@ -14,6 +14,22 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// The parent compares failure artifacts; clients never consume an expected state to repair themselves.
+fn failed_field(directory: &Path) -> Option<String> {
+    for player in 0..4 {
+        let expected = directory.join(format!("expected-{player}.json"));
+        let observed = directory.join(format!("observed-{player}.json"));
+        if let (Ok(expected), Ok(observed)) = (
+            session::read_json::<adapter::Snapshot>(expected),
+            session::read_json::<adapter::Snapshot>(observed),
+        ) && let Some(field) = adapter::first_difference(&expected, &observed)
+        {
+            return Some(format!("client {player}: {field}"));
+        }
+    }
+    None
+}
 
 /// All success and error paths kill and reap the processes this harness owns.
 struct Children(Vec<Child>);
@@ -60,6 +76,7 @@ pub struct ClientMeasurement {
 }
 #[derive(Serialize)]
 pub struct Report {
+    pub stack: Stack,
     pub mode: String,
     pub profile: String,
     pub seed: u64,
@@ -77,7 +94,7 @@ pub struct Report {
     pub measured_wall_seconds: f64,
 }
 
-pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path) -> Result<Report> {
+pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path, stack: Stack) -> Result<Report> {
     let (listen, clients, late) = match mode {
         "dedicated3" => (false, 3, false),
         "dedicated4" => (false, 4, true),
@@ -102,6 +119,7 @@ pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path) -> Result<Repor
     session::write_json(
         directory.join("config.json"),
         &Config {
+            stack,
             proxies,
             listen,
             clients,
@@ -168,6 +186,9 @@ pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path) -> Result<Repor
         for child in &mut children.0 {
             match child.try_wait()? {
                 Some(status) if !status.success() => {
+                    if let Some(field) = failed_field(&directory) {
+                        return Err(field.into());
+                    }
                     return Err(format!(
                         "child {} failed {status}; inspect {}",
                         child.id(),
@@ -265,6 +286,7 @@ pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path) -> Result<Repor
         return Err("network test did not exercise authoritative movement".into());
     }
     if live
+        && stack == Stack::Renet
         && !measurements
             .iter()
             .any(|measurement| !measurement.state.corrections_mm.is_empty())
@@ -279,6 +301,7 @@ pub fn run(mode: &str, impaired: bool, seed: u64, output: &Path) -> Result<Repor
         return Err("inventory privacy assertion failed".into());
     }
     let report = Report {
+        stack,
         mode: mode.into(),
         profile: if impaired {
             "100ms RTT / +/-20ms one-way jitter / 5% loss each direction"

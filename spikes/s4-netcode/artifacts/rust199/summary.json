@@ -1,0 +1,247 @@
+{
+  "builds": {
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "jobs": 4,
+    "incremental": false,
+    "registry_cached": true,
+    "os": "Microsoft Windows 11 Pro",
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "ram_bytes": 33410686976,
+    "builds": [
+      {
+        "stack": "renet",
+        "seconds": 32.966929199999996,
+        "exe_bytes": 1257984,
+        "pdb_bytes": 6582272,
+        "sha256": "24657CF2BFFC89D5C24A913EFA0ED04D8EDCB937341C2B92292A58854DA9CB7A",
+        "minimum_free_ram_kb": 4633908,
+        "target": "target/clean-renet-20261022T231533",
+        "executable": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-renet-20261022T231533\\release\\ara-s4-netcode.exe",
+        "arguments": [
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--no-default-features",
+          "--target-dir",
+          "target/clean-renet-20261022T231533",
+          "--features",
+          "renet-stack"
+        ]
+      },
+      {
+        "stack": "lightyear",
+        "seconds": 171.0694881,
+        "exe_bytes": 12296704,
+        "pdb_bytes": 68448256,
+        "sha256": "6422345C796F12D179476E1124B52EC8C8E10E0215787EAD20F8E4976049564D",
+        "minimum_free_ram_kb": 2320656,
+        "target": "target/clean-lightyear-20261022T231533",
+        "executable": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-lightyear-20261022T231533\\release\\ara-s4-netcode.exe",
+        "arguments": [
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--no-default-features",
+          "--target-dir",
+          "target/clean-lightyear-20261022T231533",
+          "--features",
+          "lightyear-stack"
+        ]
+      },
+      {
+        "stack": "local",
+        "seconds": 27.846196,
+        "exe_bytes": 422912,
+        "pdb_bytes": 3534848,
+        "sha256": "5AB5D52FF1563DDD0C65DF2C7278B0F49561B7B485F5E0A54757671AA1CDD6EF",
+        "minimum_free_ram_kb": 4481708,
+        "target": "target/clean-local-20261022T231533",
+        "executable": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\target\\clean-local-20261022T231533\\release\\ara-s4-netcode.exe",
+        "arguments": [
+          "build",
+          "--offline",
+          "--locked",
+          "--release",
+          "--no-default-features",
+          "--target-dir",
+          "target/clean-local-20261022T231533"
+        ]
+      }
+    ]
+  },
+  "stacks": {
+    "renet": {
+      "gates": {
+        "mode_parity": true,
+        "late_join": true,
+        "conditioner_convergence": true,
+        "replay": true,
+        "privacy": true,
+        "local_zero_serialization": true
+      },
+      "bandwidth_clients": [
+        {
+          "player": 0,
+          "down_bytes_s": 4352.080731747437,
+          "up_bytes_s": 8823.136333028056
+        },
+        {
+          "player": 1,
+          "down_bytes_s": 4319.587595110223,
+          "up_bytes_s": 8779.895466580072
+        },
+        {
+          "player": 2,
+          "down_bytes_s": 4312.089178963174,
+          "up_bytes_s": 8784.894410678105
+        },
+        {
+          "player": 3,
+          "down_bytes_s": 4302.5911851769115,
+          "up_bytes_s": 8791.89293241535
+        }
+      ],
+      "mean_down_bytes_s": 4321.587172749437,
+      "mean_up_bytes_s": 8794.954785675396,
+      "nominal_corrections": 0,
+      "nominal_prediction_checks": 715,
+      "stress_corrections": 224,
+      "stress_mean_mm": 48.4375,
+      "stress_max_mm": 125.0,
+      "stress_checks": 707,
+      "stress_ideal_outcome_match": false,
+      "stress_native_diagnostics": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "late_join_ticks": {
+        "dedicated4": 198,
+        "listen": 197,
+        "dedicated4-live": 199
+      },
+      "normal_dependency_packages": 93
+    },
+    "lightyear": {
+      "gates": {
+        "mode_parity": true,
+        "late_join": true,
+        "conditioner_convergence": true,
+        "replay": true,
+        "privacy": true,
+        "local_zero_serialization": true
+      },
+      "bandwidth_clients": [
+        {
+          "player": 0,
+          "down_bytes_s": 2991.662671657771,
+          "up_bytes_s": 4837.263026177048
+        },
+        {
+          "player": 1,
+          "down_bytes_s": 2959.6609315631536,
+          "up_bytes_s": 4828.262536775437
+        },
+        {
+          "player": 2,
+          "down_bytes_s": 2956.660768429283,
+          "up_bytes_s": 4859.014208897608
+        },
+        {
+          "player": 3,
+          "down_bytes_s": 2991.9126852522604,
+          "up_bytes_s": 4802.011109354071
+        }
+      ],
+      "mean_down_bytes_s": 2974.974264225617,
+      "mean_up_bytes_s": 4831.637720301042,
+      "nominal_corrections": 0,
+      "nominal_prediction_checks": 685,
+      "stress_corrections": 1,
+      "stress_mean_mm": 250.0,
+      "stress_max_mm": 250.0,
+      "stress_checks": 677,
+      "stress_ideal_outcome_match": true,
+      "stress_native_diagnostics": [
+        {
+          "rollback_events": 1,
+          "replayed_ticks": 12,
+          "faults_injected": 1,
+          "predicted_entities": 1,
+          "interpolated_entities": 3,
+          "prediction_histories": 1,
+          "private_inventory_components": 1,
+          "world_resources": 69,
+          "world_entities": 256
+        },
+        {
+          "rollback_events": 0,
+          "replayed_ticks": 0,
+          "faults_injected": 0,
+          "predicted_entities": 1,
+          "interpolated_entities": 3,
+          "prediction_histories": 1,
+          "private_inventory_components": 1,
+          "world_resources": 69,
+          "world_entities": 256
+        },
+        {
+          "rollback_events": 0,
+          "replayed_ticks": 0,
+          "faults_injected": 0,
+          "predicted_entities": 1,
+          "interpolated_entities": 3,
+          "prediction_histories": 1,
+          "private_inventory_components": 1,
+          "world_resources": 69,
+          "world_entities": 256
+        },
+        {
+          "rollback_events": 0,
+          "replayed_ticks": 0,
+          "faults_injected": 0,
+          "predicted_entities": 1,
+          "interpolated_entities": 3,
+          "prediction_histories": 1,
+          "private_inventory_components": 1,
+          "world_resources": 69,
+          "world_entities": 256
+        }
+      ],
+      "late_join_ticks": {
+        "dedicated4": 220,
+        "listen": 218,
+        "dedicated4-live": 205
+      },
+      "normal_dependency_packages": 189
+    }
+  },
+  "local_benchmarks": {
+    "renet": {
+      "bare_ns": 36.83425,
+      "direct_ns": 56.24850000000001,
+      "local_ns": 59.7535,
+      "local_direct_ratio": 1.0623127727850519
+    },
+    "lightyear": {
+      "bare_ns": 31.69175,
+      "direct_ns": 47.123000000000005,
+      "local_ns": 46.431749999999994,
+      "local_direct_ratio": 0.9853309424272646
+    },
+    "local": {
+      "bare_ns": 30.92,
+      "direct_ns": 43.7435,
+      "local_ns": 43.877,
+      "local_direct_ratio": 1.0030518819938963
+    }
+  },
+  "lightyear_traffic_reduction_percent": {
+    "down": 31.160146832514112,
+    "up": 45.06352973899907
+  }
+}
