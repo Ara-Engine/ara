@@ -1,0 +1,1260 @@
+{
+  "mode": "listen",
+  "profile": "100ms RTT / +/-20ms one-way jitter / 5% loss each direction",
+  "seed": 21668,
+  "runtime_artifacts": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-aff7a98c\\spikes\\s4-netcode\\artifacts/runtime\\listen-21668-1792708579534939700",
+  "server": {
+    "listen": true,
+    "clients": 4,
+    "ticks": 600,
+    "entities_replicated": 50,
+    "state": {
+      "tick": 600,
+      "motors": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "door": {
+        "open": true,
+        "changed": 40
+      },
+      "inventories": [
+        {
+          "owner": 0,
+          "items": 1
+        },
+        {
+          "owner": 1,
+          "items": 2
+        },
+        {
+          "owner": 2,
+          "items": 4
+        },
+        {
+          "owner": 3,
+          "items": 8
+        }
+      ],
+      "items": [
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        }
+      ],
+      "callers": [
+        {
+          "sequence": 60,
+          "last_toggle": 40,
+          "last_pickup": 60
+        },
+        {
+          "sequence": 60,
+          "last_toggle": null,
+          "last_pickup": 60
+        },
+        {
+          "sequence": 60,
+          "last_toggle": null,
+          "last_pickup": 60
+        },
+        {
+          "sequence": 260,
+          "last_toggle": null,
+          "last_pickup": 260
+        }
+      ]
+    },
+    "state_hash": "e013eb0e61ea0d88",
+    "replay_hash": "e013eb0e61ea0d88",
+    "script_hash": "e013eb0e61ea0d88",
+    "exact_script_match": true,
+    "replay_tick_checkpoints": 600,
+    "accepted_commands": 5,
+    "rejected_commands": 1,
+    "late_inputs": 26449,
+    "late_commands_scheduled": 0,
+    "nonzero_input_ticks": 840,
+    "bytes_encoded": 57865,
+    "host_direct_input_ticks": 600,
+    "host_projection": {
+      "tick": 600,
+      "motors": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "z": 0
+        }
+      ],
+      "door": {
+        "open": true,
+        "changed": 40
+      },
+      "items": [
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": false,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        },
+        {
+          "available": true,
+          "x": 0
+        }
+      ],
+      "inventory": {
+        "owner": 0,
+        "items": 1
+      }
+    },
+    "all_final_acks": true,
+    "elapsed_seconds": 10.1359754
+  },
+  "clients": [
+    {
+      "player": 1,
+      "upstream": {
+        "offered_packets": 1203,
+        "dropped_packets": 68,
+        "offered_udp_bytes": 87501,
+        "delivered_udp_bytes": 82983,
+        "delay_sum_us": 56825438,
+        "min_delay_us": 30008,
+        "max_delay_us": 69973,
+        "measurement_udp_bytes": 35505
+      },
+      "downstream": {
+        "offered_packets": 795,
+        "dropped_packets": 29,
+        "offered_udp_bytes": 43668,
+        "delivered_udp_bytes": 42125,
+        "delay_sum_us": 38650623,
+        "min_delay_us": 30025,
+        "max_delay_us": 69999,
+        "measurement_udp_bytes": 17344
+      },
+      "upstream_udp_bytes_per_second": 8875.529750760727,
+      "downstream_udp_bytes_per_second": 4335.648162151641,
+      "state": {
+        "player": 1,
+        "state": {
+          "tick": 600,
+          "motors": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "door": {
+            "open": true,
+            "changed": 40
+          },
+          "items": [
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            }
+          ],
+          "inventory": {
+            "owner": 1,
+            "items": 2
+          }
+        },
+        "snapshots": 194,
+        "first_baseline_tick": 0,
+        "baseline_door_open": false,
+        "baseline_collected_items": 0,
+        "foreign_inventory_values": 0,
+        "inventory_values_received": 195,
+        "checked_prediction_checkpoints": 194,
+        "corrections_mm": [],
+        "resimulated_ticks": 2457,
+        "final_predicted_motor": {
+          "x": 0,
+          "z": 0
+        },
+        "interpolation_samples": 585,
+        "bytes_encoded": 54155
+      },
+      "converged": true
+    },
+    {
+      "player": 2,
+      "upstream": {
+        "offered_packets": 1208,
+        "dropped_packets": 56,
+        "offered_udp_bytes": 87900,
+        "delivered_udp_bytes": 83771,
+        "delay_sum_us": 57621556,
+        "min_delay_us": 30047,
+        "max_delay_us": 69975,
+        "measurement_udp_bytes": 35449
+      },
+      "downstream": {
+        "offered_packets": 798,
+        "dropped_packets": 47,
+        "offered_udp_bytes": 43630,
+        "delivered_udp_bytes": 41050,
+        "delay_sum_us": 37329817,
+        "min_delay_us": 30032,
+        "max_delay_us": 69811,
+        "measurement_udp_bytes": 17280
+      },
+      "upstream_udp_bytes_per_second": 8861.53088676854,
+      "downstream_udp_bytes_per_second": 4319.649460446285,
+      "state": {
+        "player": 2,
+        "state": {
+          "tick": 600,
+          "motors": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "door": {
+            "open": true,
+            "changed": 40
+          },
+          "items": [
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            }
+          ],
+          "inventory": {
+            "owner": 2,
+            "items": 4
+          }
+        },
+        "snapshots": 190,
+        "first_baseline_tick": 0,
+        "baseline_door_open": false,
+        "baseline_collected_items": 0,
+        "foreign_inventory_values": 0,
+        "inventory_values_received": 190,
+        "checked_prediction_checkpoints": 190,
+        "corrections_mm": [],
+        "resimulated_ticks": 2348,
+        "final_predicted_motor": {
+          "x": 0,
+          "z": 0
+        },
+        "interpolation_samples": 585,
+        "bytes_encoded": 54173
+      },
+      "converged": true
+    },
+    {
+      "player": 3,
+      "upstream": {
+        "offered_packets": 815,
+        "dropped_packets": 33,
+        "offered_udp_bytes": 61303,
+        "delivered_udp_bytes": 58810,
+        "delay_sum_us": 38552560,
+        "min_delay_us": 30026,
+        "max_delay_us": 69957,
+        "measurement_udp_bytes": 35334
+      },
+      "downstream": {
+        "offered_packets": 537,
+        "dropped_packets": 24,
+        "offered_udp_bytes": 29306,
+        "delivered_udp_bytes": 27911,
+        "delay_sum_us": 25660307,
+        "min_delay_us": 30294,
+        "max_delay_us": 69954,
+        "measurement_udp_bytes": 17233
+      },
+      "upstream_udp_bytes_per_second": 8832.783219641726,
+      "downstream_udp_bytes_per_second": 4307.900413881413,
+      "state": {
+        "player": 3,
+        "state": {
+          "tick": 600,
+          "motors": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 0,
+              "z": 0
+            }
+          ],
+          "door": {
+            "open": true,
+            "changed": 40
+          },
+          "items": [
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": false,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            },
+            {
+              "available": true,
+              "x": 0
+            }
+          ],
+          "inventory": {
+            "owner": 3,
+            "items": 8
+          }
+        },
+        "snapshots": 128,
+        "first_baseline_tick": 198,
+        "baseline_door_open": true,
+        "baseline_collected_items": 3,
+        "foreign_inventory_values": 0,
+        "inventory_values_received": 129,
+        "checked_prediction_checkpoints": 127,
+        "corrections_mm": [],
+        "resimulated_ticks": 1606,
+        "final_predicted_motor": {
+          "x": 0,
+          "z": 0
+        },
+        "interpolation_samples": 391,
+        "bytes_encoded": 38328
+      },
+      "converged": true
+    }
+  ],
+  "bandwidth_window_seconds": 4.0003246,
+  "late_join_pass": true,
+  "local_replay_match": true,
+  "ideal_script_outcome_match": true,
+  "prediction_lead_ticks": 12,
+  "replay_pass": true,
+  "privacy_pass": true,
+  "convergence_pass": true,
+  "measured_wall_seconds": 10.980593
+}

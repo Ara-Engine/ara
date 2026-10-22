@@ -1,0 +1,11 @@
+{
+    "date":  "2026-10-23",
+    "os":  "Microsoft Windows 11 Pro",
+    "cpu":  "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "ram_bytes":  33410686976,
+    "rustc":  "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-pc-windows-msvc\nrelease: 1.96.0\nLLVM version: 22.1.2",
+    "cargo":  "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "cargo_build_jobs":  4,
+    "profile":  "release: optimized, debug=1",
+    "notes":  "Shared Windows host; no isolated CPU affinity or thermal controls."
+}

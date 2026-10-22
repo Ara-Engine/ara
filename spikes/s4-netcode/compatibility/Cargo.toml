@@ -1,0 +1,12 @@
+[package]
+name = "s4-lightyear-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+lightyear = { version = "=0.31.0", default-features = false, features = ["std", "client", "server", "replication", "prediction", "interpolation", "input_native", "udp", "netcode"] }
+bevy_replicon = { version = "=0.45.2", default-features = false, features = ["client", "server"] }
+bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
