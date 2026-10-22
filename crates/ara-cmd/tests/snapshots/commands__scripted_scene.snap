@@ -1,0 +1,37 @@
+---
+source: crates/ara-cmd/tests/commands.rs
+expression: after
+---
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_level001",
+  "records": {
+    "e_j6x4": {
+      "parent": "e_n3jm",
+      "order": "a0",
+      "prefab": "@prefabs/crate.prefab#pf_crate001",
+      "overrides": {
+        "Transform.position": [1, 0, 2],
+        "e_lid1/Transform.rotation": [0, 90, 0],
+        "name": "Gold crate"
+      },
+      "removed": [
+        "e_lid1/MeshRenderer"
+      ]
+    },
+    "e_n3jm": {
+      "name": "Floor",
+      "order": "a0",
+      "Transform": {
+        "rotation": [0, 90, 0],
+        "scale": [10, 1, 10]
+      }
+    },
+    "e_nezy": {
+      "name": "Lamp",
+      "parent": "e_n3jm",
+      "order": "Zz",
+      "Light": {}
+    }
+  }
+}

@@ -1,0 +1,139 @@
+---
+source: crates/ara-schema/tests/schema.rs
+expression: "ara_json::to_canonical_string(&db.reflection())"
+---
+{
+  "$schema": "ara://schema/reflection/1",
+  "types": {
+    "DamageParams": {
+      "kind": "params",
+      "doc": "Parameters of a test command.",
+      "fields": {
+        "amount": {
+          "type": "f32",
+          "doc": "Damage to apply.",
+          "required": true
+        },
+        "scale": {
+          "type": "f32",
+          "doc": "Damage multiplier.",
+          "default": 1
+        },
+        "source": {
+          "type": "option<string>",
+          "doc": "Optional source label.",
+          "default": null
+        }
+      }
+    },
+    "Health": {
+      "kind": "component",
+      "doc": "Hit points of a damageable entity.",
+      "module": "game",
+      "version": 2,
+      "aliases": [
+        "Hp"
+      ],
+      "fields": {
+        "max": {
+          "type": "f32",
+          "doc": "Maximum hit points.",
+          "default": 100,
+          "range": [1, 10000],
+          "examples": [150],
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "currentValue": {
+          "type": "f32",
+          "doc": "Current hit points.",
+          "default": 0,
+          "aliases": [
+            "hp"
+          ],
+          "replicate": {
+            "audience": "relevant",
+            "quantize": 0.5,
+            "rollback": true
+          },
+          "editor": {
+            "slider": true
+          }
+        },
+        "regenDelay": {
+          "type": "f32",
+          "doc": "Regeneration delay after taking damage.",
+          "default": 2.5,
+          "unit": "s",
+          "since": 2,
+          "editor": {
+            "group": "Regen",
+            "step": 0.1
+          }
+        }
+      }
+    },
+    "Inventory": {
+      "kind": "component",
+      "doc": "Items carried by an entity.",
+      "fields": {
+        "slots": {
+          "type": "keyed<Slot>",
+          "doc": "Slots, addressed by ID.",
+          "default": []
+        },
+        "icon": {
+          "type": "option<asset<prefab>>",
+          "doc": "Icon shown in the HUD.",
+          "default": null
+        }
+      }
+    },
+    "Rarity": {
+      "kind": "enum",
+      "doc": "Rarity tier of loot.",
+      "variants": {
+        "common": {
+          "doc": "Found everywhere."
+        },
+        "rare": {
+          "doc": "Hard to find.",
+          "aliases": [
+            "uncommon"
+          ]
+        },
+        "legendary": {
+          "doc": "One per run."
+        }
+      }
+    },
+    "Slot": {
+      "kind": "struct",
+      "doc": "One inventory slot.",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable slot ID (`s_7c`).",
+          "default": ""
+        },
+        "count": {
+          "type": "u32",
+          "doc": "Item count.",
+          "default": 0
+        },
+        "rarity": {
+          "type": "Rarity",
+          "doc": "Item rarity.",
+          "default": "common",
+          "options": [
+            "common",
+            "rare",
+            "legendary"
+          ]
+        }
+      }
+    }
+  },
+  "documents": {}
+}

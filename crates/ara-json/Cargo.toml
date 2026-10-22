@@ -1,0 +1,18 @@
+[package]
+name = "ara-json"
+description = "Strict JSON parsing and the canonical JSON layout every Ara text format uses."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ryu.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

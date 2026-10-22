@@ -1,0 +1,22 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_merge001",
+  "records": {
+    "e_a1": {
+      "name": "Crate",
+      "order": "a0",
+      "Transform": {
+        "position": [0, 0, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_b2": {
+      "name": "Barrel (theirs)",
+      "order": "a1"
+    },
+    "e_c3": {
+      "name": "Lamp",
+      "order": "a2"
+    }
+  }
+}

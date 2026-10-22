@@ -1,0 +1,31 @@
+---
+source: crates/ara-merge/tests/merge.rs
+expression: text
+---
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_merge001",
+  "records": {
+    "e_a": {
+      "name": "Renamed",
+      "order": "a0",
+      "Transform": {
+        "position": [1, 0, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_b": {
+      "name": "B",
+      "parent": "e_a",
+      "order": "a0"
+    },
+    "e_d": {
+      "name": "Ours new",
+      "order": "a2"
+    },
+    "e_e": {
+      "name": "Theirs new",
+      "order": "a2"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_stack001",
+  "records": {
+    "e_c001": {
+      "parent": "e_stk1",
+      "order": "a0",
+      "prefab": "@prefabs/crate.prefab#pf_crate001"
+    },
+    "e_c002": {
+      "parent": "e_stk1",
+      "order": "a1",
+      "prefab": "@prefabs/crate.prefab#pf_crate001",
+      "overrides": {
+        "Transform.position": [0, 1, 0],
+        "e_lid1/MeshRenderer.tint": [1, 0, 0, 1]
+      }
+    },
+    "e_stk1": {
+      "name": "Stack",
+      "Transform": {}
+    }
+  }
+}

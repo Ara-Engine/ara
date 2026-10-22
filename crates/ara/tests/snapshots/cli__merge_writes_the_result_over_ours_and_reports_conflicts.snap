@@ -1,0 +1,36 @@
+---
+source: crates/ara/tests/cli.rs
+expression: "fs::read_to_string(&ours).expect(\"merged\")"
+---
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_merge001",
+  "$conflicts": [
+    {
+      "record": "e_b2",
+      "path": "name",
+      "base": "Barrel",
+      "ours": "Barrel (ours)",
+      "theirs": "Barrel (theirs)",
+      "reason": "both sides changed this differently (kept ours)"
+    }
+  ],
+  "records": {
+    "e_a1": {
+      "name": "Crate",
+      "order": "a0",
+      "Transform": {
+        "position": [1, 0, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_b2": {
+      "name": "Barrel (ours)",
+      "order": "a1"
+    },
+    "e_c3": {
+      "name": "Lamp",
+      "order": "a2"
+    }
+  }
+}

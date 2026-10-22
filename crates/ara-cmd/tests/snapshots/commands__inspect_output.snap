@@ -1,0 +1,20 @@
+---
+source: crates/ara-cmd/tests/commands.rs
+expression: "ara_json::to_canonical_string(&applied.outputs[11])"
+---
+{
+  "entity": "e_j6x4/e_lid1",
+  "parent": "e_j6x4",
+  "order": null,
+  "source": {
+    "doc": "pf_crate001",
+    "record": "e_lid1"
+  },
+  "record": {
+    "name": "Lid",
+    "Transform": {
+      "position": [0, 0.5, 0],
+      "rotation": [0, 90, 0]
+    }
+  }
+}

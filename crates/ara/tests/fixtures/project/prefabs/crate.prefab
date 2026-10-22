@@ -1,0 +1,26 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_crate001",
+  "records": {
+    "e_crt1": {
+      "name": "Crate",
+      "order": "a0",
+      "MeshRenderer": {
+        "mesh": "@meshes/crate.glb#ms_crate001"
+      },
+      "Transform": {}
+    },
+    "e_lid1": {
+      "name": "Lid",
+      "parent": "e_crt1",
+      "order": "a0",
+      "MeshRenderer": {
+        "mesh": "@meshes/lid.glb#ms_lid00001",
+        "tint": [0.8, 0.6, 0.4, 1]
+      },
+      "Transform": {
+        "position": [0, 0.5, 0]
+      }
+    }
+  }
+}

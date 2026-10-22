@@ -1,0 +1,23 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_broken01",
+  "records": {
+    "e_a1": {
+      "name": "Orphan",
+      "parent": "e_gone",
+      "Transform": {
+        "positon": [0, 1, 0]
+      }
+    },
+    "e_b2": {
+      "name": "Lamp",
+      "Lihgt": {}
+    },
+    "e_c3": {
+      "prefab": "@prefabs/missing.prefab#pf_missing1",
+      "overrides": {
+        "Transform.position": [1, 2, 3]
+      }
+    }
+  }
+}

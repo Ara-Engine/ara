@@ -1,0 +1,617 @@
+---
+source: crates/ara/tests/cli.rs
+expression: out
+---
+{
+  "$schema": "ara://schema/reflection/1",
+  "types": {
+    "ComponentAddParams": {
+      "kind": "params",
+      "doc": "Parameters of `component.add`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity; may be inside a prefab instance (stored as an override).",
+          "required": true
+        },
+        "component": {
+          "type": "string",
+          "doc": "Component type name (`Light`).",
+          "required": true
+        },
+        "value": {
+          "type": "option<json>",
+          "doc": "Initial field values; absent uses every default.",
+          "default": null
+        }
+      }
+    },
+    "ComponentRemoveParams": {
+      "kind": "params",
+      "doc": "Parameters of `component.remove`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity; may be inside a prefab instance.",
+          "required": true
+        },
+        "component": {
+          "type": "string",
+          "doc": "Component type name.",
+          "required": true
+        }
+      }
+    },
+    "Entity": {
+      "kind": "record",
+      "doc": "An entity in a scene or prefab. Components are stored inline under their type names; a prefab instance stores `prefab` plus overrides instead.",
+      "module": "core",
+      "prefix": "e",
+      "components": true,
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Display name in the hierarchy.",
+          "default": ""
+        },
+        "parent": {
+          "type": "option<entity>",
+          "doc": "Parent entity, or none for a root. May point inside a prefab instance (`e_4f9a/m4tz`).",
+          "default": null
+        },
+        "order": {
+          "type": "option<string>",
+          "doc": "Fractional-index key ordering the entity among its siblings.",
+          "default": null
+        },
+        "prefab": {
+          "type": "option<asset<prefab>>",
+          "doc": "The prefab this entity instantiates. Instances carry overrides, not components.",
+          "default": null
+        },
+        "overrides": {
+          "type": "map<json>",
+          "doc": "Prefab overrides keyed by `[<id path>/]<field path>`, such as `m4tz/MeshRenderer.mesh` or `Transform.position`.",
+          "default": {}
+        },
+        "removed": {
+          "type": "list<string>",
+          "doc": "Prefab entities (`m4tz`) or components (`m4tz/Light`) removed from this instance.",
+          "default": []
+        }
+      }
+    },
+    "EntityCreateParams": {
+      "kind": "params",
+      "doc": "Parameters of `entity.create`.",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "ID of the new entity: a symbol (`$crate`) that later calls in the batch can use, or a concrete unused record ID. Minted when absent.",
+          "default": null
+        },
+        "name": {
+          "type": "option<string>",
+          "doc": "Display name.",
+          "default": null
+        },
+        "parent": {
+          "type": "option<entity>",
+          "doc": "Parent entity; absent creates a root. May be inside a prefab instance.",
+          "default": null
+        },
+        "index": {
+          "type": "option<u32>",
+          "doc": "Position among the parent's children; absent appends.",
+          "default": null
+        },
+        "components": {
+          "type": "option<map<json>>",
+          "doc": "Components to add, by type name; `{}` uses every default.",
+          "default": null
+        }
+      }
+    },
+    "EntityDeleteParams": {
+      "kind": "params",
+      "doc": "Parameters of `entity.delete`.",
+      "fields": {
+        "entities": {
+          "type": "list<entity>",
+          "doc": "Entities to delete, with everything below them. Entities inside a prefab instance are removed from that instance instead.",
+          "required": true
+        }
+      }
+    },
+    "EntityInspectParams": {
+      "kind": "params",
+      "doc": "Parameters of `entity.inspect`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "The entity to inspect; may be inside a prefab instance.",
+          "required": true
+        }
+      }
+    },
+    "EntityReparentParams": {
+      "kind": "params",
+      "doc": "Parameters of `entity.reparent`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "The entity to move. Must be a record of the document (not inside a prefab).",
+          "required": true
+        },
+        "parent": {
+          "type": "option<entity>",
+          "doc": "New parent; absent makes the entity a root.",
+          "default": null
+        },
+        "index": {
+          "type": "option<u32>",
+          "doc": "Position among the new siblings; absent appends.",
+          "default": null
+        }
+      }
+    },
+    "Light": {
+      "kind": "component",
+      "doc": "A punctual light source.",
+      "module": "render",
+      "fields": {
+        "kind": {
+          "type": "LightKind",
+          "doc": "Shape of the emission.",
+          "default": "point",
+          "options": [
+            "point",
+            "spot"
+          ]
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Luminous power.",
+          "default": 1000,
+          "unit": "lm",
+          "range": [0, null]
+        },
+        "color": {
+          "type": "color",
+          "doc": "Linear color.",
+          "default": [1, 1, 1, 1]
+        }
+      }
+    },
+    "LightKind": {
+      "kind": "enum",
+      "doc": "Shape of a light.",
+      "variants": {
+        "point": {
+          "doc": "Emits in all directions."
+        },
+        "spot": {
+          "doc": "Emits in a cone."
+        }
+      }
+    },
+    "MeshRenderer": {
+      "kind": "component",
+      "doc": "Draws a mesh.",
+      "module": "render",
+      "aliases": [
+        "Renderer"
+      ],
+      "fields": {
+        "mesh": {
+          "type": "asset",
+          "doc": "Mesh to draw.",
+          "default": null
+        },
+        "tint": {
+          "type": "color",
+          "doc": "Linear tint multiplied with the material.",
+          "default": [1, 1, 1, 1]
+        }
+      }
+    },
+    "OverrideRevertParams": {
+      "kind": "params",
+      "doc": "Parameters of `prefab.override.revert`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "A prefab instance, or an entity inside one.",
+          "required": true
+        },
+        "path": {
+          "type": "option<string>",
+          "doc": "The overridden path to revert, with everything under it; absent reverts every override and removal on this entity.",
+          "default": null
+        }
+      }
+    },
+    "OverrideSetParams": {
+      "kind": "params",
+      "doc": "Parameters of `prefab.override.set`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "A prefab instance, or an entity inside one (`e_4f9a/e_m4tz`).",
+          "required": true
+        },
+        "path": {
+          "type": "string",
+          "doc": "Field path: `name`, a component (`Light`) or a component field (`Light.color`).",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "The overriding value.",
+          "required": true
+        }
+      }
+    },
+    "PrefabInstantiateParams": {
+      "kind": "params",
+      "doc": "Parameters of `prefab.instantiate`.",
+      "fields": {
+        "prefab": {
+          "type": "asset<prefab>",
+          "doc": "The prefab, as `@path#id`, `@path` or `@#id`.",
+          "required": true
+        },
+        "id": {
+          "type": "option<string>",
+          "doc": "ID of the instance: a symbol (`$door`) or a concrete unused record ID. Minted when absent.",
+          "default": null
+        },
+        "name": {
+          "type": "option<string>",
+          "doc": "Display name; absent keeps the prefab root's name.",
+          "default": null
+        },
+        "parent": {
+          "type": "option<entity>",
+          "doc": "Parent entity; absent creates a root.",
+          "default": null
+        },
+        "index": {
+          "type": "option<u32>",
+          "doc": "Position among the parent's children; absent appends.",
+          "default": null
+        },
+        "position": {
+          "type": "option<vec3>",
+          "doc": "Local position of the instance.",
+          "default": null,
+          "unit": "m"
+        }
+      }
+    },
+    "PropertySetParams": {
+      "kind": "params",
+      "doc": "Parameters of `property.set`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity; inside a prefab instance this writes an override.",
+          "required": true
+        },
+        "path": {
+          "type": "string",
+          "doc": "Field path: `name`, or a component field such as `Light.intensity` or `Transform.position.y`.",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "New value, in the field's schema type and unit.",
+          "required": true
+        }
+      }
+    },
+    "Transform": {
+      "kind": "component",
+      "doc": "Position, rotation and scale of an entity relative to its parent.",
+      "module": "core",
+      "fields": {
+        "position": {
+          "type": "vec3",
+          "doc": "Position relative to the parent.",
+          "default": [0, 0, 0],
+          "unit": "m",
+          "examples": [
+            [0, 1, 0]
+          ],
+          "replicate": {
+            "audience": "relevant",
+            "quantize": 0.001,
+            "interpolate": "linear",
+            "rollback": true
+          }
+        },
+        "rotation": {
+          "type": "vec3",
+          "doc": "Rotation relative to the parent, as XYZ Euler angles.",
+          "default": [0, 0, 0],
+          "unit": "deg",
+          "examples": [
+            [0, 90, 0]
+          ],
+          "replicate": {
+            "audience": "relevant",
+            "quantize": 0.01,
+            "interpolate": "slerp",
+            "rollback": true
+          }
+        },
+        "scale": {
+          "type": "vec3",
+          "doc": "Scale relative to the parent; `[1, 1, 1]` is unscaled.",
+          "default": [1, 1, 1],
+          "examples": [
+            [2, 2, 2]
+          ]
+        }
+      }
+    },
+    "TransformSetParams": {
+      "kind": "params",
+      "doc": "Parameters of `transform.set`.",
+      "fields": {
+        "entities": {
+          "type": "list<entity>",
+          "doc": "Entities to change; each gets a `Transform` if it has none.",
+          "required": true
+        },
+        "position": {
+          "type": "option<vec3>",
+          "doc": "Position relative to the parent.",
+          "default": null,
+          "unit": "m"
+        },
+        "rotation": {
+          "type": "option<vec3>",
+          "doc": "Rotation relative to the parent, as XYZ Euler angles.",
+          "default": null,
+          "unit": "deg"
+        },
+        "scale": {
+          "type": "option<vec3>",
+          "doc": "Scale relative to the parent.",
+          "default": null
+        }
+      }
+    }
+  },
+  "documents": {
+    "prefab": {
+      "doc": "A reusable entity subtree with exactly one root, instantiated by reference.",
+      "schema": "ara://schema/prefab/1",
+      "idPrefix": "pf",
+      "extension": "prefab",
+      "records": [
+        "Entity"
+      ],
+      "singleRoot": true
+    },
+    "scene": {
+      "doc": "A level or sub-level: a flat map of entities.",
+      "schema": "ara://schema/scene/1",
+      "idPrefix": "sc",
+      "extension": "scene",
+      "records": [
+        "Entity"
+      ]
+    }
+  },
+  "commands": {
+    "component.add": {
+      "kind": "command",
+      "summary": "Add a component to an entity, with optional initial values.",
+      "params": "ComponentAddParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_8b21",
+          "component": "Transform",
+          "value": {
+            "position": [0, 1, 0]
+          }
+        }
+      ]
+    },
+    "component.remove": {
+      "kind": "command",
+      "summary": "Remove a component from an entity (for prefab entities, from this instance only).",
+      "params": "ComponentRemoveParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": true
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_8b21",
+          "component": "Transform"
+        }
+      ]
+    },
+    "entity.create": {
+      "kind": "command",
+      "summary": "Create an entity, optionally with a parent, a position among its siblings and components.",
+      "params": "EntityCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "id": "$crate",
+          "name": "Crate",
+          "components": {
+            "Transform": {
+              "position": [2, 0, 3]
+            }
+          }
+        },
+        {
+          "name": "Lid",
+          "parent": "$crate",
+          "index": 0
+        }
+      ]
+    },
+    "entity.delete": {
+      "kind": "command",
+      "summary": "Delete entities and their descendants (prefab entities are removed from their instance).",
+      "params": "EntityDeleteParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": true
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entities": [
+            "e_8b21"
+          ]
+        }
+      ]
+    },
+    "entity.inspect": {
+      "kind": "query",
+      "summary": "Show an entity's name, parent and components with prefab overrides applied.",
+      "params": "EntityInspectParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "read",
+      "examples": [
+        {
+          "entity": "e_4f9a/e_m4tz"
+        }
+      ]
+    },
+    "entity.reparent": {
+      "kind": "command",
+      "summary": "Move an entity under a new parent (or to the root) at a position among its siblings.",
+      "params": "EntityReparentParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_8b21",
+          "parent": "e_1c0d",
+          "index": 0
+        },
+        {
+          "entity": "e_8b21"
+        }
+      ]
+    },
+    "prefab.instantiate": {
+      "kind": "command",
+      "summary": "Place an instance of a prefab; its content stays linked to the prefab.",
+      "params": "PrefabInstantiateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "prefab": "@prefabs/crate.prefab",
+          "id": "$crate",
+          "position": [0, 0, 4]
+        }
+      ]
+    },
+    "prefab.override.revert": {
+      "kind": "command",
+      "summary": "Revert overrides of a prefab instance back to the prefab's values.",
+      "params": "OverrideRevertParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_4f9a/e_m4tz",
+          "path": "MeshRenderer.tint"
+        },
+        {
+          "entity": "e_4f9a"
+        }
+      ]
+    },
+    "prefab.override.set": {
+      "kind": "command",
+      "summary": "Override a value of a prefab instance (or of an entity inside it).",
+      "params": "OverrideSetParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_4f9a/e_m4tz",
+          "path": "MeshRenderer.tint",
+          "value": [1, 0, 0, 1]
+        }
+      ]
+    },
+    "property.set": {
+      "kind": "command",
+      "summary": "Set one field of an entity (its name or a component field).",
+      "params": "PropertySetParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entity": "e_8b21",
+          "path": "Transform.position.y",
+          "value": 2
+        },
+        {
+          "entity": "e_8b21",
+          "path": "name",
+          "value": "Crate"
+        }
+      ]
+    },
+    "transform.set": {
+      "kind": "command",
+      "summary": "Set the local position, rotation and/or scale of entities.",
+      "params": "TransformSetParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit",
+      "examples": [
+        {
+          "entities": [
+            "e_8b21"
+          ],
+          "position": [2, 0, 3],
+          "rotation": [0, 45, 0]
+        }
+      ]
+    }
+  }
+}

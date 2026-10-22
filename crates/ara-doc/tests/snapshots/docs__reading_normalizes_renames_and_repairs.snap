@@ -1,0 +1,30 @@
+---
+source: crates/ara-doc/tests/docs.rs
+expression: text
+---
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_messy001",
+  "records": {
+    "e_a1": {
+      "name": "Crate",
+      "prefab": "@prefabs/crate.prefab#pf_crate001",
+      "overrides": {
+        "Transform.position": [0, 0, 10],
+        "e_lid1/Transform": {
+          "scale": [2, 2, 2]
+        }
+      }
+    },
+    "e_b2": {
+      "name": "Box",
+      "order": "a1",
+      "MeshRenderer": {
+        "mesh": "@meshes/crate.glb#ms_crate001"
+      },
+      "Transform": {
+        "position": [1, 2.5, 0]
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+---
+source: crates/ara-schema/tests/schema.rs
+expression: "ara_json::to_canonical_string(&db.type_json_schema(get(&db, \"Inventory\")))"
+---
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ara://schema/type/Inventory",
+  "title": "Inventory",
+  "description": "Items carried by an entity.",
+  "type": "object",
+  "properties": {
+    "slots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Slot"
+      },
+      "description": "Slots, addressed by ID.",
+      "default": []
+    },
+    "icon": {
+      "anyOf": [
+        {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^@[^#]*(#[a-z]{1,3}_[0-9a-z]{1,24})?$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Icon shown in the HUD.",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Rarity": {
+      "description": "Rarity tier of loot.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "common",
+          "description": "Found everywhere."
+        },
+        {
+          "const": "rare",
+          "description": "Hard to find."
+        },
+        {
+          "const": "legendary",
+          "description": "One per run."
+        }
+      ]
+    },
+    "Slot": {
+      "description": "One inventory slot.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable slot ID (`s_7c`).",
+          "default": ""
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Item count.",
+          "default": 0
+        },
+        "rarity": {
+          "$ref": "#/$defs/Rarity",
+          "description": "Item rarity.",
+          "default": "common"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
