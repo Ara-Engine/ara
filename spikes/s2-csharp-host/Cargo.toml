@@ -1,0 +1,30 @@
+[package]
+name = "ara-s2-csharp-host"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+description = "M0 spike S2: Rust host for .NET 10 C# systems over bevy_ecs chunks, with L1/L3 reload."
+
+[[bin]]
+name = "ara-s2"
+path = "src/main.rs"
+
+# Throwaway spike: its own workspace, not a member of the Ara workspace.
+[workspace]
+
+[dependencies]
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded", "async_executor"] }
+bevy_tasks = { version = "0.20", features = ["multi_threaded"] }
+netcorehost = "0.22"
+
+[profile.release]
+debug = "line-tables-only"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+unwrap_used = "warn"
