@@ -1,0 +1,3125 @@
+{
+  "batch_breaks": [
+    {
+      "cause": "clip barrier",
+      "command": 1
+    },
+    {
+      "cause": "pipeline change",
+      "command": 5
+    },
+    {
+      "cause": "pipeline change",
+      "command": 6
+    },
+    {
+      "cause": "pipeline change",
+      "command": 8
+    },
+    {
+      "cause": "pipeline change",
+      "command": 9
+    },
+    {
+      "cause": "pipeline change",
+      "command": 11
+    },
+    {
+      "cause": "pipeline change",
+      "command": 12
+    },
+    {
+      "cause": "pipeline change",
+      "command": 14
+    },
+    {
+      "cause": "pipeline change",
+      "command": 15
+    },
+    {
+      "cause": "pipeline change",
+      "command": 17
+    },
+    {
+      "cause": "pipeline change",
+      "command": 18
+    },
+    {
+      "cause": "pipeline change",
+      "command": 20
+    },
+    {
+      "cause": "clip barrier",
+      "command": 23
+    }
+  ],
+  "commands": 24,
+  "focus_graph": [
+    {
+      "down": "settings",
+      "id": "resume",
+      "left": null,
+      "right": null,
+      "shift_tab": "exit",
+      "tab": "settings",
+      "up": null
+    },
+    {
+      "down": "exit",
+      "id": "settings",
+      "left": null,
+      "right": null,
+      "shift_tab": "resume",
+      "tab": "exit",
+      "up": "resume"
+    },
+    {
+      "down": null,
+      "id": "exit",
+      "left": null,
+      "right": null,
+      "shift_tab": "settings",
+      "tab": "resume",
+      "up": "settings"
+    }
+  ],
+  "glyphs": 269,
+  "nodes": [
+    {
+      "box": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause",
+      "stable_id": 5315332399326980173,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 21.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 28.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause-kicker",
+      "stable_id": 14832154283326762425,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              56
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              51
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              47
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              57
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              42
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              56
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              49
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              26
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 24,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "OUTPOST / SALVAGE RUN 07"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 51.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 61.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause-title",
+      "stable_id": 9138506026225697974,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              78
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              69
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              75
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              17
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 14,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Take a breath."
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 24.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 124.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause-subtitle",
+      "stable_id": 10410424679973988420,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              60
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              90
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              90
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              75
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 32
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 33
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 34
+            },
+            "glyphs": [
+              78
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 36,
+              "start": 35
+            },
+            "glyphs": [
+              17
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 36,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Your crew is waiting at the airlock."
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 158.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 160.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "status",
+      "stable_id": 14183358520170196015,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 30.0,
+        "w": 512.0,
+        "x": 44.0,
+        "y": 176.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "health",
+      "stable_id": 9181103189905877455,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              43
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              47
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              43
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              27
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              25
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              20
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 17,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "HEALTH  086 / 100"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 24.0,
+        "w": 512.0,
+        "x": 44.0,
+        "y": 218.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "objective",
+      "stable_id": 8095747183904291896,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              37
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              45
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              38
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              44
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              57
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              75
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 32
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 33
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 34
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 36,
+              "start": 35
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 36
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 38,
+              "start": 37
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 39,
+              "start": 38
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 39,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "OBJECTIVE   Recover the navigation core"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 48.0,
+        "w": 48.0,
+        "x": 44.0,
+        "y": 254.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "artifact",
+      "stable_id": 3351134223778367043,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 50.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 330.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "resume",
+      "stable_id": 11193066290345103082,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              80
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              91
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              71
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 17,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Resume expedition"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 50.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 392.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "settings",
+      "stable_id": 17176567880082542056,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 8,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Settings"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 50.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 454.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "save",
+      "stable_id": 678458154258103336,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 5
+            },
+            "glyphs": [
+              195
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              69
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              71
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              91
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 32
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 33
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 34
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 36,
+              "start": 35
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 36
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 36,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Save · unavailable during extraction"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 50.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 516.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "exit",
+      "stable_id": 16689862346184620389,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 17,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Return to outpost"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 39.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 578.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause-arabic",
+      "stable_id": 13659215954827885828,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 2,
+              "start": 0
+            },
+            "glyphs": [
+              2312
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 2
+            },
+            "glyphs": [
+              2327
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 4
+            },
+            "glyphs": [
+              2317
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 7
+            },
+            "glyphs": [
+              179
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 11
+            },
+            "glyphs": [
+              2313
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 13
+            },
+            "glyphs": [
+              3675
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 15
+            },
+            "glyphs": [
+              3981
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 17
+            },
+            "glyphs": [
+              2348,
+              3941
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 22
+            },
+            "glyphs": [
+              2251
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 24
+            },
+            "glyphs": [
+              2275
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 26
+            },
+            "glyphs": [
+              3678
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 28
+            },
+            "glyphs": [
+              2325
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 30
+            },
+            "glyphs": [
+              2252
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 32
+            },
+            "glyphs": [
+              3669
+            ],
+            "rtl": true
+          }
+        ],
+        "glyph_count": 18,
+        "lines": 1,
+        "ltr_runs": 0,
+        "missing_glyphs": 0,
+        "rtl_runs": 1,
+        "text": "آرا — أهلاً بعودتك"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 24.0,
+        "w": 544.0,
+        "x": 28.0,
+        "y": 629.0
+      },
+      "clip": {
+        "h": 760.0,
+        "w": 600.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "pause-help",
+      "stable_id": 15216374303091507,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              37
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              39
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              16
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              51
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              39
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              49
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              49
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 32
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 33
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 34
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 36,
+              "start": 35
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 36
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 38,
+              "start": 37
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 39,
+              "start": 38
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 40,
+              "start": 39
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 41,
+              "start": 40
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 42,
+              "start": 41
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 43,
+              "start": 42
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 43,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "TAB / D-PAD  Navigate     ENTER / A  Select"
+      },
+      "warnings": []
+    }
+  ],
+  "viewport": [
+    600.0,
+    760.0
+  ]
+}

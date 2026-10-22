@@ -1,0 +1,12 @@
+{
+    "cpu":  "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+    "logical_processors":  16,
+    "ram_bytes":  33410686976,
+    "os":  "Microsoft Windows 11 Pro",
+    "os_build":  "26300",
+    "rust":  "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "rmlui_commit":  "821cbd229d804cb1c905b729af86c21133abceee",
+    "cmake":  "4.3.1",
+    "msvc":  "19.50.35729.0",
+    "shared_machine":  true
+}

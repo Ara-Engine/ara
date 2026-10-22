@@ -1,0 +1,11 @@
+<panel id="world" class="screen">
+  <text id="world-kicker" class="eyebrow" text="OUTPOST / AIRLOCK TERMINAL" />
+  <text id="world-title" class="title" text="Crew transfer" />
+  <panel id="world-status" class="section">
+    <text id="world-state" class="section-title" text="Pressure equalized" />
+    <text id="world-arabic" style="font-size: 26px" text="مرحباً بكم في المحطة" />
+    <text id="world-cjk" class="subtitle" text="エアロック準備完了 · 气闸已就绪" />
+  </panel>
+  <button id="world-open" class="primary" text="Open airlock" action="OpenAirlock" />
+  <text id="world-foot" class="subtitle" text="640 × 480 logical pixels / 2.0 × 1.5 m" />
+</panel>

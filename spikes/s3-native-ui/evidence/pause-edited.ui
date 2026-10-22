@@ -1,0 +1,17 @@
+<!-- Ara UI Designer preserves this comment, spacing, and quote choice. -->
+<panel id="pause" class="screen">
+  <text id="pause-kicker" class="eyebrow" text="OUTPOST / SALVAGE RUN 07" />
+  <text id="pause-title" class="title" text="Take a breath." />
+  <text id="pause-subtitle" class="subtitle" text="Your crew is waiting at the airlock." />
+  <panel id="status" class="section">
+    <text id="health" class="health" bind="Health" text="HEALTH  086 / 100" />
+    <text id="objective" class="label" text="OBJECTIVE   Recover the navigation core" />
+    <image id="artifact" class="icon" src="@textures/salvage#core" />
+  </panel>
+  <button id="resume" class="primary" action="Resume" text="Continue expedition" />
+  <button id="settings" action="Settings" text="Settings" />
+  <button id="save" disabled="true" text="Save · unavailable during extraction" />
+  <button id="exit" action="Exit" text="Return to outpost" />
+  <text id="pause-arabic" style="font-size: 26px; color: var(--accent)" text="آرا — أهلاً بعودتك" />
+  <text id="pause-help" class="subtitle" text="TAB / D-PAD  Navigate     ENTER / A  Select" />
+</panel>

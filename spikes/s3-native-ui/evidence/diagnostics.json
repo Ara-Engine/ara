@@ -1,0 +1,18 @@
+[
+  {
+    "diagnostic": "CSS003 at byte 1 (line 2, column 1): unsupported selector \"button > text\"; use type, .class, #id, optionally one state",
+    "source": "\nbutton > text { gap: 4px; }"
+  },
+  {
+    "diagnostic": "CSS003 at byte 1 (line 2, column 1): unknown state selector button:visited",
+    "source": "\nbutton:visited { color:#112233; }"
+  },
+  {
+    "diagnostic": "CSS004 at byte 11 (line 2, column 11) in selector unused property position: unknown property position",
+    "source": "\n.unused { position:fixed; }"
+  },
+  {
+    "diagnostic": "CSS004 at byte 7 (line 1, column 8) in selector text property color: CSS005: unknown token --missing",
+    "source": "text { color:var(--missing); }"
+  }
+]

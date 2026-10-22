@@ -1,0 +1,1 @@
+Syntax error parsing inline property declaration 'display: grid;'.
