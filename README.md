@@ -17,6 +17,7 @@ A Rust game engine that AI agents build, and that agents and humans use to make 
 - [Milestones](docs/plan/milestones.md): build order M0–M5, including the dogfood game *Outpost*.
 - [Research synthesis](docs/research/00-synthesis.md), plus ten research reports (R01–R10).
 - [`AGENTS.md`](AGENTS.md): working rules for agents (and humans).
+- Published synthesis page: https://4c813f39474b9d32.snist.dev. Task tracking lives in Snoze (Ara › Tasks).
 
 ## Getting started
 
