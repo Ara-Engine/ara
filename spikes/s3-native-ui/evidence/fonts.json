@@ -1,0 +1,27 @@
+[
+    {
+        "file":  "C:\\Windows\\Fonts\\segoeui.ttf",
+        "bytes":  960076,
+        "sha256":  "704eada12961a27fd271f7d3b09e2066520e758390c1776744eff430fee30f6e"
+    },
+    {
+        "file":  "C:\\Windows\\Fonts\\NotoNaskhArabic-Regular.ttf",
+        "bytes":  291980,
+        "sha256":  "c9a039ce48a477243c1eb7d561b13de115cfd651d8a83fa42e2f4d63c2e11b00"
+    },
+    {
+        "file":  "C:\\Windows\\Fonts\\msyh.ttc",
+        "bytes":  19704352,
+        "sha256":  "d79c55e68b1131eea0cc1c47be4f572d964f28c682e143db2ad09c1e4cb07a3f"
+    },
+    {
+        "file":  "C:\\Windows\\Fonts\\malgun.ttf",
+        "bytes":  13459196,
+        "sha256":  "7a183cf1c6c56b9609fcc16eda8b5229fbc11758a21e669ec00343239b02192f"
+    },
+    {
+        "file":  "C:\\Windows\\Fonts\\seguiemj.ttf",
+        "bytes":  12934920,
+        "sha256":  "451df9bb5546055af625ff86aa72695df43e8e170b4c6c1316fe44e9c7a22f7c"
+    }
+]

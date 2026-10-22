@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.27)
+project(ara_rml_smoke LANGUAGES CXX)
+find_package(RmlUi CONFIG REQUIRED PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../.vendor/rml-build18" NO_DEFAULT_PATH)
+add_executable(ara_rml_smoke main.cpp)
+target_compile_features(ara_rml_smoke PRIVATE cxx_std_17)
+target_link_libraries(ara_rml_smoke PRIVATE RmlUi::Core)

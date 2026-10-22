@@ -1,0 +1,1715 @@
+{
+  "batch_breaks": [
+    {
+      "cause": "clip barrier",
+      "command": 1
+    },
+    {
+      "cause": "pipeline change",
+      "command": 4
+    },
+    {
+      "cause": "pipeline change",
+      "command": 5
+    },
+    {
+      "cause": "texture/font atlas change",
+      "command": 7
+    },
+    {
+      "cause": "texture/font atlas change",
+      "command": 9
+    },
+    {
+      "cause": "texture/font atlas change",
+      "command": 10
+    },
+    {
+      "cause": "pipeline change",
+      "command": 11
+    },
+    {
+      "cause": "pipeline change",
+      "command": 13
+    },
+    {
+      "cause": "clip barrier",
+      "command": 15
+    }
+  ],
+  "commands": 16,
+  "focus_graph": [
+    {
+      "down": null,
+      "id": "world-open",
+      "left": null,
+      "right": null,
+      "shift_tab": "world-open",
+      "tab": "world-open",
+      "up": null
+    }
+  ],
+  "glyphs": 144,
+  "nodes": [
+    {
+      "box": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world",
+      "stable_id": 5717881983045765875,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 21.0,
+        "w": 584.0,
+        "x": 28.0,
+        "y": 28.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-kicker",
+      "stable_id": 18080849900987640851,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              56
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              51
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              54
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              44
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              47
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              38
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              46
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              55
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              40
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              53
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              48
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              44
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              49
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              47
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 26,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "OUTPOST / AIRLOCK TERMINAL"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 51.0,
+        "w": 584.0,
+        "x": 28.0,
+        "y": 61.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-title",
+      "stable_id": 17036432350422128940,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              38
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              90
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              73
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 13,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Crew transfer"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 149.0,
+        "w": 584.0,
+        "x": 28.0,
+        "y": 124.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-status",
+      "stable_id": 14984163467012765060,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 30.0,
+        "w": 552.0,
+        "x": 44.0,
+        "y": 140.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-state",
+      "stable_id": 13941034489297790287,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              51
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              84
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              88
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              93
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              71
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 18,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Pressure equalized"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 39.0,
+        "w": 552.0,
+        "x": 44.0,
+        "y": 182.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-arabic",
+      "stable_id": 15854163916165939762,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 2,
+              "start": 0
+            },
+            "glyphs": [
+              2287
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 2
+            },
+            "glyphs": [
+              2828
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 4
+            },
+            "glyphs": [
+              2256
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 6
+            },
+            "glyphs": [
+              3623
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 8
+            },
+            "glyphs": [
+              2348,
+              2247
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 13
+            },
+            "glyphs": [
+              2251
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 15
+            },
+            "glyphs": [
+              3670
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 17
+            },
+            "glyphs": [
+              3671
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 20
+            },
+            "glyphs": [
+              2280
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 22
+            },
+            "glyphs": [
+              2293
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 25
+            },
+            "glyphs": [
+              2317
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 27
+            },
+            "glyphs": [
+              2286
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 29
+            },
+            "glyphs": [
+              3672
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 31
+            },
+            "glyphs": [
+              3629
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 33
+            },
+            "glyphs": [
+              3643
+            ],
+            "rtl": true
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 35
+            },
+            "glyphs": [
+              2294
+            ],
+            "rtl": true
+          }
+        ],
+        "glyph_count": 20,
+        "lines": 1,
+        "ltr_runs": 0,
+        "missing_glyphs": 0,
+        "rtl_runs": 1,
+        "text": "مرحباً بكم في المحطة"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 24.0,
+        "w": 552.0,
+        "x": 44.0,
+        "y": 233.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-cjk",
+      "stable_id": 3748497013115931352,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 3,
+              "start": 0
+            },
+            "glyphs": [
+              28737
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 3
+            },
+            "glyphs": [
+              28731
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 6
+            },
+            "glyphs": [
+              28806
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 9
+            },
+            "glyphs": [
+              28764
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 12
+            },
+            "glyphs": [
+              28744
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 15
+            },
+            "glyphs": [
+              16815
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 18
+            },
+            "glyphs": [
+              10153
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 21
+            },
+            "glyphs": [
+              1551
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 24
+            },
+            "glyphs": [
+              1076
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 28
+            },
+            "glyphs": [
+              195
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 31
+            },
+            "glyphs": [
+              2120
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 34
+            },
+            "glyphs": [
+              2944
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 40,
+              "start": 37
+            },
+            "glyphs": [
+              1629
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 43,
+              "start": 40
+            },
+            "glyphs": [
+              1596
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 46,
+              "start": 43
+            },
+            "glyphs": [
+              2513
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 17,
+        "lines": 1,
+        "ltr_runs": 4,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "エアロック準備完了 · 气闸已就绪"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 50.0,
+        "w": 584.0,
+        "x": 28.0,
+        "y": 285.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-open",
+      "stable_id": 15332633722408446274,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              50
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              78
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 12,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Open airlock"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 24.0,
+        "w": 584.0,
+        "x": 28.0,
+        "y": 347.0
+      },
+      "clip": {
+        "h": 480.0,
+        "w": 640.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "world-foot",
+      "stable_id": 1184614231092250810,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              25
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              23
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 4
+            },
+            "glyphs": [
+              239
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              23
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              27
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              91
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              18
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              21
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              17
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              19
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 32
+            },
+            "glyphs": [
+              239
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 35,
+              "start": 34
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 36,
+              "start": 35
+            },
+            "glyphs": [
+              20
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 37,
+              "start": 36
+            },
+            "glyphs": [
+              17
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 38,
+              "start": 37
+            },
+            "glyphs": [
+              24
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 39,
+              "start": 38
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 40,
+              "start": 39
+            },
+            "glyphs": [
+              80
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 38,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "640 × 480 logical pixels / 2.0 × 1.5 m"
+      },
+      "warnings": []
+    }
+  ],
+  "viewport": [
+    640.0,
+    480.0
+  ]
+}

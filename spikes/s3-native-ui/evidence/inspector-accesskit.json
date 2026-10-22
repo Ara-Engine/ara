@@ -1,0 +1,487 @@
+{
+  "nodes": [
+    [
+      921305221685350606,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            1541324798962913392,
+            4097874050585211541,
+            4500752359741074565,
+            5264243339741658844,
+            1086335023529244512,
+            4327823757486278914
+          ],
+          "label": "inspector",
+          "bounds": {
+            "x0": 0.0,
+            "y0": 0.0,
+            "x1": 600.0,
+            "y1": 760.0
+          }
+        }
+      }
+    ],
+    [
+      1541324798962913392,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "ARA / INSPECTOR",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 28.0,
+            "x1": 572.0,
+            "y1": 49.0
+          }
+        }
+      }
+    ],
+    [
+      4097874050585211541,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Navigation core",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 61.0,
+            "x1": 572.0,
+            "y1": 112.0
+          }
+        }
+      }
+    ],
+    [
+      4500752359741074565,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Entity #core-07 · Prefab override",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 124.0,
+            "x1": 572.0,
+            "y1": 148.0
+          }
+        }
+      }
+    ],
+    [
+      5264243339741658844,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            6015571477874125875,
+            8283012737156083165,
+            11506480154224576912,
+            4357874498224551704,
+            18323122852528588436,
+            8104027990839359458
+          ],
+          "label": "fields",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 160.0,
+            "x1": 572.0,
+            "y1": 512.0
+          }
+        }
+      }
+    ],
+    [
+      6015571477874125875,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Transform & state",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 176.0,
+            "x1": 556.0,
+            "y1": 206.0
+          }
+        }
+      }
+    ],
+    [
+      8283012737156083165,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            2469839925712639219,
+            5530202806555891530
+          ],
+          "label": "row-position",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 218.0,
+            "x1": 556.0,
+            "y1": 264.0
+          }
+        }
+      }
+    ],
+    [
+      2469839925712639219,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Position / m",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 218.0,
+            "x1": 292.0,
+            "y1": 264.0
+          }
+        }
+      }
+    ],
+    [
+      5530202806555891530,
+      {
+        "role": "textInput",
+        "actions": 1048578,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Position / m",
+          "description": "Local position relative to the parent.",
+          "value": "12.0, 0.0, −3.5",
+          "bounds": {
+            "x0": 308.0,
+            "y0": 218.0,
+            "x1": 556.0,
+            "y1": 264.0
+          }
+        }
+      }
+    ],
+    [
+      11506480154224576912,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            11210844957051195574,
+            13050018872595607711
+          ],
+          "label": "row-rotation",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 276.0,
+            "x1": 556.0,
+            "y1": 322.0
+          }
+        }
+      }
+    ],
+    [
+      11210844957051195574,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Rotation / deg",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 276.0,
+            "x1": 292.0,
+            "y1": 322.0
+          }
+        }
+      }
+    ],
+    [
+      13050018872595607711,
+      {
+        "role": "textInput",
+        "actions": 1048578,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Rotation / deg",
+          "description": "Euler angles in authoring space.",
+          "value": "0.0, 90.0, 0.0",
+          "bounds": {
+            "x0": 308.0,
+            "y0": 276.0,
+            "x1": 556.0,
+            "y1": 322.0
+          }
+        }
+      }
+    ],
+    [
+      4357874498224551704,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            7639745895381005778,
+            7686723154774465937
+          ],
+          "label": "row-scale",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 334.0,
+            "x1": 556.0,
+            "y1": 380.0
+          }
+        }
+      }
+    ],
+    [
+      7639745895381005778,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Scale",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 334.0,
+            "x1": 292.0,
+            "y1": 380.0
+          }
+        }
+      }
+    ],
+    [
+      7686723154774465937,
+      {
+        "role": "textInput",
+        "actions": 1048578,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Scale",
+          "description": "Local nonuniform scale.",
+          "value": "1.0, 1.0, 1.0",
+          "bounds": {
+            "x0": 308.0,
+            "y0": 334.0,
+            "x1": 556.0,
+            "y1": 380.0
+          }
+        }
+      }
+    ],
+    [
+      18323122852528588436,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            14309565357957962510,
+            11337122858232336199
+          ],
+          "label": "row-health-value",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 392.0,
+            "x1": 556.0,
+            "y1": 438.0
+          }
+        }
+      }
+    ],
+    [
+      14309565357957962510,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Health / 0–100",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 392.0,
+            "x1": 292.0,
+            "y1": 438.0
+          }
+        }
+      }
+    ],
+    [
+      11337122858232336199,
+      {
+        "role": "textInput",
+        "actions": 1048578,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Health / 0–100",
+          "description": "Current vitality, replicated by the simulation.",
+          "value": "86",
+          "bounds": {
+            "x0": 308.0,
+            "y0": 392.0,
+            "x1": 556.0,
+            "y1": 438.0
+          }
+        }
+      }
+    ],
+    [
+      8104027990839359458,
+      {
+        "role": "genericContainer",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [
+            6077715191010573088,
+            2249362895655340721
+          ],
+          "label": "row-mass",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 450.0,
+            "x1": 556.0,
+            "y1": 496.0
+          }
+        }
+      }
+    ],
+    [
+      6077715191010573088,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Mass / kg",
+          "bounds": {
+            "x0": 44.0,
+            "y0": 450.0,
+            "x1": 292.0,
+            "y1": 496.0
+          }
+        }
+      }
+    ],
+    [
+      2249362895655340721,
+      {
+        "role": "textInput",
+        "actions": 1048578,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Mass / kg",
+          "description": "Body mass used by physics.",
+          "value": "4.25",
+          "bounds": {
+            "x0": 308.0,
+            "y0": 450.0,
+            "x1": 556.0,
+            "y1": 496.0
+          }
+        }
+      }
+    ],
+    [
+      1086335023529244512,
+      {
+        "role": "button",
+        "actions": 3,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Reset selected overrides",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 524.0,
+            "x1": 572.0,
+            "y1": 574.0
+          }
+        }
+      }
+    ],
+    [
+      4327823757486278914,
+      {
+        "role": "label",
+        "actions": 0,
+        "childActions": 0,
+        "flags": 0,
+        "properties": {
+          "children": [],
+          "label": "Values: local override / prefab / default",
+          "bounds": {
+            "x0": 28.0,
+            "y0": 586.0,
+            "x1": 572.0,
+            "y1": 610.0
+          }
+        }
+      }
+    ]
+  ],
+  "tree": {
+    "root": 921305221685350606,
+    "toolkitName": null,
+    "toolkitVersion": null
+  },
+  "treeId": "00000000-0000-0000-0000-000000000000",
+  "focus": 5530202806555891530
+}

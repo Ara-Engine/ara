@@ -1,0 +1,48 @@
+{
+  "uharfbuzz": "0.56.4",
+  "harfbuzz": "15.0.0",
+  "sequences": [
+    {
+      "text": "👩🏽‍🚀",
+      "glyphs": [
+        1540
+      ],
+      "advances_font_units": [
+        2812
+      ]
+    },
+    {
+      "text": "👨‍👩‍👧‍👦",
+      "glyphs": [
+        1283,
+        1464,
+        1271,
+        1259
+      ],
+      "advances_font_units": [
+        1405,
+        1161,
+        0,
+        0
+      ]
+    },
+    {
+      "text": "🏳️‍🌈",
+      "glyphs": [
+        1071
+      ],
+      "advances_font_units": [
+        2812
+      ]
+    },
+    {
+      "text": "😀",
+      "glyphs": [
+        2317
+      ],
+      "advances_font_units": [
+        2812
+      ]
+    }
+  ]
+}

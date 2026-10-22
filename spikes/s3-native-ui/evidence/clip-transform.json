@@ -1,0 +1,990 @@
+{
+  "batch_breaks": [
+    {
+      "cause": "clip barrier",
+      "command": 1
+    },
+    {
+      "cause": "transform barrier",
+      "command": 3
+    },
+    {
+      "cause": "clip barrier",
+      "command": 5
+    },
+    {
+      "cause": "pipeline change",
+      "command": 7
+    },
+    {
+      "cause": "clip barrier",
+      "command": 8
+    },
+    {
+      "cause": "transform barrier",
+      "command": 9
+    },
+    {
+      "cause": "clip barrier",
+      "command": 10
+    },
+    {
+      "cause": "clip barrier",
+      "command": 12
+    },
+    {
+      "cause": "clip barrier",
+      "command": 13
+    }
+  ],
+  "commands": 14,
+  "focus_graph": [
+    {
+      "down": null,
+      "id": "clipped-button",
+      "left": null,
+      "right": null,
+      "shift_tab": "clipped-button",
+      "tab": "clipped-button",
+      "up": null
+    }
+  ],
+  "glyphs": 81,
+  "nodes": [
+    {
+      "box": {
+        "h": 180.0,
+        "w": 360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "clip": {
+        "h": 180.0,
+        "w": 360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "probe",
+      "stable_id": 17975714548341171953,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 26.0,
+        "w": 320.0,
+        "x": 20.0,
+        "y": 20.0
+      },
+      "clip": {
+        "h": 180.0,
+        "w": 360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "clip-title",
+      "stable_id": 10331257876640070436,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              38
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              14
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              86
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              73
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              80
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              69
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 22,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Clip + transform probe"
+      },
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 48.0,
+        "w": 180.0,
+        "x": 50.0,
+        "y": 46.0
+      },
+      "clip": {
+        "h": 180.0,
+        "w": 360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "clip",
+      "stable_id": 1403765810143580635,
+      "text": null,
+      "warnings": []
+    },
+    {
+      "box": {
+        "h": 100.0,
+        "w": 300.0,
+        "x": 50.0,
+        "y": 46.0
+      },
+      "clip": {
+        "h": 48.0,
+        "w": 180.0,
+        "x": 50.0,
+        "y": 46.0
+      },
+      "id": "clipped-button",
+      "stable_id": 8564667221910965007,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              36
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              71
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              69
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              92
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              89
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              73
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              90
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 26,
+              "start": 25
+            },
+            "glyphs": [
+              74
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 27,
+              "start": 26
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 28,
+              "start": 27
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 29,
+              "start": 28
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 30,
+              "start": 29
+            },
+            "glyphs": [
+              81
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 31,
+              "start": 30
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 32,
+              "start": 31
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 33,
+              "start": 32
+            },
+            "glyphs": [
+              82
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 34,
+              "start": 33
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 34,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "A deliberately overflowing control"
+      },
+      "warnings": [
+        "overflow-parent"
+      ]
+    },
+    {
+      "box": {
+        "h": 8.0,
+        "w": 320.0,
+        "x": 20.0,
+        "y": 94.0
+      },
+      "clip": {
+        "h": 180.0,
+        "w": 360.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "id": "small-text",
+      "stable_id": 17618497010196475828,
+      "text": {
+        "clusters": [
+          {
+            "bytes": {
+              "end": 1,
+              "start": 0
+            },
+            "glyphs": [
+              39
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 2,
+              "start": 1
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 3,
+              "start": 2
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 4,
+              "start": 3
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 5,
+              "start": 4
+            },
+            "glyphs": [
+              69
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 6,
+              "start": 5
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 7,
+              "start": 6
+            },
+            "glyphs": [
+              85
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 8,
+              "start": 7
+            },
+            "glyphs": [
+              68
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 9,
+              "start": 8
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 10,
+              "start": 9
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 11,
+              "start": 10
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 12,
+              "start": 11
+            },
+            "glyphs": [
+              92
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 13,
+              "start": 12
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 14,
+              "start": 13
+            },
+            "glyphs": [
+              70
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 15,
+              "start": 14
+            },
+            "glyphs": [
+              79
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 16,
+              "start": 15
+            },
+            "glyphs": [
+              76
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 17,
+              "start": 16
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 18,
+              "start": 17
+            },
+            "glyphs": [
+              83
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 19,
+              "start": 18
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 20,
+              "start": 19
+            },
+            "glyphs": [
+              71
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 21,
+              "start": 20
+            },
+            "glyphs": [
+              3
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 22,
+              "start": 21
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 23,
+              "start": 22
+            },
+            "glyphs": [
+              72
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 24,
+              "start": 23
+            },
+            "glyphs": [
+              91
+            ],
+            "rtl": false
+          },
+          {
+            "bytes": {
+              "end": 25,
+              "start": 24
+            },
+            "glyphs": [
+              87
+            ],
+            "rtl": false
+          }
+        ],
+        "glyph_count": 25,
+        "lines": 1,
+        "ltr_runs": 1,
+        "missing_glyphs": 0,
+        "rtl_runs": 0,
+        "text": "Deliberately clipped text"
+      },
+      "warnings": [
+        "clipped-text-height"
+      ]
+    }
+  ],
+  "viewport": [
+    360.0,
+    180.0
+  ]
+}

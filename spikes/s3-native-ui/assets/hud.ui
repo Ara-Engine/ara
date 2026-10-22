@@ -1,0 +1,9 @@
+<panel id="hud" class="screen">
+  <text id="hud-kicker" class="eyebrow" text="OUTPOST / HUD" />
+  <text id="health" class="health" bind="Health" text="HEALTH  086 / 100" />
+  <panel id="hud-goal" class="section">
+    <text id="hud-goal-title" class="section-title" text="Navigation core recovered" />
+    <text id="hud-goal-label" class="subtitle" text="Reach the airlock · 84 m" />
+  </panel>
+  <button id="hud-inventory" text="Open inventory" action="Inventory" />
+</panel>

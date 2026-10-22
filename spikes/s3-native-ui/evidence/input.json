@@ -1,0 +1,44 @@
+{
+  "directional_gamepad": true,
+  "disabled_skipped": true,
+  "focus_restored": "settings",
+  "ime_cancelled": {
+    "active": false,
+    "committed": "日本語",
+    "preedit": "",
+    "selection": {
+      "end": 0,
+      "start": 0
+    }
+  },
+  "ime_committed": {
+    "active": false,
+    "committed": "日本語",
+    "preedit": "",
+    "selection": {
+      "end": 0,
+      "start": 0
+    }
+  },
+  "ime_preedit": {
+    "active": true,
+    "committed": "",
+    "preedit": "にほんご",
+    "selection": {
+      "end": 12,
+      "start": 0
+    }
+  },
+  "paint_only_work": {
+    "layout_passes": 0,
+    "paint_nodes": 14,
+    "restyled": 1,
+    "shaped": 0
+  },
+  "pointer_hit": "settings",
+  "tab_and_shift_tab": true,
+  "world_center_ray": [
+    320.0,
+    240.0
+  ]
+}

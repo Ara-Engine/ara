@@ -1,0 +1,28 @@
+:root {
+  --surface: #17212f;
+  --raised: #243448;
+  --accent: #68dcc0;
+  --muted: #9aadc4;
+  --text: #e6edf6;
+}
+panel { flex-direction: column; gap: 12px; }
+.screen { width: 100%; height: 100%; padding: 28px; background: var(--surface); overflow: hidden; }
+.eyebrow { color: var(--accent); font-size: 14px; }
+.title { font-size: 34px; color: var(--text); }
+.subtitle { font-size: 16px; color: var(--muted); }
+.section { padding: 16px; background: #1d2b3e; border-radius: 10px; gap: 12px; }
+.section-title { font-size: 20px; color: var(--text); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.label { font-size: 16px; color: var(--muted); }
+field { background: #111d2c; border-width: 1px; border-radius: 5px; font-size: 16px; }
+button { height: 50px; background: var(--raised); border-width: 2px; border-color: #38516b; padding: 10px; }
+button:hover { background: #34546a; }
+button:focus { border-color: var(--accent); }
+button:disabled { background: #1b2736; color: #67798e; }
+.primary { background: #236d63; }
+.preedit { color: #f6d88e; font-size: 22px; }
+.viewport { height: 528px; gap: 0px; overflow: hidden; }
+.inventory-row { height: 44px; padding: 7px; font-size: 16px; border-radius: 0px; border-color: #2c4057; }
+.health { color: var(--accent); font-size: 20px; }
+.icon { width: 48px; height: 48px; }
+.text-sample { background: #111d2c; padding: 16px; border-radius: 8px; font-size: 24px; }

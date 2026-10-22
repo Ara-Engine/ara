@@ -1,0 +1,14 @@
+{
+  "noop_byte_identical": true,
+  "one_attribute_only": true,
+  "operation": {
+    "after": "Continue expedition",
+    "before": "Resume expedition",
+    "bytes": {
+      "end": 707,
+      "start": 690
+    },
+    "revision": 0
+  },
+  "undo_byte_identical": true
+}
