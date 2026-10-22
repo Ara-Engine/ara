@@ -7,6 +7,21 @@ name = "ara"
 version = "0.0.0"
 
 [[package]]
+name = "ara-cmd"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "insta",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-components"
 version = "0.0.0"
 dependencies = [

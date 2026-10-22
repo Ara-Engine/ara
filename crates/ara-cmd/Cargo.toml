@@ -1,0 +1,23 @@
+[package]
+name = "ara-cmd"
+description = "The command, query and job registry: typed, schema-described edits that record ops through transactions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-components.workspace = true
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-ops.workspace = true
+ara-schema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-json.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,228 @@
+---
+source: crates/ara-cmd/tests/commands.rs
+expression: "ara_json::to_canonical_string(&reg.catalog())"
+---
+{
+  "component.add": {
+    "kind": "command",
+    "summary": "Add a component to an entity, with optional initial values.",
+    "params": "ComponentAddParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_8b21",
+        "component": "Transform",
+        "value": {
+          "position": [0, 1, 0]
+        }
+      }
+    ]
+  },
+  "component.remove": {
+    "kind": "command",
+    "summary": "Remove a component from an entity (for prefab entities, from this instance only).",
+    "params": "ComponentRemoveParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": true
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_8b21",
+        "component": "Transform"
+      }
+    ]
+  },
+  "entity.create": {
+    "kind": "command",
+    "summary": "Create an entity, optionally with a parent, a position among its siblings and components.",
+    "params": "EntityCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "id": "$crate",
+        "name": "Crate",
+        "components": {
+          "Transform": {
+            "position": [2, 0, 3]
+          }
+        }
+      },
+      {
+        "name": "Lid",
+        "parent": "$crate",
+        "index": 0
+      }
+    ]
+  },
+  "entity.delete": {
+    "kind": "command",
+    "summary": "Delete entities and their descendants (prefab entities are removed from their instance).",
+    "params": "EntityDeleteParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": true
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entities": [
+          "e_8b21"
+        ]
+      }
+    ]
+  },
+  "entity.inspect": {
+    "kind": "query",
+    "summary": "Show an entity's name, parent and components with prefab overrides applied.",
+    "params": "EntityInspectParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "read",
+    "examples": [
+      {
+        "entity": "e_4f9a/e_m4tz"
+      }
+    ]
+  },
+  "entity.reparent": {
+    "kind": "command",
+    "summary": "Move an entity under a new parent (or to the root) at a position among its siblings.",
+    "params": "EntityReparentParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_8b21",
+        "parent": "e_1c0d",
+        "index": 0
+      },
+      {
+        "entity": "e_8b21"
+      }
+    ]
+  },
+  "prefab.instantiate": {
+    "kind": "command",
+    "summary": "Place an instance of a prefab; its content stays linked to the prefab.",
+    "params": "PrefabInstantiateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "prefab": "@prefabs/crate.prefab",
+        "id": "$crate",
+        "position": [0, 0, 4]
+      }
+    ]
+  },
+  "prefab.override.revert": {
+    "kind": "command",
+    "summary": "Revert overrides of a prefab instance back to the prefab's values.",
+    "params": "OverrideRevertParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_4f9a/e_m4tz",
+        "path": "MeshRenderer.tint"
+      },
+      {
+        "entity": "e_4f9a"
+      }
+    ]
+  },
+  "prefab.override.set": {
+    "kind": "command",
+    "summary": "Override a value of a prefab instance (or of an entity inside it).",
+    "params": "OverrideSetParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_4f9a/e_m4tz",
+        "path": "MeshRenderer.tint",
+        "value": [1, 0, 0, 1]
+      }
+    ]
+  },
+  "property.set": {
+    "kind": "command",
+    "summary": "Set one field of an entity (its name or a component field).",
+    "params": "PropertySetParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entity": "e_8b21",
+        "path": "Transform.position.y",
+        "value": 2
+      },
+      {
+        "entity": "e_8b21",
+        "path": "name",
+        "value": "Crate"
+      }
+    ]
+  },
+  "test.spawnRow": {
+    "kind": "job",
+    "summary": "Create a row of entities.",
+    "params": "SpawnRowParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "count": 2
+      }
+    ]
+  },
+  "transform.set": {
+    "kind": "command",
+    "summary": "Set the local position, rotation and/or scale of entities.",
+    "params": "TransformSetParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit",
+    "examples": [
+      {
+        "entities": [
+          "e_8b21"
+        ],
+        "position": [2, 0, 3],
+        "rotation": [0, 45, 0]
+      }
+    ]
+  }
+}

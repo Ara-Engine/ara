@@ -140,6 +140,7 @@ impl Store {
     /// Opens a transaction.
     pub fn begin(&mut self, meta: TxnMeta) -> Staged<'_> {
         Staged {
+            ids_before: self.ids.clone(),
             store: Some(self),
             meta,
             reverts: None,
@@ -394,6 +395,9 @@ pub struct Staged<'s> {
     ops: Vec<Op>,
     /// Errors each touched document had before the transaction; only new ones fail it.
     baselines: BTreeMap<AssetId, BTreeSet<String>>,
+    /// The ID generator at `begin`, restored on rollback so a dry run previews exactly
+    /// the IDs a real run mints.
+    ids_before: IdGen,
 }
 
 impl<'s> Staged<'s> {
@@ -447,23 +451,10 @@ impl<'s> Staged<'s> {
         Ok(&self.ops[index])
     }
 
-    /// Validates every touched document and records the transaction, or rolls it
-    /// back and returns the errors it introduced.
-    pub fn commit(mut self) -> Result<Commit<'s>, Vec<Diagnostic>> {
-        let ops = std::mem::take(&mut self.ops);
-        let store = self
-            .store
-            .take()
-            .expect("a staged transaction holds its store until commit or rollback");
-        if let Some(key) = &self.meta.idempotency_key
-            && let Some(&i) = store.by_key.get(key)
-        {
-            store.rollback(&ops);
-            return Ok(Commit::Replayed(&store.history[i]));
-        }
-        if ops.is_empty() {
-            return Ok(Commit::Empty);
-        }
+    /// The errors committing now would report (stale base, undo conflicts, new
+    /// validation errors), without committing. Dry runs use this.
+    pub fn check(&self) -> Vec<Diagnostic> {
+        let store = self.store();
         let mut errors = Vec::new();
         if let Some(base) = self.meta.base {
             if base > store.rev {
@@ -472,7 +463,7 @@ impl<'s> Staged<'s> {
                     format!("base revision {base} is ahead of the store ({})", store.rev),
                 ));
             } else {
-                let touched: Vec<Touch> = ops.iter().flat_map(Touch::of).collect();
+                let touched: Vec<Touch> = self.ops.iter().flat_map(Touch::of).collect();
                 errors.extend(store.conflicts(base, &touched, self.reverts.is_some()));
             }
         }
@@ -484,8 +475,38 @@ impl<'s> Staged<'s> {
                     .filter(|d| d.is_error() && !before.contains(&key_of(d))),
             );
         }
+        errors
+    }
+
+    /// Validates every touched document and records the transaction, or rolls it
+    /// back and returns the errors it introduced.
+    pub fn commit(mut self) -> Result<Commit<'s>, Vec<Diagnostic>> {
+        let replayed = self
+            .meta
+            .idempotency_key
+            .as_ref()
+            .and_then(|k| self.store().by_key.get(k).copied());
+        let errors = if replayed.is_some() || self.ops.is_empty() {
+            Vec::new()
+        } else {
+            self.check()
+        };
+        let ops = std::mem::take(&mut self.ops);
+        let ids = self.ids_before.clone();
+        let store = self
+            .store
+            .take()
+            .expect("a staged transaction holds its store until commit or rollback");
+        if let Some(i) = replayed {
+            abort(store, &ops, ids);
+            return Ok(Commit::Replayed(&store.history[i]));
+        }
+        if ops.is_empty() {
+            store.ids = ids;
+            return Ok(Commit::Empty);
+        }
         if !errors.is_empty() {
-            store.rollback(&ops);
+            abort(store, &ops, ids);
             return Err(errors);
         }
         let index = store.record(self.meta.clone(), self.reverts.take(), ops);
@@ -496,7 +517,7 @@ impl<'s> Staged<'s> {
     pub fn rollback(mut self) -> Vec<Op> {
         let ops = std::mem::take(&mut self.ops);
         if let Some(store) = self.store.take() {
-            store.rollback(&ops);
+            abort(store, &ops, self.ids_before.clone());
         }
         ops
     }
@@ -506,9 +527,15 @@ impl Drop for Staged<'_> {
     fn drop(&mut self) {
         let ops = std::mem::take(&mut self.ops);
         if let Some(store) = self.store.take() {
-            store.rollback(&ops);
+            abort(store, &ops, self.ids_before.clone());
         }
     }
+}
+
+/// Rolls back `ops` and restores the ID generator.
+fn abort(store: &mut Store, ops: &[Op], ids: IdGen) {
+    store.rollback(ops);
+    store.ids = ids;
 }
 
 fn key_of(d: &Diagnostic) -> String {
