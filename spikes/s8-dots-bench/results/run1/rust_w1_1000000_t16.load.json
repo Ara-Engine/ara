@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:33:55.1077086+03:00",
+    "wall_seconds":  1.1333349,
+    "free_memory_kib":  6199696,
+    "background_cpu_percent":  20.5939513113026,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  0.890625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.53125
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  17032,
+                          "cpu_seconds":  0.390625
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  22904,
+                          "cpu_seconds":  0.328125
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  56144,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  0.078125
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.0625
+                      }
+                  ]
+}

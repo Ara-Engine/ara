@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:40:28.7454161+03:00",
+    "wall_seconds":  2.5095473,
+    "free_memory_kib":  8119440,
+    "background_cpu_percent":  19.807170500432488,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  2.0625
+                      },
+                      {
+                          "name":  "ara-s2",
+                          "pid":  42380,
+                          "cpu_seconds":  1.890625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.59375
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  101780,
+                          "cpu_seconds":  0.5625
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.53125
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  24124,
+                          "cpu_seconds":  0.390625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  49432,
+                          "cpu_seconds":  0.1875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.15625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.109375
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.109375
+                      }
+                  ]
+}

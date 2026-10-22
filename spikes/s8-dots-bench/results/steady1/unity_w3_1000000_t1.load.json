@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:40:08.1957077+03:00",
+    "wall_seconds":  20.5451928,
+    "free_memory_kib":  8520804,
+    "background_cpu_percent":  10.385831290422352,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  5.46875
+                      },
+                      {
+                          "name":  "RiotClientServices",
+                          "pid":  16784,
+                          "cpu_seconds":  4.59375
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  3.515625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  3.21875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  2.46875
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  24124,
+                          "cpu_seconds":  1.734375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  1.578125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  1.25
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  1.171875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  49432,
+                          "cpu_seconds":  1.078125
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.96875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.859375
+                      }
+                  ]
+}

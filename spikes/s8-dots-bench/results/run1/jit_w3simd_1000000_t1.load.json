@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:33:41.3416012+03:00",
+    "wall_seconds":  0.6988343,
+    "free_memory_kib":  7225156,
+    "background_cpu_percent":  23.895820153647296,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  1.6875
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.28125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "Riot Client",
+                          "pid":  48912,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.03125
+                      }
+                  ]
+}

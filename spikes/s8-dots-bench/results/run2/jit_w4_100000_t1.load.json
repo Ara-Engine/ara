@@ -1,0 +1,58 @@
+{
+    "started":  "2026-10-23T01:37:34.4111918+03:00",
+    "wall_seconds":  0.9093764,
+    "free_memory_kib":  9526992,
+    "background_cpu_percent":  5.1546312396055143,
+    "processes":  [
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.25
+                      },
+                      {
+                          "name":  "codex",
+                          "pid":  77272,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.078125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  93176,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

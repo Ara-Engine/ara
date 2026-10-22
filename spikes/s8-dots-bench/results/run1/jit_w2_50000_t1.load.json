@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:32:04.4093759+03:00",
+    "wall_seconds":  31.4934421,
+    "free_memory_kib":  7457980,
+    "background_cpu_percent":  21.7152103151659,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  75.234375
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  8.3125
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  5.421875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  2.078125
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  1.921875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  1.71875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  1.515625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  1.5
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  1.296875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  1.015625
+                      },
+                      {
+                          "name":  "RiotClientServices",
+                          "pid":  16784,
+                          "cpu_seconds":  0.8125
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.6875
+                      }
+                  ]
+}

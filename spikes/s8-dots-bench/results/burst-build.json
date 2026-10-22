@@ -1,0 +1,26 @@
+{
+  "options": {
+    "backend": [
+      "burst-llvm-21"
+    ],
+    "target": [
+      "AVX2",
+      "X64_SSE2"
+    ],
+    "global-safety-checks-setting": [
+      "Off"
+    ],
+    "float-precision": [
+      "Standard"
+    ]
+  },
+  "compiled_benchmark_jobs": [
+    "BoidJob",
+    "ChurnJob",
+    "CollectSlotsJob",
+    "GridJob",
+    "ParticleJob",
+    "SnapshotJob",
+    "TransformJob"
+  ]
+}

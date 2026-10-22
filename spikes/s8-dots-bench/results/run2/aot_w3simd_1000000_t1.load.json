@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:37:26.4210212+03:00",
+    "wall_seconds":  0.81640989999999991,
+    "free_memory_kib":  9660344,
+    "background_cpu_percent":  3.9473507731839121,
+    "processes":  [
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.15625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "Riot Client",
+                          "pid":  48912,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "RiotClientServices",
+                          "pid":  16784,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  93176,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "RemoteDesktopCompanion",
+                          "pid":  13532,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

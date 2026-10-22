@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:38:12.6120552+03:00",
+    "wall_seconds":  0.7162525,
+    "free_memory_kib":  9313168,
+    "background_cpu_percent":  36.13098209081295,
+    "processes":  [
+                      {
+                          "name":  "rustc",
+                          "pid":  70776,
+                          "cpu_seconds":  2.625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.84375
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.203125
+                      },
+                      {
+                          "name":  "CrossDeviceService",
+                          "pid":  99936,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "tail",
+                          "pid":  54340,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "unsecapp",
+                          "pid":  59216,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "nvsphelper64",
+                          "pid":  82552,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "Riot Client",
+                          "pid":  9988,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:38:13.7808723+03:00",
+    "wall_seconds":  0.7564246,
+    "free_memory_kib":  9302016,
+    "background_cpu_percent":  8.9080673076999339,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "CrossDeviceService",
+                          "pid":  99936,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  24124,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "lghub_agent",
+                          "pid":  24256,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  15020,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "RiotClientServices",
+                          "pid":  16784,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  80460,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NVIDIA Overlay",
+                          "pid":  92320,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "nvsphelper64",
+                          "pid":  82552,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

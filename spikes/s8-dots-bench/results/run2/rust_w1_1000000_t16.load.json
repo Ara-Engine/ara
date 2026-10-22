@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:37:42.6531148+03:00",
+    "wall_seconds":  0.91526659999999993,
+    "free_memory_kib":  9533532,
+    "background_cpu_percent":  10.563008362809263,
+    "processes":  [
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.40625
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.328125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.1875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.078125
+                      },
+                      {
+                          "name":  "CrossDeviceService",
+                          "pid":  99936,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NVIDIA Overlay",
+                          "pid":  98468,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NVIDIA Overlay",
+                          "pid":  27268,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "SnippingTool",
+                          "pid":  24700,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.03125
+                      }
+                  ]
+}

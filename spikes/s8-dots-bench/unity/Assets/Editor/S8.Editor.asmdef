@@ -1,0 +1,5 @@
+{
+  "name": "S8.Editor",
+  "references": ["S8"],
+  "includePlatforms": ["Editor"]
+}

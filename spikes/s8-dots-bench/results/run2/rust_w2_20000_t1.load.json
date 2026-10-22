@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:35:17.3270190+03:00",
+    "wall_seconds":  5.6977188,
+    "free_memory_kib":  9198608,
+    "background_cpu_percent":  12.494720913569832,
+    "processes":  [
+                      {
+                          "name":  "chrome",
+                          "pid":  102432,
+                          "cpu_seconds":  1.953125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  1.5625
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  15020,
+                          "cpu_seconds":  1.171875
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.9375
+                      },
+                      {
+                          "name":  "RiotClientServices",
+                          "pid":  16784,
+                          "cpu_seconds":  0.921875
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  12616,
+                          "cpu_seconds":  0.640625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.359375
+                      },
+                      {
+                          "name":  "DiscordSystemHelper",
+                          "pid":  58848,
+                          "cpu_seconds":  0.34375
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  101780,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.203125
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.171875
+                      }
+                  ]
+}

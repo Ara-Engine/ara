@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:33:51.2924115+03:00",
+    "wall_seconds":  3.811286,
+    "free_memory_kib":  6625248,
+    "background_cpu_percent":  16.578024779562593,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  3.171875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  1.421875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.96875
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.71875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  0.5
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.375
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.34375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.296875
+                      },
+                      {
+                          "name":  "EpicWebHelper",
+                          "pid":  105384,
+                          "cpu_seconds":  0.296875
+                      },
+                      {
+                          "name":  "EpicWebHelper",
+                          "pid":  91188,
+                          "cpu_seconds":  0.296875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.140625
+                      }
+                  ]
+}

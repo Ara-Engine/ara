@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:37:21.2006688+03:00",
+    "wall_seconds":  3.8959183,
+    "free_memory_kib":  9698284,
+    "background_cpu_percent":  3.5343480508818677,
+    "processes":  [
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.546875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.28125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.15625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.15625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "codex",
+                          "pid":  77272,
+                          "cpu_seconds":  0.109375
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  80460,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.046875
+                      }
+                  ]
+}

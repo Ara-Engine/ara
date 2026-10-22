@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:40:31.2589751+03:00",
+    "wall_seconds":  3.5964682,
+    "free_memory_kib":  8065180,
+    "background_cpu_percent":  10.969963532556745,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  2.296875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.75
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.5625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  101780,
+                          "cpu_seconds":  0.296875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  49432,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.203125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "lghub_agent",
+                          "pid":  24256,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  93176,
+                          "cpu_seconds":  0.109375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.109375
+                      }
+                  ]
+}

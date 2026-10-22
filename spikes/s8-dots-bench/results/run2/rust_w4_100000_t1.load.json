@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:37:35.3451244+03:00",
+    "wall_seconds":  1.2078275,
+    "free_memory_kib":  9442108,
+    "background_cpu_percent":  7.84272278119185,
+    "processes":  [
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.53125
+                      },
+                      {
+                          "name":  "openusage",
+                          "pid":  45944,
+                          "cpu_seconds":  0.25
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.25
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "codex-computer-use",
+                          "pid":  60144,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "codex",
+                          "pid":  77272,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  10164,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

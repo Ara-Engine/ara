@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:38:20.5851817+03:00",
+    "wall_seconds":  1.0814158,
+    "free_memory_kib":  9196028,
+    "background_cpu_percent":  11.197704897598129,
+    "processes":  [
+                      {
+                          "name":  "ara-s2",
+                          "pid":  32992,
+                          "cpu_seconds":  0.796875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.296875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.234375
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  12616,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}
