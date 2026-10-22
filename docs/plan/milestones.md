@@ -28,7 +28,13 @@ Agents build most of it, using the engine's own tools.
 | S7 | **Export and AOT.** C# NativeAOT per target: Windows locally, Linux via WSL, macOS and iOS on the MacBook, Android bionic; ReadyToRun cross-compile from Windows | Signed builds launch on every target | Export lanes |
 | S8 | **DOTS-class benchmark.** Unity DOTS (Entities + Burst) vs `bevy_ecs` (Rust) vs C# JIT vs C# NativeAOT on four workloads: transform integration, boids neighbour search, SIMD particles, spawn/despawn churn | Numbers recorded on Islam's machine | C# performance-tier plan (A12) |
 
-Also in M0: the repo, workspace and `AGENTS.md` (done at init); fetching the reference clones on the MacBook.
+Also in M0: the repo, workspace and `AGENTS.md` (done at init).
+
+**Mac sessions are paused (2026-10-23).** The Apple halves are sequenced later, not dropped:
+- the S1 Metal 4 half (checklist in `spikes/s1-gpu/RESULT.md`) opens M3's Metal 4 backend work;
+- the S7 macOS/iOS export half is part of M4's export pipeline.
+
+M0 exits on the Windows/Linux/Android results.
 
 **Exit:** S1–S8 have written results and decisions; `decisions.md` is updated; M1 tasks are refined from the spike findings.
 
