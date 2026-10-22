@@ -1,0 +1,22 @@
+[package]
+name = "ara-doc"
+description = "Authoring documents (scenes, prefabs): records, canonical files, @path#id references, prefab instances and ops."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-json.workspace = true
+ara-schema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-components.workspace = true
+insta.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

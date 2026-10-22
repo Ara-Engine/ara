@@ -1,0 +1,61 @@
+---
+source: crates/ara-doc/tests/docs.rs
+expression: "ara_json::to_canonical_string(&Value::Object(view))"
+---
+{
+  "e_flr1": {
+    "name": "Floor",
+    "Transform": {
+      "scale": [40, 0.5, 40]
+    }
+  },
+  "e_lmp1": {
+    "name": "Lamp",
+    "Light": {
+      "kind": "spot",
+      "intensity": 800
+    },
+    "Transform": {
+      "position": [0, 1, 0]
+    },
+    "parent": "e_stk2/e_c001"
+  },
+  "e_stk2": {
+    "name": "Crates",
+    "Transform": {
+      "position": [4, 0, -2]
+    }
+  },
+  "e_stk2/e_c001": {
+    "name": "Crate",
+    "MeshRenderer": {
+      "mesh": "@meshes/crate.glb#ms_crate001"
+    },
+    "Transform": {},
+    "parent": "e_stk2"
+  },
+  "e_stk2/e_c001/e_lid1": {
+    "name": "Lid",
+    "MeshRenderer": {
+      "mesh": "@meshes/lid.glb#ms_lid00001",
+      "tint": [0.2, 0.9, 0.2, 1]
+    },
+    "Transform": {
+      "position": [0, 0.5, 0]
+    },
+    "parent": "e_stk2/e_c001"
+  },
+  "e_stk2/e_c002": {
+    "name": "Crate",
+    "MeshRenderer": {
+      "mesh": "@meshes/crate.glb#ms_crate001"
+    },
+    "Transform": {
+      "position": [0, 1, 0]
+    },
+    "Light": {
+      "intensity": 200
+    },
+    "parent": "e_stk2"
+  }
+}
