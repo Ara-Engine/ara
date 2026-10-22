@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Spikes are throwaway experiments with their own Cargo workspaces.
+exclude = ["spikes"]
 
 [workspace.package]
 version = "0.0.0"
