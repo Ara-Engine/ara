@@ -47,6 +47,7 @@ These are working decisions. A spike result or a new entry here can change them.
 | Spike | Result | Decision | Evidence |
 |---|---|---|---|
 | S1, Vulkan half | **PASS** (2026-10-23) | **Adopt the ara-gpu binding/sync model**, as proven on Vulkan 1.3 (RTX 4070 SUPER), validation and sync validation clean.<br>• Binding: one global update-after-bind descriptor set (textures, buffers, sampler, TLAS) plus 32-byte push constants carrying SM6.6-style heap indices.<br>• Synchronization: timeline semaphores across a dedicated compute family, with explicit queue-family transfers.<br>• Shaders: offline Slang → SPIR-V + DXIL; no shader compiler at runtime.<br>• Persisted `VkPipelineCache`: 7.6 ms cold → 0.5 ms warm.<br>The Metal 4 half (MacBook Pro M5, via Metal Shader Converter) is still open. | [`spikes/s1-gpu/RESULT.md`](../spikes/s1-gpu/RESULT.md) |
+| S3 | **PASS** (2026-10-23) | **Keep A7: one Ara-owned retained UI runtime** for the editor, HUDs and world surfaces, on Taffy 0.15 + Parley 0.12 behind our own boundaries.<br>• Measured (worst sample of 5,000): pause/HUD updates 0.33 / 0.41 ms; a 10k-item virtual inventory scroll 0.68 ms.<br>• Arabic, bidi, CJK and emoji render correctly; designer edits round-trip byte-exact; focus navigation and an AccessKit tree work.<br>• Rules: keep surviving virtual-list items and their shaped text; track restyle, layout/text and paint dirtiness separately; no HarfBuzz/ICU FFI until a coverage gap is shown.<br>• RmlUi rejected: the tested revision has no Grid, and it wouldn't remove our authoring and C# integration work.<br>Still open (M2/M3): GPU rendering at 120 Hz, OS IME and screen readers. | [`spikes/s3-native-ui/RESULT.md`](../spikes/s3-native-ui/RESULT.md) |
 
 ## Open: decided by spikes (see [milestones](plan/milestones.md), M0)
 
@@ -55,4 +56,4 @@ These are working decisions. A spike result or a new entry here can change them.
 - Play-mode process model: child process vs an in-process simulate fallback (S5).
 - Export lanes per platform with C# NativeAOT and ReadyToRun (S7).
 - C# performance-tier plan: whether to build the C#-subset LLVM compiler (S8).
-- Whether Parley's text coverage is enough (S3).
+- ~~Whether Parley's text coverage is enough (S3)~~: yes for the tested corpus (S3 PASS).
