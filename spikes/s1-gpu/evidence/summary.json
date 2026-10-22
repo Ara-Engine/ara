@@ -1,0 +1,152 @@
+{
+  "headless": {
+    "acceleration_build_gpu_ms": 0.104,
+    "cache": {
+      "cold_empty_cache_ms": [
+        5.781599999999999,
+        1.8648
+      ],
+      "order": [
+        "graphics",
+        "compute"
+      ],
+      "path": "tools/pipeline-644b886579263847b40aab325793207e-2588114944.bin",
+      "persisted_bytes": 29119,
+      "previous_disk_bytes": 29119,
+      "warm_disk_cache_ms": [
+        0.4543,
+        0.054400000000000004
+      ],
+      "warm_seed": "loaded_from_previous_process"
+    },
+    "discarded_warmup_frames": 10,
+    "passes": {
+      "compute_ms": {
+        "max": 0.0021119999999999997,
+        "median": 0.001568,
+        "min": 0.001088,
+        "p95_nearest_rank": 0.002048
+      },
+      "raster_ray_query_ms": {
+        "max": 0.040544,
+        "median": 0.031872,
+        "min": 0.030528,
+        "p95_nearest_rank": 0.032704
+      },
+      "readback_ms": {
+        "max": 0.212576,
+        "median": 0.146912,
+        "min": 0.143232,
+        "p95_nearest_rank": 0.155584
+      }
+    },
+    "samples": 110,
+    "validation": {
+      "errors": 0,
+      "layer": "VK_LAYER_KHRONOS_validation",
+      "messages": [],
+      "synchronization_validation": true,
+      "warnings": 0
+    }
+  },
+  "no-shadows": {
+    "acceleration_build_gpu_ms": 0.106336,
+    "cache": {
+      "cold_empty_cache_ms": [
+        3.0829,
+        0.2804
+      ],
+      "order": [
+        "graphics",
+        "compute"
+      ],
+      "path": "tools/pipeline-644b886579263847b40aab325793207e-2588114944.bin",
+      "persisted_bytes": 29119,
+      "previous_disk_bytes": 29119,
+      "warm_disk_cache_ms": [
+        0.1479,
+        0.0399
+      ],
+      "warm_seed": "loaded_from_previous_process"
+    },
+    "discarded_warmup_frames": 10,
+    "passes": {
+      "compute_ms": {
+        "max": 0.00208,
+        "median": 0.001536,
+        "min": 0.001088,
+        "p95_nearest_rank": 0.002016
+      },
+      "raster_ray_query_ms": {
+        "max": 0.015488,
+        "median": 0.009184,
+        "min": 0.008383999999999999,
+        "p95_nearest_rank": 0.009951999999999999
+      },
+      "readback_ms": {
+        "max": 0.14940799999999999,
+        "median": 0.145168,
+        "min": 0.14336,
+        "p95_nearest_rank": 0.147744
+      }
+    },
+    "samples": 110,
+    "validation": {
+      "errors": 0,
+      "layer": "VK_LAYER_KHRONOS_validation",
+      "messages": [],
+      "synchronization_validation": true,
+      "warnings": 0
+    }
+  },
+  "window": {
+    "acceleration_build_gpu_ms": 0.110592,
+    "cache": {
+      "cold_empty_cache_ms": [
+        6.9634,
+        0.33340000000000003
+      ],
+      "order": [
+        "graphics",
+        "compute"
+      ],
+      "path": "tools/pipeline-644b886579263847b40aab325793207e-2588114944.bin",
+      "persisted_bytes": 29119,
+      "previous_disk_bytes": 29119,
+      "warm_disk_cache_ms": [
+        0.2717,
+        0.056799999999999996
+      ],
+      "warm_seed": "loaded_from_previous_process"
+    },
+    "discarded_warmup_frames": 10,
+    "passes": {
+      "compute_ms": {
+        "max": 0.007424,
+        "median": 0.001792,
+        "min": 0.001152,
+        "p95_nearest_rank": 0.002784
+      },
+      "raster_ray_query_ms": {
+        "max": 0.037792,
+        "median": 0.032448000000000005,
+        "min": 0.030912,
+        "p95_nearest_rank": 0.034207999999999995
+      },
+      "readback_ms": {
+        "max": 0.182464,
+        "median": 0.155712,
+        "min": 0.14496,
+        "p95_nearest_rank": 0.17152
+      }
+    },
+    "samples": 110,
+    "validation": {
+      "errors": 0,
+      "layer": "VK_LAYER_KHRONOS_validation",
+      "messages": [],
+      "synchronization_validation": true,
+      "warnings": 0
+    }
+  }
+}
