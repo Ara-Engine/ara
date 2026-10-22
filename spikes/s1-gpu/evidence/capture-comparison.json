@@ -1,0 +1,9 @@
+{
+  "changed_pixels": 10253,
+  "maximum_pixel_rgb_absolute_sum": 168,
+  "mean_channel_absolute_difference": 0.5717205584490741,
+  "pixels": 921600,
+  "shadowed": "RESULT.png",
+  "shadowed_pixels_brighter_than_control": 0,
+  "unshadowed": "evidence/no-shadows.png"
+}

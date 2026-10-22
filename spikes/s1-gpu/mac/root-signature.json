@@ -1,0 +1,88 @@
+{
+  "RootSignature": {
+    "Flags": "IRRootSignatureFlagAllowInputAssemblerInputLayout",
+    "NumParameters": 5,
+    "NumStaticSamplers": 0,
+    "Parameters": [
+      {
+        "Constants": {
+          "Num32BitValues": 8,
+          "RegisterSpace": 0,
+          "ShaderRegister": 0
+        },
+        "ParameterType": "IRRootParameterType32BitConstants",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 16,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSRV",
+              "RegisterSpace": 1
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 4,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeUAV",
+              "RegisterSpace": 2
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 1,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSampler",
+              "RegisterSpace": 0
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 1,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSRV",
+              "RegisterSpace": 3
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      }
+    ],
+    "StaticSamplers": []
+  },
+  "version": "IRRootSignatureVersion_1_1"
+}

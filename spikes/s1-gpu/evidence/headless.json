@@ -1,0 +1,810 @@
+{
+  "acceleration_build_gpu_ms": 0.104,
+  "bindless": {
+    "global_sets": 1,
+    "sampled_image_capacity": 16,
+    "storage_buffer_capacity": 4,
+    "texture_slot_3_updated_after_command_recording": true,
+    "update_after_bind": true
+  },
+  "cache": {
+    "cold_empty_cache_ms": [
+      5.781599999999999,
+      1.8648
+    ],
+    "order": [
+      "graphics",
+      "compute"
+    ],
+    "path": "tools/pipeline-644b886579263847b40aab325793207e-2588114944.bin",
+    "persisted_bytes": 29119,
+    "previous_disk_bytes": 29119,
+    "warm_disk_cache_ms": [
+      0.4543,
+      0.054400000000000004
+    ],
+    "warm_seed": "loaded_from_previous_process"
+  },
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ]
+  },
+  "render": {
+    "compute_first_sample": 0.8799999952316284,
+    "compute_last_sample": 0.9899327754974365,
+    "compute_max_error": 5.364418029785156e-7,
+    "frames": [
+      {
+        "compute_ms": 0.002208,
+        "frame": 0,
+        "raster_ray_query_ms": 0.041984,
+        "readback_ms": 0.14687999999999998
+      },
+      {
+        "compute_ms": 0.001312,
+        "frame": 1,
+        "raster_ray_query_ms": 0.03184,
+        "readback_ms": 0.14585599999999999
+      },
+      {
+        "compute_ms": 0.002016,
+        "frame": 2,
+        "raster_ray_query_ms": 0.032256,
+        "readback_ms": 0.148896
+      },
+      {
+        "compute_ms": 0.0012159999999999999,
+        "frame": 3,
+        "raster_ray_query_ms": 0.031744,
+        "readback_ms": 0.14665599999999998
+      },
+      {
+        "compute_ms": 0.00112,
+        "frame": 4,
+        "raster_ray_query_ms": 0.031296,
+        "readback_ms": 0.14704
+      },
+      {
+        "compute_ms": 0.001728,
+        "frame": 5,
+        "raster_ray_query_ms": 0.032352,
+        "readback_ms": 0.145312
+      },
+      {
+        "compute_ms": 0.0018239999999999999,
+        "frame": 6,
+        "raster_ray_query_ms": 0.031456,
+        "readback_ms": 0.14563199999999998
+      },
+      {
+        "compute_ms": 0.0015999999999999999,
+        "frame": 7,
+        "raster_ray_query_ms": 0.031264,
+        "readback_ms": 0.145728
+      },
+      {
+        "compute_ms": 0.001472,
+        "frame": 8,
+        "raster_ray_query_ms": 0.031744,
+        "readback_ms": 0.144864
+      },
+      {
+        "compute_ms": 0.0015999999999999999,
+        "frame": 9,
+        "raster_ray_query_ms": 0.03152,
+        "readback_ms": 0.15398399999999998
+      },
+      {
+        "compute_ms": 0.001472,
+        "frame": 10,
+        "raster_ray_query_ms": 0.031232,
+        "readback_ms": 0.152288
+      },
+      {
+        "compute_ms": 0.0021119999999999997,
+        "frame": 11,
+        "raster_ray_query_ms": 0.032576,
+        "readback_ms": 0.146304
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 12,
+        "raster_ray_query_ms": 0.030879999999999998,
+        "readback_ms": 0.143872
+      },
+      {
+        "compute_ms": 0.0014399999999999999,
+        "frame": 13,
+        "raster_ray_query_ms": 0.031135999999999997,
+        "readback_ms": 0.143648
+      },
+      {
+        "compute_ms": 0.001888,
+        "frame": 14,
+        "raster_ray_query_ms": 0.031647999999999996,
+        "readback_ms": 0.15023999999999998
+      },
+      {
+        "compute_ms": 0.001984,
+        "frame": 15,
+        "raster_ray_query_ms": 0.03184,
+        "readback_ms": 0.145952
+      },
+      {
+        "compute_ms": 0.001088,
+        "frame": 16,
+        "raster_ray_query_ms": 0.03184,
+        "readback_ms": 0.15251199999999998
+      },
+      {
+        "compute_ms": 0.0014399999999999999,
+        "frame": 17,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.152032
+      },
+      {
+        "compute_ms": 0.001632,
+        "frame": 18,
+        "raster_ray_query_ms": 0.031232,
+        "readback_ms": 0.146848
+      },
+      {
+        "compute_ms": 0.0012159999999999999,
+        "frame": 19,
+        "raster_ray_query_ms": 0.032383999999999996,
+        "readback_ms": 0.146016
+      },
+      {
+        "compute_ms": 0.0019199999999999998,
+        "frame": 20,
+        "raster_ray_query_ms": 0.032639999999999995,
+        "readback_ms": 0.152704
+      },
+      {
+        "compute_ms": 0.001952,
+        "frame": 21,
+        "raster_ray_query_ms": 0.032128,
+        "readback_ms": 0.14944
+      },
+      {
+        "compute_ms": 0.001536,
+        "frame": 22,
+        "raster_ray_query_ms": 0.031264,
+        "readback_ms": 0.153088
+      },
+      {
+        "compute_ms": 0.001984,
+        "frame": 23,
+        "raster_ray_query_ms": 0.032096,
+        "readback_ms": 0.147456
+      },
+      {
+        "compute_ms": 0.001568,
+        "frame": 24,
+        "raster_ray_query_ms": 0.032416,
+        "readback_ms": 0.14374399999999998
+      },
+      {
+        "compute_ms": 0.0017599999999999998,
+        "frame": 25,
+        "raster_ray_query_ms": 0.031487999999999995,
+        "readback_ms": 0.147616
+      },
+      {
+        "compute_ms": 0.0018239999999999999,
+        "frame": 26,
+        "raster_ray_query_ms": 0.031807999999999996,
+        "readback_ms": 0.149024
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 27,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.1528
+      },
+      {
+        "compute_ms": 0.001696,
+        "frame": 28,
+        "raster_ray_query_ms": 0.031712,
+        "readback_ms": 0.150272
+      },
+      {
+        "compute_ms": 0.00112,
+        "frame": 29,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.15536
+      },
+      {
+        "compute_ms": 0.001856,
+        "frame": 30,
+        "raster_ray_query_ms": 0.031616,
+        "readback_ms": 0.147968
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 31,
+        "raster_ray_query_ms": 0.031744,
+        "readback_ms": 0.14608
+      },
+      {
+        "compute_ms": 0.001792,
+        "frame": 32,
+        "raster_ray_query_ms": 0.032416,
+        "readback_ms": 0.14592
+      },
+      {
+        "compute_ms": 0.001312,
+        "frame": 33,
+        "raster_ray_query_ms": 0.031936,
+        "readback_ms": 0.14528
+      },
+      {
+        "compute_ms": 0.0019199999999999998,
+        "frame": 34,
+        "raster_ray_query_ms": 0.031424,
+        "readback_ms": 0.143616
+      },
+      {
+        "compute_ms": 0.001472,
+        "frame": 35,
+        "raster_ray_query_ms": 0.035232,
+        "readback_ms": 0.148864
+      },
+      {
+        "compute_ms": 0.001664,
+        "frame": 36,
+        "raster_ray_query_ms": 0.031424,
+        "readback_ms": 0.155584
+      },
+      {
+        "compute_ms": 0.001856,
+        "frame": 37,
+        "raster_ray_query_ms": 0.03152,
+        "readback_ms": 0.147584
+      },
+      {
+        "compute_ms": 0.001664,
+        "frame": 38,
+        "raster_ray_query_ms": 0.032512,
+        "readback_ms": 0.145952
+      },
+      {
+        "compute_ms": 0.00208,
+        "frame": 39,
+        "raster_ray_query_ms": 0.032448,
+        "readback_ms": 0.146176
+      },
+      {
+        "compute_ms": 0.001248,
+        "frame": 40,
+        "raster_ray_query_ms": 0.03168,
+        "readback_ms": 0.148288
+      },
+      {
+        "compute_ms": 0.001536,
+        "frame": 41,
+        "raster_ray_query_ms": 0.0312,
+        "readback_ms": 0.14563199999999998
+      },
+      {
+        "compute_ms": 0.001088,
+        "frame": 42,
+        "raster_ray_query_ms": 0.032704,
+        "readback_ms": 0.145312
+      },
+      {
+        "compute_ms": 0.0012799999999999999,
+        "frame": 43,
+        "raster_ray_query_ms": 0.032288,
+        "readback_ms": 0.14368
+      },
+      {
+        "compute_ms": 0.001504,
+        "frame": 44,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.14543999999999999
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 45,
+        "raster_ray_query_ms": 0.032576,
+        "readback_ms": 0.14864
+      },
+      {
+        "compute_ms": 0.001632,
+        "frame": 46,
+        "raster_ray_query_ms": 0.031872,
+        "readback_ms": 0.150144
+      },
+      {
+        "compute_ms": 0.0014399999999999999,
+        "frame": 47,
+        "raster_ray_query_ms": 0.031552,
+        "readback_ms": 0.15062399999999998
+      },
+      {
+        "compute_ms": 0.001184,
+        "frame": 48,
+        "raster_ray_query_ms": 0.03232,
+        "readback_ms": 0.146752
+      },
+      {
+        "compute_ms": 0.001088,
+        "frame": 49,
+        "raster_ray_query_ms": 0.03184,
+        "readback_ms": 0.1464
+      },
+      {
+        "compute_ms": 0.001152,
+        "frame": 50,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.146784
+      },
+      {
+        "compute_ms": 0.001408,
+        "frame": 51,
+        "raster_ray_query_ms": 0.031296,
+        "readback_ms": 0.144128
+      },
+      {
+        "compute_ms": 0.001984,
+        "frame": 52,
+        "raster_ray_query_ms": 0.031456,
+        "readback_ms": 0.150176
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 53,
+        "raster_ray_query_ms": 0.032672,
+        "readback_ms": 0.149632
+      },
+      {
+        "compute_ms": 0.001504,
+        "frame": 54,
+        "raster_ray_query_ms": 0.031904,
+        "readback_ms": 0.143232
+      },
+      {
+        "compute_ms": 0.001792,
+        "frame": 55,
+        "raster_ray_query_ms": 0.032288,
+        "readback_ms": 0.144544
+      },
+      {
+        "compute_ms": 0.0015999999999999999,
+        "frame": 56,
+        "raster_ray_query_ms": 0.031232,
+        "readback_ms": 0.143776
+      },
+      {
+        "compute_ms": 0.00208,
+        "frame": 57,
+        "raster_ray_query_ms": 0.031456,
+        "readback_ms": 0.14895999999999998
+      },
+      {
+        "compute_ms": 0.001504,
+        "frame": 58,
+        "raster_ray_query_ms": 0.030528,
+        "readback_ms": 0.150752
+      },
+      {
+        "compute_ms": 0.001984,
+        "frame": 59,
+        "raster_ray_query_ms": 0.034144,
+        "readback_ms": 0.146176
+      },
+      {
+        "compute_ms": 0.0012799999999999999,
+        "frame": 60,
+        "raster_ray_query_ms": 0.031776,
+        "readback_ms": 0.152992
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 61,
+        "raster_ray_query_ms": 0.031328,
+        "readback_ms": 0.148736
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 62,
+        "raster_ray_query_ms": 0.031807999999999996,
+        "readback_ms": 0.14576
+      },
+      {
+        "compute_ms": 0.0015999999999999999,
+        "frame": 63,
+        "raster_ray_query_ms": 0.032448,
+        "readback_ms": 0.145696
+      },
+      {
+        "compute_ms": 0.001408,
+        "frame": 64,
+        "raster_ray_query_ms": 0.032383999999999996,
+        "readback_ms": 0.14448
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 65,
+        "raster_ray_query_ms": 0.032288,
+        "readback_ms": 0.144
+      },
+      {
+        "compute_ms": 0.001152,
+        "frame": 66,
+        "raster_ray_query_ms": 0.032096,
+        "readback_ms": 0.144192
+      },
+      {
+        "compute_ms": 0.0014399999999999999,
+        "frame": 67,
+        "raster_ray_query_ms": 0.030751999999999998,
+        "readback_ms": 0.15424
+      },
+      {
+        "compute_ms": 0.00112,
+        "frame": 68,
+        "raster_ray_query_ms": 0.031264,
+        "readback_ms": 0.150528
+      },
+      {
+        "compute_ms": 0.001952,
+        "frame": 69,
+        "raster_ray_query_ms": 0.03136,
+        "readback_ms": 0.145728
+      },
+      {
+        "compute_ms": 0.00112,
+        "frame": 70,
+        "raster_ray_query_ms": 0.031647999999999996,
+        "readback_ms": 0.14438399999999998
+      },
+      {
+        "compute_ms": 0.001728,
+        "frame": 71,
+        "raster_ray_query_ms": 0.032032,
+        "readback_ms": 0.150272
+      },
+      {
+        "compute_ms": 0.001504,
+        "frame": 72,
+        "raster_ray_query_ms": 0.032704,
+        "readback_ms": 0.14435199999999998
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 73,
+        "raster_ray_query_ms": 0.032063999999999995,
+        "readback_ms": 0.150528
+      },
+      {
+        "compute_ms": 0.001952,
+        "frame": 74,
+        "raster_ray_query_ms": 0.031328,
+        "readback_ms": 0.146848
+      },
+      {
+        "compute_ms": 0.0012159999999999999,
+        "frame": 75,
+        "raster_ray_query_ms": 0.032128,
+        "readback_ms": 0.14476799999999998
+      },
+      {
+        "compute_ms": 0.001568,
+        "frame": 76,
+        "raster_ray_query_ms": 0.03216,
+        "readback_ms": 0.158752
+      },
+      {
+        "compute_ms": 0.001792,
+        "frame": 77,
+        "raster_ray_query_ms": 0.031872,
+        "readback_ms": 0.14687999999999998
+      },
+      {
+        "compute_ms": 0.001728,
+        "frame": 78,
+        "raster_ray_query_ms": 0.032063999999999995,
+        "readback_ms": 0.1536
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 79,
+        "raster_ray_query_ms": 0.032223999999999996,
+        "readback_ms": 0.147232
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 80,
+        "raster_ray_query_ms": 0.032576,
+        "readback_ms": 0.145376
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 81,
+        "raster_ray_query_ms": 0.032256,
+        "readback_ms": 0.144736
+      },
+      {
+        "compute_ms": 0.001152,
+        "frame": 82,
+        "raster_ray_query_ms": 0.031744,
+        "readback_ms": 0.148864
+      },
+      {
+        "compute_ms": 0.0012799999999999999,
+        "frame": 83,
+        "raster_ray_query_ms": 0.032223999999999996,
+        "readback_ms": 0.15126399999999998
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 84,
+        "raster_ray_query_ms": 0.032032,
+        "readback_ms": 0.14479999999999998
+      },
+      {
+        "compute_ms": 0.001888,
+        "frame": 85,
+        "raster_ray_query_ms": 0.03168,
+        "readback_ms": 0.14687999999999998
+      },
+      {
+        "compute_ms": 0.00208,
+        "frame": 86,
+        "raster_ray_query_ms": 0.031456,
+        "readback_ms": 0.146944
+      },
+      {
+        "compute_ms": 0.001472,
+        "frame": 87,
+        "raster_ray_query_ms": 0.031904,
+        "readback_ms": 0.149568
+      },
+      {
+        "compute_ms": 0.001856,
+        "frame": 88,
+        "raster_ray_query_ms": 0.03136,
+        "readback_ms": 0.15808
+      },
+      {
+        "compute_ms": 0.001568,
+        "frame": 89,
+        "raster_ray_query_ms": 0.032256,
+        "readback_ms": 0.144
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 90,
+        "raster_ray_query_ms": 0.031904,
+        "readback_ms": 0.148864
+      },
+      {
+        "compute_ms": 0.0018239999999999999,
+        "frame": 91,
+        "raster_ray_query_ms": 0.032448,
+        "readback_ms": 0.20912
+      },
+      {
+        "compute_ms": 0.0019199999999999998,
+        "frame": 92,
+        "raster_ray_query_ms": 0.032192,
+        "readback_ms": 0.212576
+      },
+      {
+        "compute_ms": 0.001856,
+        "frame": 93,
+        "raster_ray_query_ms": 0.030944,
+        "readback_ms": 0.147456
+      },
+      {
+        "compute_ms": 0.001184,
+        "frame": 94,
+        "raster_ray_query_ms": 0.032223999999999996,
+        "readback_ms": 0.14464
+      },
+      {
+        "compute_ms": 0.001312,
+        "frame": 95,
+        "raster_ray_query_ms": 0.031967999999999996,
+        "readback_ms": 0.153536
+      },
+      {
+        "compute_ms": 0.001504,
+        "frame": 96,
+        "raster_ray_query_ms": 0.03152,
+        "readback_ms": 0.144864
+      },
+      {
+        "compute_ms": 0.001984,
+        "frame": 97,
+        "raster_ray_query_ms": 0.031487999999999995,
+        "readback_ms": 0.143776
+      },
+      {
+        "compute_ms": 0.0019199999999999998,
+        "frame": 98,
+        "raster_ray_query_ms": 0.031264,
+        "readback_ms": 0.14368
+      },
+      {
+        "compute_ms": 0.001728,
+        "frame": 99,
+        "raster_ray_query_ms": 0.031584,
+        "readback_ms": 0.15062399999999998
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 100,
+        "raster_ray_query_ms": 0.03168,
+        "readback_ms": 0.1464
+      },
+      {
+        "compute_ms": 0.001568,
+        "frame": 101,
+        "raster_ray_query_ms": 0.032512,
+        "readback_ms": 0.145152
+      },
+      {
+        "compute_ms": 0.001248,
+        "frame": 102,
+        "raster_ray_query_ms": 0.030912,
+        "readback_ms": 0.149024
+      },
+      {
+        "compute_ms": 0.001248,
+        "frame": 103,
+        "raster_ray_query_ms": 0.032768,
+        "readback_ms": 0.169088
+      },
+      {
+        "compute_ms": 0.001152,
+        "frame": 104,
+        "raster_ray_query_ms": 0.032352,
+        "readback_ms": 0.152032
+      },
+      {
+        "compute_ms": 0.001568,
+        "frame": 105,
+        "raster_ray_query_ms": 0.03232,
+        "readback_ms": 0.154688
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 106,
+        "raster_ray_query_ms": 0.040544,
+        "readback_ms": 0.14710399999999998
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 107,
+        "raster_ray_query_ms": 0.032096,
+        "readback_ms": 0.146112
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 108,
+        "raster_ray_query_ms": 0.032096,
+        "readback_ms": 0.148192
+      },
+      {
+        "compute_ms": 0.0017599999999999998,
+        "frame": 109,
+        "raster_ray_query_ms": 0.031872,
+        "readback_ms": 0.14668799999999999
+      },
+      {
+        "compute_ms": 0.001248,
+        "frame": 110,
+        "raster_ray_query_ms": 0.032704,
+        "readback_ms": 0.14384
+      },
+      {
+        "compute_ms": 0.0015999999999999999,
+        "frame": 111,
+        "raster_ray_query_ms": 0.033248,
+        "readback_ms": 0.14479999999999998
+      },
+      {
+        "compute_ms": 0.001344,
+        "frame": 112,
+        "raster_ray_query_ms": 0.031712,
+        "readback_ms": 0.149632
+      },
+      {
+        "compute_ms": 0.001152,
+        "frame": 113,
+        "raster_ray_query_ms": 0.03184,
+        "readback_ms": 0.14768
+      },
+      {
+        "compute_ms": 0.0013759999999999998,
+        "frame": 114,
+        "raster_ray_query_ms": 0.03152,
+        "readback_ms": 0.14672
+      },
+      {
+        "compute_ms": 0.002016,
+        "frame": 115,
+        "raster_ray_query_ms": 0.031552,
+        "readback_ms": 0.14582399999999998
+      },
+      {
+        "compute_ms": 0.002016,
+        "frame": 116,
+        "raster_ray_query_ms": 0.032608,
+        "readback_ms": 0.145504
+      },
+      {
+        "compute_ms": 0.001312,
+        "frame": 117,
+        "raster_ray_query_ms": 0.031647999999999996,
+        "readback_ms": 0.14928
+      },
+      {
+        "compute_ms": 0.001632,
+        "frame": 118,
+        "raster_ray_query_ms": 0.032063999999999995,
+        "readback_ms": 0.14736
+      },
+      {
+        "compute_ms": 0.002048,
+        "frame": 119,
+        "raster_ray_query_ms": 0.032032,
+        "readback_ms": 0.146016
+      }
+    ],
+    "last_timeline_values": [
+      120,
+      120
+    ],
+    "presentation": false,
+    "queue_family_transfers": 236
+  },
+  "scene": {
+    "height": 720,
+    "materials": 4,
+    "shadows": true,
+    "textures": 4,
+    "triangles": 38,
+    "width": 1280
+  },
+  "screenshot": "RESULT.png",
+  "validation": {
+    "errors": 0,
+    "layer": "VK_LAYER_KHRONOS_validation",
+    "messages": [],
+    "synchronization_validation": true,
+    "warnings": 0
+  }
+}

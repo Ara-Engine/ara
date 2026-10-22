@@ -1,0 +1,16 @@
+{
+  "ash": "0.38.0+1.4.352",
+  "ash_revision": "f4c2ca3e4f6b998d5254ad101a32f024d87cdec2",
+  "captured_utc": "2026-10-22T22:28:23.0299489Z",
+  "cargo_build_jobs": 4,
+  "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+  "driver": "617.14",
+  "os": "Microsoft Windows 11 Pro",
+  "os_version": "10.0.26300",
+  "reference_study": "Godot rendering_device_driver_vulkan.cpp: queue discovery, capability probing; no source copied",
+  "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "sdk": "1.4.363.0",
+  "sdl": "3.4.18",
+  "slang": "2026.17-25-gc7954ebd1",
+  "total_physical_memory_bytes": 33410686976
+}
