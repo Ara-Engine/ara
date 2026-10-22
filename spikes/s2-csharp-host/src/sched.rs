@@ -30,7 +30,10 @@ impl CsSystem {
     /// Runs this system over one chunk. Faults are contained and reported on the C# side.
     pub fn run(&self, chunk: &Chunk, tick: &Tick) {
         if let Some(t) = &self.tally {
-            let name = std::thread::current().name().unwrap_or("<unnamed>").to_owned();
+            let name = std::thread::current()
+                .name()
+                .unwrap_or("<unnamed>")
+                .to_owned();
             *t.lock().expect("tally lock").entry(name).or_default() += 1;
         }
         // SAFETY: `chunk` points at table columns borrowed by the calling query for the duration of
@@ -80,13 +83,21 @@ pub fn read_systems(api: &ScriptApi) -> Vec<SystemEntry> {
     let count = unsafe { (api.system_count)() };
     (0..count)
         .map(|id| {
-            let mut info = schema::SystemInfo { shape: 0, name_len: 0 };
+            let mut info = schema::SystemInfo {
+                shape: 0,
+                name_len: 0,
+            };
             let mut buf = [0u8; 128];
             // SAFETY: `info` and `buf` are valid for writes; the capacity matches `buf`.
-            let rc = unsafe { (api.system_info)(id, &mut info, buf.as_mut_ptr(), buf.len() as u32) };
+            let rc =
+                unsafe { (api.system_info)(id, &mut info, buf.as_mut_ptr(), buf.len() as u32) };
             assert_eq!(rc, 0, "system_info({id}) failed");
             let name = String::from_utf8_lossy(&buf[..info.name_len as usize]).into_owned();
-            SystemEntry { id, name, shape: info.shape }
+            SystemEntry {
+                id,
+                name,
+                shape: info.shape,
+            }
         })
         .collect()
 }
@@ -95,13 +106,19 @@ pub fn read_systems(api: &ScriptApi) -> Vec<SystemEntry> {
 fn conflicts(a: u32, b: u32) -> bool {
     let (a, b) = (&SHAPES[a as usize], &SHAPES[b as usize]);
     a.columns.iter().any(|ca| {
-        b.columns.iter().any(|cb| ca.component == cb.component && (ca.write || cb.write))
+        b.columns
+            .iter()
+            .any(|cb| ca.component == cb.component && (ca.write || cb.write))
     })
 }
 
 /// Builds a multi-threaded schedule for the registered systems. Conflicting systems are ordered
 /// by registration order (deterministic); non-conflicting ones may run in parallel.
-pub fn build_schedule(api: ScriptApi, systems: &[SystemEntry], tally: Option<ThreadTally>) -> Schedule {
+pub fn build_schedule(
+    api: ScriptApi,
+    systems: &[SystemEntry],
+    tally: Option<ThreadTally>,
+) -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(MultiThreadedExecutor::new());
     for (i, s) in systems.iter().enumerate() {
@@ -110,8 +127,16 @@ pub fn build_schedule(api: ScriptApi, systems: &[SystemEntry], tally: Option<Thr
             .filter(|p| conflicts(p.shape, s.shape))
             .map(|p| CsSet(p.id))
             .collect();
-        let sys = CsSystem { id: s.id, api, tally: tally.clone() };
-        assert!(schema::add_shape_system(&mut schedule, s.shape, sys, &after), "unknown shape {}", s.shape);
+        let sys = CsSystem {
+            id: s.id,
+            api,
+            tally: tally.clone(),
+        };
+        assert!(
+            schema::add_shape_system(&mut schedule, s.shape, sys, &after),
+            "unknown shape {}",
+            s.shape
+        );
     }
     schedule
 }

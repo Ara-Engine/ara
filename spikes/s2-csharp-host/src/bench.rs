@@ -18,7 +18,11 @@ pub fn game_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("game")
 }
 
-const TICK: Tick = Tick { frame: 0, dt: 1.0 / 60.0, elapsed: 0.0 };
+const TICK: Tick = Tick {
+    frame: 0,
+    dt: 1.0 / 60.0,
+    elapsed: 0.0,
+};
 
 /// Times `frames` calls of `f`, `samples` times; returns (median, min) ns per entity.
 fn measure(samples: usize, frames: usize, mut f: impl FnMut()) -> (f64, f64) {
@@ -47,14 +51,28 @@ fn warm(mut f: impl FnMut()) {
 }
 
 fn find(systems: &[sched::SystemEntry], name: &str) -> u32 {
-    systems.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("system {name} not registered")).id
+    systems
+        .iter()
+        .find(|s| s.name == name)
+        .unwrap_or_else(|| panic!("system {name} not registered"))
+        .id
 }
 
 /// Single-threaded `integrate` over every chunk: C# when `cs` is Some(id), else the Rust port.
-fn integrate_frame(world: &mut World, state: &mut QueryState<(Entity, &mut Transform, &Velocity)>, api: &ScriptApi, cs: Option<u32>, mark: bool) {
+fn integrate_frame(
+    world: &mut World,
+    state: &mut QueryState<(Entity, &mut Transform, &Velocity)>,
+    api: &ScriptApi,
+    cs: Option<u32>,
+    mark: bool,
+) {
     let mut q = state.query_mut(world);
     for (ents, tr, vel) in q.contiguous_iter_mut().expect("dense query") {
-        let (tr, _) = if mark { ContiguousMut::split(tr) } else { ContiguousMut::bypass_change_detection_split(tr) };
+        let (tr, _) = if mark {
+            ContiguousMut::split(tr)
+        } else {
+            ContiguousMut::bypass_change_detection_split(tr)
+        };
         match cs {
             Some(id) => {
                 let mut chunk = chunk_for(ents);
@@ -69,10 +87,20 @@ fn integrate_frame(world: &mut World, state: &mut QueryState<(Entity, &mut Trans
 }
 
 /// Single-threaded `gravity` over every chunk (lighter, memory-bound loop).
-fn gravity_frame(world: &mut World, state: &mut QueryState<(Entity, &mut Velocity, &Transform)>, api: &ScriptApi, cs: Option<u32>, mark: bool) {
+fn gravity_frame(
+    world: &mut World,
+    state: &mut QueryState<(Entity, &mut Velocity, &Transform)>,
+    api: &ScriptApi,
+    cs: Option<u32>,
+    mark: bool,
+) {
     let mut q = state.query_mut(world);
     for (ents, vel, tr) in q.contiguous_iter_mut().expect("dense query") {
-        let (vel, _) = if mark { ContiguousMut::split(vel) } else { ContiguousMut::bypass_change_detection_split(vel) };
+        let (vel, _) = if mark {
+            ContiguousMut::split(vel)
+        } else {
+            ContiguousMut::bypass_change_detection_split(vel)
+        };
         match cs {
             Some(id) => {
                 let mut chunk = chunk_for(ents);
@@ -89,9 +117,11 @@ fn gravity_frame(world: &mut World, state: &mut QueryState<(Entity, &mut Velocit
 /// Rust twin of the C# `integrate` wrapper that `schema::add_shape_system` builds (same par iter, same change ticks).
 fn rust_integrate_par(mut q: Query<(Entity, &mut Transform, &Velocity)>, tick: Res<SimTick>) {
     let dt = tick.0.dt;
-    q.contiguous_par_iter_mut().expect("dense query").for_each(|(_, tr, vel)| {
-        world::integrate(ContiguousMut::split(tr).0, vel, dt);
-    });
+    q.contiguous_par_iter_mut()
+        .expect("dense query")
+        .for_each(|(_, tr, vel)| {
+            world::integrate(ContiguousMut::split(tr).0, vel, dt);
+        });
 }
 
 pub fn run(args: &[String]) {
@@ -103,7 +133,10 @@ pub fn run(args: &[String]) {
 
     let ctx = HostCtx::new(flag(args, "--verbose"));
     let clr = clr::start(enc, ctx.clone());
-    let load_ms = clr.load_module(&game_dir(), if debug_il { schema::LOAD_DEBUG_IL } else { 0 });
+    let load_ms = clr.load_module(
+        &game_dir(),
+        if debug_il { schema::LOAD_DEBUG_IL } else { 0 },
+    );
     ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(threads).build());
     println!(
         "runtime init {:.1} ms, script init {:.1} ms, module compile+load {:.0} ms ({} IL, DOTNET_MODIFIABLE_ASSEMBLIES={})",
@@ -122,20 +155,48 @@ pub fn run(args: &[String]) {
     let (integrate, gravity) = (find(&systems, "integrate"), find(&systems, "gravity"));
     let mut iq = world.query::<(Entity, &mut Transform, &Velocity)>();
     let mut gq = world.query::<(Entity, &mut Velocity, &Transform)>();
-    let chunks = iq.query_mut(&mut world).contiguous_iter_mut().expect("dense").count();
-    println!("{ENTITIES} entities in {chunks} chunks (archetype tables); {samples} samples x {frames} frames; median (min) ns/entity\n");
+    let chunks = iq
+        .query_mut(&mut world)
+        .contiguous_iter_mut()
+        .expect("dense")
+        .count();
+    println!(
+        "{ENTITIES} entities in {chunks} chunks (archetype tables); {samples} samples x {frames} frames; median (min) ns/entity\n"
+    );
 
     println!("single-threaded         | C#             | Rust           | C#/Rust");
     for mark in [false, true] {
         let label = if mark { "+change ticks" } else { "raw loop" };
         warm(|| integrate_frame(&mut world, &mut iq, &api, Some(integrate), mark));
-        let cs = measure(samples, frames, || integrate_frame(&mut world, &mut iq, &api, Some(integrate), mark));
-        let rs = measure(samples, frames, || integrate_frame(&mut world, &mut iq, &api, None, mark));
-        println!("integrate {label:<14}| {:>5.2} ({:>5.2})  | {:>5.2} ({:>5.2})  | {:.2}x", cs.0, cs.1, rs.0, rs.1, cs.0 / rs.0);
+        let cs = measure(samples, frames, || {
+            integrate_frame(&mut world, &mut iq, &api, Some(integrate), mark)
+        });
+        let rs = measure(samples, frames, || {
+            integrate_frame(&mut world, &mut iq, &api, None, mark)
+        });
+        println!(
+            "integrate {label:<14}| {:>5.2} ({:>5.2})  | {:>5.2} ({:>5.2})  | {:.2}x",
+            cs.0,
+            cs.1,
+            rs.0,
+            rs.1,
+            cs.0 / rs.0
+        );
         warm(|| gravity_frame(&mut world, &mut gq, &api, Some(gravity), mark));
-        let cs = measure(samples, frames, || gravity_frame(&mut world, &mut gq, &api, Some(gravity), mark));
-        let rs = measure(samples, frames, || gravity_frame(&mut world, &mut gq, &api, None, mark));
-        println!("gravity   {label:<14}| {:>5.2} ({:>5.2})  | {:>5.2} ({:>5.2})  | {:.2}x", cs.0, cs.1, rs.0, rs.1, cs.0 / rs.0);
+        let cs = measure(samples, frames, || {
+            gravity_frame(&mut world, &mut gq, &api, Some(gravity), mark)
+        });
+        let rs = measure(samples, frames, || {
+            gravity_frame(&mut world, &mut gq, &api, None, mark)
+        });
+        println!(
+            "gravity   {label:<14}| {:>5.2} ({:>5.2})  | {:>5.2} ({:>5.2})  | {:.2}x",
+            cs.0,
+            cs.1,
+            rs.0,
+            rs.1,
+            cs.0 / rs.0
+        );
     }
 
     // Boundary cost: run_system on an empty chunk (Rust -> C# call, dispatch, probe call back to Rust).
@@ -146,11 +207,18 @@ pub fn run(args: &[String]) {
         // SAFETY: an empty chunk has no rows, so C# reads no column memory.
         unsafe { (api.run_system)(integrate, &empty, &TICK) };
     }
-    println!("\nboundary: run_system on an empty chunk = {:.1} ns/call", t.elapsed().as_secs_f64() * 1e9 / f64::from(n));
+    println!(
+        "\nboundary: run_system on an empty chunk = {:.1} ns/call",
+        t.elapsed().as_secs_f64() * 1e9 / f64::from(n)
+    );
 
     // Task pool: the same system as a Bevy system over contiguous_par_iter_mut chunks.
     let tally: ThreadTally = Arc::new(Mutex::new(Default::default()));
-    let entry: Vec<_> = systems.iter().filter(|s| s.name == "integrate").cloned().collect();
+    let entry: Vec<_> = systems
+        .iter()
+        .filter(|s| s.name == "integrate")
+        .cloned()
+        .collect();
     let mut cs_sched = sched::build_schedule(api, &entry, Some(tally.clone()));
     let mut rs_sched = Schedule::default();
     rs_sched.set_executor(bevy_ecs::schedule::MultiThreadedExecutor::new());
@@ -183,5 +251,8 @@ pub fn run(args: &[String]) {
     }
     drop(t);
     let leaked = clr.shutdown();
-    println!("\nshutdown: {leaked} leaked ALCs; checksum {:016x}", world::checksum(&mut world));
+    println!(
+        "\nshutdown: {leaked} leaked ALCs; checksum {:016x}",
+        world::checksum(&mut world)
+    );
 }

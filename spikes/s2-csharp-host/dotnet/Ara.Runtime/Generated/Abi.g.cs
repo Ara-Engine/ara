@@ -184,7 +184,7 @@ public unsafe partial struct HostApi
     // (void* ctx)
     [FieldOffset(8)] public delegate* unmanaged<void*, ulong> NowNs;
     /// <summary>
-    /// Records that code carrying probe `value` ran (keeps the maximum seen).
+    /// Records that code carrying probe `value` ran (the host keeps a seen-set).
     /// </summary>
     // (void* ctx, uint value)
     [FieldOffset(16)] public delegate* unmanaged<void*, uint, void> Stamp;
@@ -259,7 +259,7 @@ public static class AbiInfo
     /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
     public const uint Version = 1;
     /// <summary>Hash of every layout and signature this file was generated from.</summary>
-    public const ulong LayoutHash = 0xAC638F1F3A1B5BD9UL;
+    public const ulong LayoutHash = 0xF05A653205D7F8B9UL;
 
     /// <summary>Checks that C# agrees with the generated sizes; returns an error or null.</summary>
     public static string? VerifySizes()

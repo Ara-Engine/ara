@@ -1,0 +1,81 @@
+[cs info] stage: load 75.9 ms, register 2.9 ms, prepare 0.8 ms, baseline 5.4 ms; GCs during load: gen0 +0 gen1 +0 gen2 +0, pause +0.0 ms
+[cs info] module 'C:\Users\snowy\.t3\worktrees\snengine\t3-1ba35d51\spikes\s2-csharp-host\work/reload': 108 files, 5198 lines, Debug IL (hot), refs=168 from C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\10.0.6\ref\net10.0; parse 169 ms, create+emit 1547 ms, total 1807 ms; EnC supported
+module: 8 hand-written + 100 filler files, 198 + 5000 = 5198 lines (Debug IL, hot)
+cold start: runtime init 41.8 ms, script init 1.8 ms, first compile+load 1859 ms, prewarm 0 ms, first tick 5.2 ms (JIT + task pool)
+systems: integrate, gravity, swirl, drag, bounds, regen, pulse
+1 rounds x 52 edits, tick 60 Hz, task pool 8 threads
+
+r0 #0  integrate: split step                        L1->L1      201.9 ms  [watch   0.8 parse  9.2 classify 31.4 emit  154.4 stage   0.0 wait   5.0 tick   3.5] maxtick 2.3
+r0 #1  spin: early-out for zero angular velocity    L1->L1       46.8 ms  [watch   0.0 parse  3.8 classify  0.7 emit   27.8 stage   0.0 wait  13.2 tick   3.7] maxtick 2.5
+r0 #2  bounds: clamp height                         L1->L1       13.3 ms  [watch   0.0 parse  1.8 classify  0.3 emit    7.1 stage   0.0 wait   3.5 tick   3.5] maxtick 2.2
+r0 #3  wrap: expression body -> block body          L1->L1       16.9 ms  [watch   0.0 parse  7.2 classify  0.3 emit    6.2 stage   0.0 wait   2.3 tick   3.4] maxtick 2.2
+r0 #4  gravity: ground friction on bounce           L1->L1       17.4 ms  [watch   0.0 parse  1.6 classify  0.4 emit    5.9 stage   0.0 wait   8.8 tick   3.6] maxtick 2.3
+r0 #5  drag: extra linear damping                   L1->L1       16.6 ms  [watch   0.0 parse  8.1 classify  0.3 emit    5.6 stage   0.0 wait   1.4 tick   3.6] maxtick 2.3
+r0 #6  swirl: wider core                            L1->L1       24.6 ms  [watch   0.0 parse  6.4 classify  0.3 emit    5.3 stage   0.0 wait  11.9 tick   3.7] maxtick 2.2
+r0 #7  swirl: lift near the ground                  L1->L1       13.2 ms  [watch   0.0 parse  1.5 classify  0.3 emit    5.4 stage   0.0 wait   4.9 tick   3.7] maxtick 2.5
+r0 #8  regen: faster when low                       L1->L1       25.6 ms  [watch   0.0 parse 10.3 classify  0.3 emit    4.9 stage   0.0 wait   8.9 tick   3.7] maxtick 2.6
+r0 #9  regen: clamp reset value                     L1->L1       22.6 ms  [watch   0.0 parse  1.6 classify  0.4 emit    5.0 stage   0.0 wait  14.8 tick   3.6] maxtick 2.3
+r0 #10 pulse: finer phase spread                    L1->L1       58.8 ms  [watch   0.0 parse  6.9 classify  0.3 emit   35.9 stage   0.0 wait  14.7 tick   3.6] maxtick 2.4
+r0 #11 pulse: halve amplitude                       L1->L1       10.8 ms  [watch   0.0 parse  1.7 classify  0.2 emit    4.7 stage   0.0 wait   3.5 tick   3.6] maxtick 2.2
+[fault] system 3: drag: IndexOutOfRangeException: Index was outside the bounds of the array. at Game.Forces.Drag(DampChunk c, Tick& t) (disabled until next reload)
+r0 #12 drag: off-by-one loop (throws)               Fault->L1       22.0 ms  [watch   0.0 parse  6.2 classify  0.2 emit    3.7 stage   0.0 wait   5.7 tick   8.7] maxtick 7.5 faults+1
+r0 #13 drag: fix off-by-one                         L1->L1       23.3 ms  [watch   0.0 parse  1.6 classify  0.4 emit    4.4 stage   0.0 wait  15.7 tick   4.0] maxtick 2.5
+[cs warn] compile error (last good code keeps running): C:\Users\snowy\.t3\worktrees\snengine\t3-1ba35d51\spikes\s2-csharp-host\work\reload\Forces.cs(19,34): error CS0117: 'Tuning' does not contain a definition for 'Gravty'
+r0 #14 gravity: typo (compile error)                Error->error   124.0 ms  [watch   0.0 parse  1.5 classify  0.3 emit   97.5 stage   0.0 wait  24.2 tick   2.1] maxtick 13.0
+r0 #15 gravity: fix typo                            L1->L1        9.9 ms  [watch   0.0 parse  1.8 classify  0.3 emit    3.3 stage   0.0 wait   3.8 tick   3.5] maxtick 2.2
+r0 #16 movement: add Speed() and cap step           L3->L3      206.3 ms  [watch   0.0 parse  9.2 classify  0.1 emit  114.2 stage  71.1 wait  10.6 tick   3.6] maxtick 9.9
+r0 #17 speed: sqrt of length squared                L1->L1       17.7 ms  [watch   0.0 parse  1.6 classify  0.3 emit    4.3 stage   0.0 wait  10.3 tick   3.7] maxtick 2.5
+r0 #18 spin: signature takes `in` params            L3->L3      202.2 ms  [watch   0.0 parse  1.7 classify  0.2 emit  119.0 stage  67.8 wait  12.4 tick   3.7] maxtick 39.1
+r0 #19 integrate: slower spin                       L1->L1       30.5 ms  [watch   0.0 parse  6.5 classify  0.4 emit   20.2 stage   0.0 wait   2.1 tick   3.8] maxtick 2.6
+r0 #20 bounds: add generic Clamp<T>                 L3->L3      194.8 ms  [watch   0.0 parse  1.8 classify  0.2 emit  114.6 stage  71.6 wait   5.5 tick   3.8] maxtick 8.3
+r0 #21 clamp: generic body edit                     L1->L1       28.1 ms  [watch   0.0 parse  7.4 classify  0.4 emit    7.7 stage   0.0 wait  11.1 tick   3.9] maxtick 5.7
+r0 #22 tuning: add GroundFriction const             L3->L3      207.9 ms  [watch   0.0 parse  1.6 classify  3.3 emit  116.4 stage  69.8 wait  15.7 tick   3.9] maxtick 49.7
+r0 #23 gravity: use GroundFriction                  L1->L1       21.1 ms  [watch   0.0 parse  6.2 classify  0.2 emit    3.4 stage   0.0 wait  10.1 tick   3.9] maxtick 2.7
+r0 #24 tuning: bouncier restitution                 L3->L3      187.1 ms  [watch   0.0 parse  1.4 classify  0.1 emit  109.5 stage  70.3 wait   4.3 tick   3.9] maxtick 16.1
+r0 #25 swirl: extract Tangent()                     L3->L3      160.7 ms  [watch   0.0 parse  1.5 classify  0.2 emit   79.9 stage  70.6 wait   7.2 tick   3.9] maxtick 7.9
+r0 #26 tangent: tilt with height                    L1->L1       14.5 ms  [watch   0.0 parse  1.4 classify  0.2 emit    3.9 stage   0.0 wait   7.5 tick   3.9] maxtick 2.7
+r0 #27 swirl: add SwirlParams record struct         L3->L3      248.4 ms  [watch   0.0 parse  1.8 classify  2.0 emit  155.0 stage  73.4 wait  14.5 tick   4.4] maxtick 37.6
+r0 #28 swirl: retune params                         L1->L1       15.5 ms  [watch   0.0 parse  1.4 classify  0.2 emit    3.9 stage   0.0 wait   8.7 tick   3.9] maxtick 2.6
+[fault] system 5: regen: NullReferenceException: Object reference not set to an instance of an object. at Game.Vitals.Regen(VitalsChunk c, Tick& t) (disabled until next reload)
+r0 #29 regen: uninitialised history array (throws)  Fault->L1       28.4 ms  [watch   0.0 parse  4.3 classify  0.5 emit   16.8 stage   0.0 wait   5.4 tick   4.2] maxtick 2.9 faults+1
+r0 #30 regen: remove history                        L1->L1       20.1 ms  [watch   0.0 parse  1.4 classify  0.3 emit    3.7 stage   0.0 wait  13.4 tick   3.9] maxtick 2.7
+r0 #31 regen: extract RegenRate()                   L3->L3      177.5 ms  [watch   0.0 parse  1.5 classify  0.1 emit   97.0 stage  66.6 wait  10.8 tick   4.0] maxtick 29.7
+r0 #32 regenrate: stronger boost                    L1->L1        9.0 ms  [watch   0.0 parse  1.4 classify  0.3 emit    3.3 stage   0.0 wait   2.6 tick   3.8] maxtick 2.5
+r0 #33 visuals: add Wobble system (unregistered)    L3->L3      191.6 ms  [watch   0.0 parse  6.1 classify  0.1 emit   98.5 stage  67.6 wait  18.0 tick   3.9] maxtick 5.7
+r0 #34 register wobble                              L1->L1       23.7 ms  [watch   0.0 parse  9.5 classify  0.2 emit    9.2 stage   0.0 wait   3.2 tick   4.1] maxtick 2.8
+r0 #35 wobble: gentler and faster                   L1->L1       25.1 ms  [watch   0.0 parse  1.4 classify  0.2 emit    6.8 stage   0.0 wait  15.3 tick   4.5] maxtick 3.0
+r0 #36 new file: Spawner.cs (unregistered)          L3->L3      189.1 ms  [watch   0.0 parse  1.5 classify  0.7 emit   97.7 stage  70.5 wait  17.2 tick   4.6] maxtick 19.0
+r0 #37 register heartbeat                           L1->L1       12.5 ms  [watch   0.0 parse  1.5 classify  0.2 emit    5.0 stage   0.0 wait   3.9 tick   4.6] maxtick 3.4
+r0 #38 heartbeat: lambda body edit                  L3->L3      146.6 ms  [watch   0.0 parse  7.7 classify  0.3 emit   65.3 stage  67.8 wait   3.8 tick   4.4] maxtick 13.9
+r0 #39 register: reorder regen after pulse          L1->L1       19.3 ms  [watch   0.0 parse  1.4 classify  0.2 emit    4.6 stage   0.0 wait  12.0 tick   4.0] maxtick 2.6
+r0 #40 tuning: weaker swirl                         L3->L3      173.7 ms  [watch   0.0 parse  1.4 classify  0.1 emit   92.4 stage  65.7 wait  12.1 tick   4.6] maxtick 10.7
+r0 #41 regen: lower reset fraction                  L1->L1       34.5 ms  [watch   0.0 parse  1.6 classify  0.2 emit   16.9 stage   0.0 wait  14.4 tick   3.8] maxtick 2.9
+r0 #42 integrate: NaN guard                         L1->L1       23.5 ms  [watch   0.0 parse  1.6 classify  0.3 emit    5.7 stage   0.0 wait  14.2 tick   4.7] maxtick 4.5
+r0 #43 gravity: extract Grounded()                  L3->L3      157.0 ms  [watch   0.0 parse  1.5 classify  0.1 emit   70.6 stage  68.7 wait  13.7 tick   5.1] maxtick 31.8
+r0 #44 grounded: contact epsilon                    L1->L1       19.1 ms  [watch   0.0 parse  7.4 classify  0.2 emit    3.7 stage   0.0 wait   6.2 tick   4.7] maxtick 3.2
+r0 #45 drag: extra angular damping                  L1->L1       20.5 ms  [watch   0.0 parse  1.5 classify  0.2 emit    3.0 stage   0.0 wait  14.6 tick   4.1] maxtick 3.1
+r0 #46 comment-only change                          Noop->none    604.5 ms  [] maxtick 3.0
+r0 #47 pulse: add TwoPi const, wrap phase           L3->L3      187.0 ms  [watch   0.0 parse  2.7 classify  0.8 emit   87.3 stage  76.6 wait  17.8 tick   4.6] maxtick 8.7
+r0 #48 pulse: wrap at 4 pi                          L1->L1       24.9 ms  [watch   0.0 parse  8.2 classify  0.2 emit    3.5 stage   0.0 wait  11.7 tick   4.2] maxtick 2.9
+r0 #49 swirl: stronger lift                         L1->L1       25.5 ms  [watch   0.0 parse  1.6 classify  0.3 emit   19.1 stage   0.0 wait   2.6 tick   4.5] maxtick 3.3
+r0 #50 vitals: add Drain() system (unregistered)    L3->L3      151.4 ms  [watch   0.0 parse  1.5 classify  0.1 emit   66.9 stage  69.3 wait  12.2 tick   4.2] maxtick 31.7
+r0 #51 register drain                               L1->L1       15.3 ms  [watch   0.0 parse  1.4 classify  0.2 emit    5.8 stage   0.0 wait   6.3 tick   4.3] maxtick 3.0
+
+=== summary (latency = save -> end of first tick running new code; ms) ===
+L1    n=35  p50   21.1  p95   58.8  max  201.9  min    9.0  (first of kind 201.9)
+      medians: watcher 0.0, parse 1.7, classify 0.3, emit 5.3, stage(load/bind) 0.0, wait-for-boundary 8.7, tick 3.9; emit bytes 10 KB
+L3    n=15  p50  187.1  p95  248.4  max  248.4  min  146.6  (first of kind 206.3)
+      medians: watcher 0.0, parse 1.6, classify 0.2, emit 97.7, stage(load/bind) 69.8, wait-for-boundary 12.2, tick 4.0; emit bytes 212 KB
+error n=1   p50  124.0  p95  124.0  max  124.0  min  124.0  (first of kind 124.0)
+      medians: watcher 0.0, parse 1.5, classify 0.3, emit 97.5, stage(load/bind) 0.0, wait-for-boundary 24.2, tick 2.1; emit bytes 0 KB
+classification: 52 / 52 as expected
+L3 escalation reasons (1 file-set, 2 structural, 3 state machine, 4 emit failed, 7 closure): {1: 1, 2: 13, 7: 1}
+timeouts: 0
+tick (schedule.run) ms: all p50 2.44 p99 13.05 max 49.67; during reload windows p50 2.66 p99 37.58 max 49.67
+
+state: 50 reload boundaries checksummed, 0 mismatches; schedule rebuilt 4x; 1160 ticks run
+faults contained: 2 (host kept ticking); ALCs created 16, alive before shutdown 3; managed heap 57 MB, working set 263 MB
+slow ticks (>8 ms): 23 of 1160; 8 overlapped a GC pause; GC pause = 36% of their time
+GC during session: 548.7 ms total pause; gen0 30 gen1 22 gen2 7 collections
+[cs info] shutdown: 16 ALCs retired, 0 still alive after 28 ms of GC
+shutdown: 0 ALCs still alive after forced GC

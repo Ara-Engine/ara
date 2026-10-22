@@ -366,14 +366,21 @@ macro_rules! shape_is_write {
 }
 
 macro_rules! shape_query_ty {
-    (w $c:ident) => { &mut $c };
-    (r $c:ident) => { &$c };
+    (w $c:ident) => {
+        &mut $c
+    };
+    (r $c:ident) => {
+        &$c
+    };
 }
 
 /// Column base pointer for one contiguous item; writes mark the rows changed (bevy change ticks).
 macro_rules! shape_column_ptr {
     (w $v:ident) => {
-        bevy_ecs::change_detection::ContiguousMut::split($v).0.as_mut_ptr().cast::<u8>()
+        bevy_ecs::change_detection::ContiguousMut::split($v)
+            .0
+            .as_mut_ptr()
+            .cast::<u8>()
     };
     (r $v:ident) => {
         $v.as_ptr().cast_mut().cast::<u8>()
@@ -403,9 +410,15 @@ pub fn layout_hash() -> u64 {
             h = h.wrapping_mul(0x0100_0000_01b3);
         }
     };
-    for s in VALUE_TYPES.iter().chain(COMPONENTS).chain(ABI_STRUCTS).chain(INIT_STRUCTS) {
+    for s in VALUE_TYPES
+        .iter()
+        .chain(COMPONENTS)
+        .chain(ABI_STRUCTS)
+        .chain(INIT_STRUCTS)
+    {
         eat(s.name);
         eat(&s.size.to_string());
+        eat(&s.align.to_string());
         for f in s.fields {
             eat(f.name);
             eat(f.ty);

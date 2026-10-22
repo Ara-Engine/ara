@@ -17,16 +17,41 @@ pub fn spawn(world: &mut World) {
     };
     for i in 0..ENTITIES {
         let t = Transform {
-            position: Vec3 { x: rnd() * 800.0 - 400.0, y: rnd() * 50.0, z: rnd() * 800.0 - 400.0 },
-            rotation: Quat { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+            position: Vec3 {
+                x: rnd() * 800.0 - 400.0,
+                y: rnd() * 50.0,
+                z: rnd() * 800.0 - 400.0,
+            },
+            rotation: Quat {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                w: 1.0,
+            },
             scale: 1.0,
         };
         let v = Velocity {
-            linear: Vec3 { x: rnd() * 4.0 - 2.0, y: rnd() * 2.0, z: rnd() * 4.0 - 2.0 },
-            angular: Vec3 { x: rnd() - 0.5, y: rnd() * 2.0 - 1.0, z: rnd() - 0.5 },
+            linear: Vec3 {
+                x: rnd() * 4.0 - 2.0,
+                y: rnd() * 2.0,
+                z: rnd() * 4.0 - 2.0,
+            },
+            angular: Vec3 {
+                x: rnd() - 0.5,
+                y: rnd() * 2.0 - 1.0,
+                z: rnd() - 0.5,
+            },
         };
         if i % 2 == 0 {
-            world.spawn((t, v, Health { value: rnd() * 100.0, max: 100.0, regen: 1.0 + rnd() * 4.0 }));
+            world.spawn((
+                t,
+                v,
+                Health {
+                    value: rnd() * 100.0,
+                    max: 100.0,
+                    regen: 1.0 + rnd() * 4.0,
+                },
+            ));
         } else {
             world.spawn((t, v));
         }
@@ -36,7 +61,10 @@ pub fn spawn(world: &mut World) {
 /// FNV-style checksum over every component's bytes, in entity order (deterministic).
 pub fn checksum(world: &mut World) -> u64 {
     let mut q = world.query::<(Entity, &Transform, &Velocity, Option<&Health>)>();
-    let mut rows: Vec<_> = q.iter(world).map(|(e, t, v, h)| (e.to_bits(), *t, *v, h.copied())).collect();
+    let mut rows: Vec<_> = q
+        .iter(world)
+        .map(|(e, t, v, h)| (e.to_bits(), *t, *v, h.copied()))
+        .collect();
     rows.sort_unstable_by_key(|r| r.0);
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut eat = |x: u32| {
@@ -47,7 +75,22 @@ pub fn checksum(world: &mut World) -> u64 {
         eat(e as u32);
         let p = &t.position;
         let r = &t.rotation;
-        for f in [p.x, p.y, p.z, r.x, r.y, r.z, r.w, t.scale, v.linear.x, v.linear.y, v.linear.z, v.angular.x, v.angular.y, v.angular.z] {
+        for f in [
+            p.x,
+            p.y,
+            p.z,
+            r.x,
+            r.y,
+            r.z,
+            r.w,
+            t.scale,
+            v.linear.x,
+            v.linear.y,
+            v.linear.z,
+            v.angular.x,
+            v.angular.y,
+            v.angular.z,
+        ] {
             eat(f.to_bits());
         }
         if let Some(hp) = hp {
@@ -69,7 +112,22 @@ pub fn checksum_fast(world: &mut World) -> u64 {
     };
     for (t, v, hp) in q.iter(world) {
         let (p, r) = (&t.position, &t.rotation);
-        for f in [p.x, p.y, p.z, r.x, r.y, r.z, r.w, t.scale, v.linear.x, v.linear.y, v.linear.z, v.angular.x, v.angular.y, v.angular.z] {
+        for f in [
+            p.x,
+            p.y,
+            p.z,
+            r.x,
+            r.y,
+            r.z,
+            r.w,
+            t.scale,
+            v.linear.x,
+            v.linear.y,
+            v.linear.z,
+            v.angular.x,
+            v.angular.y,
+            v.angular.z,
+        ] {
             eat(f.to_bits());
         }
         if let Some(hp) = hp {
@@ -95,11 +153,30 @@ fn quat_mul(a: Quat, b: Quat) -> Quat {
 
 #[inline]
 fn spin(q: Quat, w: Vec3, dt: f32) -> Quat {
-    let dq = quat_mul(Quat { x: w.x, y: w.y, z: w.z, w: 0.0 }, q);
+    let dq = quat_mul(
+        Quat {
+            x: w.x,
+            y: w.y,
+            z: w.z,
+            w: 0.0,
+        },
+        q,
+    );
     let h = 0.5 * dt;
-    let n = Quat { x: q.x + h * dq.x, y: q.y + h * dq.y, z: q.z + h * dq.z, w: q.w + h * dq.w };
-    let inv = 1.0 / (n.x * n.x + n.y * n.y + n.z * n.z + n.w * n.w).sqrt();
-    Quat { x: n.x * inv, y: n.y * inv, z: n.z * inv, w: n.w * inv }
+    let n = Quat {
+        x: q.x + h * dq.x,
+        y: q.y + h * dq.y,
+        z: q.z + h * dq.z,
+        w: q.w + h * dq.w,
+    };
+    // Same as System.Numerics `Quaternion.Normalize`: divide by the length.
+    let len = (n.x * n.x + n.y * n.y + n.z * n.z + n.w * n.w).sqrt();
+    Quat {
+        x: n.x / len,
+        y: n.y / len,
+        z: n.z / len,
+        w: n.w / len,
+    }
 }
 
 /// Port of `Movement.Integrate`: position += linear * dt; rotation integrated by angular velocity.

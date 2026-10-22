@@ -35,6 +35,17 @@ struct Arm {
     wait: Wait,
 }
 
+/// The tick loop's view of the edit being waited for.
+struct Inflight {
+    wait: Wait,
+    /// Report and fault counts when armed; later entries belong to this edit.
+    reports0: usize,
+    faults0: usize,
+    checksum_ns: u64,
+    armed: Instant,
+    max_tick_ms: f64,
+}
+
 /// Tick loop → editor: the edit completed (or timed out).
 struct Done {
     t1_ns: u64,
@@ -58,7 +69,13 @@ struct Sample {
 
 impl Sample {
     fn kind(&self) -> u32 {
-        self.done.reports.iter().map(|r| r.kind).find(|&k| k != RELOAD_ERROR).or(self.done.reports.first().map(|r| r.kind)).unwrap_or(0)
+        self.done
+            .reports
+            .iter()
+            .map(|r| r.kind)
+            .find(|&k| k != RELOAD_ERROR)
+            .or(self.done.reports.first().map(|r| r.kind))
+            .unwrap_or(0)
     }
 }
 
@@ -72,7 +89,12 @@ fn pristine() -> BTreeMap<String, String> {
         .expect("read game/")
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|x| x == "cs"))
-        .map(|e| (e.file_name().to_string_lossy().into_owned(), std::fs::read_to_string(e.path()).expect("read source")))
+        .map(|e| {
+            (
+                e.file_name().to_string_lossy().into_owned(),
+                std::fs::read_to_string(e.path()).expect("read source"),
+            )
+        })
         .collect()
 }
 
@@ -87,7 +109,12 @@ fn apply(files: &BTreeMap<String, String>, edit: &Edit, v: u32) -> Result<(Strin
         }
         let n = text.matches(find).count();
         if n != 1 {
-            return Err(format!("edit '{}': `{}` found {n} times in {}", edit.name, find.escape_debug(), edit.file));
+            return Err(format!(
+                "edit '{}': `{}` found {n} times in {}",
+                edit.name,
+                find.escape_debug(),
+                edit.file
+            ));
         }
         text = text.replacen(find, &replace, 1);
     }
@@ -107,13 +134,24 @@ fn apply(files: &BTreeMap<String, String>, edit: &Edit, v: u32) -> Result<(Strin
                 // The site is in this file: bump it to this edit's version.
                 let old = line.to_string();
                 let indent = &old[..old.len() - old.trim_start().len()];
-                text = text.replacen(&old, &format!("{indent}Probe.Stamp({v}); // @stamp:{site}"), 1);
+                text = text.replacen(
+                    &old,
+                    &format!("{indent}Probe.Stamp({v}); // @stamp:{site}"),
+                    1,
+                );
                 v
             } else {
                 // The site lives in another file (e.g. registering a system): wait for its current value.
-                files.values().find_map(|t| stamp_value(site, t)).ok_or(format!("edit '{}': no stamp site {site}", edit.name))?
+                files
+                    .values()
+                    .find_map(|t| stamp_value(site, t))
+                    .ok_or(format!("edit '{}': no stamp site {site}", edit.name))?
             };
-            if expect == Expect::Fault { Wait::StampAndFault(value) } else { Wait::Stamp(value) }
+            if expect == Expect::Fault {
+                Wait::StampAndFault(value)
+            } else {
+                Wait::Stamp(value)
+            }
         }
     };
     Ok((text, wait))
@@ -178,13 +216,29 @@ pub fn run(args: &[String]) {
         assert_eq!(unsafe { (clr.api.prewarm)() }, 0, "prewarm failed");
     }
     let prewarm_ms = ms(t);
-    ctx.verbose.store(verbose, std::sync::atomic::Ordering::Relaxed);
-    ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(threads).build());
+    ctx.verbose
+        .store(verbose, std::sync::atomic::Ordering::Relaxed);
+    let boost = flag(args, "--boost-ticks");
+    ComputeTaskPool::get_or_init(|| {
+        let b = TaskPoolBuilder::new().num_threads(threads);
+        if boost {
+            b.on_thread_spawn(boost_current_thread).build()
+        } else {
+            b.build()
+        }
+    });
+    if boost {
+        boost_current_thread();
+    }
 
     let mut world = World::new();
     world::spawn(&mut world);
     let dt = (1.0 / tick_hz) as f32;
-    let mut tick = Tick { frame: 0, dt, elapsed: 0.0 };
+    let mut tick = Tick {
+        frame: 0,
+        dt,
+        elapsed: 0.0,
+    };
     world.insert_resource(SimTick(tick));
     let api = clr.api;
     let mut systems = sched::read_systems(&api);
@@ -192,13 +246,30 @@ pub fn run(args: &[String]) {
     let t = Instant::now();
     schedule.run(&mut world);
     let first_tick_ms = ms(t);
-    println!("module: {} hand-written + {} filler files, {} + {} = {} lines (Debug IL, hot)", originals.len(), filler::FILES, hand_lines, filler_lines, hand_lines + filler_lines);
+    println!(
+        "module: {} hand-written + {} filler files, {} + {} = {} lines (Debug IL, hot)",
+        originals.len(),
+        filler::FILES,
+        hand_lines,
+        filler_lines,
+        hand_lines + filler_lines
+    );
     println!(
         "cold start: runtime init {:.1} ms, script init {:.1} ms, first compile+load {:.0} ms, prewarm {:.0} ms, first tick {:.1} ms (JIT + task pool)",
         clr.runtime_init_ms, clr.script_init_ms, load_ms, prewarm_ms, first_tick_ms
     );
-    println!("systems: {}", systems.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", "));
-    println!("{rounds} rounds x {} edits, tick {tick_hz} Hz, task pool {threads} threads\n", EDITS.len());
+    println!(
+        "systems: {}",
+        systems
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!(
+        "{rounds} rounds x {} edits, tick {tick_hz} Hz, task pool {threads} threads\n",
+        EDITS.len()
+    );
 
     let gc0 = (
         clr.diag(schema::DIAG_GC_PAUSE_US),
@@ -220,18 +291,25 @@ pub fn run(args: &[String]) {
     // The tick loop.
     let period = Duration::from_secs_f64(1.0 / tick_hz);
     let mut next = Instant::now();
-    let mut inflight: Option<(Wait, usize, usize, u64, Instant, u64, f64)> = None;
+    let mut inflight: Option<Inflight> = None;
     let (mut state_checks, mut state_mismatches) = (0usize, 0usize);
     let mut tick_ms: Vec<f64> = Vec::new();
     let mut reload_tick_ms: Vec<f64> = Vec::new();
     let mut rebuilds = 0usize;
+    let mut slow_ticks: Vec<(f64, f64)> = Vec::new();
     while !editor.is_finished() {
         if let Ok(arm) = arm_rx.try_recv() {
             let r = ctx.reports.lock().expect("reports").len();
             let f = ctx.faults.lock().expect("faults").len();
-            inflight = Some((arm.wait, r, f, 0, Instant::now(), 0, 0.0));
+            inflight = Some(Inflight {
+                wait: arm.wait,
+                reports0: r,
+                faults0: f,
+                checksum_ns: 0,
+                armed: Instant::now(),
+                max_tick_ms: 0.0,
+            });
         }
-        let t_tick = Instant::now();
         // SAFETY: plain call into the C# runtime.
         let pending = unsafe { (api.has_pending)() } != 0;
         let mut ck_ns = 0;
@@ -261,19 +339,24 @@ pub fn run(args: &[String]) {
             rebuilds += 1;
         }
         world.resource_mut::<SimTick>().0 = tick;
+        let gc_before = clr.diag(schema::DIAG_GC_PAUSE_US);
         let t_run = Instant::now();
         schedule.run(&mut world);
         let run_ms = ms(t_run);
+        let gc_ms = (clr.diag(schema::DIAG_GC_PAUSE_US) - gc_before) as f64 / 1e3;
         tick_ms.push(run_ms);
-        let _ = t_tick;
+        if run_ms > 8.0 {
+            slow_ticks.push((run_ms, gc_ms));
+        }
 
-        if let Some((wait, r0, f0, ck, armed, _, max_tick)) = inflight.as_mut() {
-            *ck += ck_ns;
-            *max_tick = max_tick.max(run_ms);
+        if let Some(w) = inflight.as_mut() {
+            w.checksum_ns += ck_ns;
+            w.max_tick_ms = w.max_tick_ms.max(run_ms);
             reload_tick_ms.push(run_ms);
-            let reports = ctx.reports.lock().expect("reports")[*r0..].to_vec();
-            let faults = ctx.faults.lock().expect("faults").len() - *f0;
-            let done = match *wait {
+            let reports = ctx.reports.lock().expect("reports")[w.reports0..].to_vec();
+            let faults = ctx.faults.lock().expect("faults").len() - w.faults0;
+            let armed = w.armed;
+            let done = match w.wait {
                 Wait::Stamp(v) => ctx.seen(v),
                 Wait::StampAndFault(v) => ctx.seen(v) && faults > 0,
                 Wait::Report => !reports.is_empty(),
@@ -282,7 +365,14 @@ pub fn run(args: &[String]) {
             };
             let timed_out = armed.elapsed() > Duration::from_secs(8);
             if done || timed_out {
-                let msg = Done { t1_ns: ctx.now_ns(), reports, faults, checksum_ns: *ck, max_tick_ms: *max_tick, timed_out: timed_out && !done };
+                let msg = Done {
+                    t1_ns: ctx.now_ns(),
+                    reports,
+                    faults,
+                    checksum_ns: w.checksum_ns,
+                    max_tick_ms: w.max_tick_ms,
+                    timed_out: timed_out && !done,
+                };
                 let _ = done_tx.send(msg);
                 inflight = None;
             }
@@ -301,14 +391,28 @@ pub fn run(args: &[String]) {
     let samples = editor.join().expect("editor thread");
 
     summarize(&samples, &tick_ms, &reload_tick_ms);
-    println!("\nstate: {state_checks} reload boundaries checksummed, {state_mismatches} mismatches; schedule rebuilt {rebuilds}x; {} ticks run", tick.frame);
+    println!(
+        "\nstate: {state_checks} reload boundaries checksummed, {state_mismatches} mismatches; schedule rebuilt {rebuilds}x; {} ticks run",
+        tick.frame
+    );
     let faults = ctx.faults.lock().expect("faults").len();
     println!(
-        "faults contained: {faults} (host kept ticking); ALCs created {}, alive before shutdown {}; managed heap {:.0} MB, working set {:.0} MB",
+        "faults contained: {faults} reported, {} counted by C# (host kept ticking); ALCs created {}, alive before shutdown {}; managed heap {:.0} MB, working set {:.0} MB",
+        clr.diag(schema::DIAG_FAULTS),
         clr.diag(schema::DIAG_ALCS_CREATED),
         clr.diag(schema::DIAG_ALCS_ALIVE),
         clr.diag(schema::DIAG_MANAGED_HEAP) as f64 / 1e6,
         clr.diag(schema::DIAG_WORKING_SET) as f64 / 1e6
+    );
+    let with_gc = slow_ticks.iter().filter(|(_, g)| *g > 0.5).count();
+    let gc_share: f64 = slow_ticks.iter().map(|(t, g)| g.min(*t)).sum::<f64>()
+        / slow_ticks.iter().map(|(t, _)| t).sum::<f64>().max(1e-9);
+    println!(
+        "slow ticks (>8 ms): {} of {}; {} overlapped a GC pause; GC pause = {:.0}% of their time",
+        slow_ticks.len(),
+        tick_ms.len(),
+        with_gc,
+        gc_share * 100.0
     );
     println!(
         "GC during session: {:.1} ms total pause; gen0 {} gen1 {} gen2 {} collections",
@@ -317,13 +421,35 @@ pub fn run(args: &[String]) {
         clr.diag(schema::DIAG_GC_GEN1) - gc0.2,
         clr.diag(schema::DIAG_GC_GEN2) - gc0.3
     );
-    ctx.verbose.store(true, std::sync::atomic::Ordering::Relaxed);
+    ctx.verbose
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     let leaked = clr.shutdown();
     println!("shutdown: {leaked} ALCs still alive after forced GC");
 }
 
+/// Raises the calling thread to above-normal priority (Windows), so tick work wins the CPU over the
+/// in-process compiler's thread-pool workers.
+fn boost_current_thread() {
+    #[cfg(windows)]
+    {
+        unsafe extern "system" {
+            fn GetCurrentThread() -> *mut core::ffi::c_void;
+            fn SetThreadPriority(thread: *mut core::ffi::c_void, priority: i32) -> i32;
+        }
+        const THREAD_PRIORITY_ABOVE_NORMAL: i32 = 1;
+        // SAFETY: GetCurrentThread returns a pseudo-handle valid for the calling thread.
+        unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) };
+    }
+}
+
 /// The editor thread: saves each edit, waits for the tick loop to see it, then pauses.
-fn editor(rounds: usize, dir: &Path, ctx: &Arc<HostCtx>, arm: &Sender<Arm>, done: &Receiver<Done>) -> Vec<Sample> {
+fn editor(
+    rounds: usize,
+    dir: &Path,
+    ctx: &Arc<HostCtx>,
+    arm: &Sender<Arm>,
+    done: &Receiver<Done>,
+) -> Vec<Sample> {
     let mut samples = Vec::new();
     let mut rng: u32 = 0x9e37_79b9;
     let mut pause = || {
@@ -335,7 +461,13 @@ fn editor(rounds: usize, dir: &Path, ctx: &Arc<HostCtx>, arm: &Sender<Arm>, done
     for round in 0..rounds {
         let mut files = originals.clone();
         if round > 0 {
-            restore(dir, &originals, &mut files_on_disk(dir, &originals), arm, done);
+            restore(
+                dir,
+                &originals,
+                &mut files_on_disk(dir, &originals),
+                arm,
+                done,
+            );
         }
         for (i, edit) in EDITS.iter().enumerate() {
             let (text, wait) = apply(&files, edit, version(round, i)).expect("validated");
@@ -345,7 +477,14 @@ fn editor(rounds: usize, dir: &Path, ctx: &Arc<HostCtx>, arm: &Sender<Arm>, done
             files.insert(edit.file.to_string(), text);
             let d = done.recv().expect("tick loop alive");
             let latency_ms = (d.t1_ns - t0_ns - d.checksum_ns) as f64 / 1e6;
-            let s = Sample { round, name: edit.name, expect: edit.expect, latency_ms, done: d, t0_ns };
+            let s = Sample {
+                round,
+                name: edit.name,
+                expect: edit.expect,
+                latency_ms,
+                done: d,
+                t0_ns,
+            };
             print_sample(i, &s);
             samples.push(s);
             std::thread::sleep(pause());
@@ -357,7 +496,11 @@ fn editor(rounds: usize, dir: &Path, ctx: &Arc<HostCtx>, arm: &Sender<Arm>, done
 /// Current on-disk texts of the hand-written files (plus any created by edits).
 fn files_on_disk(dir: &Path, originals: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut m = BTreeMap::new();
-    for e in EDITS.iter().map(|e| e.file).chain(originals.keys().map(String::as_str)) {
+    for e in EDITS
+        .iter()
+        .map(|e| e.file)
+        .chain(originals.keys().map(String::as_str))
+    {
         if let Ok(t) = std::fs::read_to_string(dir.join(e)) {
             m.insert(e.to_string(), t);
         }
@@ -367,20 +510,39 @@ fn files_on_disk(dir: &Path, originals: &BTreeMap<String, String>) -> BTreeMap<S
 
 /// Restores the pristine module between rounds, one file at a time in an order that always compiles
 /// (registrations first, the added file last). Not measured.
-fn restore(dir: &Path, originals: &BTreeMap<String, String>, disk: &mut BTreeMap<String, String>, arm: &Sender<Arm>, done: &Receiver<Done>) {
-    let mut order: Vec<&str> = vec!["ModuleEntry.cs", "Visuals.cs", "Vitals.cs", "Forces.cs", "Steering.cs", "Movement.cs", "Tuning.cs"];
+fn restore(
+    dir: &Path,
+    originals: &BTreeMap<String, String>,
+    disk: &mut BTreeMap<String, String>,
+    arm: &Sender<Arm>,
+    done: &Receiver<Done>,
+) {
+    let mut order: Vec<&str> = vec![
+        "ModuleEntry.cs",
+        "Visuals.cs",
+        "Vitals.cs",
+        "Forces.cs",
+        "Steering.cs",
+        "Movement.cs",
+        "Tuning.cs",
+    ];
     order.retain(|f| originals.contains_key(*f));
     for f in order {
         if disk.get(f) == originals.get(f) {
             continue;
         }
-        arm.send(Arm { wait: Wait::Report }).expect("tick loop alive");
+        arm.send(Arm { wait: Wait::Report })
+            .expect("tick loop alive");
         std::fs::write(dir.join(f), &originals[f]).expect("restore");
         let d = done.recv().expect("tick loop alive");
-        assert!(!d.timed_out && d.reports.iter().all(|r| r.kind != RELOAD_ERROR), "restore of {f} did not reload cleanly");
+        assert!(
+            !d.timed_out && d.reports.iter().all(|r| r.kind != RELOAD_ERROR),
+            "restore of {f} did not reload cleanly"
+        );
     }
     for f in disk.keys().filter(|f| !originals.contains_key(*f)) {
-        arm.send(Arm { wait: Wait::Report }).expect("tick loop alive");
+        arm.send(Arm { wait: Wait::Report })
+            .expect("tick loop alive");
         std::fs::remove_file(dir.join(f)).expect("remove added file");
         let d = done.recv().expect("tick loop alive");
         assert!(!d.timed_out, "removing {f} did not reload");
@@ -399,7 +561,12 @@ fn kind_name(k: u32) -> &'static str {
 }
 
 fn print_sample(i: usize, s: &Sample) {
-    let r = s.done.reports.iter().find(|r| r.kind != RELOAD_ERROR).or(s.done.reports.first());
+    let r = s
+        .done
+        .reports
+        .iter()
+        .find(|r| r.kind != RELOAD_ERROR)
+        .or(s.done.reports.first());
     let phases = r
         .map(|r| {
             let d = |a: u64, b: u64| (b.saturating_sub(a)) as f64 / 1e6;
@@ -417,29 +584,44 @@ fn print_sample(i: usize, s: &Sample) {
         .unwrap_or_default();
     let got = kind_name(s.kind());
     let mark = match (s.expect, got) {
-        (Expect::L1 | Expect::Fault, "L1") | (Expect::L3, "L3") | (Expect::Error, "error") | (Expect::Noop, "none") => "",
+        (Expect::L1 | Expect::Fault, "L1")
+        | (Expect::L3, "L3")
+        | (Expect::Error, "error")
+        | (Expect::Noop, "none") => "",
         _ => " <-- MISMATCH",
     };
-    let fault = if s.done.faults > 0 { format!(" faults+{}", s.done.faults) } else { String::new() };
+    let fault = if s.done.faults > 0 {
+        format!(" faults+{}", s.done.faults)
+    } else {
+        String::new()
+    };
     let to = if s.done.timed_out { " TIMEOUT" } else { "" };
     println!(
         "r{} #{i:<2} {:<44} {:?}->{got:<5} {:>7.1} ms  [{phases}] maxtick {:.1}{fault}{to}{mark}",
-        s.round,
-        s.name,
-        s.expect,
-        s.latency_ms,
-        s.done.max_tick_ms
+        s.round, s.name, s.expect, s.latency_ms, s.done.max_tick_ms
     );
 }
 
 fn summarize(samples: &[Sample], tick_ms: &[f64], reload_tick_ms: &[f64]) {
     println!("\n=== summary (latency = save -> end of first tick running new code; ms) ===");
-    for (label, kind) in [("L1", RELOAD_L1), ("L3", RELOAD_L3), ("error", RELOAD_ERROR)] {
-        let xs: Vec<f64> = samples.iter().filter(|s| s.kind() == kind && !s.done.timed_out).map(|s| s.latency_ms).collect();
+    for (label, kind) in [
+        ("L1", RELOAD_L1),
+        ("L3", RELOAD_L3),
+        ("error", RELOAD_ERROR),
+    ] {
+        let xs: Vec<f64> = samples
+            .iter()
+            .filter(|s| s.kind() == kind && !s.done.timed_out)
+            .map(|s| s.latency_ms)
+            .collect();
         if xs.is_empty() {
             continue;
         }
-        let first = samples.iter().find(|s| s.kind() == kind).map(|s| s.latency_ms).unwrap_or(f64::NAN);
+        let first = samples
+            .iter()
+            .find(|s| s.kind() == kind)
+            .map(|s| s.latency_ms)
+            .unwrap_or(f64::NAN);
         println!(
             "{label:<5} n={:<3} p50 {:>6.1}  p95 {:>6.1}  max {:>6.1}  min {:>6.1}  (first of kind {:.1})",
             xs.len(),
@@ -454,7 +636,13 @@ fn summarize(samples: &[Sample], tick_ms: &[f64], reload_tick_ms: &[f64]) {
             let v: Vec<f64> = samples
                 .iter()
                 .filter(|s| s.kind() == kind)
-                .filter_map(|s| s.done.reports.iter().find(|r| r.kind == kind).map(|r| f(s, r)))
+                .filter_map(|s| {
+                    s.done
+                        .reports
+                        .iter()
+                        .find(|r| r.kind == kind)
+                        .map(|r| f(s, r))
+                })
                 .collect();
             pct(&v, 0.5)
         };
@@ -473,10 +661,27 @@ fn summarize(samples: &[Sample], tick_ms: &[f64], reload_tick_ms: &[f64]) {
     }
     let mismatches = samples.iter().filter(|s| {
         let got = s.kind();
-        !matches!((s.expect, got), (Expect::L1 | Expect::Fault, RELOAD_L1) | (Expect::L3, RELOAD_L3) | (Expect::Error, RELOAD_ERROR) | (Expect::Noop, 0))
+        !matches!(
+            (s.expect, got),
+            (Expect::L1 | Expect::Fault, RELOAD_L1)
+                | (Expect::L3, RELOAD_L3)
+                | (Expect::Error, RELOAD_ERROR)
+                | (Expect::Noop, 0)
+        )
     });
-    let mm: Vec<_> = mismatches.map(|s| format!("{} (r{})", s.name, s.round)).collect();
-    println!("classification: {} / {} as expected{}", samples.len() - mm.len(), samples.len(), if mm.is_empty() { String::new() } else { format!("; mismatches: {}", mm.join(", ")) });
+    let mm: Vec<_> = mismatches
+        .map(|s| format!("{} (r{})", s.name, s.round))
+        .collect();
+    println!(
+        "classification: {} / {} as expected{}",
+        samples.len() - mm.len(),
+        samples.len(),
+        if mm.is_empty() {
+            String::new()
+        } else {
+            format!("; mismatches: {}", mm.join(", "))
+        }
+    );
     let mut esc: BTreeMap<u32, usize> = BTreeMap::new();
     for s in samples {
         for r in &s.done.reports {
@@ -485,7 +690,9 @@ fn summarize(samples: &[Sample], tick_ms: &[f64], reload_tick_ms: &[f64]) {
             }
         }
     }
-    println!("L3 escalation reasons (1 file-set, 2 structural, 3 state machine, 4 emit failed, 7 closure): {esc:?}");
+    println!(
+        "L3 escalation reasons (1 file-set, 2 structural, 3 state machine, 4 emit failed, 7 closure): {esc:?}"
+    );
     let timeouts = samples.iter().filter(|s| s.done.timed_out).count();
     println!("timeouts: {timeouts}");
     println!(

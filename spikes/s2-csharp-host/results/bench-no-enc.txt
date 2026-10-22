@@ -1,0 +1,23 @@
+runtime init 37.2 ms, script init 1.7 ms, module compile+load 1470 ms (Release IL, DOTNET_MODIFIABLE_ASSEMBLIES=unset)
+100000 entities in 2 chunks (archetype tables); 7 samples x 200 frames; median (min) ns/entity
+
+single-threaded         | C#             | Rust           | C#/Rust
+integrate raw loop      |  6.56 ( 6.22)  |  3.66 ( 3.58)  | 1.79x
+gravity   raw loop      |  0.80 ( 0.74)  |  0.60 ( 0.53)  | 1.34x
+integrate +change ticks |  6.52 ( 6.18)  |  3.68 ( 3.59)  | 1.77x
+gravity   +change ticks |  1.02 ( 0.99)  |  0.76 ( 0.74)  | 1.34x
+
+boundary: run_system on an empty chunk = 15.4 ns/call
+
+task pool (8 threads, wall time / entity): C# 1.70 (1.64), Rust 1.27 (1.23), C#/Rust 1.34x
+C# integrate ran on 8 OS threads (47600 chunk calls, 17.0 chunks/frame); CLR saw 9 distinct threads call run_system:
+  TaskPool (0)                 5755
+  TaskPool (1)                 5786
+  TaskPool (2)                 6305
+  TaskPool (3)                 6320
+  TaskPool (4)                 5839
+  TaskPool (5)                 5756
+  TaskPool (6)                 6057
+  TaskPool (7)                 5782
+
+shutdown: 0 leaked ALCs; checksum eeb192b0c178ffab

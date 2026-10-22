@@ -3,8 +3,10 @@
 //!
 //! Subcommands (see RESULT.md for the full sequence):
 //! - `gen [--check]`: generate the C# ABI/component/shape bindings from `schema.rs`.
-//! - `bench [--debug-il] [--frames N]`: C# vs Rust ns/entity, single-threaded and on the task pool.
-//! - `reload [--rounds N] [--tick-hz N]`: the 50-edit save → first-new-tick latency harness.
+//! - `bench [--debug-il] [--no-enc] [--frames N] [--threads N]`: C# vs Rust ns/entity,
+//!   single-threaded and on the task pool.
+//! - `reload [--rounds N] [--tick-hz N] [--threads N] [--boost-ticks] [--no-prewarm] [--verbose]`:
+//!   the 52-edit save → first-new-tick latency harness.
 
 mod bench;
 mod clr;
@@ -27,7 +29,9 @@ fn main() {
         Some("bench") => bench::run(rest),
         Some("reload") => harness::run(rest),
         _ => {
-            eprintln!("usage: ara-s2 <gen [--check] | bench [--debug-il] | reload [--rounds N]>");
+            eprintln!(
+                "usage: ara-s2 <gen [--check] | bench [--debug-il] [--no-enc] | reload [--rounds N] [--boost-ticks]>"
+            );
             std::process::exit(2);
         }
     }

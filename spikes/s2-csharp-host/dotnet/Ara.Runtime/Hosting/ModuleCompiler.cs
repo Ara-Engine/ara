@@ -37,7 +37,7 @@ internal sealed class ModuleCompiler
             OutputKind.DynamicallyLinkedLibrary,
             optimizationLevel: debugIL ? OptimizationLevel.Debug : OptimizationLevel.Release,
             allowUnsafe: true,
-            concurrentBuild: true,
+            concurrentBuild: Environment.GetEnvironmentVariable("ARA_CONCURRENT_BUILD") != "0",
             nullableContextOptions: NullableContextOptions.Enable);
         (References, ReferenceSource) = LoadReferences();
     }

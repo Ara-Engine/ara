@@ -224,6 +224,7 @@ internal sealed class ModuleHost
             if (ReadWithRetry(full) is { } text) _disk[full] = text;
             else _disk.Remove(full);
         }
+        var tRead = Host.Now();
 
         var changes = new List<FileChange>();
         var nextTrees = new Dictionary<string, SyntaxTree>(_trees, StringComparer.OrdinalIgnoreCase);
@@ -242,7 +243,7 @@ internal sealed class ModuleHost
         if (changes.Count == 0) return;
 
         var report = new ReloadReport { TEvent = tEvent, TParsed = Host.Now() };
-        Host.Log(0, $"process: settle {Host.Ms(tEvent, tStart):F1} ms, read+diff+parse {Host.Ms(tStart, report.TParsed):F1} ms ({paths.Count} paths, {changes.Count} changed)");
+        Host.Log(0, $"process: settle {Host.Ms(tEvent, tStart):F1} ms, read {Host.Ms(tStart, tRead):F1} ms, diff+parse {Host.Ms(tRead, report.TParsed):F1} ms ({paths.Count} paths, {changes.Count} changed)");
         var next = _comp;
         foreach (var c in changes)
         {

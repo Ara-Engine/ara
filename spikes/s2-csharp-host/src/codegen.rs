@@ -19,7 +19,11 @@ pub fn out_dir() -> PathBuf {
 
 /// Renders every generated file as (file name, contents).
 pub fn render() -> Vec<(&'static str, String)> {
-    vec![("Abi.g.cs", abi()), ("Components.g.cs", components()), ("Shapes.g.cs", shapes())]
+    vec![
+        ("Abi.g.cs", abi()),
+        ("Components.g.cs", components()),
+        ("Shapes.g.cs", shapes()),
+    ]
 }
 
 /// Writes (or, with `check`, verifies) the generated files. Returns false if `check` found drift.
@@ -49,7 +53,9 @@ fn pascal(s: &str) -> String {
         .filter(|p| !p.is_empty())
         .map(|p| {
             let mut c = p.chars();
-            c.next().map(|f| f.to_ascii_uppercase().to_string() + c.as_str()).unwrap_or_default()
+            c.next()
+                .map(|f| f.to_ascii_uppercase().to_string() + c.as_str())
+                .unwrap_or_default()
         })
         .collect()
 }
@@ -57,8 +63,15 @@ fn pascal(s: &str) -> String {
 /// Maps a Rust type (as `stringify!` wrote it) to C#.
 fn cs_type(rust: &str) -> String {
     let t = rust.split_whitespace().collect::<Vec<_>>().join(" ");
-    if let Some(inner) = t.strip_prefix("*const ").or_else(|| t.strip_prefix("*mut ")) {
-        return if inner == "c_void" { "void*".into() } else { format!("{}*", cs_type(inner)) };
+    if let Some(inner) = t
+        .strip_prefix("*const ")
+        .or_else(|| t.strip_prefix("*mut "))
+    {
+        return if inner == "c_void" {
+            "void*".into()
+        } else {
+            format!("{}*", cs_type(inner))
+        };
     }
     let known_struct = VALUE_TYPES
         .iter()
@@ -87,13 +100,20 @@ fn cs_type(rust: &str) -> String {
 
 /// Writes a `/// <summary>` block from a Rust doc string, indented by `indent`.
 fn doc(out: &mut String, indent: &str, text: &str) {
-    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
     if lines.is_empty() {
         return;
     }
     let _ = writeln!(out, "{indent}/// <summary>");
     for l in lines {
-        let l = l.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let l = l
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
         let _ = writeln!(out, "{indent}/// {l}");
     }
     let _ = writeln!(out, "{indent}/// </summary>");
@@ -101,30 +121,58 @@ fn doc(out: &mut String, indent: &str, text: &str) {
 
 fn struct_def(out: &mut String, s: &StructDesc) {
     doc(out, "", s.doc);
-    let _ = writeln!(out, "[StructLayout(LayoutKind.Explicit, Size = {})]", s.size);
+    let _ = writeln!(
+        out,
+        "[StructLayout(LayoutKind.Explicit, Size = {})]",
+        s.size
+    );
     let _ = writeln!(out, "public unsafe partial struct {}\n{{", s.name);
     for f in s.fields {
         doc(out, "    ", f.doc);
-        let _ = writeln!(out, "    [FieldOffset({})] public {} {};", f.offset, cs_type(f.ty), pascal(f.name));
+        let _ = writeln!(
+            out,
+            "    [FieldOffset({})] public {} {};",
+            f.offset,
+            cs_type(f.ty),
+            pascal(f.name)
+        );
     }
     let _ = writeln!(out, "}}\n");
 }
 
 fn fn_ptr_type(f: &FnDesc) -> String {
     let mut parts: Vec<String> = f.params.iter().map(|(_, t)| cs_type(t)).collect();
-    parts.push(if f.ret.is_empty() { "void".into() } else { cs_type(f.ret) });
+    parts.push(if f.ret.is_empty() {
+        "void".into()
+    } else {
+        cs_type(f.ret)
+    });
     format!("delegate* unmanaged<{}>", parts.join(", "))
 }
 
 fn table_def(out: &mut String, t: &TableDesc) {
     doc(out, "", t.doc);
-    let _ = writeln!(out, "[StructLayout(LayoutKind.Explicit, Size = {})]", t.fns.len() * 8);
+    let _ = writeln!(
+        out,
+        "[StructLayout(LayoutKind.Explicit, Size = {})]",
+        t.fns.len() * 8
+    );
     let _ = writeln!(out, "public unsafe partial struct {}\n{{", t.name);
     for (i, f) in t.fns.iter().enumerate() {
         doc(out, "    ", f.doc);
-        let params: Vec<String> = f.params.iter().map(|(n, ty)| format!("{} {n}", cs_type(ty))).collect();
+        let params: Vec<String> = f
+            .params
+            .iter()
+            .map(|(n, ty)| format!("{} {n}", cs_type(ty)))
+            .collect();
         let _ = writeln!(out, "    // ({})", params.join(", "));
-        let _ = writeln!(out, "    [FieldOffset({})] public {} {};", i * 8, fn_ptr_type(f), pascal(f.name));
+        let _ = writeln!(
+            out,
+            "    [FieldOffset({})] public {} {};",
+            i * 8,
+            fn_ptr_type(f),
+            pascal(f.name)
+        );
     }
     let _ = writeln!(out, "}}\n");
 }
@@ -138,17 +186,36 @@ fn abi() -> String {
     table_def(&mut o, &HOST_API);
     table_def(&mut o, &SCRIPT_API);
 
-    let _ = writeln!(o, "/// <summary>ABI identity shared with the Rust host.</summary>");
+    let _ = writeln!(
+        o,
+        "/// <summary>ABI identity shared with the Rust host.</summary>"
+    );
     let _ = writeln!(o, "public static class AbiInfo\n{{");
-    let _ = writeln!(o, "    /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>");
+    let _ = writeln!(
+        o,
+        "    /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>"
+    );
     let _ = writeln!(o, "    public const uint Version = {ABI_VERSION};");
-    let _ = writeln!(o, "    /// <summary>Hash of every layout and signature this file was generated from.</summary>");
-    let _ = writeln!(o, "    public const ulong LayoutHash = 0x{:016X}UL;\n", layout_hash());
-    let _ = writeln!(o, "    /// <summary>Checks that C# agrees with the generated sizes; returns an error or null.</summary>");
+    let _ = writeln!(
+        o,
+        "    /// <summary>Hash of every layout and signature this file was generated from.</summary>"
+    );
+    let _ = writeln!(
+        o,
+        "    public const ulong LayoutHash = 0x{:016X}UL;\n",
+        layout_hash()
+    );
+    let _ = writeln!(
+        o,
+        "    /// <summary>Checks that C# agrees with the generated sizes; returns an error or null.</summary>"
+    );
     let _ = writeln!(o, "    public static string? VerifySizes()\n    {{");
     let mut checks: Vec<(String, usize)> = vec![
         ("global::System.Numerics.Vector3".into(), size_of::<Vec3>()),
-        ("global::System.Numerics.Quaternion".into(), size_of::<Quat>()),
+        (
+            "global::System.Numerics.Quaternion".into(),
+            size_of::<Quat>(),
+        ),
     ];
     for s in COMPONENTS.iter().chain(ABI_STRUCTS).chain(INIT_STRUCTS) {
         checks.push((format!("global::Ara.{}", s.name), s.size));
@@ -175,7 +242,10 @@ fn components() -> String {
 fn shapes() -> String {
     let mut o = String::from(HEADER);
     o.push_str("using System;\n\nnamespace Ara;\n\n");
-    let _ = writeln!(o, "/// <summary>Query shapes known to the host (index = Rust <c>Shape</c>).</summary>");
+    let _ = writeln!(
+        o,
+        "/// <summary>Query shapes known to the host (index = Rust <c>Shape</c>).</summary>"
+    );
     let _ = writeln!(o, "public enum ShapeId : uint\n{{");
     for (i, s) in SHAPES.iter().enumerate() {
         doc(&mut o, "    ", s.doc);
@@ -184,8 +254,18 @@ fn shapes() -> String {
     let _ = writeln!(o, "}}\n");
 
     let access = |s: &ShapeDesc| -> String {
-        let w: Vec<&str> = s.columns.iter().filter(|c| c.write).map(|c| c.component).collect();
-        let r: Vec<&str> = s.columns.iter().filter(|c| !c.write).map(|c| c.component).collect();
+        let w: Vec<&str> = s
+            .columns
+            .iter()
+            .filter(|c| c.write)
+            .map(|c| c.component)
+            .collect();
+        let r: Vec<&str> = s
+            .columns
+            .iter()
+            .filter(|c| !c.write)
+            .map(|c| c.component)
+            .collect();
         let mut parts = Vec::new();
         if !w.is_empty() {
             parts.push(format!("writes {}", w.join(", ")));
@@ -198,19 +278,41 @@ fn shapes() -> String {
 
     for s in SHAPES {
         let view = format!("{}Chunk", s.name);
-        doc(&mut o, "", &format!("{}One chunk of a {} query ({}).", s.doc, s.name, access(s)));
+        doc(
+            &mut o,
+            "",
+            &format!("{}One chunk of a {} query ({}).", s.doc, s.name, access(s)),
+        );
         let _ = writeln!(o, "public readonly ref struct {view}\n{{");
-        let _ = writeln!(o, "    /// <summary>Rows in this chunk.</summary>\n    public readonly int Length;");
-        let _ = writeln!(o, "    /// <summary>Entity handles, one per row.</summary>\n    public readonly ReadOnlySpan<Entity> Entities;");
+        let _ = writeln!(
+            o,
+            "    /// <summary>Rows in this chunk.</summary>\n    public readonly int Length;"
+        );
+        let _ = writeln!(
+            o,
+            "    /// <summary>Entity handles, one per row.</summary>\n    public readonly ReadOnlySpan<Entity> Entities;"
+        );
         for c in s.columns {
             let span = if c.write { "Span" } else { "ReadOnlySpan" };
             let rw = if c.write { "read-write" } else { "read-only" };
-            let _ = writeln!(o, "    /// <summary>{} column ({rw}).</summary>", c.component);
-            let _ = writeln!(o, "    public readonly {span}<global::Ara.{}> {};", c.component, pascal(c.name));
+            let _ = writeln!(
+                o,
+                "    /// <summary>{} column ({rw}).</summary>",
+                c.component
+            );
+            let _ = writeln!(
+                o,
+                "    public readonly {span}<global::Ara.{}> {};",
+                c.component,
+                pascal(c.name)
+            );
         }
         let _ = writeln!(o, "\n    internal unsafe {view}(Chunk* c)\n    {{");
         let _ = writeln!(o, "        Length = (int)c->Len;");
-        let _ = writeln!(o, "        Entities = new ReadOnlySpan<Entity>(c->Entities, Length);");
+        let _ = writeln!(
+            o,
+            "        Entities = new ReadOnlySpan<Entity>(c->Entities, Length);"
+        );
         for (i, c) in s.columns.iter().enumerate() {
             let span = if c.write { "Span" } else { "ReadOnlySpan" };
             let _ = writeln!(
@@ -221,13 +323,26 @@ fn shapes() -> String {
             );
         }
         let _ = writeln!(o, "    }}\n}}\n");
-        let _ = writeln!(o, "/// <summary>A system over <see cref=\"{view}\"/> ({}).</summary>", access(s));
-        let _ = writeln!(o, "public delegate void {}System({view} chunk, in Tick tick);\n", s.name);
+        let _ = writeln!(
+            o,
+            "/// <summary>A system over <see cref=\"{view}\"/> ({}).</summary>",
+            access(s)
+        );
+        let _ = writeln!(
+            o,
+            "public delegate void {}System({view} chunk, in Tick tick);\n",
+            s.name
+        );
     }
 
     let _ = writeln!(o, "public sealed partial class SystemRegistry\n{{");
     for s in SHAPES {
-        let _ = writeln!(o, "    /// <summary>Registers a {} system ({}).</summary>", s.name, access(s));
+        let _ = writeln!(
+            o,
+            "    /// <summary>Registers a {} system ({}).</summary>",
+            s.name,
+            access(s)
+        );
         let _ = writeln!(
             o,
             "    public void Add(string name, {0}System system) => AddEntry(name, ShapeId.{0}, system);",
@@ -237,8 +352,14 @@ fn shapes() -> String {
     let _ = writeln!(o, "}}\n");
 
     let _ = writeln!(o, "internal static class ShapeDispatch\n{{");
-    let _ = writeln!(o, "    /// <summary>Builds the typed chunk view for <paramref name=\"shape\"/> and invokes the system.</summary>");
-    let _ = writeln!(o, "    internal static unsafe void Invoke(ShapeId shape, Delegate system, Chunk* chunk, Tick* tick)\n    {{");
+    let _ = writeln!(
+        o,
+        "    /// <summary>Builds the typed chunk view for <paramref name=\"shape\"/> and invokes the system.</summary>"
+    );
+    let _ = writeln!(
+        o,
+        "    internal static unsafe void Invoke(ShapeId shape, Delegate system, Chunk* chunk, Tick* tick)\n    {{"
+    );
     let _ = writeln!(o, "        switch (shape)\n        {{");
     for s in SHAPES {
         let _ = writeln!(
@@ -247,7 +368,10 @@ fn shapes() -> String {
             s.name
         );
     }
-    let _ = writeln!(o, "            default: throw new InvalidOperationException(\"unknown shape \" + shape);");
+    let _ = writeln!(
+        o,
+        "            default: throw new InvalidOperationException(\"unknown shape \" + shape);"
+    );
     let _ = writeln!(o, "        }}\n    }}\n}}");
     o
 }
