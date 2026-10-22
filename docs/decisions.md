@@ -23,6 +23,7 @@ Locked decisions for Ara. To change one, add a new entry that supersedes it; don
 | D15 | **Apple:** Apple silicon only; Intel Macs dropped for now. A MacBook Pro M5 (Apple10: hardware RT and mesh shading) is the Metal dev and Mac/iOS build machine. | 2026-10-23 |
 | D16 | **Dogfood game: Outpost**, a co-op third-person salvage run built on the engine as it grows (see [milestones](plan/milestones.md)). | 2026-10-23 |
 | D17 | **Toolchain: Rust 1.99.1, the latest stable**, pinned in `rust-toolchain.toml`. Track stable deliberately: bump when a dependency needs it or roughly every release cycle, in one commit that updates the pin and `rust-version` together. (The original 1.96 pin was just the version installed on the machine; Bevy 0.20 and Lightyear need ≥1.97.1.) | 2026-10-23 |
+| D18 | **Editor look: T3 Code's default dark and light themes.** Ara Dark (default) and Ara Light are defined as semantic tokens in `assets/themes/` (see `docs/design/theme.md`). UI markup and stylesheets use tokens only. | 2026-10-23 |
 
 ## Architecture (adopted from research)
 
