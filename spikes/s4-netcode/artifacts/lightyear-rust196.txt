@@ -1,0 +1,22 @@
+error: rustc 1.96.0 is not supported by the following packages:
+  bevy@0.20.0 requires rustc 1.97.1
+  lightyear@0.31.0 requires rustc 1.97.1
+  lightyear_connection@0.31.0 requires rustc 1.97.1
+  lightyear_core@0.31.0 requires rustc 1.97.1
+  lightyear_frame_interpolation@0.31.0 requires rustc 1.97.1
+  lightyear_inputs@0.31.0 requires rustc 1.97.1
+  lightyear_inputs_native@0.31.0 requires rustc 1.97.1
+  lightyear_interpolation@0.31.0 requires rustc 1.97.1
+  lightyear_link@0.31.0 requires rustc 1.97.1
+  lightyear_messages@0.31.0 requires rustc 1.97.1
+  lightyear_netcode@0.31.0 requires rustc 1.97.1
+  lightyear_prediction@0.31.0 requires rustc 1.97.1
+  lightyear_replication@0.31.0 requires rustc 1.97.1
+  lightyear_serde@0.31.0 requires rustc 1.97.1
+  lightyear_sync@0.31.0 requires rustc 1.97.1
+  lightyear_transport@0.31.0 requires rustc 1.97.1
+  lightyear_udp@0.31.0 requires rustc 1.97.1
+  lightyear_utils@0.31.0 requires rustc 1.97.1
+Either upgrade rustc or select compatible dependency versions with
+`cargo update <name>@<current-ver> --precise <compatible-ver>`
+where `<compatible-ver>` is the latest version supporting rustc 1.96.0
