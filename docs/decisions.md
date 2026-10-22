@@ -42,6 +42,12 @@ These are working decisions. A spike result or a new entry here can change them.
 | A11 | **Reuse.** Bevy 0.20 crates (no fork). Kira and Steam Audio; gltf, ufbx, meshopt, KTX2; Recast; Tracy; Sentry minidumps. | R06, R07 |
 | A12 | **Performance tiers (DOTS-class).** Engine systems and hot gameplay systems in Rust are the "Burst tier": the same LLVM backend, with `&mut` giving no-alias guarantees and SIMD via `glam`. C# systems run over chunk-batched spans with no per-entity calls, using explicit SIMD (`Vector128`/`Vector256`) and NativeAOT in shipping builds. A compiler for a C# subset through LLVM is in the build order, decided by the S8 benchmarks. | R07, R10 |
 
+## Spike results (M0)
+
+| Spike | Result | Decision | Evidence |
+|---|---|---|---|
+| S1, Vulkan half | **PASS** (2026-10-23) | **Adopt the ara-gpu binding/sync model**, as proven on Vulkan 1.3 (RTX 4070 SUPER), validation and sync validation clean.<br>• Binding: one global update-after-bind descriptor set (textures, buffers, sampler, TLAS) plus 32-byte push constants carrying SM6.6-style heap indices.<br>• Synchronization: timeline semaphores across a dedicated compute family, with explicit queue-family transfers.<br>• Shaders: offline Slang → SPIR-V + DXIL; no shader compiler at runtime.<br>• Persisted `VkPipelineCache`: 7.6 ms cold → 0.5 ms warm.<br>The Metal 4 half (MacBook Pro M5, via Metal Shader Converter) is still open. | [`spikes/s1-gpu/RESULT.md`](../spikes/s1-gpu/RESULT.md) |
+
 ## Open: decided by spikes (see [milestones](plan/milestones.md), M0)
 
 - Physics: Jolt (via a binding we own) vs Rapier. **Lean: Jolt** (S6).
