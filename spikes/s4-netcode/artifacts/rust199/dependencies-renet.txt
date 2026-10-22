@@ -1,0 +1,145 @@
+ara-s4-netcode v0.0.0 (C:\Users\snowy\.t3\worktrees\snengine\t3-aff7a98c\spikes\s4-netcode)
+bevy_ecs v0.20.0
+arrayvec v0.7.8
+bevy_ecs_macros v0.20.0 (proc-macro)
+bevy_ecs_macro_logic v0.20.0
+bevy_macro_utils v0.20.0
+proc-macro2 v1.0.107
+unicode-ident v1.0.27
+quote v1.0.47
+proc-macro2 v1.0.107 (*)
+syn v2.0.119
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-ident v1.0.27
+toml_edit v0.25.17+spec-1.1.0
+indexmap v2.14.2
+equivalent v1.0.3
+hashbrown v0.17.1
+toml_datetime v1.1.2+spec-1.1.0
+toml_parser v1.1.5+spec-1.1.0
+winnow v1.0.4
+winnow v1.0.4
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_macro_utils v0.20.0 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_platform v0.20.0
+foldhash v0.2.0
+hashbrown v0.16.1
+equivalent v1.0.3
+spin v0.12.3
+windows-sys v0.61.2
+windows-link v0.2.1
+bevy_ptr v0.20.0
+bevy_tasks v0.20.0
+async-task v4.7.1
+atomic-waker v1.1.2
+bevy_platform v0.20.0 (*)
+crossbeam-queue v0.3.14
+crossbeam-utils v0.8.23
+derive_more v2.1.1
+derive_more-impl v2.1.1 (proc-macro)
+convert_case v0.10.0
+unicode-segmentation v1.13.3
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+unicode-xid v0.2.6
+futures-lite v2.6.1
+futures-core v0.3.34
+pin-project-lite v0.2.17
+bevy_utils v0.20.0
+bevy_platform v0.20.0 (*)
+disqualified v1.1.0
+indexmap v2.14.2
+equivalent v1.0.3
+hashbrown v0.17.1
+thread_local v1.1.10
+cfg-if v1.0.5
+bitflags v2.13.2
+bumpalo v3.20.3
+concurrent-queue v2.5.0
+crossbeam-utils v0.8.23
+derive_more v2.1.1 (*)
+fixedbitset v0.5.7
+indexmap v2.14.2 (*)
+log v0.4.34
+nonmax v0.5.5
+slotmap v1.1.1
+smallvec v1.16.3
+thiserror v2.0.21
+thiserror-impl v2.0.21 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.9
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-ident v1.0.27
+variadics_please v2.0.0 (proc-macro)
+quote v1.0.47 (*)
+unsynn v0.3.0
+mutants v0.0.3 (proc-macro)
+proc-macro2 v1.0.107 (*)
+rustc-hash v2.1.3
+postcard v1.1.3
+cobs v0.3.0
+thiserror v2.0.21 (*)
+heapless v0.7.17
+hash32 v0.2.1
+byteorder v1.5.0
+serde v1.0.229
+serde_core v1.0.229
+serde_derive v1.0.229 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.9 (*)
+spin v0.9.9
+lock_api v0.4.14
+scopeguard v1.2.0
+stable_deref_trait v1.2.1
+serde v1.0.229 (*)
+renet v2.0.0
+bytes v1.12.1
+log v0.4.34
+octets v0.3.7
+renet_netcode v2.0.0
+log v0.4.34
+renet v2.0.0 (*)
+renetcode v2.0.0
+chacha20poly1305 v0.10.1
+aead v0.5.2
+crypto-common v0.1.7
+generic-array v0.14.7
+typenum v1.20.1
+rand_core v0.6.4
+getrandom v0.2.17
+cfg-if v1.0.5
+typenum v1.20.1
+generic-array v0.14.7 (*)
+chacha20 v0.9.1
+cfg-if v1.0.5
+cipher v0.4.4
+crypto-common v0.1.7 (*)
+inout v0.1.4
+generic-array v0.14.7 (*)
+zeroize v1.9.1
+cpufeatures v0.2.17
+cipher v0.4.4 (*)
+poly1305 v0.8.0
+cpufeatures v0.2.17
+opaque-debug v0.3.1
+universal-hash v0.5.1
+crypto-common v0.1.7 (*)
+subtle v2.6.1
+zeroize v1.9.1
+log v0.4.34
+serde v1.0.229 (*)
+serde_json v1.0.154
+itoa v1.0.18
+memchr v2.8.3
+serde_core v1.0.229
+zmij v1.0.23

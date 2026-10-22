@@ -68,6 +68,7 @@ intent! {
 }
 
 /// Typed, bounded motor input. Invalid axes are rejected by the authority.
+#[cfg_attr(feature = "lightyear-stack", derive(bevy_reflect::Reflect))]
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MoveInput {
     /// Signed axis in -1..=1.
@@ -120,6 +121,12 @@ struct Clock(u32);
 /// Owned ECS world plus stable entity mapping. All mutable gameplay state is ECS data.
 pub struct Simulation {
     pub world: World,
+    scene: Scene,
+}
+
+/// Stable scene handles; components remain in the caller-owned ECS world.
+#[derive(Resource, Clone, Copy)]
+pub struct Scene {
     entities: [Entity; ENTITIES],
     clock: Entity,
 }
@@ -153,10 +160,9 @@ pub fn step_motor(state: &mut Motor, input: MoveInput) {
     state.z += i32::from(input.z) * 25;
 }
 
-impl Simulation {
+impl Scene {
     /// Construct one headless room with four players, one door and 45 pickups.
-    pub fn new() -> Self {
-        let mut world = World::new();
+    pub fn spawn(world: &mut World) -> Self {
         let entities = std::array::from_fn(|id| {
             if id < PLAYERS {
                 world
@@ -181,38 +187,38 @@ impl Simulation {
             }
         });
         let clock = world.spawn(Clock(0)).id();
-        Self {
-            world,
-            entities,
-            clock,
-        }
+        Self { entities, clock }
     }
 
-    pub fn tick(&self) -> u32 {
-        self.world
+    /// Resolve a logical entity slot without exposing process-local IDs on the wire.
+    #[cfg(feature = "lightyear-stack")]
+    pub fn entity(&self, id: usize) -> Entity {
+        self.entities[id]
+    }
+
+    pub fn tick(&self, world: &World) -> u32 {
+        world
             .get::<Clock>(self.clock)
             .expect("clock entity remains alive")
             .0
     }
 
-    pub fn motor(&self, player: usize) -> Motor {
-        *self
-            .world
+    pub fn motor(&self, world: &World, player: usize) -> Motor {
+        *world
             .get::<Motor>(self.entities[player])
             .expect("player has motor")
     }
 
     /// Apply one fixed tick. Arrival queues must already have been drained by the session.
-    pub fn step(&mut self, frame: &Frame) -> Outcomes {
+    pub fn step(&self, world: &mut World, frame: &Frame) -> Outcomes {
         assert_eq!(
             frame.tick,
-            self.tick() + 1,
+            self.tick(world) + 1,
             "simulation ticks must be contiguous"
         );
         for (player, input) in frame.inputs.iter().enumerate() {
             if (-1..=1).contains(&input.x) && (-1..=1).contains(&input.z) {
-                let mut motor = self
-                    .world
+                let mut motor = world
                     .get_mut::<Motor>(self.entities[player])
                     .expect("player has motor");
                 step_motor(&mut motor, *input);
@@ -220,13 +226,13 @@ impl Simulation {
         }
         let mut outcomes = Outcomes::default();
         for command in &frame.commands {
-            if self.execute(frame.tick, *command) {
+            if self.execute(world, frame.tick, *command) {
                 outcomes.accepted += 1;
             } else {
                 outcomes.rejected += 1;
             }
         }
-        self.world
+        world
             .get_mut::<Clock>(self.clock)
             .expect("clock remains alive")
             .0 = frame.tick;
@@ -234,14 +240,13 @@ impl Simulation {
     }
 
     /// Validate ownership, sequence, range and per-intent cooldown before mutating.
-    fn execute(&mut self, tick: u32, command: Command) -> bool {
+    fn execute(&self, world: &mut World, tick: u32, command: Command) -> bool {
         let caller = usize::from(command.caller);
         if caller >= PLAYERS {
             return false;
         }
         let player = self.entities[caller];
-        let mut state = *self
-            .world
+        let mut state = *world
             .get::<CallerState>(player)
             .expect("caller state exists");
         if command.sequence <= state.sequence {
@@ -249,27 +254,25 @@ impl Simulation {
         }
         state.sequence = command.sequence;
         // Even rejected commands consume their identity; retries cannot bypass validation.
-        *self
-            .world
+        *world
             .get_mut::<CallerState>(player)
             .expect("caller state exists") = state;
         match command.intent {
             Intent::Toggle(toggle) => {
                 if toggle.target != 4
-                    || self.motor(caller).x.abs() > 2_000
+                    || self.motor(world, caller).x.abs() > 2_000
                     || state.last_toggle.is_some_and(|last| {
                         tick - last < HZ / u32::from(ToggleDoor::RATE_PER_SECOND)
                     })
                 {
                     return false;
                 }
-                let mut door = self
-                    .world
+                let mut door = world
                     .get_mut::<Door>(self.entities[4])
                     .expect("door exists");
                 door.open = !door.open;
                 door.changed = tick;
-                self.world
+                world
                     .get_mut::<CallerState>(player)
                     .expect("caller state exists")
                     .last_toggle = Some(tick);
@@ -284,22 +287,19 @@ impl Simulation {
                 {
                     return false;
                 }
-                let item = *self
-                    .world
-                    .get::<Item>(self.entities[id])
-                    .expect("item exists");
-                if !item.available || (self.motor(caller).x - item.x).abs() > 2_000 {
+                let item = *world.get::<Item>(self.entities[id]).expect("item exists");
+                if !item.available || (self.motor(world, caller).x - item.x).abs() > 2_000 {
                     return false;
                 }
-                self.world
+                world
                     .get_mut::<Item>(self.entities[id])
                     .expect("item exists")
                     .available = false;
-                self.world
+                world
                     .get_mut::<Inventory>(player)
                     .expect("inventory exists")
                     .items |= 1 << (id - 5);
-                self.world
+                world
                     .get_mut::<CallerState>(player)
                     .expect("caller state exists")
                     .last_pickup = Some(tick);
@@ -309,31 +309,47 @@ impl Simulation {
     }
 
     /// Canonical stable-order extraction for replay, hashes and adapter projections.
-    pub fn capture(&self) -> State {
+    pub fn capture(&self, world: &World) -> State {
         State {
-            tick: self.tick(),
-            motors: std::array::from_fn(|id| self.motor(id)),
-            door: *self
-                .world
-                .get::<Door>(self.entities[4])
-                .expect("door exists"),
+            tick: self.tick(world),
+            motors: std::array::from_fn(|id| self.motor(world, id)),
+            door: *world.get::<Door>(self.entities[4]).expect("door exists"),
             inventories: std::array::from_fn(|id| {
-                *self
-                    .world
+                *world
                     .get::<Inventory>(self.entities[id])
                     .expect("inventory exists")
             }),
             items: self.entities[5..]
                 .iter()
-                .map(|entity| *self.world.get::<Item>(*entity).expect("item exists"))
+                .map(|entity| *world.get::<Item>(*entity).expect("item exists"))
                 .collect(),
             callers: std::array::from_fn(|id| {
-                *self
-                    .world
+                *world
                     .get::<CallerState>(self.entities[id])
                     .expect("caller state exists")
             }),
         }
+    }
+}
+
+impl Simulation {
+    pub fn new() -> Self {
+        let mut world = World::new();
+        let scene = Scene::spawn(&mut world);
+        Self { world, scene }
+    }
+    #[cfg(feature = "renet-stack")]
+    pub fn tick(&self) -> u32 {
+        self.scene.tick(&self.world)
+    }
+    pub fn motor(&self, player: usize) -> Motor {
+        self.scene.motor(&self.world, player)
+    }
+    pub fn step(&mut self, frame: &Frame) -> Outcomes {
+        self.scene.step(&mut self.world, frame)
+    }
+    pub fn capture(&self) -> State {
+        self.scene.capture(&self.world)
     }
 }
 

@@ -2,14 +2,16 @@
 name = "ara-s4-netcode"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.96"
+rust-version = "1.99.1"
 publish = false
 
 [workspace]
 
 [features]
-default = ["network"]
-network = ["dep:renet", "dep:renet_netcode", "dep:postcard"]
+default = ["renet-stack"]
+network = ["dep:postcard"]
+renet-stack = ["network", "dep:renet", "dep:renet_netcode"]
+lightyear-stack = ["network", "dep:lightyear", "dep:bevy_replicon", "dep:bevy_app", "dep:bevy_time", "dep:bevy_reflect", "dep:bevy_state"]
 
 [dependencies]
 bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
@@ -18,6 +20,12 @@ renet_netcode = { version = "=2.0.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 postcard = { version = "1", features = ["alloc"], optional = true }
+lightyear = { version = "=0.31.0", default-features = false, features = ["std", "client", "server", "replication", "prediction", "interpolation", "input_native", "udp", "netcode"], optional = true }
+bevy_replicon = { version = "=0.45.2", default-features = false, features = ["client", "server"], optional = true }
+bevy_app = { version = "=0.20.0", default-features = false, features = ["std"], optional = true }
+bevy_time = { version = "=0.20.0", default-features = false, features = ["std"], optional = true }
+bevy_reflect = { version = "=0.20.0", default-features = false, features = ["std"], optional = true }
+bevy_state = { version = "=0.20.0", default-features = false, features = ["std", "bevy_app"], optional = true }
 
 [lints.clippy]
 unwrap_used = "deny"
