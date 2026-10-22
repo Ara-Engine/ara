@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 13c2cb0aab1b90194c9a9b53da40b3511e0bd45177f2d446f9be5418c5c69ace # shrinks to choices = [Reparent(Index(9223372036854775808), None), DeleteLeaf(Index(0)), DeleteLeaf(Index(0)), Position(Index(435773801), 121)]

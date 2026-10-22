@@ -47,6 +47,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-ops"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "proptest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-schema"
 version = "0.0.0"
 dependencies = [

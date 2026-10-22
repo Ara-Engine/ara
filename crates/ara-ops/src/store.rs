@@ -1,0 +1,520 @@
+//! [`Store`]: the authority over a workspace's documents. Every change goes through a
+//! [`Staged`] transaction and lands in the history.
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::mpsc::{Receiver, Sender, channel};
+
+use ara_diag::{Diagnostic, codes};
+use ara_doc::{AssetId, Edit, IdGen, Op, RecordId, Workspace};
+use ara_schema::{FieldPath, SchemaDb};
+
+use crate::{Author, Transaction, TxnId, TxnMeta};
+
+/// The result of committing.
+#[derive(Debug)]
+pub enum Commit<'a> {
+    /// Applied as a new transaction.
+    Applied(&'a Transaction),
+    /// The idempotency key was already used; nothing changed and this is the original.
+    Replayed(&'a Transaction),
+    /// There were no ops; nothing was recorded.
+    Empty,
+}
+
+impl<'a> Commit<'a> {
+    /// The recorded transaction, if any.
+    pub fn txn(&self) -> Option<&'a Transaction> {
+        match self {
+            Commit::Applied(t) | Commit::Replayed(t) => Some(t),
+            Commit::Empty => None,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct Stacks {
+    undo: Vec<TxnId>,
+    redo: Vec<TxnId>,
+}
+
+/// Documents plus their attributed, undoable history.
+///
+/// Open a transaction with [`begin`](Self::begin), apply edits (each takes effect
+/// immediately, so later reads see it), then [`commit`](Staged::commit). Commit
+/// validates every touched document and either records everything or nothing.
+#[derive(Debug)]
+pub struct Store {
+    db: SchemaDb,
+    ws: Workspace,
+    rev: u64,
+    history: Vec<Transaction>,
+    by_id: HashMap<TxnId, usize>,
+    by_key: HashMap<String, usize>,
+    reverted_by: HashMap<TxnId, TxnId>,
+    stacks: BTreeMap<Author, Stacks>,
+    ids: IdGen,
+    subscribers: Vec<Sender<Transaction>>,
+}
+
+impl Store {
+    /// A store over `ws`, at revision 0. IDs are minted from entropy.
+    pub fn new(db: SchemaDb, ws: Workspace) -> Self {
+        Self::with_ids(db, ws, IdGen::from_entropy())
+    }
+
+    /// A store with a given ID generator (seed it for reproducible IDs).
+    pub fn with_ids(db: SchemaDb, ws: Workspace, ids: IdGen) -> Self {
+        Store {
+            db,
+            ws,
+            rev: 0,
+            history: Vec::new(),
+            by_id: HashMap::new(),
+            by_key: HashMap::new(),
+            reverted_by: HashMap::new(),
+            stacks: BTreeMap::new(),
+            ids,
+            subscribers: Vec::new(),
+        }
+    }
+
+    /// The Schema DB.
+    pub fn schema(&self) -> &SchemaDb {
+        &self.db
+    }
+
+    /// The Schema DB, to register runtime types. Call `verify()` afterwards.
+    pub fn schema_mut(&mut self) -> &mut SchemaDb {
+        &mut self.db
+    }
+
+    /// The documents.
+    pub fn workspace(&self) -> &Workspace {
+        &self.ws
+    }
+
+    /// The current revision: the number of committed transactions.
+    pub fn revision(&self) -> u64 {
+        self.rev
+    }
+
+    /// The ID generator, for minting record IDs.
+    pub fn ids(&mut self) -> &mut IdGen {
+        &mut self.ids
+    }
+
+    /// Every committed transaction, oldest first.
+    pub fn history(&self) -> &[Transaction] {
+        &self.history
+    }
+
+    /// Transactions committed after revision `rev`: "what changed since X".
+    pub fn since(&self, rev: u64) -> &[Transaction] {
+        let start = self.history.partition_point(|t| t.result <= rev);
+        &self.history[start..]
+    }
+
+    /// A transaction by ID.
+    pub fn txn(&self, id: &TxnId) -> Option<&Transaction> {
+        self.by_id.get(id).map(|&i| &self.history[i])
+    }
+
+    /// The transaction that reverted `id`, if any.
+    pub fn reverted_by(&self, id: &TxnId) -> Option<&TxnId> {
+        self.reverted_by.get(id)
+    }
+
+    /// The transaction committed with this idempotency key, if any.
+    pub fn find_by_key(&self, key: &str) -> Option<&Transaction> {
+        self.by_key.get(key).map(|&i| &self.history[i])
+    }
+
+    /// Subscribes to the op stream: every transaction committed from now on is sent,
+    /// in order. Dropping the receiver unsubscribes.
+    pub fn subscribe(&mut self) -> Receiver<Transaction> {
+        let (tx, rx) = channel();
+        self.subscribers.push(tx);
+        rx
+    }
+
+    /// Opens a transaction.
+    pub fn begin(&mut self, meta: TxnMeta) -> Staged<'_> {
+        Staged {
+            store: Some(self),
+            meta,
+            reverts: None,
+            ops: Vec::new(),
+            baselines: BTreeMap::new(),
+        }
+    }
+
+    /// Applies `edits` as one transaction.
+    pub fn transact(
+        &mut self,
+        meta: TxnMeta,
+        edits: impl IntoIterator<Item = Edit>,
+    ) -> Result<Commit<'_>, Vec<Diagnostic>> {
+        let mut staged = self.begin(meta);
+        for edit in edits {
+            staged.apply(edit).map_err(|d| vec![d])?;
+        }
+        staged.commit()
+    }
+
+    /// Undoes one transaction by applying its inverse as a new transaction by `by`.
+    /// Fails with `ARA1502` if a later transaction touched the same paths (unless
+    /// that transaction was itself undone).
+    pub fn undo(&mut self, id: &TxnId, by: Author) -> Result<&Transaction, Vec<Diagnostic>> {
+        let undone_author = self.txn(id).map(|t| t.author.clone());
+        let new = self.revert(id, by)?;
+        if let Some(stacks) = undone_author.and_then(|a| self.stacks.get_mut(&a)) {
+            stacks.undo.retain(|t| t != id);
+        }
+        Ok(&self.history[new])
+    }
+
+    /// Undoes `author`'s most recent transaction that is still in effect.
+    pub fn undo_last(&mut self, author: &Author) -> Result<&Transaction, Vec<Diagnostic>> {
+        let Some(id) = self.stacks.get_mut(author).and_then(|s| s.undo.pop()) else {
+            return Err(vec![nothing(author, "undo")]);
+        };
+        match self.revert(&id, author.clone()) {
+            Ok(new) => {
+                let undo_id = self.history[new].id.clone();
+                self.stacks
+                    .entry(author.clone())
+                    .or_default()
+                    .redo
+                    .push(undo_id);
+                Ok(&self.history[new])
+            }
+            Err(e) => {
+                self.stacks.entry(author.clone()).or_default().undo.push(id);
+                Err(e)
+            }
+        }
+    }
+
+    /// Redoes `author`'s most recently undone transaction. A new edit by the author
+    /// clears the redo stack.
+    pub fn redo_last(&mut self, author: &Author) -> Result<&Transaction, Vec<Diagnostic>> {
+        let Some(id) = self.stacks.get_mut(author).and_then(|s| s.redo.pop()) else {
+            return Err(vec![nothing(author, "redo")]);
+        };
+        match self.revert(&id, author.clone()) {
+            Ok(new) => {
+                let redo_id = self.history[new].id.clone();
+                self.stacks
+                    .entry(author.clone())
+                    .or_default()
+                    .undo
+                    .push(redo_id);
+                Ok(&self.history[new])
+            }
+            Err(e) => {
+                self.stacks.entry(author.clone()).or_default().redo.push(id);
+                Err(e)
+            }
+        }
+    }
+
+    /// Commits the inverse of `id`. Returns the new transaction's history index.
+    fn revert(&mut self, id: &TxnId, by: Author) -> Result<usize, Vec<Diagnostic>> {
+        let Some(target) = self.txn(id).cloned() else {
+            return Err(vec![Diagnostic::error(
+                codes::TXN_NOT_FOUND,
+                format!("no transaction `{id}`"),
+            )]);
+        };
+        if let Some(r) = self.reverted_by.get(id) {
+            return Err(vec![Diagnostic::error(
+                codes::ALREADY_REVERTED,
+                format!("`{id}` was already reverted by `{r}`"),
+            )]);
+        }
+        let label = format!("undo {}", target.label.as_deref().unwrap_or(&target.id.0));
+        let meta = TxnMeta {
+            author: by,
+            why: None,
+            label: Some(label),
+            base: Some(target.result),
+            idempotency_key: None,
+        };
+        let mut staged = self.begin(meta);
+        staged.reverts = Some(target.id.clone());
+        for op in target.ops.iter().rev() {
+            staged.apply(op.inverse().to_edit()).map_err(|d| vec![d])?;
+        }
+        staged.commit()?;
+        let new = self.history.len() - 1;
+        self.reverted_by
+            .insert(target.id, self.history[new].id.clone());
+        Ok(new)
+    }
+
+    /// Diagnostics for transactions after `base` that touched any of `touched`.
+    /// An undone transaction and its undo cancel out and are skipped.
+    fn conflicts(&self, base: u64, touched: &[Touch], undo: bool) -> Vec<Diagnostic> {
+        let mut out = Vec::new();
+        for t in self.since(base) {
+            let cancelled = self.reverted_by.contains_key(&t.id)
+                || t.reverts
+                    .as_ref()
+                    .and_then(|r| self.txn(r))
+                    .is_some_and(|r| r.result > base);
+            if cancelled {
+                continue;
+            }
+            for op in &t.ops {
+                let theirs = Touch::of(op);
+                for (mine, theirs) in touched
+                    .iter()
+                    .flat_map(|m| theirs.iter().map(move |t| (m, t)))
+                {
+                    if mine.overlaps(theirs) {
+                        let (code, verb) = if undo {
+                            (codes::UNDO_CONFLICT, "undo would overwrite")
+                        } else {
+                            (codes::STALE_BASE, "your base revision predates")
+                        };
+                        let what = theirs
+                            .path
+                            .as_ref()
+                            .map_or("the record".to_owned(), |p| format!("`{p}`"));
+                        out.push(
+                            Diagnostic::error(
+                                code,
+                                format!(
+                                    "{verb} {what}, changed by `{}` ({}) at revision {}",
+                                    t.id, t.author, t.result
+                                ),
+                            )
+                            .doc(theirs.doc.as_str())
+                            .record(theirs.record.as_str())
+                            .path(
+                                theirs
+                                    .path
+                                    .as_ref()
+                                    .map(ToString::to_string)
+                                    .unwrap_or_default(),
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        out.dedup();
+        out
+    }
+
+    /// Undoes applied ops, newest first. Used when a transaction fails.
+    fn rollback(&mut self, ops: &[Op]) {
+        for op in ops.iter().rev() {
+            if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
+                doc.revert(op, &self.db);
+            }
+        }
+    }
+
+    /// Records a validated transaction and notifies subscribers.
+    fn record(&mut self, meta: TxnMeta, reverts: Option<TxnId>, ops: Vec<Op>) -> usize {
+        self.rev += 1;
+        let id = TxnId(self.ids.token("tx", 8));
+        let txn = Transaction {
+            id: id.clone(),
+            base: meta.base.unwrap_or(self.rev - 1),
+            result: self.rev,
+            author: meta.author,
+            why: meta.why,
+            label: meta.label,
+            idempotency_key: meta.idempotency_key,
+            reverts,
+            ops,
+        };
+        let index = self.history.len();
+        if let Some(key) = &txn.idempotency_key {
+            self.by_key.insert(key.clone(), index);
+        }
+        if txn.reverts.is_none() {
+            let stacks = self.stacks.entry(txn.author.clone()).or_default();
+            stacks.undo.push(id.clone());
+            stacks.redo.clear();
+        }
+        self.by_id.insert(id, index);
+        self.subscribers.retain(|s| s.send(txn.clone()).is_ok());
+        self.history.push(txn);
+        index
+    }
+}
+
+fn nothing(author: &Author, what: &str) -> Diagnostic {
+    Diagnostic::error(
+        codes::NOTHING_TO_UNDO,
+        format!("{author} has nothing to {what}"),
+    )
+}
+
+/// A record path an op touched (`path: None` is the whole record).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Touch {
+    doc: AssetId,
+    record: RecordId,
+    path: Option<FieldPath>,
+}
+
+impl Touch {
+    fn of(op: &Op) -> Vec<Touch> {
+        op.touches()
+            .into_iter()
+            .map(|path| Touch {
+                doc: op.doc().clone(),
+                record: op.id().clone(),
+                path,
+            })
+            .collect()
+    }
+
+    fn overlaps(&self, other: &Touch) -> bool {
+        self.doc == other.doc
+            && self.record == other.record
+            && match (&self.path, &other.path) {
+                (Some(a), Some(b)) => a.overlaps(b),
+                _ => true,
+            }
+    }
+}
+
+/// An open transaction. Edits apply immediately; dropping it without committing
+/// rolls everything back.
+#[derive(Debug)]
+pub struct Staged<'s> {
+    store: Option<&'s mut Store>,
+    meta: TxnMeta,
+    reverts: Option<TxnId>,
+    ops: Vec<Op>,
+    /// Errors each touched document had before the transaction; only new ones fail it.
+    baselines: BTreeMap<AssetId, BTreeSet<String>>,
+}
+
+impl<'s> Staged<'s> {
+    fn store_mut(&mut self) -> &mut Store {
+        self.store
+            .as_deref_mut()
+            .expect("a staged transaction holds its store until commit or rollback")
+    }
+
+    /// The store, as it looks with this transaction's edits applied.
+    pub fn store(&self) -> &Store {
+        self.store
+            .as_deref()
+            .expect("a staged transaction holds its store until commit or rollback")
+    }
+
+    /// The ops applied so far.
+    pub fn ops(&self) -> &[Op] {
+        &self.ops
+    }
+
+    /// The ID generator.
+    pub fn ids(&mut self) -> &mut IdGen {
+        &mut self.store_mut().ids
+    }
+
+    /// Applies one edit now. On error nothing changes and the transaction stays open.
+    pub fn apply(&mut self, edit: Edit) -> Result<&Op, Diagnostic> {
+        let doc_id = edit.doc().clone();
+        if !self.baselines.contains_key(&doc_id) {
+            let store = self.store();
+            if store.ws.doc(doc_id.as_str()).is_none() {
+                return Err(Diagnostic::error(
+                    codes::DOC_NOT_FOUND,
+                    format!("no document `{doc_id}` is loaded"),
+                ));
+            }
+            let baseline = error_keys(&store.ws.check(&doc_id, None, &store.db));
+            self.baselines.insert(doc_id.clone(), baseline);
+        }
+        let store = self.store_mut();
+        let doc = store.ws.doc_mut(doc_id.as_str()).ok_or_else(|| {
+            Diagnostic::error(
+                codes::DOC_NOT_FOUND,
+                format!("no document `{doc_id}` is loaded"),
+            )
+        })?;
+        let op = doc.apply(edit, &store.db)?;
+        let index = self.ops.len();
+        self.ops.push(op);
+        Ok(&self.ops[index])
+    }
+
+    /// Validates every touched document and records the transaction, or rolls it
+    /// back and returns the errors it introduced.
+    pub fn commit(mut self) -> Result<Commit<'s>, Vec<Diagnostic>> {
+        let ops = std::mem::take(&mut self.ops);
+        let store = self
+            .store
+            .take()
+            .expect("a staged transaction holds its store until commit or rollback");
+        if let Some(key) = &self.meta.idempotency_key
+            && let Some(&i) = store.by_key.get(key)
+        {
+            store.rollback(&ops);
+            return Ok(Commit::Replayed(&store.history[i]));
+        }
+        if ops.is_empty() {
+            return Ok(Commit::Empty);
+        }
+        let mut errors = Vec::new();
+        if let Some(base) = self.meta.base {
+            if base > store.rev {
+                errors.push(Diagnostic::error(
+                    codes::STALE_BASE,
+                    format!("base revision {base} is ahead of the store ({})", store.rev),
+                ));
+            } else {
+                let touched: Vec<Touch> = ops.iter().flat_map(Touch::of).collect();
+                errors.extend(store.conflicts(base, &touched, self.reverts.is_some()));
+            }
+        }
+        for (doc, before) in &self.baselines {
+            let after = store.ws.check(doc, None, &store.db);
+            errors.extend(
+                after
+                    .into_iter()
+                    .filter(|d| d.is_error() && !before.contains(&key_of(d))),
+            );
+        }
+        if !errors.is_empty() {
+            store.rollback(&ops);
+            return Err(errors);
+        }
+        let index = store.record(self.meta.clone(), self.reverts.take(), ops);
+        Ok(Commit::Applied(&store.history[index]))
+    }
+
+    /// Rolls back and returns the ops that were applied: a dry run's diff.
+    pub fn rollback(mut self) -> Vec<Op> {
+        let ops = std::mem::take(&mut self.ops);
+        if let Some(store) = self.store.take() {
+            store.rollback(&ops);
+        }
+        ops
+    }
+}
+
+impl Drop for Staged<'_> {
+    fn drop(&mut self) {
+        let ops = std::mem::take(&mut self.ops);
+        if let Some(store) = self.store.take() {
+            store.rollback(&ops);
+        }
+    }
+}
+
+fn key_of(d: &Diagnostic) -> String {
+    format!("{}|{}|{}", d.code, d.location, d.message)
+}
+
+fn error_keys(diags: &[Diagnostic]) -> BTreeSet<String> {
+    diags.iter().filter(|d| d.is_error()).map(key_of).collect()
+}
