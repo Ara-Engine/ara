@@ -1,0 +1,37 @@
+[
+    {
+        "path":  "target/release/s8-dots-bench.exe",
+        "sha256":  "e2d0cb133914b45b5a099387a656838b6c043154d90d98f1bb4881b337985dd7",
+        "bytes":  818176
+    },
+    {
+        "path":  "target/release/s8_host.dll",
+        "sha256":  "aab8a958a72c8d1d8fa9ffd3c97f30bb341f6e5e6bc75e0de71b2f97ee350dce",
+        "bytes":  356864
+    },
+    {
+        "path":  "managed/bin/Release/net10.0/Managed.dll",
+        "sha256":  "89917ab1dea1e2965cfa9105f867193cbbd0a526d7042a7fdf3de3bea26bf1ea",
+        "bytes":  38912
+    },
+    {
+        "path":  "out/aot/Managed.exe",
+        "sha256":  "4663494fa547dd1a016da54616f24caef253729ae62db970daac259c66a56dfd",
+        "bytes":  2492416
+    },
+    {
+        "path":  "unity/Build/S8.exe",
+        "sha256":  "5ae16e18272be99348db2a4e6450bba3210710f8279357ab2f1f0b33ce520dd1",
+        "bytes":  667136
+    },
+    {
+        "path":  "unity/Build/GameAssembly.dll",
+        "sha256":  "3cb1ec7cc471511c26c87b339599ef8f7b518f51d9dc78004966adf23ebb22e7",
+        "bytes":  20547072
+    },
+    {
+        "path":  "unity/Build/S8_Data/Plugins/x86_64/lib_burst_generated.dll",
+        "sha256":  "2c67ef8d854b7fcbb04a146dd1ab6de0b3e2f17965aa8a25690e66bb2a1fdee5",
+        "bytes":  1820160
+    }
+]

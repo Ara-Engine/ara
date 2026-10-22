@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:42:11.4495870+03:00",
+    "wall_seconds":  0.8285963,
+    "free_memory_kib":  7841036,
+    "background_cpu_percent":  7.7785919391626539,
+    "processes":  [
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.25
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.078125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  93176,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  83744,
+                          "cpu_seconds":  0.0625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.046875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  73408,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  101780,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  80460,
+                          "cpu_seconds":  0.03125
+                      }
+                  ]
+}

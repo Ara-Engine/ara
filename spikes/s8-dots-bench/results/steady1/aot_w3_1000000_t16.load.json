@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:40:35.8323824+03:00",
+    "wall_seconds":  3.042923,
+    "free_memory_kib":  8100704,
+    "background_cpu_percent":  13.254371290367846,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  1.296875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.625
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.609375
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.546875
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.515625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  47716,
+                          "cpu_seconds":  0.46875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  101780,
+                          "cpu_seconds":  0.34375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  4736,
+                          "cpu_seconds":  0.28125
+                      },
+                      {
+                          "name":  "explorer",
+                          "pid":  101672,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  49432,
+                          "cpu_seconds":  0.1875
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.140625
+                      }
+                  ]
+}

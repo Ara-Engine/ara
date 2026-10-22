@@ -1,0 +1,55 @@
+{
+    "captured":  "2026-10-23T01:31:45.8351016+03:00",
+    "cpu":  {
+                "Name":  "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+                "NumberOfCores":  8,
+                "NumberOfLogicalProcessors":  16
+            },
+    "os":  {
+               "Caption":  "Microsoft Windows 11 Pro",
+               "Version":  "10.0.26300",
+               "TotalVisibleMemorySize":  32627624,
+               "FreePhysicalMemory":  7357324
+           },
+    "gpu":  [
+                {
+                    "Name":  "Meta Virtual Monitor",
+                    "DriverVersion":  "5.3.57.114"
+                },
+                {
+                    "Name":  "Parsec Virtual Display Adapter",
+                    "DriverVersion":  "0.45.0.0"
+                },
+                {
+                    "Name":  "AMD Radeon(TM) Graphics",
+                    "DriverVersion":  "32.0.21030.2001"
+                },
+                {
+                    "Name":  "NVIDIA GeForce RTX 4070 SUPER",
+                    "DriverVersion":  "32.0.16.1714"
+                }
+            ],
+    "rust":  "rustc 1.96.0 (ac68faa20 2026-05-25)\r\nbinary: rustc\r\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\r\ncommit-date: 2026-05-25\r\nhost: x86_64-pc-windows-msvc\r\nrelease: 1.96.0\r\nLLVM version: 22.1.2",
+    "dotnet_sdk":  "10.0.202",
+    "dotnet_runtimes":  [
+                            "Microsoft.AspNetCore.App 3.1.10 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+                            "Microsoft.AspNetCore.App 10.0.5 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+                            "Microsoft.AspNetCore.App 10.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+                            "Microsoft.NETCore.App 3.1.10 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+                            "Microsoft.NETCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+                            "Microsoft.NETCore.App 9.0.14 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+                            "Microsoft.NETCore.App 10.0.5 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+                            "Microsoft.NETCore.App 10.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+                            "Microsoft.WindowsDesktop.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                            "Microsoft.WindowsDesktop.App 9.0.14 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                            "Microsoft.WindowsDesktop.App 10.0.5 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+                            "Microsoft.WindowsDesktop.App 10.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]"
+                        ],
+    "unity":  "6000.6.6f1",
+    "entities":  "6.6.0 built-in",
+    "burst":  "2.0.0 built-in",
+    "collections":  "6.6.0 built-in",
+    "mathematics":  "1.4.0 built-in",
+    "isa":  "Rust target-cpu=native; NativeAOT IlcInstructionSet=native; Vector256 hardware accelerated",
+    "power_plan":  "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)"
+}

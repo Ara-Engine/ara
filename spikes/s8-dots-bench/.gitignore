@@ -1,0 +1,15 @@
+/target/
+/managed/bin/
+/managed/obj/
+/out/
+/unity/Library/
+/unity/Temp/
+/unity/Logs/
+/unity/Build/
+/unity/obj/
+/unity/UserSettings/
+/unity/ProjectSettings/*
+!/unity/ProjectSettings/ProjectVersion.txt
+*.pdb
+/results/validation/
+/results/validation-initial.json

@@ -1,0 +1,5 @@
+{
+  "name": "S8",
+  "references": ["Unity.Entities", "Unity.Burst", "Unity.Collections", "Unity.Mathematics"],
+  "allowUnsafeCode": true
+}

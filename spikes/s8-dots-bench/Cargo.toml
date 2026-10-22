@@ -1,0 +1,23 @@
+[package]
+name = "s8-dots-bench"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[lib]
+name = "s8_host"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std", "multi_threaded"] }
+bevy_tasks = { version = "=0.20.0", features = ["multi_threaded"] }
+glam = "=0.30.9"
+rayon = "=1.11.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

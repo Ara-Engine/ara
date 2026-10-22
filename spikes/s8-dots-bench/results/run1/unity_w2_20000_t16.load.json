@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:34:05.1968629+03:00",
+    "wall_seconds":  2.9451318,
+    "free_memory_kib":  6579604,
+    "background_cpu_percent":  13.031303471715596,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  2.890625
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.578125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.515625
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.21875
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  22020,
+                          "cpu_seconds":  0.171875
+                      },
+                      {
+                          "name":  "Lunar Client",
+                          "pid":  102184,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.140625
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  19212,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "NZXT CAM",
+                          "pid":  100472,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.125
+                      }
+                  ]
+}

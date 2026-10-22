@@ -1,0 +1,68 @@
+{
+    "started":  "2026-10-23T01:34:18.0369331+03:00",
+    "wall_seconds":  5.9896867999999994,
+    "free_memory_kib":  6512636,
+    "background_cpu_percent":  15.717119799986872,
+    "processes":  [
+                      {
+                          "name":  "VALORANT-Win64-Shipping",
+                          "pid":  101968,
+                          "cpu_seconds":  5.28125
+                      },
+                      {
+                          "name":  "BackgroundDownload",
+                          "pid":  62796,
+                          "cpu_seconds":  2.234375
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  1.171875
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  1.03125
+                      },
+                      {
+                          "name":  "audiodg",
+                          "pid":  62392,
+                          "cpu_seconds":  0.609375
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  19212,
+                          "cpu_seconds":  0.484375
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  85552,
+                          "cpu_seconds":  0.34375
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.34375
+                      },
+                      {
+                          "name":  "chrome",
+                          "pid":  15020,
+                          "cpu_seconds":  0.3125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.3125
+                      },
+                      {
+                          "name":  "T3 Code (Nightly)",
+                          "pid":  13004,
+                          "cpu_seconds":  0.265625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.265625
+                      }
+                  ]
+}

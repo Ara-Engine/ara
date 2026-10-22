@@ -1,0 +1,63 @@
+{
+    "started":  "2026-10-23T01:38:15.5852069+03:00",
+    "wall_seconds":  0.45354639999999996,
+    "free_memory_kib":  9203352,
+    "background_cpu_percent":  6.459509986188845,
+    "processes":  [
+                      {
+                          "name":  "Discord",
+                          "pid":  44728,
+                          "cpu_seconds":  0.125
+                      },
+                      {
+                          "name":  "Discord",
+                          "pid":  4064,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "ara-s2",
+                          "pid":  32992,
+                          "cpu_seconds":  0.09375
+                      },
+                      {
+                          "name":  "powershell",
+                          "pid":  69660,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "git-remote-https",
+                          "pid":  69724,
+                          "cpu_seconds":  0.03125
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  96048,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  72372,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "relay_win",
+                          "pid":  102556,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  80460,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "cam_helper",
+                          "pid":  73648,
+                          "cpu_seconds":  0.015625
+                      },
+                      {
+                          "name":  "claude",
+                          "pid":  93176,
+                          "cpu_seconds":  0.015625
+                      }
+                  ]
+}

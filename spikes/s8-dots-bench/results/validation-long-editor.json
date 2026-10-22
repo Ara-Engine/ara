@@ -1,0 +1,16 @@
+[
+  {
+    "case": "unity_w3_1000000_t1",
+    "floats": 12000000,
+    "max_abs_error": 0.0,
+    "failures": 0,
+    "pass": true
+  },
+  {
+    "case": "unity_w3_1000000_t16",
+    "floats": 12000000,
+    "max_abs_error": 0.0,
+    "failures": 0,
+    "pass": true
+  }
+]
