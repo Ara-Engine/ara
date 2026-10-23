@@ -11,6 +11,7 @@ pub mod protocol;
 mod resolve;
 mod schema;
 mod serve;
+pub mod why;
 
 pub use check::check;
 pub use docs::docs;

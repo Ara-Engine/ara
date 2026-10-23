@@ -17,6 +17,7 @@ ara-merge.workspace = true
 ara-ops.workspace = true
 ara-proto.workspace = true
 ara-schema.workspace = true
+ara-why = { path = "../ara-why" }
 serde.workspace = true
 serde_json.workspace = true
 

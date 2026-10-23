@@ -1,0 +1,35 @@
+[package]
+name = "ara-player"
+description = "The play process: a pooled, single-use player that runs a scene for the edit-world owner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+ara-asset = { path = "../ara-asset" }
+ara-gpu = { path = "../ara-gpu" }
+ara-input = { path = "../ara-input" }
+ara-platform = { path = "../ara-platform" }
+ara-play = { path = "../ara-play" }
+ara-render = { path = "../ara-render" }
+ara-runtime = { path = "../ara-runtime" }
+ara-runtime-render = { path = "../ara-runtime-render" }
+ara-sim = { path = "../ara-sim" }
+ara-doc.workspace = true
+clap.workspace = true
+serde.workspace = true
+glam = "0.34"
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
+
+[dev-dependencies]
+ara-host.workspace = true
+ara-mcp.workspace = true
+ara-play-host = { path = "../ara-play-host" }
+
+[lints]
+workspace = true

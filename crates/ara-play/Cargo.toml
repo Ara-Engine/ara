@@ -1,0 +1,20 @@
+[package]
+name = "ara-play"
+description = "The play-mode wire contract: player link messages, binary scene snapshots and the shared-memory transport."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-doc.workspace = true
+ciborium = "0.2.2"
+serde.workspace = true
+serde_json.workspace = true
+tungstenite.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_Security"] }
+
+[lints]
+workspace = true

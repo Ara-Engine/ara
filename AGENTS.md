@@ -27,9 +27,20 @@ M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are b
 - physics (`ara-physics*`), audio (`ara-audio`), navigation (`ara-nav`), animation (`ara-anim`);
 - the UI runtime and tooling (`ara-ui-*`);
 - export (`ara-export*`, `ara-pack`, `ara-bridge`);
-- localization and saves (`ara-l10n`, `ara-save`).
+- localization and saves (`ara-l10n`, `ara-save`);
+- the editor (`ara-editor`, `ara-editor-gpu`) and the play process (`ara-runtime*`, `ara-play*`, `ara-player`);
+- multiplayer (`ara-net`), world streaming (`ara-world`), terrain (`ara-terrain`, `ara-landscape`, `ara-foliage`), 2D (`ara-2d`, `ara-render2d`, `ara-physics2d`, `ara-import2d`);
+- VFX (`ara-vfx`, `ara-vfx-gpu`), animation v2 (`ara-anim-physics`), profiling (`ara-profile`, `ara-bench`), vendored SDL3 (`ara-sdl3-src`).
 
-**In progress:** the editor shell, multiplayer (`ara-net`), runtime integration (`ara-runtime`, `ara-player`), VFX, terrain, 2D, world streaming, profiling, vendored SDL3, and C# host v2. Run `ara init` in a scratch dir to try the CLI and MCP.
+**In progress:**
+- integration v2: C# in the runtime, one shared schema DB, subsystem hooks, replicated Play;
+- editor panels;
+- Lumen parity round 2;
+- virtualized geometry and VSM;
+- the physics performance pass;
+- the diagnostics bus and `ara why`.
+
+Run `ara init` in a scratch dir to try the CLI and MCP.
 
 GPU tests need `VULKAN_SDK` set (slangc is found through it).
 

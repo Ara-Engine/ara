@@ -1,4 +1,4 @@
-use crate::{settings::*, targets::*, view::FidelityView};
+use crate::{pipeline_variants::Transport, settings::*, targets::*, view::FidelityView};
 use anyhow::Result;
 use ara_gpu::{
     Access, Queue, Resource, RootConstants,
@@ -48,6 +48,16 @@ impl FidelityView {
             },
         );
         shared.push((f, Access::ShaderRead));
+        shared.push((
+            graph.import(
+                Resource::Image(self.sheen_lut),
+                State {
+                    access: Access::ShaderRead,
+                    queue: Queue::Graphics,
+                },
+            ),
+            Access::ShaderRead,
+        ));
         let lut = graph.import(
             Resource::Image(self.lut),
             State {
@@ -67,26 +77,75 @@ impl FidelityView {
          -> Result<()> {
             let id = graph.pass(name, Queue::Graphics, uses);
             graph.accesses(id, shared.iter().copied())?;
+            if self.atmosphere.is_some()
+                && (pipeline.starts_with("primary")
+                    || pipeline.starts_with("hybrid")
+                    || pipeline.starts_with("reference")
+                    || pipeline.starts_with("ddgi"))
+            {
+                graph.accesses(
+                    id,
+                    [
+                        (ids[SKYVIEW], Access::ShaderRead),
+                        (ids[TRANSMITTANCE], Access::ShaderRead),
+                    ],
+                )?;
+            }
             recipes.push((id, pipeline, arg, groups));
             Ok(())
         };
         let slot = self.slot;
         let previous = 1 - slot;
         let reset = input.reset || !self.history;
+        let lighting_response = !reset && (input.lighting_changed || self.responsive_frames > 0);
         let rt = self.settings.tier == Tier::Rt;
         let reference = matches!(self.settings.mode, Mode::Reference { .. });
-        let emitters = self.scene.has_emitters;
+        if self.atmosphere.is_some() {
+            if self.atmosphere_dirty {
+                add(
+                    "Atmosphere.Transmittance",
+                    "transmittance",
+                    0,
+                    [32, 8, 1],
+                    vec![(ids[TRANSMITTANCE], Access::Storage)],
+                )?;
+                add(
+                    "Atmosphere.MultiScatter",
+                    "multiscatter",
+                    0,
+                    [4, 4, 1],
+                    vec![
+                        (ids[TRANSMITTANCE], Access::ShaderRead),
+                        (ids[MULTISCATTER], Access::Storage),
+                    ],
+                )?;
+            }
+            add(
+                "Atmosphere.SkyView",
+                "skyview",
+                0,
+                [24, 14, 1],
+                vec![
+                    (ids[TRANSMITTANCE], Access::ShaderRead),
+                    (ids[MULTISCATTER], Access::ShaderRead),
+                    (ids[SKYVIEW], Access::Storage),
+                ],
+            )?;
+            add(
+                "Atmosphere.Froxels.AerialPerspective",
+                if rt { "fog" } else { "fog_raster" },
+                0,
+                [8, 5, 1],
+                vec![
+                    (ids[TRANSMITTANCE], Access::ShaderRead),
+                    (ids[MULTISCATTER], Access::ShaderRead),
+                    (ids[FROXELS], Access::Storage),
+                ],
+            )?;
+        }
         add(
             "Visibility.Motion",
-            if rt {
-                if emitters {
-                    "primary_emissive"
-                } else {
-                    "primary"
-                }
-            } else {
-                "primary_raster"
-            },
+            self.transport_pipeline(Transport::Primary),
             0,
             dispatch,
             [
@@ -104,7 +163,7 @@ impl FidelityView {
         if rt && !reference {
             add(
                 "DDGI.Trace.Relocate.Classify.Integrate",
-                if emitters { "ddgi_emissive" } else { "ddgi" },
+                self.transport_pipeline(Transport::Probes),
                 0,
                 [self.volume.len() as u32, 1, 1],
                 vec![
@@ -130,27 +189,17 @@ impl FidelityView {
             } else {
                 "RT.Reflections.SoftShadows.DDGI"
             },
-            if reference {
-                if emitters {
-                    "reference_emissive"
-                } else {
-                    "reference"
-                }
-            } else if rt {
-                if emitters {
-                    "hybrid_emissive"
-                } else {
-                    "hybrid"
-                }
+            self.transport_pipeline(if reference {
+                Transport::Reference
             } else {
-                "hybrid_raster"
-            },
-            if !reference && !reset && !input.lighting_changed {
+                Transport::Gather
+            }),
+            if !reference && !reset && !lighting_response {
                 if self.transport_stride == 4 { 3 } else { 1 }
             } else {
                 0
             },
-            if !reference && !reset && !input.lighting_changed {
+            if !reference && !reset && !lighting_response {
                 [
                     render[0].div_ceil(8 * self.transport_stride),
                     render[1].div_ceil(8),
@@ -172,18 +221,10 @@ impl FidelityView {
             .chain(transport_history)
             .collect(),
         )?;
-        if !reference && !reset && !input.lighting_changed && frame.transport[3] == 0 {
+        if !reference && !reset && !lighting_response && frame.transport[3] == 0 {
             add(
                 "RT.Disocclusion.Repair",
-                if rt {
-                    if emitters {
-                        "hybrid_emissive"
-                    } else {
-                        "hybrid"
-                    }
-                } else {
-                    "hybrid_raster"
-                },
+                self.transport_pipeline(Transport::Gather),
                 if self.transport_stride == 4 { 4 } else { 2 },
                 [
                     render[0].div_ceil(if self.transport_stride == 4 { 8 } else { 16 }),
@@ -230,7 +271,7 @@ impl FidelityView {
             if reference {
                 "Reference.Accumulate.Undenoised"
             } else {
-                "SVGF.Reproject.Reject.Outlier.Moments"
+                "SVGF.Reproject.Reject.Moments"
             },
             "temporal",
             0,
@@ -311,7 +352,19 @@ impl FidelityView {
                 (ids[POST], Access::Storage),
                 (exposure, Access::ShaderRead),
                 (lut, Access::ShaderRead),
-            ],
+            ]
+            .into_iter()
+            .chain(if self.atmosphere.is_some() {
+                vec![
+                    (ids[SKYVIEW], Access::ShaderRead),
+                    (ids[TRANSMITTANCE], Access::ShaderRead),
+                    (ids[FROXELS], Access::ShaderRead),
+                    (ids[WORLD0 + slot], Access::ShaderRead),
+                ]
+            } else {
+                vec![]
+            })
+            .collect(),
         )?;
         let fsr = u32::from(self.settings.upscaler == Upscaler::Fsr1 && render != display);
         let display_groups = [display[0].div_ceil(8), display[1].div_ceil(8), 1];
@@ -402,14 +455,16 @@ impl FidelityView {
         self.previous_vp = vp;
         self.previous_camera = camera;
         self.history = true;
+        self.atmosphere_dirty = false;
         self.slot = previous;
         self.responsive_frames = if input.lighting_changed {
-            (self.volume.len() as u32).div_ceil(self.settings.probe_ray_budget / 64) * 2
+            7
         } else {
             self.responsive_frames.saturating_sub(1)
         };
-        self.probe_start =
-            (self.probe_start + self.settings.probe_ray_budget / 64) % self.volume.len() as u32;
+        self.probe_start = (self.probe_start
+            + self.settings.probe_ray_budget / if lighting_response { 16 } else { 64 })
+            % self.volume.len() as u32;
         self.probe_slot = 1 - self.probe_slot;
         gpu.assert_clean()?;
         Ok(())

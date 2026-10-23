@@ -34,6 +34,8 @@ fn histogram_ev_limits_manual_compensation_and_simulation_time_adaptation() -> R
         },
     };
     let mut view = FidelityView::new(&mut gpu, &scenes::scene("furnace", 0), settings, None)?;
+    ensure!(view.capture_direct_radiance(&mut gpu).is_err());
+    ensure!(view.capture_incident_radiance(&mut gpu).is_err());
     let mut input = FrameInput {
         camera: &camera,
         tick: 0,

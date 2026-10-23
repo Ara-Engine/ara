@@ -1,0 +1,219 @@
+{
+  "label": "why-with-r4",
+  "agent": "claude:sonnet-5.5",
+  "suite": "diagnose",
+  "started": "2026-10-23T07:03:29Z",
+  "engine": "8bd5454+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "Read": 1,
+        "ToolSearch": 1,
+        "ara_why": 2,
+        "edit": 1
+      },
+      "wallMs": 26051,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 152733,
+        "cacheWrite": 13529,
+        "output": 780
+      },
+      "costUsd": 0.0773411,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The radio disappeared because someone's edit left `materials/radio.material` with a typo, so the material no longer compiled. I fixed it, and `ara_why` now reports the material as OK.\n\nLine 4 read `output baseColor = pain;`, but the parameter is named `paint`. With no shader to draw it with, the engine skipped the radio (`Radio`, `e_radio1`). I changed line 4 to `output baseColor = paint;`.\n\nI couldn't check the running renderer, so I haven't seen the radio on screen. The other visibility checks (enabled, transform, layer, distance) were already fine."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "Glob": 1,
+        "Read": 1,
+        "ToolSearch": 2,
+        "ara_apply": 1,
+        "ara_why": 1
+      },
+      "wallMs": 25875,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 151507,
+        "cacheWrite": 13842,
+        "output": 990
+      },
+      "costUsd": 0.0805682,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because its mesh reference was broken. I fixed the reference, but I haven't checked it in the running renderer.\n\nThe `Generator` entity (`e_gen001`) in `levels/outpost.scene` still pointed at `@meshes/generator.glb#ms_genr0001`. When the art team re-exported the mesh, it became `meshes/generator_v2.glb` with ID `ms_genr0002`, so the old path and ID no longer matched any asset. The enabled flag, layer, position and distance from the camera all checked out fine.\n\nI repointed `MeshRenderer.mesh` to `@meshes/generator_v2.glb#ms_genr0002`. Before applying, I confirmed th"
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"default\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_why": 1
+      },
+      "wallMs": 14446,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 114798,
+        "cacheWrite": 11320,
+        "output": 623
+      },
+      "costUsd": 0.06313700000000001,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The workbench had been put on the `editor` layer, and `MainCamera`'s culling mask is only `[\"default\", \"props\"]`, so the camera skipped it. The entity was still in `levels/outpost.scene` and enabled. I moved its `MeshRenderer.layer` to `default`, and I didn't touch the camera.\n\nI haven't run the game, so I haven't confirmed it renders. The check for render passes needs the running renderer.\n\nIts mesh, `meshes/bench.glb`, has no source file on disk. If the bench is still missing in game, look there next.\n\nIf you want it undone, roll back to checkpoint `cp_9k59nrz8`."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "Glob": 1,
+        "ToolSearch": 2,
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_logs": 1,
+        "ara_query": 1
+      },
+      "wallMs": 29157,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 191067,
+        "cacheWrite": 15493,
+        "output": 1039
+      },
+      "costUsd": 0.0916243,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "`Barrel.002` vanished because its rigid body had a mass of 0 kg. I've set the mass to 30 kg, but I haven't replayed the level to confirm the barrel now stays put.\n\nThe engine log shows what happened. On physics tick 61 it divided by zero mass (ARA7001), the barrel's position became NaN (ARA3304), and the engine stopped drawing it. The other two barrels have 30 kg.\n\nI only changed `RigidBody.mass` on `e_brl003` in `levels/outpost.scene`. You can undo it with a rollback to checkpoint `cp_9186bj8d`.\n\n`Barrel.002` also starts at y=5 while the other two barrels sit at y=0, so it will drop 5 m when "
+    }
+  ]
+}

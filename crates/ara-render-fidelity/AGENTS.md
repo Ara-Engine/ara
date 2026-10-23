@@ -25,9 +25,10 @@ Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 ## Contracts
 Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
 Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
-history. Light edits reset lighting history and reduce probe hysteresis.
+history. Light edits retain geometric history, use responsive radiance weights,
+and update more probes with 16 rays each inside the same per-frame ray budget.
 Direct radiance has separate temporal history; incident radiance uses a wavelet
-filter with fresh-history variance bootstrapping. Checkerboard transport must
+filter without luminance rejection on rough surfaces. Checkerboard transport must
 repair invalid history before temporal resolve. Reference targets stay RGBA32F.
 Exposure is applied once after reconstruction. Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
@@ -35,6 +36,8 @@ Every bindless input is declared to the graph, including masked textures.
 Feature inputs remain owned by the view; consume them at a completed boundary.
 External HDR post input returns Graphics/ShaderRead; output remains CopySource.
 Frames currently serialize because the merged GPU API serializes diagnostics.
+After changing the sheen BRDF, run ara-pathtrace's `bake_sheen` example before
+cooking; its 16 KiB directional-albedo asset participates in the shader cohort.
 Release resources using `destroy` before dropping the external device.
 See README for unsupported backend contracts and measured gates; do not claim
 unmeasured refit, NRD, FSR2, DLSS, or async overlap.

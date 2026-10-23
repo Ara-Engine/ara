@@ -27,8 +27,11 @@ pub(crate) struct GpuFrame {
     pub(crate) control: [u32; 4],
     pub(crate) transport: [u32; 4],
     pub(crate) jitter: [f32; 4],
-    pub(crate) read: [[u32; 4]; 6],
-    write: [[u32; 4]; 6],
+    texture: [f32; 4],
+    atmosphere: [f32; 4],
+    weather: [f32; 4],
+    pub(crate) read: [[u32; 4]; 7],
+    write: [[u32; 4]; 7],
 }
 impl FidelityView {
     pub(crate) fn frame(&self, input: &FrameInput<'_>) -> Result<(GpuFrame, Mat4, Vec3)> {
@@ -54,6 +57,7 @@ impl FidelityView {
         let vp = projection * camera.view;
         let unjittered = camera.projection * camera.view;
         let reset = input.reset || !self.history;
+        let responsive = !reset && (input.lighting_changed || self.responsive_frames > 0);
         let p = s.post;
         let exposure = p
             .ev100
@@ -118,20 +122,15 @@ impl FidelityView {
             probes: [
                 self.probe_indices[1 - self.probe_slot],
                 self.probe_indices[self.probe_slot],
-                (s.probe_ray_budget / 64).min(self.volume.len() as u32),
+                (s.probe_ray_budget / if responsive { 16 } else { 64 })
+                    .min(self.volume.len() as u32),
                 self.probe_start,
             ],
             sun_direction: self.scene.sun_direction.extend(0.00465).to_array(),
-            sun_lux: self
-                .scene
-                .sun_lux
-                .extend(f32::from(
-                    input.lighting_changed || self.responsive_frames > 0,
-                ))
-                .to_array(),
+            sun_lux: self.scene.sun_lux.extend(f32::from(responsive)).to_array(),
             temporal: [
                 f32::from(reset),
-                f32::from(input.lighting_changed),
+                f32::from(input.lighting_changed || self.responsive_frames > 0),
                 input.delta_seconds,
                 s.reflection_cutoff,
             ],
@@ -142,7 +141,12 @@ impl FidelityView {
                 p.auto_exposure.low_percentile,
                 p.auto_exposure.high_percentile,
             ],
-            display: [p.tone_mapper as u32, 0, 0, 0],
+            display: [
+                p.tone_mapper as u32,
+                0,
+                self.sheen_index,
+                u32::from(self.atmosphere.is_some()),
+            ],
             lens: [
                 p.focus_distance,
                 p.aperture,
@@ -182,6 +186,18 @@ impl FidelityView {
                 self.previous_jitter.x,
                 self.previous_jitter.y,
             ],
+            texture: [
+                2. / (camera.projection.y_axis.y * s.render_size[1] as f32),
+                self.texture_bias + (s.render_size[1] as f32 / s.display_size[1] as f32).log2(),
+                0.,
+                0.,
+            ],
+            atmosphere: self.atmosphere.map_or([0.; 4], |a| {
+                [a.sea_level, a.fog_extinction, a.fog_height, a.fog_albedo]
+            }),
+            weather: self
+                .atmosphere
+                .map_or([0.; 4], |a| [a.cloud_coverage, a.cloud_height, 0., 0.]),
             read: self.targets.sampled.as_chunks::<4>().0.try_into()?,
             write: self.targets.storage.as_chunks::<4>().0.try_into()?,
         };

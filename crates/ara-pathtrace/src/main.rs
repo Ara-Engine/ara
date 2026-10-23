@@ -4,8 +4,11 @@ use ara_pathtrace::{Reference, scenes};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::Path;
 mod content;
+mod corridor;
 mod lag;
 mod large;
+mod lighting_sequence;
+mod material_import;
 mod quality;
 mod robust;
 mod verification;
@@ -22,6 +25,8 @@ fn main() -> Result<()> {
         "content" => content::run(&mut gpu, root)?,
         "sponza-reference" => large::reference(&mut gpu, root)?,
         "sponza-quality" => large::quality(&mut gpu, root)?,
+        "corridor" => corridor::run(&mut gpu, root)?,
+        "lighting-sequence" => lighting_sequence::run(&mut gpu, root)?,
         "robust-quality" => robust::quality(&mut gpu, root)?,
         "robust-timings" => robust::timings(&mut gpu, root)?,
         "capture" => verification::captures(&mut gpu, root)?,

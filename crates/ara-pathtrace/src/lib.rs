@@ -4,6 +4,7 @@
 pub mod metrics;
 pub mod robust_scenes;
 pub mod scenes;
+mod vegetation;
 use anyhow::Result;
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::scene::{CameraSpec, Scene};
@@ -16,6 +17,13 @@ pub struct Reference {
     target: u32,
 }
 impl Reference {
+    /// Use the physical sky as transport illumination for an outdoor reference.
+    pub fn set_atmosphere(
+        &mut self,
+        atmosphere: Option<ara_render_fidelity::atmosphere::Atmosphere>,
+    ) -> Result<()> {
+        self.view.set_atmosphere(atmosphere)
+    }
     /// Use the exact scene/material/light extraction used by the hybrid view.
     pub fn new(
         gpu: &mut VulkanDevice,
@@ -76,6 +84,10 @@ impl Reference {
     /// Address-independent fingerprint of the shared scene/material/light extraction.
     pub fn scene_hash(&self) -> &str {
         self.view.scene_hash()
+    }
+    /// Cooked transport cohort associated with this accumulation.
+    pub fn shader_revision(&self) -> &str {
+        self.view.shader_revision()
     }
     /// Release resources before the device owner is dropped.
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {

@@ -2,30 +2,30 @@
   {
     "hybrid_settle_frames": 96,
     "reference_bounces": 12,
-    "reference_convergence": 0.014554045699550473,
+    "reference_convergence": 0.014660227462601797,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.06469097546968758,
+    "relative_rmse": 0.061135014232536866,
     "scene": "glossy_interior",
     "target": 0.08
   },
   {
     "hybrid_settle_frames": 96,
     "reference_bounces": 12,
-    "reference_convergence": 0.014855823508312391,
+    "reference_convergence": 0.015007217905446239,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.09037120733291323,
+    "relative_rmse": 0.08452149446566941,
     "scene": "thin_wall",
     "target": 0.1
   },
   {
     "hybrid_settle_frames": 96,
     "reference_bounces": 12,
-    "reference_convergence": 0.0011963823384919731,
+    "reference_convergence": 0.0011915613802795366,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.006219853336454331,
+    "relative_rmse": 0.0062151714067041905,
     "scene": "furnace",
     "target": 0.025
   }

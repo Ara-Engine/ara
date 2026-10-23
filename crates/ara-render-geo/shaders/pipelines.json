@@ -1,0 +1,299 @@
+{
+  "arguments": {
+    "entries": {
+      "argumentMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "hardware": {
+    "entries": {
+      "hardwareFragment": "fragment",
+      "hardwareVertex": "vertex"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "hzb": {
+    "entries": {
+      "hzbMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "instances": {
+    "entries": {
+      "instanceMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "mesh": {
+    "entries": {
+      "meshFragment": "fragment",
+      "meshMain": "mesh"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "reset": {
+    "entries": {
+      "resetMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "resolve": {
+    "entries": {
+      "resolveMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "select": {
+    "entries": {
+      "selectMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_allocate": {
+    "entries": {
+      "shadowAllocate": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_arguments": {
+    "entries": {
+      "shadowArguments": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_clear": {
+    "entries": {
+      "shadowClear": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_finalize": {
+    "entries": {
+      "shadowFinalize": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_mark": {
+    "entries": {
+      "shadowMark": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_raster": {
+    "entries": {
+      "shadowFragment": "fragment",
+      "shadowVertex": "vertex"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_reference": {
+    "entries": {
+      "shadowReference": "compute"
+    },
+    "source": "shadow_reference.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_reset": {
+    "entries": {
+      "shadowReset": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_resolve": {
+    "entries": {
+      "shadowResolve": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_select": {
+    "entries": {
+      "shadowSelect": "compute"
+    },
+    "source": "shadows.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "software": {
+    "entries": {
+      "softwareMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "stream_upload": {
+    "entries": {
+      "streamUpload": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "upscale": {
+    "entries": {
+      "upscaleMain": "compute"
+    },
+    "source": "upscale.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  }
+}

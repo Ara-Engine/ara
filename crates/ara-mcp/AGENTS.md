@@ -1,6 +1,6 @@
 # ara-mcp
 
-The MCP adapter: twelve tools generated from the Engine Protocol catalog, served
+The MCP adapter: thirteen tools generated from the Engine Protocol catalog, served
 over stdio (`ara mcp`) and Streamable HTTP (`POST /mcp` on the daemon). It holds no
 engine state; every call goes to an `ara_proto::Endpoint`.
 Depends on ara-proto, ara-diag.
@@ -21,7 +21,14 @@ Depends on ara-proto, ara-diag.
 ## Tools (fixed order)
 
 `ara_query`, `ara_inspect`, `ara_schema`, `ara_apply`, `ara_run`, `ara_capture`,
-`ara_play`, `ara_test`, `ara_logs`, `ara_session`, `ara_docs`, `ara_jobs`.
+`ara_play`, `ara_test`, `ara_logs`, `ara_why`, `ara_session`, `ara_docs`, `ara_jobs`.
+
+- `ara_logs` returns the bus grouped by code within a character `budget`;
+  `ara_why` (the `why` method) returns ranked causes with runnable fixes. The
+  server instructions tell agents to ask `ara_why` first when something is wrong.
+- Claude Code gives the model `structuredContent`, not `content`: a result's JSON
+  is what agents pay for, so methods meant for agents keep it small (`why`, `logs`
+  answer with their text unless asked for more).
 
 - A tool's methods are the catalog entries whose `tool` binding names it.
   One method without `action`: the tool's input schema *is* its params schema.

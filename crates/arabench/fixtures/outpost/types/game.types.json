@@ -1,6 +1,15 @@
 {
   "$schema": "ara://schema/types/1",
   "types": {
+    "Camera": {
+      "kind": "component",
+      "doc": "A game camera. It draws the render layers in its culling mask, out to its far plane.",
+      "module": "render",
+      "fields": {
+        "cullingMask": { "type": "list<string>", "doc": "Render layers this camera draws.", "default": ["default"] },
+        "far": { "type": "f32", "doc": "Far plane: nothing farther away is drawn.", "unit": "m", "default": 1000, "range": [0, null] }
+      }
+    },
     "Collider": {
       "kind": "component",
       "doc": "A collision shape for physics and triggers, centered on the entity.",
@@ -58,6 +67,8 @@
       "module": "render",
       "fields": {
         "mesh": { "type": "asset", "doc": "Mesh to draw." },
+        "material": { "type": "asset", "doc": "Material to draw the mesh with; unset uses the default material." },
+        "layer": { "type": "string", "doc": "Render layer; cameras draw only the layers in their culling mask.", "default": "default" },
         "tint": { "type": "color", "doc": "Linear tint multiplied with the material." }
       }
     },

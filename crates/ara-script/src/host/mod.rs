@@ -387,6 +387,14 @@ impl ScriptHost {
         if let Ok(mut r) = self.ctx.reloads.lock() {
             out.reports = std::mem::take(&mut *r);
         }
+        for report in &out.reports {
+            let module = self
+                .registry
+                .modules
+                .get(&report.module)
+                .map_or("?", |m| m.name.as_str());
+            report.emit(module);
+        }
         out
     }
 

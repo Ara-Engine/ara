@@ -12,7 +12,7 @@ Gameplay state lives in components; everything here is canonical text (A3).
   silhouette: boundary edges only, counter-clockwise).
 - `commands::register`: `tilemap.paint|erase|fill|rule.apply` (strokes, optional
   `autotile`), and validated setters `sprite.set`, `camera2d.set`, `light2d.set`,
-  `flipbook.set`, `tilemap.set`. Diagnostics use ARA3601.
+  `flipbook.set`, `tilemap.set`. Diagnostics use ARA3620.
 - `canonical`, `canonical_json`, `to_value` (f32 written by shortest decimal).
 
 ## Tile model

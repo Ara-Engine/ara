@@ -227,7 +227,10 @@ impl HotReload {
                                 final_pass: terminal,
                             });
                         }
-                        Err(error) => events.push(ReloadEvent::Failed { asset, error }),
+                        Err(error) => {
+                            error.diagnostic(&asset).emit();
+                            events.push(ReloadEvent::Failed { asset, error })
+                        }
                     }
                 }
                 Background::Complete(_, _, _, Ok((cached, _))) => {

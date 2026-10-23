@@ -41,6 +41,7 @@ impl Renderer {
             )) * projection;
         }
         let vp = projection * camera.view;
+        let light_count = self.content.lights.len() as u32;
         let splits = [8., 18., 40., 100.];
         let previous = if self.targets.history.is_some() {
             self.previous_vp
@@ -51,18 +52,13 @@ impl Renderer {
             vp,
             previous_vp: previous,
             inverse_vp: vp.inverse(),
-            shadows: shadow_cascades(camera, self.sun_direction, splits),
+            shadows: shadow_cascades(camera, self.content.sun_direction, splits),
             camera: camera.position.extend(0.1).to_array(),
             forward: camera.forward.extend(0.).to_array(),
-            sun_direction: self.sun_direction.extend(0.).to_array(),
-            sun_color_exposure: self.sun_lux.extend(exposure).to_array(),
+            sun_direction: self.content.sun_direction.extend(0.).to_array(),
+            sun_color_exposure: self.content.sun_lux.extend(exposure).to_array(),
             splits,
-            extent: [
-                self.size[0],
-                self.size[1],
-                self.light_count,
-                self.frame_number,
-            ],
+            extent: [self.size[0], self.size[1], light_count, self.frame_number],
             gbuffer: [
                 self.targets.sampled[ALBEDO],
                 self.targets.sampled[NORMAL],
@@ -73,13 +69,13 @@ impl Renderer {
                 self.targets.sampled[DEPTH],
                 self.targets.sampled[ID],
                 self.targets.sampled[SHADOW],
-                self.environment,
+                self.content.environment,
             ],
             lighting: [
-                self.irradiance,
-                self.prefilter,
+                self.content.irradiance,
+                self.content.prefilter,
                 self.targets.tile_index,
-                self.light_index,
+                self.content.light_index,
             ],
             post: [
                 self.targets.sampled[HDR],
@@ -91,7 +87,7 @@ impl Renderer {
                 u32::from(self.targets.history.is_some()),
                 u32::from(deterministic),
                 mode as u32,
-                self.material_index,
+                self.content.material_index,
             ],
         }
     }

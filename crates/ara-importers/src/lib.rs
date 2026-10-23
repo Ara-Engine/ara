@@ -21,6 +21,7 @@ pub fn registry() -> Result<ImporterRegistry> {
     registry.register(GltfImporter)?;
     registry.register(FbxImporter)?;
     registry.register(TextureImporter)?;
+    registry.register(ara_geo::GeoImporter)?;
     Ok(registry)
 }
 

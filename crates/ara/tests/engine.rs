@@ -356,7 +356,7 @@ fn an_mcp_agent_edits_through_the_daemon_and_reverts_its_turn() {
 
     let mut mcp = Mcp::start(&root);
     let tools = mcp.request("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().map(Vec::len), Some(12));
+    assert_eq!(tools["result"]["tools"].as_array().map(Vec::len), Some(13));
 
     let begun = mcp.tool(
         "ara_session",
@@ -479,7 +479,7 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
     assert_eq!(status, 200, "{body}");
     assert_eq!(
         json_of(&body)["result"]["tools"].as_array().map(Vec::len),
-        Some(12)
+        Some(13)
     );
     let (status, _) = mcp_http(port, "wrong-token", "", &list);
     assert_eq!(status, 401);

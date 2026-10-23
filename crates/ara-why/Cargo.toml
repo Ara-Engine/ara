@@ -1,0 +1,16 @@
+[package]
+name = "ara-why"
+description = "`ara why`: causal explanations from documents and the diagnostics bus, through pluggable per-subsystem explainers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-material = { path = "../ara-material" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

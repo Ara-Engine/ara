@@ -46,6 +46,19 @@ pub enum Error {
     Transaction(Vec<ara_diag::Diagnostic>),
 }
 
+impl Error {
+    /// The error as a bus diagnostic (`ARA2201`; transaction errors keep their own).
+    pub fn diagnostics(&self) -> Vec<ara_diag::Diagnostic> {
+        match self {
+            Error::Transaction(diags) => diags.clone(),
+            other => vec![ara_diag::Diagnostic::error(
+                ara_diag::codes::WORLD_INVALID,
+                other.to_string(),
+            )],
+        }
+    }
+}
+
 /// World subsystem result.
 pub type Result<T> = std::result::Result<T, Error>;
 

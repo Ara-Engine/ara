@@ -66,6 +66,13 @@ pub enum Command {
         /// Four-byte-aligned byte offset of one 16-byte draw record.
         offset: u64,
     },
+    /// GPU-generated mesh workgroups, requiring the optional mesh-shader tier.
+    DrawMeshTasksIndirect {
+        /// Buffer with INDIRECT_BUFFER usage and three U32 group counts.
+        arguments: Buffer,
+        /// Four-byte-aligned offset of the 12-byte argument record.
+        offset: u64,
+    },
     /// Fullscreen triangle without vertex input.
     Fullscreen,
     /// Procedural instanced draw using SV_VertexID/SV_InstanceID, without vertex input.

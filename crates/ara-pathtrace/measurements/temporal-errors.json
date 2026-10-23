@@ -2,27 +2,27 @@
   {
     "capture_stride": 4,
     "frames": 12,
-    "maximum_residual": 0.0,
-    "mean_residual": 0.0,
-    "reset_residual": 0.0011208746873235182,
+    "maximum_residual": 0.01666117427362901,
+    "mean_residual": 0.014274203145308818,
+    "reset_residual": 0.001346647300895653,
     "scene": "moving_emissive",
     "simulation_frames": 48
   },
   {
     "capture_stride": 4,
     "frames": 12,
-    "maximum_residual": 0.0,
-    "mean_residual": 0.0,
-    "reset_residual": 0.0011754619543291162,
+    "maximum_residual": 0.016458367660788564,
+    "mean_residual": 0.014527837278700953,
+    "reset_residual": 0.001887557492132248,
     "scene": "time_of_day",
     "simulation_frames": 48
   },
   {
     "capture_stride": 4,
     "frames": 12,
-    "maximum_residual": 0.024485362772556057,
-    "mean_residual": 0.02019293174786015,
-    "reset_residual": 0.0008378520132333497,
+    "maximum_residual": 0.024167078596140555,
+    "mean_residual": 0.019692609069769444,
+    "reset_residual": 0.0008563301863955973,
     "scene": "disocclusion",
     "simulation_frames": 48
   }

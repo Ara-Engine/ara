@@ -64,6 +64,13 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
   `from_bytes` use CBOR and preserve finite IEEE float bits, including signed zero.
   Runtime fields and source mirrors retain explicit defaults, so queued op `prev`
   preconditions survive restore. Scene identity still uses the canonical doc writer.
+- `StateProvider` + `Session::add_provider`: subsystem-owned state (native physics,
+  nav agents, animators). Owned types are exempt from the registered-state check;
+  `capture` → `Snapshot` (+ state hash), `restore` rebuilds after registered state.
+  `Session::checkpoint`/`PlayControl::checkpoint` add exact in-process `TrustedState`
+  (never serialized); `record` uses it. `add_parallel_systems`: one ordering slot,
+  conflicting access rejected before the schedule changes (multi-threaded executor).
+  `EditWorld::workspace()` exposes the mirrored documents for live-patch ops.
 - `Replay`: scene/dependency hash + seed + build/schema hash + initial snapshot +
   applied input/command/op log. Verification checks every tick hash. The build hash
   supplied by the host must cover native/gameplay modules. No hashes or history
@@ -119,6 +126,7 @@ This crate is the engine library side of play control. A6's child-process player
 pool/shared-memory transport, protocol authorization and ara_play/ara_test handlers
 belong to the process/protocol integration. No networking stack is linked here;
 Listen/Dedicated need the optional M2 adapter. Physics/C# modules must register
-their complete state/codecs before relying on these snapshots. Binary checkpoint
+their complete state/codecs (or a `StateProvider`) before relying on snapshots;
+persistence (`persistent_state`) does not include provider state yet. Binary checkpoint
 shared-memory/process transport, columnar cooking and incremental prefab dependency
 invalidation are follow-on work.

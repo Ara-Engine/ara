@@ -563,7 +563,7 @@ expression: pretty
   {
     "name": "ara_logs",
     "title": "Read diagnostics",
-    "description": "Diagnostics from every subsystem (stable ARA#### codes, locations, machine-applicable fixes), de-duplicated with counts. Pass the returned `cursor` as `since` to see only what is new; filter by `codes`, `severity` or `entity`.",
+    "description": "Diagnostics from every subsystem (stable ARA codes, locations, machine-applicable fixes), grouped by code with counts, the subjects involved and the best fix, within a `budget` of characters. Pass the returned `cursor` as `since` to see only what is new; filter by `codes`, `severity`, `subjects` (`entity:e_8b21`, `asset:@meshes/crate.glb`) or `origin`; `group: false` lists entries one by one. To understand one, use ara_why.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -572,11 +572,11 @@ expression: pretty
           "description": "Session handle from `session.begin`."
         },
         "since": {
-          "description": "Only entries newer than this cursor (`cursor` of a previous call).",
+          "description": "Only entries new or repeated after this cursor (`cursor` of a previous call).",
           "type": "integer"
         },
         "codes": {
-          "description": "Only these codes (`ARA1101`).",
+          "description": "Only these codes (`ARA1302`, `ARA-EXP-AND-007`).",
           "type": "array",
           "items": {
             "type": "string"
@@ -590,8 +590,33 @@ expression: pretty
           "description": "Only entries about this entity (record ID or address prefix).",
           "type": "string"
         },
+        "subjects": {
+          "description": "Only entries about these subjects (`entity:e_8b21`, `asset:@meshes/crate.glb`, `system:physics.step`, `pass:gbuffer`, `module:Gameplay`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "origin": {
+          "description": "Only entries caused by `engine`, `human`, `agent` or `agent:<name>`.",
+          "type": "string"
+        },
+        "text": {
+          "description": "Only entries whose message contains this text.",
+          "type": "string"
+        },
+        "group": {
+          "description": "Group entries by code with counts, subjects and the best fix (default true); `false` lists them one by one.",
+          "type": "boolean"
+        },
+        "budget": {
+          "description": "Approximate size of the text answer in characters (default 2000).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
         "limit": {
-          "description": "Maximum entries (default 50).",
+          "description": "Also return up to this many entries (newest kept) as JSON `entries`, with the grouped `summary`. Without it the answer is the text: what agents need.",
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295
@@ -624,6 +649,47 @@ expression: pretty
     },
     "annotations": {
       "title": "Read diagnostics",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_why",
+    "title": "Explain a problem",
+    "description": "Explain why something is wrong, in one call: an entity and its symptom (`name:Crate not visible`), a diagnostic code (`ARA1302`), an asset (`@materials/crate.material`) or a topic (`did reload fall back to L3`, `is the frame slow`). Returns a short ranked list of likely causes, each with its evidence and runnable fixes (commands to pass to ara_apply as is), plus what was checked and ruled out. Use it before inspecting by hand. `list: true` shows what it can explain.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "question": {
+          "description": "What to explain: an entity and symptom (`name:Crate not visible`), a code (`ARA1302`), an asset (`@meshes/crate.glb`) or a topic (`did reload fall back to L3`, `is the frame slow`).",
+          "type": "string"
+        },
+        "doc": {
+          "description": "Document for entity selectors (default: the one holding the entity, else the main scene).",
+          "type": "string"
+        },
+        "list": {
+          "description": "List the explainers and example questions instead of answering.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return the whole report as JSON (causes with evidence, checks, related). Default: the text plus the runnable fixes, which is what agents need and costs about half the tokens.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Explain a problem",
       "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,

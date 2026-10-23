@@ -64,7 +64,7 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
         source_hash.update(file.strip_prefix(source_root)?.to_string_lossy().as_bytes());
         source_hash.update(std::fs::read(file)?);
     }
-    source_hash.update(b"ara-cook-2|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex|vulkan1.3-validation");
+    source_hash.update(b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation");
     source_hash.update(std::fs::read(&tools.slangc)?);
     if let Some(bin) = tools.slangc.parent() {
         for name in ["slang.dll", "slang-glslang.dll", "dxcompiler.dll"] {
@@ -125,7 +125,7 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
                 ]);
                 if target == "spirv" {
                     cmd.args(["-D", "VULKAN=1"]);
-                    if stage == Stage::Vertex {
+                    if matches!(stage, Stage::Vertex | Stage::Mesh) {
                         cmd.arg("-fvk-invert-y");
                     }
                 }

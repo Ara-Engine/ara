@@ -1,0 +1,211 @@
+{
+  "label": "why-without-r3",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T06:55:41Z",
+  "engine": "9705198+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 14,
+      "toolCalls": {
+        "ara_docs": 1,
+        "ara_inspect": 2,
+        "ara_logs": 2,
+        "ara_query": 1,
+        "ara_schema": 1,
+        "shell": 7
+      },
+      "wallMs": 33815,
+      "tokens": {
+        "input": 48369,
+        "cacheRead": 395904,
+        "cacheWrite": 0,
+        "output": 1715
+      },
+      "codes": {
+        "ARA1101": 1,
+        "ARA1106": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The radio’s material referenced `pain`, but the declared color parameter is `paint`. That undefined shader input caused the radio’s material to fail. I corrected the expression in [radio.material](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-bad-material-46380-156a911c-4/proj/materials/radio.material).\n\n`ara check` reports 0 errors and 0 warnings. The radio’s scene reference was already intact."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "shell": 9
+      },
+      "wallMs": 21224,
+      "tokens": {
+        "input": 8206,
+        "cacheRead": 130432,
+        "cacheWrite": 0,
+        "output": 1137
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because its mesh reference still pointed to the old asset path and ID. The re-export is registered as `@meshes/generator_v2.glb#ms_genr0002`.\n\nI updated the reference on `Generator`. `ara check` now reports zero errors or warnings. The change is transaction `tx_q424w3pb` and remains unreviewed until a human accepts or reverts it."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"props\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 13880,
+      "tokens": {
+        "input": 11094,
+        "cacheRead": 94976,
+        "cacheWrite": 0,
+        "output": 540
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed the workbench’s render layer in [outpost.scene](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-culling-mask-46380-1a954ab0-6/proj/levels/outpost.scene): it was set to `editor`, which the camera doesn’t render. It’s now on `props`, a layer already included in the camera’s culling mask. The camera is unchanged, and `ara check` reports no errors or warnings."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 12,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_docs": 1,
+        "shell": 10
+      },
+      "wallMs": 32016,
+      "tokens": {
+        "input": 27736,
+        "cacheRead": 253696,
+        "cacheWrite": 0,
+        "output": 1715
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "**Fixed:** `Barrel.002` was the only barrel with a dynamic rigid body set to zero mass, which can make physics calculations invalid. I changed its mass to 30 kg, matching the other barrels.\n\n`ara check` passes with no errors or warnings. I couldn’t replay the reported disappearance because the play controller is unavailable in this engine build. The change is applied and awaiting human review."
+    }
+  ]
+}

@@ -26,7 +26,8 @@ SDR output remains CopySource. This seam does not advance scene transport.
 IDs and unchanged BLASes. Position-only deformations retain old positions for
 motion; geometry topology/material changes require a history reset. Lighting
 changes must set `FrameInput::lighting_changed`. A lighting edit accelerates probe
-updates for two complete budgeted sweeps, independently of the denoiser reset.
+coverage for eight frames, using 16-ray irradiance-only updates within the same
+primary-ray budget. Geometry visibility/classification stays valid during the response.
 Failed input validation preserves the last good extraction. Upload/build APIs
 currently wait for completion; hosts should prepare replacements outside their
 interactive frame loop and apply them at a frame boundary (D20).
@@ -49,7 +50,7 @@ interactive frame loop and apply them at a frame boundary (D20).
   masked/blended instances use candidate evaluation with closest-hit clipping.
   Shadow queries terminate on the first accepted blocker. Geometric ray origins
   prevent shading-normal offsets from starting rays inside tessellated surfaces.
-* Two-surface cosine final gathering resolves diffuse local occlusion; GGX visible
+* Bounded, importance-sampled GGX/diffuse final gathering resolves diffuse local occlusion; GGX visible
   normals resolve selective specular with bounded grazing-angle weights. The last
   event uses the probe field. Traced specular fades into directional probe lighting
   over 0.1 roughness below the cutoff, rather than an unoccluded sky fallback.
@@ -61,8 +62,8 @@ interactive frame loop and apply them at a frame boundary (D20).
 * Direct radiance has separate temporal history and never enters the incident
   radiance spatial blur. SVGF-style reconstruction validates ID/depth/normal/
   roughness/direct-light changes, validates bilinear history footprints, caps
-  moving-surface history, rejects 12-sigma incident outliers and bootstraps fresh
-  variance. Three shared-memory 3x3 wavelet iterations use plane distance and
+  moving-surface history and accumulates incident moments. Rare bright bounce
+  samples retain their energy; rough irradiance does not use luminance rejection. Three shared-memory 3x3 wavelet iterations use plane distance and
   roughness-aware normal weights. This preserves direct highlights, silhouettes
   and slanted surfaces. No NRD implementation code is copied.
 * Hybrid radiance/normal/post intermediates use RGBA16F where possible; world
@@ -79,12 +80,12 @@ interactive frame loop and apply them at a frame boundary (D20).
   Fractional low/high percentile trims and EV100 limits are typed settings;
   compensation is in stops, adaptation in inverse seconds. No wall clock or CPU
   readback drives adaptation. `capture_exposure` is an explicit diagnostic only.
-* Energy-redistributing separable bloom; homogeneous single-scattering aerial
-  perspective with Rayleigh/Mie sky phase approximations; depth-aware DOF and
+* Energy-redistributing separable bloom; optional physical sky/aerial perspective and shadowed
+  height fog through a frustum volume; depth-aware DOF and
   shutter motion blur behind the Cinematic quality gate.
 * SDR selects Khronos PBR Neutral or the documented ACES fitted curve, then a trilinear
   16^3 grading LUT and piecewise sRGB transfer. ACES remains the compatibility default;
-  it is not the full ACES color pipeline, planetary atmosphere or HDR output.
+  it is not the full ACES color pipeline or HDR output.
 * Reference mode uses the same hit/material/light functions, mixed GGX/diffuse
   importance sampling and Russian roulette, in batches of eight samples. It has
   no probes, denoising, variance clipping or temporal reconstruction. Accumulation
@@ -130,8 +131,8 @@ This is a verified rendering foundation, not completion of the full M3 brief.
    This code uses the graph's existing serialized diagnostic execution; timestamps
    sum GPU pass durations, not CPU wall time or overlapped frame time.
 
-The v1 heap has 64 storage-image slots: this view consumes 24. Resize temporarily
-needs another 24; multiple editor views must account for that capacity. Textures
+The v1 heap has 64 storage-image slots: this view consumes 28. Resize temporarily
+needs another 28; multiple editor views must account for that capacity. Textures
 and the environment require a replacement view, while geometry/lights/material
 parameters update in place. Call `destroy` before dropping a borrowed device.
 
@@ -188,14 +189,105 @@ this distribution and its register pressure from non-emissive scenes. Highly glo
 small-emitter paths would benefit from BSDF/light MIS; this is not ReSTIR.
 
 The terrain fixture uses ara-landscape's actual sample tile and ara-terrain's
-hole-aware heightfield mesh, with a static BLAS snapshot and original alpha cards.
+hole-aware heightfield mesh, with logarithmic distant terrain, branch geometry
+and individually alpha-tested leaves with bounded two-sided transmission.
 Production integration still needs tiled streaming/dirty-region BLAS updates,
 material-layer/normal-map translation and foliage instance/wind previous positions.
 The DLSS/Streamline seam and baked Raster/Mobile contracts are unchanged.
 
 The terminal probe approximation accounts for both diffuse and specular energy;
-conductors no longer become zero-energy terminals. It uses one directional lookup
-(a diffuse/reflective direction blend by metalness and roughness), multiplied by
-an energy-bounded diffuse plus Fresnel factor. It is a high-order filtered terminal,
+conductors no longer become zero-energy terminals. It shares geometric visibility
+and interpolation weights across diffuse and reflected directional irradiance
+lookups, then applies the BRDF energy factors. It is a high-order filtered terminal,
 not an exact directional radiance cache or a GGX convolution. XOR-folded frame digits
 decorrelate the compact ray phases from Halton's horizontal subpixel strata.
+
+## Lumen parity round 2
+
+The corridor failure had two distinct causes. Temporal outlier clipping discarded
+rare, important bounce paths. Remodulating averaged incident light with only the
+current jittered albedo also broke pixel-area integration. The material factor now
+accumulates alongside lighting (RGB10 packed into MOMENTS.z); variance comes from
+its two moments. Luminance rejection ends by roughness 0.3, avoiding a second energy
+loss as fresh history matures. Plane, normal, ID and roughness guides still protect
+edges. Sharp reflections retain variance-based luminance weights.
+
+`MaterialDetail::apply` tags extracted materials without changing the shared
+80-byte material ABI. It carries coat, Charlie sheen, thin-sheet transmission,
+authored ORM occlusion and a dielectric specular multiplier. Normal maps use UV
+frames; the benchmark converts authored bump heights and derives tangent handedness.
+MTL map_Ks affects specular intensity, never roughness. Optional layers use prewarmed
+shader variants, so unused coat, sheen and atmosphere code does not burden Sponza.
+Sheen base attenuation uses a baked 32x32 directional-albedo quadrature, reproducible
+with `cargo run -p ara-pathtrace --example bake_sheen`. GGX samples below the
+reflecting hemisphere are null events, including on transmitting leaves.
+
+Material mip pyramids are packed into a single portable image because the current
+GPU API exposes single-level allocations. Bilinear taps wrap inside each level;
+interior taps use hardware filtering. Colour mips average linear light. Ray-cone
+footprints select trilinear LOD, with log2(render/display) plus the typed view bias.
+Normal variance broadens roughness to limit shimmer. Native stationary TAA reuses
+already integrated pixel coverage without a redundant neighborhood reprojection.
+Previous vertices are fetched only for primary motion vectors, not secondary rays.
+
+`set_atmosphere(Some(Atmosphere { .. }))` enables Earth-scale Rayleigh/Mie/ozone
+transport: 256x64 transmittance, 32x32 isotropic multiple-scattering transfer,
+192x108 sky-view and 64x36x32 logarithmic frustum columns. The volume stores RGB
+in-scattering and transmittance in separate atlas regions. It integrates height
+fog, sun/local-light visibility and spot cones deterministically. Cumulative slice
+ends interpolate from identity at the camera; an independent Beer-Lambert GPU test
+checks this convention. The sky lights all transport, including probe rays and
+reflections. The analytic sun disk has flux-normalized limb darkening. A lit planar
+cloud layer contributes to sky radiance and shadows the sun/fog; volumetric clouds
+are not implemented. Sun lux is top-of-atmosphere illuminance when this model is enabled.
+
+The atmosphere layout follows [Hillaire 2020](https://sebh.github.io/publications/egsr2020.pdf)
+with Ara quadrature/integration code. Layer equations follow the Khronos
+[coat](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat)
+and [sheen](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_sheen)
+models. The pinned OBJ/MTL has no authored coat or sheen parameters; the furnace
+test exercises those layers independently. Production material-AST lowering,
+landscape streaming and foliage wind still need the existing extraction seams.
+Editor viewport output, FSR1/TAAU and the DLSS seam retain their contracts.
+
+## Geometry / shadow integration contract
+
+The public extraction boundary remains `ara_render::scene::Scene` through
+`FidelityView::new` / `update_scene`; `GpuScene::instance_id(entity)` gives its
+stable instance ID. `Material` is still 80 bytes and `Vertex` 48 bytes. Optional
+`MaterialDetail` uses a version tag in reserved material flags. Geometry/VSM work
+must preserve alpha cutoff, two-sided normals, previous deformed positions and
+the extracted light units (lux, lumens, radiance). No root renderer changes are
+required by this round.
+
+The visibility-to-lighting layout below is unchanged. All images have render-size
+dimensions, top-left UVs and right-handed Y-up world coordinates in metres.
+These are internal graph targets, **not** a public writable-image import API;
+an external visibility producer needs an additive graph adapter rather than
+writing view-owned images behind the graph. That adapter must declare every
+sampled/storage access and preserve this schema:
+
+| Signal | Hybrid format | Channels and validity |
+|---|---|---|
+| WORLD, ping-pong | RGBA32F | world position xyz; exact stable instance ID + 1 in w; zero means sky |
+| NORMAL, ping-pong | RGBA16F | camera-facing shading normal xyz; perceptual GGX roughness w |
+| BASE | RGBA32F | triangle barycentrics xy, primitive index z, RGB8 demodulation factor packed as an exact 24-bit integer in w |
+| MOTION | RGBA32F | previous UV minus current UV, excluding jitter, xy; previous radial camera distance z; reactive mask w |
+| DEPTH | RGBA32F | positive current view depth x; zero means sky |
+| DIRECT | RGBA16F | unexposed linear direct + primary emission rgb; surface-valid flag w |
+| RAW | RGBA16F | demodulated indirect rgb; sample-valid flag w (quarter-rate phases leave holes) |
+
+IDs/primitive indices must remain exactly representable as f32 integers. Barycentrics
+refer to the same extracted triangles used by secondary hardware rays. A virtual
+geometry producer therefore needs a correspondence to that ray scene. VSM visibility
+may replace direct-light shadow evaluation; it must not multiply indirect lighting
+by a second ambient-occlusion term. Normal/ORM sampling, layer energy and specular
+occlusion remain shared with the reference material evaluator.
+
+Camera matrices are unjittered for motion; the current inverse projection includes
+jitter. History rejection adds the separately supplied jitter delta. `update_scene`
+retains previous geometry for one frame; signal lighting edits with
+`FrameInput::lighting_changed`, and cuts/reassignments with `reset`.
+`upscaler_input` still exports scene-linear colour at pre-exposure 1, depth, motion,
+jitter and both sizes. `output()` is the completed offscreen SDR image in CopySource
+state; the editor must import/transition it before sampling, outlining or gizmos.
