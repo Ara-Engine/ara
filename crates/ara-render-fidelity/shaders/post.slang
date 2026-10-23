@@ -1,12 +1,29 @@
 #define RASTER 1
 #include "common.slangh"
 float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
-[shader("compute")][numthreads(1,1,1)]
-void exposureMain(uint3 tid:SV_DispatchThreadID){
-    Frame f=frame();float target=f.post.x;
-    if(target<0){float sum=0;for(uint y=0;y<18;y++)for(uint x=0;x<32;x++){float3 c=sampleImage(f,FILTER0,(float2(x,y)+0.5)/float2(32,18)).rgb;sum+=log2(max(luminance(c),0.0001));}target=clamp(0.18/exp2(sum/576)*(-f.post.x),1e-6,65536);}
+// Fixed 128x72 sampling grid, 256 log-luminance bins over [-12,20] stops.
+// A single workgroup avoids global histogram clears, atomics or readbacks.
+groupshared uint histogram[256];
+[shader("compute")][numthreads(256,1,1)]
+void exposureMain(uint lane:SV_GroupIndex){
+    Frame f=frame();histogram[lane]=0;GroupMemoryBarrierWithGroupSync();
+    if(f.post.x<0){
+        for(uint i=lane;i<9216;i+=256){float3 c=sampleImage(f,FILTER0,(float2(i%128,i/128)+0.5)/float2(128,72)).rgb;
+            float logL=clamp(log2(max(luminance(c),exp2(-12.))),-12.,20.);uint bin=min(uint((logL+12)*8),255);InterlockedAdd(histogram[bin],1);}
+    }
+    GroupMemoryBarrierWithGroupSync();if(lane!=0)return;
+    float target=f.post.x,metered=0,ev=0;
+    if(target<0){float low=f.metering.z*9216,high=f.metering.w*9216,prefix=0,sum=0,mass=0;
+        for(uint bin=0;bin<256;bin++){float count=histogram[bin];float weight=max(0,min(prefix+count,high)-max(prefix,low));sum+=(-12+(bin+0.5)/8)*weight;mass+=weight;prefix+=count;}
+        metered=exp2(sum/max(mass,1));ev=clamp(log2(metered/(0.18*1.2)),f.metering.x,f.metering.y);target=(-f.post.x)/(1.2*exp2(ev));
+    }else ev=log2(1/max(1.2*target,1e-12));
     float old=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);float value=f.temporal.x>0 || f.post.x>0?target:lerp(old,target,1-exp(-f.temporal.z*f.post.y));
-    buffers[NonUniformResourceIndex(f.control.y)].Store<float>(4,old);buffers[NonUniformResourceIndex(f.control.y)].Store<float>(0,value);
+    buffers[NonUniformResourceIndex(f.control.y)].Store<float4>(0,float4(value,old,ev,metered));
+}
+float3 neutral(float3 colour){
+    float minimum=min(colour.x,min(colour.y,colour.z));float offset=minimum<=0.08?minimum-6.25*minimum*minimum:0.04;colour-=offset;
+    float peak=max(colour.x,max(colour.y,colour.z));if(peak<=0.76)return colour;
+    float compressed=1-0.0576/(peak-0.52);float blend=1-1/(1+0.15*(peak-compressed));return lerp(colour*(compressed/peak),float3(compressed),blend);
 }
 [shader("compute")][numthreads(8,8,1)]
 void bloomMain(uint3 tid:SV_DispatchThreadID){
@@ -34,5 +51,5 @@ void postMain(uint3 tid:SV_DispatchThreadID){
     float transmittance=exp(-f.post.w*(depth>0?depth:500));c=c*transmittance+atmosphere*(1-transmittance);
     float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);c=max(c*exposure,0);
     // Narkowicz's ACES fitted curve, matching M1; an SDR fit, not a full ACES transform.
-    c=saturate((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14));c=srgb(grading(f,c));store(f,POST,p,float4(c,1));
+    c=f.display.x==1?neutral(c):saturate((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14));c=srgb(grading(f,c));store(f,POST,p,float4(c,1));
 }

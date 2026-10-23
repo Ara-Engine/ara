@@ -1,0 +1,76 @@
+[
+  {
+    "bounces": 12,
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        23.0,
+        23.67090606689453,
+        27.0
+      ],
+      "target": [
+        -4.0,
+        -6.282798767089844,
+        -5.0
+      ],
+      "vertical_fov": 1.0
+    },
+    "convergence": {
+      "mae": 0.5248539259306197,
+      "relative_rmse": 0.0011119393134005843,
+      "rmse": 1.1178035092836502
+    },
+    "error": {
+      "mae": 7.378795544196058,
+      "relative_rmse": 0.0393915847299944,
+      "rmse": 39.59932985260781
+    },
+    "ev100": 12.0,
+    "samples": 4096,
+    "scene": "outdoor_day",
+    "scene_hash": "78a4090ea2d175b9bfdfbcabd12836b9c0356fbfc1b427470f8fa09b2405abe6",
+    "settle_frames": 256,
+    "size": [
+      480,
+      270
+    ],
+    "tone_mapper": "PBR Neutral"
+  },
+  {
+    "bounces": 12,
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        0.0,
+        1.600000023841858,
+        6.5
+      ],
+      "target": [
+        0.0,
+        1.2000000476837158,
+        -0.4000000059604645
+      ],
+      "vertical_fov": 0.8999999761581421
+    },
+    "convergence": {
+      "mae": 1.0146431141458863,
+      "relative_rmse": 0.014623881305505222,
+      "rmse": 2.3073356146217
+    },
+    "error": {
+      "mae": 1.6318623933715326,
+      "relative_rmse": 0.04910337001501055,
+      "rmse": 7.747461297496283
+    },
+    "ev100": 5.0,
+    "samples": 4096,
+    "scene": "night_interior",
+    "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
+    "settle_frames": 256,
+    "size": [
+      480,
+      270
+    ],
+    "tone_mapper": "PBR Neutral"
+  }
+]

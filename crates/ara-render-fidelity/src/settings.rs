@@ -1,4 +1,5 @@
 //! Physical and temporal contracts shared by every reconstruction backend.
+use crate::colour::{AutoExposure, ToneMapper};
 use anyhow::{Result, ensure};
 use ara_gpu::Image;
 use ara_render::scene::CameraSpec;
@@ -45,12 +46,16 @@ pub enum Quality {
 /// Exposure and display processing. Values are linear until the SDR transfer.
 #[derive(Debug, Clone, Copy)]
 pub struct PostSettings {
-    /// Manual EV100; None enables geometric-mean metering.
+    /// Manual EV100; None enables percentile-trimmed histogram metering.
     pub ev100: Option<f32>,
     /// Exposure compensation in stops.
     pub compensation: f32,
     /// Adaptation rate in inverse seconds.
     pub adaptation: f32,
+    /// Histogram percentile trims and permitted EV100 range for automatic metering.
+    pub auto_exposure: AutoExposure,
+    /// Selectable SDR curve; exposure is applied before this transform.
+    pub tone_mapper: ToneMapper,
     /// Energy fraction redistributed to the bloom kernel, from zero to 0.25.
     pub bloom: f32,
     /// Sea-level homogeneous extinction in inverse metres.
@@ -70,6 +75,8 @@ impl Default for PostSettings {
             ev100: Some(5.),
             compensation: 0.,
             adaptation: 3.,
+            auto_exposure: AutoExposure::default(),
+            tone_mapper: ToneMapper::AcesFit,
             bloom: 0.04,
             fog_density: 0.002,
             focus_distance: 5.,
@@ -135,6 +142,20 @@ impl Settings {
             );
         }
         let p = self.post;
+        let a = p.auto_exposure;
+        ensure!(
+            a.low_percentile.is_finite()
+                && a.high_percentile.is_finite()
+                && a.low_percentile >= 0.
+                && a.high_percentile <= 1.
+                && a.low_percentile < a.high_percentile
+                && a.minimum_ev100.is_finite()
+                && a.maximum_ev100.is_finite()
+                && a.minimum_ev100 >= -24.
+                && a.maximum_ev100 <= 32.
+                && a.minimum_ev100 < a.maximum_ev100,
+            "Invalid exposure histogram or EV100 limits"
+        );
         ensure!(
             p.ev100
                 .is_none_or(|v| v.is_finite() && (-24.0..=32.0).contains(&v)),

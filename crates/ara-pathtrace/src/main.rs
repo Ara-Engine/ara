@@ -5,7 +5,9 @@ use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings
 use std::path::Path;
 mod content;
 mod lag;
+mod large;
 mod quality;
+mod robust;
 mod verification;
 
 fn main() -> Result<()> {
@@ -18,6 +20,10 @@ fn main() -> Result<()> {
         "sequences" => verification::sequences(&mut gpu, root)?,
         "quality" => quality::run(&mut gpu, root)?,
         "content" => content::run(&mut gpu, root)?,
+        "sponza-reference" => large::reference(&mut gpu, root)?,
+        "sponza-quality" => large::quality(&mut gpu, root)?,
+        "robust-quality" => robust::quality(&mut gpu, root)?,
+        "robust-timings" => robust::timings(&mut gpu, root)?,
         "capture" => verification::captures(&mut gpu, root)?,
         "timings" => verification::timings(&mut gpu, root)?,
         "smoke" => {

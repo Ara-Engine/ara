@@ -28,7 +28,7 @@ interactive frame loop and apply them at a frame boundary (D20).
 * Visibility: inline hardware triangle queries, stable external entity -> 24-bit
   scene ID, opaque/masked/stochastic-alpha candidate evaluation. RT hit, shadow,
   probe and reference paths use the same texture/normal/material evaluation.
-* One automatic 10x6x10 half-cell-padded probe volume; 64 Fibonacci paths/update
+* One automatic half-cell-padded probe volume (minimum 10x6x10, target 1.5 m spacing, at most 32,768 probes); 64 Fibonacci paths/update
   with a full sphere rotation, 6x6 octahedral irradiance and 8x8 distance moments.
   Seam-folded bilinear directional lookup removes quantized angular patches.
   Relocation follows the nearest back hit; relocated probes stay unclassified
@@ -37,8 +37,9 @@ interactive frame loop and apply them at a frame boundary (D20).
   leakage and temporal debt. Each budgeted primary path resolves up to five
   surfaces, plus explicit shadow rays; the 16384 budget counts primary paths.
 * Primary visibility also evaluates full-rate direct lighting. Hardware-opaque
-  queries avoid material candidate loads when the entire extraction is opaque;
-  masked/blended extractions retain candidate evaluation. Geometric ray origins
+  queries traverse a separate opaque instance mask even in mixed extractions;
+  masked/blended instances use candidate evaluation with closest-hit clipping.
+  Shadow queries terminate on the first accepted blocker. Geometric ray origins
   prevent shading-normal offsets from starting rays inside tessellated surfaces.
 * Two-surface cosine final gathering resolves diffuse local occlusion; GGX visible
   normals resolve selective specular with bounded grazing-angle weights. The last
@@ -66,12 +67,15 @@ interactive frame loop and apply them at a frame boundary (D20).
   vertex deformation. Reprojection explicitly adds previous minus current jitter.
 * Exposure is `1 / (1.2 * 2^EV100)`, with stop compensation; auto exposure meters
   geometric-mean linear luminance and adapts using simulation delta. The metering
-  grid is fixed 32x18, rather than a percentile histogram.
+  grid is fixed 128x72 with 256 log-luminance bins over [-12,20] stops.
+  Fractional low/high percentile trims and EV100 limits are typed settings;
+  compensation is in stops, adaptation in inverse seconds. No wall clock or CPU
+  readback drives adaptation. `capture_exposure` is an explicit diagnostic only.
 * Energy-redistributing separable bloom; homogeneous single-scattering aerial
   perspective with Rayleigh/Mie sky phase approximations; depth-aware DOF and
   shutter motion blur behind the Cinematic quality gate.
-* SDR uses the documented ACES fitted curve already used by M1, then a trilinear
-  16^3 grading LUT and piecewise sRGB transfer. This preserves M1 display semantics;
+* SDR selects Khronos PBR Neutral or the documented ACES fitted curve, then a trilinear
+  16^3 grading LUT and piecewise sRGB transfer. ACES remains the compatibility default;
   it is not the full ACES color pipeline, planetary atmosphere or HDR output.
 * Reference mode uses the same hit/material/light functions, mixed GGX/diffuse
   importance sampling and Russian roulette, in batches of eight samples. It has
@@ -140,3 +144,50 @@ before/after errors and per-pass GPU table in `../ara-pathtrace/README.md`.
 Algorithms follow [Heitz's visible GGX distribution](https://jcgt.org/published/0007/04/01/)
 and [visibility-aware irradiance fields](https://research.nvidia.com/publication/2019-05_dynamic-diffuse-global-illumination-ray-traced-irradiance-fields).
 The probes and reconstruction are Ara implementations.
+
+## Sponza energy/exposure round
+
+PBR Neutral follows the [Khronos specification](https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral).
+It preserves midtone material colour while smoothly compressing/desaturating bright
+highlights. This is an SDR display transform, not a scene-energy correction.
+Goldens use fixed exposure; the content benchmark exercises histogram auto exposure
+with -1.5 stops compensation. The unchanged physical Sponza lighting rig allows the
+linear-radiance error to distinguish transport errors from display exposure.
+
+Incident radiance is demodulated by a bounded material-colour factor before temporal
+and wavelet filtering, then remodulated after filtering. BASE.w packs that UNORM8 RGB
+factor as an exactly representable 24-bit integer; it no longer stores hit distance.
+Primary visibility/direct lighting remain full rate. `set_transport_stride(4)` rotates
+four compact incident-ray phases; uncovered invalid history is repaired at full rate.
+A stationary camera integrates pixel-area coverage across a 256-phase Halton sequence;
+moving views keep depth/normal/ID rejection. This avoids resampling each jittered
+silhouette as though it were the same surface. Direct radiance averages independent
+shadow samples separately; geometry changes retain illumination rejection.
+
+`set_gather_events` bounds transport before the visibility-aware probe terminal.
+Small-room default sampling remains two split lobes and half-rate transport. The
+four-phase preset selects a single importance-sampled lobe with its selection PDF;
+roughness-faded specular retains the same directional-probe blend. More events cost
+more rays. Reset frames and views with extensive disocclusion cost more than the
+steady-camera timing distributions. No async overlap is claimed.
+
+Emissive triangles use area times luminance weighted CDF next-event estimation with
+solid-angle PDFs and alpha-aware visibility. This is the sole emitter estimator
+after the primary camera hit, so later BSDF hits omit emission to avoid double
+counting. All lobes have finite roughness; no delta paths are dropped. Probe-origin
+rays retain first-hit emission. Separate prewarmed emitter shader variants remove
+this distribution and its register pressure from non-emissive scenes. Highly glossy
+small-emitter paths would benefit from BSDF/light MIS; this is not ReSTIR.
+
+The terrain fixture uses ara-landscape's actual sample tile and ara-terrain's
+hole-aware heightfield mesh, with a static BLAS snapshot and original alpha cards.
+Production integration still needs tiled streaming/dirty-region BLAS updates,
+material-layer/normal-map translation and foliage instance/wind previous positions.
+The DLSS/Streamline seam and baked Raster/Mobile contracts are unchanged.
+
+The terminal probe approximation accounts for both diffuse and specular energy;
+conductors no longer become zero-energy terminals. It uses one directional lookup
+(a diffuse/reflective direction blend by metalness and roughness), multiplied by
+an energy-bounded diffuse plus Fresnel factor. It is a high-order filtered terminal,
+not an exact directional radiance cache or a GGX convolution. XOR-folded frame digits
+decorrelate the compact ray phases from Halton's horizontal subpixel strata.
