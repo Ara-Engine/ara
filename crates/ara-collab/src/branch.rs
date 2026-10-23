@@ -470,6 +470,14 @@ impl Hub {
         self.branches.values()
     }
 
+    /// True if `id` may edit or submit `b`: its owner session, or another session of
+    /// the same agent (CLI calls and reconnects begin new sessions).
+    fn owns(&self, b: &Branch, id: &ParticipantId) -> bool {
+        &b.owner == id
+            || (matches!(b.author, Author::Agent(_))
+                && self.roster.get(id).is_some_and(|p| p.author == b.author))
+    }
+
     /// The overlay store of `id`'s open branch, to run commands in. Marks the branch
     /// changed (persist it afterwards).
     pub fn branch_store(
@@ -478,7 +486,7 @@ impl Hub {
         id: &ParticipantId,
     ) -> Result<&mut Store, Vec<Diagnostic>> {
         let b = self.branches.get(branch).ok_or_else(|| not_found(branch))?;
-        if &b.owner != id {
+        if !self.owns(b, id) {
             return Err(vec![Diagnostic::error(
                 codes::BRANCH_STATE,
                 format!(
@@ -508,16 +516,17 @@ impl Hub {
         why: Option<String>,
         now: u64,
     ) -> Result<BranchInfo, Vec<Diagnostic>> {
-        let b = self
-            .branches
-            .get_mut(branch)
-            .ok_or_else(|| not_found(branch))?;
-        if &b.owner != id {
+        let b = self.branches.get(branch).ok_or_else(|| not_found(branch))?;
+        if !self.owns(b, id) {
             return Err(vec![Diagnostic::error(
                 codes::BRANCH_STATE,
                 format!("branch `{branch}` belongs to {}", b.name),
             )]);
         }
+        let b = self
+            .branches
+            .get_mut(branch)
+            .ok_or_else(|| not_found(branch))?;
         if b.status != BranchStatus::Open {
             return Err(wrong_state(b, "open"));
         }
@@ -537,11 +546,12 @@ impl Hub {
         branch: &str,
     ) -> Result<BranchInfo, Vec<Diagnostic>> {
         let human = self.participant(id)?.kind == Kind::Human;
+        let owns = self.branch(branch).is_ok_and(|b| self.owns(b, id));
         let b = self
             .branches
             .get_mut(branch)
             .ok_or_else(|| not_found(branch))?;
-        if &b.owner != id && !human {
+        if !owns && !human {
             return Err(vec![Diagnostic::error(
                 codes::HUMAN_ONLY,
                 format!("only {} or a human can discard `{branch}`", b.name),
