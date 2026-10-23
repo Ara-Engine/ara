@@ -150,3 +150,52 @@ pub fn pack(
     }
     Ok(packed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn texture(value: u8) -> Texture {
+        Texture {
+            size: [8, 8],
+            rgba: vec![value; 8 * 8 * 4],
+            srgb: true,
+        }
+    }
+
+    fn vertex(uv: [f32; 2]) -> Vertex {
+        Vertex {
+            position: [0.0; 3],
+            normal: [0.0, 1.0, 0.0],
+            uv,
+            tangent: [1.0, 0.0, 0.0, 1.0],
+        }
+    }
+
+    #[test]
+    fn unit_square_materials_move_into_cells_and_tiling_ones_stay() {
+        let mut textures = vec![texture(255), texture(128), texture(10), texture(20)];
+        let mut materials = vec![Material::default(), Material::default()];
+        materials[0].textures[0] = 2;
+        materials[1].textures[0] = 3;
+        let mut packed = vec![vertex([0.0, 0.0]), vertex([1.0, 1.0])];
+        let mut tiling = vec![vertex([0.0, 0.0]), vertex([4.0, 1.0])];
+        let mut vertices = BTreeMap::from([(0, &mut packed), (1, &mut tiling)]);
+        let n = pack(&mut textures, &mut materials, &mut vertices, &[10.0, 5.0]).expect("pack");
+        assert_eq!(n, 1);
+        assert_eq!(textures.len(), 5, "one colour page added");
+        assert_eq!(materials[0].textures[0], 4);
+        assert_eq!(
+            materials[1].textures[0], 3,
+            "tiling material keeps its texture"
+        );
+        for v in &packed {
+            assert!(
+                v.uv.iter().all(|c| (0.0..=1024.0 / 4096.0).contains(c)),
+                "{:?}",
+                v.uv
+            );
+        }
+        assert_eq!(tiling[1].uv, [4.0, 1.0]);
+    }
+}

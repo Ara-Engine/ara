@@ -1,0 +1,50 @@
+{
+  "scene": "levels/hangar.scene",
+  "start": {
+    "world": "play:1",
+    "scene": "sc_hangar1",
+    "snapshotBytes": 144005,
+    "transport": "shm",
+    "prepareMs": 3902.9395999999997,
+    "bootMs": 2345.0513,
+    "players": [
+      {
+        "role": "local",
+        "pid": 5880,
+        "started": {
+          "tick": 1,
+          "entities": 142,
+          "buildMs": 1084.4630000000002,
+          "firstTickMs": 1.7034,
+          "netHandshakeMs": null
+        }
+      }
+    ]
+  },
+  "presentedCapture": {
+    "tick": 138,
+    "hash": "95a2ba568534c73dc937d5735134630954ffd27a155a33c32aec74f12d66665e",
+    "entities": 142,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\outpost\\evidence\\hangar-player-window.png",
+    "marks": []
+  },
+  "fullCapture": {
+    "tick": 146,
+    "hash": "81467c1c4278d2138be14a105f6a2d47955dc5c689859d8ea6fb386988b602c4",
+    "entities": 142,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\outpost\\evidence\\hangar-player.png",
+    "marks": []
+  },
+  "status": {
+    "tick": 378,
+    "paused": false,
+    "maxLateUs": 15455,
+    "fps": 31.631322178723295,
+    "frameMsP95": 34.903900146484375,
+    "fault": null,
+    "audio": true,
+    "net": null,
+    "cells": []
+  },
+  "wallSeconds": 16.7046834
+}

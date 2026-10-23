@@ -187,11 +187,11 @@
       "name": "Camera",
       "order": "a9",
       "Camera": {
-        "fov": 40
+        "fov": 45
       },
       "Transform": {
-        "position": [0, 1.6, -5],
-        "rotation": [-174.28941345214844, 180, 0]
+        "position": [0, 2.2, -7.5],
+        "rotation": [-170.91, 0, 180]
       }
     },
     "e_env": {
@@ -217,7 +217,7 @@
       },
       "Transform": {
         "position": [4, 2.5, -3.5],
-        "rotation": [-156.801, 46.409, 0]
+        "rotation": [-156.801, 46.409, 162.755]
       }
     },
     "e_hero0": {
@@ -227,7 +227,7 @@
         "model": "@assets/third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
       },
       "Transform": {
-        "position": [-3.132, 1, -1.78],
+        "position": [-4.264, 1, -1.118],
         "rotation": [0, 200, 0]
       }
     },
@@ -238,9 +238,9 @@
         "model": "@assets/third_party/khronos_scifi_helmet/SciFiHelmet.gltf#as_khronosscifihelmet"
       },
       "Transform": {
-        "position": [-2.675, 1.467, -2.409],
+        "position": [-3.811, 1.292, -2.2],
         "rotation": [0, 160, 0],
-        "scale": [0.32, 0.32, 0.32]
+        "scale": [0.2, 0.2, 0.2]
       }
     },
     "e_hero10": {
@@ -250,7 +250,7 @@
         "model": "@assets/third_party/old_gas_mask/old_gas_mask_2k.gltf#as_oldgasmask"
       },
       "Transform": {
-        "position": [3.102, 2.407, -1.758],
+        "position": [4.235, 2.407, -1.097],
         "rotation": [0, 160, 0],
         "scale": [1.4, 1.4, 1.4]
       }
@@ -262,9 +262,9 @@
         "model": "@assets/third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
       },
       "Transform": {
-        "position": [-2.185, 1, -2.914],
+        "position": [-3.153, 1, -3.112],
         "rotation": [0, 210, 0],
-        "scale": [0.18, 0.18, 0.18]
+        "scale": [0.11, 0.11, 0.11]
       }
     },
     "e_hero3": {
@@ -274,7 +274,7 @@
         "model": "@assets/third_party/khronos_water_bottle/WaterBottle.gltf#as_khronoswaterbottle"
       },
       "Transform": {
-        "position": [-1.464, 1.208, -3.289],
+        "position": [-2.2, 1.208, -3.811],
         "rotation": [0, 180, 0],
         "scale": [1.6, 1.6, 1.6]
       }
@@ -286,7 +286,7 @@
         "model": "@assets/third_party/camera_01/Camera_01_2k.gltf#as_camera01"
       },
       "Transform": {
-        "position": [-0.881, 0.999, -3.418],
+        "position": [-1.271, 0.999, -4.147],
         "rotation": [0, 150, 0],
         "scale": [2.2, 2.2, 2.2]
       }
@@ -298,8 +298,9 @@
         "model": "@assets/third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
       },
       "Transform": {
-        "position": [0, 1, -3.6],
-        "rotation": [0, 190, 0]
+        "position": [0, 1, -4.4],
+        "rotation": [0, 190, 0],
+        "scale": [2.2, 2.2, 2.2]
       }
     },
     "e_hero6": {
@@ -309,7 +310,7 @@
         "model": "@assets/third_party/binoculars/binoculars_2k.gltf#as_binoculars"
       },
       "Transform": {
-        "position": [0.869, 1.016, -3.642],
+        "position": [1.259, 1.016, -4.371],
         "rotation": [0, 140, 0],
         "scale": [2, 2, 2]
       }
@@ -321,7 +322,7 @@
         "model": "@assets/third_party/brass_blowtorch/brass_blowtorch_2k.gltf#as_brassblowtorch"
       },
       "Transform": {
-        "position": [1.475, 1, -3.259],
+        "position": [2.211, 1, -3.781],
         "rotation": [0, 200, 0],
         "scale": [2, 2, 2]
       }
@@ -333,7 +334,7 @@
         "model": "@assets/third_party/boombox/boombox_2k.gltf#as_boombox"
       },
       "Transform": {
-        "position": [2.113, 1, -2.893],
+        "position": [3.108, 1, -3.092],
         "rotation": [0, 170, 0]
       }
     },
@@ -344,7 +345,7 @@
         "model": "@assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
       },
       "Transform": {
-        "position": [2.627, 1.001, -2.338],
+        "position": [3.762, 1.001, -2.129],
         "rotation": [0, 180, 0]
       }
     },
@@ -360,7 +361,7 @@
         "halfHeight": 0.6
       },
       "MeshRenderer": {
-        "model": "@assets/third_party/m2m_human/human-base-animations.glb#as_m2mhuman"
+        "model": "@assets/kit/human.gltf#as_kithuman"
       },
       "NavAgent": {},
       "PhysicsId": {
@@ -389,7 +390,7 @@
       },
       "Transform": {
         "position": [0, 10, 0],
-        "rotation": [-56.31, -26.53, 0]
+        "rotation": [-56.31, -26.53, -33.822]
       }
     },
     "e_model": {
@@ -400,7 +401,7 @@
       },
       "CharacterController": {},
       "MeshRenderer": {
-        "model": "@assets/third_party/m2m_human/human-base-animations.glb#as_m2mhuman"
+        "model": "@assets/kit/human.gltf#as_kithuman"
       },
       "PhysicsId": {},
       "PlayerControl": {
@@ -430,7 +431,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [-3.118, 0, -1.8]
+        "position": [-4.25, 0, -1.139],
+        "rotation": [0, 75, 0]
       }
     },
     "e_plinth0c": {
@@ -444,7 +446,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [-3.118, 0.5, -1.8]
+        "position": [-4.25, 0.5, -1.139],
+        "rotation": [0, 75, 0]
       }
     },
     "e_plinth1": {
@@ -454,7 +457,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [-2.675, 0, -2.409]
+        "position": [-3.811, 0, -2.2],
+        "rotation": [0, 60, 0]
       }
     },
     "e_plinth10": {
@@ -464,7 +468,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [3.118, 0, -1.8]
+        "position": [4.25, 0, -1.139],
+        "rotation": [0, -75, 0]
       }
     },
     "e_plinth10c": {
@@ -478,7 +483,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [3.118, 0.5, -1.8]
+        "position": [4.25, 0.5, -1.139],
+        "rotation": [0, -75, 0]
       }
     },
     "e_plinth1c": {
@@ -492,7 +498,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [-2.675, 0.5, -2.409]
+        "position": [-3.811, 0.5, -2.2],
+        "rotation": [0, 60, 0]
       }
     },
     "e_plinth2": {
@@ -502,7 +509,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [-2.116, 0, -2.912]
+        "position": [-3.111, 0, -3.111],
+        "rotation": [0, 45, 0]
       }
     },
     "e_plinth2c": {
@@ -516,7 +524,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [-2.116, 0.5, -2.912]
+        "position": [-3.111, 0.5, -3.111],
+        "rotation": [0, 45, 0]
       }
     },
     "e_plinth3": {
@@ -526,7 +535,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [-1.464, 0, -3.289]
+        "position": [-2.2, 0, -3.811],
+        "rotation": [0, 30, 0]
       }
     },
     "e_plinth3c": {
@@ -540,7 +550,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [-1.464, 0.5, -3.289]
+        "position": [-2.2, 0.5, -3.811],
+        "rotation": [0, 30, 0]
       }
     },
     "e_plinth4": {
@@ -550,7 +561,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [-0.748, 0, -3.521]
+        "position": [-1.139, 0, -4.25],
+        "rotation": [0, 15, 0]
       }
     },
     "e_plinth4c": {
@@ -564,7 +576,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [-0.748, 0.5, -3.521]
+        "position": [-1.139, 0.5, -4.25],
+        "rotation": [0, 15, 0]
       }
     },
     "e_plinth5": {
@@ -574,7 +587,7 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [0, 0, -3.6]
+        "position": [0, 0, -4.4]
       }
     },
     "e_plinth5c": {
@@ -588,7 +601,7 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [0, 0.5, -3.6]
+        "position": [0, 0.5, -4.4]
       }
     },
     "e_plinth6": {
@@ -598,7 +611,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [0.748, 0, -3.521]
+        "position": [1.139, 0, -4.25],
+        "rotation": [0, -15, 0]
       }
     },
     "e_plinth6c": {
@@ -612,7 +626,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [0.748, 0.5, -3.521]
+        "position": [1.139, 0.5, -4.25],
+        "rotation": [0, -15, 0]
       }
     },
     "e_plinth7": {
@@ -622,7 +637,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [1.464, 0, -3.289]
+        "position": [2.2, 0, -3.811],
+        "rotation": [0, -30, 0]
       }
     },
     "e_plinth7c": {
@@ -636,7 +652,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [1.464, 0.5, -3.289]
+        "position": [2.2, 0.5, -3.811],
+        "rotation": [0, -30, 0]
       }
     },
     "e_plinth8": {
@@ -646,7 +663,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [2.116, 0, -2.912]
+        "position": [3.111, 0, -3.111],
+        "rotation": [0, -45, 0]
       }
     },
     "e_plinth8c": {
@@ -660,7 +678,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [2.116, 0.5, -2.912]
+        "position": [3.111, 0.5, -3.111],
+        "rotation": [0, -45, 0]
       }
     },
     "e_plinth9": {
@@ -670,7 +689,8 @@
         "model": "@assets/kit/plinth.gltf#as_kitplinth"
       },
       "Transform": {
-        "position": [2.675, 0, -2.409]
+        "position": [3.811, 0, -2.2],
+        "rotation": [0, -60, 0]
       }
     },
     "e_plinth9c": {
@@ -684,7 +704,8 @@
       },
       "RigidBody": {},
       "Transform": {
-        "position": [2.675, 0.5, -2.409]
+        "position": [3.811, 0.5, -2.2],
+        "rotation": [0, -60, 0]
       }
     },
     "e_rim": {
@@ -700,7 +721,7 @@
       },
       "Transform": {
         "position": [-3.5, 3.2, 3],
-        "rotation": [-36.254, -43.253, 0]
+        "rotation": [-36.254, -43.253, -26.679]
       }
     },
     "e_stage": {

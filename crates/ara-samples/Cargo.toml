@@ -15,6 +15,8 @@ ara-doc.workspace = true
 ara-foliage = { path = "../ara-foliage" }
 ara-gpu = { path = "../ara-gpu" }
 ara-ops.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
 ara-render = { path = "../ara-render" }

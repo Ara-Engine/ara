@@ -51,7 +51,7 @@ pub fn festoon(root: &Path, lock: &Lock) -> Result<String> {
         kits::cable(&mut kit, 0, a, b, 1.1, 0.012);
     }
     for p in bulb_positions() {
-        kit.sphere(1, p, 0.045, 8, Vec2::ONE);
+        kit.sphere(1, p, 0.035, 8, Vec2::ONE);
         kit.cuboid(
             0,
             Vec3::new(0.02, 0.12, 0.02),
@@ -71,10 +71,12 @@ pub fn cables(root: &Path, lock: &Lock) -> Result<String> {
         0.0,
     )]);
     for (a, b, sag) in [
-        (Vec3::new(9.85, 1.4, -6.5), Vec3::new(5.4, 0.02, -7.4), 1.6),
+        (Vec3::new(9.85, 1.4, -6.5), Vec3::new(9.5, 0.02, -6.0), 0.0),
+        (Vec3::new(9.5, 0.02, -6.0), Vec3::new(8.6, 0.02, 4.0), 0.0),
+        (Vec3::new(8.6, 0.02, 4.0), Vec3::new(6.2, 0.02, 9.4), 0.0),
         (Vec3::new(9.85, 1.3, -6.5), Vec3::new(9.85, 2.6, 2.0), 0.4),
         (Vec3::new(-9.85, 6.4, 8.0), Vec3::new(-2.0, 5.7, 8.0), 0.5),
-        (Vec3::new(5.4, 0.02, -7.4), Vec3::new(2.5, 0.02, -8.8), 0.0),
+        (Vec3::new(6.2, 0.02, 9.4), Vec3::new(5.0, 0.02, 7.6), 0.0),
     ] {
         kits::cable(&mut kit, 0, a, b, sag, 0.025);
     }
@@ -119,7 +121,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         "e_player",
         "Salvager",
         json!({
-            "Transform": super::place::transform(f(1.5, -10.5), 0.0, 1.0),
+            "Transform": super::place::transform(f(-5.5, -10.0), 30.0, 1.0),
             "MeshRenderer": {"model": models.get("human").reference},
             "Animator": {"controller": "@anim/human.animation#an_locomotion"},
             "CharacterController": {},
@@ -141,10 +143,11 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
     let mut n = 0;
     for (r, z) in rows.iter().enumerate() {
         for (c, x) in cols.iter().enumerate() {
+            // Night shift: most of the bay is dark, a few tubes still work.
             let radiance = match (r, c) {
-                (0, 3) | (2, 0) => 0.0,
-                (1, 1) => 900.0,
-                _ => 5200.0,
+                (0, 1) | (1, 2) | (2, 2) => 3600.0,
+                (1, 0) => 700.0,
+                _ => 0.0,
             };
             s.prop(
                 Prop::new(
@@ -173,7 +176,7 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         )
         .at_origin()
         .decor()
-        .renderer(json!({"emissive": [60000, 60000, 60000]})),
+        .renderer(json!({"emissive": [22000, 22000, 22000]})),
     );
     s.prop(
         Prop::new("e_cables", "Power cables", "cables", Vec3::ZERO, 0.0)
@@ -322,18 +325,18 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         "e_welder",
         "Welding cart",
         "welding_cart",
-        f(5.4, -7.4),
+        f(6.2, 9.4),
         200.0,
     ));
     s.entity(
         "e_sparks",
         "Welding sparks",
-        json!({"Transform": {"position": [2.5, 0.6, -8.8]}, "VisualEffect": {"effect": "depth_sparks"}}),
+        json!({"Transform": {"position": [5.0, 0.6, 7.6]}, "VisualEffect": {"effect": "sparks"}}),
     );
     s.commands.push(light(
         "e_weldlight",
         "Welding arc",
-        Vec3::new(2.5, 0.7, -8.8),
+        Vec3::new(5.0, 0.7, 7.6),
         json!({"color": [0.6, 0.75, 1.0, 1], "intensity": 2400, "range": 9}),
         None,
     ));
@@ -494,6 +497,16 @@ pub fn build(ctx: &Ctx, models: &Models) -> Result<()> {
         ("crate_military", -1.0, 10.8, 5.0),
         ("crate_long", -2.6, 11.1, 90.0),
         ("old_drill_press", 3.6, 3.8, 200.0),
+        // A work island mid-floor: crates, barrels and gas by the car.
+        ("crate_military", 1.6, 2.4, 10.0),
+        ("crate_military", 1.7, 2.5, 95.0),
+        ("crate_long", 2.9, 1.6, 30.0),
+        ("barrel_rust", -0.6, 3.2, 0.0),
+        ("barrel_blue", -0.1, 3.7, 40.0),
+        ("lpg", 0.5, 3.0, 0.0),
+        ("jerrycan", 0.9, 1.4, 70.0),
+        ("box", 3.6, 2.8, 20.0),
+        ("box", 3.9, 3.3, 75.0),
     ]
     .into_iter()
     .enumerate()

@@ -106,7 +106,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     let root = &ctx.root;
     // Stage pieces.
     let mut stage = Kit::new(vec![
-        Material::textured("floor", "concrete_floor_02"),
+        Material::textured("floor", "concrete_floor_02").tinted([0.32, 0.31, 0.3]),
         Material::flat("turntable", [0.06, 0.06, 0.065], 0.35, 0.0),
         Material::flat("plinth", [0.72, 0.71, 0.69], 0.55, 0.0),
     ]);
@@ -249,16 +249,16 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     s.entity(
         "e_camera",
         "Camera",
-        json!({"Transform": {"position": [0.0, 1.6, -5.0], "rotation": [aim(Vec3::new(0.0, -0.1, 1.0)).x, 180.0, 0.0]}, "Camera": {"fov": 40}}),
+        json!({"Transform": super::place::transform_euler(Vec3::new(0.0, 2.2, -7.5), aim(Vec3::new(0.0, -0.16, 1.0))), "Camera": {"fov": 45}}),
     );
     // Hero props on plinths in an arc in front.
     for (i, (name, scale, yaw)) in [
         ("flight_helmet", 1.0, 200.0),
-        ("scifi_helmet", 0.32, 160.0),
-        ("antique_camera", 0.18, 210.0),
+        ("scifi_helmet", 0.2, 160.0),
+        ("antique_camera", 0.11, 210.0),
         ("water_bottle", 1.6, 180.0),
         ("camera", 2.2, 150.0),
-        ("lantern", 1.0, 190.0),
+        ("lantern", 2.2, 190.0),
         ("binoculars", 2.0, 140.0),
         ("blowtorch", 2.0, 200.0),
         ("boombox", 1.0, 170.0),
@@ -268,14 +268,15 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     .into_iter()
     .enumerate()
     {
-        let a = (-60.0 + i as f32 * 12.0).to_radians();
-        let base = Vec3::new(a.sin() * 3.6, 0.0, -a.cos() * 3.6);
+        // A wide arc of plinths turned toward the turntable.
+        let a = (-75.0 + i as f32 * 15.0).to_radians();
+        let base = Vec3::new(a.sin() * 4.4, 0.0, -a.cos() * 4.4);
         s.prop(Prop::new(
             &format!("e_plinth{i}"),
             "Plinth",
             "plinth",
             base,
-            0.0,
+            -a.to_degrees(),
         ));
         s.prop(
             Prop::new(&format!("e_hero{i}"), name, name, base + Vec3::Y * 1.0, yaw)
@@ -300,6 +301,5 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         calls,
     )?;
     ctx.check()?;
-    ctx.accept_all()?;
     Ok(())
 }

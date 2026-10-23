@@ -12,9 +12,11 @@ use std::path::PathBuf;
 mod build;
 mod capture;
 mod credits;
+mod editor;
 mod fetch;
 mod kit;
 mod lock;
+mod play;
 mod sources;
 
 #[derive(Parser)]
@@ -104,6 +106,33 @@ enum Command {
         /// Frames per timing window.
         #[arg(long, default_value_t = 240)]
         timing_frames: u32,
+    },
+    /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
+    Play {
+        /// Project folder name.
+        project: String,
+        /// Scene path (`levels/outpost.scene`).
+        scene: String,
+        /// Capture file stem.
+        name: String,
+        /// Ticks to walk forward before capturing.
+        #[arg(long, default_value_t = 90)]
+        walk: u32,
+        /// A headless player instead of a window.
+        #[arg(long)]
+        headless: bool,
+    },
+    /// Open a scene in `ara-editor`, frame it over the Engine Protocol and capture.
+    Editor {
+        /// Project folder name.
+        project: String,
+        /// Scene path.
+        scene: String,
+        /// Capture file stem.
+        name: String,
+        /// Orbit target, yaw (rad), pitch (rad), distance: `x,y,z,yaw,pitch,distance`.
+        #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
+        camera: Vec<f32>,
     },
 }
 
@@ -236,6 +265,68 @@ fn main() -> Result<()> {
                 timing_frames,
             },
         )?,
+        Command::Play {
+            project,
+            scene,
+            name,
+            walk,
+            headless,
+        } => {
+            let report = play::run(
+                &samples,
+                &play::Request {
+                    project: &project,
+                    scene: &scene,
+                    name: &name,
+                    walk,
+                    window: !headless,
+                },
+            )?;
+            let path = samples
+                .join(&project)
+                .join("evidence")
+                .join(format!("{name}-player.json"));
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(&report)?
+                    + "
+",
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report["status"])?);
+        }
+        Command::Editor {
+            project,
+            scene,
+            name,
+            camera,
+        } => {
+            anyhow::ensure!(camera.len() == 6, "--camera takes x,y,z,yaw,pitch,distance");
+            let report = editor::run(
+                &samples,
+                &editor::Request {
+                    project: &project,
+                    scene: &scene,
+                    name: &name,
+                    camera: (
+                        [camera[0], camera[1], camera[2]],
+                        camera[3],
+                        camera[4],
+                        camera[5],
+                    ),
+                },
+            )?;
+            let path = samples
+                .join(&project)
+                .join("evidence")
+                .join(format!("{name}-editor.json"));
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(&report)?
+                    + "
+",
+            )?;
+            println!("{}", report["logs"]["text"].as_str().unwrap_or_default());
+        }
     }
     Ok(())
 }

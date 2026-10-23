@@ -188,12 +188,6 @@ impl Ctx {
     pub fn check(&self) -> Result<()> {
         self.ara(&["check"]).map(drop)
     }
-
-    /// Accepts the build's agent edits so the shipped project has nothing unreviewed.
-    pub fn accept_all(&self) -> Result<()> {
-        let _ = self.ara(&["accept", "--all"]);
-        Ok(())
-    }
 }
 
 /// Runs a command, failing with its output.

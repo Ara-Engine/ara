@@ -105,45 +105,45 @@
       "scale": [1, 2.5],
       "enabled": true
     },
-    "x_07pn": {
-      "center": [192.5, 162],
-      "radius": 5
-    },
-    "x_1xqd": {
-      "center": [203, 120],
-      "radius": 5
-    },
-    "x_8j4j": {
-      "center": [197, 82],
-      "radius": 5
-    },
-    "x_apdh": {
-      "center": [192, 196],
-      "radius": 37
-    },
-    "x_eh3c": {
+    "x_3vn1": {
       "center": [193, 56],
       "radius": 5
     },
-    "x_htt1": {
+    "x_bwr8": {
+      "center": [202, 106],
+      "radius": 5
+    },
+    "x_dqv0": {
+      "center": [197, 82],
+      "radius": 5
+    },
+    "x_g8pc": {
+      "center": [203, 120],
+      "radius": 5
+    },
+    "x_n5vh": {
       "center": [192, 175],
       "radius": 5
     },
-    "x_jtwa": {
-      "center": [200, 134],
-      "radius": 5
-    },
-    "x_pb85": {
+    "x_qhcc": {
       "center": [195, 148],
       "radius": 5
     },
-    "x_qdx3": {
+    "x_rft4": {
       "center": [192, 24],
       "radius": 5
     },
-    "x_zcqt": {
-      "center": [202, 106],
+    "x_skt1": {
+      "center": [200, 134],
       "radius": 5
+    },
+    "x_we4y": {
+      "center": [192.5, 162],
+      "radius": 5
+    },
+    "x_zth5": {
+      "center": [192, 196],
+      "radius": 37
     }
   }
 }

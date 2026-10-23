@@ -15,7 +15,213 @@
       "enabled": true,
       "opacity": 1
     },
-    "s_17nc": {
+    "s_0gac": {
+      "layer": "l_sculpt",
+      "sequence": 3,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [192, 192],
+          "radius": 320,
+          "amount": 1
+        }
+      ],
+      "channel": 2,
+      "iterations": 8
+    },
+    "s_bfvw": {
+      "layer": "l_sculpt",
+      "sequence": 4,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [132, 274],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [206, 282],
+          "radius": 15.299999,
+          "amount": 0.9
+        },
+        {
+          "center": [272, 256],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [282, 186],
+          "radius": 12.599999,
+          "amount": 0.9
+        },
+        {
+          "center": [264, 114],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [379.55103, 200.91331],
+          "radius": 30.685177,
+          "amount": 1
+        },
+        {
+          "center": [369.44305, 258.6448],
+          "radius": 44.830357,
+          "amount": 1
+        },
+        {
+          "center": [349.72778, 288.203],
+          "radius": 44.611668,
+          "amount": 1
+        },
+        {
+          "center": [323.0086, 311.02765],
+          "radius": 34.41825,
+          "amount": 1
+        },
+        {
+          "center": [303.21893, 333.91638],
+          "radius": 44.432068,
+          "amount": 1
+        },
+        {
+          "center": [258.56448, 363.12637],
+          "radius": 30.763905,
+          "amount": 1
+        },
+        {
+          "center": [212.84326, 366.2423],
+          "radius": 35.117542,
+          "amount": 1
+        },
+        {
+          "center": [164.38733, 379.65707],
+          "radius": 38.014637,
+          "amount": 1
+        },
+        {
+          "center": [130.01247, 369.86554],
+          "radius": 34.68673,
+          "amount": 1
+        },
+        {
+          "center": [112.0886, 351.07178],
+          "radius": 38.889736,
+          "amount": 1
+        },
+        {
+          "center": [78.02837, 330.31653],
+          "radius": 37.54422,
+          "amount": 1
+        },
+        {
+          "center": [32.2666, 291.4335],
+          "radius": 44.904667,
+          "amount": 1
+        },
+        {
+          "center": [18.130478, 260.50494],
+          "radius": 35.887074,
+          "amount": 1
+        },
+        {
+          "center": [18.830566, 229.34323],
+          "radius": 37.523067,
+          "amount": 1
+        },
+        {
+          "center": [14.258743, 166.82132],
+          "radius": 39.11807,
+          "amount": 1
+        },
+        {
+          "center": [16.283676, 140.1843],
+          "radius": 41.090523,
+          "amount": 1
+        },
+        {
+          "center": [27.935013, 106.363106],
+          "radius": 40.641777,
+          "amount": 1
+        },
+        {
+          "center": [52.79724, 70.23322],
+          "radius": 44.10604,
+          "amount": 1
+        },
+        {
+          "center": [91.50483, 43.487473],
+          "radius": 32.953564,
+          "amount": 1
+        },
+        {
+          "center": [129.11203, 19.074524],
+          "radius": 40.691723,
+          "amount": 1
+        },
+        {
+          "center": [285.2378, 34.88182],
+          "radius": 34.124557,
+          "amount": 1
+        },
+        {
+          "center": [312.635, 58.167282],
+          "radius": 30.701368,
+          "amount": 1
+        },
+        {
+          "center": [347.61563, 96.16733],
+          "radius": 31.686108,
+          "amount": 1
+        },
+        {
+          "center": [353.48077, 124.96619],
+          "radius": 32.692146,
+          "amount": 1
+        },
+        {
+          "center": [365.26147, 174.41928],
+          "radius": 41.845985,
+          "amount": 1
+        }
+      ],
+      "channel": 1,
+      "iterations": 8
+    },
+    "s_c75y": {
+      "layer": "l_sculpt",
+      "sequence": 5,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [156, 216],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [228, 166],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [236, 236],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [150, 140],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [216, 126],
+          "radius": 9,
+          "amount": 0.5
+        }
+      ],
+      "iterations": 8
+    },
+    "s_dv8d": {
       "layer": "l_sculpt",
       "sequence": 1,
       "dabs": [
@@ -842,213 +1048,7 @@
       ],
       "iterations": 8
     },
-    "s_4mt3": {
-      "layer": "l_sculpt",
-      "sequence": 4,
-      "operation": "paint",
-      "dabs": [
-        {
-          "center": [132, 274],
-          "radius": 13.5,
-          "amount": 0.9
-        },
-        {
-          "center": [206, 282],
-          "radius": 15.299999,
-          "amount": 0.9
-        },
-        {
-          "center": [272, 256],
-          "radius": 13.5,
-          "amount": 0.9
-        },
-        {
-          "center": [282, 186],
-          "radius": 12.599999,
-          "amount": 0.9
-        },
-        {
-          "center": [264, 114],
-          "radius": 13.5,
-          "amount": 0.9
-        },
-        {
-          "center": [379.55103, 200.91331],
-          "radius": 30.685177,
-          "amount": 1
-        },
-        {
-          "center": [369.44305, 258.6448],
-          "radius": 44.830357,
-          "amount": 1
-        },
-        {
-          "center": [349.72778, 288.203],
-          "radius": 44.611668,
-          "amount": 1
-        },
-        {
-          "center": [323.0086, 311.02765],
-          "radius": 34.41825,
-          "amount": 1
-        },
-        {
-          "center": [303.21893, 333.91638],
-          "radius": 44.432068,
-          "amount": 1
-        },
-        {
-          "center": [258.56448, 363.12637],
-          "radius": 30.763905,
-          "amount": 1
-        },
-        {
-          "center": [212.84326, 366.2423],
-          "radius": 35.117542,
-          "amount": 1
-        },
-        {
-          "center": [164.38733, 379.65707],
-          "radius": 38.014637,
-          "amount": 1
-        },
-        {
-          "center": [130.01247, 369.86554],
-          "radius": 34.68673,
-          "amount": 1
-        },
-        {
-          "center": [112.0886, 351.07178],
-          "radius": 38.889736,
-          "amount": 1
-        },
-        {
-          "center": [78.02837, 330.31653],
-          "radius": 37.54422,
-          "amount": 1
-        },
-        {
-          "center": [32.2666, 291.4335],
-          "radius": 44.904667,
-          "amount": 1
-        },
-        {
-          "center": [18.130478, 260.50494],
-          "radius": 35.887074,
-          "amount": 1
-        },
-        {
-          "center": [18.830566, 229.34323],
-          "radius": 37.523067,
-          "amount": 1
-        },
-        {
-          "center": [14.258743, 166.82132],
-          "radius": 39.11807,
-          "amount": 1
-        },
-        {
-          "center": [16.283676, 140.1843],
-          "radius": 41.090523,
-          "amount": 1
-        },
-        {
-          "center": [27.935013, 106.363106],
-          "radius": 40.641777,
-          "amount": 1
-        },
-        {
-          "center": [52.79724, 70.23322],
-          "radius": 44.10604,
-          "amount": 1
-        },
-        {
-          "center": [91.50483, 43.487473],
-          "radius": 32.953564,
-          "amount": 1
-        },
-        {
-          "center": [129.11203, 19.074524],
-          "radius": 40.691723,
-          "amount": 1
-        },
-        {
-          "center": [285.2378, 34.88182],
-          "radius": 34.124557,
-          "amount": 1
-        },
-        {
-          "center": [312.635, 58.167282],
-          "radius": 30.701368,
-          "amount": 1
-        },
-        {
-          "center": [347.61563, 96.16733],
-          "radius": 31.686108,
-          "amount": 1
-        },
-        {
-          "center": [353.48077, 124.96619],
-          "radius": 32.692146,
-          "amount": 1
-        },
-        {
-          "center": [365.26147, 174.41928],
-          "radius": 41.845985,
-          "amount": 1
-        }
-      ],
-      "channel": 1,
-      "iterations": 8
-    },
-    "s_88w3": {
-      "layer": "l_sculpt",
-      "sequence": 5,
-      "operation": "paint",
-      "dabs": [
-        {
-          "center": [156, 216],
-          "radius": 9,
-          "amount": 0.5
-        },
-        {
-          "center": [228, 166],
-          "radius": 9,
-          "amount": 0.5
-        },
-        {
-          "center": [236, 236],
-          "radius": 9,
-          "amount": 0.5
-        },
-        {
-          "center": [150, 140],
-          "radius": 9,
-          "amount": 0.5
-        },
-        {
-          "center": [216, 126],
-          "radius": 9,
-          "amount": 0.5
-        }
-      ],
-      "iterations": 8
-    },
-    "s_c95b": {
-      "layer": "l_sculpt",
-      "sequence": 3,
-      "operation": "paint",
-      "dabs": [
-        {
-          "center": [192, 192],
-          "radius": 320,
-          "amount": 1
-        }
-      ],
-      "channel": 2,
-      "iterations": 8
-    },
-    "s_qnrk": {
+    "s_s8m2": {
       "layer": "l_sculpt",
       "sequence": 2,
       "dabs": [
@@ -3570,1590 +3570,1590 @@
       ],
       "iterations": 8
     },
-    "t_0256": {
+    "t_0ct4": {
+      "coord": {
+        "x": 2,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_0jtz": {
+      "coord": {
+        "x": 2,
+        "z": 4
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_1bew": {
+      "coord": {
+        "x": 11,
+        "z": 10
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_1dw4": {
+      "coord": {
+        "x": 3,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_1hnx": {
+      "coord": {
+        "z": 5
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_22cf": {
+      "coord": {
+        "x": 3,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_22mx": {
+      "coord": {
+        "x": 3,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_2725": {
       "coord": {
         "x": 1,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_0297": {
-      "coord": {
-        "x": 4,
         "z": 11
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_07kt": {
-      "coord": {
-        "x": 9,
-        "z": 7
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_0gm1": {
+    "t_2pe7": {
       "coord": {
         "x": 8,
-        "z": 3
+        "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_10hs": {
-      "coord": {
-        "x": 7,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3",
-        "s_88w3"
-      ]
-    },
-    "t_185a": {
+    "t_2zdj": {
       "coord": {
         "x": 6,
-        "z": 1
+        "z": 2
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_19w9": {
-      "coord": {
-        "x": 8,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1cys": {
-      "coord": {
-        "x": 3,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1esc": {
-      "coord": {
-        "x": 5,
-        "z": 6
-      },
-      "strokes": [
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_1g34": {
-      "coord": {
-        "x": 5,
-        "z": 7
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_1nr2": {
-      "coord": {
-        "x": 11,
-        "z": 5
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1rjd": {
+    "t_2zpd": {
       "coord": {
         "x": 1,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1rrp": {
-      "coord": {
-        "x": 11,
-        "z": 9
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1xas": {
-      "coord": {
-        "x": 2,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1yhs": {
-      "coord": {
-        "x": 2,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_1zwr": {
-      "coord": {
-        "x": 5,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_22r7": {
-      "coord": {
-        "x": 9,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_247x": {
-      "coord": {
-        "x": 9,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_24f9": {
-      "coord": {
-        "z": 10
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_2r1h": {
-      "coord": {
-        "x": 9,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_35w3": {
-      "coord": {
-        "x": 8,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_386t": {
-      "coord": {
-        "x": 4,
-        "z": 10
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_3bds": {
-      "coord": {
-        "x": 6,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_3cnc": {
-      "coord": {
-        "x": 8,
-        "z": 9
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_3tnj": {
-      "coord": {
-        "x": 3,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_47ps": {
-      "coord": {
-        "x": 7,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_48z1": {
-      "coord": {
-        "x": 6,
-        "z": 6
-      },
-      "strokes": [
-        "s_c95b"
-      ]
-    },
-    "t_4dd5": {
-      "coord": {
-        "x": 11,
-        "z": 10
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_51gj": {
-      "coord": {
-        "x": 3,
-        "z": 9
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_54bv": {
-      "coord": {
-        "z": 7
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_58zr": {
-      "coord": {
-        "x": 10,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_5g9p": {
-      "coord": {
-        "x": 6,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_5qcv": {
-      "coord": {
-        "x": 9,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_5ymk": {
-      "coord": {
-        "x": 3,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_61be": {
-      "coord": {
-        "x": 2,
-        "z": 9
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_630h": {
-      "coord": {
-        "x": 9,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_6ncd": {
-      "coord": {
-        "x": 4,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_79ax": {
-      "coord": {
-        "x": 5,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_7ns3": {
-      "coord": {
-        "z": 9
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_7yzd": {
-      "coord": {
-        "x": 4,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_88g9": {
-      "coord": {
-        "x": 3,
         "z": 4
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_8mnn": {
-      "coord": {
-        "x": 9,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_8nn6": {
-      "coord": {
-        "x": 11,
-        "z": 3
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_8vyp": {
+    "t_34ft": {
       "coord": {
         "x": 1,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_9hxh": {
-      "coord": {
-        "x": 5,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_9tdn": {
-      "coord": {
-        "x": 4
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_9vvs": {
-      "coord": {
-        "x": 3,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_9y2f": {
-      "coord": {
-        "x": 10,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_a0re": {
-      "coord": {
-        "x": 2,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_a7pb": {
-      "coord": {
-        "x": 3,
         "z": 7
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_b3f2": {
+    "t_357a": {
       "coord": {
         "x": 10,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_3kj3": {
+      "coord": {
+        "x": 6,
         "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_b7xh": {
+    "t_3zd8": {
       "coord": {
         "x": 8,
-        "z": 4
+        "z": 10
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_bj0b": {
+    "t_466s": {
       "coord": {
-        "x": 2,
-        "z": 4
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_bjqv": {
-      "coord": {
-        "x": 10,
+        "x": 11,
         "z": 5
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_bkj8": {
+    "t_46fr": {
       "coord": {
-        "x": 7,
-        "z": 9
+        "x": 9,
+        "z": 10
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_btnz": {
+    "t_54p8": {
       "coord": {
-        "x": 6,
-        "z": 5
+        "x": 4,
+        "z": 11
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_c002": {
-      "coord": {
-        "x": 7,
-        "z": 7
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_c48n": {
-      "coord": {
-        "x": 5,
-        "z": 4
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_cg7k": {
+    "t_56bp": {
       "coord": {
         "x": 3,
         "z": 10
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_d15d": {
+    "t_59yr": {
       "coord": {
-        "x": 6,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_d28k": {
-      "coord": {
-        "z": 3
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_d34v": {
-      "coord": {
-        "x": 9,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_d5h2": {
-      "coord": {
-        "x": 9,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_d7dw": {
-      "coord": {
-        "x": 10,
+        "x": 3,
         "z": 4
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_dk7d": {
+    "t_5wkp": {
       "coord": {
-        "x": 4,
-        "z": 7
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_dkzj": {
-      "coord": {
-        "x": 8
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_e0z9": {
-      "coord": {
-        "x": 5,
+        "x": 11,
         "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_ecbk": {
+    "t_5xte": {
       "coord": {
-        "x": 11,
-        "z": 2
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ehmm": {
-      "coord": {
-        "x": 4,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_ekqj": {
-      "coord": {
-        "x": 11,
-        "z": 1
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b"
-      ]
-    },
-    "t_em0j": {
-      "coord": {
-        "x": 7,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_etab": {
-      "coord": {
-        "x": 7,
-        "z": 4
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_f2yb": {
-      "coord": {
-        "x": 6,
-        "z": 4
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_f6qn": {
-      "coord": {
-        "x": 5,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
-      ]
-    },
-    "t_f9kz": {
-      "coord": {
-        "x": 2,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_fqfg": {
-      "coord": {
-        "x": 3
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_g91g": {
-      "coord": {
-        "x": 4,
-        "z": 4
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_88w3"
-      ]
-    },
-    "t_h2r8": {
-      "coord": {
-        "x": 2,
+        "x": 10,
         "z": 3
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_h4ev": {
+    "t_5xvg": {
       "coord": {
-        "x": 9,
+        "x": 2,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_64tb": {
+      "coord": {
+        "x": 4,
+        "z": 4
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_6jtm": {
+      "coord": {
+        "x": 6,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_6qjp": {
+      "coord": {
+        "x": 6,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_6w3w": {
+      "coord": {
+        "x": 11,
+        "z": 4
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_78k8": {
+      "coord": {
+        "x": 10,
         "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_ha8b": {
-      "coord": {
-        "x": 10,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ha8s": {
-      "coord": {
-        "x": 11,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b"
-      ]
-    },
-    "t_hc42": {
-      "coord": {
-        "x": 5,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_j1yc": {
-      "coord": {
-        "x": 7,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_j5c1": {
-      "coord": {
-        "x": 1,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_j6me": {
-      "coord": {
-        "x": 10,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_j8s0": {
-      "coord": {
-        "x": 6,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_j9ng": {
+    "t_7cwa": {
       "coord": {
         "x": 9
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_je9n": {
+    "t_7ect": {
       "coord": {
-        "x": 2
+        "x": 5,
+        "z": 3
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_jgjm": {
+    "t_7km7": {
       "coord": {
-        "x": 1,
+        "x": 8,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_7p6f": {
+      "coord": {
+        "x": 2,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_7q7w": {
+      "coord": {
+        "x": 9,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_7t0g": {
+      "coord": {
+        "x": 8,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_8cv7": {
+      "coord": {
+        "x": 9,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_8fxb": {
+      "coord": {
+        "x": 4,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_8tp5": {
+      "coord": {
+        "x": 4,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_8vg7": {
+      "coord": {
+        "z": 8
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_8ye4": {
+      "coord": {
+        "x": 9,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_92mm": {
+      "coord": {
+        "x": 2,
         "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_jkpn": {
+    "t_93cq": {
+      "coord": {
+        "x": 11,
+        "z": 7
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_96pj": {
+      "coord": {
+        "x": 2,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_9rk1": {
+      "coord": {
+        "x": 7,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_9y0r": {
+      "coord": {
+        "x": 7,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_aerr": {
+      "coord": {
+        "z": 9
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_amqr": {
+      "coord": {
+        "x": 10,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_ans8": {
+      "coord": {
+        "x": 7,
+        "z": 4
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_b721": {
+      "coord": {
+        "x": 2,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_bad6": {
+      "coord": {
+        "x": 5,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_bx9y": {
+      "coord": {
+        "x": 1,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_c3cs": {
+      "coord": {
+        "x": 11,
+        "z": 8
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_c8ad": {
+      "coord": {
+        "x": 1,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_ce03": {
+      "coord": {
+        "x": 7,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_ck63": {
+      "coord": {
+        "x": 2,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_d2bt": {
+      "coord": {
+        "x": 1,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_d3jz": {
+      "coord": {
+        "x": 4,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_d4tx": {
+      "coord": {
+        "x": 6,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_dce9": {
+      "coord": {
+        "x": 1,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_dm9t": {
+      "coord": {
+        "x": 10,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_e7ds": {
+      "coord": {
+        "x": 3,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_e9hv": {
+      "coord": {
+        "x": 4
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_eq6k": {
+      "coord": {
+        "x": 3,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_ezbr": {
+      "coord": {
+        "x": 7,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_ezjx": {
+      "coord": {
+        "z": 7
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_f47q": {
+      "coord": {
+        "x": 8,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_f8zb": {
+      "coord": {
+        "x": 9,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_fa32": {
+      "coord": {
+        "x": 7
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_fj81": {
+      "coord": {
+        "z": 1
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_g102": {
+      "coord": {
+        "x": 11,
+        "z": 3
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_g8tk": {
+      "coord": {
+        "x": 7,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_gf9b": {
+      "coord": {
+        "x": 11,
+        "z": 2
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_gms7": {
+      "coord": {
+        "x": 9,
+        "z": 9
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_gvyj": {
+      "coord": {
+        "x": 11,
+        "z": 6
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_gypa": {
+      "coord": {
+        "x": 5,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_hcsa": {
+      "coord": {
+        "x": 3,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_j118": {
+      "coord": {
+        "z": 10
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_ja3c": {
+      "coord": {
+        "x": 9,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_jbeh": {
+      "coord": {
+        "x": 4,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_jj9p": {
+      "coord": {
+        "x": 9,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_jmkm": {
+      "coord": {
+        "x": 5,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_jmpj": {
+      "coord": {
+        "x": 10,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_k6s4": {
+      "coord": {
+        "x": 5,
+        "z": 6
+      },
+      "strokes": [
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_kgm5": {
+      "coord": {
+        "x": 3,
+        "z": 9
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_kh1h": {
+      "coord": {
+        "x": 4,
+        "z": 1
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_khs8": {
+      "coord": {
+        "x": 6,
+        "z": 4
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_kkqm": {
+      "coord": {
+        "x": 5,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_km61": {
+      "coord": {
+        "x": 8,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_kspr": {
+      "coord": {
+        "x": 5,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_kymn": {
+      "coord": {
+        "x": 6,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_m5yq": {
+      "coord": {
+        "x": 8,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_mk37": {
       "coord": {
         "x": 8,
         "z": 7
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_jx6t": {
+    "t_mvfy": {
       "coord": {
-        "x": 10,
-        "z": 7
+        "x": 8,
+        "z": 11
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_k472": {
+    "t_n1yz": {
+      "coord": {
+        "x": 6,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_nez7": {
+      "coord": {
+        "x": 6
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_nrjn": {
+      "coord": {
+        "x": 5
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_nv1r": {
+      "coord": {
+        "x": 6,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_nwv1": {
+      "coord": {
+        "x": 5,
+        "z": 9
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_p1rk": {
+      "coord": {
+        "x": 9,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_p3ac": {
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_p3z1": {
+      "coord": {
+        "x": 3
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_pgxz": {
+      "coord": {
+        "x": 1,
+        "z": 9
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_phnp": {
+      "coord": {
+        "x": 9,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_ps26": {
+      "coord": {
+        "x": 3,
+        "z": 5
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac"
+      ]
+    },
+    "t_pshd": {
+      "coord": {
+        "x": 3,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_pxsq": {
+      "coord": {
+        "x": 7,
+        "z": 1
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_pzka": {
+      "coord": {
+        "x": 8
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_qehr": {
+      "coord": {
+        "x": 1,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_qg9m": {
+      "coord": {
+        "x": 2
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_qgfa": {
+      "coord": {
+        "x": 2,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_qwm7": {
+      "coord": {
+        "x": 7,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_qyrx": {
+      "coord": {
+        "x": 1,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_r5f2": {
+      "coord": {
+        "x": 11,
+        "z": 11
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_rpea": {
+      "coord": {
+        "z": 4
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_rq1y": {
+      "coord": {
+        "x": 4,
+        "z": 6
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
+      ]
+    },
+    "t_rr0j": {
+      "coord": {
+        "x": 7,
+        "z": 9
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_rsqt": {
       "coord": {
         "x": 9,
         "z": 4
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
       ]
     },
-    "t_kjgd": {
-      "coord": {
-        "x": 6,
-        "z": 7
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_m09p": {
-      "coord": {
-        "x": 1,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_mgba": {
-      "coord": {
-        "x": 11,
-        "z": 8
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_myj9": {
-      "coord": {
-        "z": 8
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_n9tz": {
-      "coord": {
-        "x": 11,
-        "z": 7
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ngeq": {
-      "coord": {
-        "z": 6
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ngpd": {
-      "coord": {
-        "x": 3,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ngra": {
+    "t_s50k": {
       "coord": {
         "x": 4,
-        "z": 2
+        "z": 7
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
+        "s_dv8d",
+        "s_0gac",
+        "s_c75y"
       ]
     },
-    "t_p2qd": {
+    "t_s78j": {
+      "coord": {
+        "x": 4,
+        "z": 10
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_spnk": {
+      "coord": {
+        "x": 10,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_srq3": {
+      "coord": {
+        "x": 2,
+        "z": 10
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_st15": {
       "coord": {
         "x": 11,
+        "z": 1
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_t52c": {
+      "coord": {
+        "x": 10,
         "z": 4
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_pmwf": {
+    "t_t6tr": {
       "coord": {
-        "x": 1,
-        "z": 7
+        "x": 5,
+        "z": 4
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_pqh7": {
-      "coord": {
-        "x": 4,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_psc7": {
+    "t_tcat": {
       "coord": {
         "x": 8,
-        "z": 8
+        "z": 4
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_pyzg": {
+    "t_tpq0": {
       "coord": {
         "x": 11
       },
       "strokes": [
-        "s_c95b"
+        "s_0gac"
       ]
     },
-    "t_q555": {
+    "t_tr4q": {
+      "coord": {
+        "x": 7,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw",
+        "s_c75y"
+      ]
+    },
+    "t_v441": {
+      "coord": {
+        "x": 10,
+        "z": 7
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_vzbz": {
+      "coord": {
+        "x": 7,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_wjf7": {
+      "coord": {
+        "z": 11
+      },
+      "strokes": [
+        "s_0gac"
+      ]
+    },
+    "t_wqdg": {
       "coord": {
         "x": 1
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_qvy0": {
-      "coord": {
-        "x": 1,
-        "z": 11
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_qwf7": {
+    "t_wypn": {
       "coord": {
         "x": 6,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_r222": {
-      "coord": {
-        "z": 4
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_rcmn": {
-      "coord": {
-        "x": 8,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_rnpq": {
-      "coord": {
-        "x": 2,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_rqgp": {
-      "coord": {
-        "x": 1,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_rv7e": {
-      "coord": {
-        "z": 2
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_s7w1": {
-      "coord": {
-        "x": 11,
-        "z": 6
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_spja": {
-      "coord": {
-        "x": 10,
-        "z": 2
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_spx2": {
-      "coord": {
-        "z": 1
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_swyc": {
-      "coord": {
-        "x": 6
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b"
-      ]
-    },
-    "t_t5ff": {
-      "coord": {
-        "x": 5,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_t9bd": {
-      "coord": {
-        "x": 7,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b"
-      ]
-    },
-    "t_tdpx": {
-      "coord": {
-        "x": 7,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_tdyp": {
-      "coord": {
-        "x": 4,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_tr28": {
-      "coord": {
-        "x": 7,
-        "z": 1
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_tsj6": {
-      "coord": {
-        "x": 8,
-        "z": 6
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_ty40": {
-      "coord": {
-        "x": 3,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_v8cz": {
-      "coord": {
-        "x": 10,
-        "z": 3
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_v8tx": {
-      "coord": {
-        "x": 2,
         "z": 7
       },
       "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_vgwf": {
+    "t_x4t0": {
       "coord": {
-        "x": 3,
+        "x": 10,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_xgbh": {
+      "coord": {
+        "x": 1,
+        "z": 3
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_xh9z": {
+      "coord": {
+        "x": 10,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_xmnv": {
+      "coord": {
+        "x": 5,
+        "z": 8
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_yanb": {
+      "coord": {
+        "x": 6,
         "z": 6
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b"
+        "s_0gac"
       ]
     },
-    "t_wfqp": {
+    "t_yc6e": {
+      "coord": {
+        "x": 5,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac"
+      ]
+    },
+    "t_yf2b": {
+      "coord": {
+        "z": 3
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_yp4z": {
+      "coord": {
+        "x": 8,
+        "z": 2
+      },
+      "strokes": [
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_yra5": {
+      "coord": {
+        "z": 2
+      },
+      "strokes": [
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
+      ]
+    },
+    "t_z75c": {
       "coord": {
         "x": 10
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_wmqg": {
+    "t_zce7": {
       "coord": {
-        "x": 8,
-        "z": 11
+        "z": 6
       },
       "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     },
-    "t_x0bd": {
-      "coord": {
-        "x": 2,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_x0bt": {
-      "coord": {
-        "x": 7,
-        "z": 8
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b"
-      ]
-    },
-    "t_xcqd": {
-      "coord": {
-        "x": 1,
-        "z": 4
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_xefe": {
-      "coord": {
-        "x": 4,
-        "z": 9
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_xgs0": {
-      "coord": {
-        "x": 5
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_y131": {
+    "t_zj20": {
       "coord": {
         "x": 2,
         "z": 6
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b"
+        "s_dv8d",
+        "s_0gac"
       ]
     },
-    "t_y5kj": {
+    "t_zky0": {
       "coord": {
-        "z": 11
-      },
-      "strokes": [
-        "s_c95b"
-      ]
-    },
-    "t_yy40": {
-      "coord": {
-        "x": 7
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_yypp": {
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_z15x": {
-      "coord": {
-        "z": 5
-      },
-      "strokes": [
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_z3z4": {
-      "coord": {
-        "x": 6,
+        "x": 4,
         "z": 9
       },
       "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_z758": {
-      "coord": {
-        "x": 5,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_zg8v": {
-      "coord": {
-        "x": 10,
-        "z": 10
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_zmjb": {
-      "coord": {
-        "x": 1,
-        "z": 1
-      },
-      "strokes": [
-        "s_17nc",
-        "s_qnrk",
-        "s_c95b",
-        "s_4mt3"
-      ]
-    },
-    "t_zvv7": {
-      "coord": {
-        "x": 8,
-        "z": 5
-      },
-      "strokes": [
-        "s_17nc",
-        "s_c95b",
-        "s_4mt3"
+        "s_dv8d",
+        "s_s8m2",
+        "s_0gac",
+        "s_bfvw"
       ]
     }
   }

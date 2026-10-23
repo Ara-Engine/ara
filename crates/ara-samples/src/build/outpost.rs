@@ -83,7 +83,6 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     exterior(ctx, &models, &ground)?;
     super::hangar::build(ctx, &models)?;
     ctx.check()?;
-    ctx.accept_all()?;
     Ok(())
 }
 
@@ -738,11 +737,14 @@ fn music(ctx: &Ctx) -> Result<()> {
 }
 
 /// Euler rotation (degrees) aiming local −Z along `direction` (lights, cameras).
+/// Upright: yaw about +Y, then pitch, expressed in the Transform's XYZ Euler order.
 pub fn aim(direction: Vec3) -> Vec3 {
     let d = direction.normalize();
-    let yaw = (-d.x).asin();
-    let pitch = d.y.atan2(-d.z);
-    Vec3::new(pitch.to_degrees(), yaw.to_degrees(), 0.0)
+    let yaw = (-d.x).atan2(-d.z);
+    let pitch = d.y.clamp(-1.0, 1.0).asin();
+    let q = glam::Quat::from_euler(glam::EulerRot::YXZ, yaw, pitch, 0.0);
+    let (x, y, z) = q.to_euler(glam::EulerRot::XYZ);
+    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
 }
 
 /// A light entity.
@@ -787,6 +789,17 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         "Terrain",
         json!({"Transform": {}, "Terrain": {"terrain": reference(TERRAIN), "foliage": reference(FOLIAGE)}}),
     );
+    // Collision and navigation chunks for the walkable middle (tiles 4..8: the
+    // compound plus a 32 m margin); the rim mountains stay scenery.
+    for z in 4..8 {
+        for x in 4..8 {
+            s.entity(
+                &format!("e_chunk{x}{z}"),
+                "Terrain chunk",
+                json!({"TerrainChunk": {"x": x, "z": z}, "AcousticSurface": {"preset": "gravel"}}),
+            );
+        }
+    }
     s.entity(
         "e_humankind",
         "Human agents",
@@ -1365,5 +1378,28 @@ fn fence(s: &mut Scene<'_>, ground: &Ground) {
             .at_origin()
             .decor(),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aim_points_local_minus_z_and_stays_upright() {
+        for d in [
+            Vec3::new(0.0, -0.16, 1.0),
+            Vec3::new(1.0, -0.3, 0.2),
+            Vec3::new(-0.93, -0.05, -0.36),
+            Vec3::new(0.0, -1.0, 0.0),
+        ] {
+            let r = aim(d) * std::f32::consts::PI / 180.0;
+            let q = glam::Quat::from_euler(glam::EulerRot::XYZ, r.x, r.y, r.z);
+            let forward = q * Vec3::NEG_Z;
+            assert!(forward.distance(d.normalize()) < 1e-3, "{d} -> {forward}");
+            if d.normalize().y.abs() < 0.99 {
+                assert!((q * Vec3::Y).y > 0.0, "upright for {d}");
+            }
+        }
     }
 }

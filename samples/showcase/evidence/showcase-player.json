@@ -1,0 +1,50 @@
+{
+  "scene": "levels/showcase.scene",
+  "start": {
+    "world": "play:1",
+    "scene": "sc_showcase1",
+    "snapshotBytes": 15505,
+    "transport": "shm",
+    "prepareMs": 5870.2748,
+    "bootMs": 1647.0080999999998,
+    "players": [
+      {
+        "role": "local",
+        "pid": 27296,
+        "started": {
+          "tick": 1,
+          "entities": 61,
+          "buildMs": 486.4073,
+          "firstTickMs": 1.6659000000000002,
+          "netHandshakeMs": null
+        }
+      }
+    ]
+  },
+  "presentedCapture": {
+    "tick": 82,
+    "hash": "64dff9cf7552804b73e5e4181f53a12669e534f4b8e230c317295e922323f3a5",
+    "entities": 61,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\showcase\\evidence\\showcase-player-window.png",
+    "marks": []
+  },
+  "fullCapture": {
+    "tick": 90,
+    "hash": "3d2c5c330ba23298e80f9dc7ac2dc398ae43575c86f02cb29e7738ef3286a82a",
+    "entities": 61,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\showcase\\evidence\\showcase-player.png",
+    "marks": []
+  },
+  "status": {
+    "tick": 330,
+    "paused": false,
+    "maxLateUs": 11716,
+    "fps": 90.48093370029252,
+    "frameMsP95": 12.895500183105469,
+    "fault": null,
+    "audio": true,
+    "net": null,
+    "cells": []
+  },
+  "wallSeconds": 17.1898257
+}

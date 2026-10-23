@@ -1,0 +1,80 @@
+{
+  "scene": "levels/showcase.scene",
+  "ticks": 150,
+  "sky": {
+    "kind": "hdri",
+    "asset": "brown_photostudio_02",
+    "intensity": 900,
+    "rotation": 0
+  },
+  "post": {
+    "compensation": 0.0,
+    "bloom": 0.04,
+    "neutral": true
+  },
+  "details": [],
+  "shots": [
+    {
+      "name": "stage",
+      "position": [
+        0.0,
+        2.3,
+        -8.6
+      ],
+      "target": [
+        0.0,
+        0.9,
+        1.0
+      ],
+      "fov": 46
+    },
+    {
+      "name": "character",
+      "position": [
+        0.9,
+        1.45,
+        -2.6
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "fov": 40
+    },
+    {
+      "name": "props",
+      "position": [
+        -0.9,
+        1.55,
+        -1.9
+      ],
+      "target": [
+        -3.4,
+        1.15,
+        -3.0
+      ],
+      "fov": 48
+    },
+    {
+      "name": "materials",
+      "position": [
+        0.0,
+        1.6,
+        0.6
+      ],
+      "target": [
+        0.0,
+        0.3,
+        3.6
+      ],
+      "fov": 45
+    }
+  ],
+  "sequence": {
+    "from": "stage",
+    "to": "character",
+    "frames": 6,
+    "step": 10
+  }
+}

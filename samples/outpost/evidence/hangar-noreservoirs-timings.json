@@ -1,0 +1,272 @@
+{
+  "scene": "levels/hangar.scene",
+  "name": "hangar-noreservoirs",
+  "budgetMs": {
+    "native1440p": 16.0,
+    "upscaled": 8.0
+  },
+  "content": {
+    "objects": 245,
+    "meshes": 70,
+    "triangles": 522225,
+    "finestTriangles": 1074144,
+    "foliageInstances": 0,
+    "texturesWanted": 170,
+    "textures": 30,
+    "atlasedMaterials": 53,
+    "texels": 148897794,
+    "uploadMib": 1181.5534629821777,
+    "lights": 6,
+    "emissiveMaterials": 6,
+    "breakdown": [
+      [
+        "Overhead crane",
+        89964
+      ],
+      [
+        "Clutter",
+        89760
+      ],
+      [
+        "Stock",
+        69550
+      ],
+      [
+        "Bench drill press",
+        31001
+      ],
+      [
+        "Radio",
+        27000
+      ],
+      [
+        "Storage cart",
+        18902
+      ],
+      [
+        "Shelving",
+        15912
+      ],
+      [
+        "Tool",
+        15123
+      ],
+      [
+        "Welding cart",
+        14772
+      ],
+      [
+        "Ladder",
+        14728
+      ],
+      [
+        "Tool cart",
+        14696
+      ],
+      [
+        "Covered car",
+        12592
+      ],
+      [
+        "Wall pipes",
+        12340
+      ],
+      [
+        "Air duct",
+        11116
+      ],
+      [
+        "Festoon work lights",
+        10884
+      ],
+      [
+        "Caged sconce",
+        10256
+      ],
+      [
+        "Hanging lamp",
+        10248
+      ],
+      [
+        "Stool",
+        8332
+      ],
+      [
+        "Laptop",
+        7228
+      ],
+      [
+        "Workbench",
+        6894
+      ],
+      [
+        "Salvager",
+        6877
+      ],
+      [
+        "Tool chest",
+        6440
+      ],
+      [
+        "Rack",
+        6084
+      ],
+      [
+        "Power box",
+        5318
+      ]
+    ]
+  },
+  "modes": [
+    {
+      "mode": "native",
+      "renderSize": [
+        2560,
+        1440
+      ],
+      "displaySize": [
+        2560,
+        1440
+      ],
+      "upscaler": "Taau",
+      "viewCreateMs": 5562.1643,
+      "processGpuMemoryMiB": {
+        "beforeView": null,
+        "afterCaptures": null
+      },
+      "timing": {
+        "shot": "bay",
+        "frames": 60,
+        "p50": 11.186432,
+        "p95": 11.326176000000002,
+        "max": 12.308031999999999,
+        "frameSamplesMs": [
+          11.132192,
+          11.124671999999999,
+          12.103616,
+          11.157631999999998,
+          11.189951999999998,
+          11.133984,
+          11.199872,
+          11.240416,
+          11.239808000000002,
+          11.209408000000002,
+          11.210559999999996,
+          11.326176000000002,
+          11.210976,
+          11.189695999999998,
+          11.192256,
+          11.131712,
+          11.118879999999999,
+          11.147039999999997,
+          11.131103999999999,
+          11.167295999999999,
+          11.147103999999999,
+          11.185824,
+          11.085151999999999,
+          11.144799999999998,
+          11.098080000000001,
+          11.123135999999999,
+          11.186848,
+          11.174432000000001,
+          11.260863999999996,
+          11.240896000000001,
+          12.308031999999999,
+          11.09968,
+          11.178879999999998,
+          11.290591999999997,
+          11.266272000000003,
+          11.123904,
+          11.163456000000004,
+          11.320736,
+          11.234975999999998,
+          11.132384000000002,
+          11.186432,
+          11.180480000000001,
+          11.242624000000001,
+          11.180576,
+          11.245247999999998,
+          11.130911999999999,
+          11.147199999999998,
+          11.181216,
+          11.117536,
+          11.160767999999997,
+          11.201888,
+          11.189759999999998,
+          11.462912000000003,
+          11.190015999999998,
+          11.245664,
+          11.238271999999998,
+          11.175168,
+          11.203872000000002,
+          11.135935999999996,
+          11.192031999999998
+        ],
+        "passes": {
+          "Bloom.Horizontal": {
+            "p50": 0.208224,
+            "p95": 0.209312
+          },
+          "Bloom.Vertical": {
+            "p50": 0.108672,
+            "p95": 0.155328
+          },
+          "DDGI.Trace.Relocate.Classify.Integrate": {
+            "p50": 0.178208,
+            "p95": 0.189024
+          },
+          "Exposure.EV100.Meter.Adapt": {
+            "p50": 0.005568,
+            "p95": 0.006272
+          },
+          "Output.SDR": {
+            "p50": 0.093664,
+            "p95": 0.108704
+          },
+          "Post.Atmosphere.Lens.ToneMap.LUT": {
+            "p50": 0.317792,
+            "p95": 0.360448
+          },
+          "RT.Reflections.SoftShadows.DDGI": {
+            "p50": 5.073024,
+            "p95": 5.091104
+          },
+          "SVGF.Atrous.1": {
+            "p50": 0.526496,
+            "p95": 0.568096
+          },
+          "SVGF.Atrous.2": {
+            "p50": 0.583168,
+            "p95": 0.6096
+          },
+          "SVGF.Atrous.4": {
+            "p50": 0.603104,
+            "p95": 0.631936
+          },
+          "SVGF.Reproject.Reject.Moments": {
+            "p50": 0.985216,
+            "p95": 1.05168
+          },
+          "Upscale.TAAU.Resolve": {
+            "p50": 0.369888,
+            "p95": 0.411712
+          },
+          "Viewport.Ready": {
+            "p50": 0.000096,
+            "p95": 0.000096
+          },
+          "Visibility.Motion": {
+            "p50": 2.106528,
+            "p95": 2.110048
+          }
+        },
+        "gpuBefore": "98 %, 5303 MiB, 12282 MiB, 211.21 W, 2820 MHz",
+        "gpuAfter": "98 %, 5303 MiB, 12282 MiB, 201.33 W, 2820 MHz"
+      },
+      "exposure": "ExposureState { multiplier: 0.011335295, previous_multiplier: 0.011335295, target_ev100: 6.2, metered_luminance: 0.0 }",
+      "sceneHash": "d0bdf1c3aa80c2fbccb42bdb79bace4e94ec1e2bb19fbbd2b315dd23dcfa02c6",
+      "shaderRevision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce"
+    }
+  ],
+  "sharedGpu": "other agents share this RTX 4070 SUPER; gpuBefore/gpuAfter record nvidia-smi load around each window"
+}

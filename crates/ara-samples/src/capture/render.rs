@@ -116,22 +116,20 @@ pub fn gpu_load() -> String {
         .unwrap_or_else(|e| format!("unavailable: {e}"))
 }
 
-/// GPU memory this process holds, per `nvidia-smi` (MiB), when reported.
-pub fn process_memory() -> Option<f64> {
+/// Whole-GPU memory in use (MiB) per `nvidia-smi`. WDDM does not attribute
+/// graphics memory per process, so deltas around a view include other agents' work.
+pub fn gpu_memory() -> Option<f64> {
     let output = std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-compute-apps=pid,used_memory",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.used", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
-    let pid = std::process::id().to_string();
     String::from_utf8_lossy(&output.stdout)
+        .trim()
         .lines()
-        .find_map(|line| {
-            let (p, mem) = line.split_once(',')?;
-            (p.trim() == pid).then(|| mem.trim().parse().ok())?
-        })
+        .next()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 fn save_small(image: &RgbaImage, width: u32, path: &Path) -> Result<()> {
@@ -172,7 +170,7 @@ pub fn run(
         if options.quick && label == "upscaled" {
             continue;
         }
-        let memory_before = process_memory();
+        let memory_before = gpu_memory();
         let created = std::time::Instant::now();
         let mut view = FidelityView::new(
             gpu,
@@ -301,7 +299,7 @@ pub fn run(
             "displaySize": DISPLAY,
             "upscaler": format!("{upscaler:?}"),
             "viewCreateMs": create_ms,
-            "processGpuMemoryMiB": {"beforeView": memory_before, "afterCaptures": process_memory()},
+            "gpuMemoryUsedMiB": {"beforeView": memory_before, "afterCaptures": gpu_memory(), "note": "whole GPU (shared); the delta approximates this view"},
             "timing": timing,
             "exposure": exposure,
             "sceneHash": view.scene_hash(),

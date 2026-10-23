@@ -36,6 +36,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Scene textures (model maps, terrain tiles and the two defaults) the presenter
+/// uploads at most: the device's bindless heap holds 128 sampled images in total
+/// (the cooked binding ABI), shared with render targets and capture composites.
+pub const SCENE_TEXTURE_BUDGET: usize = 32;
+
 /// Per-frame CPU cost of the last `present`, for profiling.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct PresentStats {
@@ -71,6 +76,8 @@ pub struct Presenter {
     sun: ([f32; 3], [f32; 3]),
     scratch: Vec<Vertex>,
     stats: PresentStats,
+    /// Whether the over-budget texture note was printed.
+    warned_budget: bool,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -131,6 +138,7 @@ impl Presenter {
             sun: ([0.0; 3], [0.0; 3]),
             scratch: Vec::new(),
             stats: PresentStats::default(),
+            warned_budget: false,
         }
     }
 
@@ -360,6 +368,50 @@ impl Presenter {
         let (size, sky) = sky(&frame.environment);
         scene.environment_size = size;
         scene.environment = sky;
+        // Model textures share the device's 128-entry sampled-image heap with the
+        // renderer's own targets: colour maps of every draw come first, then normal,
+        // metal/roughness and emissive maps while the budget lasts. Maps past it fold
+        // into their material's factors (mean texel) instead of failing the upload.
+        let budget = SCENE_TEXTURE_BUDGET.saturating_sub(2 + tiles.len());
+        let mut wanted: Vec<Vec<(Arc<Model>, usize)>> = vec![Vec::new(); 4];
+        let mut seen = std::collections::BTreeSet::new();
+        for draw in &frame.draws {
+            if let Geometry::Model { model, primitive } = &draw.geometry
+                && let Some(m) = model.primitives[*primitive]
+                    .material
+                    .and_then(|m| model.materials.get(m))
+            {
+                for (slot, texture) in [
+                    m.base_color_texture,
+                    m.normal_texture,
+                    m.metallic_roughness_texture,
+                    m.emissive_texture,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(t) = texture
+                        && seen.insert((slot, model.digest.to_string(), t))
+                    {
+                        wanted[slot].push((Arc::clone(model), t));
+                    }
+                }
+            }
+        }
+        let mut accepted = std::collections::BTreeSet::new();
+        for (model, t) in wanted.iter().flatten() {
+            let key = (model.digest.to_string(), *t);
+            if accepted.len() < budget || accepted.contains(&key) {
+                accepted.insert(key);
+            }
+        }
+        let folded = seen.len().saturating_sub(accepted.len());
+        if folded > 0 && !self.warned_budget {
+            eprintln!(
+                "ara-runtime-render: {folded} model texture maps exceed the {SCENE_TEXTURE_BUDGET}-slot scene budget; folded into material factors"
+            );
+            self.warned_budget = true;
+        }
         let mut texture_slots: BTreeMap<(String, usize), u32> = BTreeMap::new();
         self.uploaded.clear();
         for draw in &frame.draws {
@@ -412,6 +464,10 @@ impl Presenter {
                 {
                     let Some(t) = texture else { continue };
                     let key = (model.digest.to_string(), t);
+                    if !accepted.contains(&key) {
+                        fold(&mut material, slot, mean_texel(&model.textures[t].ktx2)?);
+                        continue;
+                    }
                     let index = match texture_slots.get(&key) {
                         Some(&index) => index,
                         None => {
@@ -609,6 +665,76 @@ pub fn sky(env: &Environment) -> ([u32; 2], Vec<[f32; 4]>) {
         }
     }
     ([W, H], pixels)
+}
+
+/// Folds a texture map that did not fit the budget into its material's factors.
+fn fold(material: &mut scene::Material, slot: usize, mean: [f32; 4]) {
+    match slot {
+        0 => {
+            for (c, m) in material.base_color.iter_mut().zip(mean).take(3) {
+                *c = (*c * m).clamp(0.0, 1.0);
+            }
+        }
+        2 => {
+            material.emissive_roughness[3] *= mean[1];
+            material.surface[0] *= mean[2];
+        }
+        3 => {
+            for (c, m) in material.emissive_roughness.iter_mut().zip(mean).take(3) {
+                *c *= m;
+            }
+        }
+        // Normal maps fold to the flat default.
+        _ => {}
+    }
+}
+
+/// The mean texel of a cooked texture from its coarsest block-sized level (linear
+/// colour for sRGB maps, raw channels otherwise).
+pub fn mean_texel(ktx2: &[u8]) -> Result<[f32; 4]> {
+    let texture =
+        ara_asset_format::Texture::read(ktx2).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let [mut w, mut h] = texture.dimensions();
+    let mut chosen = None;
+    for level in texture.levels() {
+        if w < 4 || h < 4 {
+            break;
+        }
+        chosen = Some((level, w, h));
+        w = (w / 2).max(1);
+        h = (h / 2).max(1);
+    }
+    let Some((level, w, h)) = chosen else {
+        return Ok([1.0; 4]);
+    };
+    let mut pixels = vec![0u32; (w * h) as usize];
+    let format = texture.format();
+    match format {
+        ara_asset_format::TextureFormat::Bc7 | ara_asset_format::TextureFormat::Bc7Srgb => {
+            texture2ddecoder::decode_bc7(level, w as usize, h as usize, &mut pixels)
+                .map_err(|e| anyhow::anyhow!("BC7 decode: {e}"))?;
+        }
+        _ => return Ok([1.0; 4]),
+    }
+    let srgb = format == ara_asset_format::TextureFormat::Bc7Srgb;
+    let mut sum = [0.0f64; 4];
+    for p in &pixels {
+        let [b, g, r, a] = p.to_le_bytes();
+        for (i, v) in [r, g, b, a].into_iter().enumerate() {
+            let v = f64::from(v) / 255.0;
+            sum[i] += if srgb && i < 3 {
+                if v <= 0.04045 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            } else {
+                v
+            };
+        }
+    }
+    let n = pixels.len().max(1) as f64;
+    Ok(sum.map(|s| (s / n) as f32))
 }
 
 /// Decodes the finest level of a cooked KTX2 texture to RGBA8: BC7 colour/linear data,

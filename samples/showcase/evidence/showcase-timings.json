@@ -1,0 +1,361 @@
+{
+  "scene": "levels/showcase.scene",
+  "name": "showcase",
+  "budgetMs": {
+    "native1440p": 16.0,
+    "upscaled": 8.0
+  },
+  "content": {
+    "objects": 74,
+    "meshes": 45,
+    "triangles": 186851,
+    "finestTriangles": 407603,
+    "foliageInstances": 0,
+    "texturesWanted": 86,
+    "textures": 36,
+    "atlasedMaterials": 21,
+    "texels": 164626434,
+    "uploadMib": 1273.8098487854004,
+    "lights": 2,
+    "emissiveMaterials": 1,
+    "breakdown": [
+      [
+        "flight_helmet",
+        28784
+      ],
+      [
+        "radio",
+        27000
+      ],
+      [
+        "scifi_helmet",
+        23358
+      ],
+      [
+        "Mannequin",
+        13754
+      ],
+      [
+        "camera",
+        11117
+      ],
+      [
+        "lantern",
+        10778
+      ],
+      [
+        "antique_camera",
+        10032
+      ],
+      [
+        "gas_mask",
+        9450
+      ],
+      [
+        "binoculars",
+        8506
+      ],
+      [
+        "blowtorch",
+        2936
+      ],
+      [
+        "boombox",
+        2746
+      ],
+      [
+        "ball_aluminium",
+        2048
+      ],
+      [
+        "ball_chrome",
+        2048
+      ],
+      [
+        "ball_copper",
+        2048
+      ],
+      [
+        "ball_denim",
+        2048
+      ],
+      [
+        "ball_emissive",
+        2048
+      ],
+      [
+        "ball_glass",
+        2048
+      ],
+      [
+        "ball_glass_tinted",
+        2048
+      ],
+      [
+        "ball_gold",
+        2048
+      ],
+      [
+        "ball_leather",
+        2048
+      ],
+      [
+        "ball_marble",
+        2048
+      ],
+      [
+        "ball_plastic_red",
+        2048
+      ],
+      [
+        "ball_plastic_white",
+        2048
+      ],
+      [
+        "ball_plate",
+        2048
+      ]
+    ]
+  },
+  "modes": [
+    {
+      "mode": "native",
+      "renderSize": [
+        2560,
+        1440
+      ],
+      "displaySize": [
+        2560,
+        1440
+      ],
+      "upscaler": "Taau",
+      "viewCreateMs": 7809.8578,
+      "processGpuMemoryMiB": {
+        "beforeView": null,
+        "afterCaptures": null
+      },
+      "timing": {
+        "shot": "stage",
+        "frames": 30,
+        "p50": 6.083167999999999,
+        "p95": 6.173599999999999,
+        "max": 6.1815039999999986,
+        "frameSamplesMs": [
+          6.0919680000000005,
+          6.086464,
+          6.037951999999999,
+          6.003359999999999,
+          6.095136,
+          6.046272,
+          6.064032,
+          6.081279999999999,
+          6.083167999999999,
+          6.086752,
+          6.173599999999999,
+          6.160927999999998,
+          6.115552000000001,
+          6.124319999999999,
+          6.074463999999999,
+          6.1815039999999986,
+          6.062015999999999,
+          6.029664,
+          5.993727999999998,
+          6.023808000000001,
+          6.129344,
+          6.073823999999999,
+          6.075264,
+          6.098687999999999,
+          6.055679999999998,
+          6.1043199999999995,
+          6.097951999999999,
+          6.086975999999999,
+          5.976223999999999,
+          6.052415999999999
+        ],
+        "passes": {
+          "Bloom.Horizontal": {
+            "p50": 0.208576,
+            "p95": 0.209792
+          },
+          "Bloom.Vertical": {
+            "p50": 0.108672,
+            "p95": 0.1096
+          },
+          "DDGI.Trace.Relocate.Classify.Integrate": {
+            "p50": 0.102816,
+            "p95": 0.141536
+          },
+          "Exposure.EV100.Meter.Adapt": {
+            "p50": 0.025952,
+            "p95": 0.027296
+          },
+          "Output.SDR": {
+            "p50": 0.047904,
+            "p95": 0.051776
+          },
+          "Post.Atmosphere.Lens.ToneMap.LUT": {
+            "p50": 0.2664,
+            "p95": 0.277056
+          },
+          "RT.Reflections.SoftShadows.DDGI": {
+            "p50": 1.900256,
+            "p95": 1.92144
+          },
+          "SVGF.Atrous.1": {
+            "p50": 0.448128,
+            "p95": 0.491232
+          },
+          "SVGF.Atrous.2": {
+            "p50": 0.480352,
+            "p95": 0.494016
+          },
+          "SVGF.Atrous.4": {
+            "p50": 0.533312,
+            "p95": 0.5672
+          },
+          "SVGF.Reproject.Reject.Moments": {
+            "p50": 0.714656,
+            "p95": 0.831936
+          },
+          "Upscale.TAAU.Resolve": {
+            "p50": 0.210976,
+            "p95": 0.233024
+          },
+          "Viewport.Ready": {
+            "p50": 0.000544,
+            "p95": 0.000576
+          },
+          "Visibility.Motion": {
+            "p50": 1.009504,
+            "p95": 1.014464
+          }
+        },
+        "gpuBefore": "64 %, 5227 MiB, 12282 MiB, 154.38 W, 2805 MHz",
+        "gpuAfter": "64 %, 5227 MiB, 12282 MiB, 154.38 W, 2805 MHz"
+      },
+      "exposure": "ExposureState { multiplier: 0.0010996097, previous_multiplier: 0.0010948699, target_ev100: 9.449301, metered_luminance: 151.0 }",
+      "sceneHash": "4f197c8d6b71fc30a36e40a21169b960c37ff12d19f527c145c0312740c849c4",
+      "shaderRevision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce"
+    },
+    {
+      "mode": "upscaled",
+      "renderSize": [
+        1707,
+        960
+      ],
+      "displaySize": [
+        2560,
+        1440
+      ],
+      "upscaler": "Fsr1",
+      "viewCreateMs": 7387.1365000000005,
+      "processGpuMemoryMiB": {
+        "beforeView": null,
+        "afterCaptures": null
+      },
+      "timing": {
+        "shot": "stage",
+        "frames": 30,
+        "p50": 2.898688,
+        "p95": 2.9870720000000004,
+        "max": 3.041408,
+        "frameSamplesMs": [
+          2.9221440000000003,
+          2.9310080000000007,
+          2.9494400000000005,
+          2.899296,
+          2.899872,
+          2.9350399999999994,
+          2.9870720000000004,
+          2.8769279999999995,
+          2.895104000000001,
+          2.891552,
+          2.8826879999999995,
+          2.8902719999999995,
+          2.9031999999999996,
+          2.9024639999999997,
+          2.898688,
+          2.91936,
+          2.8623999999999996,
+          2.8749760000000006,
+          2.8339840000000005,
+          2.887616,
+          2.8740159999999997,
+          2.8500799999999997,
+          3.041408,
+          2.9111359999999995,
+          2.915744,
+          2.9115840000000004,
+          2.8555200000000007,
+          2.889728,
+          2.8618240000000004,
+          2.8313280000000005
+        ],
+        "passes": {
+          "Bloom.Horizontal": {
+            "p50": 0.096704,
+            "p95": 0.097664
+          },
+          "Bloom.Vertical": {
+            "p50": 0.051584,
+            "p95": 0.052736
+          },
+          "DDGI.Trace.Relocate.Classify.Integrate": {
+            "p50": 0.102592,
+            "p95": 0.136384
+          },
+          "Exposure.EV100.Meter.Adapt": {
+            "p50": 0.025888,
+            "p95": 0.026176
+          },
+          "Post.Atmosphere.Lens.ToneMap.LUT": {
+            "p50": 0.074816,
+            "p95": 0.078048
+          },
+          "RT.Reflections.SoftShadows.DDGI": {
+            "p50": 0.875552,
+            "p95": 0.898112
+          },
+          "SVGF.Atrous.1": {
+            "p50": 0.200352,
+            "p95": 0.220192
+          },
+          "SVGF.Atrous.2": {
+            "p50": 0.230464,
+            "p95": 0.25504
+          },
+          "SVGF.Atrous.4": {
+            "p50": 0.23728,
+            "p95": 0.24896
+          },
+          "SVGF.Reproject.Reject.Moments": {
+            "p50": 0.296352,
+            "p95": 0.331648
+          },
+          "Upscale.FSR1.EASU": {
+            "p50": 0.167456,
+            "p95": 0.169472
+          },
+          "Upscale.FSR1.RCAS": {
+            "p50": 0.055712,
+            "p95": 0.057472
+          },
+          "Viewport.Ready": {
+            "p50": 0.000096,
+            "p95": 0.000576
+          },
+          "Visibility.Motion": {
+            "p50": 0.466528,
+            "p95": 0.467872
+          }
+        },
+        "gpuBefore": "54 %, 4761 MiB, 12282 MiB, 105.57 W, 2805 MHz",
+        "gpuAfter": "0 %, 4761 MiB, 12282 MiB, 74.22 W, 2805 MHz"
+      },
+      "exposure": "ExposureState { multiplier: 0.0013049633, previous_multiplier: 0.0013049043, target_ev100: 9.3174715, metered_luminance: 137.81366 }",
+      "sceneHash": "4f197c8d6b71fc30a36e40a21169b960c37ff12d19f527c145c0312740c849c4",
+      "shaderRevision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce"
+    }
+  ],
+  "sharedGpu": "other agents share this RTX 4070 SUPER; gpuBefore/gpuAfter record nvidia-smi load around each window"
+}

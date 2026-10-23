@@ -847,3 +847,40 @@ pub fn chainlink_texture(project: &Path, name: &str) -> Result<String> {
     image.save(dir.join(&file))?;
     Ok(file)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every triangle's winding agrees with its vertices' stored normals.
+    fn wound_outward(mesh: &Mesh) -> bool {
+        mesh.indices.chunks_exact(3).all(|t| {
+            let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.positions[i as usize]);
+            let face = (b - a).cross(c - a);
+            face.length() < 1e-9 || face.dot(mesh.normals[t[0] as usize]) > 0.0
+        })
+    }
+
+    #[test]
+    fn primitives_wind_counter_clockwise_outward() {
+        let mut kit = Kit::new(vec![Material::flat("m", [0.5; 3], 0.5, 0.0)]);
+        kit.cuboid(
+            0,
+            Vec3::new(2.0, 1.0, 3.0),
+            Mat4::from_rotation_y(0.7),
+            Vec2::ONE,
+        );
+        kit.cylinder(0, 0.5, 2.0, 12, Mat4::IDENTITY, Vec2::ONE);
+        kit.sphere(0, Vec3::ZERO, 1.0, 8, Vec2::ONE);
+        kit.disc(0, 1.0, 3, 0.0);
+        kit.ribbon(
+            0,
+            &[Vec2::ZERO, Vec2::new(0.0, 10.0), Vec2::new(5.0, 20.0)],
+            4.0,
+            0.0,
+            Vec2::ONE,
+            &|x, _| x * 0.1,
+        );
+        assert!(wound_outward(&kit.meshes[0]));
+    }
+}

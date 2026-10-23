@@ -165,3 +165,46 @@ fn safe(part: &str) -> bool {
         && !part.contains(['\\', ':'])
         && !part.starts_with('/')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn asset(id: &str, path: &str) -> Asset {
+        Asset {
+            id: id.into(),
+            title: id.into(),
+            kind: Kind::Model,
+            source: "https://example.invalid".into(),
+            license: "CC0-1.0".into(),
+            authors: vec![],
+            projects: vec!["outpost".into()],
+            meters: None,
+            files: vec![File {
+                path: path.into(),
+                url: "https://example.invalid/f".into(),
+                size: 1,
+                blake3: "0".repeat(64),
+            }],
+        }
+    }
+
+    #[test]
+    fn duplicate_ids_and_traversal_are_rejected() {
+        let ok = Lock {
+            version: 1,
+            assets: vec![asset("a", "textures/a.jpg"), asset("b", "b.gltf")],
+        };
+        assert!(ok.validate().is_ok());
+        let duplicate = Lock {
+            version: 1,
+            assets: vec![asset("a", "a.gltf"), asset("a", "b.gltf")],
+        };
+        assert!(duplicate.validate().is_err());
+        let escape = Lock {
+            version: 1,
+            assets: vec![asset("a", "../outside.bin")],
+        };
+        assert!(escape.validate().is_err());
+    }
+}
