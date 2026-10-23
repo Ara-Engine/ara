@@ -20,6 +20,8 @@ function Build-Bench([string]$Name, [string[]]$Features, [string]$Bench = 'perfo
     $artifact = $messages | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq $Bench -and $_.executable } | Select-Object -Last 1
     if (-not $artifact) { throw "Missing $Bench executable: $Name" }
     Copy-Item -LiteralPath $artifact.executable -Destination (Join-Path $bins "$Name.exe") -Force
+    $binary = Join-Path $bins "$Name.exe"
+    Write-JsonInput "$binary.build.json" ([ordered]@{ buildRevision = (& git -C $repo rev-parse HEAD); dirty = [bool](& git -C $repo status --porcelain); binarySha256 = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash; builtUtc = [DateTime]::UtcNow.ToString('o'); cargoArguments = $arguments })
 }
 if (-not $RunOnly) {
     Build-Bench 'deterministic' @('--features', 'bench')
