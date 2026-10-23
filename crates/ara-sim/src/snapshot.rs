@@ -139,6 +139,34 @@ fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 }
 
 impl Session {
+    /// Opt-in diagnostic view of all registered ECS state, ordered by stable identity.
+    /// No extraction/serialization occurs unless tooling explicitly calls this.
+    pub fn diagnostic_state(&self) -> Result<serde_json::Value> {
+        let (entities, resources) = self.capture_world()?;
+        Ok(
+            serde_json::json!({"entities": entities, "resources": resources, "context": self.context()}),
+        )
+    }
+
+    /// Replays a trusted applied boundary using the ordinary input/command/ops path.
+    /// This administrative recording API must never be exposed to game clients.
+    pub fn replay_tick(&mut self, record: &TickRecord) -> Result<TickRecord> {
+        if record.tick != self.tick() + 1 {
+            return Err(SimError("replay ticks must be contiguous".into()));
+        }
+        // A snapshot can already contain this boundary's queued work. The applied
+        // record replaces that queue; extending it would apply authoring ops twice.
+        self.pending_inputs.remove(&record.tick);
+        self.pending_commands.remove(&record.tick);
+        self.pending_typed.remove(&record.tick);
+        self.inject(record.tick, record.inputs.clone())?;
+        for command in &record.commands {
+            self.submit(record.tick, command.clone())?;
+        }
+        self.pending_ops.insert(record.tick, record.ops.clone());
+        self.step()
+    }
+
     /// Hashes schema values, hierarchy, explicit resources, RNG and active inputs.
     /// Pending external arrivals and host interpolation are excluded from a tick hash.
     pub fn state_hash(&self) -> Result<StateHash> {
