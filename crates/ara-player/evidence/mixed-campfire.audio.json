@@ -1,0 +1,43 @@
+{
+  "channelRms": [0.025188588492097555, 0.019167387870592197],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 48000,
+  "integratedLufs": -30.911677073833143,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -33.00225668414056,
+  "samplePeak": 0.15796378254890442,
+  "sampleRate": 48000,
+  "seconds": 1,
+  "silenceFraction": 0.001958333333333333,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -70.03798262582524
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -33.02350360400136
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -69.60591066988493
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -63.61047725815821
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -59.34267992406913
+    }
+  ],
+  "truePeak": 0.15796378254890442,
+  "wavBlake3": "4fc682e30bdc05d7de3fb77784f367c77442dadcd2afe0bb433c61c9375103c2"
+}
