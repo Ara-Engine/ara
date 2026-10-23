@@ -9,8 +9,8 @@ publish.workspace = true
 ara-json = { path = "../ara-json" }
 ara-ui = { path = "../ara-ui" }
 ara-ui-text = { path = "../ara-ui-text" }
-tiny-skia = "=0.12.0"
-swash = "=0.2.10"
+tiny-skia = "0.12.0"
+swash = "0.2.10"
 serde = { workspace = true }
 serde_json = { workspace = true }
 

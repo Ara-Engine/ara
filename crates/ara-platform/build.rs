@@ -4,5 +4,8 @@ fn main() {
         let dir = std::env::var("SDL3_LIB_DIR")
             .unwrap_or_else(|_| format!("{}/native", env!("CARGO_MANIFEST_DIR")));
         println!("cargo:rustc-link-search=native={dir}");
+        // Link explicitly: ara-audio enables sdl3-sys `no-link`, and workspace feature
+        // unification would otherwise drop sdl3-sys's own link directive.
+        println!("cargo:rustc-link-lib=dylib=SDL3");
     }
 }
