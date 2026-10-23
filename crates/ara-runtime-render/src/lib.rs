@@ -9,6 +9,7 @@
 
 pub mod geometry;
 pub mod two_d;
+pub mod vfx;
 
 use anyhow::{Context, Result, ensure};
 use ara_render::{
@@ -47,6 +48,7 @@ pub struct PresentStats {
 /// Owns the renderer and the per-draw upload state.
 pub struct Presenter {
     renderer: Option<Renderer>,
+    effects: vfx::Effects,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
@@ -105,6 +107,7 @@ impl Presenter {
     pub fn new(size: [u32; 2], extensions: Vec<CString>, cache: impl Into<PathBuf>) -> Self {
         Self {
             renderer: None,
+            effects: vfx::Effects::default(),
             size,
             extensions,
             cache: cache.into(),
@@ -217,7 +220,10 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("renderer missing after prepare")?;
-        let capture = renderer.capture(&request)?;
+        let mut capture = renderer.capture(&request)?;
+        // GPU particles replay over the captured frame before it is resized away.
+        self.effects
+            .composite(renderer, frame, &request, &mut capture)?;
         // Captures resize to the request; return to the presentation size.
         renderer.resize(self.size)?;
         Ok(capture)

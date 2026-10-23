@@ -158,6 +158,17 @@ impl GpuSystem {
     /// Replay from tick zero and assemble a standard ara-render capture at time T.
     /// Capture tick is completed fixed ticks; settle frames are bounded and do not advance time.
     pub fn capture(&mut self, gpu: &mut VulkanDevice, request: &CaptureRequest) -> Result<Capture> {
+        self.capture_over(gpu, request, View::default())
+    }
+    /// [`GpuSystem::capture`] composited over a scene: `scene` supplies the background,
+    /// depth and lighting of every replayed frame (its camera and exposure come from
+    /// `request`). The scene inputs must stay valid and unchanged for the whole replay.
+    pub fn capture_over(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        request: &CaptureRequest,
+        scene: View,
+    ) -> Result<Capture> {
         ensure!(
             request.deterministic && request.seed == u64::from(self.effect.seed),
             "VFX captures require deterministic mode and the authored seed"
@@ -178,9 +189,7 @@ impl GpuSystem {
             camera: request.camera.clone(),
             exposure: request.exposure,
             async_compute: false,
-            scene_depth: None,
-            scene_color: None,
-            ..View::default()
+            ..scene
         };
         for _ in 1..request.tick {
             self.run_frame(gpu, &view, false, true)?;
