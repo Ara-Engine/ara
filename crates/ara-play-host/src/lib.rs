@@ -175,7 +175,8 @@ impl PlayService {
                     ),
                 ]);
             }
-            let pool = Pool::new(self.config.pool.clone(), self.token.clone())
+            let scripts = self.script_scene().ok().flatten();
+            let pool = Pool::with_scripts(self.config.pool.clone(), self.token.clone(), scripts)
                 .map_err(|e| fail(codes::PLAY, format!("cannot start the player pool: {e}")))?;
             self.pool = Some(pool);
         }
@@ -195,7 +196,7 @@ impl PlayService {
             .ok_or_else(|| fail(codes::ASSETS, "asset pipeline unavailable"))
     }
 
-    /// Logs pending asset notes (importer upgrades) and adds them to a successful
+    /// Logs pending asset notes (upgrades or placeholders) and adds them to a successful
     /// result as `notes`.
     fn with_notes(
         &mut self,
@@ -943,16 +944,31 @@ impl Service for PlayService {
             pool.refill();
         }
         let mut faults = Vec::new();
+        let mut closed = Vec::new();
         for (id, world) in &mut self.worlds {
             if world.fault.is_some() {
                 continue;
             }
             for (_, player) in &mut world.players {
                 if let Some(fault) = player.check() {
+                    if fault["code"] == "player_exited" && fault["exitCode"] == "0x00000000" {
+                        closed.push(id.clone());
+                        break;
+                    }
                     faults.push((id.clone(), fault.clone()));
                     world.fault = Some(fault);
                     break;
                 }
+            }
+        }
+        for id in closed {
+            let _ = self.stop(&id);
+            cx.log(Diagnostic::info(
+                codes::PLAY,
+                format!("{id}: player window closed"),
+            ));
+            if self.worlds.is_empty() {
+                cx.publish_commands("play", &Value::Null);
             }
         }
         for (id, fault) in faults {

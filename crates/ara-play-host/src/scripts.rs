@@ -101,7 +101,7 @@ impl PlayService {
         let paths = self.config.scripts.as_ref().ok_or_else(|| {
             fail(
                 codes::REQUEST,
-                "the project has C# modules but the .NET host is not built \
+                "the project has C# modules but the .NET host is not built; run `ara doctor` \
                  (`dotnet build dotnet/Ara.slnx -c Release`, or set ARA_DOTNET_ARTIFACTS)",
             )
         })?;

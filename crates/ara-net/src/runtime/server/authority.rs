@@ -165,13 +165,21 @@ fn tick_inner<F: SimulationFeature>(world: &mut World, state: &mut Authority) ->
             && let Some(input) = world.get::<ActionState<Input>>(actor.entity)
         {
             // Invalid/unavailable input is neutral; clients never submit state or edits.
-            let typed = input.0.typed::<F>().unwrap_or_default();
-            state.adapter.inputs.push(Injection {
-                player,
-                action: F::ACTION.into(),
-                value: F::action(&typed)?,
-                hold_ticks: 1,
-            });
+            let codec = world.get_resource::<crate::ActionCodec<F::Input>>();
+            let typed = input.0.typed_with::<F>(codec).unwrap_or_default();
+            let actions = match codec {
+                Some(codec) => (codec.expand)(&typed)?,
+                None => vec![(F::ACTION.into(), F::action(&typed)?)],
+            };
+            state
+                .adapter
+                .inputs
+                .extend(actions.into_iter().map(|(action, value)| Injection {
+                    player,
+                    action,
+                    value,
+                    hold_ticks: 1,
+                }));
         }
     }
     if let Some(intents) = state

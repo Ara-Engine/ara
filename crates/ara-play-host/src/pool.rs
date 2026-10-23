@@ -236,11 +236,21 @@ pub struct Pool {
     spawning: Vec<Spawning>,
     idle: Vec<Player>,
     next: u32,
+    scripts: Option<ara_play::ScriptScene>,
 }
 
 impl Pool {
     /// Binds the live-link listener on 127.0.0.1 and starts filling the pool.
     pub fn new(config: PoolConfig, token: String) -> std::io::Result<Self> {
+        Self::with_scripts(config, token, None)
+    }
+
+    /// Warms project modules in each single-use player before its ready handshake.
+    pub fn with_scripts(
+        config: PoolConfig,
+        token: String,
+        scripts: Option<ara_play::ScriptScene>,
+    ) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         std::fs::create_dir_all(&config.logs)?;
@@ -251,6 +261,7 @@ impl Pool {
             spawning: Vec::new(),
             idle: Vec::new(),
             next: 0,
+            scripts,
         };
         pool.refill();
         Ok(pool)
@@ -305,11 +316,15 @@ impl Pool {
             .arg("--size")
             .arg(format!("{}x{}", self.config.size[0], self.config.size[1]))
             .env(TOKEN_ENV, &self.token)
+            .env("ARA_CRASH_DIR", self.config.logs.join("crashes"))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::from(std::fs::File::create(&log)?));
         if window {
             command.arg("--window");
+        }
+        if let Some(scripts) = &self.scripts {
+            command.env("ARA_PLAY_SCRIPTS", serde_json::to_string(scripts)?);
         }
         #[cfg(windows)]
         {
@@ -435,8 +450,12 @@ impl Pool {
         timeout: Duration,
     ) -> Result<Vec<Player>, String> {
         let start = Instant::now();
+        let mut problems = Vec::new();
         loop {
-            let problems = self.poll();
+            let observed = self.poll();
+            if !observed.is_empty() {
+                problems = observed;
+            }
             if self.ready(window) >= count {
                 break;
             }

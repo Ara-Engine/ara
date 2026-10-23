@@ -11,13 +11,14 @@ renderer and per-draw upload state; no simulation, window or process code.
   (entity, geometry, material); otherwise re-transforms moved/skinned meshes on the CPU
   (`Renderer::update_mesh`) and rewrites lights/sun in place.
 - `present(&frame)`: `prepare` + render to the output image (blit with
-  `ara_platform::Present`); resident terrain chunks draw as meshes
-  (`terrain_mesh::TerrainMeshes`: world-space heightfield, splat-coloured texture,
-  shadows and local lights like any surface). `capture(&frame, size, mode, marks,
+  `ara_platform::Present`); resident terrain and foliage use ara-landscape on the
+  same device. `capture(&frame, size, mode, marks,
   seed)`: deterministic capture with numbered marks and a legend whose names are
   `Name (e_address)`; terrain and foliage come from the landscape composite.
-  `capture_presented(&frame, size, marks, seed)`: what presented frames draw (terrain
-  meshes, no landscape/VFX composites; `play.capture {presented: true}`).
+  `capture_presented(&frame, size, marks, seed)`: reads the GPU-composited window
+  path, including landscape/foliage and persistent VFX (`presented: true`).
+- Window presentation merges landscape and scene depth on the GPU before particles,
+  then runs the shared HDR post pass. `output()` is the final CopySource image.
 - `stats()`: rebuilt flag, meshes updated, CPU prepare time, render time.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
@@ -44,8 +45,10 @@ renderer and per-draw upload state; no simulation, window or process code.
   light and transform edits stream. Model texture decodes are cached per generation.
 - At most 64 local lights; one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
-- VFX, 2D and foliage are capture paths today; windowed presentation draws terrain
-  chunks as meshes but no foliage, particles or 2D yet (needs GPU-side composition).
+- `Presenter2d::set_atlases` publishes textures once; `prepare` moves the atlas map
+  through extraction without copying pixels; `present` draws without readbacks.
+- Cook the compositor offline: `cargo run -p ara-shader-cook --
+  crates/ara-runtime-render/shaders/pipelines.json crates/ara-runtime-render/cooked`.
 - Effects come from ara-vfx-gpu's committed cooked library (a dev-checkout path);
   authored project effects need an asset-pipeline cook first.
 

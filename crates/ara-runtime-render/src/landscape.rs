@@ -136,6 +136,75 @@ fn scene_depth(renderer: &mut Renderer, size: [u32; 2]) -> Result<Vec<f32>> {
 }
 
 impl Landscapes {
+    /// Renders resident landscape/foliage on the scene device without readback.
+    /// Streams one detail tile per frame; the coarse atlas remains resident.
+    pub fn present(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        camera: &CameraSpec,
+    ) -> Result<Option<(ara_gpu::Image, ara_gpu::Image)>> {
+        let Some(terrain) = &frame.terrain else {
+            return Ok(None);
+        };
+        let size = renderer.size();
+        if self
+            .built
+            .as_ref()
+            .is_none_or(|b| !Arc::ptr_eq(&b.data, &terrain.data) || b.size != size)
+        {
+            if let Some(old) = self.built.take() {
+                old.landscape.retire(renderer.gpu_mut())?;
+            }
+            let data = landscape_data(&terrain.data)?;
+            self.built = Some(Built {
+                data: Arc::clone(&terrain.data),
+                size,
+                landscape: Landscape::new(renderer.gpu_mut(), &data, size, &cooked_root())?,
+                queued: BTreeSet::new(),
+            });
+        }
+        let CameraSpec::LookAt {
+            position,
+            target,
+            vertical_fov,
+        } = camera
+        else {
+            return Ok(None);
+        };
+        let built = self.built.as_mut().context("landscape initialized")?;
+        let (direction, lux) = frame.sun.unwrap_or(([-0.4, 0.8, -0.25], [1.0; 3]));
+        let peak = lux.iter().copied().fold(1e-6, f32::max);
+        let view = View {
+            eye: *position,
+            target: *target,
+            fov_y: *vertical_fov,
+            near: NEAR,
+            sun: glam30::Vec3::from_array(direction).normalize_or(glam30::Vec3::Y),
+            sun_color: glam30::Vec3::from_array(lux.map(|c| c / peak)),
+            tick: frame.tick.min(u64::from(u32::MAX)) as u32,
+            dt: 1.0 / 60.0,
+        };
+        let gpu = renderer.gpu_mut();
+        if let Some(coord) = terrain
+            .tiles
+            .iter()
+            .filter(|c| !built.queued.contains(c))
+            .min()
+            .copied()
+            && let Some(tile) = terrain.data.tiles.get(&coord)
+            && built.landscape.queue_tile(gpu, coord, tile, true)?
+        {
+            built.queued.insert(coord);
+        }
+        built.landscape.update(gpu, &view)?;
+        let list = built.landscape.record(gpu)?;
+        let point = gpu.submit(list, &[])?;
+        gpu.resolve(point)?;
+        let outputs = built.landscape.outputs();
+        Ok(Some((outputs.color, outputs.depth)))
+    }
+
     /// Composites `frame`'s terrain into `capture` (after the scene's VFX): `base` is
     /// the scene image before VFX, so the effects' delta carries over onto terrain.
     /// No terrain: no change.

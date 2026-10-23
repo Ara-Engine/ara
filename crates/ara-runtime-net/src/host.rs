@@ -11,6 +11,20 @@ use std::{net::SocketAddr, time::Instant};
 struct Driver(Runtime);
 
 impl Authoritative for Driver {
+    fn component_at(
+        &self,
+        entity: Entity,
+        name: &str,
+    ) -> std::result::Result<Option<Value>, SimError> {
+        match self.session().component_at(entity, name)? {
+            Some(value) => Ok(Some(value)),
+            None => Ok(ara_runtime_script::read(
+                self.session().world(),
+                entity,
+                name,
+            )),
+        }
+    }
     fn session(&self) -> &Session {
         self.0.play().session()
     }
@@ -110,6 +124,7 @@ impl NetHost {
                 ..Default::default()
             },
         )?;
+        server.action_codec(super::locomotion::codec());
         for (identity, player) in &players {
             server.spawn(
                 identity,
@@ -166,18 +181,11 @@ impl NetHost {
     }
 
     /// The listen host's own input (player 1), `after` ticks past the next boundary:
-    /// `Move` through the server's host path, other actions straight into the session.
+    /// All movement actions go through the same bounded codec as remote input.
     pub fn input(&mut self, after: u64, inputs: Vec<Injection>) -> Result<()> {
         let tick = self.server.session().tick() + 1 + after;
-        let (moves, rest): (Vec<_>, Vec<_>) = inputs.into_iter().partition(|i| i.action == MOVE);
-        for input in moves {
+        for input in inputs {
             self.server.inject_host(tick, input)?;
-        }
-        if !rest.is_empty() {
-            self.runtime_mut()
-                .play_mut()
-                .session_mut()
-                .inject(tick, rest)?;
         }
         Ok(())
     }

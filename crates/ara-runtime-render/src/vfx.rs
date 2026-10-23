@@ -38,9 +38,142 @@ fn library(name: &str) -> Result<Effect> {
 #[derive(Default)]
 pub struct Effects {
     systems: BTreeMap<(String, [u32; 2]), GpuSystem>,
+    live: BTreeMap<u64, Live>,
+    failed: BTreeMap<u64, String>,
+}
+
+struct Live {
+    name: String,
+    size: [u32; 2],
+    system: GpuSystem,
+    tick: u64,
+    rendered: bool,
 }
 
 impl Effects {
+    /// Advances persistent per-entity particle systems to this presentation tick,
+    /// then redraws them over the current camera/background. No pixel readbacks.
+    pub fn present(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        camera: &CameraSpec,
+        mut color: SceneColor,
+        depth: SceneDepth,
+    ) -> Result<SceneColor> {
+        let size = renderer.size();
+        let stale: Vec<u64> = self
+            .live
+            .iter()
+            .filter(|(id, live)| {
+                live.size != size
+                    || !frame
+                        .effects
+                        .iter()
+                        .any(|e| e.entity == **id && e.effect == live.name)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in stale {
+            if let Some(live) = self.live.remove(&id) {
+                live.system.retire(renderer.gpu_mut())?;
+            }
+        }
+        for effect in &frame.effects {
+            if self.failed.get(&effect.entity) == Some(&effect.effect) {
+                continue;
+            }
+            if !self.live.contains_key(&effect.entity) {
+                let definition = match library(&effect.effect) {
+                    Ok(definition) => definition,
+                    Err(error) => {
+                        eprintln!("ARA7303: {error:#}");
+                        self.failed.insert(effect.entity, effect.effect.clone());
+                        continue;
+                    }
+                };
+                let system = GpuSystem::new(
+                    renderer.gpu_mut(),
+                    &definition,
+                    &cooked_root().join(&definition.name),
+                    size,
+                )?;
+                self.live.insert(
+                    effect.entity,
+                    Live {
+                        name: effect.effect.clone(),
+                        size,
+                        system,
+                        tick: frame.tick.saturating_sub(1),
+                        rendered: false,
+                    },
+                );
+            }
+            let live = self
+                .live
+                .get_mut(&effect.entity)
+                .context("live effect initialized")?;
+            let offset = glam30::Vec3::from_array(effect.position);
+            let camera = match camera {
+                CameraSpec::LookAt {
+                    position,
+                    target,
+                    vertical_fov,
+                } => CameraSpec::LookAt {
+                    position: *position - offset,
+                    target: *target - offset,
+                    vertical_fov: *vertical_fov,
+                },
+                CameraSpec::Orthographic { centre, world_size } => CameraSpec::Orthographic {
+                    centre: *centre,
+                    world_size: *world_size,
+                },
+                CameraSpec::FrameBounds {
+                    min,
+                    max,
+                    direction,
+                    padding,
+                    vertical_fov,
+                } => CameraSpec::FrameBounds {
+                    min: *min - offset,
+                    max: *max - offset,
+                    direction: *direction,
+                    padding: *padding,
+                    vertical_fov: *vertical_fov,
+                },
+            };
+            let view = View {
+                camera,
+                exposure: frame.environment.exposure,
+                scene_background: Some(color),
+                scene_depth: Some(depth),
+                lighting: match frame.sun {
+                    Some((direction, lux)) => Lighting {
+                        sun_direction: glam30::Vec3::from_array(direction).normalize_or_zero(),
+                        sun_color: glam30::Vec3::from_array(lux),
+                        ..Lighting::default()
+                    },
+                    None => Lighting::default(),
+                },
+                ..View::default()
+            };
+            // Catch up only completed simulation ticks; redraws between ticks do
+            // not age particles. Bound catch-up after a long paused capture.
+            let count = frame.tick.saturating_sub(live.tick).min(8);
+            if count == 0 && live.rendered {
+                live.system.render(renderer.gpu_mut(), &view)?;
+            } else {
+                for _ in 0..count.max(1) {
+                    live.system.step(renderer.gpu_mut(), &view)?;
+                }
+            }
+            live.tick = frame.tick;
+            live.rendered = true;
+            color = live.system.hdr_output();
+        }
+        Ok(color)
+    }
+
     /// Composites `frame`'s effects over the frame `renderer` just captured (call
     /// before resizing it) and replaces `capture`'s image. No effects: no change.
     pub fn composite(

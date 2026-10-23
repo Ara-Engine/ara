@@ -49,7 +49,8 @@ fn valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp() {
         &dir.join("scripts/Outpost"),
     );
     let scripts = ScriptPaths::locate(&repo()).expect("built .NET host");
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     std::fs::create_dir_all(&captures).unwrap();
     let mut agent = Agent::open(&dir, 31, |config| config.scripts = Some(scripts.clone()));
 
@@ -99,7 +100,7 @@ fn valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp() {
     agent.play(
         "input",
         json!({"world": w, "inputs": [
-            {"action": "Move", "value": [1, 0], "holdTicks": 600, "player": 1}
+            {"action": "Move", "value": [0, 1], "holdTicks": 600, "player": 1}
         ]}),
     );
     until_tick(&mut agent, begin + 600 + 30);
@@ -144,6 +145,34 @@ fn valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp() {
     until_tick(&mut agent, begin + 600 + 40);
     let healed = read(&mut agent, &w, None, &["e_fox.Vitality.hp"]);
     assert_eq!(healed["e_fox.Vitality.hp"], json!(65), "{healed}");
+    agent.play(
+        "command",
+        json!({"world":w,"name":"game.UseMedkit","params":{"actor":"e_player02"}}),
+    );
+    until_tick(&mut agent, begin + 600 + 65);
+    let fields = [
+        "e_fox.Vitality.hp",
+        "e_fox.Vitality.medkits",
+        "e_player02.Vitality.hp",
+        "e_player02.Vitality.medkits",
+    ];
+    let replicated = read(&mut agent, &w, Some(1), &fields);
+    assert_eq!(
+        replicated["e_fox.Vitality.hp"],
+        json!(65),
+        "relevant C# field: {replicated}"
+    );
+    assert_eq!(
+        replicated["e_fox.Vitality.medkits"],
+        json!(2),
+        "another owner's field stays local: {replicated}"
+    );
+    assert_eq!(
+        replicated["e_player02.Vitality.medkits"],
+        json!(1),
+        "owner C# field: {replicated}"
+    );
+    println!("CSHARP-REPLICATION {replicated}");
 
     // Captures: each process renders its own view (terrain, foliage, VFX composited).
     let host_png = captures.join("valley-host.png");
@@ -216,7 +245,8 @@ fn valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp() {
 #[ignore = "opens a window; run explicitly with --ignored"]
 fn valley_plays_in_a_window() {
     let dir = demo_copy("valley-window");
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     std::fs::create_dir_all(&captures).unwrap();
     let mut agent = Agent::open(&dir, 9, |config| {
         config.pool.windowed = 1;
@@ -296,5 +326,76 @@ fn valley_plays_in_a_window() {
             "fox": read,
         }))
         .unwrap()
+    );
+}
+
+/// A settled stationary workload for comparable frame-budget measurements. Set
+/// ARA_BENCH_PLAYER to a saved player binary to measure the same test before a patch.
+#[test]
+#[ignore = "opens a window; run explicitly for frame-budget evidence"]
+fn valley_window_budget() {
+    let dir = demo_copy("valley-budget");
+    let output = repo().join("target/runtime-polish");
+    let mut agent = Agent::open(&dir, 9, |config| {
+        config.pool.windowed = 1;
+        config.pool.headless = 0;
+    });
+    agent.until("a warm window", |a| {
+        a.play("status", json!({}))["pool"]["windowed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 1
+    });
+    // View across the campfire at (16,0,16), with foliage behind it.
+    agent.tool("ara_apply",json!({"doc":SCENE,"why":"Frame-budget camera","commands":[
+        {"cmd":"property.set","args":{"entity":"e_camera","path":"FollowCamera.yaw","value":-60}},
+        {"cmd":"property.set","args":{"entity":"e_camera","path":"FollowCamera.distance","value":9}}
+    ]}));
+    let started = agent.play("start", json!({"scene":SCENE,"window":true,"seed":9}));
+    let world = started["world"].clone();
+    let begin = Instant::now();
+    let mut samples = Vec::new();
+    while begin.elapsed() < std::time::Duration::from_secs(10) {
+        agent.host.tick();
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let current = status(&mut agent, 0);
+        assert!(current["fault"].is_null(), "{current}");
+        if begin.elapsed() > std::time::Duration::from_secs(3) {
+            samples.push(current);
+        }
+    }
+    let label = if std::env::var_os("ARA_BENCH_PLAYER").is_some() {
+        "before"
+    } else {
+        "after"
+    };
+    let path = output.join(format!("valley-camp-{label}.png"));
+    agent.play(
+        "capture",
+        json!({"world":world,"path":path,"presented":true,"marks":0}),
+    );
+    agent.play("capture",json!({"world":world,"path":output.join(format!("valley-camp-reference-{label}.png")),"marks":0}));
+    agent.play("stop", json!({"world":world}));
+    let mut p95: Vec<f64> = samples
+        .iter()
+        .filter_map(|s| s["frameMsP95"].as_f64())
+        .filter(|v| *v > 0.0)
+        .collect();
+    p95.sort_by(f64::total_cmp);
+    assert!(!p95.is_empty(), "window did not report any frame timing");
+    let budget_ms = 1000.0 / 60.0;
+    assert!(
+        p95.last().unwrap() <= &budget_ms,
+        "60 Hz budget exceeded: {p95:?}"
+    );
+    let measurement = json!({"label":label,"budgetMs":budget_ms,"frameMsP95Windows":p95,"medianWindowP95":p95[p95.len()/2],"maxWindowP95":p95.last(),"samples":samples});
+    std::fs::write(
+        output.join(format!("valley-budget-{label}.json")),
+        serde_json::to_vec_pretty(&measurement).unwrap(),
+    )
+    .unwrap();
+    println!(
+        "VALLEY-BUDGET {}",
+        json!({"label":label,"medianWindowP95":measurement["medianWindowP95"],"maxWindowP95":measurement["maxWindowP95"]})
     );
 }

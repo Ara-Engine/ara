@@ -1,0 +1,415 @@
+{
+  "label": "before",
+  "frameMsP95Windows": [
+    2.711199998855591,
+    3.135499954223633,
+    3.151700019836426,
+    3.178800106048584,
+    3.185299873352051,
+    3.6255998611450195,
+    3.7517001628875732,
+    3.932300090789795,
+    5.136899948120117,
+    5.144800186157227,
+    5.169899940490723,
+    5.180700302124023,
+    5.18120002746582,
+    5.195700168609619,
+    5.221099853515625,
+    5.227200031280518,
+    5.2295002937316895,
+    5.265300273895264,
+    5.298399925231934,
+    5.309700012207031,
+    5.311999797821045,
+    5.352700233459473,
+    5.504199981689453,
+    5.521299839019775,
+    5.542500019073486,
+    5.551199913024902,
+    5.563000202178955,
+    5.605900287628174,
+    5.752999782562256
+  ],
+  "medianWindowP95": 5.221099853515625,
+  "maxWindowP95": 5.752999782562256,
+  "samples": [
+    {
+      "tick": 161,
+      "paused": false,
+      "maxLateUs": 5781,
+      "fps": 163.07867074177727,
+      "frameMsP95": 5.311999797821045,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 176,
+      "paused": false,
+      "maxLateUs": 5849,
+      "fps": 166.31476574169258,
+      "frameMsP95": 5.542500019073486,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 191,
+      "paused": false,
+      "maxLateUs": 6831,
+      "fps": 164.6074406482398,
+      "frameMsP95": 5.352700233459473,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 206,
+      "paused": false,
+      "maxLateUs": 5228,
+      "fps": 170.09184168326053,
+      "frameMsP95": 5.309700012207031,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 222,
+      "paused": false,
+      "maxLateUs": 6317,
+      "fps": 167.89824585379188,
+      "frameMsP95": 5.18120002746582,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 237,
+      "paused": false,
+      "maxLateUs": 6363,
+      "fps": 168.67917926203253,
+      "frameMsP95": 5.195700168609619,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 252,
+      "paused": false,
+      "maxLateUs": 5573,
+      "fps": 176.1737182481129,
+      "frameMsP95": 5.144800186157227,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 268,
+      "paused": false,
+      "maxLateUs": 5195,
+      "fps": 172.10263262267986,
+      "frameMsP95": 5.227200031280518,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 283,
+      "paused": false,
+      "maxLateUs": 5641,
+      "fps": 168.28691745331014,
+      "frameMsP95": 5.521299839019775,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 298,
+      "paused": false,
+      "maxLateUs": 5595,
+      "fps": 167.51494372893848,
+      "frameMsP95": 5.605900287628174,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 313,
+      "paused": false,
+      "maxLateUs": 5710,
+      "fps": 167.1140947608538,
+      "frameMsP95": 5.551199913024902,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 328,
+      "paused": false,
+      "maxLateUs": 5466,
+      "fps": 162.7886570451953,
+      "frameMsP95": 5.504199981689453,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 343,
+      "paused": false,
+      "maxLateUs": 5475,
+      "fps": 170.5750839784774,
+      "frameMsP95": 5.752999782562256,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 359,
+      "paused": false,
+      "maxLateUs": 5422,
+      "fps": 168.90677642202812,
+      "frameMsP95": 5.2295002937316895,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 374,
+      "paused": false,
+      "maxLateUs": 6045,
+      "fps": 177.5290792631833,
+      "frameMsP95": 5.169899940490723,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 389,
+      "paused": false,
+      "maxLateUs": 5427,
+      "fps": 174.03775907399253,
+      "frameMsP95": 5.563000202178955,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 404,
+      "paused": false,
+      "maxLateUs": 5879,
+      "fps": 182.77032127843864,
+      "frameMsP95": 5.180700302124023,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 419,
+      "paused": false,
+      "maxLateUs": 4086,
+      "fps": 174.06922416555565,
+      "frameMsP95": 5.265300273895264,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 434,
+      "paused": false,
+      "maxLateUs": 4700,
+      "fps": 179.69968588494905,
+      "frameMsP95": 5.221099853515625,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 450,
+      "paused": false,
+      "maxLateUs": 4672,
+      "fps": 177.83665268738844,
+      "frameMsP95": 5.136899948120117,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 465,
+      "paused": false,
+      "maxLateUs": 5761,
+      "fps": 185.93581495667698,
+      "frameMsP95": 5.298399925231934,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 480,
+      "paused": false,
+      "maxLateUs": 11945,
+      "fps": 233.7693726462099,
+      "frameMsP95": 2.711199998855591,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 495,
+      "paused": false,
+      "maxLateUs": 12013,
+      "fps": 240.81450571835757,
+      "frameMsP95": 3.151700019836426,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 510,
+      "paused": false,
+      "maxLateUs": 4299,
+      "fps": 239.00230876230268,
+      "frameMsP95": 3.185299873352051,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 525,
+      "paused": false,
+      "maxLateUs": 4240,
+      "fps": 247.93427459153813,
+      "frameMsP95": 3.135499954223633,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 541,
+      "paused": false,
+      "maxLateUs": 12176,
+      "fps": 232.25036431815624,
+      "frameMsP95": 3.178800106048584,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 556,
+      "paused": false,
+      "maxLateUs": 6009,
+      "fps": 233.86898580137785,
+      "frameMsP95": 3.6255998611450195,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 571,
+      "paused": false,
+      "maxLateUs": 4507,
+      "fps": 234.16536122785203,
+      "frameMsP95": 3.7517001628875732,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    },
+    {
+      "tick": 586,
+      "paused": false,
+      "maxLateUs": 4443,
+      "fps": 229.176726076123,
+      "frameMsP95": 3.932300090789795,
+      "fault": null,
+      "audio": true,
+      "net": null,
+      "cells": [
+        "c_00"
+      ]
+    }
+  ]
+}

@@ -76,7 +76,8 @@ fn read(agent: &mut Agent, world: &Value, path: &str) -> Value {
 #[test]
 fn agent_plays_and_captures_a_2d_scene() {
     let dir = project();
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     let mut agent = Agent::open(&dir, 11, |_| {});
     // The scout becomes the player's 2D character.
     agent.tool(
@@ -125,4 +126,34 @@ fn agent_plays_and_captures_a_2d_scene() {
         }))
         .unwrap()
     );
+}
+
+#[test]
+#[ignore = "opens a native 2D player window"]
+fn two_d_scene_presents_in_a_window() {
+    let dir = project();
+    let mut agent = Agent::open(&dir, 11, |config| {
+        config.pool.windowed = 1;
+        config.pool.headless = 0;
+    });
+    agent.until("a warm window", |a| {
+        a.play("status", json!({}))["pool"]["windowed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 1
+    });
+    let started = agent.play("start", json!({"window":true}));
+    let id = started["world"].clone();
+    agent.until("native 2D frames", |a| {
+        let status = a.play("status", json!({}));
+        let player = &status["worlds"][0]["players"][0]["status"];
+        assert!(player["fault"].is_null(), "{status}");
+        player["fps"].as_f64().unwrap_or(0.0) > 0.0 && player["tick"].as_u64().unwrap_or(0) > 30
+    });
+    let path = support::repo().join("target/runtime-polish/2d-window.png");
+    agent.play(
+        "capture",
+        json!({"world":id,"path":path,"marks":0,"presented":true}),
+    );
+    agent.play("stop", json!({"world":id}));
 }
