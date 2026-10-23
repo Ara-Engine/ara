@@ -1,12 +1,15 @@
 use super::*;
-use crate::acceleration::AccelerationDesc;
+use crate::acceleration::{AccelerationDesc, TriangleRange};
+mod triangles;
 
 enum Geometry {
     Triangles {
         vertices: Buffer,
+        vertex_offset: u64,
         vertex_count: u32,
         stride: u64,
         indices: Buffer,
+        index_offset: u64,
         index_count: u32,
     },
     Instances {
@@ -44,33 +47,16 @@ impl VulkanDevice {
                 vertex_stride,
                 indices,
                 index_count,
-            } => {
-                let v = self.buffers.get(*vertices)?.raw;
-                let i = self.buffers.get(*indices)?.raw;
-                let usage = vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
-                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
-                if *vertex_count == 0
-                    || *index_count == 0
-                    || index_count % 3 != 0
-                    || *vertex_stride < 12
-                    || vertex_stride % 4 != 0
-                    || !v.usage.contains(usage)
-                    || !i.usage.contains(usage)
-                    || u64::from(*vertex_count)
-                        .checked_mul(*vertex_stride)
-                        .is_none_or(|n| n > v.size)
-                    || u64::from(*index_count) * 4 > i.size
-                {
-                    return Err(GpuError::Contract("Invalid triangle AS input".into()));
-                }
-                Geometry::Triangles {
-                    vertices: *vertices,
-                    vertex_count: *vertex_count,
-                    stride: *vertex_stride,
-                    indices: *indices,
-                    index_count: *index_count,
-                }
-            }
+            } => self.triangle_input(TriangleRange {
+                vertices: *vertices,
+                vertex_offset: 0,
+                vertex_count: *vertex_count,
+                vertex_stride: *vertex_stride,
+                indices: *indices,
+                index_offset: 0,
+                index_count: *index_count,
+            })?,
+            AccelerationDesc::TriangleRange(range) => self.triangle_input(*range)?,
             AccelerationDesc::Instances(instances) => {
                 if instances.is_empty() {
                     return Err(GpuError::Contract("Empty TLAS".into()));
@@ -205,9 +191,11 @@ impl VulkanDevice {
         Ok(match *geometry {
             Geometry::Triangles {
                 vertices,
+                vertex_offset,
                 vertex_count,
                 stride,
                 indices,
+                index_offset,
                 index_count,
             } => (
                 vk::AccelerationStructureGeometryKHR::default()
@@ -217,17 +205,13 @@ impl VulkanDevice {
                         triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::default()
                             .vertex_format(vk::Format::R32G32B32_SFLOAT)
                             .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: self
-                                    .context
-                                    .address(self.buffers.get(vertices)?.raw),
+                                device_address: self.range_address(vertices, vertex_offset)?,
                             })
                             .vertex_stride(stride)
                             .max_vertex(vertex_count - 1)
                             .index_type(vk::IndexType::UINT32)
                             .index_data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: self
-                                    .context
-                                    .address(self.buffers.get(indices)?.raw),
+                                device_address: self.range_address(indices, index_offset)?,
                             }),
                     }),
                 index_count / 3,

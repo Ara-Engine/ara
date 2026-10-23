@@ -19,6 +19,9 @@ Owns the native GPU boundary. Vulkan uses ash revision
   barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
 - `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
+  `TriangleRange` selects checked aligned byte ranges in shared vertex/index
+  allocations; indices remain local to the range. Multiple BLAS builds and their
+  transformed TLAS instances can share one upload and submission.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
   `resource_dir` finds executable-relative installed shaders before checkout data;
   a distribution with engine.json never silently falls back to checkout shaders.
@@ -64,6 +67,8 @@ or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
 GPU tests need Vulkan 1.3, validation layers, a dedicated compute family and
 process-local `VK_IMPLICIT_LAYER_PATH` pointing at an empty directory on this PC.
 They verify malformed-copy rejection, stale handles and real BLAS/TLAS lifetime.
+The triangle-range probe checks pooled geometry, overflow/alignment rejection
+and real rays hitting three transformed instances of two shared BLAS identities.
 The sampled-heap probe reads 257 nonuniform slots on GPU, publishes an unused slot
 before completion, and checks native mip interpolation. Explicit offline fixture
 updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then

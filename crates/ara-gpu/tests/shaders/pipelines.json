@@ -12,5 +12,19 @@
       "depth_write": false,
       "vertex_stride": 0
     }
+  },
+  "triangle_ranges": {
+    "entries": {
+      "rangeProbe": "compute"
+    },
+    "source": "triangle_ranges.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
   }
 }
