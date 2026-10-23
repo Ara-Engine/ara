@@ -25,7 +25,8 @@ mod server;
 pub use client::{Client, ClientConfig, ClientStatus};
 pub use server::{AdapterRef, Authoritative, Server, ServerConfig};
 
-const PROTOCOL: u64 = 0xa4a0_0002_0001;
+// Spawn baselines include scene/streaming lifetime ownership.
+const PROTOCOL: u64 = 0xa4a0_0002_0002;
 
 /// Encrypted short-lived join credential; never log or persist it with replay artifacts.
 pub struct JoinToken(pub(crate) Vec<u8>);
@@ -180,7 +181,7 @@ fn base<F: SimulationFeature>(server: bool, policies: PolicyRegistry, hz: u32) -
     app.insert_resource(Compatibility(
         ara_sim::StateHash::of_bytes(
             format!(
-                "{}:{}:{}:{hz}",
+                "{PROTOCOL}:{}:{}:{}:{hz}",
                 F::State::describe().name,
                 F::ACTION,
                 F::VERSION
