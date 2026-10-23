@@ -234,6 +234,15 @@ pub struct SpanGuard {
     _thread: PhantomData<Rc<()>>,
 }
 impl SpanGuard {
+    #[inline(always)]
+    pub(crate) const fn inactive() -> Self {
+        Self {
+            id: None,
+            owner: 0,
+            _thread: PhantomData,
+        }
+    }
+    #[inline]
     pub(crate) fn new(name: &'static str) -> Self {
         let id = begin(Name::Static(name), name);
         let owner = if id.is_some() {
@@ -249,6 +258,7 @@ impl SpanGuard {
     }
 }
 impl Drop for SpanGuard {
+    #[inline]
     fn drop(&mut self) {
         if let Some(id) = self.id
             && PRODUCER

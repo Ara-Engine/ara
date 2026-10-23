@@ -178,11 +178,15 @@ impl Profiler {
     pub fn start(&self) {
         #[cfg(feature = "tracy")]
         tracy_client::Client::start();
-        self.control.enabled.store(true, Ordering::Release);
+        if !self.control.enabled.swap(true, Ordering::AcqRel) {
+            crate::ACTIVE_CAPTURES.fetch_add(1, Ordering::Relaxed);
+        }
     }
     /// Stops new scopes; outstanding scopes can still finish and be collected.
     pub fn stop(&self) {
-        self.control.enabled.store(false, Ordering::Release);
+        if self.control.enabled.swap(false, Ordering::AcqRel) {
+            crate::ACTIVE_CAPTURES.fetch_sub(1, Ordering::Relaxed);
+        }
     }
     /// Whether new scopes are being recorded.
     pub fn is_recording(&self) -> bool {
@@ -417,9 +421,19 @@ impl Profiler {
     }
 }
 
+impl Drop for Profiler {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 /// Enters a native CPU scope on an explicitly attached thread; inactive without
 /// recording/a frame. `ProfileLayer` routes ordinary tracing spans to the same ring.
-#[inline]
+#[inline(always)]
 pub fn scope(name: &'static str) -> SpanGuard {
-    SpanGuard::new(name)
+    if crate::instrumentation_enabled() {
+        SpanGuard::new(name)
+    } else {
+        SpanGuard::inactive()
+    }
 }

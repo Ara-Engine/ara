@@ -21,6 +21,14 @@ pub use ring::SpanGuard;
 pub use summary::{Distribution, Hitch, Metric, Summary, SummaryBudget};
 pub use tracing_layer::ProfileLayer;
 
+static ACTIVE_CAPTURES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Whether any capture is recording. One relaxed load, without touching TLS.
+#[inline(always)]
+pub fn instrumentation_enabled() -> bool {
+    ACTIVE_CAPTURES.load(std::sync::atomic::Ordering::Relaxed) != 0
+}
+
 /// Whether an external Tracy viewer is connected to this process.
 pub fn tracy_connected() -> bool {
     #[cfg(feature = "tracy")]

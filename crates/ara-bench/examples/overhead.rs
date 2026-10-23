@@ -3,6 +3,9 @@ use ara_bench::LoadSampler;
 use ara_profile::{Config, Counters, Memory, Profiler, ThreadRegistration, scope};
 use std::{hint::black_box, time::Instant};
 
+const DISABLED_ITERATIONS: u64 = 100_000_000;
+const ENABLED_ITERATIONS: u64 = 16_000;
+
 #[global_allocator]
 static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
     ara_profile::CountingAllocator(std::alloc::System);
@@ -40,24 +43,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for round in 0..21 {
         profiler.stop();
         let (b, d) = if round % 2 == 0 {
-            (run(2_000_000, false), run(2_000_000, true))
+            (
+                run(DISABLED_ITERATIONS, false),
+                run(DISABLED_ITERATIONS, true),
+            )
         } else {
-            let d = run(2_000_000, true);
-            (run(2_000_000, false), d)
+            let d = run(DISABLED_ITERATIONS, true);
+            (run(DISABLED_ITERATIONS, false), d)
         };
         base.push(b);
         disabled.push(d - b);
         profiler.start();
         profiler.begin_frame()?;
         let (b, e) = if round % 2 == 0 {
-            (run(16000, false), run(16000, true))
+            (
+                run(ENABLED_ITERATIONS, false),
+                run(ENABLED_ITERATIONS, true),
+            )
         } else {
-            let e = run(16000, true);
-            (run(16000, false), e)
+            let e = run(ENABLED_ITERATIONS, true);
+            (run(ENABLED_ITERATIONS, false), e)
         };
         let collection = Instant::now();
         profiler.end_frame(Counters::default(), Memory::default())?;
-        let collection = collection.elapsed().as_nanos() as f64 / 16000.0;
+        let collection = collection.elapsed().as_nanos() as f64 / ENABLED_ITERATIONS as f64;
         collections.push(collection);
         enabled.push(e - b);
         samples.push(
@@ -66,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     ThreadRegistration::detach();
-    let value = serde_json::json!({"rounds":21,"baseline_ns":median(base),"disabled_added_ns":median(disabled),"enabled_added_ns":median(enabled),
+    let value = serde_json::json!({"rounds":21,"disabled_iterations":DISABLED_ITERATIONS,"enabled_iterations":ENABLED_ITERATIONS,"baseline_ns":median(base),"disabled_added_ns":median(disabled),"enabled_added_ns":median(enabled),
         "collection_ns_per_span":median(collections),
         "tracy":cfg!(feature="tracy"),"allocation":cfg!(feature="allocation"),"load":load.sample(),
         "tracy_connected":ara_profile::tracy_connected(),"samples":samples,
