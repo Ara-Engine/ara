@@ -151,6 +151,23 @@ impl Shell {
         }
         Ok(())
     }
+    /// Palette rows for `query` as (group, title, command id) without opening it.
+    pub fn palette_rows(
+        &mut self,
+        editor: &mut Editor,
+        query: &str,
+    ) -> Vec<(&'static str, String, Option<&'static str>)> {
+        self.palette_items(editor, query)
+            .into_iter()
+            .map(|item| {
+                let command = match item.binding {
+                    Binding::Command(id, _) => Some(id),
+                    _ => None,
+                };
+                (item.group, item.title, command)
+            })
+            .collect()
+    }
     /// Open the context menu at a control (or the first hierarchy row) and list its commands.
     pub fn context_rows_at(
         &mut self,

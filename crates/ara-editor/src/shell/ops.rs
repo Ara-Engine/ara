@@ -22,11 +22,6 @@ impl Shell {
     pub(crate) fn copy_text(&mut self, text: String) {
         self.pending_clipboard = Some(text);
     }
-    pub(crate) fn recent(&mut self, doc: &str) {
-        self.recent_docs.retain(|d| d != doc);
-        self.recent_docs.insert(0, doc.to_owned());
-        self.recent_docs.truncate(10);
-    }
     /// Open the palette, optionally in a prefix mode (`@` entities and assets, `#` scenes
     /// and assets, `?` help, `>Create ` filtered commands).
     pub(crate) fn open_palette(&mut self, editor: &mut Editor, prefix: &str) -> ara_ui::Result<()> {
@@ -90,8 +85,7 @@ impl Shell {
             .as_str()
             .ok_or("scene creation returned no document")?
             .to_owned();
-        editor.action("editor.select", json!({"doc": doc}))?;
-        self.recent(&doc);
+        editor.action("editor.scene.open", json!({"scene": doc}))?;
         editor.action("editor.focus", json!({"panel": "scene"}))?;
         Ok(())
     }
@@ -213,8 +207,7 @@ impl Shell {
             && let Some(doc) = workspace.doc(&id)
         {
             if doc.kind == "scene" {
-                editor.action("editor.select", json!({"doc": id}))?;
-                self.recent(&id);
+                editor.action("editor.scene.open", json!({"scene": id}))?;
                 editor.action("editor.focus", json!({"panel": "scene"}))?;
                 return Ok(());
             }

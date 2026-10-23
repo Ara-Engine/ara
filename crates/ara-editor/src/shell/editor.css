@@ -236,3 +236,22 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .selected:hover { background:var(--selection-surface); }
 /* Secondary text (menu paths, command ids) on a selected row. */
 .on-selection-muted { color:var(--selection-muted-foreground); }
+/* D24 notices over the Scene view and the following chip. */
+.notice-stack { position:absolute; left:12px; bottom:12px; width:380px; gap:6px; }
+.notice { flex-direction:row; align-items:center; gap:8px; min-height:34px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); }
+.notice-text { flex-grow:1; flex-shrink:1; flex-basis:0px; min-width:0px; overflow:hidden; font-size:12px; color:var(--foreground); }
+.notice-action { height:22px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:var(--radius-sm); background:var(--raised); color:var(--foreground); font-size:12px; }
+.notice-action:hover { background:var(--hover-surface); }
+.following { position:absolute; left:12px; top:12px; flex-direction:row; align-items:center; gap:8px; height:30px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--accent); font-size:12px; }
+/* Agents activity feed. */
+.presence-pill { flex-direction:row; align-items:center; gap:6px; height:26px; padding-left:8px; padding-right:2px; border-radius:var(--radius-md); background:var(--raised); flex-shrink:0; }
+.presence-dot { width:8px; height:8px; border-radius:4px; background:var(--success-foreground); flex-shrink:0; }
+.feed-row { flex-direction:row; align-items:center; gap:4px; min-height:40px; padding-right:6px; flex-shrink:0; }
+.feed-row:hover { background:var(--hover-surface); }
+.feed-undone { color:var(--muted-foreground); }
+.feed-main { flex-grow:1; flex-basis:0px; min-width:0px; flex-direction:row; align-items:center; justify-content:start; gap:8px; padding-left:6px; height:40px; background:transparent; border-width:0px; }
+.avatar-sm { width:22px; height:22px; border-radius:11px; background:var(--accent); align-items:center; justify-content:center; flex-shrink:0; font-size:11px; }
+.feed-copy { flex-grow:1; flex-basis:0px; min-width:0px; gap:1px; }
+.feed-why { font-size:12px; color:var(--foreground); overflow:hidden; }
+.feed-diff { padding-left:44px; padding-top:2px; padding-bottom:6px; gap:2px; flex-shrink:0; background:var(--background); }
+.feed-op { font-size:11px; font-family:JetBrains Mono; overflow:hidden; }

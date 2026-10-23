@@ -49,6 +49,7 @@ pub struct Activity {
     log_cursor: Option<u64>,
     last_log_poll: Option<Instant>,
     recent: Vec<(TxnId, Instant)>,
+    seen_at: BTreeMap<TxnId, Instant>,
     views: BTreeMap<String, (String, Vec<String>, Camera)>,
     notices: Vec<Notice>,
     next_notice: u64,
@@ -80,6 +81,7 @@ impl Activity {
                 continue;
             }
             self.recent.push((txn.id.clone(), now));
+            self.seen_at.insert(txn.id.clone(), now);
             self.last_agent = Some(now);
             changed = true;
         }
@@ -161,6 +163,12 @@ impl Activity {
         self.recent
             .retain(|(.., at)| now.duration_since(*at) < GLOW);
         before != self.notices.len() + self.recent.len()
+    }
+
+    /// When this window saw an agent transaction commit (`None` for history that
+    /// predates the window, such as journal replay).
+    pub fn seen_at(&self, txn: &TxnId) -> Option<Instant> {
+        self.seen_at.get(txn).copied()
     }
 
     /// Current notices, oldest first.

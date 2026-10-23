@@ -6,15 +6,15 @@ use super::panels::display;
 use super::*;
 
 /// One palette row.
-struct Item {
-    title: String,
+pub(super) struct Item {
+    pub(super) title: String,
     detail: String,
     id: String,
     icon: &'static str,
-    binding: Binding,
+    pub(super) binding: Binding,
     keys: Vec<&'static str>,
     reason: Option<String>,
-    group: &'static str,
+    pub(super) group: &'static str,
     score: usize,
 }
 impl Shell {
@@ -40,7 +40,7 @@ impl Shell {
         };
         out.push_str(&format!("<panel id='search-wrap-{panel}' class='search'><field id='{id}' class='search-input' text='{}' label='Search {panel}' action='Dispatch' /><image id='search-icon-{panel}' class='search-icon' src='icon-search' tint='true' />{} </panel>",escape(value),if value.is_empty() {format!("<text id='search-placeholder-{panel}' class='placeholder' text='{hint}' />")}else{String::new()}));
     }
-    fn palette_items(&mut self, editor: &mut Editor, query: &str) -> Vec<Item> {
+    pub(super) fn palette_items(&mut self, editor: &mut Editor, query: &str) -> Vec<Item> {
         let mut items = Vec::new();
         let (mode, term) = match query.chars().next() {
             Some(c @ ('@' | '#' | '?' | '>')) => (c, query[1..].trim().to_lowercase()),
@@ -152,6 +152,31 @@ impl Shell {
                 }
             }
         }
+        if mode == '#' {
+            // Every scene in the project, recently opened first: File > Open Scene.
+            let workspace = editor.host.store().workspace();
+            for (_, doc) in workspace.docs().filter(|(_, d)| d.kind == "scene") {
+                let id = doc.id.to_string();
+                let path = workspace.path_of(&id).unwrap_or(&id).to_owned();
+                let Some(s) = score(&path) else { continue };
+                let recent = editor.state.recent_scenes.iter().position(|r| *r == id);
+                items.push(Item {
+                    title: path.rsplit('/').next().unwrap_or(&path).to_owned(),
+                    detail: if id == editor.state.doc {
+                        format!("{path} · open")
+                    } else {
+                        path.clone()
+                    },
+                    id: String::new(),
+                    icon: "clapperboard",
+                    binding: Binding::Command("file.open_scene", Target::Doc(id)),
+                    keys: Vec::new(),
+                    reason: None,
+                    group: "Scenes",
+                    score: recent.filter(|_| term.is_empty()).unwrap_or(s + 100),
+                });
+            }
+        }
         if mode == '@' || mode == '#' {
             let workspace = editor.host.store().workspace();
             for asset in &self.browser.items {
@@ -164,6 +189,9 @@ impl Shell {
                         .filter(|d| d.kind == "scene")
                         .map(|_| id.to_string())
                 });
+                if mode == '#' && scene.is_some() {
+                    continue;
+                }
                 items.push(Item {
                     title: asset
                         .path
@@ -184,11 +212,7 @@ impl Shell {
                     },
                     keys: Vec::new(),
                     reason: None,
-                    group: if mode == '#' {
-                        "Scenes and assets"
-                    } else {
-                        "Assets"
-                    },
+                    group: "Assets",
                     score: s + 1000,
                 });
             }
@@ -197,8 +221,9 @@ impl Shell {
             "Recent" => 0,
             "Entities" => 1,
             "Commands" => 2,
-            "Scenes and assets" | "Assets" => 3,
-            _ => 4,
+            "Scenes" => 3,
+            "Assets" => 4,
+            _ => 5,
         };
         items.sort_by(|a, b| {
             order(a.group)

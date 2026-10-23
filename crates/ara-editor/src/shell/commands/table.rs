@@ -88,6 +88,29 @@ fn graph_open(c: &Ctx) -> Avail {
         Avail::Blocked("Open a material, VFX or animation graph first".into())
     }
 }
+fn agent_target(c: &Ctx) -> Avail {
+    match c.target {
+        Target::Text(agent) if c.state.presence.contains_key(agent) => Avail::Ready,
+        _ => Avail::Blocked(
+            "No agent has shared a view yet; agents appear when they connect over MCP".into(),
+        ),
+    }
+}
+fn agent_follow(c: &Ctx) -> Avail {
+    match agent_target(c) {
+        Avail::Ready => Avail::Checked(
+            matches!(c.target, Target::Text(a) if c.state.follow.as_ref() == Some(a)),
+        ),
+        blocked => blocked,
+    }
+}
+fn following(c: &Ctx) -> Avail {
+    if c.state.follow.is_some() {
+        Avail::Ready
+    } else {
+        Avail::Blocked("You are not following an agent".into())
+    }
+}
 fn setting(c: &Ctx, key: &str) -> Value {
     c.state.settings.get(key).cloned().unwrap_or(Value::Null)
 }
@@ -332,12 +355,11 @@ fn build() -> Vec<Spec> {
     c.extend([
         cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, _| s.new_scene(e)),
         later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
-        cmd("file.open", "Open…", "search", "Ctrl+O", "Quick-open a scene or asset by name.", |s, e, _| s.open_palette(e, "#")),
+        cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
         later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
-        cmd("file.open_scene", "Open Scene", "box", "", "Open a scene document in the Scene view.", |s, e, t| {
+        cmd("file.open_scene", "Open Scene", "clapperboard", "", "Open a scene document in the Scene view.", |_, e, t| {
             let Target::Doc(doc) = t else { return Err("choose a scene".into()) };
-            act(e, "editor.select", json!({"doc": doc}))?;
-            s.recent(doc);
+            act(e, "editor.scene.open", json!({"scene": doc}))?;
             focus(e, "scene")
         }),
         cmd("file.save", "Save", "check", "Ctrl+S", "Write every changed document to disk now.", |s, e, _| {
@@ -981,6 +1003,56 @@ fn build() -> Vec<Spec> {
         later("tools.cs.solution", "Open Solution in IDE", "file-code", "", "Generate the solution with `ara script` and open it in your IDE."),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
+        cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
+            let Target::Text(agent) = t else { return Err("choose an agent".into()) };
+            act(e, "editor.follow", json!({"agent": agent}))?;
+            act(e, "editor.follow", json!({}))
+        }).when(agent_target),
+        cmd("agents.follow", "Follow Agent", "bot", "", "Keep your view on the agent's scene, selection and camera until you stop following.", |_, e, t| {
+            let Target::Text(agent) = t else { return Err("choose an agent".into()) };
+            if e.state.follow.as_ref() == Some(agent) {
+                act(e, "editor.follow", json!({}))
+            } else {
+                act(e, "editor.follow", json!({"agent": agent}))
+            }
+        }).when(agent_follow),
+        cmd("agents.stop_following", "Stop Following", "x", "", "Return the Scene view to your own camera control.", |_, e, _| act(e, "editor.follow", json!({}))).when(following),
+        cmd("agents.expand_turn", "Show Turn Changes", "chevron-down", "", "Expand or collapse what an agent turn changed.", |s, _, t| {
+            if let Target::Text(turn) = t
+                && !s.expanded_turns.remove(turn)
+            {
+                s.expanded_turns.insert(turn.clone());
+            }
+            Ok(())
+        }),
+        cmd("agents.undo_turn", "Undo Agent Turn", "undo-2", "", "Undo every change of an agent turn as new transactions; later edits by others stay.", |_, e, t| {
+            let Target::Text(turn) = t else { return Err("choose an agent turn".into()) };
+            // A turn is one transaction, or several sharing a `gesture-turn:<group>|` label.
+            let marker = format!("gesture-turn:{turn}|");
+            let txns: Vec<String> = e
+                .host
+                .store()
+                .history()
+                .iter()
+                .rev()
+                .filter(|x| x.id.0 == *turn || x.label.as_deref().is_some_and(|l| l.starts_with(&marker)))
+                .filter(|x| e.host.store().reverted_by(&x.id).is_none())
+                .map(|x| x.id.0.clone())
+                .collect();
+            for txn in txns {
+                act(e, "review.revert", json!({"txn": txn}))?;
+            }
+            Ok(())
+        }),
+        cmd("notice.dismiss", "Dismiss Notice", "x", "", "Close this notice.", |_, e, t| {
+            if let Target::Text(id) = t
+                && let Ok(id) = id.parse()
+            {
+                e.activity.dismiss(id);
+                e.panels_revision += 1;
+            }
+            Ok(())
+        }),
         cmd("agents.connect", "Connect an Agent (MCP)…", "bot", "", "Show how to connect Claude Code, Codex or another MCP client.", |s, e, _| {
             s.dialog = Some(super::super::Dialog::connect(e));
             Ok(())

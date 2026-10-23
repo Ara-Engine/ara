@@ -439,3 +439,75 @@ fn tinted_icons_take_their_state_color() {
         shell.ui.sheet.color_token("--selection-foreground")
     );
 }
+#[test]
+fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
+    let project = Project::new();
+    write(
+        &project.0.join("levels/hangar.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_hangar001","records":{"e_lamp0001":{"name":"Lamp","Transform":{"position":[200,2,190]}}}}),
+    );
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // File > Open Scene lists every scene, grouped before assets.
+    let rows = shell.palette_rows(&mut editor, "#");
+    assert!(
+        rows.iter()
+            .any(|r| r.0 == "Scenes" && r.1 == "hangar.scene" && r.2 == Some("file.open_scene")),
+        "{rows:?}"
+    );
+    let main_camera = editor.state.camera;
+    editor
+        .action("editor.scene.open", json!({"scene":"levels/hangar.scene"}))
+        .unwrap();
+    assert_eq!(editor.state.doc, "sc_hangar001");
+    // A first open frames the scene: the lamp is 270 m from the origin.
+    assert!((editor.state.camera.target.x - 200.).abs() < 1.);
+    assert_eq!(editor.state.recent_scenes[0], "sc_hangar001");
+    editor
+        .action("editor.scene.open", json!({"scene":"sc_test0001"}))
+        .unwrap();
+    assert_eq!(editor.state.camera, main_camera);
+    assert!(
+        editor
+            .action("editor.scene.open", json!({"scene":"levels/missing.scene"}))
+            .is_err()
+    );
+    // An agent opening a scene moves its presence, not the human view, and the human
+    // gets a View/Follow notice instead.
+    let agent = ara_proto::Endpoint::call(
+        &mut editor,
+        "session.begin",
+        json!({"client":"scene-test","author":"agent:scout"}),
+    )
+    .unwrap()["session"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    ara_proto::Endpoint::call(
+        &mut editor,
+        "editor.scene.open",
+        json!({"session":agent,"scene":"levels/hangar.scene"}),
+    )
+    .unwrap();
+    assert_eq!(editor.state.doc, "sc_test0001");
+    assert_eq!(editor.state.presence[&agent].doc, "sc_hangar001");
+    let notice = editor
+        .activity
+        .notices()
+        .iter()
+        .find(|n| n.text == "Scout is viewing hangar.scene")
+        .unwrap()
+        .id;
+    editor.state.focus = "scene".into();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find(&format!("notice-{notice}-follow")).is_some());
+    shell
+        .run_command(
+            &mut editor,
+            "agents.view",
+            &ara_editor::shell::commands::Target::Text(agent.clone()),
+        )
+        .unwrap();
+    assert_eq!(editor.state.doc, "sc_hangar001");
+    assert!(editor.state.follow.is_none());
+}

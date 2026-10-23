@@ -149,6 +149,10 @@ pub struct EditorState {
     pub presence: BTreeMap<String, AgentPresence>,
     /// Session whose view the human explicitly chose to follow.
     pub follow: Option<String>,
+    /// Each scene's last camera, restored when the scene is reopened.
+    pub scene_cameras: BTreeMap<String, Camera>,
+    /// Scenes the human opened, newest first (File > Open Recent).
+    pub recent_scenes: Vec<String>,
     /// Selected source media path; separate from entity selection.
     pub asset_path: Option<String>,
     /// Folder shown by the asset browser, relative to the project root.
@@ -230,6 +234,8 @@ impl Default for EditorState {
             palette: false,
             presence: BTreeMap::new(),
             follow: None,
+            scene_cameras: BTreeMap::new(),
+            recent_scenes: Vec::new(),
             asset_path: None,
             asset_folder: String::new(),
             asset_grid: true,

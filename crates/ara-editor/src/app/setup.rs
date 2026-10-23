@@ -28,6 +28,8 @@ pub struct Options {
     pub verify_panels: bool,
     /// Run the Editor UX v2 capture route (menus, Settings, floating windows, tabs).
     pub verify_ux: bool,
+    /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
+    pub scene: Option<String>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -44,10 +46,14 @@ impl Default for Options {
             screenshot: false,
             verify_panels: false,
             verify_ux: false,
+            scene: None,
         }
     }
 }
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
+    if let Some(scene) = &options.scene {
+        editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
     if options.sample {
         sample(editor)?;
     }

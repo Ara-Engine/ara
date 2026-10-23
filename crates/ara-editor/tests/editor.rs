@@ -170,7 +170,7 @@ fn mcp_actions_agent_review_provenance_and_revert_are_live() {
     );
     let mut clipboard = MemoryClipboard::default();
     shell
-        .click(&format!("revert-{txn}"), &mut clipboard)
+        .click(&format!("turn-{txn}-undo"), &mut clipboard)
         .unwrap();
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(x(&editor), 0.);

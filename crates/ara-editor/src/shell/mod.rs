@@ -15,6 +15,7 @@ mod input;
 mod keyboard;
 mod menu;
 mod motion;
+mod notices;
 mod ops;
 mod polish;
 mod scrub;
@@ -22,6 +23,7 @@ mod settings_panel;
 mod testing;
 use drag::Drag;
 pub use testing::MenuRow;
+mod agents_panel;
 mod animation_panel;
 mod assets_panel;
 mod graph_annotations;
@@ -86,6 +88,8 @@ pub struct Shell {
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
+    /// Agent turns whose changes the activity feed shows expanded.
+    pub(crate) expanded_turns: std::collections::BTreeSet<String>,
     hierarchy_view: Option<VirtualView>,
     /// Surface hosting the hierarchy's virtual rows (`None` is the main window).
     hierarchy_surface: Option<String>,
@@ -153,7 +157,6 @@ pub struct Shell {
     pub(crate) entity_clipboard: Option<Vec<Value>>,
     pub(crate) field_clipboard: Option<Value>,
     pending_clipboard: Option<String>,
-    recent_docs: Vec<String>,
     recent_commands: Vec<&'static str>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
     pub(crate) recording: Option<&'static str>,
@@ -236,6 +239,7 @@ impl Shell {
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
             hierarchy_ghosts: std::collections::BTreeSet::new(),
+            expanded_turns: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
@@ -298,7 +302,6 @@ impl Shell {
             entity_clipboard: None,
             field_clipboard: None,
             pending_clipboard: None,
-            recent_docs: Vec::new(),
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
