@@ -99,20 +99,12 @@ impl Shell {
             );
             if matches {
                 let key = crate::world::render_id(id);
-                let badge = if e.source.0.as_str() != editor.state.doc {
-                    " P"
-                } else {
-                    ""
-                };
-                let modified = if changed_entities.contains(id.as_str()) {
-                    " *"
-                } else {
-                    ""
-                };
                 self.hierarchy_style.insert(
                     key,
                     polish::RowStyle {
                         depth,
+                        prefab: e.source.0.as_str() != editor.state.doc,
+                        changed: changed_entities.contains(id.as_str()),
                         icon: if e.record.contains_key("Light") {
                             "lightbulb"
                         } else if e.record.contains_key("Camera") {
@@ -128,7 +120,7 @@ impl Shell {
                         hidden: editor.state.hidden.contains(id),
                     },
                 );
-                let text = format!("{name}{badge}{modified}");
+                let text = name.to_owned();
                 self.hierarchy.items.push((key, text));
                 self.hierarchy_entities.insert(key, id.clone());
             }

@@ -6,8 +6,8 @@ use ara_ui::{
 use std::{collections::BTreeMap, time::Instant};
 #[derive(Default)]
 pub(super) struct Motion {
-    colors: BTreeMap<(u64, u8), Color>,
-    tweens: BTreeMap<(u64, u8), Tween>,
+    colors: BTreeMap<(u64, u8, usize), Color>,
+    tweens: BTreeMap<(u64, u8, usize), Tween>,
 }
 struct Tween {
     from: Color,
@@ -31,6 +31,7 @@ impl Motion {
         }
         let now = Instant::now();
         let mut active = false;
+        let mut occurrences = BTreeMap::new();
         for draw in &mut list.commands {
             let (key, color) = match draw {
                 Draw::RoundedRect { node, color, .. } | Draw::Rect { node, color, .. } => {
@@ -39,21 +40,23 @@ impl Motion {
                 Draw::Border { node, color, .. } => ((*node, 1), color),
                 _ => continue,
             };
-            if fresh {
-                if let Some(old) = self.colors.insert(key, *color)
-                    && old != *color
-                    && !reduce
-                {
-                    let from = self.tweens.get(&key).map_or(old, |t| sample(t, now));
-                    self.tweens.insert(
-                        key,
-                        Tween {
-                            from,
-                            to: *color,
-                            start: now,
-                        },
-                    );
-                }
+            let occurrence = occurrences.entry(key).or_insert(0usize);
+            let key = (key.0, key.1, *occurrence);
+            *occurrence += 1;
+            if fresh
+                && let Some(old) = self.colors.insert(key, *color)
+                && old != *color
+                && !reduce
+            {
+                let from = self.tweens.get(&key).map_or(old, |t| sample(t, now));
+                self.tweens.insert(
+                    key,
+                    Tween {
+                        from,
+                        to: *color,
+                        start: now,
+                    },
+                );
             }
             if let Some(t) = self.tweens.get(&key) {
                 *color = sample(t, now);
@@ -75,4 +78,24 @@ fn sample(t: &Tween, now: Instant) -> Color {
         mix(t.from.2, t.to.2),
         mix(t.from.3, t.to.3),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn separate_primitives_of_one_control_do_not_animate_each_other() {
+        let mut list = DisplayList::default();
+        for color in [Color(10, 10, 10, 255), Color(100, 150, 200, 255)] {
+            list.commands.push(Draw::Rect {
+                node: 1,
+                rect: Default::default(),
+                color,
+            });
+        }
+        let mut motion = Motion::default();
+        assert!(!motion.apply(&mut list, true, false));
+        assert!(!motion.apply(&mut list, false, false));
+        assert!(motion.tweens.is_empty());
+    }
 }

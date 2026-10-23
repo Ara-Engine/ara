@@ -281,7 +281,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
-            if frames > 0 && frames % 144 == 0 {
+            if frames > 0 && frames.is_multiple_of(144) {
                 shell.frame_timing(
                     1000. / interval.max(0.1),
                     render_samples.last().copied().unwrap_or(0.),

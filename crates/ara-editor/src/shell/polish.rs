@@ -4,6 +4,8 @@ use ara_ui::{paint::Draw, source::stable_id};
 
 pub(super) struct RowStyle {
     pub depth: usize,
+    pub prefab: bool,
+    pub changed: bool,
     pub icon: &'static str,
     pub children: bool,
     pub collapsed: bool,
@@ -12,7 +14,7 @@ pub(super) struct RowStyle {
 }
 impl Shell {
     pub(super) fn paint_polish(&mut self) {
-        let color = |name| {
+        let color = |name: &str| {
             self.ui
                 .sheet
                 .color_token(name)
@@ -103,12 +105,44 @@ impl Shell {
                         },
                         s.icon,
                     );
+                    if s.prefab {
+                        image(
+                            &mut draws,
+                            id,
+                            Box2 {
+                                x: r.x + r.w - 54.,
+                                y: r.y + 5.,
+                                w: 16.,
+                                h: 16.,
+                            },
+                            "package",
+                        );
+                    }
+                    if s.changed {
+                        draws.push(Draw::RoundedRect {
+                            node: id ^ 0xffff_1111_0000,
+                            rect: Box2 {
+                                x: r.x + r.w - 10.,
+                                y: r.y + 10.,
+                                w: 6.,
+                                h: 6.,
+                            },
+                            radius: 3.,
+                            color: color(&format!(
+                                "--{}",
+                                self.hierarchy_tints
+                                    .get(&key)
+                                    .copied()
+                                    .unwrap_or("warning-foreground")
+                            )),
+                        });
+                    }
                     if s.locked || s.hidden {
                         image(
                             &mut draws,
                             id,
                             Box2 {
-                                x: r.x + r.w - 22.,
+                                x: r.x + r.w - 32.,
                                 y: r.y + 5.,
                                 w: 16.,
                                 h: 16.,

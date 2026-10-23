@@ -3,7 +3,7 @@ impl Shell {
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
         self.search(out, "assets", editor);
-        out.push_str("<text id='asset-hint' class='muted' text='Filter: type:prefab / type:glb' /></panel><scroll id='asset-rows' class='body' />");
+        out.push_str("<text id='asset-hint' class='muted' text='Filter: type:prefab / type:glb' /></panel><scroll id='asset-rows' class='body asset-list' />");
         let query = editor
             .state
             .searches
@@ -27,9 +27,7 @@ impl Shell {
         self.asset_entries.clear();
         for asset in items {
             let key = ara_ui::source::stable_id(&asset.path);
-            self.asset_rows
-                .items
-                .push((key, format!("        {}", asset.path)));
+            self.asset_rows.items.push((key, asset.path.clone()));
             self.asset_entries.insert(key, asset);
         }
     }

@@ -25,7 +25,7 @@ pub(crate) fn install(renderer: &mut Renderer, light: bool, dpi: f32) -> ara_ui:
         );
         // tiny-skia stores premultiplied pixels; the UI image contract is straight alpha.
         let mut rgba = pixels.take();
-        for pixel in rgba.chunks_exact_mut(4) {
+        for pixel in rgba.as_chunks_mut::<4>().0 {
             if pixel[3] > 0 {
                 for n in 0..3 {
                     pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;

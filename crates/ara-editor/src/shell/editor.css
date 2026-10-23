@@ -78,3 +78,5 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 
 
 .agent-card { padding:8px; gap:4px; }
+
+.asset-list { padding:8px; gap:0px; }
