@@ -19,6 +19,8 @@ pub enum BoneRole {
     Spine,
     /// Upper spine/chest.
     Chest,
+    /// Optional upper chest, above the main chest role.
+    UpperChest,
     /// Neck.
     Neck,
     /// Head/look joint.
@@ -167,11 +169,12 @@ impl RigMap {
         Ok(out)
     }
 }
-fn relations() -> [(BoneRole, BoneRole); 15] {
+fn relations() -> [(BoneRole, BoneRole); 17] {
     use BoneRole::*;
     [
         (Hips, Spine),
         (Spine, Chest),
+        (Chest, UpperChest),
         (Chest, Neck),
         (Neck, Head),
         (LeftUpperArm, LeftLowerArm),
@@ -185,6 +188,7 @@ fn relations() -> [(BoneRole, BoneRole); 15] {
         (RightUpperLeg, RightLowerLeg),
         (RightLowerLeg, RightFoot),
         (LeftFoot, LeftToes),
+        (RightFoot, RightToes),
     ]
 }
 fn role(name: &str) -> Option<BoneRole> {
@@ -195,11 +199,13 @@ fn role(name: &str) -> Option<BoneRole> {
         .filter(|c| c.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect();
-    Some(match n.as_str() {
+    let n = n.strip_prefix("mixamorig").unwrap_or(&n);
+    Some(match n {
         "root" | "armature" => Root,
         "hips" | "pelvis" => Hips,
         "spine" | "spine01" => Spine,
-        "chest" | "spine2" | "spine03" | "upperchest" => Chest,
+        "chest" | "spine2" | "spine03" => Chest,
+        "upperchest" => UpperChest,
         "neck" | "neck01" => Neck,
         "head" => Head,
         "leftshoulder" | "claviclel" => LeftShoulder,

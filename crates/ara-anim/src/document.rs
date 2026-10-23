@@ -29,6 +29,10 @@ pub struct AnimAsset {
     pub rig: Option<crate::retarget::RigMap>,
     /// Procedural contact chains and ground-probe settings.
     pub ik: Option<IkSetup>,
+    /// Offline pose/trajectory feature database configuration.
+    pub motion_database: Option<crate::matching::MatchConfig>,
+    /// Powered bodies, constraints and spring gains for physical animation.
+    pub ragdoll: Option<crate::physical::RagdollProfile>,
 }
 
 /// Canonical procedural rig setup; goal values are fixed-tick gameplay inputs.
@@ -111,6 +115,10 @@ pub enum AnimationCommand {
     SetRig(crate::retarget::RigMap),
     /// Replaces the validated-at-cook procedural setup.
     SetIk(IkSetup),
+    /// Replaces the cook-time pose-search feature configuration.
+    SetMotionDatabase(crate::matching::MatchConfig),
+    /// Replaces the powered-ragdoll source profile.
+    SetRagdoll(crate::physical::RagdollProfile),
     /// Changes one schema-addressed field; the kernel validates its typed value.
     SetField {
         /// Stable field path, shared with the inspector and timeline.
@@ -153,6 +161,14 @@ impl AnimationCommand {
                 Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetField { path, value } => (path, value),
+            Self::SetRagdoll(data) => (
+                "ragdoll".parse().map_err(Error)?,
+                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+            ),
+            Self::SetMotionDatabase(data) => (
+                "motionDatabase".parse().map_err(Error)?,
+                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+            ),
         };
         Ok(Edit::Set {
             doc,

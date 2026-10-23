@@ -35,6 +35,7 @@ pub struct BodyGoal {
 /// Runtime goals remain caller-owned ECS data; this object holds only derived scratch.
 #[derive(Debug)]
 pub struct FullBody {
+    skeleton: u64,
     chains: Vec<Chain>,
     pelvis: usize,
     model: Vec<Mat4>,
@@ -53,6 +54,7 @@ impl FullBody {
             "invalid full-body pelvis or contact capacity",
         )?;
         Ok(Self {
+            skeleton: skeleton.signature(),
             chains: chains
                 .iter()
                 .map(|c| Chain::cook(skeleton, c))
@@ -73,7 +75,8 @@ impl FullBody {
         settings: SolverSettings,
     ) -> Result<(), Error> {
         ensure(
-            goals.len() <= self.order.capacity()
+            skeleton.signature() == self.skeleton
+                && goals.len() <= self.order.capacity()
                 && max_pelvis_shift.is_finite()
                 && max_pelvis_shift >= 0.0
                 && pose.len() == skeleton.len()

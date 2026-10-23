@@ -23,6 +23,7 @@ pub struct Retargeter {
     target_model: Vec<Mat4>,
     effectors: Vec<(usize, Chain)>,
     scale: f32,
+    hips: Option<usize>,
 }
 impl Retargeter {
     /// Resolves bone roles, reference frames and leg-height scale at import/setup time.
@@ -104,6 +105,7 @@ impl Retargeter {
             target_model: vec![Mat4::IDENTITY; target.len()],
             effectors,
             scale,
+            hips: target_rig.joint(target, BoneRole::Hips),
         })
     }
     /// Height ratio used for root displacement and end-effector motion.
@@ -131,10 +133,7 @@ impl Retargeter {
         out.copy_from(target.bind_pose())?;
         // Translate roots/hips only. Local limb translations retain target proportions.
         for &(s, t) in &self.pairs {
-            if source.parents[s].is_none()
-                || target.parents[t].is_none()
-                || target.data.joints[t].retarget.role == "hips"
-            {
+            if source.parents[s].is_none() || target.parents[t].is_none() || self.hips == Some(t) {
                 out.translations[t] +=
                     (source_pose.translations[s] - source.bind.translations[s]) * self.scale;
             }

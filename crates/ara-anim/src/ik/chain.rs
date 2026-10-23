@@ -257,6 +257,38 @@ impl Chain {
         }
         model_matrices(skeleton, pose, &mut self.model)?;
         let last = self.joints.len() - 1;
+        let anchor = self.model[self.joints[0]].w_axis.truncate();
+        let axis_to_goal = target - anchor;
+        let total: f32 = self.lengths.iter().sum();
+        if last >= 2
+            && axis_to_goal.length() < total - settings.tolerance
+            && self.joints.iter().skip(1).all(|j| {
+                (self.model[*j].w_axis.truncate() - anchor)
+                    .cross(axis_to_goal)
+                    .length_squared()
+                    < 1e-10
+            })
+        {
+            // Both iterative methods have a straight-chain stationary point.
+            // A small, deterministic bend in the allowed plane escapes it.
+            let i = 0;
+            let j = self.joints[i];
+            let rotation = self.model[j].to_scale_rotation_translation().1;
+            let axis = if self.limits[i].kind == LimitKind::Hinge {
+                rotation * Vec3::from(self.limits[i].axis)
+            } else {
+                direction(axis_to_goal).any_orthonormal_vector()
+            };
+            let desired = Quat::from_axis_angle(axis, 0.05) * rotation;
+            let parent = skeleton.parents[j].map_or(Quat::IDENTITY, |p| {
+                self.model[p as usize].to_scale_rotation_translation().1
+            });
+            let rest = skeleton.bind.rotations[j];
+            pose.rotations[j] = (rest
+                * self.limits[i].clamp(rest.conjugate() * parent.conjugate() * desired))
+            .normalize();
+            model_matrices(skeleton, pose, &mut self.model)?;
+        }
         let mut report = SolveReport {
             error: self.model[self.joints[last]]
                 .w_axis

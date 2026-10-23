@@ -2,6 +2,7 @@ pub use crate::compile::Controller;
 use crate::{
     Error, Pose, RootMotion, Sampler, Skeleton, ensure,
     graph::{Comparison, ParameterId, ParameterValue},
+    matching::player::{MotionScratch, MotionState},
 };
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +28,7 @@ pub struct Snapshot {
     pub(crate) fade: Option<Fade>,
     pub(crate) parameters: Vec<ParameterValue>,
     pub(crate) tick: u64,
+    pub(crate) matching: Vec<Option<MotionState>>,
 }
 impl Clone for Snapshot {
     fn clone(&self) -> Self {
@@ -36,6 +38,7 @@ impl Clone for Snapshot {
             fade: self.fade,
             parameters: self.parameters.clone(),
             tick: self.tick,
+            matching: self.matching.clone(),
         }
     }
     fn clone_from(&mut self, source: &Self) {
@@ -44,6 +47,7 @@ impl Clone for Snapshot {
         self.fade = source.fade;
         self.parameters.clone_from(&source.parameters);
         self.tick = source.tick;
+        self.matching.clone_from(&source.matching);
     }
 }
 
@@ -82,6 +86,7 @@ pub struct Animator {
     pub(crate) event_weights: Vec<f32>,
     pub(crate) output: Pose,
     pub(crate) curves: Vec<f32>,
+    pub(crate) motion_scratch: Vec<Option<MotionScratch>>,
 }
 impl Animator {
     /// Allocates all actor buffers and initializes typed parameters and bind pose.
@@ -116,12 +121,36 @@ impl Animator {
                 fade: None,
                 parameters: controller.defaults.clone(),
                 tick: 0,
+                matching: controller
+                    .nodes
+                    .iter()
+                    .map(|n| {
+                        n.matching
+                            .as_ref()
+                            .map(|p| MotionState::new(p, skeleton))
+                            .transpose()
+                    })
+                    .collect::<Result<_, _>>()?,
             },
             scratch,
             samplers,
             event_weights: vec![0.0; controller.nodes.len()],
             output: skeleton.bind.clone(),
             curves: vec![0.0; controller.properties.len()],
+            motion_scratch: controller
+                .nodes
+                .iter()
+                .map(|n| {
+                    n.matching.as_ref().map(|p| {
+                        MotionScratch::new(
+                            p,
+                            &controller.databases[p.database],
+                            &controller.clips,
+                            skeleton,
+                        )
+                    })
+                })
+                .collect(),
         };
         actor.render(
             controller,
@@ -184,6 +213,18 @@ impl Animator {
         };
         ensure(
             snapshot.program == controller.signature
+                && snapshot.matching.len() == controller.nodes.len()
+                && snapshot
+                    .matching
+                    .iter()
+                    .zip(&controller.nodes)
+                    .all(|(s, n)| match (s, &n.matching) {
+                        (Some(state), Some(program)) => {
+                            state.valid(program, skeleton) && state.last_tick <= snapshot.tick
+                        }
+                        (None, None) => true,
+                        _ => false,
+                    })
                 && snapshot.parameters.len() == controller.defaults.len()
                 && snapshot
                     .parameters

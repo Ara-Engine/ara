@@ -1,0 +1,19 @@
+[package]
+name = "ara-anim-capture"
+description = "Deterministic skeletal pose-strip verification through Ara's Vulkan renderer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-anim = { path = "../ara-anim" }
+ara-render = { path = "../ara-render" }
+ara-schema = { path = "../ara-schema" }
+ara-anim-physics = { path = "../ara-anim-physics" }
+ara-physics = { path = "../ara-physics" }
+ara-physics-jolt = { path = "../ara-physics-jolt" }
+glam = "0.30"
+
+[lints]
+workspace = true
