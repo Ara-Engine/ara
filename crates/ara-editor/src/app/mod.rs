@@ -364,7 +364,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 break;
             }
             if let Some(remaining) = frame_budget.checked_sub(frame_start.elapsed()) {
-                native.wait(remaining);
+                native.wait(remaining)?;
             }
         }
         if verification.as_ref().is_some_and(|v| !v.finished()) {

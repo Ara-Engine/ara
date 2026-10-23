@@ -1,6 +1,8 @@
 //! Editor-only SDL clipboard, IME, monitor scale and Windows accessibility adapters.
 #[cfg(windows)]
 mod accessibility;
+#[cfg(windows)]
+mod pacing;
 use ara_ui::{
     Ui,
     input::{InputEvent, InputState},
@@ -54,9 +56,14 @@ pub(crate) struct Native {
     text_active: bool,
     #[cfg(windows)]
     accessibility: accessibility::Accessibility,
+    #[cfg(windows)]
+    timer: pacing::FrameTimer,
 }
 impl Native {
-    pub fn wait(&self, remaining: std::time::Duration) {
+    pub fn wait(&self, remaining: std::time::Duration) -> anyhow::Result<()> {
+        #[cfg(windows)]
+        self.timer.wait(remaining)?;
+        #[cfg(not(windows))]
         // SAFETY: Main-thread SDL pump; a null event pointer leaves queued input for Window::poll.
         unsafe {
             SDL_WaitEventTimeout(
@@ -64,8 +71,11 @@ impl Native {
                 remaining.as_millis().min(i32::MAX as u128) as i32,
             );
         }
+        Ok(())
     }
     pub fn attach(title: &str) -> anyhow::Result<Self> {
+        #[cfg(windows)]
+        let timer = pacing::FrameTimer::new()?;
         let mut count = 0;
         // SAFETY: SDL video is initialized by ara-platform; its window array is freed with SDL_free.
         let window = unsafe {
@@ -113,6 +123,8 @@ impl Native {
             text_active: false,
             #[cfg(windows)]
             accessibility,
+            #[cfg(windows)]
+            timer,
         })
     }
     pub fn dpi(&self) -> f32 {

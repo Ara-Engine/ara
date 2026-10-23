@@ -38,4 +38,4 @@ accesskit = { version = "0.25", features = ["serde"] }
 
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Threading", "Win32_Security"] }
