@@ -67,6 +67,8 @@ pub(crate) struct Ctx<'a> {
     pub clipboard_value: bool,
     /// Console and Problems filters (for their toggle states).
     pub logs: crate::shell::LogView,
+    /// Assets lists every file (Show All Files).
+    pub assets_show_all: bool,
 }
 /// Whether a command can run now.
 #[derive(Clone, Debug, PartialEq)]
@@ -206,6 +208,7 @@ impl Shell {
             clipboard_entities: self.entity_clipboard.is_some(),
             clipboard_value: self.field_clipboard.is_some(),
             logs: self.log_view,
+            assets_show_all: self.assets_show_all,
         }
     }
     /// Run a registry command if it is available, then rebuild; disabled commands

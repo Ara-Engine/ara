@@ -672,3 +672,63 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
         .unwrap();
     assert_eq!(editor.state.doc, prefab);
 }
+#[test]
+fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
+    let project = Project::new();
+    std::fs::create_dir_all(project.0.join("models")).unwrap();
+    std::fs::create_dir_all(project.0.join("textures/rock")).unwrap();
+    std::fs::write(project.0.join("models/crate.gltf"), "{}").unwrap();
+    std::fs::write(project.0.join("models/crate.bin"), [0u8; 16]).unwrap();
+    std::fs::write(project.0.join("textures/rock/albedo.png"), [0u8; 16]).unwrap();
+    std::fs::write(project.0.join("NOTES.md"), "notes").unwrap();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"assets"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The browser scans off the UI thread.
+    let start = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let names = |shell: &Shell| -> Vec<String> {
+        shell
+            .ui
+            .nodes
+            .iter()
+            .filter(|n| n.element.id.starts_with("asset-card-") && n.element.id.ends_with("-name"))
+            .filter_map(|n| n.text.as_ref().map(|t| t.value.clone()))
+            .collect()
+    };
+    // Root: the folders, then root files; notes and glTF buffers stay hidden.
+    let root = names(&shell);
+    assert!(
+        root.contains(&"models".to_owned()) && root.contains(&"textures".to_owned()),
+        "{root:?}"
+    );
+    assert!(
+        !root
+            .iter()
+            .any(|n| n.ends_with(".md") || n.ends_with(".bin")),
+        "{root:?}"
+    );
+    editor
+        .action("editor.workspace", json!({"folder":"models"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(names(&shell), ["crate.gltf"]);
+    shell
+        .run_command(&mut editor, "assets.show_all", &Default::default())
+        .unwrap();
+    assert!(names(&shell).contains(&"crate.bin".to_owned()));
+    // A type filter searches every folder.
+    editor
+        .action(
+            "editor.search",
+            json!({"panel":"assets","query":"type:texture"}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(names(&shell), ["albedo.png"]);
+}

@@ -597,6 +597,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.import"),
             C("assets.reveal"),
             C("assets.rebuild_thumbnails"),
+            S,
+            C("assets.show_all"),
         ],
         Context::Field => &[
             C("field.copy"),

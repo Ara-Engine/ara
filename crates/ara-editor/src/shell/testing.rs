@@ -151,6 +151,14 @@ impl Shell {
         }
         Ok(())
     }
+    /// Poll the background asset scan once; rebuilds and returns true when it arrived.
+    pub fn poll_assets_for_test(&mut self, editor: &mut Editor) -> bool {
+        if self.poll_assets() || !self.browser.items.is_empty() {
+            let _ = self.rebuild(editor);
+            return !self.browser.items.is_empty();
+        }
+        false
+    }
     /// Palette rows for `query` as (group, title, command id) without opening it.
     pub fn palette_rows(
         &mut self,

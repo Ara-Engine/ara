@@ -81,7 +81,35 @@ impl Shell {
         } else {
             168.
         };
-        out.push_str("</panel><panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
+        out.push_str("</panel>");
+        if !narrow {
+            let current = editor
+                .state
+                .searches
+                .get("assets")
+                .cloned()
+                .unwrap_or_default();
+            out.push_str("<panel id='asset-types' class='type-chips'>");
+            self.bindings.insert(
+                ara_ui::source::stable_id("asset-type-all"),
+                Binding::Protocol("editor.search", json!({"panel":"assets","query":""})),
+            );
+            let any = TYPE_CHIPS
+                .iter()
+                .any(|(_, t)| current.contains(&format!("type:{t}")));
+            out.push_str(&format!("<button id='asset-type-all' class='type-chip{}' label='All types' action='Dispatch'><text id='asset-type-all-label' text='All' /></button>",if any{""}else{" selected"}));
+            for (label, kind) in TYPE_CHIPS {
+                let id = format!("asset-type-{kind}");
+                let on = current.contains(&format!("type:{kind}"));
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::Protocol("editor.search", json!({"panel":"assets","query": if on { String::new() } else { format!("type:{kind}") }})),
+                );
+                out.push_str(&format!("<button id='{id}' class='type-chip{}' label='{label}' description='Show only {}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""},label.to_lowercase()));
+            }
+            out.push_str("</panel>");
+        }
+        out.push_str("<panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
         if side > 0. {
             out.push_str(&format!("<scroll id='asset-folders' style='width:{side}px;min-width:{side}px;flex-basis:{side}px;flex-shrink:0;padding:4px;gap:0px;background:var(--panel-header)'>"));
             self.bindings.insert(
@@ -115,19 +143,54 @@ impl Shell {
             .get("assets")
             .map(String::as_str)
             .unwrap_or("");
-        let items = self
-            .browser
-            .items
-            .iter()
-            .filter(|a| {
-                matches_query(a, query)
-                    && (editor.state.asset_folder.is_empty()
-                        || a.path
-                            .strip_prefix(&format!("{}/", editor.state.asset_folder))
-                            .is_some_and(|s| !s.contains('/')))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        // The current folder's subfolders, then its files; a search looks everywhere.
+        let in_folder = |path: &str| {
+            let rest = if editor.state.asset_folder.is_empty() {
+                Some(path)
+            } else {
+                path.strip_prefix(&format!("{}/", editor.state.asset_folder))
+            };
+            rest.is_some_and(|s| !s.contains('/'))
+        };
+        let searching = !query.trim().is_empty();
+        let mut items: Vec<assets::Asset> = Vec::new();
+        if !searching {
+            let mut subfolders = std::collections::BTreeSet::new();
+            for asset in &self.browser.items {
+                if !self.assets_show_all && is_noise(asset) {
+                    continue;
+                }
+                let parent = asset.path.rsplit_once('/').map_or("", |(p, _)| p);
+                let mut path = parent;
+                // Every ancestor of a visible file that is directly in this folder.
+                while !path.is_empty() {
+                    if in_folder(path) {
+                        subfolders.insert(path.to_owned());
+                        break;
+                    }
+                    path = path.rsplit_once('/').map_or("", |(p, _)| p);
+                }
+            }
+            items.extend(subfolders.into_iter().map(|path| assets::Asset {
+                path,
+                reference: None,
+                kind: "folder".into(),
+                domain: None,
+                uses: Vec::new(),
+                stamp: 0,
+            }));
+        }
+        items.extend(
+            self.browser
+                .items
+                .iter()
+                .filter(|a| {
+                    (self.assets_show_all || !is_noise(a))
+                        && matches_query(a, query)
+                        && (searching || in_folder(&a.path))
+                })
+                .cloned(),
+        );
         self.asset_rows.items.clear();
         self.asset_entries.clear();
         for asset in &items {
@@ -204,7 +267,11 @@ impl Shell {
             let id = format!("asset-card-{n}");
             self.bindings.insert(
                 ara_ui::source::stable_id(&id),
-                Binding::Asset(asset.clone()),
+                if asset.kind == "folder" {
+                    Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
+                } else {
+                    Binding::Asset(asset.clone())
+                },
             );
             out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns-first_row) as f32*row_step,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
             self.asset_thumbnail(asset, out, &id, thumbnail);
@@ -285,15 +352,53 @@ pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
         },
         "cs" => "file-code",
         "json" => "file-code",
+        "folder" => "folder",
+        "wav" | "ogg" | "mp3" | "flac" => "volume-2",
         _ => "file",
     }
 }
+/// Files that are not assets: glTF buffers, notes, project and IDE files. Hidden
+/// unless Assets > Show All Files is on.
+pub(super) fn is_noise(asset: &assets::Asset) -> bool {
+    matches!(
+        asset.kind.as_str(),
+        "bin"
+            | "md"
+            | "toml"
+            | "json"
+            | "csproj"
+            | "sln"
+            | "slnx"
+            | "lock"
+            | "txt"
+            | "log"
+            | "tmp"
+            | "gitignore"
+            | "gitattributes"
+    )
+}
+/// The type chips above the asset grid: label and the `type:` query each sets.
+pub(super) const TYPE_CHIPS: &[(&str, &str)] = &[
+    ("Models", "mesh"),
+    ("Textures", "texture"),
+    ("Materials", "material"),
+    ("Prefabs", "prefab"),
+    ("Scenes", "scene"),
+    ("Audio", "audio"),
+    ("Scripts", "script"),
+    ("VFX", "vfx"),
+];
 fn matches_query(asset: &assets::Asset, query: &str) -> bool {
     query.split_whitespace().all(|term| {
         if let Some(kind) = term.strip_prefix("type:") {
             match kind {
                 "mesh" => matches!(asset.kind.as_str(), "gltf" | "glb" | "fbx"),
-                "texture" => matches!(asset.kind.as_str(), "png" | "jpg" | "jpeg" | "hdr" | "exr"),
+                "texture" => matches!(
+                    asset.kind.as_str(),
+                    "png" | "jpg" | "jpeg" | "hdr" | "exr" | "ktx2"
+                ),
+                "audio" => matches!(asset.kind.as_str(), "wav" | "ogg" | "mp3" | "flac"),
+                "script" => asset.kind == "cs",
                 "material" => {
                     matches!(asset.kind.as_str(), "material" | "materialinstance")
                         || asset.domain.as_deref() == Some("material")

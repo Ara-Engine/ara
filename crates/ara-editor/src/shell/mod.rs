@@ -91,6 +91,8 @@ pub struct Shell {
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
+    /// Assets lists every file, including glTF buffers and project files.
+    pub(crate) assets_show_all: bool,
     /// Console and Problems filters.
     pub(crate) log_view: LogView,
     /// Console row whose details are expanded (bus sequence number).
@@ -253,6 +255,7 @@ impl Shell {
             expanded_turns: std::collections::BTreeSet::new(),
             pending_reports: Vec::new(),
             log_view: LogView::default(),
+            assets_show_all: false,
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
@@ -452,8 +455,14 @@ impl Shell {
             let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
             view.scroll(&mut ui, &self.asset_rows, self.asset_offset, height)?;
             for (key, asset) in &self.asset_entries {
-                self.bindings
-                    .insert(view.identity(*key), Binding::Asset(asset.clone()));
+                self.bindings.insert(
+                    view.identity(*key),
+                    if asset.kind == "folder" {
+                        Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
+                    } else {
+                        Binding::Asset(asset.clone())
+                    },
+                );
             }
             self.asset_view = Some(view);
             self.asset_surface = self.current.clone();

@@ -279,6 +279,7 @@ impl EditorService {
                 clipboard_entities: false,
                 clipboard_value: false,
                 logs: crate::shell::LogView::default(),
+                assets_show_all: false,
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }

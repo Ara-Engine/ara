@@ -859,6 +859,10 @@ fn build() -> Vec<Spec> {
         later("assets.duplicate", "Duplicate", "copy", "", "Asset duplication needs new stable IDs from a typed asset.copy command."),
         later("assets.delete", "Delete", "trash", "", "Deleting assets needs the reference-count warning from asset.delete; not built yet."),
         later("assets.validate", "Validate Project", "circle-check", "", "Run `ara check` for now; the in-editor validation report arrives with Problems."),
+        cmd("assets.show_all", "Show All Files", "file", "", "List every file, including glTF buffers, notes and project files.", |s, _, _| {
+            s.assets_show_all = !s.assets_show_all;
+            Ok(())
+        }).when(|c| Avail::Checked(c.assets_show_all)),
         cmd("assets.rebuild_thumbnails", "Rebuild Thumbnails", "image", "", "Re-render every asset thumbnail off the UI thread.", |s, _, _| {
             s.rebuild_thumbnails();
             Ok(())

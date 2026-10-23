@@ -279,3 +279,7 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .progress-fill { height:4px; border-radius:2px; background:var(--accent); }
 /* Inspector prefab bar. */
 .prefab-bar { flex-direction:row; align-items:center; gap:6px; height:30px; flex-shrink:0; padding-left:8px; padding-right:6px; border-radius:var(--radius-sm); background:var(--accent-surface); }
+/* Asset type chips. */
+.type-chips { flex-direction:row; align-items:center; gap:4px; height:28px; flex-shrink:0; padding-left:8px; padding-right:8px; overflow:hidden; }
+.type-chip { height:20px; padding-left:8px; padding-right:8px; border-width:1px; border-color:var(--separator-strong); border-radius:10px; background:transparent; font-size:11px; color:var(--muted-foreground); flex-shrink:0; }
+.type-chip:hover { background:var(--raised); color:var(--foreground); }
