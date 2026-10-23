@@ -146,6 +146,7 @@ pub(crate) fn load(path: &Path) -> Result<Scene> {
         .into_iter()
         .filter(|m| !m.indices.is_empty())
         .collect();
+    material_import::detail(&mut scene, path)?;
     Ok(scene)
 }
 
@@ -180,6 +181,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut passes = BTreeMap::<String, Vec<f64>>::new();
         let mut totals = Vec::new();
         let background_before = background_load();
+        let cpu_before = cpu_load();
         for tick in 0..336 {
             let mut request = input(&camera, tick, false);
             request.deterministic = false;
@@ -211,7 +213,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 (name, serde_json::json!({"p50":times[120],"p95":times[227]}))
             })
             .collect::<BTreeMap<_, _>>();
-        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"budget_ms":budget,"budget_passed":p95<=budget,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks"}));
+        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored bump heights -> tangent normals; UV-derived tangents; map_Ks -> bounded specular intensity, not roughness; linear-space mip pyramids","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"budget_ms":budget,"budget_passed":p95<=budget,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"cpu_before":cpu_before,"cpu_after":cpu_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks; before/after snapshots are outside timed frames"}));
         view.destroy(gpu)?;
     }
     write_json(&root.join("measurements/sponza-timings.json"), &report)?;
@@ -226,4 +228,8 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 /// Benchmark-only telemetry; no machine query enters the renderer's frame loop.
 pub(crate) fn background_load() -> String {
     std::process::Command::new("nvidia-smi").args(["--query-gpu=utilization.gpu,utilization.memory,memory.used,power.draw,clocks.gr,clocks.mem","--format=csv,noheader"]).output().map(|o|String::from_utf8_lossy(&o.stdout).trim().to_owned()).unwrap_or_else(|e|format!("unavailable: {e}"))
+}
+/// CPU utilization and free RAM snapshots outside GPU timing windows.
+pub(crate) fn cpu_load() -> String {
+    std::process::Command::new("powershell.exe").args(["-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command","$p=Get-CimInstance Win32_Processor; $m=Get-CimInstance Win32_OperatingSystem; Write-Output ('cpu_percent='+$p.LoadPercentage+'; free_ram_kib='+$m.FreePhysicalMemory)"]).output().map(|o|String::from_utf8_lossy(&o.stdout).trim().to_owned()).unwrap_or_else(|e|format!("unavailable: {e}"))
 }

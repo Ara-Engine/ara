@@ -23,7 +23,8 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara history [--doc] [--by author] [--limit]`, `ara review` | `history.list`, `review.list` | |
 | `ara undo [txn]`, `ara redo` | `history.undo/redo` for `--author` | nothing to undo, conflicts |
 | `ara accept [txn] [--entity e] [--all]`, `ara revert [txn] [--entity e]` | `review.accept/revert` | nothing to review |
-| `ara logs [--since] [--code].. [--severity] [--entity] [--limit]` | `logs` | |
+| `ara logs [--since] [--code].. [--severity] [--entity] [--subject].. [--origin] [--grep] [--all] [--budget] [--limit]` | `logs`: grouped by code (`--all`: one by one) | |
+| `ara why <question..> [--doc d] [--list]` | `why`: ranked causes, evidence, runnable fixes (`name:Crate not visible`, `ARA1302`, `@meshes/x.glb`, `is the frame slow`) | |
 
 Global: `--root <dir>`, `--json` (every command), `--author human|agent:<name>`
 (protocol commands; default `ARA_AUTHOR`, else the agent whose shell runs the CLI:
@@ -56,7 +57,8 @@ with ARA1901 and a `Cli ["init", dir]` fix. Scans skip hidden dirs (`.git`,
 - `commands/`: `init`, `serve` (daemon + MCP glue: `Daemon` implements
   `ara_rpc::Handler`; stdio MCP is per-connection, `/mcp` stateless), `protocol`
   (args and summaries), `docs`, `fmt`, `check` (+ `--fix`), `schema`, `merge`,
-  `resolve`, `edit` (record/field-path edits of a document file's JSON).
+  `resolve`, `edit` (record/field-path edits of a document file's JSON), `why`
+  (`ara why` and the `ara logs` args).
 
 ## Gotchas
 

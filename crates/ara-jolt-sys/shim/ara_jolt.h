@@ -188,6 +188,7 @@ uint32_t ara_body_destroy(AraWorld* world, uint32_t body);
 uint32_t ara_bodies_read(const AraWorld* world, const uint32_t* bodies, uint32_t count, AraBodyState* out);
 uint32_t ara_bodies_apply(AraWorld* world, const AraBodyCommand* commands, uint32_t count, float dt);
 uint32_t ara_queries(const AraWorld* world, const AraQuery* queries, uint32_t count, AraHit* hits, uint32_t capacity, uint32_t* offsets);
+uint32_t ara_ray_closest(const AraWorld* world, const AraQuery* query, AraHit* hit);
 uint32_t ara_contacts(AraWorld* world, AraContact* out, uint32_t capacity);
 uint32_t ara_character_create(AraWorld* world, const AraCharacterDesc* desc);
 uint32_t ara_character_destroy(AraWorld* world, uint32_t character);

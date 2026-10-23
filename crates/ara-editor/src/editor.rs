@@ -130,6 +130,11 @@ impl Editor {
             controls: control_send,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
+        let mut play = ara_play_host::PlayConfig::for_project(root);
+        play.pool.headless = 1;
+        host.register(Box::new(ara_play_host::PlayService::new(root, play)))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))

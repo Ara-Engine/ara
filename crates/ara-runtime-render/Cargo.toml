@@ -1,0 +1,28 @@
+[package]
+name = "ara-runtime-render"
+description = "Presents ara-runtime frames with ara-render: extraction upload, CPU skinning, sky and labelled captures."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+ara-asset-format = { path = "../ara-asset-format" }
+ara-render = { path = "../ara-render" }
+ara-runtime = { path = "../ara-runtime" }
+glam = "0.34"
+# ara-render's scene/camera API uses glam 0.30 types.
+glam30 = { package = "glam", version = "0.30" }
+texture2ddecoder = "0.1.2"
+
+[dev-dependencies]
+ara-asset = { path = "../ara-asset" }
+ara-doc.workspace = true
+ara-importers = { path = "../ara-importers" }
+ara-input = { path = "../ara-input" }
+ara-sim = { path = "../ara-sim" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -16,7 +16,13 @@ void upscaleMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.zw))return;float3 colour;
     if(root.pass==1){uint4 a,b,c,d;FsrEasuCon(a,b,c,d,f.sizes.x,f.sizes.y,f.sizes.x,f.sizes.y,f.sizes.z,f.sizes.w);FsrEasuF(colour,p,a,b,c,d);}
     else {float2 uv=(float2(p)+0.5)/float2(f.sizes.zw);colour=sampleImage(f,POST,uv).rgb;}
-    if(root.pass==0 && f.transport.x==0 && f.temporal.x==0 && f.temporal.y==0){
+    float2 exposureState=buffers[NonUniformResourceIndex(f.control.y)].Load<float2>(0);
+    bool integrated=root.pass==0 && f.transport.x==0 && f.temporal.x==0 && f.temporal.y==0 && f.transport.w==1 && all(f.sizes.xy==f.sizes.zw) && abs(log2(max(exposureState.x,1e-6)/max(exposureState.y,1e-6)))<0.001;
+    if(integrated){
+        // Pixel coverage, direct light and remodulation already integrate their
+        // area. An unchanged camera/scene needs no reprojection or 3x3 clipping.
+        if(pixel(f,WORLD+f.control.x,p).w>0)colour=lerp(pixel(f,19+1-f.control.x,p).rgb,colour,0.15);
+    }else if(root.pass==0 && f.transport.x==0 && f.temporal.x==0 && f.temporal.y==0){
         float2 uv=(float2(p)+0.5)/float2(f.sizes.zw);float4 motion=sampleImage(f,MOTION,uv);
         // Stationary transport already integrates pixel-area samples. Reapplying
         // jitter reprojection here blurs that integration a second time.

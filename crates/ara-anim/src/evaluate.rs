@@ -166,6 +166,33 @@ impl Animator {
                     }
                     out.root = root_for(clip, skeleton, previous.time, current.time, state);
                 }
+                NodeKind::MotionMatching => {
+                    let program = node
+                        .matching
+                        .as_ref()
+                        .expect("compiled motion node has settings");
+                    let state = self.state.matching[index]
+                        .as_mut()
+                        .expect("motion node has actor state");
+                    let scratch = self.motion_scratch[index]
+                        .as_mut()
+                        .expect("motion node has scratch");
+                    scratch.evaluate(
+                        state,
+                        program,
+                        &c.databases[program.database],
+                        c,
+                        skeleton,
+                        &self.state.parameters,
+                        self.state.tick,
+                    )?;
+                    out.pose.copy_from(&state.pose)?;
+                    let clip = program.clips[state.clip];
+                    for (i, value) in scratch.curves[state.clip].iter().enumerate() {
+                        out.curves[c.curve_maps[clip][i]] = *value;
+                    }
+                    out.root = state.root;
+                }
                 NodeKind::Blend1d | NodeKind::Directional2d => {
                     let w = weights(node, &self.state.parameters);
                     let first = (0..w.len).find(|i| w.values[*i] > 0.0).unwrap_or(0);
@@ -299,6 +326,33 @@ impl Animator {
                                     tick: self.state.tick,
                                     lane,
                                     clip: node.clip,
+                                    notify,
+                                    cycle,
+                                    weight,
+                                });
+                            }
+                        }
+                    }
+                }
+                NodeKind::MotionMatching => {
+                    let program = node.matching.as_ref().expect("compiled motion node");
+                    let playback = self.state.matching[index]
+                        .as_ref()
+                        .expect("motion playback state");
+                    let clip_index = program.clips[playback.clip];
+                    let clip = &c.clips[clip_index];
+                    let duration = u64::from(clip.duration);
+                    for cycle in playback.before / duration..=playback.time / duration {
+                        for notify in &clip.notifies {
+                            let time =
+                                u128::from(cycle) * u128::from(duration) + u128::from(notify.tick);
+                            if time > u128::from(playback.before)
+                                && time <= u128::from(playback.time)
+                            {
+                                emit(Event {
+                                    tick: self.state.tick,
+                                    lane,
+                                    clip: clip_index,
                                     notify,
                                     cycle,
                                     weight,

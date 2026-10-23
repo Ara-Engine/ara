@@ -4,7 +4,8 @@ One project's engine host behind the Engine Protocol: sessions and scopes, the
 method registry (`Service`) and the core methods, review state, checkpoints, the
 journal, always-saved persistence and external-edit reconciliation. The daemon
 (`ara serve`) serves it; the offline CLI and tests call it in-process.
-Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag.
+Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag,
+ara-why, ara-profile.
 
 ## Public API
 
@@ -31,11 +32,39 @@ Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag
 - `Approval` hook (`DefaultPolicy`: humans everything, agents
   `Scope::agent_default()`); the decision is stored on the session, journaled and
   logged (ARA1812, denials ARA1805).
-- `core_methods()`: the core catalog without a host (offline `ara docs`).
+- `core_methods()`: the catalog of the always-registered services (core, profile,
+  diag, why) without a host (offline `ara docs`, MCP tests).
+- `Host::why()`: the `ara why` registry; subsystems `register` explainers and `add`
+  collectors. `HostConfig::diagnostics`: bus retention per severity.
 - `Host::review_entities(txn)`: read-only per-entity review status for native
   hierarchy/viewport overlays; uses the same state as review accept/revert.
 - Modules: `params` (all core params types), `query` (compact syntax), `text`
-  (scene-to-text), `docs` (llms.txt), `journal`, `logs`, `review`, `jobs`, `tree`.
+  (scene-to-text), `docs` (llms.txt, a page per code), `journal`, `review`, `jobs`,
+  `tree`, `diag` (the bus service, `.ara/diagnostics.jsonl`), `why` (`HostFacts`).
+
+## Diagnostics bus (`diag.rs`, `why.rs`)
+
+- `Host::open` attaches the process's bus consumer; every tick drains other threads'
+  emits into the store (`ara_diag::store`), and `Cx::log` / failed calls push
+  directly, attributed to the calling session's author. Subsystems on the host's
+  thread during a call are attributed through `bus::scope`.
+- `logs` (`ara_logs`): grouped by code (counts, subjects, newest message, best fix)
+  within `budget` characters; `group: false` lists entries. Answers are the text
+  (`{cursor, total, text}`) unless `limit` asks for `entries` and `summary`: MCP
+  clients pass `structuredContent` to the model, so JSON costs tokens. `diag.query`
+  always answers in full and adds time,
+  tick and text filters; `diag.subscribe` streams `diag.event {subscription,
+  record}`; `diag.clear`; `diag.report` lets other processes push diagnostics
+  (`engine: true`, `tick`, per-item `causedBy` index).
+- Engine reports (bus events, `diag.report`) persist in `.ara/diagnostics.jsonl`
+  (appended every 500 ms, rewritten when 4× larger than the store); call errors do
+  not. Restored records keep causal links (by dedup key).
+- `why` (`ara_why`): `Why::explain` over `HostFacts` (resolved trees cached per
+  question, effective component values, the asset index, project files, the bus,
+  a profiler summary); `list: true` lists explainers. It answers `{text, fixes}`
+  (runnable fixes with their cause code); `full: true` returns the whole `Report`.
+  `docs.search` answers a code
+  query with its `errors/<code>` page.
 
 ## Core methods (`core/`)
 
@@ -102,7 +131,9 @@ compaction, review roll-up. `tests/host.rs` (fixture project copied to a temp di
 round trips, scopes, dry run = apply, symbols, review per entity, rollback, crash
 replay, external edits/conflicts, service registration, subscriptions with a
 registry job's progress, document inference + apply text, required agent
-`why`. Snapshots: scene-to-text.
+`why`. Snapshots: scene-to-text. `tests/diag.rs` (serialized: the bus is global):
+grouped logs and attribution, subscriptions with other threads' emits, report and
+clear, `why` over the protocol with its fix applied, persistence across a restart.
 
 Cx::create_document establishes an empty canonical document identity for a typed
 subsystem create action. Initialize semantic records with Cx::apply, which provides

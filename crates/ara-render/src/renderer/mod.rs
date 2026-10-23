@@ -33,12 +33,19 @@ const OUTPUT: usize = 10;
 const TARGET_COUNT: usize = 11;
 
 struct Mesh {
+    /// Stable external identity, the key for `Renderer::update_mesh`.
+    entity: u64,
     vertices: Buffer,
     indices: Buffer,
     count: u32,
+    vertex_count: usize,
     material: u32,
     transparent: bool,
     centre: Vec3,
+    /// Vertices live in host-visible storage rewritten between frames.
+    host: bool,
+    /// Last dynamic upload, retained for capture provenance hashing.
+    latest: Option<Vec<crate::scene::Vertex>>,
 }
 struct Targets {
     images: Vec<Image>,
@@ -69,31 +76,16 @@ pub struct Renderer {
     size: [u32; 2],
     targets: Targets,
     pipelines: Pipelines,
-    meshes: Vec<Mesh>,
-    graphics_inputs: Vec<(Resource, Access)>,
-    compute_inputs: Vec<(Resource, Access)>,
-    material_index: u32,
+    content: upload::Content,
     frame: Buffer,
     frame_index: u32,
     compute_frame: Buffer,
     compute_frame_index: u32,
-    light_index: u32,
-    compute_light_index: u32,
-    light_count: u32,
-    environment: u32,
-    irradiance: u32,
-    prefilter: u32,
-    sun_direction: Vec3,
-    sun_lux: Vec3,
     previous_vp: Mat4,
     frame_number: u32,
-    scene_hash: String,
-    static_scene_hash: String,
+    artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
-    entity_names: Vec<(u64, String)>,
     last_timings: Vec<PassTiming>,
-    scene_textures: Vec<u32>,
-    dynamic: Vec<Resource>,
 }
 
 impl Renderer {
@@ -186,7 +178,7 @@ impl Renderer {
     }
     /// Compact channel index (slice index + 1) to external entity identity and label.
     pub fn entities(&self) -> &[(u64, String)] {
-        &self.entity_names
+        &self.content.entity_names
     }
     /// Last measured pass timings, including actual dedicated-queue execution.
     pub fn timings(&self) -> &[PassTiming] {
@@ -241,13 +233,14 @@ impl Renderer {
             .iter()
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as u32)
             .collect::<Vec<_>>();
+        let hash = self.scene_hash();
         Capture::from_render(
             rgba,
             ids,
             request,
             crate::capture::CaptureContext {
-                names: &self.entity_names,
-                hash: &self.scene_hash,
+                names: &self.content.entity_names,
+                hash: &hash,
                 device: &self.gpu.context().info,
                 timings: &self.last_timings,
                 shaders: &self.shader_metadata,

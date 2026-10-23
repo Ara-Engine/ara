@@ -1,0 +1,62 @@
+// Spherical Earth, metres. Independent implementation of Hillaire (EGSR 2020).
+static const uint TRANSMITTANCE=24,MULTISCATTER=25,SKYVIEW=26,FROXELS=27;
+static const float PLANET=6360000,TOP=6460000;
+float3 extinction(float height,out float3 scatteringR,out float scatteringM){
+    height=max(height,0);scatteringR=float3(5.802e-6,13.558e-6,33.1e-6)*exp(-height/8000);
+    scatteringM=3.996e-6*exp(-height/1200);
+    float ozone=max(0,1-abs(height-25000)/15000);
+    return scatteringR+scatteringM/0.9+float3(0.650e-6,1.881e-6,0.085e-6)*ozone;
+}
+float sphereExit(float3 p,float3 d,float radius){float b=dot(p,d),q=b*b-dot(p,p)+radius*radius;return q<0?0:max(0,-b+sqrt(q));}
+float atmosphereLength(float3 p,float3 d){
+    float top=sphereExit(p,d,TOP),b=dot(p,d),q=b*b-dot(p,p)+PLANET*PLANET;
+    if(q>0 && -b-sqrt(q)>0)return min(top,-b-sqrt(q));return top;
+}
+float3 transmittance(Frame f,float height,float cosine){return textures[NonUniformResourceIndex(ri(f,TRANSMITTANCE))].SampleLevel(samplers[2],float2(cosine*0.5+0.5,sqrt(saturate(height/100000))),0).rgb;}
+float phaseR(float cosine){return 3*(1+cosine*cosine)/(16*PI);}
+float phaseM(float cosine,float g){return (1-g*g)/(4*PI*pow(max(1+g*g-2*g*cosine,0.001),1.5));}
+float3 multiScattering(Frame f,float height,float cosine){return textures[NonUniformResourceIndex(ri(f,MULTISCATTER))].SampleLevel(samplers[2],float2(cosine*0.5+0.5,sqrt(saturate(height/100000))),0).rgb;}
+float3 integrateSky(Frame f,float3 p,float3 d,float distance,uint steps,bool multiple,out float3 throughput){
+    float3 sum=0;throughput=1;float previous=0;
+    for(uint i=0;i<steps;i++){
+        float end=distance*pow(float(i+1)/steps,2),ds=end-previous;
+        float3 at=p+d*(previous+ds*0.5);previous=end;float height=max(length(at)-PLANET,0),mu=dot(normalize(at),f.sunDirection.xyz);
+        float3 sr;float sm;float3 e=extinction(height,sr,sm),segment=exp(-e*ds);
+        float3 source=transmittance(f,height,mu)*(sr*phaseR(dot(d,f.sunDirection.xyz))+sm*phaseM(dot(d,f.sunDirection.xyz),0.8));
+        if(multiple)source+=(sr+sm)*multiScattering(f,height,mu);
+        sum+=throughput*source*(1-segment)/max(e,float3(1e-9));throughput*=segment;
+    }return sum*f.sunLux.rgb;
+}
+float noise2(float2 p){int2 i=int2(floor(p));float2 a=frac(p);a=a*a*(3-2*a);float n00=float(hash(asuint(i.x)*73856093u^asuint(i.y)*19349663u)&65535)/65535.;float n10=float(hash(asuint(i.x+1)*73856093u^asuint(i.y)*19349663u)&65535)/65535.;float n01=float(hash(asuint(i.x)*73856093u^asuint(i.y+1)*19349663u)&65535)/65535.;float n11=float(hash(asuint(i.x+1)*73856093u^asuint(i.y+1)*19349663u)&65535)/65535.;return lerp(lerp(n00,n10,a.x),lerp(n01,n11,a.x),a.y);}
+float cloudDensity(Frame f,float2 p){float n=0,m=0.5;for(uint i=0;i<5;i++){n+=noise2(p)*m;p=p*2.03+17.7;m*=0.5;}return smoothstep(1-f.weather.x,1-f.weather.x+0.18,n);}
+float3 solarIrradiance(Frame f,float3 position){
+    float height=max(position.y-f.atmosphere.x,0);float3 light=f.sunLux.rgb*transmittance(f,height,f.sunDirection.y);
+    if(f.weather.x>0 && f.sunDirection.y>0.01){float2 p=position.xz+f.sunDirection.xz*((f.weather.y-position.y)/f.sunDirection.y);light*=exp(-cloudDensity(f,p*0.00025)*3/max(f.sunDirection.y,0.2));}
+    return light;
+}
+float3 atmosphereEnvironment(Frame f,float3 d,bool disk){
+    float2 uv=envUv(d);float3 c=textures[NonUniformResourceIndex(ri(f,SKYVIEW))].SampleLevel(samplers[1],uv,0).rgb;
+    // Analytic disk avoids aliasing a 0.53-degree sun into the sky-view LUT.
+    float radius=f.sunDirection.w,angle=acos(clamp(dot(d,f.sunDirection.xyz),-1.,1.));
+    if(disk && angle<radius && d.y>0){float mu=sqrt(saturate(1-angle*angle/(radius*radius)));float limb=1-0.6*(1-mu);c+=f.sunLux.rgb*transmittance(f,max(f.camera.y-f.atmosphere.x,2),d.y)*limb/(PI*radius*radius*0.8);}
+    if(f.weather.x>0 && d.y>0.01){
+        float2 pos=f.camera.xz+d.xz*((f.weather.y-f.camera.y)/d.y);
+        float density=cloudDensity(f,pos*0.00025),shade=cloudDensity(f,(pos+f.sunDirection.xz*250)*0.00025);
+        float optical=density*3/max(d.y,0.2),t=exp(-optical);
+        float3 light=f.sunLux.rgb*(0.045+0.2*exp(-shade*2.2))*max(f.sunDirection.y,0.05);
+        c=c*t+light*(1-t);
+    }return c;
+}
+float3 sampleFroxel(Frame f,float2 uv,float distance,out float3 trans){
+    // Columns store cumulative values at slice ends, not slice centres.
+    float slice=log2(1+distance/2)/log2(1+4000./2)*32;
+    float z=clamp(slice-1,0.,31.);uint lo=uint(z),hi=min(lo+1,31);
+    float2 a=(clamp(uv,float2(0.5/64,0.5/36),float2(63.5/64,35.5/36))*float2(64,36));
+    float3 x=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((lo*128+a.x)/4096,a.y/36),0).rgb;
+    float3 y=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((hi*128+a.x)/4096,a.y/36),0).rgb;
+    float3 tx=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((lo*128+64+a.x)/4096,a.y/36),0).rgb;
+    float3 ty=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((hi*128+64+a.x)/4096,a.y/36),0).rgb;
+    trans=lerp(tx,ty,frac(z));float3 light=lerp(x,y,frac(z));
+    if(slice<1){trans=lerp(float3(1),trans,slice);light*=slice;}
+    return light;
+}

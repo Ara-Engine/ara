@@ -94,7 +94,7 @@ pub fn check(project: &Project, files: &[PathBuf], fix: bool, json: bool) -> Res
     if fix {
         fixed = apply_fixes(project, &diags)?;
         if !fixed.is_empty() {
-            let again = Project::open(&project.root).map_err(|d| d.to_string())?;
+            let again = crate::project::load(&project.root).map_err(|d| d.to_string())?;
             (targets, diags) = diagnostics(&again, files);
         }
     }

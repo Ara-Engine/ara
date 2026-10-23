@@ -1,10 +1,313 @@
 ---
 source: crates/ara/tests/cli.rs
+assertion_line: 93
 expression: out
 ---
 {
   "$schema": "ara://schema/reflection/1",
   "types": {
+    "Animator": {
+      "kind": "component",
+      "doc": "Skeletal animation for this entity's `MeshRenderer.model`, compiled to an ara-anim program: an `idle` state and a `move` state whose 1D blend tree is driven by the entity's ground speed, cross-faded at `moveThreshold`.",
+      "module": "animation",
+      "fields": {
+        "idle": {
+          "type": "string",
+          "doc": "Idle clip name.",
+          "default": ""
+        },
+        "locomotion": {
+          "type": "list<LocomotionClip>",
+          "doc": "Moving blend samples in increasing speed order.",
+          "default": []
+        },
+        "moveThreshold": {
+          "type": "f32",
+          "doc": "Ground speed separating idle from moving.",
+          "default": 0.15,
+          "unit": "m/s",
+          "range": [0, null]
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Cross-fade duration between idle and moving.",
+          "default": 0.2,
+          "unit": "s",
+          "range": [0, null]
+        },
+        "rootMotion": {
+          "type": "bool",
+          "doc": "Moves the entity by the extracted root motion (only without a character controller or navigation agent, which own movement).",
+          "default": false
+        }
+      }
+    },
+    "Camera": {
+      "kind": "component",
+      "doc": "A viewpoint looking along the entity's local -Z axis. The lowest `priority` wins.",
+      "module": "render",
+      "fields": {
+        "fov": {
+          "type": "f32",
+          "doc": "Vertical field of view.",
+          "default": 55,
+          "unit": "deg",
+          "range": [1, 170]
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Selection order when several cameras exist; lower is preferred.",
+          "default": 0
+        }
+      }
+    },
+    "CharacterController": {
+      "kind": "component",
+      "doc": "Predicted capsule movement: slopes, stairs, moving platforms, crouching and pushing.",
+      "module": "physics",
+      "fields": {
+        "radius": {
+          "type": "f32",
+          "doc": "Standing capsule radius.",
+          "default": 0.3,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Complete standing height; must exceed twice the radius.",
+          "default": 1.8,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "crouchHeight": {
+          "type": "f32",
+          "doc": "Complete crouched height, between diameter and standing height.",
+          "default": 1,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "maxSlopeDeg": {
+          "type": "f32",
+          "doc": "Maximum walkable slope angle.",
+          "default": 45,
+          "unit": "deg",
+          "range": [0.1, 89.9]
+        },
+        "stepHeight": {
+          "type": "f32",
+          "doc": "Maximum stair step height.",
+          "default": 0.35,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "stickDown": {
+          "type": "f32",
+          "doc": "Distance searched below feet to stay on a descending surface.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "padding": {
+          "type": "f32",
+          "doc": "Capsule collision padding.",
+          "default": 0.02,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "maxStrength": {
+          "type": "f32",
+          "doc": "Maximum force used to push rigid bodies.",
+          "default": 1000,
+          "unit": "N",
+          "range": [0, null]
+        },
+        "mass": {
+          "type": "f32",
+          "doc": "Character mass used for dynamic body interaction.",
+          "default": 70,
+          "unit": "kg",
+          "range": [0.001, null]
+        },
+        "layer": {
+          "type": "u32",
+          "doc": "Collision group used for movement queries.",
+          "default": 1,
+          "range": [1, 15]
+        }
+      }
+    },
+    "CharacterInput": {
+      "kind": "component",
+      "doc": "Per-tick character intent: replay this input exactly once before the rigid-body step.",
+      "module": "physics",
+      "fields": {
+        "desiredVelocity": {
+          "type": "vec3",
+          "doc": "Desired world-space horizontal velocity; Y must be zero.",
+          "default": [0, 0, 0],
+          "unit": "m/s",
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "jumpSpeed": {
+          "type": "f32",
+          "doc": "Jump launch speed; zero means no jump this tick.",
+          "default": 0,
+          "unit": "m/s",
+          "range": [0, null],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "crouch": {
+          "type": "bool",
+          "doc": "Requested crouch; standing may be blocked by clearance.",
+          "default": false,
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "CharacterMotion": {
+      "kind": "component",
+      "doc": "Character support and stance mirrored at every fixed boundary.",
+      "module": "physics",
+      "fields": {
+        "grounded": {
+          "type": "bool",
+          "doc": "Walkable ground support.",
+          "default": false,
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "crouched": {
+          "type": "bool",
+          "doc": "Actual stance; a ceiling can prevent standing.",
+          "default": false,
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "groundVelocity": {
+          "type": "vec3",
+          "doc": "Platform contact velocity.",
+          "default": [0, 0, 0],
+          "unit": "m/s",
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "groundNormal": {
+          "type": "vec3",
+          "doc": "Supporting surface normal.",
+          "default": [0, 0, 0],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "Collider": {
+      "kind": "component",
+      "doc": "Collision geometry, material, layer and trigger settings.",
+      "module": "physics",
+      "fields": {
+        "kind": {
+          "type": "ColliderKind",
+          "doc": "Primitive type or externally cooked shape.",
+          "default": "box",
+          "options": [
+            "box",
+            "sphere",
+            "capsule",
+            "cylinder",
+            "cooked"
+          ]
+        },
+        "halfExtents": {
+          "type": "vec3",
+          "doc": "Box half extents; scale must be baked before physics extraction.",
+          "default": [0.5, 0.5, 0.5],
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Sphere, capsule or cylinder radius.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "halfHeight": {
+          "type": "f32",
+          "doc": "Cylinder half height, excluding the capsule hemispheres.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "asset": {
+          "type": "option<asset>",
+          "doc": "Cooked collision asset (`@path#id`); resolve into `CookedCollider` before ticking.",
+          "default": null
+        },
+        "layer": {
+          "type": "u32",
+          "doc": "Zero selects static/moving defaults from the body; 1..15 select an explicit group.",
+          "default": 0,
+          "range": [0, 15]
+        },
+        "sensor": {
+          "type": "bool",
+          "doc": "Report trigger events without a collision response.",
+          "default": false
+        },
+        "friction": {
+          "type": "f32",
+          "doc": "Coulomb friction coefficient.",
+          "default": 0.6,
+          "range": [0, null]
+        },
+        "restitution": {
+          "type": "f32",
+          "doc": "Elasticity: zero is inelastic, one is perfectly elastic.",
+          "default": 0,
+          "range": [0, 1]
+        }
+      }
+    },
+    "ColliderKind": {
+      "kind": "enum",
+      "doc": "Primitive or cooked geometry selection. Cooked geometry is resolved by the asset worker.",
+      "module": "physics",
+      "variants": {
+        "box": {
+          "doc": "Box using half extents."
+        },
+        "sphere": {
+          "doc": "Sphere using radius."
+        },
+        "capsule": {
+          "doc": "Y-axis capsule using cylinder half height and radius."
+        },
+        "cylinder": {
+          "doc": "Y-axis cylinder using half height and radius."
+        },
+        "cooked": {
+          "doc": "Immutable cooked hull, mesh, terrain or compound, attached as `CookedCollider`."
+        }
+      }
+    },
     "ComponentAddParams": {
       "kind": "params",
       "doc": "Parameters of `component.add`.",
@@ -155,6 +458,189 @@ expression: out
         }
       }
     },
+    "Environment": {
+      "kind": "component",
+      "doc": "Procedural sky radiance and camera exposure. The first in stable-ID order wins.",
+      "module": "render",
+      "fields": {
+        "sky": {
+          "type": "color",
+          "doc": "Zenith sky color (linear).",
+          "default": [0.22, 0.32, 0.6, 1]
+        },
+        "horizon": {
+          "type": "color",
+          "doc": "Horizon sky color (linear).",
+          "default": [0.95, 0.62, 0.4, 1]
+        },
+        "ground": {
+          "type": "color",
+          "doc": "Ground color seen below the horizon (linear).",
+          "default": [0.18, 0.16, 0.14, 1]
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Sky radiance scale in candela per square metre.",
+          "default": 900,
+          "unit": "cd",
+          "range": [0, null]
+        },
+        "exposure": {
+          "type": "f32",
+          "doc": "Linear camera exposure multiplier, applied before tone mapping.",
+          "default": 0.0015,
+          "range": [1e-7, null]
+        }
+      }
+    },
+    "FollowCamera": {
+      "kind": "component",
+      "doc": "Third-person orbit rig: places this entity behind `target`, steered by `Look`.",
+      "module": "gameplay",
+      "fields": {
+        "target": {
+          "type": "option<entity>",
+          "doc": "Followed entity.",
+          "default": null
+        },
+        "distance": {
+          "type": "f32",
+          "doc": "Orbit distance from the aim point.",
+          "default": 5,
+          "unit": "m",
+          "range": [0.1, null]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Aim point height above the target's origin.",
+          "default": 0.8,
+          "unit": "m"
+        },
+        "yaw": {
+          "type": "f32",
+          "doc": "Orbit yaw; 0 looks along +Z. Simulation state driven by `Look`.",
+          "default": 0,
+          "unit": "deg"
+        },
+        "pitch": {
+          "type": "f32",
+          "doc": "Orbit pitch above the horizon; simulation state driven by `Look`.",
+          "default": 20,
+          "unit": "deg",
+          "range": [-80, 80]
+        },
+        "sensitivity": {
+          "type": "f32",
+          "doc": "Look sensitivity: degrees per tick at full axis deflection.",
+          "default": 2.5,
+          "unit": "deg",
+          "range": [0, null]
+        },
+        "player": {
+          "type": "u64",
+          "doc": "Input owner whose `Look` action steers the rig.",
+          "default": 1
+        }
+      }
+    },
+    "Joint": {
+      "kind": "component",
+      "doc": "Joint on a body; connection zero anchors to the world. Anchors/axes are world-space.",
+      "module": "physics",
+      "fields": {
+        "kind": {
+          "type": "JointKind",
+          "doc": "Constraint primitive.",
+          "default": "fixed",
+          "options": [
+            "fixed",
+            "hinge",
+            "slider",
+            "distance",
+            "point",
+            "sixDof"
+          ]
+        },
+        "connectedBody": {
+          "type": "u64",
+          "doc": "PhysicsId of the connected body; zero is the world.",
+          "default": 0
+        },
+        "anchorA": {
+          "type": "vec3",
+          "doc": "Anchor on the connected body, or the world anchor.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "anchorB": {
+          "type": "vec3",
+          "doc": "Anchor on this entity's body.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "axis": {
+          "type": "vec3",
+          "doc": "Unit primary axis (hinge direction, slider direction, or frame X).",
+          "default": [1, 0, 0]
+        },
+        "normal": {
+          "type": "vec3",
+          "doc": "Unit perpendicular normal (frame Y).",
+          "default": [0, 1, 0]
+        },
+        "translationMin": {
+          "type": "vec3",
+          "doc": "Minimum XYZ translation; X is the slider/distance lower bound.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "translationMax": {
+          "type": "vec3",
+          "doc": "Maximum XYZ translation; X is the slider/distance upper bound.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "rotationMin": {
+          "type": "vec3",
+          "doc": "Minimum XYZ angular limits; X is the hinge lower bound.",
+          "default": [0, 0, 0],
+          "unit": "rad",
+          "range": [-3.1415928, 3.1415928]
+        },
+        "rotationMax": {
+          "type": "vec3",
+          "doc": "Maximum XYZ angular limits; X is the hinge upper bound.",
+          "default": [0, 0, 0],
+          "unit": "rad",
+          "range": [-3.1415928, 3.1415928]
+        }
+      }
+    },
+    "JointKind": {
+      "kind": "enum",
+      "doc": "Joint primitive implemented by the backend.",
+      "module": "physics",
+      "variants": {
+        "fixed": {
+          "doc": "Locks all relative motion."
+        },
+        "hinge": {
+          "doc": "Rotation around one axis."
+        },
+        "slider": {
+          "doc": "Translation along one axis."
+        },
+        "distance": {
+          "doc": "Separation constrained to a distance interval."
+        },
+        "point": {
+          "doc": "Coincident anchors with free rotation."
+        },
+        "sixDof": {
+          "doc": "Independent translation and angular limits on three axes each."
+        }
+      }
+    },
     "Light": {
       "kind": "component",
       "doc": "A punctual light source.",
@@ -195,6 +681,25 @@ expression: out
         }
       }
     },
+    "LocomotionClip": {
+      "kind": "struct",
+      "doc": "One clip of a locomotion blend and the ground speed it represents.",
+      "module": "animation",
+      "fields": {
+        "clip": {
+          "type": "string",
+          "doc": "Animation name inside the model (the glTF animation name).",
+          "default": ""
+        },
+        "speed": {
+          "type": "f32",
+          "doc": "Ground speed at which this clip has full weight.",
+          "default": 0,
+          "unit": "m/s",
+          "range": [0, null]
+        }
+      }
+    },
     "MeshRenderer": {
       "kind": "component",
       "doc": "Draws a mesh.",
@@ -212,6 +717,185 @@ expression: out
           "type": "color",
           "doc": "Linear tint multiplied with the material.",
           "default": [1, 1, 1, 1]
+        }
+      }
+    },
+    "MotionType": {
+      "kind": "enum",
+      "doc": "How a rigid body moves; kinematic targets are runtime intents.",
+      "module": "physics",
+      "variants": {
+        "static": {
+          "doc": "Infinite mass, fixed scenery."
+        },
+        "kinematic": {
+          "doc": "Infinite mass, moves to an explicit target each tick."
+        },
+        "dynamic": {
+          "doc": "Finite mass, simulated by the solver."
+        }
+      }
+    },
+    "NavAgent": {
+      "kind": "component",
+      "doc": "Dimensions, speed and permitted areas of one navigation agent.",
+      "module": "navigation",
+      "fields": {
+        "profile": {
+          "type": "u32",
+          "doc": "Mesh profile ID; radius and height must fit that profile.",
+          "default": 0
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Collision radius in metres.",
+          "default": 0.3,
+          "unit": "m",
+          "range": [0.001, 10]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Required clearance in metres.",
+          "default": 1.8,
+          "unit": "m",
+          "range": [0.01, 100]
+        },
+        "maxSpeed": {
+          "type": "f32",
+          "doc": "Maximum movement speed in metres per second.",
+          "default": 3,
+          "range": [0, 1000]
+        },
+        "acceleration": {
+          "type": "f32",
+          "doc": "Maximum change in velocity per second.",
+          "default": 8,
+          "range": [0, 10000]
+        },
+        "areaMask": {
+          "type": "u16",
+          "doc": "Areas this agent can use (one bit per area).",
+          "default": 65535
+        },
+        "stoppingDistance": {
+          "type": "f32",
+          "doc": "Arrival tolerance in metres.",
+          "default": 0.1,
+          "unit": "m",
+          "range": [0.001, 10]
+        }
+      }
+    },
+    "NavArea": {
+      "kind": "component",
+      "doc": "Area label and cost policy for the collision-geometry producer and query filters.",
+      "module": "navigation",
+      "fields": {
+        "area": {
+          "type": "u8",
+          "doc": "Semantic area ID, from 0 through 15.",
+          "default": 0,
+          "range": [0, 15]
+        },
+        "name": {
+          "type": "string",
+          "doc": "Inspector name (for example Ground, Water or Hazard).",
+          "default": ""
+        },
+        "cost": {
+          "type": "f32",
+          "doc": "Default query traversal cost; agents can override it in their state filter.",
+          "default": 1,
+          "range": [1, 1000000]
+        }
+      }
+    },
+    "NavLink": {
+      "kind": "component",
+      "doc": "Authored off-mesh connection in world space (jump, ladder or scripted passage).",
+      "module": "navigation",
+      "fields": {
+        "id": {
+          "type": "u32",
+          "doc": "Stable nonzero connection ID.",
+          "default": 0
+        },
+        "start": {
+          "type": "vec3",
+          "doc": "Start endpoint in world space.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "end": {
+          "type": "vec3",
+          "doc": "End endpoint in world space.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Maximum horizontal attachment distance.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0.001, 100]
+        },
+        "area": {
+          "type": "u8",
+          "doc": "Traversal area index, from 0 through 15.",
+          "default": 0,
+          "range": [0, 15]
+        },
+        "bidirectional": {
+          "type": "bool",
+          "doc": "Whether traversal is allowed in both directions.",
+          "default": true
+        },
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether the connection is available to the baker.",
+          "default": true
+        }
+      }
+    },
+    "NavMeshSurface": {
+      "kind": "component",
+      "doc": "Authored raw-geometry navigation surface; its derived mesh is content-addressed.",
+      "module": "navigation",
+      "fields": {
+        "profiles": {
+          "type": "list<u32>",
+          "doc": "Shared bake profiles to generate from this surface.",
+          "default": []
+        },
+        "geometry": {
+          "type": "option<asset>",
+          "doc": "Source collision geometry asset, resolved by the asset/physics integration.",
+          "default": null
+        },
+        "min": {
+          "type": "vec3",
+          "doc": "World-space lower bake bound.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "max": {
+          "type": "vec3",
+          "doc": "World-space upper bake bound.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "cellSize": {
+          "type": "f32",
+          "doc": "Horizontal voxel size in metres.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0.01, 10]
+        },
+        "tileSize": {
+          "type": "u16",
+          "doc": "Interior tile width in voxels.",
+          "default": 64,
+          "range": [8, 256]
         }
       }
     },
@@ -249,6 +933,98 @@ expression: out
           "type": "json",
           "doc": "The overriding value.",
           "required": true
+        }
+      }
+    },
+    "PhysicsId": {
+      "kind": "component",
+      "doc": "Stable simulation identity; nonzero and unique within a physics world.",
+      "module": "physics",
+      "fields": {
+        "value": {
+          "type": "u64",
+          "doc": "Stable scene/network identity, used to sort creation and inputs across peers.",
+          "default": 1,
+          "range": [1, null]
+        }
+      }
+    },
+    "PhysicsPose": {
+      "kind": "component",
+      "doc": "Resolved world-space pose in meters. Hierarchy/scale resolution runs before physics.",
+      "module": "physics",
+      "fields": {
+        "position": {
+          "type": "vec3",
+          "doc": "Body origin or character feet, in world space.",
+          "default": [0, 0, 0],
+          "unit": "m",
+          "replicate": {
+            "audience": "relevant",
+            "interpolate": "linear",
+            "rollback": true
+          }
+        },
+        "rotation": {
+          "type": "quat",
+          "doc": "Unit quaternion in XYZW order; use baked rotations for cross-platform replay.",
+          "default": [0, 0, 0, 1],
+          "replicate": {
+            "audience": "relevant",
+            "interpolate": "slerp",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "PlayerControl": {
+      "kind": "component",
+      "doc": "Drives this entity's CharacterController from `Move`, `Sprint` and `Jump`, relative to its camera rig's yaw.",
+      "module": "gameplay",
+      "fields": {
+        "player": {
+          "type": "u64",
+          "doc": "Input owner (`PlayerId`).",
+          "default": 1
+        },
+        "walkSpeed": {
+          "type": "f32",
+          "doc": "Walking speed.",
+          "default": 1.6,
+          "unit": "m/s",
+          "range": [0, null]
+        },
+        "runSpeed": {
+          "type": "f32",
+          "doc": "Sprinting speed.",
+          "default": 4.5,
+          "unit": "m/s",
+          "range": [0, null]
+        },
+        "jumpSpeed": {
+          "type": "f32",
+          "doc": "Jump launch speed.",
+          "default": 4.5,
+          "unit": "m/s",
+          "range": [0, null]
+        },
+        "turnRate": {
+          "type": "f32",
+          "doc": "Maximum turn rate toward the movement direction.",
+          "default": 540,
+          "unit": "deg/s",
+          "range": [0, null]
+        },
+        "yaw": {
+          "type": "f32",
+          "doc": "Facing yaw; 0 faces +Z. Simulation state.",
+          "default": 0,
+          "unit": "deg"
+        },
+        "camera": {
+          "type": "option<entity>",
+          "doc": "Camera rig whose yaw orients `Move`; world axes when empty.",
+          "default": null
         }
       }
     },
@@ -307,6 +1083,40 @@ expression: out
           "type": "json",
           "doc": "New value, in the field's schema type and unit.",
           "required": true
+        }
+      }
+    },
+    "RigidBody": {
+      "kind": "component",
+      "doc": "Rigid-body authoring settings; simulation state is written to pose and velocity.",
+      "module": "physics",
+      "fields": {
+        "motion": {
+          "type": "MotionType",
+          "doc": "Static, kinematic, or dynamic motion.",
+          "default": "static",
+          "options": [
+            "static",
+            "kinematic",
+            "dynamic"
+          ]
+        },
+        "mass": {
+          "type": "f32",
+          "doc": "Mass in kilograms; zero computes mass from the collider's 1000 kg/m3 density.",
+          "default": 0,
+          "unit": "kg",
+          "range": [0, null]
+        },
+        "allowSleep": {
+          "type": "bool",
+          "doc": "Permit inactive bodies to sleep.",
+          "default": true
+        },
+        "continuous": {
+          "type": "bool",
+          "doc": "Use swept collision detection for fast bodies.",
+          "default": false
         }
       }
     },
@@ -380,6 +1190,237 @@ expression: out
           "type": "option<vec3>",
           "doc": "Scale relative to the parent.",
           "default": null
+        }
+      }
+    },
+    "Vehicle": {
+      "kind": "component",
+      "doc": "Four-wheel engine/automatic-gearbox vehicle, using S6's stable defaults.",
+      "module": "physics",
+      "fields": {
+        "halfExtents": {
+          "type": "vec3",
+          "doc": "Chassis half extents.",
+          "default": [0.9, 0.2, 2],
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "mass": {
+          "type": "f32",
+          "doc": "Chassis mass.",
+          "default": 1500,
+          "unit": "kg",
+          "range": [0.001, null]
+        },
+        "wheelRadius": {
+          "type": "f32",
+          "doc": "All four wheel radii.",
+          "default": 0.35,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "wheelWidth": {
+          "type": "f32",
+          "doc": "All four wheel widths.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "suspensionMin": {
+          "type": "f32",
+          "doc": "Minimum suspension length.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "suspensionMax": {
+          "type": "f32",
+          "doc": "Maximum suspension length.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "suspensionFrequency": {
+          "type": "f32",
+          "doc": "Suspension spring frequency.",
+          "default": 1.5,
+          "unit": "Hz",
+          "range": [0.001, null]
+        },
+        "suspensionDamping": {
+          "type": "f32",
+          "doc": "Suspension damping ratio.",
+          "default": 0.5,
+          "range": [0, null]
+        },
+        "maxSteerDeg": {
+          "type": "f32",
+          "doc": "Front wheel steering lock.",
+          "default": 30,
+          "unit": "deg",
+          "range": [0, 89]
+        },
+        "engineMaxTorque": {
+          "type": "f32",
+          "doc": "Engine peak torque; Jolt's gearbox/engine curves supply the remaining defaults.",
+          "default": 500,
+          "unit": "N*m",
+          "range": [0.001, null]
+        },
+        "rearWheelDrive": {
+          "type": "bool",
+          "doc": "Rear-wheel drive; false selects front-wheel drive.",
+          "default": true
+        },
+        "layer": {
+          "type": "u32",
+          "doc": "Chassis collision layer.",
+          "default": 1,
+          "range": [1, 15]
+        }
+      }
+    },
+    "VehicleInput": {
+      "kind": "component",
+      "doc": "Replayable driver intent consumed every fixed tick.",
+      "module": "physics",
+      "fields": {
+        "throttle": {
+          "type": "f32",
+          "doc": "Signed accelerator, with negative input selecting reverse.",
+          "default": 0,
+          "range": [-1, 1],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "steer": {
+          "type": "f32",
+          "doc": "Signed steering, positive turns right.",
+          "default": 0,
+          "range": [-1, 1],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "brake": {
+          "type": "f32",
+          "doc": "Service brake.",
+          "default": 0,
+          "range": [0, 1],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "handBrake": {
+          "type": "f32",
+          "doc": "Rear-wheel handbrake.",
+          "default": 0,
+          "range": [0, 1],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "VehicleTelemetry": {
+      "kind": "component",
+      "doc": "Vehicle drivetrain and suspension state mirrored into ECS after each tick.",
+      "module": "physics",
+      "fields": {
+        "wheelsInContact": {
+          "type": "u32",
+          "doc": "Grounded wheel count.",
+          "default": 0,
+          "range": [0, 4],
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        },
+        "engineRpm": {
+          "type": "f32",
+          "doc": "Current engine speed in revolutions per minute.",
+          "default": 0,
+          "range": [0, null],
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        },
+        "gear": {
+          "type": "i32",
+          "doc": "Gear index (negative is reverse).",
+          "default": 0,
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "Velocity": {
+      "kind": "component",
+      "doc": "Authoritative velocity, synchronized at tick boundaries.",
+      "module": "physics",
+      "fields": {
+        "linear": {
+          "type": "vec3",
+          "doc": "World-space linear velocity.",
+          "default": [0, 0, 0],
+          "unit": "m/s",
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        },
+        "angular": {
+          "type": "vec3",
+          "doc": "World-space angular velocity.",
+          "default": [0, 0, 0],
+          "unit": "rad/s",
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "Wanderer": {
+      "kind": "component",
+      "doc": "Server-side AI: walks the navmesh to random points inside a box, pausing between.",
+      "module": "gameplay",
+      "fields": {
+        "min": {
+          "type": "vec3",
+          "doc": "Minimum corner of the roaming box (world space).",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "max": {
+          "type": "vec3",
+          "doc": "Maximum corner of the roaming box (world space).",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "pauseTicks": {
+          "type": "u32",
+          "doc": "Ticks to wait after arriving before choosing the next goal.",
+          "default": 45
+        },
+        "resumeTick": {
+          "type": "u64",
+          "doc": "Tick at which the next goal is chosen. Simulation state.",
+          "default": 0
+        },
+        "goals": {
+          "type": "u32",
+          "doc": "Goals chosen so far. Simulation state.",
+          "default": 0
         }
       }
     }

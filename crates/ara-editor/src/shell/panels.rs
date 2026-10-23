@@ -14,6 +14,8 @@ pub(super) fn button(id: &str, text: &str, class: &str) -> String {
         "play" => ("play", true),
         "pause" => ("pause", true),
         "step" => ("step-forward", true),
+        "resume" => ("circle-play", true),
+        "stop" => ("square", true),
         "entity-create" => ("plus", true),
         "hierarchy-menu" => ("ellipsis", true),
         "hierarchy-collapse" => ("chevron-down", true),
@@ -117,7 +119,8 @@ impl Shell {
                 }
                 out.push_str("</panel>");
                 if let Some(panel) = tabs.get(*active) {
-                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play becomes available with the simulation host.' /></panel>"),"material"=>self.material_panel(editor,out)?,"vfx"=>self.vfx_panel(editor,out)?,"profiler"=>self.profiler_panel(editor,out)?,"animation"=>self.animation_panel(editor,out)?,"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
+                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play opens the game in a player window; the in-editor game viewport (shared GPU texture) comes next.' /></panel>"),"material"=>self.material_panel(editor,out)?,"vfx"=>self.vfx_panel(editor,out)?,"profiler"=>self.profiler_panel(editor,out)?,"animation"=>self.animation_panel(editor,out)?,"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
+
                 }
                 out.push_str("</panel>");
             }

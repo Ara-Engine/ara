@@ -231,16 +231,23 @@ impl Shell {
         let mut markup = String::from("<ui id='editor'>");
         markup.push_str("<panel id='topbar' class='topbar'>");
         markup.push_str(&format!("<text id='brand' class='brand' text='ara' /><text id='project-name' text='{}' /><text id='project-divider' class='muted' text='/' /><text id='scene-name' class='muted' text='{}' /><panel id='top-spacer' style='flex-grow:1' />",escape(&project_name(editor)),escape(editor.host.store().workspace().path_of(&editor.state.doc).unwrap_or("Scene"))));
-        markup.push_str(&format!("<panel id='play-controls' class='play-pill' style='position:absolute;left:{}px;top:8px;width:100px'>",(self.ui.size[0]-100.)*0.5));
-        for (id, name) in [
-            ("play", "play"),
-            ("pause", "pause"),
-            ("step", "step-forward"),
+        // Play opens the scene in a pooled ara-player window; controls act on the latest world.
+        markup.push_str(&format!("<panel id='play-controls' class='play-pill' style='position:absolute;left:{}px;top:8px;width:164px'>",(self.ui.size[0]-164.)*0.5));
+        for (id, text, method, params) in [
+            ("play", "Play", "play.start", json!({"window": true})),
+            ("pause", "Pause", "play.pause", json!({})),
+            ("resume", "Resume", "play.resume", json!({})),
+            ("step", "Step", "play.step", json!({"ticks": 1})),
+            ("stop", "Stop", "play.stop", json!({})),
         ] {
-            markup.push_str(&format!("<button id='{id}' class='segment-button quiet' label='{id}' disabled='true' description='Play requires ara-sim. A disposable player will be connected here.'>{}</button>",icons::icon(id,name)));
+            markup.push_str(&self.bind_button(
+                id,
+                text,
+                Binding::Protocol(method, params),
+                "segment-button quiet",
+            ));
         }
         markup.push_str("</panel><panel id='top-spacer2' style='flex-grow:1' />");
-
         markup.push_str(&self.bind_button(
             "palette-open",
             "Commands    Ctrl K",

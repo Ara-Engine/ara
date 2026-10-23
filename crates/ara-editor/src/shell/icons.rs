@@ -71,6 +71,10 @@ const ASSETS: &[(&str, &str)] = &[
         "circle-dot",
         include_str!("../../assets/icons/circle-dot.svg"),
     ),
+    (
+        "circle-play",
+        include_str!("../../assets/icons/circle-play.svg"),
+    ),
     ("command", include_str!("../../assets/icons/command.svg")),
     (
         "crosshair",
@@ -124,6 +128,7 @@ const ASSETS: &[(&str, &str)] = &[
         "step-forward",
         include_str!("../../assets/icons/step-forward.svg"),
     ),
+    ("square", include_str!("../../assets/icons/square.svg")),
     ("sun", include_str!("../../assets/icons/sun.svg")),
     ("undo-2", include_str!("../../assets/icons/undo-2.svg")),
     ("x", include_str!("../../assets/icons/x.svg")),

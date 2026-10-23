@@ -1,3 +1,4 @@
+use crate::matching::{MatchNode, MotionDatabase};
 use crate::{
     CookedClip, Error, Skeleton, ensure,
     graph::{
@@ -16,6 +17,14 @@ pub(crate) struct ProgramNode {
     pub x: usize,
     pub y: usize,
     pub duration: u32,
+    pub matching: Option<ProgramMatch>,
+}
+#[derive(Debug)]
+pub(crate) struct ProgramMatch {
+    pub database: usize,
+    pub clips: Vec<usize>,
+    pub parameters: Vec<usize>,
+    pub settings: MatchNode,
 }
 #[derive(Debug)]
 pub(crate) struct ProgramState {
@@ -78,6 +87,7 @@ pub struct Controller {
     pub(crate) initial: usize,
     pub(crate) step: u32,
     pub(crate) extract: bool,
+    pub(crate) databases: Vec<MotionDatabase>,
 }
 impl Controller {
     /// Resolves canonical clip references and validates the entire controller DAG.
@@ -86,6 +96,16 @@ impl Controller {
         data: &ControllerData,
         skeleton: &Skeleton,
         bindings: Vec<(AssetRef, CookedClip)>,
+    ) -> Result<Self, Error> {
+        Self::compile_with_matching(data, skeleton, bindings, Vec::new())
+    }
+    /// Compiles controllers containing motion-matching nodes. Database and clip
+    /// generations are checked together before an immutable program is published.
+    pub fn compile_with_matching(
+        data: &ControllerData,
+        skeleton: &Skeleton,
+        bindings: Vec<(AssetRef, CookedClip)>,
+        databases: Vec<(AssetRef, MotionDatabase)>,
     ) -> Result<Self, Error> {
         ensure(
             data.fixed_step > 0 && !data.states.is_empty() && data.nodes.len() <= 1024,
@@ -119,6 +139,33 @@ impl Controller {
             clips.push(clip);
         }
         let mut nodes = Vec::new();
+        let mut database_names = BTreeMap::new();
+        let mut database_values = Vec::new();
+        for (name, db) in databases {
+            let parts = parse_ref(&name.0).map_err(Error)?;
+            ensure(
+                parts.path.is_some()
+                    && parts.id.is_some()
+                    && db.skeleton == skeleton.signature()
+                    && clips.first().is_some_and(|c| c.frequency == db.frequency),
+                "motion database skeleton/timebase/reference mismatch",
+            )?;
+            for (reference, expected) in db.references.iter().zip(&db.clips) {
+                ensure(
+                    clip_names
+                        .get(&reference.0)
+                        .is_some_and(|i| clips[*i].signature == *expected),
+                    "motion database uses a different clip generation",
+                )?;
+            }
+            ensure(
+                database_names
+                    .insert(name.0, database_values.len())
+                    .is_none(),
+                "duplicate motion database reference",
+            )?;
+            database_values.push(db);
+        }
         let mut resolved = BTreeMap::new();
         let mut visiting = BTreeSet::new();
         for id in data.nodes.keys() {
@@ -127,6 +174,8 @@ impl Controller {
                 data,
                 &clip_names,
                 &clips,
+                &database_names,
+                &database_values,
                 skeleton.len(),
                 &mut nodes,
                 &mut resolved,
@@ -252,6 +301,9 @@ impl Controller {
         for clip in &clips {
             bytes.extend(clip.signature.to_le_bytes());
         }
+        for db in &database_values {
+            bytes.extend(db.signature.to_le_bytes());
+        }
         Ok(Self {
             signature: signature(&bytes),
             skeleton: skeleton.signature(),
@@ -268,6 +320,7 @@ impl Controller {
             initial,
             step: data.fixed_step,
             extract: data.extract_root_motion,
+            databases: database_values,
         })
     }
     /// Resolves a parameter name for cached typed gameplay access.
@@ -301,6 +354,8 @@ fn visit(
     data: &ControllerData,
     clip_names: &BTreeMap<String, usize>,
     clips: &[CookedClip],
+    database_names: &BTreeMap<String, usize>,
+    databases: &[MotionDatabase],
     joints: usize,
     out: &mut Vec<ProgramNode>,
     resolved: &mut BTreeMap<String, usize>,
@@ -350,6 +405,7 @@ fn visit(
     let mut x = 0;
     let mut y = 0;
     let mut clip = 0;
+    let mut matching = None;
     match node.kind {
         NodeKind::Clip => {
             ensure(
@@ -365,6 +421,42 @@ fn visit(
                         .0,
                 )
                 .ok_or_else(|| Error("clip binding is missing".into()))?;
+        }
+        NodeKind::MotionMatching => {
+            ensure(
+                node.samples.is_empty(),
+                "motion-matching nodes cannot have children",
+            )?;
+            let database = *database_names
+                .get(
+                    &node
+                        .clip
+                        .as_ref()
+                        .ok_or_else(|| Error("motion node has no database reference".into()))?
+                        .0,
+                )
+                .ok_or_else(|| Error("motion database binding is missing".into()))?;
+            let db = &databases[database];
+            let settings = node
+                .matching
+                .as_ref()
+                .ok_or_else(|| Error("motion node search settings are missing".into()))?;
+            ensure(
+                settings.query.len() == db.config().dimensions()
+                    && settings.half_life.is_finite()
+                    && settings.half_life > 0.0,
+                "motion query dimension or half-life mismatch",
+            )?;
+            matching = Some(ProgramMatch {
+                database,
+                settings: settings.clone(),
+                parameters: settings
+                    .query
+                    .iter()
+                    .map(|p| param(p))
+                    .collect::<Result<_, _>>()?,
+                clips: db.references.iter().map(|r| clip_names[&r.0]).collect(),
+            });
         }
         NodeKind::Blend1d => {
             x = param(&node.parameter_x)?;
@@ -428,13 +520,22 @@ fn visit(
             data,
             clip_names,
             clips,
+            database_names,
+            databases,
             joints,
             out,
             resolved,
             visiting,
         )?);
     }
-    let duration = if node.kind == NodeKind::Clip {
+    let duration = if let Some(program) = &matching {
+        program
+            .clips
+            .iter()
+            .map(|i| clips[*i].duration)
+            .max()
+            .unwrap_or(0)
+    } else if node.kind == NodeKind::Clip {
         clips[clip].duration
     } else {
         children.iter().map(|i| out[*i].duration).max().unwrap_or(0)
@@ -449,6 +550,7 @@ fn visit(
         x,
         y,
         duration,
+        matching,
     });
     Ok(index)
 }

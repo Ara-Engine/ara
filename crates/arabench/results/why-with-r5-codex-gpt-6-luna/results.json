@@ -1,0 +1,211 @@
+{
+  "label": "why-with-r5",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T07:09:42Z",
+  "engine": "e988645+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 13,
+      "toolCalls": {
+        "ara_docs": 1,
+        "ara_query": 2,
+        "ara_schema": 3,
+        "ara_session": 1,
+        "ara_why": 2,
+        "shell": 4
+      },
+      "wallMs": 34048,
+      "tokens": {
+        "input": 30796,
+        "cacheRead": 492288,
+        "cacheWrite": 0,
+        "output": 1497
+      },
+      "codes": {
+        "ARA1106": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed the radio material: `baseColor` referenced undefined `pain` instead of the declared `paint` parameter. Ara now reports the material is valid and found no document or bus issue explaining the radio’s visibility. The running renderer check is unavailable here, so I couldn’t confirm it in-game."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_why": 3
+      },
+      "wallMs": 21744,
+      "tokens": {
+        "input": 19828,
+        "cacheRead": 200192,
+        "cacheWrite": 0,
+        "output": 627
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because its scene reference pointed to the old mesh asset, which no longer resolves after the re-export. I updated `Generator` in `levels/outpost.scene` to use `@meshes/generator_v2.glb#ms_genr0002`.\n\nAra now reports the mesh reference resolves. The old ARA1302 message remains in related history; confirming the mesh renders still requires the running renderer. The change is recorded as transaction `tx_kbrfhkpm` for human review."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"default\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 16999,
+      "tokens": {
+        "input": 7588,
+        "cacheRead": 65664,
+        "cacheWrite": 0,
+        "output": 668
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed the workbench visibility issue. Ara found it was on the `editor` layer, which the game camera doesn’t render. I moved it to `default` and left the camera unchanged.\n\nAra now reports the layer and distance checks are OK. The remaining render-pass check requires the game renderer to be running, so I couldn’t verify the workbench in-game. The change is recorded as transaction `tx_j40kejxk` and awaits human review."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "shell": 9
+      },
+      "wallMs": 23524,
+      "tokens": {
+        "input": 33041,
+        "cacheRead": 161920,
+        "cacheWrite": 0,
+        "output": 860
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The engine traced the disappearance to `Barrel.002` (`e_brl003`) having a rigid body with **0 kg mass**. Physics divided by zero and turned its position into NaN at tick 61.\n\nI restored its position and set its mass to **30 kg**, matching the other outpost barrels. `ara check` reports 0 errors and 0 warnings.\n\nThe fix is applied as two engine transactions and remains unreviewed until you run `ara accept`, per the project workflow."
+    }
+  ]
+}

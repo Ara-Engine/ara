@@ -3,6 +3,15 @@
 use crate::{Error, Pose, Skeleton, ensure, pose::nlerp};
 use glam::{Mat4, Quat, Vec3};
 
+mod chain;
+mod contacts;
+pub use chain::{
+    Chain, ChainData, ChainSolver, JointLimit, LimitKind, SolveReport, SolverSettings,
+};
+pub use contacts::{
+    BodyGoal, Foot, FootPlacement, FootSettings, FullBody, GroundHit, GroundQuery, HandGrip,
+};
+
 /// Solves a two-segment chain geometrically using a target and a pole direction.
 /// Returns desired model-space root and middle rotations. Segment lengths and
 /// scales come from the supplied model matrices; unreachable targets are clamped.

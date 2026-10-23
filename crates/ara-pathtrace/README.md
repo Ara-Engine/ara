@@ -45,8 +45,8 @@ The quality gate additionally requires glossy <=8%, thin wall <=10%, furnace
 frames rendered, every fourth frame captured), and 1440p native/FSR
 readbacks. Temporal tests compare continuous accumulation against a separate
 history-reset view with matching probe evolution in the central viewport region.
-Global radiance history intentionally rejects lighting edits; disocclusion retains
-history elsewhere. The maximum central display residual must be <3.5% and reset residual <3%.
+Lighting edits use responsive radiance weights while retaining valid geometric
+history; disocclusion rejects history only where needed. The maximum central display residual must be <3.5% and reset residual <3%.
 This is a bounded diagnostic, not a perceptual ghosting oracle.
 The four-stop light-step test measures the probe field itself over 24 frames,
 against a 48-frame target, and requires 90% response within 12 frames.
@@ -213,9 +213,10 @@ worst-case moving-camera/reset budgets.
 
 Verified visually: all hybrid/reference/diff captures, native/upscaled hero views,
 baked fallback, moving-light/time-of-day/disocclusion sheets and Sponza pan sheet.
-**This does not yet pass for an Unreal 5 Lumen screenshot.** Sponza still has no
-authored normal/height maps or full PBR material conversion. At 640x360, the fixed
-corridor crop [170,235]..[430,350] has 27.17% relative RMSE and 17.39% lower mean
+**Historical round-1 verdict (40b2fa6):** this did not pass for an Unreal 5 Lumen
+screenshot. Sponza then had no
+authored normal/height maps or full PBR material conversion. At 640x360, its fixed
+corridor crop [170,235]..[430,350] had 27.17% relative RMSE and 17.39% lower mean
 luminance than the reference, despite 7.28% whole-image error. Bright architecture
 dominates the global energy denominator. Lighting-reset sequences show visible
 low-sample mottling, and the daylight alpha canopies are procedural stand-ins.
@@ -231,3 +232,170 @@ The final detached verification run reaccumulated the three 4096-spp references,
 passed strict display goldens, RMSE/temporal/budget gates, both crates' tests,
 clippy with warnings denied, rustfmt checks and all 17 SPIR-V validations.
 No capture PNG changed from checkpoint 1044f81; the result is deterministic.
+
+## Lumen parity round 2
+
+Commands: `-Mode Sponza-Reference`, `Sponza-Quality`, `Lighting-Sequence`,
+`Robust-Quality`, `Robust-Timings`, then `Check`, with CARGO_BUILD_JOBS=2.
+Sponza uses 32,768 independent samples at 640x360 / 12 bounces, including a
+16,384-sample regional convergence check. The corridor is [170,235]..[430,350].
+Both whole-image and regional radiance are measured before fixed EV100 5.5/PBR
+Neutral. Cached references must match scene, camera and cooked shader cohort.
+Material detail is enhanced in this round; each renderer uses the same materials
+and lighting as its matched reference. This is not a 1440p reference claim.
+
+`Lighting-Sequence` sweeps the sun over 16 frames, toggles a 12,000-lumen local light
+on/off, and renders 192 frames after each event. Convergence uses filtered indirect
+radiance (direct subtracted): eight consecutive ROI means must be within 5% of the
+final 32-frame steady state. Frame-to-frame HDR ROI variance and per-pixel display
+RMS (decoded linear sRGB) quantify flicker. Strip rows are sun/on/off; columns are
+frames 0,3,7,31,160,168,176,184. These are simulation frames at 1/60 second.
+
+The outdoor fixture extracts a real ARTH landscape tile, extends the actual
+landscape height function through distant LODs, and adds branches, individual
+serrated leaf cutouts, transmission and ground cover. It uses physical sky LUTs,
+shadowed volumetric height fog and a lit planar cloud layer. Its 4096-spp reference
+has independent surface transport but shares atmosphere LUTs/froxel composition;
+HDR RMSE is before fog. This does not validate the medium against an independent
+volumetric path tracer. The lower-half ROI separately records terrain/foliage error.
+The night fixture remains emissive-only and uses the same bounded gather preset.
+
+Furnace tests check coat, sheen and thin-sheet energy, including the GGX null-event
+PDF contract. A separate GPU test checks atmosphere attenuation against the analytic
+Beer-Lambert law. The sheen albedo LUT is an engine asset, not a capture/cache.
+The OBJ, original copyright, HDR caches and intermediate cooks remain ignored.
+
+The final timing table below uses the full steady RT frame, warm caches and 240
+Sponza samples / 60 robust-scene samples. GPU pass sums are not CPU wall time or
+async frame times. Reset, lighting-response and extensive-disocclusion peaks are
+not covered by this steady-camera budget. Background load is recorded, including
+CPU/free-RAM snapshots and GPU utilization/clocks; ten agents share the machine.
+Failed prototype/contended timing runs are retained in the round-2 JSON report.
+
+### Measured result
+
+| Scene | Relative RMSE, before → after | Frame p95 ms native / upscaled, before → after |
+|---|---:|---:|
+| Sponza | 7.28% → 4.59%; corridor 27.17% → 8.96% | 8.99/3.93 → 9.16/4.31 |
+| outdoor_day | 3.94% → 2.67% | 5.03/2.90 → 6.10/3.36 |
+| night_interior | 4.91% → 4.90% | 6.81/2.86 → 7.54/3.53 |
+
+Outdoor content changes from 2,084 proxy triangles to 49,496 landscape/leaf triangles.
+Corridor mean luminance went from 17.39% too dim to 0.13% above its matched reference.
+All errors compare each hybrid with its matched reference. The outdoor lower-half
+ROI is 4.38%; night lower-half ROI is 15.83%, so its low global error hides a local gap.
+The emissive night preset now uses two gather events and half-rate transport;
+daylight retains one event and quarter-rate transport. This spends its room-scale
+headroom on more small-emitter paths. The initial night 18.64% ROI result is retained in JSON.
+The new atmosphere initialization passes cost extra on composition changes and are
+not in these steady-frame distributions. No worst-case or exclusive-GPU budget is claimed.
+
+### Per-pass GPU deltas
+
+Median GPU milliseconds, old → new. Individual p95 values and retained failed
+trials are in [lumen-round2.json](measurements/lumen-round2.json). Frame p95 above
+comes from frame sums. Per-pass percentiles must not be added to estimate it.
+
+**sponza**
+
+| Pass | Native 1440p | 960p → 1440p |
+|---|---:|---:|
+| Bloom.Horizontal | 0.208 → 0.208 | 0.096 → 0.097 |
+| Bloom.Vertical | 0.108 → 0.108 | 0.051 → 0.052 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.141 → 0.171 | 0.143 → 0.163 |
+| Exposure.EV100.Meter.Adapt | 0.025 → 0.025 | 0.026 → 0.025 |
+| Output.SDR | 0.057 → 0.054 | 0.000 → 0.000 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.310 → 0.307 | 0.100 → 0.100 |
+| RT.Reflections.SoftShadows.DDGI | 2.733 → 3.459 | 1.277 → 1.622 |
+| SVGF.Atrous.1 | 0.481 → 0.508 | 0.219 → 0.234 |
+| SVGF.Atrous.2 | 0.546 → 0.552 | 0.258 → 0.264 |
+| SVGF.Atrous.4 | 0.668 → 0.635 | 0.296 → 0.287 |
+| SVGF.Reproject.Reject.Moments | 0.868 → 0.836 | 0.369 → 0.369 |
+| Upscale.FSR1.EASU | 0.000 → 0.000 | 0.178 → 0.222 |
+| Upscale.FSR1.RCAS | 0.000 → 0.000 | 0.063 → 0.062 |
+| Upscale.TAAU.Resolve | 0.580 → 0.300 | 0.000 → 0.000 |
+| Viewport.Ready | 0.000 → 0.000 | 0.000 → 0.000 |
+| Visibility.Motion | 1.629 → 1.594 | 0.762 → 0.735 |
+
+**outdoor_day**
+
+| Pass | Native 1440p | 960p → 1440p |
+|---|---:|---:|
+| Atmosphere.Froxels.AerialPerspective | 0.000 → 0.079 | 0.000 → 0.079 |
+| Atmosphere.SkyView | 0.000 → 0.015 | 0.000 → 0.016 |
+| Bloom.Horizontal | 0.206 → 0.206 | 0.095 → 0.097 |
+| Bloom.Vertical | 0.107 → 0.107 | 0.050 → 0.051 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.238 → 0.117 | 0.243 → 0.117 |
+| Exposure.EV100.Meter.Adapt | 0.024 → 0.023 | 0.024 → 0.026 |
+| Output.SDR | 0.036 → 0.041 | 0.000 → 0.000 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.214 → 0.370 | 0.058 → 0.172 |
+| RT.Reflections.SoftShadows.DDGI | 0.628 → 1.257 | 0.304 → 0.622 |
+| SVGF.Atrous.1 | 0.388 → 0.466 | 0.175 → 0.214 |
+| SVGF.Atrous.2 | 0.417 → 0.491 | 0.201 → 0.232 |
+| SVGF.Atrous.4 | 0.563 → 0.612 | 0.250 → 0.277 |
+| SVGF.Reproject.Reject.Moments | 0.671 → 0.681 | 0.300 → 0.308 |
+| Upscale.FSR1.EASU | 0.000 → 0.000 | 0.161 → 0.217 |
+| Upscale.FSR1.RCAS | 0.000 → 0.000 | 0.050 → 0.056 |
+| Upscale.TAAU.Resolve | 0.339 → 0.206 | 0.000 → 0.000 |
+| Viewport.Ready | 0.000 → 0.000 | 0.000 → 0.000 |
+| Visibility.Motion | 0.634 → 1.184 | 0.281 → 0.547 |
+
+**night_interior**
+
+| Pass | Native 1440p | 960p → 1440p |
+|---|---:|---:|
+| Bloom.Horizontal | 0.210 → 0.210 | 0.097 → 0.096 |
+| Bloom.Vertical | 0.109 → 0.109 | 0.052 → 0.052 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.050 → 0.055 | 0.049 → 0.054 |
+| Exposure.EV100.Meter.Adapt | 0.025 → 0.025 | 0.026 → 0.025 |
+| Output.SDR | 0.042 → 0.041 | 0.000 → 0.000 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.274 → 0.274 | 0.075 → 0.082 |
+| RT.Reflections.SoftShadows.DDGI | 1.662 → 2.130 | 0.762 → 0.970 |
+| SVGF.Atrous.1 | 0.454 → 0.490 | 0.205 → 0.222 |
+| SVGF.Atrous.2 | 0.511 → 0.526 | 0.242 → 0.250 |
+| SVGF.Atrous.4 | 0.643 → 0.627 | 0.283 → 0.280 |
+| SVGF.Reproject.Reject.Moments | 0.915 → 0.902 | 0.400 → 0.421 |
+| Upscale.FSR1.EASU | 0.000 → 0.000 | 0.160 → 0.213 |
+| Upscale.FSR1.RCAS | 0.000 → 0.000 | 0.050 → 0.050 |
+| Upscale.TAAU.Resolve | 0.494 → 0.263 | 0.000 → 0.000 |
+| Viewport.Ready | 0.000 → 0.000 | 0.000 → 0.000 |
+| Visibility.Motion | 0.780 → 1.091 | 0.350 → 0.523 |
+
+### Response and visual inspection
+
+| Event | Frames to 5% indirect steady state | Static ROI luminance-delta variance | Display pixel flicker RMS |
+|---|---:|---:|---:|
+| sun-sweep | 1 | 2.46e-07 | 0.523% |
+| light-on | 1 | 9.9e-08 | 0.421% |
+| light-off | 2 | 1.13e-07 | 0.491% |
+
+Variance subtracts the mean delta; RMS retains drift. Flicker uses final frames
+160–191 and has a 1% display-RMS gate in addition to visual strip review.
+The steady-state target is a long-run hybrid, not a path-traced response target.
+
+GPU/CPU load snapshots are in every current timing row. Contended/prototype Sponza
+native p95 reached 13–19 ms; those failures are retained. The final workload uses
+the single-loop directional-probe terminal, material mip fast path, primary-only
+previous-position fetch and stationary TAA/temporal fetch fast paths. Frame batching
+and a single elapsed timestamp span did not remove shared-load spikes and were rejected.
+
+**Verified visually:** every committed final still, hybrid/reference/difference
+image, native/upscaled hero and temporal strip; hero views inspected at full size.
+The Sponza pair is [hybrid left / reference right](captures/sponza-reference-side-by-side.png);
+the [sun/light strip](captures/sponza-lighting-sequence.png) shows no conspicuous flicker or trailing.
+
+**sponza:** Not yet a finished UE5 Lumen cinematic: balanced bounce and detailed materials, but residual shadowed/contact detail softness; no general parity claim from one legacy asset view.
+
+**outdoor_day:** No: real landscape geometry, atmosphere/fog and alpha leaves work, but sparse procedural vegetation, simple ground art and visibly planar clouds are below a UE5 outdoor screenshot.
+
+**night_interior:** No: small-emitter mottling remains visible despite the denser gather; lower-half radiance RMSE is 15.83%; diagnostic geometry is not cinematic content.
+
+The stable [geometry/VSM input schema](../ara-render-fidelity/README.md#geometry--shadow-integration-contract)
+documents IDs, barycentrics, normals, linear lighting, previous radial depth and jitter.
+External visibility import still needs an additive graph adapter; no private-image writes.
+DLSS and editor offscreen output contracts are unchanged.
+
+Verification: both crates passed tests, all-target clippy with warnings denied and
+rustfmt checks; the denser night preset also passed the focused golden test. All 31
+SPIR-V modules passed spirv-val for Vulkan 1.3. Validation and synchronization
+validation reported no errors. Scratch/reference HDR caches remain ignored.

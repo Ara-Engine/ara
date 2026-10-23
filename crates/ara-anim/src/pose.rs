@@ -2,6 +2,7 @@
 
 use crate::{Error, Skeleton, data::AnimTransform, ensure};
 use glam::{Mat4, Quat, Vec3, Vec3A};
+use serde::{Deserialize, Serialize};
 
 /// A local transform held in SIMD-friendly aligned types.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,11 +51,50 @@ impl Transform {
 }
 
 /// Separate contiguous translation, rotation and scale streams, allocated at setup.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Pose {
     pub(crate) translations: Vec<Vec3A>,
     pub(crate) rotations: Vec<Quat>,
     pub(crate) scales: Vec<Vec3A>,
+}
+impl<'de> Deserialize<'de> for Pose {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Streams {
+            translations: Vec<Vec3A>,
+            rotations: Vec<Quat>,
+            scales: Vec<Vec3A>,
+        }
+        let streams = Streams::deserialize(deserializer)?;
+        let pose = Self {
+            translations: streams.translations,
+            rotations: streams.rotations,
+            scales: streams.scales,
+        };
+        if pose.translations.len() != pose.len()
+            || pose.scales.len() != pose.len()
+            || !(0..pose.len()).all(|j| pose.joint(j).is_some_and(Transform::valid))
+        {
+            return Err(serde::de::Error::custom(
+                "invalid pose streams or transforms",
+            ));
+        }
+        Ok(pose)
+    }
+}
+impl Clone for Pose {
+    fn clone(&self) -> Self {
+        Self {
+            translations: self.translations.clone(),
+            rotations: self.rotations.clone(),
+            scales: self.scales.clone(),
+        }
+    }
+    fn clone_from(&mut self, source: &Self) {
+        self.translations.clone_from(&source.translations);
+        self.rotations.clone_from(&source.rotations);
+        self.scales.clone_from(&source.scales);
+    }
 }
 impl Pose {
     /// Allocates an identity pose for `joints` joints; call outside the tick loop.
@@ -205,7 +245,7 @@ pub fn skinning_palette(
 }
 
 /// An SE(3) displacement in the root's previous local coordinate system.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RootMotion {
     /// Translation in meters, rotated by the preceding root orientation.
     pub translation: Vec3,

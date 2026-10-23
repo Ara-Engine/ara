@@ -44,17 +44,20 @@ edit.
 - **Review:** every change is a transaction with a `why` (agents must give one).
   Agent changes apply live but stay unreviewed until a human runs `ara accept` or
   `ara revert`.
+- **When something is wrong, ask the engine first:** `ara why name:Crate not
+  visible`, `ara why ARA1302`, `ara why "is the frame slow"` (MCP: `ara_why`). It
+  answers with ranked causes, their evidence and fixes you can run as is.
 
 ## Tools
 
-- MCP: `.mcp.json` starts `ara mcp` (12 tools). Over `ara mcp` the session is
+- MCP: `.mcp.json` starts `ara mcp` (13 tools). Over `ara mcp` the session is
   optional (one begins on first use); `ara_session {"action": "begin", "client":
   "<you>"}` names yours. Codex: add `[mcp_servers.ara]` with `command = "ara"`,
   `args = ["mcp"]` to its config.
 - CLI: `ara check` (validate), `ara query "Light"` / `ara query Crate`,
   `ara inspect` (main scene) or `ara inspect --doc outpost name:Crate`,
   `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500
-  --why "<reason>"`, `ara history`, `ara undo`, `ara logs`, `ara schema`. Add
+  --why "<reason>"`, `ara history`, `ara undo`, `ara logs`, `ara why`, `ara schema`. Add
   `--json` to any. `--args` takes JSON with or without quotes (`{entity: e_8b21}`),
   `@file.json` or `-` (stdin). The CLI attributes changes to the agent running it
   (Codex, Claude Code) or to `ARA_AUTHOR`.

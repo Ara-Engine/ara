@@ -26,6 +26,30 @@ fn schema_canonical_documents_typed_ops_and_undo_share_the_kernel() {
         skeleton: Some(s.data().clone()),
         clip: Some(common::clip(&s, 1.0)),
         controller: Some(common::controller_data()),
+        rig: Some(ara_anim::retarget::RigMap {
+            bones: vec![ara_anim::retarget::RigBone {
+                role: ara_anim::retarget::BoneRole::Root,
+                joint: "joint_0".into(),
+            }],
+        }),
+        ik: Some(document::IkSetup {
+            pelvis: "joint_0".into(),
+            chains: vec![ara_anim::ik::ChainData {
+                joints: vec!["joint_0".into(), "joint_1".into()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }),
+        motion_database: Some(ara_anim::matching::MatchConfig {
+            bones: vec!["joint_1".into()],
+            ..Default::default()
+        }),
+        ragdoll: Some(ara_anim::physical::RagdollProfile {
+            bones: vec![ara_anim::physical::RagdollBone {
+                joint: "joint_0".into(),
+                ..Default::default()
+            }],
+        }),
         ..Default::default()
     };
     AnimationCommand::Create(asset.clone())
@@ -71,4 +95,19 @@ fn schema_canonical_documents_typed_ops_and_undo_share_the_kernel() {
         document::write(store.workspace().doc(id.as_str()).unwrap(), store.schema())
     );
     assert!(document::read(r#"{"id":1,"id":2}"#, "bad.animation", store.schema()).is_err());
+    for command in [
+        AnimationCommand::SetRig(asset.rig.unwrap()),
+        AnimationCommand::SetIk(asset.ik.unwrap()),
+        AnimationCommand::SetMotionDatabase(asset.motion_database.unwrap()),
+        AnimationCommand::SetRagdoll(asset.ragdoll.unwrap()),
+    ] {
+        command
+            .apply(
+                &mut store,
+                TxnMeta::by(Author::Human),
+                id.clone(),
+                RecordId::parse("an_rig").unwrap(),
+            )
+            .unwrap();
+    }
 }

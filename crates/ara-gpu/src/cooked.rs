@@ -54,6 +54,10 @@ pub enum Stage {
     Fragment,
     /// Compute dispatch.
     Compute,
+    /// Optional VK_EXT_mesh_shader amplification stage.
+    Task,
+    /// Optional VK_EXT_mesh_shader geometry stage.
+    Mesh,
 }
 impl Stage {
     /// Slang's command line stage name.
@@ -62,6 +66,8 @@ impl Stage {
             Self::Vertex => "vertex",
             Self::Fragment => "fragment",
             Self::Compute => "compute",
+            Self::Task => "amplification",
+            Self::Mesh => "mesh",
         }
     }
 }

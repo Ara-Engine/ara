@@ -1,0 +1,108 @@
+Windows 11 / Ryzen 7 7800X3D / Rust 1.99.1 / release / 8 Rayon workers / shared CPU; each A/B block runs sequentially
+round=1 baseline_original
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,1.007,1.129
+animation+palette,8,1000,65,1.155,1.306
+round=1 baseline_current
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,0.996,1.108
+animation+palette,8,1000,65,1.121,1.302
+round=1 matching_before_inertial_optimization
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=9.329 p95=14.473; search_512_us p50=2.620 p95=4.273
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.845 p95=3.522
+round=1 matching_current
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=9.220 p95=13.833; search_512_us p50=2.625 p95=4.290
+search_exact_1000_8workers_ms p50=1.537 p95=2.015
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.222 p95=2.764
+round=1 procedural_before_descendant_fk
+Fabrik 65_bone_us p50=23.742 p95=27.023 residual_mm=0.1440
+Ccd 65_bone_us p50=23.086 p95=29.415 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=6.352 p95=9.537
+full_body_3goals_65bones_us p50=284.389 p95=312.591
+retarget_65bones_1.3x_us p50=17.918 p95=23.746 bind_plant_mm=0.00100
+round=1 procedural_current
+Fabrik 65_bone_us p50=5.386 p95=6.693 residual_mm=0.1440
+Ccd 65_bone_us p50=4.456 p95=5.274 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=6.168 p95=8.425
+full_body_3goals_65bones_us p50=52.924 p95=65.279
+retarget_65bones_1.3x_us p50=18.618 p95=28.906 bind_plant_mm=0.00004
+round=2 baseline_original
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,1.072,1.207
+animation+palette,8,1000,65,1.143,1.307
+round=2 baseline_current
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,1.071,1.231
+animation+palette,8,1000,65,1.289,1.400
+round=2 matching_before_inertial_optimization
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=8.992 p95=11.430; search_512_us p50=2.610 p95=3.515
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.757 p95=3.222
+round=2 matching_current
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=9.407 p95=14.256; search_512_us p50=2.619 p95=4.721
+search_exact_1000_8workers_ms p50=1.743 p95=2.231
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.550 p95=3.064
+round=2 procedural_before_descendant_fk
+Fabrik 65_bone_us p50=24.437 p95=33.353 residual_mm=0.1440
+Ccd 65_bone_us p50=23.129 p95=26.580 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=5.609 p95=6.896
+full_body_3goals_65bones_us p50=282.611 p95=322.165
+retarget_65bones_1.3x_us p50=18.564 p95=27.907 bind_plant_mm=0.00100
+round=2 procedural_current
+Fabrik 65_bone_us p50=5.393 p95=6.843 residual_mm=0.1440
+Ccd 65_bone_us p50=4.460 p95=5.220 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=6.178 p95=9.283
+full_body_3goals_65bones_us p50=54.119 p95=65.938
+retarget_65bones_1.3x_us p50=19.254 p95=31.880 bind_plant_mm=0.00004
+round=3 baseline_original
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,1.130,1.542
+animation+palette,8,1000,65,1.232,1.695
+round=3 baseline_current
+runtime clip bytes 45059
+compression CompressionReport { source_bytes: 143796, cooked_bytes: 12051, translation_error: 7.86921e-5, rotation_error: 1.8380497e-5, scale_error: 0.0, curve_error: 0.0, translation_bound: 7.8754434e-5, rotation_bound: 0.00033419707, scale_bound: 0.0, curve_bound: 6.1519444e-5 }; ratio 11.932x
+mode,threads,characters,bones,p50_ms,p95_ms
+animation,8,1000,65,1.116,1.510
+animation+palette,8,1000,65,1.161,1.602
+round=3 matching_before_inertial_optimization
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=9.124 p95=13.748; search_512_us p50=2.666 p95=4.364
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.622 p95=4.078
+round=3 matching_current
+database rows=1920 dimensions=27 feature_bytes=215040
+search_exact_us_per_character p50=9.927 p95=13.909; search_512_us p50=2.744 p95=4.420
+search_exact_1000_8workers_ms p50=1.462 p95=2.985
+scripted_demo_ticks=600 root_distance_checksum=4.701455
+motion_crowd_1000x65_8workers_ms p50=2.810 p95=4.183
+round=3 procedural_before_descendant_fk
+Fabrik 65_bone_us p50=24.523 p95=41.562 residual_mm=0.1440
+Ccd 65_bone_us p50=23.238 p95=25.845 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=5.633 p95=6.961
+full_body_3goals_65bones_us p50=286.008 p95=323.353
+retarget_65bones_1.3x_us p50=18.155 p95=21.002 bind_plant_mm=0.00100
+round=3 procedural_current
+Fabrik 65_bone_us p50=5.414 p95=7.399 residual_mm=0.1440
+Ccd 65_bone_us p50=4.442 p95=5.585 residual_mm=0.1864
+foot_placement_2feet_65bones_us p50=6.155 p95=7.494
+full_body_3goals_65bones_us p50=52.327 p95=60.410
+retarget_65bones_1.3x_us p50=18.614 p95=21.230 bind_plant_mm=0.00004
+powered_current
+32x7_bodies_8workers_drive_step_blend_ms p50=0.174 p95=0.206

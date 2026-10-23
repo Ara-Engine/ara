@@ -1,0 +1,217 @@
+{
+  "label": "why-with-r6",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T07:14:27Z",
+  "engine": "e4325d6",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "ara_inspect": 2,
+        "ara_query": 1,
+        "ara_session": 1,
+        "ara_why": 2,
+        "edit": 1,
+        "shell": 2
+      },
+      "wallMs": 25063,
+      "tokens": {
+        "input": 38407,
+        "cacheRead": 221312,
+        "cacheWrite": 0,
+        "output": 1076
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed the radio material in [radio.material](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-bad-material-16988-27f6602c-4/proj/materials/radio.material): `baseColor` referenced the misspelled output `pain`; it now uses the declared parameter `paint`.\n\nAra’s follow-up diagnosis reports the material is valid. It found no remaining document or bus issue; renderer pass visibility still requires the running renderer to confirm."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 2,
+        "ara_query": 1,
+        "ara_session": 1,
+        "ara_why": 2
+      },
+      "wallMs": 18208,
+      "tokens": {
+        "input": 22135,
+        "cacheRead": 206720,
+        "cacheWrite": 0,
+        "output": 830
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed `Generator` in `levels/outpost.scene` to use the re-exported mesh `@meshes/generator_v2.glb#ms_genr0002`. Ara confirms the mesh reference now resolves and the renderer and transform are valid.\n\nThe change is recorded as transaction `tx_vx9dsvjm` and is ready for human review. The running renderer would be needed to confirm the mesh actually draws."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"default\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_why": 2
+      },
+      "wallMs": 15653,
+      "tokens": {
+        "input": 15997,
+        "cacheRead": 175104,
+        "cacheWrite": 0,
+        "output": 444
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Ara identified the cause: the Workbench was on the `editor` layer, while `MainCamera` renders only `default` and `props`. I moved the Workbench to `default` and left the camera unchanged.\n\nThe change is recorded as transaction `tx_0pywyxge` in `levels/outpost.scene`, awaiting human review."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 15613,
+      "tokens": {
+        "input": 7709,
+        "cacheRead": 91904,
+        "cacheWrite": 0,
+        "output": 724
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "`Barrel.002` had a dynamic rigid body with `mass: 0`. Physics divided by zero during the first second of play, turning its position into NaN and making it disappear.\n\nI set its mass to `30 kg`, matching the other barrels, in transaction `tx_zr46qawr`. `ara check` reports no errors or warnings."
+    }
+  ]
+}

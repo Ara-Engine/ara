@@ -17,6 +17,7 @@ use std::{collections::BTreeMap, path::Path};
 /// boundaries. Resources and temporal histories belong to this view alone.
 pub struct FidelityView {
     pub(crate) settings: Settings,
+    pub(crate) shader_revision: String,
     pub(crate) scene: GpuScene,
     pub(crate) targets: Targets,
     pub(crate) pipelines: BTreeMap<&'static str, Pipeline>,
@@ -34,6 +35,8 @@ pub struct FidelityView {
     pub(crate) exposure_state: State,
     pub(crate) lut: Image,
     pub(crate) lut_index: u32,
+    pub(crate) sheen_lut: Image,
+    pub(crate) sheen_index: u32,
     pub(crate) previous_vp: Mat4,
     pub(crate) previous_jitter: glam::Vec2,
     pub(crate) previous_camera: Vec3,
@@ -41,6 +44,9 @@ pub struct FidelityView {
     pub(crate) slot: usize,
     pub(crate) samples: u32,
     pub(crate) gather_events: u32,
+    pub(crate) atmosphere: Option<crate::atmosphere::Atmosphere>,
+    pub(crate) atmosphere_dirty: bool,
+    pub(crate) texture_bias: f32,
     pub(crate) transport_stride: u32,
     pub(crate) timings: Vec<PassTiming>,
 }
@@ -114,6 +120,13 @@ impl FidelityView {
             bytemuck::cast_slice(&lut_data),
         )?;
         let lut_index = gpu.sampled_image(lut, false)?.index;
+        let sheen_lut = upload_image(
+            gpu,
+            [32, 32],
+            vk::Format::R32G32B32A32_SFLOAT,
+            include_bytes!("../shaders/sheen-albedo.bin"),
+        )?;
+        let sheen_index = gpu.sampled_image(sheen_lut, false)?.index;
         let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
         let mut pipelines = BTreeMap::new();
         let names = if settings.tier == Tier::Rt {
@@ -126,13 +139,36 @@ impl FidelityView {
                 "ddgi_emissive",
                 "hybrid_emissive",
                 "reference_emissive",
+                "primary_atmosphere",
+                "ddgi_atmosphere",
+                "hybrid_atmosphere",
+                "reference_atmosphere",
+                "primary_layers",
+                "ddgi_layers",
+                "hybrid_layers",
+                "reference_layers",
             ]
         } else {
             vec!["primary_raster", "hybrid_raster"]
         };
         let mut cohort = None;
         for name in names.into_iter().chain([
-            "temporal", "atrous", "bloom", "exposure", "post", "upscale", "sharpen",
+            "temporal",
+            "atrous",
+            "bloom",
+            "exposure",
+            "post",
+            "upscale",
+            "sharpen",
+            "transmittance",
+            "multiscatter",
+            "skyview",
+            "diagnostic",
+            if settings.tier == Tier::Rt {
+                "fog"
+            } else {
+                "fog_raster"
+            },
         ]) {
             let cooked: ara_gpu::cooked::CookedPipeline =
                 serde_json::from_slice(&std::fs::read(artifacts.join(format!("{name}.json")))?)?;
@@ -149,6 +185,7 @@ impl FidelityView {
         };
         Ok(Self {
             settings,
+            shader_revision: cohort.expect("Every view loads cooked pipelines"),
             scene,
             targets: Targets::new(
                 gpu,
@@ -171,6 +208,8 @@ impl FidelityView {
             exposure_state: state,
             lut,
             lut_index,
+            sheen_lut,
+            sheen_index,
             previous_vp: Mat4::IDENTITY,
             previous_jitter: glam::Vec2::ZERO,
             previous_camera: Vec3::ZERO,
@@ -178,6 +217,9 @@ impl FidelityView {
             slot: 0,
             samples: 0,
             gather_events: 2,
+            atmosphere: None,
+            atmosphere_dirty: true,
+            texture_bias: 0.,
             transport_stride: 2,
             timings: Vec::new(),
         })
@@ -295,6 +337,10 @@ impl FidelityView {
     pub fn scene(&self) -> &GpuScene {
         &self.scene
     }
+    /// Cooked shader cohort used to reject stale cached ground truth.
+    pub fn shader_revision(&self) -> &str {
+        &self.shader_revision
+    }
     /// Content hash for reference, bake and capture provenance.
     pub fn scene_hash(&self) -> &str {
         self.scene.content_hash()
@@ -401,6 +447,7 @@ impl FidelityView {
             gpu.retire(Resource::Buffer(b))?;
         }
         gpu.retire(Resource::Image(self.lut))?;
+        gpu.retire(Resource::Image(self.sheen_lut))?;
         for (_, p) in self.pipelines {
             gpu.retire_pipeline(p)?;
         }
