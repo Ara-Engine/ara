@@ -168,6 +168,17 @@ impl FidelityView {
             ),
         ] {
             uses.push((fb, Access::ShaderRead));
+            if pipeline == "post" && self.atmosphere.is_some() {
+                uses.extend(
+                    [SKYVIEW, TRANSMITTANCE, FROXELS, WORLD0 + 1 - self.slot]
+                        .map(|i| (ids[i], Access::ShaderRead)),
+                );
+            }
+            if pipeline == "upscale" {
+                uses.extend(
+                    [MOTION, DEPTH, WORLD0 + 1 - self.slot].map(|i| (ids[i], Access::ShaderRead)),
+                );
+            }
             let id = graph.pass(name, Queue::Graphics, uses);
             recipes.push((id, pipeline, arg, dispatch));
         }
