@@ -145,6 +145,7 @@ fn incremental_halos_obstacles_streaming_and_determinism() {
             min: [15.0, -0.5, 0.0],
             max: [17.0, 3.0, 32.0],
         },
+        area: Obstacle::CARVE,
     });
     let cut = baker.bake(&input, Some(&initial)).unwrap();
     assert!(cut.stats.rebuilt > 0);

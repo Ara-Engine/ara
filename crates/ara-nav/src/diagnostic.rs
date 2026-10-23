@@ -26,6 +26,12 @@ pub enum ReachabilityReason {
     MissingLink,
     /// Query capacity was exhausted; increase capacity before concluding disconnection.
     Capacity,
+    /// A complete corridor exists only through this closed or locked link (door,
+    /// elevator, collapsed bridge).
+    ClosedLink {
+        /// Authored link ID.
+        id: u32,
+    },
 }
 
 /// Machine-readable explanation and a common kernel diagnostic for display.
@@ -58,7 +64,47 @@ pub fn why_unreachable(
     goal: [f32; 3],
     filter: &QueryFilter,
 ) -> Result<Reachability, NavError> {
+    why_unreachable_blocked(mesh, start, goal, filter, &[])
+}
+
+/// Like [`why_unreachable`] with runtime-blocked link IDs (closed/locked gates):
+/// when only a blocked link connects the endpoints it is reported by ID.
+pub fn why_unreachable_blocked(
+    mesh: &NavMesh,
+    start: [f32; 3],
+    goal: [f32; 3],
+    filter: &QueryFilter,
+    blocked: &[u32],
+) -> Result<Reachability, NavError> {
     let mut query = mesh.query()?;
+    if !blocked.is_empty() {
+        query.set_blocked_links(blocked);
+        let gated = query.path(start, goal, filter).ok();
+        if gated.as_ref().is_some_and(|p| !p.complete) {
+            query.set_blocked_links(&[]);
+            if let Ok(open) = query.path(start, goal, filter)
+                && open.complete
+            {
+                for pair in open.corners.windows(2) {
+                    if pair[0].off_mesh
+                        && let Some((link, _)) = crate::follow::find_link(
+                            mesh.links(),
+                            pair[0].position,
+                            pair[1].position,
+                        )
+                        && blocked.contains(&link.id)
+                    {
+                        return Ok(report(
+                            ReachabilityReason::ClosedLink { id: link.id },
+                            gated.map(|p| p.reachable),
+                            "The only connecting corridor crosses a closed or locked link",
+                        ));
+                    }
+                }
+            }
+        }
+        query.set_blocked_links(blocked);
+    }
     if query.nearest(start, filter)?.is_none() {
         return Ok(report(
             ReachabilityReason::StartOutside,

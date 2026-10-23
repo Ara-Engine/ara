@@ -1,0 +1,60 @@
+# Cover fight: step out and shoot while healthy, take hidden cover when hurt,
+# recover behind it, then step out again.
+behavior Soldier {
+  var health: float = 100;
+  var cover: vec3;
+  var firing: vec3;
+
+  query CoverSpot {
+    generate cover(self, 16);
+    filter navigable(item);
+    filter distance(item, lastSeen(nearest("player"))) > 6;
+    filter not visible(lastSeen(nearest("player")), item);
+    score inverse(distance(item, self), 16) weight 2;
+    score remap(distance(item, lastSeen(nearest("player"))), 6, 20);
+  }
+
+  query FirePosition {
+    generate ring(self, 2, 8);
+    generate ring(self, 4, 12);
+    filter navigable(item);
+    filter visible(lastSeen(nearest("player")), item);
+    score inverse(distance(item, self), 6);
+  }
+
+  state Fight select utility every 0.5 {
+    state Engage {
+      score remap(health, 30, 70);
+      state Peek {
+        do find(FirePosition, into: firing);
+        on done -> StepOut;
+        on failed -> Shoot;
+      }
+      state StepOut {
+        do moveTo(firing, speed: 3, tolerance: 0.3);
+        on done -> Shoot;
+        on failed -> Shoot;
+      }
+      state Shoot {
+        do face(lastSeen(nearest("player")));
+        do act("fire", nearest("player"), every: 0.5);
+      }
+    }
+    state TakeCover {
+      score inverse(health, 60);
+      state FindCover {
+        do find(CoverSpot, into: cover);
+        on done -> GoToCover;
+        on failed -> Hold;
+      }
+      state GoToCover {
+        do moveTo(cover, speed: 4, tolerance: 0.2);
+        on done -> Hold;
+        on failed -> FindCover;
+      }
+      state Hold {
+        do face(lastSeen(nearest("player")));
+      }
+    }
+  }
+}

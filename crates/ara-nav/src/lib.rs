@@ -9,33 +9,51 @@ mod artifact;
 mod bake;
 mod components;
 mod debug;
+mod detour_step;
 mod diagnostic;
+mod dynamic;
+mod follow;
+mod hier;
 mod input;
 mod job;
 mod native;
 #[cfg(test)]
 mod native_tests;
+mod obstacles;
+mod orca_step;
 mod query;
-mod step;
+mod route;
+mod stream;
 mod world;
 
+pub use ara_crowd;
 pub use artifact::{BakeArtifact, BakeStats, CacheKey, TileData};
 pub use bake::Baker;
 pub use components::{
-    NavAgent, NavAgentState, NavArea, NavLink, NavMeshSurface, NavPosition, NavStatus, Traversal,
-    register,
+    NavAgent, NavAgentState, NavArea, NavIssue, NavLink, NavMeshSurface, NavPosition, NavStatus,
+    Traversal, register,
 };
 pub use debug::DebugPrimitive;
-pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable};
+pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable, why_unreachable_blocked};
+pub use dynamic::{LinkKind, NavAgentType, NavLinkState, NavObstacle, ObstacleMode};
+pub use hier::{
+    CellCoord, CellGrid, ClusterGraph, ClusterSummary, LANDMARKS, MIN_PORTAL, Portal, RouteScratch,
+    RouteStats, Side, UNREACHABLE,
+};
 pub use input::{
     AgentProfile, BakeInput, BakeSettings, Bounds, Geometry, Obstacle, OffMeshLink, TileCoord,
 };
 pub use job::{BakeJob, JobPoll, WorkerRequest, worker_main};
+pub use obstacles::RebakeCheckpoint;
 pub use query::{
     NavMesh, NavPath, NavQuery, NearestPoint, PathCorner, PathRequest, QueryFilter, RaycastHit,
 };
-pub use step::tick;
-pub use world::{Authority, GotoTarget, NavConfig, NavWorld, NavigationTick, goto, register_sim};
+pub use route::Route;
+pub use stream::{CellBake, CellSource, NavStreamer, bake_cell, merge_cells};
+pub use world::{
+    Authority, CrowdSolver, GotoTarget, NavConfig, NavWorld, NavigationTick, goto, register_sim,
+    tick,
+};
 
 /// A rejected bake, native allocation, query, job or integration operation.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

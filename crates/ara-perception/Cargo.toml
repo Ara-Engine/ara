@@ -1,0 +1,20 @@
+[package]
+name = "ara-perception"
+description = "Deterministic AI perception for Ara: sight cones, hearing and memory."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-physics = { path = "../ara-physics" }
+ara-schema = { path = "../ara-schema" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+rayon = "1.11"
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

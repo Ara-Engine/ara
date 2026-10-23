@@ -1,29 +1,16 @@
 //! Fixed-tick crowd synchronization; no authoritative state survives outside ECS.
 use crate::{
-    Authority, NavAgent, NavAgentState, NavError, NavMesh, NavPosition, NavStatus, NavWorld,
-    Traversal, distance, finite,
+    NavAgent, NavAgentState, NavError, NavMesh, NavPosition, NavStatus, NavWorld, Traversal,
+    distance, finite,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::BTreeSet;
 
-/// Publishes permitted completed bakes and advances server agents by one fixed tick.
+/// Small-crowd tick using DetourCrowd avoidance (one native solve per profile).
 /// Stable component IDs define order; ECS allocation/iteration order has no effect.
-pub fn tick(world: &mut World) {
-    if !world.contains_resource::<NavWorld>() {
-        return;
-    }
-    world.resource_scope(
-        |world, mut nav: bevy_ecs::change_detection::Mut<NavWorld>| {
-            nav.errors.clear();
-            if nav.config.allow_mesh_swap {
-                let pending = std::mem::take(&mut nav.pending);
-                for (profile, mesh) in pending {
-                    nav.meshes.insert(profile, mesh);
-                }
-            }
-            if nav.config.authority == Authority::Client {
-                return;
-            }
+pub(crate) fn step(world: &mut World, nav: &mut NavWorld) {
+    {
+        {
             nav.agents.clear();
             nav.agents.extend(
                 world
@@ -53,6 +40,8 @@ pub fn tick(world: &mut World) {
                     scratch,
                     entities,
                     errors,
+                    gates,
+                    types,
                     ..
                 } = &mut *nav;
                 scratch.clear();
@@ -82,6 +71,7 @@ pub fn tick(world: &mut World) {
                         continue;
                     }
                 };
+                query.set_blocked_links(&gates.blocked);
                 let mut query_state =
                     world.query::<(&NavAgent, &mut NavAgentState, &mut NavPosition)>();
                 for &(id, entity) in agents.iter() {
@@ -98,8 +88,7 @@ pub fn tick(world: &mut World) {
                         errors.push((id, error));
                         continue;
                     }
-                    let mut permitted = state.filter;
-                    permitted.include &= agent.area_mask;
+                    let permitted = crate::orca_step::effective_filter(agent, &state, types);
                     if state.traversal.is_none()
                         && !query
                             .nearest(position.0, &permitted)
@@ -113,21 +102,7 @@ pub fn tick(world: &mut World) {
                         ));
                         continue;
                     }
-                    if let Some(mut traversal) = state.traversal {
-                        traversal.elapsed = (traversal.elapsed + dt).min(traversal.duration);
-                        let f = (traversal.elapsed / traversal.duration).min(1.0);
-                        position.0 = std::array::from_fn(|i| {
-                            traversal.start[i] + (traversal.end[i] - traversal.start[i]) * f
-                        });
-                        state.velocity = std::array::from_fn(|i| {
-                            (traversal.end[i] - traversal.start[i]) / traversal.duration
-                        });
-                        if f >= 1.0 {
-                            state.traversal = None;
-                            state.corner += 2;
-                        } else {
-                            state.traversal = Some(traversal);
-                        }
+                    if crate::follow::advance_traversal(&mut state, &mut position.0, dt) {
                         continue;
                     }
                     let mut desired = [0.0; 3];
@@ -139,8 +114,7 @@ pub fn tick(world: &mut World) {
                             if state.status == NavStatus::Arrived {
                                 state.status = NavStatus::Moving;
                             }
-                            let mut filter = state.filter;
-                            filter.include &= agent.area_mask;
+                            let filter = crate::orca_step::effective_filter(agent, &state, types);
                             if state.path.is_none()
                                 || state.mesh != Some(mesh.content_hash())
                                 || state.planned_filter != Some(filter)
@@ -242,6 +216,12 @@ pub fn tick(world: &mut World) {
                                             .and_then(|p| p.corners.get(state.corner + 1))
                                             .map(|c| c.position)
                                     {
+                                        let link = crate::follow::find_link(
+                                            mesh.links(),
+                                            corner.position,
+                                            end,
+                                        )
+                                        .map(|(l, _)| l);
                                         state.traversal = Some(Traversal {
                                             start: corner.position,
                                             end,
@@ -249,6 +229,9 @@ pub fn tick(world: &mut World) {
                                             duration: (distance(corner.position, end)
                                                 / agent.max_speed.max(0.01))
                                             .max(dt),
+                                            link: link.map_or(0, |l| l.id),
+                                            kind: link.map_or(crate::LinkKind::Walk, |l| l.kind),
+                                            arc_height: link.map_or(0.0, |l| l.arc_height),
                                         });
                                         state.velocity = [0.0; 3];
                                         continue;
@@ -314,8 +297,8 @@ pub fn tick(world: &mut World) {
                     }
                 }
             }
-        },
-    );
+        }
+    }
 }
 fn validate_agent(
     a: &NavAgent,
@@ -349,6 +332,6 @@ fn validate_agent(
             "invalid state or dimensions larger than baked clearance",
         ));
     }
-    s.filter.native()?;
+    s.filter.validate()?;
     Ok(())
 }

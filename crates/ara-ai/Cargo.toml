@@ -1,0 +1,32 @@
+[package]
+name = "ara-ai"
+description = "Ara gameplay AI: state trees with utility scoring, EQS queries and a text DSL."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-cmd = { path = "../ara-cmd" }
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-graph = { path = "../ara-graph" }
+ara-json.workspace = true
+ara-nav = { path = "../ara-nav" }
+ara-ops.workspace = true
+ara-perception = { path = "../ara-perception" }
+ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
+ara-why = { path = "../ara-why" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+blake3 = "1.8"
+rayon = "1.11"
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "ai"
+harness = false
