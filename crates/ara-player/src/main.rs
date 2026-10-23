@@ -107,10 +107,7 @@ struct Player {
     presenter2d: Option<Presenter2d>,
     window2d: Option<Presenter2d>,
     /// Live audio of windowed players: the world's presenter and the SDL device.
-    audio: Option<(
-        ara_runtime_audio::AudioPresenter,
-        ara_audio::device::SdlBackend,
-    )>,
+    audio: Option<(world::Audio, ara_audio::device::SdlBackend)>,
     frame: RenderFrame,
     world: Option<World>,
     /// Keeps the snapshot section mapped for the session (diff baselines, restarts).

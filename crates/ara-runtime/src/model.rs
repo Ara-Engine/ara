@@ -8,9 +8,15 @@ use glam::{Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 mod material;
+mod selection;
 mod uv;
 pub use material::ModelMaterial;
+pub use selection::{ModelNode, ModelSelection};
 pub use uv::TextureTransform;
+#[cfg(test)]
+mod extraction_tests;
+#[cfg(test)]
+mod selection_tests;
 
 /// A decoded model-space vertex with up to eight skin influences.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -87,6 +93,10 @@ pub struct Model {
     pub digest: Digest,
     /// Drawable primitives in manifest order.
     pub primitives: Vec<Primitive>,
+    /// Source scene nodes, with drawable subtree ranges and model-space pivots.
+    pub nodes: BTreeMap<u32, ModelNode>,
+    /// Node names to source indices. `None` identifies ambiguous duplicate names.
+    pub node_names: BTreeMap<String, Option<u32>>,
     /// Materials in source order.
     pub materials: Vec<ModelMaterial>,
     /// Cooked textures referenced by materials.
@@ -196,9 +206,22 @@ impl Model {
             );
         }
         let mut primitives = Vec::new();
+        let scene_order = scene_nodes(document, &nodes);
+        let mut model_nodes = BTreeMap::new();
         let mut min = Vec3::splat(f32::INFINITY);
         let mut max = Vec3::splat(f32::NEG_INFINITY);
-        for node in scene_nodes(document, &nodes) {
+        for &node in &scene_order {
+            let node_index = u32::try_from(node)
+                .map_err(|_| RuntimeError(format!("{asset}: too many model nodes")))?;
+            model_nodes.insert(
+                node_index,
+                ModelNode {
+                    index: node_index,
+                    name: nodes[node]["name"].as_str().unwrap_or_default().to_owned(),
+                    origin: world(node).w_axis.truncate().to_array(),
+                    primitives: primitives.len()..primitives.len(),
+                },
+            );
             let Some(mesh) = nodes[node]["mesh"].as_u64().map(|m| m as usize) else {
                 continue;
             };
@@ -222,6 +245,26 @@ impl Model {
                 }
                 primitives.push(decoded);
             }
+            if let Some(entry) = model_nodes.get_mut(&node_index) {
+                entry.primitives.end = primitives.len();
+            }
+        }
+        // DFS keeps each subtree contiguous. Extend ancestors after their descendants.
+        for &node in scene_order.iter().rev() {
+            let end = model_nodes[&(node as u32)].primitives.end;
+            if let Some(parent) = parents
+                .get(&node)
+                .and_then(|parent| model_nodes.get_mut(&(*parent as u32)))
+            {
+                parent.primitives.end = parent.primitives.end.max(end);
+            }
+        }
+        let mut node_names = BTreeMap::new();
+        for node in model_nodes.values().filter(|node| !node.name.is_empty()) {
+            node_names
+                .entry(node.name.clone())
+                .and_modify(|index| *index = None)
+                .or_insert(Some(node.index));
         }
         if primitives.is_empty() {
             return Err(RuntimeError(format!(
@@ -232,6 +275,8 @@ impl Model {
             asset: asset.to_owned(),
             digest,
             primitives,
+            nodes: model_nodes,
+            node_names,
             materials,
             textures,
             skins,
@@ -340,6 +385,7 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
     let min = Vec3::new(bounds[0], bounds[1], bounds[2]);
     let extent = Vec3::new(bounds[3], bounds[4], bounds[5]) - min;
     let normals = transform.inverse().transpose();
+    let mirrored = transform.determinant() < 0.;
     let vertices = mesh
         .vertices
         .as_chunks::<52>()
@@ -384,7 +430,16 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
                 normal: n.to_array(),
                 uv: [half(q.uv[0]), half(q.uv[1])],
                 uv1: [half(q.uv[2]), half(q.uv[3])],
-                tangent: [t.x, t.y, t.z, if q.tangent[3] < 0 { -1.0 } else { 1.0 }],
+                tangent: [
+                    t.x,
+                    t.y,
+                    t.z,
+                    if (q.tangent[3] < 0) ^ mirrored {
+                        -1.0
+                    } else {
+                        1.0
+                    },
+                ],
                 joints,
                 weights,
             }
@@ -392,7 +447,7 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
         .collect();
     let read = |lod: &Lod| -> Result<Vec<u32>> {
         let first = lod.first_index as usize * 4;
-        Ok(mesh
+        let mut indices: Vec<u32> = mesh
             .indices
             .get(first..first + lod.index_count as usize * 4)
             .ok_or_else(|| RuntimeError("LOD outside the index stream".into()))?
@@ -400,7 +455,13 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
             .0
             .iter()
             .map(|b| u32::from_le_bytes(*b))
-            .collect())
+            .collect();
+        if mirrored {
+            for triangle in indices.as_chunks_mut::<3>().0 {
+                triangle.swap(1, 2);
+            }
+        }
+        Ok(indices)
     };
     let mut lods = mesh
         .lods

@@ -41,6 +41,8 @@ ara do import.initialize --args '{"source":"audio/theme.ogg","id":"as_theme","se
 Selection follows the source extension, and the engine records the installed
 importer version. Configure replaces supplied settings, preset or dependencies;
 omitted fields are retained. Settings are reflected and validated before commit.
+Play consumes these command settings immediately, including a newly initialized
+import or a configure operation before the host's debounced sidecar save.
 Sidecars save alongside the source while asset references continue to name the
 source file. Undo removes a newly initialized sidecar, preserving the source.
 
@@ -59,6 +61,11 @@ Audio `decodedBudget` counts resident PCM staging bytes (64 MiB default; 64 KiB
 minimum). Music and dialogue decode and resample in bounded blocks before Opus
 encoding, independent of track duration. Effects decode into a resident clip and
 must fit the budget. Compressed input/output and codec/meter scratch are separate.
+Play keeps streamed imports compressed and feeds 4096-frame stereo PCM queues
+(about 33 KiB per voice) under an 8 MiB aggregate queue budget. Live playback
+decodes on workers; offline captures refill synchronously before each render
+quantum. Looping rewinds the compressed source on its producer. Graph sample
+nodes retain resident loading for their short effects.
 
 Animation commands expose the Rust `AnimationCommand` API:
 `animation.create`, `animation.skeleton.set`, `animation.clip.set`,
@@ -91,6 +98,26 @@ ara do transform.lookAt --args '{"entity":"e_light","target":"e_crate"}' --why '
 Supply exactly one of `point` and `target`. Parent transforms are respected;
 parallel up/direction vectors use a deterministic upright fallback. Coincident
 targets, zero up vectors and singular parent transforms diagnose without editing.
+
+Select a source kit piece and switch a lamp's emissive material without generating
+a derived glTF:
+
+```powershell
+ara do component.add --doc levels/yard.scene --args '{"entity":"e_lamp","component":"MeshRenderer","value":{"model":"@models/kit.gltf#as_kit","node":"WallLamp","emissiveFactor":[2000,1800,1000],"emissiveMaterials":["Bulb"]}}' --why 'Use the kit lamp and light its bulb'
+ara do property.set --doc levels/yard.scene --args '{"entity":"e_lamp","path":"MeshRenderer.emissiveEnabled","value":false}' --why 'Switch the lamp off'
+```
+
+`node` selects a named source subtree or numeric node index as a string; `name:3`
+selects a numeric name. Duplicate names require an index. The selected pivot moves
+to the entity origin while source rotation/scale and descendant transforms remain.
+Omitting `node` retains the complete default scene and its authored placement.
+`primitive` optionally selects a zero-based primitive within that subtree.
+
+Imported emission is enabled by default. `emissiveFactor` replaces the source RGB
+factor for the named/indexed `emissiveMaterials` (empty targets all), then
+`emissiveStrength` multiplies emission once. `emissiveEnabled` switches it off.
+Procedural shapes retain emitted-radiance semantics. Invalid node/primitive or
+material selectors report `ARA7310`; invalid geometry selections show a placeholder.
 
 `terrain.raise`, `terrain.paint` and `foliage.exclude` accept an optional `id`.
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.

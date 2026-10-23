@@ -15,31 +15,7 @@
       "enabled": true,
       "opacity": 1
     },
-    "s_f7nr": {
-      "layer": "l_sculpt",
-      "sequence": 2,
-      "operation": "paint",
-      "dabs": [
-        {
-          "center": [52, 50],
-          "radius": 9,
-          "amount": 0.9
-        },
-        {
-          "center": [8, 48],
-          "radius": 8,
-          "amount": 0.8
-        },
-        {
-          "center": [54, 10],
-          "radius": 5,
-          "amount": 0.7
-        }
-      ],
-      "channel": 1,
-      "iterations": 8
-    },
-    "s_fdxz": {
+    "s_19bc": {
       "layer": "l_sculpt",
       "sequence": 3,
       "operation": "paint",
@@ -90,37 +66,61 @@
       ],
       "iterations": 8
     },
-    "t_19bc": {
+    "s_thpy": {
+      "layer": "l_sculpt",
+      "sequence": 2,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [52, 50],
+          "radius": 9,
+          "amount": 0.9
+        },
+        {
+          "center": [8, 48],
+          "radius": 8,
+          "amount": 0.8
+        },
+        {
+          "center": [54, 10],
+          "radius": 5,
+          "amount": 0.7
+        }
+      ],
+      "channel": 1,
+      "iterations": 8
+    },
+    "t_p0zp0": {
+      "strokes": [
+        "s_19bc"
+      ]
+    },
+    "t_p0zp1": {
+      "coord": {
+        "z": 1
+      },
+      "strokes": [
+        "s_qw2b",
+        "s_thpy"
+      ]
+    },
+    "t_p1zp0": {
       "coord": {
         "x": 1
       },
       "strokes": [
         "s_qw2b",
-        "s_f7nr"
+        "s_thpy"
       ]
     },
-    "t_eg6r": {
+    "t_p1zp1": {
       "coord": {
         "x": 1,
         "z": 1
       },
       "strokes": [
         "s_qw2b",
-        "s_f7nr"
-      ]
-    },
-    "t_g9tz": {
-      "strokes": [
-        "s_fdxz"
-      ]
-    },
-    "t_thpy": {
-      "coord": {
-        "z": 1
-      },
-      "strokes": [
-        "s_qw2b",
-        "s_f7nr"
+        "s_thpy"
       ]
     }
   }

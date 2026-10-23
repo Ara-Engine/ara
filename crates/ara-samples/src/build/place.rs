@@ -408,6 +408,7 @@ impl Ground {
                 header: terrain.header.clone(),
                 tiles,
                 foliage: Vec::new(),
+                foliage_rules: Vec::new(),
             },
             shift: Vec3::ZERO,
         })

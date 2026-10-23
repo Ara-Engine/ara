@@ -7,14 +7,16 @@ use std::{
     collections::BTreeMap,
     io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::mpsc::{self, Receiver, TryRecvError},
     thread,
     time::{Duration, Instant},
 };
 
 mod limit;
+mod process;
 use limit::Permit;
+use process::Running;
 
 const MAX_FRAME: u64 = 512 * 1024 * 1024;
 pub(crate) fn background_priority() {
@@ -287,7 +289,6 @@ impl ProcessWorker {
         let (tx, rx) = mpsc::channel();
         let mut job = ImportJob {
             child: None,
-            permit: None,
             pending: Some(Pending {
                 command,
                 request,
@@ -312,8 +313,7 @@ struct Pending {
 /// A nonblocking queued/process job. Dropping cancels queued work or kills/reaps
 /// its child without joining on UI. Worker deadlines exclude time in the queue.
 pub struct ImportJob {
-    child: Option<Child>,
-    permit: Option<Permit>,
+    child: Option<Running>,
     pending: Option<Pending>,
     events: Receiver<Result<Message>>,
     started: Instant,
@@ -332,17 +332,16 @@ impl ImportJob {
             return Ok(());
         };
         self.started = Instant::now();
-        self.child = Some(pending.command.spawn()?);
-        self.permit = Some(permit);
-        let child = self.child.as_mut().expect("child was just spawned");
+        let mut child = pending.command.spawn()?;
         let mut stdin = child
             .stdin
             .take()
-            .ok_or_else(|| Error::Worker("missing stdin".into()))?;
+            .expect("worker command configures piped stdin");
         let mut stdout = child
             .stdout
             .take()
-            .ok_or_else(|| Error::Worker("missing stdout".into()))?;
+            .expect("worker command configures piped stdout");
+        self.child = Some(Running::new(child, permit));
         let tx = pending.events;
         let request = pending.request;
         let writer_tx = tx.clone();
@@ -438,18 +437,11 @@ impl ImportJob {
             }
         }
     }
-    /// Kills a crashed, hung or superseded native importer immediately.
+    /// Requests termination/reaping of a native importer without joining the caller.
     pub fn cancel(&mut self) {
         self.finished = true;
         self.pending = None;
-        if let Some(mut child) = self.child.take() {
-            let permit = self.permit.take();
-            let _ = child.kill();
-            thread::spawn(move || {
-                let _ = child.wait();
-                drop(permit);
-            });
-        }
+        self.child = None;
     }
     /// Synchronous CLI/background convenience; editor frame code uses `poll`.
     pub fn wait(
