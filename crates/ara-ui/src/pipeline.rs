@@ -22,8 +22,12 @@ impl Ui {
                     self.tree.set_style(node.layout_id, layout)?;
                     node.dirty.layout = true;
                 }
-                if computed.font_size != node.computed.font_size {
-                    if let Some(text) = &mut node.text {
+                if computed.font_size != node.computed.font_size
+                    || computed.wrap_text != node.computed.wrap_text
+                {
+                    if let Some(text) = &mut node.text
+                        && computed.font_size != node.computed.font_size
+                    {
                         text.dirty = true;
                     }
                     self.tree.mark_dirty(node.layout_id)?;
@@ -65,7 +69,9 @@ impl Ui {
                                 AvailableSpace::MinContent => Some(1.0),
                                 _ => None,
                             });
-                            let width = if matches!(node.element.tag.as_str(), "field" | "input") {
+                            let width = if !node.computed.wrap_text
+                                || matches!(node.element.tag.as_str(), "field" | "input")
+                            {
                                 None
                             } else {
                                 width
@@ -86,7 +92,9 @@ impl Ui {
                     let l = self.tree.layout(node.layout_id)?;
                     text_system.measure(
                         text,
-                        if matches!(node.element.tag.as_str(), "field" | "input") {
+                        if !node.computed.wrap_text
+                            || matches!(node.element.tag.as_str(), "field" | "input")
+                        {
                             None
                         } else {
                             Some(

@@ -35,13 +35,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit_consumer"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a45e2bb300bea6d5f33a82c3e051c3ddc6f41c209750f68a0acbe991a284344"
+dependencies = [
+ "accesskit 0.25.1",
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "accesskit_ios"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "750c4e9f6ce888dfe8a10c0f1b5ceb646a7854fd46579d74919219d1bb314083"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
  "objc2 0.5.3",
  "objc2-foundation 0.2.2",
@@ -55,7 +65,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce02dc63b43f0c9296af9ac946312a2dc8814427d7a64d2d600971dac55b6076"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
  "objc2 0.5.3",
  "objc2-app-kit",
@@ -69,8 +79,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
+ "static_assertions",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
+name = "accesskit_windows"
+version = "0.35.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce63f35d6bdcf59f26b76b3379063f738e6412cef46999cc772d46aa3de35adb"
+dependencies = [
+ "accesskit 0.25.1",
+ "accesskit_consumer 0.39.1",
+ "hashbrown 0.17.1",
  "static_assertions",
  "windows",
  "windows-core",
@@ -85,7 +109,7 @@ dependencies = [
  "accesskit 0.24.1",
  "accesskit_ios",
  "accesskit_macos",
- "accesskit_windows",
+ "accesskit_windows 0.34.0",
  "raw-window-handle",
  "winit",
 ]
@@ -513,6 +537,53 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-editor"
+version = "0.0.0"
+dependencies = [
+ "accesskit 0.25.1",
+ "accesskit_windows 0.35.1",
+ "anyhow",
+ "ara-cmd",
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-editor-gpu",
+ "ara-gpu",
+ "ara-host",
+ "ara-json",
+ "ara-mcp",
+ "ara-ops",
+ "ara-platform",
+ "ara-proto",
+ "ara-render",
+ "ara-rpc",
+ "ara-schema",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-text",
+ "glam 0.30.9",
+ "gltf",
+ "image",
+ "sdl3-sys",
+ "serde",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
+name = "ara-editor-gpu"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-ui",
+ "ara-ui-render",
+ "ash 0.38.0+1.4.352",
+ "bytemuck",
+ "image",
 ]
 
 [[package]]

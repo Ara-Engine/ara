@@ -1,5 +1,7 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
+mod edit;
 mod frame;
+mod hash;
 mod passes;
 mod transfer;
 mod upload;
@@ -85,9 +87,12 @@ pub struct Renderer {
     previous_vp: Mat4,
     frame_number: u32,
     scene_hash: String,
+    static_scene_hash: String,
     shader_metadata: crate::capture::ShaderMetadata,
     entity_names: Vec<(u64, String)>,
     last_timings: Vec<PassTiming>,
+    scene_textures: Vec<u32>,
+    dynamic: Vec<Resource>,
 }
 
 impl Renderer {
@@ -172,6 +177,15 @@ impl Renderer {
     /// Current SDR output, in CopySource layout after rendering.
     pub fn output(&self) -> Image {
         self.targets.images[OUTPUT]
+    }
+    /// Last completed entity-ID texture, in CopySource layout after rendering.
+    /// The editor samples this on the same device for selection/review outlines.
+    pub fn entity_channel(&self) -> Image {
+        self.targets.images[ID]
+    }
+    /// Compact channel index (slice index + 1) to external entity identity and label.
+    pub fn entities(&self) -> &[(u64, String)] {
+        &self.entity_names
     }
     /// Last measured pass timings, including actual dedicated-queue execution.
     pub fn timings(&self) -> &[PassTiming] {
