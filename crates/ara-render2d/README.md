@@ -43,9 +43,9 @@ loop. Post reuses the main renderer's exposure/ACES/sRGB `ToneMap`; pixel art ne
 jitters. The resident atlas count is bounded by the common Vulkan heap; overflow is a
 structured GPU error.
 
-Additive shared hooks (minimal): `Command::DrawProcedural` in ara-gpu; in ara-render
-`CameraSpec::Orthographic`, public `CaptureContext`/`Capture::from_render`, and
-`renderer::post::ToneMap`.
+Additive shared hooks (minimal): `Command::DrawProcedural` in ara-gpu (validated with
+the pipeline's `vertex_stride`); in ara-render `CameraSpec::Orthographic` and
+`renderer::post::ToneMap`. Captures go through main's `Capture::from_feature`.
 
 ## Measurements (RTX 4070 SUPER, 1280x720, Vulkan timestamps)
 
