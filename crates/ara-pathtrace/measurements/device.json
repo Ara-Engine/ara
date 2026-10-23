@@ -1,13 +1,22 @@
 {
   "api_version": "1.4.351",
+  "buffer_int64_atomics": true,
   "compute_family": 2,
   "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
   "descriptor_heap_available": true,
   "device_id": 10115,
   "driver_version": 2588114944,
+  "geometry_shader": true,
   "graphics_family": 0,
   "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
   "max_image_dimension": 32768,
+  "mesh_dispatch": [
+    4194304,
+    65535,
+    65535,
+    4194304
+  ],
+  "mesh_shading": true,
   "name": "NVIDIA GeForce RTX 4070 SUPER",
   "pipeline_cache_uuid": [
     100,
@@ -28,6 +37,12 @@
     126
   ],
   "ray_tracing": true,
+  "task_dispatch": [
+    4194304,
+    65535,
+    65535,
+    4194304
+  ],
   "timestamp_period_ns": 1.0,
   "timestamp_valid_bits": [
     64,

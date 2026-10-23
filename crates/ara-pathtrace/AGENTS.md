@@ -25,6 +25,9 @@ the 1000-light corridor independently. Matching *-Timings modes measure full fra
 Night references use 32768 spp; the 1000-light reference uses 65536 spp and 32 RIS
 candidates per vertex. Report lower-half residuals as well as whole-image error.
 Timing reports retain chronological frame samples, median, p95, maximum and load.
+`./verify-round3.ps1 -SharedGpu` reproduces the full round, retaining timing
+failures for shared-load reporting. Omit SharedGpu for strict budget gates.
+`-TimingsOnly` reruns only the four timing modes and preserves quality receipts.
 Goldens update only with `ARA_UPDATE_FIDELITY_GOLDENS=1`; regular tests compare.
 All output/provenance goes under this crate; root files/docs remain untouched.
 Runtime shader cooking is forbidden. Recook fidelity offline before testing edits.

@@ -2,10 +2,10 @@
   {
     "hybrid_settle_frames": 96,
     "reference_bounces": 12,
-    "reference_convergence": 0.014660227462601797,
+    "reference_convergence": 0.01466022746836292,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.061135014232536866,
+    "relative_rmse": 0.06113501499603066,
     "scene": "glossy_interior",
     "target": 0.08
   },

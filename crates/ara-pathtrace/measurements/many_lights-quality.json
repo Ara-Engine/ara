@@ -1,0 +1,36 @@
+{
+  "bounces": 12,
+  "convergence": {
+    "mae": 0.7309934870549191,
+    "relative_rmse": 0.008881431817273293,
+    "rmse": 1.3029896708831785
+  },
+  "error": {
+    "mae": 5.093819152053614,
+    "relative_rmse": 0.10209717723593993,
+    "rmse": 14.978617198414886
+  },
+  "ev100": 6.0,
+  "point_lights": 500,
+  "reference_model": "independent surface path transport",
+  "reference_samples": 65536,
+  "scene_hash": "b64022fdadf36bbac097e166d57b41eb079217e08ffa97826a670dbcdd255f62",
+  "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "size": [
+    480,
+    270
+  ],
+  "source": "500 points + 500 emissive panels, 1000 semantic lights",
+  "surface_roi": "lower half",
+  "surface_roi_convergence": {
+    "mae": 0.6437277083043699,
+    "relative_rmse": 0.030628246852294032,
+    "rmse": 0.8724197405003092
+  },
+  "surface_roi_error": {
+    "mae": 3.5418501044766892,
+    "relative_rmse": 0.17363269026605552,
+    "rmse": 4.945780518055899
+  },
+  "triangles": 1010
+}

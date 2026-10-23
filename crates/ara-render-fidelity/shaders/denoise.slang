@@ -93,10 +93,13 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
     uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
-    int step=splitSignals?(root.pass==0?1:root.pass==1?3:8):1<<root.pass;uint width=8+2*step;
+    int baseStep=splitSignals?(root.pass==0?1:root.pass==1?3:8):1<<root.pass;
+    // Preserve the validated angular footprint at native/upscaled resolutions.
+    // A fixed pixel radius hides noise in the 270p metric but leaves native walls mottled.
+    int step=splitSignals?max(baseStep,int(float(baseStep)*f.sizes.y/270.+0.5)):baseStep;uint width=8+2*step;
     uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
-    // At step 8 the nine 8x8 footprints do not overlap within a group. Direct
-    // coalesced texture gathers avoid staging 576 values with no shared reuse.
+    // Wide footprints provide little group reuse and exceed the compact tile.
+    // Coalesced texture gathers preserve occupancy without a large shared halo.
     bool wide=step>4;
     if(!wide){
         for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at).rgb;filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at).rgb;}
@@ -109,7 +112,9 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
     else{world=filterWorld[centerIndex];center=filterColour[centerIndex];guide=filterGuide[centerIndex];if(splitSignals)specCenter=filterSpecular[centerIndex];}
     float3 sum=0;float total=0;
     float2 temporalMoments=pixel(f,MOMENTS+slot,p).xy;float sigma=sqrt(max(temporalMoments.y-temporalMoments.x*temporalMoments.x,0.00001));float l=luminance(center);float historyCount=pixel(f,HISTORY+slot,p).w;
-    float scale=max(guide.w*0.001,0.003)*step;float roughness=pixel(f,NORMAL+slot,p).w;
+    // Geometry tolerance stays in world units; a larger image must not admit
+    // samples through increasingly thick walls when its pixel radius grows.
+    float scale=max(guide.w*0.001,0.003)*baseStep;float roughness=pixel(f,NORMAL+slot,p).w;
     float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter):0;
     float4 specMoments=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p):float4(0);float2 specMom=specMoments.xy;float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){

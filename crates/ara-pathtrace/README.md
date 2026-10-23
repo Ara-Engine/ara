@@ -399,3 +399,7 @@ Verification: both crates passed tests, all-target clippy with warnings denied a
 rustfmt checks; the denser night preset also passed the focused golden test. All 31
 SPIR-V modules passed spirv-val for Vulkan 1.3. Validation and synchronization
 validation reported no errors. Scratch/reference HDR caches remain ignored.
+
+## Fidelity round 3
+
+See [the round-3 report](FIDELITY_ROUND3.md) for low-light reservoirs, CC0 beauty content, independent references, temporal noise, shared-GPU median/p95/spikes, per-pass deltas and remaining UE5 quality gaps.

@@ -1,0 +1,22 @@
+{
+  "bounces": 12,
+  "maximum_error_ratio": 1.05,
+  "passed": true,
+  "reference_samples": 8192,
+  "relative_rmse": [
+    0.08589887559632066,
+    0.06518765913291512
+  ],
+  "roi": "lower half, resolved to matching 480x270 pixel areas",
+  "settle_frames": 256,
+  "sizes": [
+    [
+      480,
+      270
+    ],
+    [
+      960,
+      540
+    ]
+  ]
+}

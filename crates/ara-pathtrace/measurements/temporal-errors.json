@@ -2,9 +2,9 @@
   {
     "capture_stride": 4,
     "frames": 12,
-    "maximum_residual": 0.01666117427362901,
-    "mean_residual": 0.014274203145308818,
-    "reset_residual": 0.001346647300895653,
+    "maximum_residual": 0.021868237491071495,
+    "mean_residual": 0.016520431702090835,
+    "reset_residual": 0.002197490518840769,
     "scene": "moving_emissive",
     "simulation_frames": 48
   },

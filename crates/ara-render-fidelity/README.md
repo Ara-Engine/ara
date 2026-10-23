@@ -334,8 +334,11 @@ evaluation at each reservoir stage. Public G-buffer slots and `FILTER0=12` remai
 unchanged; the feature/bloom integration test exercises the same HDR composition.
 
 Diffuse and GGX specular signals have separate histories and moments. Three
-variance-guided geometry-aware a-trous iterations use steps 1, 3 and 8 in reservoir
-mode; classic mode retains steps 1/2/4. Motion/light changes clamp
+variance-guided geometry-aware a-trous iterations use base steps 1, 3 and 8 in reservoir
+mode. Above 270p their pixel spacing scales with render height, preserving the
+validated angular footprint in native/upscaled captures. Plane rejection keeps
+the original world-space tolerance so resolution cannot increase light leakage.
+Classic mode retains steps 1/2/4. Motion/light changes clamp
 history to compatible current neighborhoods; static histories preserve rare
 energy. Half-float histories carry a quantized RGB rounding residual in unused
 float32 moment channels: this preserves small EMA corrections without adding
