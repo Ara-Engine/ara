@@ -727,6 +727,7 @@ impl Service for PlayService {
             play(Method::new::<PlayCommandParams>(db, "play.command", "Run a C# [Command] (game.UseMedkit) in the running world between ticks; returns its effects."), "command"),
             play(Method::new::<WorldParams>(db, "play.commands", "The running world's C# command catalog (params schemas, examples; scope play).").read_only(), "commands"),
             play(Method::new::<WorldParams>(db, "play.events", "C# reload reports and module diagnostics since the last call.").read_only(), "events"),
+            play(Method::new::<PlayCaptureAudioParams>(db, "play.captureAudio", "Render the world's sound offline (sources at their poses, the listener at the camera) to a WAV with loudness, peak and spectrum analysis.").read_only(), "captureAudio"),
             Method::new::<ScriptWriteParams>(db, "script.write", "Write a C# module source; agent writes are claimed by running players first and reload at a tick boundary (D20 policy).")
                 .scope(Scope::EditCode)
                 .action("ara_play", "write"),
@@ -816,7 +817,7 @@ impl Service for PlayService {
                     | "play.patch" | "play.step" => (method, true),
                     "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
                     | "play.record" | "play.recording" | "play.replay" | "play.diff"
-                    | "play.debug.crash" | "play.commands" => (method, false),
+                    | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
                     // C# commands mutate the world: every player of it runs them.
                     "play.command" => (method, true),
                     other => {

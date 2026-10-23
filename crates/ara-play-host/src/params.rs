@@ -277,6 +277,22 @@ pub struct PlayCommandParams {
     pub params: Option<Value>,
 }
 
+/// Params of `play.captureAudio`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayCaptureAudioParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// WAV file to write; the analysis (loudness, peaks, spectrum) goes beside it as JSON.
+    pub path: String,
+    /// Seconds of sound to render offline from the current tick.
+    #[ara(unit = Seconds, range(min = 0.01, max = 60))]
+    pub seconds: f64,
+}
+
 /// Params of `script.write`.
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]

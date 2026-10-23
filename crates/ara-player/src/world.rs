@@ -114,6 +114,84 @@ impl World {
         Ok(())
     }
 
+    /// `play.captureAudio`: renders `seconds` of the world's sound offline from the
+    /// current tick (each `AudioSource` at its world pose, the listener at the camera)
+    /// to a WAV plus analysis JSON. Presentation only; the simulation is untouched.
+    pub fn capture_audio(
+        &mut self,
+        params: &ara_play::CaptureAudio,
+        frame: &mut RenderFrame,
+    ) -> Result<Value> {
+        use ara_audio::{AudioEngine, AudioListener, AudioSource, EngineConfig, Playback};
+        use ara_runtime::assets::AssetSource;
+        self.runtime.extract(frame);
+        let mut listener = AudioListener::default();
+        if let Some(camera) = &frame.camera {
+            listener.position = camera.position;
+            listener.forward = camera.forward;
+        }
+        let mut engine = AudioEngine::new(EngineConfig::default())?;
+        let bus = engine.bus("master").context("no master bus")?;
+        let assets = assets(&self.cache, &self.pins)?;
+        let world = self.runtime.world();
+        let mut sources: Vec<(String, AudioSource, [f32; 3])> = world
+            .iter_entities()
+            .filter_map(|e| {
+                let id = e.get::<ara_sim::Identity>()?.0.clone();
+                let source = e.get::<AudioSource>()?.clone();
+                let pose = e.get::<ara_runtime::sync::WorldPose>()?;
+                Some((id, source, pose.0.translation.to_array()))
+            })
+            .collect();
+        sources.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut voices = Vec::new();
+        for (id, mut source, position) in sources {
+            let Some(clip) = &source.clip else { continue };
+            let asset = ara_runtime::assets::asset_id(clip).map_err(|e| anyhow!(e.0))?;
+            let (_, cached) = assets
+                .load(asset)
+                .map_err(|e| anyhow!(e.0))?
+                .with_context(|| format!("{id}: sound {} is not imported", clip.0))?;
+            let artifact = |name: &str| {
+                cached
+                    .output
+                    .artifacts
+                    .iter()
+                    .find(|a| a.name == name)
+                    .map(|a| a.bytes.clone())
+                    .with_context(|| format!("{id}: sound has no {name}"))
+            };
+            let meta: Value = serde_json::from_slice(&artifact("audio.json")?)?;
+            let bytes = std::io::Cursor::new(artifact("audio.bin")?);
+            let mut decoder: Box<dyn ara_audio::codec::AudioDecoder> = if meta["codec"] == "opus" {
+                Box::new(ara_audio::codec::OpusDecoder::open(bytes)?)
+            } else {
+                Box::new(ara_audio::codec::MediaDecoder::open(
+                    Box::new(bytes),
+                    "wav",
+                )?)
+            };
+            let decoded = ara_audio::codec::decode_clip(decoder.as_mut(), 64 * 1024 * 1024)?;
+            source.position = position;
+            let playback = Playback::from_source(&source, &listener, 0, Default::default())?;
+            engine.play(bus, decoded, playback)?;
+            voices.push(id);
+        }
+        let capture = ara_audio::capture::capture_audio(&mut engine, params.seconds)?;
+        let path = std::path::Path::new(&params.path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(path, &capture.wav)?;
+        let analysis = capture.analysis_json()?;
+        std::fs::write(path.with_extension("json"), &analysis)?;
+        Ok(json!({
+            "tick": self.runtime.tick(),
+            "voices": voices,
+            "analysis": serde_json::from_str::<Value>(&analysis)?,
+        }))
+    }
+
     /// `play.snapshot`: the current tick as a portable snapshot (hex CBOR).
     pub fn snapshot(&self) -> Result<Value> {
         let snapshot = self.runtime.play().snapshot()?;

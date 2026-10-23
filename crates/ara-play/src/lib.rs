@@ -83,6 +83,8 @@ pub mod method {
     pub const COMPILE: &str = "play.compile";
     /// A portable snapshot of the current tick (hex CBOR), to resume elsewhere.
     pub const SNAPSHOT: &str = "play.snapshot";
+    /// Render the world's sound offline to a WAV plus analysis ([`crate::CaptureAudio`]).
+    pub const CAPTURE_AUDIO: &str = "play.captureAudio";
 }
 
 /// Process role, assigned when Play begins (same vocabulary as `ara-net` launches).
@@ -164,6 +166,16 @@ pub struct Command {
     /// Params; entity params may use document addresses (`e_fox`).
     #[serde(default)]
     pub params: Value,
+}
+
+/// `play.captureAudio` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureAudio {
+    /// WAV file to write (`.json` beside it holds the analysis).
+    pub path: String,
+    /// Seconds to render, in (0, 60].
+    pub seconds: f64,
 }
 
 /// `play.compile` params.

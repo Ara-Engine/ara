@@ -11,7 +11,7 @@ ara-2d = { path = "../ara-2d" }
 ara-anim = { path = "../ara-anim" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
-ara-audio = { path = "../ara-audio" }
+ara-audio = { path = "../ara-audio", features = ["ecs"] }
 ara-cmd.workspace = true
 ara-components.workspace = true
 ara-diag.workspace = true

@@ -463,6 +463,10 @@ impl Player {
                 world.compile(&compile)
             }
             method::SNAPSHOT => world.snapshot()?,
+            method::CAPTURE_AUDIO => {
+                let params: ara_play::CaptureAudio = parse(params)?;
+                world.capture_audio(&params, &mut self.frame)?
+            }
             _ => return Err(Failure::Unknown),
         };
         Ok(value)

@@ -185,6 +185,9 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<Wanderer>()?;
     registry.register_component::<Animator>()?;
     registry.register_component::<components::VisualEffect>()?;
+    // Presentation sound intent; playback cursors never enter the simulation.
+    registry.register_component::<ara_audio::AudioSource>()?;
+    registry.register_component::<ara_audio::AudioListener>()?;
     // 2D scenes: sprites, tilemaps, lights, cameras and Rapier2D bodies.
     ara_2d::register_sim(registry)?;
     ara_physics2d::register_sim(registry)?;

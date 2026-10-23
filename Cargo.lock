@@ -762,9 +762,11 @@ version = "0.0.0"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
+ "ara-audio",
  "ara-doc",
  "ara-import2d",
  "ara-importers",
+ "ara-json",
  "ara-schema",
  "gltf",
  "image",
@@ -1122,6 +1124,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-asset",
+ "ara-audio",
  "ara-doc",
  "ara-gpu",
  "ara-host",
