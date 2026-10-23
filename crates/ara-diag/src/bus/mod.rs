@@ -26,7 +26,8 @@ mod ring;
 
 use std::cell::RefCell;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::marker::PhantomData;
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
@@ -205,8 +206,10 @@ struct Shared {
     ring: Ring<Event>,
     /// Events lost to a full ring since the last drain.
     dropped: AtomicU64,
-    /// Sampled-out events per code since the last drain: `(code + 1, count)`.
-    sampled: [(AtomicU32, AtomicU32); TRACKED_CODES],
+    /// Sampled-out events since the last drain, one code per slot, packed as
+    /// `(code + 1) << 32 | count` so the consumer can take and free a slot in one
+    /// swap without losing a count the producer adds meanwhile.
+    sampled: [AtomicU64; TRACKED_CODES],
 }
 
 impl Shared {
@@ -214,31 +217,37 @@ impl Shared {
         Shared {
             ring: Ring::new(RING_CAPACITY),
             dropped: AtomicU64::new(0),
-            sampled: std::array::from_fn(|_| (AtomicU32::new(0), AtomicU32::new(0))),
+            sampled: std::array::from_fn(|_| AtomicU64::new(0)),
         }
     }
 
-    /// Counts one sampled-out event of `code` (producer side).
+    /// Counts one sampled-out event of `code` (producer side). With more than
+    /// `TRACKED_CODES` distinct codes sampled in one drain window, the extra counts
+    /// are lost (the events themselves were already held back).
     fn sample(&self, code: Code) {
-        let key = u32::from(code.0) + 1;
-        for (slot, count) in &self.sampled {
-            let held = slot.load(Ordering::Relaxed);
-            if held == key
-                || (held == 0
-                    && slot
-                        .compare_exchange(0, key, Ordering::Relaxed, Ordering::Relaxed)
-                        .is_ok())
-            {
-                count.fetch_add(1, Ordering::Relaxed);
-                return;
+        let key = (u64::from(code.0) + 1) << 32;
+        for slot in &self.sampled {
+            let mut held = slot.load(Ordering::Relaxed);
+            loop {
+                let next = if held >> 32 == key >> 32 {
+                    held + 1
+                } else if held == 0 {
+                    key | 1
+                } else {
+                    break;
+                };
+                match slot.compare_exchange_weak(held, next, Ordering::Relaxed, Ordering::Relaxed) {
+                    Ok(_) => return,
+                    Err(now) => held = now,
+                }
             }
         }
     }
 }
 
 struct Global {
+    /// Attached consumers; the bus admits events while it is above zero.
     consumers: AtomicUsize,
-    enabled: AtomicBool,
     /// Current simulation tick plus one; 0 = none.
     tick: AtomicU64,
     /// Drain generation; sampling windows restart when it changes.
@@ -251,7 +260,6 @@ struct Global {
 
 static GLOBAL: Global = Global {
     consumers: AtomicUsize::new(0),
-    enabled: AtomicBool::new(false),
     tick: AtomicU64::new(0),
     window: AtomicU64::new(0),
     next_slot: AtomicU32::new(1),
@@ -297,10 +305,14 @@ impl Local {
             .expect("the ring was just registered")
     }
 
-    /// The next event ID of this thread.
+    /// The next event ID of this thread. When the counter wraps, the thread takes a
+    /// fresh slot so IDs never repeat within a process.
     fn next_id(&mut self) -> EventId {
         let id = EventId((u64::from(self.slot) << 32) | u64::from(self.next));
         self.next = self.next.wrapping_add(1);
+        if self.next == 0 {
+            self.slot = GLOBAL.next_slot.fetch_add(1, Ordering::Relaxed);
+        }
         id
     }
 
@@ -342,7 +354,7 @@ thread_local! {
 /// a hot path; [`Diagnostic::emit`] checks it too.
 #[inline]
 pub fn admit(code: Code) -> bool {
-    if !GLOBAL.enabled.load(Ordering::Relaxed) {
+    if GLOBAL.consumers.load(Ordering::Relaxed) == 0 {
         return false;
     }
     LOCAL
@@ -426,6 +438,8 @@ pub fn set_burst(code: Code, burst: u32) {
 #[must_use = "the origin applies only while the guard lives"]
 pub struct OriginScope {
     previous: Option<Origin>,
+    /// The origin is per thread: the guard must drop where it was made.
+    _thread: PhantomData<*const ()>,
 }
 
 /// Attributes this thread's events to `origin` until the guard drops.
@@ -434,7 +448,10 @@ pub fn scope(origin: Origin) -> OriginScope {
         .try_with(|o| o.borrow_mut().replace(origin))
         .ok()
         .flatten();
-    OriginScope { previous }
+    OriginScope {
+        previous,
+        _thread: PhantomData,
+    }
 }
 
 impl Drop for OriginScope {
@@ -463,7 +480,6 @@ pub struct Consumer {
 /// Attaches a consumer, enabling the bus.
 pub fn attach() -> Consumer {
     GLOBAL.consumers.fetch_add(1, Ordering::SeqCst);
-    GLOBAL.enabled.store(true, Ordering::SeqCst);
     Consumer { _private: () }
 }
 
@@ -478,9 +494,13 @@ impl Consumer {
                 out.push(event);
             }
             lost.dropped += shared.dropped.swap(0, Ordering::Relaxed);
-            for (slot, count) in &shared.sampled {
-                let key = slot.load(Ordering::Relaxed);
-                let n = count.swap(0, Ordering::Relaxed);
+            for slot in &shared.sampled {
+                if slot.load(Ordering::Relaxed) == 0 {
+                    continue;
+                }
+                // Take the code and its count together, freeing the slot.
+                let held = slot.swap(0, Ordering::Relaxed);
+                let (key, n) = (held >> 32, (held & 0xffff_ffff) as u32);
                 if key == 0 || n == 0 {
                     continue;
                 }
@@ -501,9 +521,7 @@ impl Consumer {
 
 impl Drop for Consumer {
     fn drop(&mut self) {
-        if GLOBAL.consumers.fetch_sub(1, Ordering::SeqCst) == 1 {
-            GLOBAL.enabled.store(false, Ordering::SeqCst);
-        }
+        GLOBAL.consumers.fetch_sub(1, Ordering::SeqCst);
     }
 }
 

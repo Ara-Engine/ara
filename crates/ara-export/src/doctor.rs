@@ -384,6 +384,8 @@ pub fn doctor_for_preset(
         scratch: opts.scratch.clone(),
     };
     let mut checks = doctor(&scoped, t);
+    // `doctor` already put its own checks on the bus; only the preset's are new.
+    let host_checks = checks.len();
     if preset.platform == Platform::Android {
         let (status, message, context) = if let Some(signing) = &preset.signing {
             let key = tools::project_path(project, &signing.keystore).ok();
@@ -436,6 +438,6 @@ pub fn doctor_for_preset(
             },
         });
     }
-    crate::bus::emit_checks(&checks);
+    crate::bus::emit_checks(&checks[host_checks..]);
     checks
 }

@@ -1,0 +1,216 @@
+{
+  "label": "why-without-r2",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T06:46:03Z",
+  "engine": "baa7b61+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 12,
+      "toolCalls": {
+        "shell": 12
+      },
+      "wallMs": 28183,
+      "tokens": {
+        "input": 26719,
+        "cacheRead": 230272,
+        "cacheWrite": 0,
+        "output": 1695
+      },
+      "codes": {
+        "ARA1106": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The radio disappeared because [radio.material](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-bad-material-7668-36726420-4/proj/materials/radio.material) assigned `baseColor` from `pain`, which isn’t declared. I corrected it to `paint`, the declared color parameter.\n\n`ara check --json` reports zero errors and warnings. The Ara CLI has no transaction command for material source files, so this one-line asset fix was made directly; it won’t appear in `ara history` for human review."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 17063,
+      "tokens": {
+        "input": 10613,
+        "cacheRead": 89344,
+        "cacheWrite": 0,
+        "output": 824
+      },
+      "codes": {
+        "ARA1302": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because [outpost.scene](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-missing-mesh-7668-71c3e6c-5/proj/levels/outpost.scene) still referenced the old mesh path and ID, `@meshes/generator.glb#ms_genr0001`. The re-export is `@meshes/generator_v2.glb#ms_genr0002`.\n\nI updated the reference through an Ara transaction. `ara check --json` now reports **0 errors and 0 warnings**. The transaction is applied and awaits human review with `ara accept` or `ara revert`."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"props\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 14300,
+      "tokens": {
+        "input": 11184,
+        "cacheRead": 87680,
+        "cacheWrite": 0,
+        "output": 530
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The workbench disappeared because its renderer was on the `\"editor\"` layer, which the outpost camera does not draw. I changed `Workbench.MeshRenderer.layer` to `\"props\"` and left the camera untouched.\n\n`ara check` passed with 0 errors and 0 warnings. The change is applied as transaction `tx_je4y22zp` and awaits review."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 18,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_docs": 1,
+        "ara_inspect": 3,
+        "ara_logs": 2,
+        "ara_play": 1,
+        "ara_query": 3,
+        "ara_schema": 3,
+        "ara_session": 1,
+        "shell": 3
+      },
+      "wallMs": 27577,
+      "tokens": {
+        "input": 32999,
+        "cacheRead": 346496,
+        "cacheWrite": 0,
+        "output": 1531
+      },
+      "codes": {
+        "ARA1101": 2,
+        "ARA1806": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "`Barrel.002` had a dynamic rigid body with **0 kg mass** while starting 5 meters above the floor. I changed its mass to **30 kg**, matching the other barrels, so it can fall and settle without a zero-mass physics state.\n\n`ara check --json` passes with 0 errors and 0 warnings. I couldn’t confirm the fix in play mode because the simulation service isn’t available in this engine build. The change is recorded as transaction `tx_0669hzkv` and awaits human review."
+    }
+  ]
+}

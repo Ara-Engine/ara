@@ -11,6 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fmt::Write;
 use std::hash::{BuildHasherDefault, Hasher};
+use std::ops::Bound;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -73,6 +74,10 @@ pub struct Record {
     pub diagnostic: Diagnostic,
     #[serde(skip)]
     key: u64,
+    /// Which incarnation of the key this is: a cleared or evicted record that comes
+    /// back is a new generation, so old event IDs do not resolve to it.
+    #[serde(skip)]
+    generation: u64,
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -206,13 +211,15 @@ pub struct Store {
     records: BTreeMap<u64, Record>,
     by_key: HashMap<u64, u64, Hash>,
     by_severity: [BTreeSet<u64>; 3],
-    /// Event IDs → dedup keys, for causal links; bounded FIFO.
-    ids: HashMap<EventId, u64, Hash>,
+    /// Event IDs → (dedup key, record generation), for causal links; bounded FIFO.
+    ids: HashMap<EventId, (u64, u64), Hash>,
     id_order: VecDeque<EventId>,
     next: u64,
     next_local: u32,
     /// Event IDs handed to restored records.
     restored: u64,
+    /// The next record generation.
+    generations: u64,
     retention: Retention,
     epoch: Instant,
     epoch_ms: u64,
@@ -279,6 +286,7 @@ impl Store {
             next: 0,
             next_local: 0,
             restored: 0,
+            generations: 0,
             retention,
             epoch: Instant::now(),
             epoch_ms,
@@ -375,11 +383,12 @@ impl Store {
                 self.by_severity[rank(r.diagnostic.severity) as usize].remove(&r.seq);
                 r.seq = seq;
                 r.count = r.count.saturating_add(1);
+                // Everything but the counts describes the latest occurrence.
                 r.id = e.id;
-                r.cause = e.cause.or(r.cause);
+                r.cause = e.cause;
                 r.origin = e.origin;
                 r.at = at;
-                r.tick = e.tick.or(r.tick);
+                r.tick = e.tick;
                 r.diagnostic = e.diagnostic;
                 r
             }
@@ -396,9 +405,10 @@ impl Store {
                 tick: e.tick,
                 diagnostic: e.diagnostic,
                 key,
+                generation: self.new_generation(),
             },
         };
-        self.remember(e.id, key);
+        self.remember(e.id, key, record.generation);
         self.place(record)
     }
 
@@ -420,8 +430,13 @@ impl Store {
         seq
     }
 
-    fn remember(&mut self, id: EventId, key: u64) {
-        if self.ids.insert(id, key).is_none() {
+    fn new_generation(&mut self) -> u64 {
+        self.generations += 1;
+        self.generations
+    }
+
+    fn remember(&mut self, id: EventId, key: u64, generation: u64) {
+        if self.ids.insert(id, (key, generation)).is_none() {
             self.id_order.push_back(id);
         }
         let bound = 4 * (self.retention.errors + self.retention.warnings + self.retention.info);
@@ -437,7 +452,7 @@ impl Store {
         let record = self.records.get(&seq)?;
         Some(Saved {
             key: record.key,
-            cause_key: record.cause.and_then(|c| self.ids.get(&c).copied()),
+            cause_key: record.cause.and_then(|c| self.by_id(c)).map(|c| c.key),
             record: record.clone(),
         })
     }
@@ -447,17 +462,17 @@ impl Store {
     /// live events never use, keeping causal links between restored records, so a
     /// new process's events cannot be mistaken for them.
     pub fn restore(&mut self, saved: Vec<Saved>) -> usize {
-        let mut latest: Vec<Saved> = Vec::new();
-        let mut at: HashMap<u64, usize, Hash> = HashMap::default();
-        for s in saved {
-            match at.get(&s.key) {
-                Some(i) => latest[*i] = s,
-                None => {
-                    at.insert(s.key, latest.len());
-                    latest.push(s);
-                }
-            }
+        // The last line per key wins, in the order of those last lines (recency).
+        let mut last: HashMap<u64, usize, Hash> = HashMap::default();
+        for (i, s) in saved.iter().enumerate() {
+            last.insert(s.key, i);
         }
+        let latest: Vec<Saved> = saved
+            .into_iter()
+            .enumerate()
+            .filter(|(i, s)| last.get(&s.key) == Some(i))
+            .map(|(_, s)| s)
+            .collect();
         let mut renamed: HashMap<u64, EventId, Hash> = HashMap::default();
         for s in &latest {
             self.restored += 1;
@@ -479,7 +494,8 @@ impl Store {
             record.key = key;
             record.id = renamed.get(&key).copied().unwrap_or(EventId(RESTORED));
             record.cause = cause_key.and_then(|k| renamed.get(&k).copied());
-            self.remember(record.id, key);
+            record.generation = self.new_generation();
+            self.remember(record.id, key, record.generation);
             self.place(record);
         }
         n
@@ -521,8 +537,10 @@ impl Store {
 
     /// The record an event ID belongs to (any of its occurrences), if still kept.
     pub fn by_id(&self, id: EventId) -> Option<&Record> {
-        let key = self.ids.get(&id)?;
-        self.records.get(self.by_key.get(key)?)
+        let (key, generation) = self.ids.get(&id)?;
+        self.records
+            .get(self.by_key.get(key)?)
+            .filter(|r| r.generation == *generation)
     }
 
     /// The record that caused `r`, if known and kept.
@@ -560,7 +578,7 @@ impl Store {
     pub fn query(&self, f: &Filter) -> Vec<&Record> {
         let mut out: Vec<&Record> = self
             .records
-            .range(f.since + 1..)
+            .range((Bound::Excluded(f.since), Bound::Unbounded))
             .map(|(_, r)| r)
             .filter(|r| f.accepts(r))
             .collect();
@@ -574,7 +592,7 @@ impl Store {
     pub fn clear(&mut self, f: &Filter) -> usize {
         let doomed: Vec<u64> = self
             .records
-            .range(f.since + 1..)
+            .range((Bound::Excluded(f.since), Bound::Unbounded))
             .filter(|(_, r)| f.accepts(r))
             .map(|(seq, _)| *seq)
             .collect();
@@ -802,6 +820,51 @@ mod tests {
                 .is_some_and(|r| r.diagnostic.message == "new")
         );
         let _ = (child, a);
+    }
+
+    #[test]
+    fn cleared_causes_do_not_come_back_and_repeats_carry_their_own_cause() {
+        let mut s = Store::default();
+        let parent = s
+            .push(Diagnostic::error(codes::IO, "disk"), Meta::default())
+            .id;
+        let child = s.push(warn("child"), Meta::caused_by(Some(parent))).seq;
+        s.clear(&Filter {
+            codes: vec![codes::IO],
+            ..Filter::default()
+        });
+        s.push(Diagnostic::error(codes::IO, "disk"), Meta::default());
+        let child = s.get(child).expect("child");
+        assert!(
+            s.causes(child).is_empty(),
+            "a new `disk` record is not the old cause"
+        );
+        let repeated = s.push(warn("child"), Meta::default());
+        assert_eq!(repeated.cause, None, "the latest occurrence has no cause");
+        assert!(
+            s.query(&Filter {
+                since: u64::MAX,
+                ..Filter::default()
+            })
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn restore_keeps_the_newest_records_when_retention_is_tight() {
+        let mut a = Store::default();
+        a.push(warn("a"), Meta::default());
+        a.push(warn("b"), Meta::default());
+        a.push(warn("a"), Meta::default());
+        let saved: Vec<Saved> = (1..=a.cursor()).filter_map(|s| a.save(s)).collect();
+        let mut b = Store::new(Retention {
+            warnings: 1,
+            ..Retention::default()
+        });
+        b.restore(saved);
+        let kept = b.query(&Filter::default());
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].diagnostic.message, "a", "`a` happened last");
     }
 
     #[test]

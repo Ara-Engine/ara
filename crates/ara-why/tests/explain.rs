@@ -579,3 +579,77 @@ fn a_vague_name_prefers_the_entity_the_bus_has_errors_about() {
         (codes::RENDER_NON_FINITE_TRANSFORM, Likelihood::High)
     );
 }
+
+#[test]
+fn far_planes_clip_by_view_depth_and_any_camera_that_sees_it_counts() {
+    // 113 m away but only 80 m deep in the view: inside a 100 m far plane.
+    let mut f = Fixture::scene();
+    f.set("e_cam01", "Transform", "position", json!([0, 0, 0]));
+    f.set("e_crate1", "Transform", "position", json!([80, -1, -80]));
+    let r = f.why("name:Crate not visible");
+    assert!(r.causes.is_empty(), "{}", r.text());
+
+    // A short-range camera misses it, a second camera sees it: not culled.
+    let mut f = Fixture::scene();
+    f.set("e_crate1", "Transform", "position", json!([0, 1, -300]));
+    f.add(
+        "e_cam02",
+        "Far Camera",
+        None,
+        json!({
+            "Transform": { "position": [0, 2, 10], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+            "Camera": { "cullingMask": ["default"], "far": 1000 },
+        }),
+    );
+    let r = f.why("name:Crate not visible");
+    assert!(r.causes.is_empty(), "{}", r.text());
+
+    // A layer name cannot be compared with layer indices: unknown, not culled.
+    let mut f = Fixture::scene();
+    f.set("e_cam01", "Camera", "cullingMask", json!([0]));
+    let r = f.why("name:Crate not visible");
+    assert!(r.causes.is_empty(), "{}", r.text());
+    assert!(
+        r.checks
+            .iter()
+            .any(|c| c.name == "layer" && c.status == Status::Unknown)
+    );
+}
+
+#[test]
+fn a_fixed_compile_error_is_history_and_code_questions_narrow_to_entities() {
+    let mut f = Fixture::scene();
+    let module = || Subject::module("Gameplay");
+    f.bus.push(
+        Diagnostic::error(Code(900), "`Gameplay` did not reload: 1 compile errors")
+            .subject(module()),
+        Meta::default(),
+    );
+    f.bus.push(
+        Diagnostic::info(codes::RELOAD_APPLIED, "`Gameplay` reloaded at L1 in 40 ms")
+            .subject(module()),
+        Meta::default(),
+    );
+    let r = f.why("why did reload fall back to L3");
+    let compile = r
+        .causes
+        .iter()
+        .find(|c| c.code == Code(900))
+        .expect("compile cause");
+    assert_eq!(compile.likelihood, Likelihood::Low, "{}", r.text());
+
+    for e in ["e_crate1", "e_stack1"] {
+        f.bus.push(
+            Diagnostic::error(codes::UNRESOLVED_REF, format!("{e} ref")).record(e),
+            Meta::default(),
+        );
+    }
+    let r = f.why("ARA1302 on name:Crate");
+    assert_eq!(r.causes.len(), 1, "{}", r.text());
+    assert!(r.causes[0].title.starts_with("e_crate1"));
+    assert!(
+        Why::builtin()
+            .explain("ARA1302 on name:Nobody", &f)
+            .is_err()
+    );
+}

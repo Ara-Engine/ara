@@ -132,7 +132,7 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
     for path in &csharp {
         let text = fs::read_to_string(path).unwrap_or_default();
         for (i, n) in numbers_after(&text, "\"ARA") {
-            if n.len() == 4 && text[i + 5 + 4..].starts_with('"') {
+            if n.len() == 4 && text[i + "\"ARA".len() + 4..].starts_with('"') {
                 numbers
                     .entry(n.parse().unwrap_or(0))
                     .or_default()

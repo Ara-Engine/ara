@@ -221,14 +221,34 @@ impl Explainer for Reload {
             .iter()
             .filter(|r| r.diagnostic.code == COMPILE_ERROR || r.diagnostic.code == COMPILE_SERVER)
         {
-            f.cause(
+            // A failure is current only if no reload of the same module came after it.
+            let module = |x: &Record| {
+                x.diagnostic
+                    .subjects
+                    .iter()
+                    .find(|s| s.kind == SubjectKind::Module)
+                    .cloned()
+            };
+            let fixed = records.iter().any(|later| {
+                later.seq > r.seq
+                    && matches!(later.diagnostic.code, c if c == codes::RELOAD_APPLIED || c == codes::RELOAD_ESCALATED)
+                    && module(later) == module(r)
+            });
+            let cause = if fixed {
+                Cause::new(
+                    r.diagnostic.code,
+                    Likelihood::Low,
+                    "An earlier edit failed to compile; a later reload of the module succeeded"
+                        .to_owned(),
+                )
+            } else {
                 Cause::new(
                     r.diagnostic.code,
                     Likelihood::High,
                     "The last edit did not reload at all: it failed to compile, so the last good code keeps running".to_owned(),
                 )
-                .evidence(line(r)),
-            );
+            };
+            f.cause(cause.evidence(line(r)));
         }
         for r in records.iter().filter(|r| {
             MODULE_LARGE.contains(&r.diagnostic.code)

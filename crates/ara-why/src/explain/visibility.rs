@@ -730,23 +730,31 @@ fn layer(cx: &Ctx<'_>) -> (Value, Option<String>) {
     }
 }
 
-/// Whether a camera mask includes a layer; `None` when they cannot be compared.
+/// Whether a camera mask includes a layer; `None` when they cannot be compared (a
+/// layer name against layer indices or a bitmask, or the other way round).
 fn sees(mask: Option<&Value>, layer: &Value) -> Option<bool> {
     let Some(mask) = mask.filter(|m| !m.is_null()) else {
         return Some(true);
     };
     match (mask, layer) {
         (Value::Array(items), _) => {
-            let all = items.iter().any(|i| {
+            if items.iter().any(|i| {
                 i.as_str()
                     .is_some_and(|s| matches!(s, "*" | "all" | "everything"))
-            });
-            Some(
-                all || items.iter().any(|i| match (i, layer) {
-                    (Value::String(a), Value::String(b)) => a.eq_ignore_ascii_case(b),
-                    (a, b) => a.as_f64().is_some() && a.as_f64() == b.as_f64(),
-                }),
-            )
+            }) {
+                return Some(true);
+            }
+            let comparable: Vec<&Value> = items
+                .iter()
+                .filter(|i| i.is_string() == layer.is_string() && (i.is_string() || i.is_number()))
+                .collect();
+            if comparable.is_empty() && !items.is_empty() {
+                return None;
+            }
+            Some(comparable.iter().any(|i| match (i, layer) {
+                (Value::String(a), Value::String(b)) => a.eq_ignore_ascii_case(b),
+                (a, b) => a.as_f64().is_some() && a.as_f64() == b.as_f64(),
+            }))
         }
         (Value::Number(bits), Value::Number(index)) => {
             let (bits, index) = (bits.as_u64()?, index.as_u64()?);
@@ -758,6 +766,27 @@ fn sees(mask: Option<&Value>, layer: &Value) -> Option<bool> {
 
 fn camera_off(cam: &Entity) -> bool {
     !off_flags(cam, Some("Camera")).is_empty()
+}
+
+/// A camera's world transform.
+fn camera_world(facts: &dyn Facts, cam: &Entity) -> Affine {
+    let mut chain: Vec<Entity> = ancestors(facts, cam);
+    chain.reverse();
+    chain
+        .iter()
+        .chain(std::iter::once(cam))
+        .fold(Affine::IDENTITY, |w, e| {
+            w.then(&Affine::from_transform(e.components.get("Transform")))
+        })
+}
+
+/// One camera's view of the entity: radial distance, depth along its view axis
+/// (the far plane is a plane, so depth is what it clips) and its far plane.
+struct View<'a> {
+    cam: &'a Entity,
+    distance: f64,
+    depth: f64,
+    far: f64,
 }
 
 fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
@@ -784,26 +813,19 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
         return;
     }
     let (layer, layer_path) = layer(cx);
-    let pos = world.t;
-    let limit = cx
-        .renderer_field(&["maxDistance", "drawDistance", "cullDistance"])
-        .and_then(|(k, v)| Some((k, v.as_f64()?)))
-        .filter(|(_, d)| *d > 0.0);
     let mut culled = Vec::new();
+    let mut unknown = 0;
+    // Cameras that may render the layer: known to, or not comparable.
     let mut seeing = Vec::new();
     for cam in &cams {
-        let mut chain: Vec<Entity> = ancestors(cx.facts, cam);
-        chain.reverse();
-        let cam_world = chain
-            .iter()
-            .chain(std::iter::once(cam))
-            .fold(Affine::IDENTITY, |w, e| {
-                w.then(&Affine::from_transform(e.components.get("Transform")))
-            });
         let mask = cam.get("Camera", "cullingMask");
         match sees(mask, &layer) {
             Some(false) => culled.push((cam, mask.cloned().unwrap_or(Value::Null))),
-            _ => seeing.push((cam, cam_world)),
+            Some(true) => seeing.push((cam, camera_world(cx.facts, cam))),
+            None => {
+                unknown += 1;
+                seeing.push((cam, camera_world(cx.facts, cam)));
+            }
         }
     }
     let layer_text = layer
@@ -850,64 +872,88 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
         f.cause(c);
         return;
     }
-    f.check("layer", Status::Ok, format!("`{layer_text}`"));
-    // Distance and direction, against the cameras that render the layer.
-    let mut nearest: Option<(f64, &Entity, f64)> = None;
-    let mut in_front = false;
-    for (cam, cam_world) in &seeing {
-        let to = math::sub(pos, cam_world.t);
-        let d = math::length(to);
-        let far = cam
-            .get("Camera", "far")
-            .and_then(Value::as_f64)
-            .unwrap_or(f64::INFINITY);
-        let forward = cam_world.vector([0.0, 0.0, -1.0]);
-        if math::dot(forward, to) >= 0.0 || d < 1e-6 {
-            in_front = true;
-        }
-        if nearest.is_none_or(|(nd, _, _)| d < nd) {
-            nearest = Some((d, cam, far));
-        }
+    if unknown == seeing.len() {
+        f.check(
+            "layer",
+            Status::Unknown,
+            format!("`{layer_text}` cannot be compared with the cameras' masks"),
+        );
+    } else {
+        f.check("layer", Status::Ok, format!("`{layer_text}`"));
     }
-    let Some((d, cam, far)) = nearest else {
-        return;
-    };
     if !world.is_finite() {
         f.check("distance", Status::Skip, "position not finite");
         return;
     }
+    let pos = world.t;
+    let views: Vec<View<'_>> = seeing
+        .iter()
+        .map(|(cam, w)| {
+            let to = math::sub(pos, w.t);
+            let axis = w.vector([0.0, 0.0, -1.0]);
+            View {
+                cam,
+                distance: math::length(to),
+                depth: math::dot(axis, to) / math::length(axis).max(1e-9),
+                far: cam
+                    .get("Camera", "far")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(f64::INFINITY),
+            }
+        })
+        .collect();
+    let Some(nearest) = views
+        .iter()
+        .min_by(|a, b| a.distance.total_cmp(&b.distance))
+    else {
+        return;
+    };
     let mut ok = true;
-    if d > far {
+    let in_front: Vec<&View<'_>> = views
+        .iter()
+        .filter(|v| v.depth >= 0.0 || v.distance < 1e-6)
+        .collect();
+    let visible = in_front.iter().any(|v| v.depth <= v.far);
+    // Every camera that faces it clips it: name the one closest to seeing it.
+    if !visible
+        && let Some(v) = in_front
+            .iter()
+            .min_by(|a, b| (a.depth / a.far).total_cmp(&(b.depth / b.far)))
+    {
         ok = false;
-        let new_far = (d * 1.25).ceil();
+        let new_far = (v.depth * 1.25).ceil();
         f.cause(
             Cause::new(
                 codes::RENDER_DISTANCE_CULLED,
                 Likelihood::High,
                 format!(
-                    "It is {} m from the nearest camera {}, beyond its far plane ({} m)",
-                    show(d),
-                    cam.label(),
-                    show(far)
+                    "It is {} m deep in the view of {}, beyond its far plane ({} m)",
+                    show(v.depth),
+                    v.cam.label(),
+                    show(v.far)
                 ),
             )
             .evidence(format!(
                 "{} at {}; Camera far = {}",
                 cx.e.address,
                 show3(pos),
-                show(far)
+                show(v.far)
             ))
             .subject(Subject::entity(cx.e.address.clone()))
             .fix(set(
                 format!("Raise the camera's far plane to {} m", show(new_far)),
-                &cam.address,
+                &v.cam.address,
                 "Camera.far",
                 math::number(new_far),
             )),
         );
     }
+    let limit = cx
+        .renderer_field(&["maxDistance", "drawDistance", "cullDistance"])
+        .and_then(|(k, v)| Some((k, v.as_f64()?)))
+        .filter(|(_, d)| *d > 0.0);
     if let Some((field, limit)) = limit
-        && d > limit
+        && nearest.distance > limit
     {
         ok = false;
         let path = cx.renderer_path(field);
@@ -917,7 +963,7 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
                 Likelihood::High,
                 format!(
                     "It is {} m from the nearest camera but `{path}` is {} m",
-                    show(d),
+                    show(nearest.distance),
                     show(limit)
                 ),
             )
@@ -926,23 +972,27 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
                 format!("Raise `{path}`"),
                 &cx.e.address,
                 &path,
-                math::number((d * 1.25).ceil()),
+                math::number((nearest.distance * 1.25).ceil()),
             )),
         );
     }
     f.check(
         "distance",
         if ok { Status::Ok } else { Status::Fail },
-        format!("{} m from {}", show(d), cam.label()),
+        format!("{} m from {}", show(nearest.distance), nearest.cam.label()),
     );
-    if !in_front {
+    if in_front.is_empty() {
         f.cause(
             Cause::new(
                 codes::RENDER_OUT_OF_VIEW,
                 Likelihood::Low,
                 "It is behind every camera that renders its layer".to_owned(),
             )
-            .evidence(format!("nearest camera {} at {} m", cam.label(), show(d)))
+            .evidence(format!(
+                "nearest camera {} at {} m",
+                nearest.cam.label(),
+                show(nearest.distance)
+            ))
             .advice("move it in front of the camera, or turn the camera"),
         );
     }

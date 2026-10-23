@@ -491,41 +491,47 @@ impl Persist {
             return Ok(());
         }
         self.last = Instant::now();
-        let seqs = std::mem::take(&mut self.dirty);
-        if self.lines + seqs.len() > 4 * store.len() + 256 {
+        if self.lines + self.dirty.len() > 4 * store.len() + 256 {
             return self.rewrite(store);
         }
         let mut text = String::new();
-        for seq in seqs {
-            if let Some(saved) = store.save(seq) {
+        let mut lines = 0;
+        for seq in &self.dirty {
+            if let Some(saved) = store.save(*seq) {
                 text.push_str(&serde_json::to_string(&saved).unwrap_or_default());
                 text.push('\n');
-                self.lines += 1;
+                lines += 1;
             }
         }
-        let mut file = fs::OpenOptions::new()
+        // On failure the records stay dirty and the next flush retries them.
+        fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&self.path)?;
-        file.write_all(text.as_bytes())
+            .open(&self.path)?
+            .write_all(text.as_bytes())?;
+        self.dirty.clear();
+        self.lines += lines;
+        Ok(())
     }
 
     /// Writes the engine's current records only (after a clear, or to compact).
     pub(crate) fn rewrite(&mut self, store: &DiagStore) -> std::io::Result<()> {
-        self.dirty.clear();
         let mut text = String::new();
-        self.lines = 0;
+        let mut lines = 0;
         for r in store.query(&Filter::default()) {
             if r.origin == Origin::Engine
                 && let Some(saved) = store.save(r.seq)
             {
                 text.push_str(&serde_json::to_string(&saved).unwrap_or_default());
                 text.push('\n');
-                self.lines += 1;
+                lines += 1;
             }
         }
         let tmp = self.path.with_extension("jsonl.tmp");
         fs::write(&tmp, text)?;
-        fs::rename(&tmp, &self.path)
+        fs::rename(&tmp, &self.path)?;
+        self.dirty.clear();
+        self.lines = lines;
+        Ok(())
     }
 }

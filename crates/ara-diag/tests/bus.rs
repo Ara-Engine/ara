@@ -124,3 +124,27 @@ fn a_full_ring_drops_and_reports_it() {
     });
     assert!(dropped[0].diagnostic.message.starts_with("10 diagnostics"));
 }
+
+#[test]
+fn sampling_keeps_counting_after_many_distinct_codes() {
+    let _g = serial();
+    let consumer = bus::attach();
+    let mut store = Store::default();
+    // Four windows of 10 distinct codes each: 40 codes over the thread's life.
+    for window in 0..4u16 {
+        for c in 0..10u16 {
+            let code = ara_diag::Code(5000 + window * 100 + c);
+            for _ in 0..(bus::DEFAULT_BURST + 5) {
+                if bus::admit(code) {
+                    bus::push(Diagnostic::info(code, "x"), Meta::default());
+                }
+            }
+        }
+        drain(&consumer, &mut store);
+    }
+    let last = store.query(&Filter {
+        codes: vec![ara_diag::Code(5309)],
+        ..Filter::default()
+    });
+    assert_eq!(last[0].sampled, 5, "the 40th code is still counted");
+}

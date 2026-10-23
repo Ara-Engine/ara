@@ -52,12 +52,12 @@ impl Explainer for CodeExplainer {
             )]);
         };
         let mut f = Findings::default();
+        // Entity selectors (`name:Crate`) narrow the instances; resolve them first.
         let mut subjects = q.subjects.clone();
-        subjects.extend(
-            q.entities
-                .iter()
-                .filter_map(|e| ara_diag::Subject::parse(e)),
-        );
+        for selector in &q.entities {
+            let e = facts.entity(selector, q.doc.as_deref())?;
+            subjects.push(ara_diag::Subject::entity(e.address));
+        }
         let records = facts.diagnostics(&Filter {
             codes: vec![code],
             subjects,

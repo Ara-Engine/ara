@@ -188,10 +188,13 @@ impl Facts for HostFacts<'_> {
     }
 
     fn asset(&self, reference: &str) -> Asset {
+        // `@path#id` as is; a bare path (`meshes/x.glb`) or a bare ID (`ms_crate001`).
         let text = if reference.starts_with('@') {
             reference.to_owned()
-        } else {
+        } else if reference.contains('/') || reference.contains('.') {
             format!("@{reference}")
+        } else {
+            format!("@#{reference}")
         };
         let index = self.st.store.workspace().index();
         match ara_doc::refs::resolve(&text, None, index) {
@@ -225,11 +228,17 @@ impl Facts for HostFacts<'_> {
 
     fn read(&self, path: &str) -> Option<String> {
         let rel = std::path::Path::new(path);
-        let inside = rel
+        let lexical = rel
             .components()
             .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-        inside
-            .then(|| std::fs::read_to_string(self.st.root.join(rel)).ok())
+        if !lexical {
+            return None;
+        }
+        // Links and junctions may point outside: the resolved file must be inside.
+        let root = self.st.root.canonicalize().ok()?;
+        let file = root.join(rel).canonicalize().ok()?;
+        file.starts_with(&root)
+            .then(|| std::fs::read_to_string(&file).ok())
             .flatten()
     }
 
