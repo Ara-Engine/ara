@@ -142,7 +142,7 @@ fn gain_ramps_on_resident_blocks_are_sample_exact() {
     let step = -1.0_f32 / 256.0;
     let mut gain = 1.0_f32;
     for frame in 0..512 {
-        if frame >= 128 && frame < 384 {
+        if (128..384).contains(&frame) {
             assert_eq!(out[frame * 2], 0.5 * gain, "frame {frame}");
             gain += step;
         }
