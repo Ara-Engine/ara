@@ -285,6 +285,27 @@ impl<'m> Env<'_, 'm> {
                     ((x - a) / (b - a)).clamp(0.0, 1.0)
                 })
             }
+            Builtin::Direction => {
+                let (a, b) = (arg(self, 0), arg(self, 1));
+                match (self.position_of(&a), self.position_of(&b)) {
+                    (Some(a), Some(b)) => {
+                        let (dx, dz) = (b[0] - a[0], b[2] - a[2]);
+                        let len = (dx * dx + dz * dz).sqrt();
+                        Value::Vec3(if len > 1e-6 {
+                            [dx / len, 0.0, dz / len]
+                        } else {
+                            [0.0; 3]
+                        })
+                    }
+                    _ => Value::Vec3([0.0; 3]),
+                }
+            }
+            Builtin::Dot => match (arg(self, 0), arg(self, 1)) {
+                (Value::Vec3(a), Value::Vec3(b)) => {
+                    Value::Float(a[0] * b[0] + a[1] * b[1] + a[2] * b[2])
+                }
+                _ => Value::Float(0.0),
+            },
             Builtin::Inverse => {
                 let (x, m) = (arg(self, 0).float(), arg(self, 1).float());
                 Value::Float(if m > 0.0 {

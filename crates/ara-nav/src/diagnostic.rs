@@ -87,8 +87,11 @@ pub fn why_unreachable_blocked(
             {
                 for pair in open.corners.windows(2) {
                     if pair[0].off_mesh
-                        && let Some((link, _)) =
-                            crate::follow::find_link(mesh.links(), pair[0].position, pair[1].position)
+                        && let Some((link, _)) = crate::follow::find_link(
+                            mesh.links(),
+                            pair[0].position,
+                            pair[1].position,
+                        )
                         && blocked.contains(&link.id)
                     {
                         return Ok(report(

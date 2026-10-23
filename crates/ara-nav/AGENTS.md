@@ -19,7 +19,7 @@ triangle winding. Area IDs are 0..15; 255 is non-walkable.
   (`crowd: CrowdSolver::{Orca, Detour}`, `replan_budget`, `link_wait_ticks`,
   `stall_ticks`, `rebake_latency_ticks`), `goto`.
 - Components: `NavAgent`, `NavAgentState` (+ `desired`, `issue: NavIssue`,
-  `route`, `waiting`, `speed_limit`), `NavPosition`, `NavLink` (`kind:
+  `route`, `waiting`, `speed_limit`, `flow`), `NavPosition`, `NavLink` (`kind:
   LinkKind`), `NavLinkState` (gate), `NavObstacle` (`ObstacleMode::{Carve, Area,
   Avoid}`), `NavAgentType` (profile dimensions + per-area cost multipliers).
 - Large worlds: `CellGrid`, `bake_cell`/`CellSource`/`CellBake`, `merge_cells`,
@@ -52,6 +52,10 @@ and worker count. Duplicate IDs abort the tick with `duplicateAgentId`.
   `rebake_latency_ticks` later (joined if late) - deterministic. Until then, and
   always for `Avoid`, they are fixed ORCA discs (agents sidestep them).
 - Agent types multiply their area costs onto each agent's own filter.
+- Flow mode: `NavWorld::set_flow_field(id, field)` (build with
+  `NavMesh::walk_grid` + `ara_crowd::FlowField::build` off the tick thread) and
+  `NavAgentState::follow_flow(id, goal)`: massed groups steer by one shared field
+  and never plan corridors (single walkable layer; ORCA solver only).
 
 ## Rules and gotchas
 

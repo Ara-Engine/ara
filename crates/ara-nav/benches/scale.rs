@@ -43,10 +43,12 @@ fn percentile(samples: &mut [f64], p: f64) -> f64 {
 }
 
 /// 10,000 agents in four blocks crossing a 240 m plaza with 16 carved pillars.
+/// With `flow`, every agent instead follows one shared flow field to the east edge.
 fn crowd(
     solver: CrowdSolver,
     threads: usize,
     agents: usize,
+    flow: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut geometry = Geometry::default();
     quad(&mut geometry, [0.0, 240.0], [0.0, 240.0], 0.0, 0);
@@ -97,6 +99,20 @@ fn crowd(
             ..Default::default()
         },
     )?;
+    let flow_goal = [232.0, 0.1, 120.0];
+    if flow {
+        let start = Instant::now();
+        let grid = mesh.walk_grid([0.0, 0.0], [240.0, 240.0], 0.5)?;
+        let field = ara_crowd::FlowField::build(&grid, flow_goal)?;
+        println!(
+            "flow_field_build: cells={} ms={:.2}",
+            grid.walkable_cells(),
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+        world
+            .resource_mut::<NavWorld>()
+            .set_flow_field(1, std::sync::Arc::new(field));
+    }
     world.resource_mut::<NavWorld>().stage(mesh);
     let side = (agents as f32 / 4.0).sqrt().ceil() as usize;
     for i in 0..agents {
@@ -107,7 +123,11 @@ fn crowd(
         let p = [120.0 - sx * (20.0 + gx), 0.1, 120.0 - sz * (20.0 + gz)];
         let goal = [120.0 + sx * (20.0 + gx), 0.1, 120.0 + sz * (20.0 + gz)];
         let mut state = NavAgentState::new(i as u64);
-        state.set_target(Some(goal));
+        if flow {
+            state.follow_flow(1, flow_goal);
+        } else {
+            state.set_target(Some(goal));
+        }
         world.spawn((NavAgent::default(), NavPosition(p), state));
     }
     // Warm up: plan every corridor within the replan budget.
@@ -128,7 +148,7 @@ fn crowd(
         .filter(|s| s.status == NavStatus::Moving)
         .count();
     println!(
-        "nav_tick: solver={solver:?} agents={agents} workers={threads} p50_ms={:.3} p95_ms={:.3} max_ms={:.3} moving={moving} errors={errors}",
+        "nav_tick: solver={solver:?} flow={flow} agents={agents} workers={threads} p50_ms={:.3} p95_ms={:.3} max_ms={:.3} moving={moving} errors={errors}",
         percentile(&mut samples, 0.5),
         percentile(&mut samples, 0.95),
         percentile(&mut samples, 1.0),
@@ -247,11 +267,14 @@ fn large_world() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    large_world()?;
-    for threads in [1, 2, 4, 8] {
-        crowd(CrowdSolver::Orca, threads, 10_000)?;
+    if std::env::var("ARA_NAV_BENCH_CROWD_ONLY").is_err() {
+        large_world()?;
     }
-    crowd(CrowdSolver::Detour, 1, 2_000)?;
-    crowd(CrowdSolver::Orca, 1, 2_000)?;
+    for threads in [1, 2, 4, 8] {
+        crowd(CrowdSolver::Orca, threads, 10_000, false)?;
+    }
+    crowd(CrowdSolver::Orca, 8, 10_000, true)?;
+    crowd(CrowdSolver::Detour, 1, 2_000, false)?;
+    crowd(CrowdSolver::Orca, 1, 2_000, false)?;
     Ok(())
 }

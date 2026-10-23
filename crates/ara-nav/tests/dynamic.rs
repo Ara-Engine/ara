@@ -161,7 +161,14 @@ fn door_timeout_replans_around_and_locked_links_are_never_planned() {
     assert!(matches!(state.issue, Some(NavIssue::NoPath { .. })));
     // The explanation names the locked link instead of "missing link".
     let mesh = world.resource::<NavWorld>().mesh(0).unwrap().clone();
-    let why = why_unreachable_blocked(&mesh, [10.0, 0.1, 6.0], [30.0, 0.1, 6.0], &QueryFilter::default(), &[7]).unwrap();
+    let why = why_unreachable_blocked(
+        &mesh,
+        [10.0, 0.1, 6.0],
+        [30.0, 0.1, 6.0],
+        &QueryFilter::default(),
+        &[7],
+    )
+    .unwrap();
     assert_eq!(why.reason, ReachabilityReason::ClosedLink { id: 7 });
     // Unlocked: a jump follows a ballistic arc above the straight line.
     world.get_mut::<NavLinkState>(lock).unwrap().locked = false;
@@ -338,4 +345,76 @@ fn detour_solver_still_supported() {
     let actor = agent(&mut world, 1, [10.0, 0.1, 6.0]);
     goto(&mut world, actor, GotoTarget::Point([30.0, 0.1, 6.0])).unwrap();
     run_until_arrived(&mut world, &mut schedule, actor, 900);
+}
+
+#[test]
+fn massed_group_follows_a_shared_flow_field_through_a_gap() {
+    // A wall across x = 20 with one 4 m gap; 300 agents cross it to one goal.
+    let mut input = plane(40.0);
+    input.obstacles.push(Obstacle::carve(
+        1,
+        Bounds {
+            min: [19.0, -1.0, 0.0],
+            max: [21.0, 3.0, 18.0],
+        },
+    ));
+    input.obstacles.push(Obstacle::carve(
+        2,
+        Bounds {
+            min: [19.0, -1.0, 22.0],
+            max: [21.0, 3.0, 40.0],
+        },
+    ));
+    let (_, mesh) = bake(&input);
+    let goal = [34.0, 0.1, 20.0];
+    let field = ara_crowd::FlowField::build(
+        &mesh.walk_grid([0.0, 0.0], [40.0, 40.0], 0.5).unwrap(),
+        goal,
+    )
+    .unwrap();
+    let (mut world, mut schedule) = sim(NavConfig::default());
+    world.resource_mut::<NavWorld>().stage(mesh);
+    world
+        .resource_mut::<NavWorld>()
+        .set_flow_field(1, std::sync::Arc::new(field));
+    let mut agents = Vec::new();
+    for i in 0..300u64 {
+        let p = [
+            2.0 + (i % 15) as f32 * 1.0,
+            0.1,
+            5.0 + (i / 15) as f32 * 1.5,
+        ];
+        let mut state = NavAgentState::new(i);
+        state.follow_flow(1, goal);
+        agents.push(
+            world
+                .spawn((NavAgent::default(), NavPosition(p), state))
+                .id(),
+        );
+    }
+    for _ in 0..3600 {
+        schedule.run(&mut world);
+    }
+    assert!(world.resource::<NavWorld>().errors().is_empty());
+    let mut crossed = 0;
+    let mut near = 0;
+    for e in &agents {
+        let p = world.get::<NavPosition>(*e).unwrap().0;
+        assert!(
+            !((19.0..21.0).contains(&p[0]) && !(18.0..22.0).contains(&p[2])),
+            "inside wall {p:?}"
+        );
+        crossed += usize::from(p[0] > 21.0);
+        near += usize::from((p[0] - goal[0]).hypot(p[2] - goal[2]) < 10.0);
+    }
+    // Everyone funnels through the single gap; most pack around the one goal.
+    assert_eq!(crossed, 300, "everyone crosses the single gap within 60 s");
+    assert!(near >= 240, "{near}/300 around the goal");
+    // Flow followers never request corridors.
+    assert!(
+        world
+            .query::<&NavAgentState>()
+            .iter(&world)
+            .all(|s| s.path.is_none())
+    );
 }

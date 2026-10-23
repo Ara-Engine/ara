@@ -82,6 +82,7 @@ fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
     };
     let meshes = &nav.meshes;
     let gates = &nav.gates;
+    let flows = &nav.flows;
     for (agents, states, positions) in &mut views {
         agents
             .par_iter()
@@ -107,6 +108,19 @@ fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
                     state.issue = None;
                 }
                 if follow::advance_traversal(state, &mut position.0, cfg.dt) {
+                    return;
+                }
+                if let Some(id) = state.flow {
+                    state.desired = match flows.get(&id) {
+                        Some(field) => follow::flow(agent, state, position.0, field, cfg),
+                        None => {
+                            state.status = NavStatus::Unreachable;
+                            state.issue = Some(NavIssue::NoPath {
+                                reachable: position.0,
+                            });
+                            [0.0; 3]
+                        }
+                    };
                     return;
                 }
                 state.desired = follow::steer(agent, state, position.0, mesh.links(), gates, cfg);
@@ -230,7 +244,7 @@ fn candidate(
     meshes: &std::collections::BTreeMap<u32, crate::NavMesh>,
     types: &std::collections::BTreeMap<u32, QueryFilter>,
 ) -> Option<(bool, bool)> {
-    if state.traversal.is_some() || state.waiting.is_some() {
+    if state.traversal.is_some() || state.waiting.is_some() || state.flow.is_some() {
         return None;
     }
     let hash = meshes.get(&agent.profile)?.content_hash();

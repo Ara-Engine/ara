@@ -98,6 +98,7 @@ pub struct NavWorld {
     pub(crate) rebakes: crate::obstacles::Rebakes,
     pub(crate) graphs: BTreeMap<u32, std::sync::Arc<crate::ClusterGraph>>,
     pub(crate) route_scratch: crate::RouteScratch,
+    pub(crate) flows: BTreeMap<u32, std::sync::Arc<ara_crowd::FlowField>>,
 }
 impl NavWorld {
     /// Creates a world with a valid fixed tick; no workers are started here.
@@ -133,6 +134,7 @@ impl NavWorld {
             rebakes: Default::default(),
             graphs: BTreeMap::new(),
             route_scratch: Default::default(),
+            flows: BTreeMap::new(),
         })
     }
     /// Stages an already-assembled background result; latest result wins per profile.
@@ -155,6 +157,15 @@ impl NavWorld {
     /// goal lies outside the resident mesh then follow a long [`crate::Route`].
     pub fn set_cluster_graph(&mut self, profile: u32, graph: std::sync::Arc<crate::ClusterGraph>) {
         self.graphs.insert(profile, graph);
+    }
+    /// Publishes a shared flow field; agents with `NavAgentState::flow == Some(id)`
+    /// steer by it (ORCA solver). Build fields off the tick thread.
+    pub fn set_flow_field(&mut self, id: u32, field: std::sync::Arc<ara_crowd::FlowField>) {
+        self.flows.insert(id, field);
+    }
+    /// Removes a flow field; its followers become unreachable until retargeted.
+    pub fn remove_flow_field(&mut self, id: u32) {
+        self.flows.remove(&id);
     }
     /// Current immutable mesh for a profile, if published.
     pub fn mesh(&self, profile: u32) -> Option<&NavMesh> {

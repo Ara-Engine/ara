@@ -295,3 +295,68 @@ fn rounded(p: [f32; 3], previous: [f32; 3], corner: [f32; 3], next: [f32; 3], st
 fn horizontal(a: [f32; 3], b: [f32; 3]) -> f32 {
     ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
+
+/// Desired velocity from a shared flow field (no corridor, no planning). The
+/// field's surface height gives the vertical component on slopes.
+pub(crate) fn flow(
+    agent: &NavAgent,
+    state: &mut NavAgentState,
+    position: [f32; 3],
+    field: &ara_crowd::FlowField,
+    cfg: Follow,
+) -> [f32; 3] {
+    let Some(target) = state.target else {
+        state.status = NavStatus::Idle;
+        return [0.0; 3];
+    };
+    let remaining = horizontal(position, target);
+    if remaining <= agent.stopping_distance {
+        state.status = NavStatus::Arrived;
+        state.issue = None;
+        return [0.0; 3];
+    }
+    // Avoidance can push an agent into a boundary cell whose centre lies just
+    // outside the eroded mesh; steer back toward the best nearby field cell.
+    let direction = field.direction(position).or_else(|| {
+        let mut best: Option<(f32, [f32; 2])> = None;
+        for ring in [0.5f32, 1.0, 1.5] {
+            for k in 0..8 {
+                let a = k as f32 * std::f32::consts::FRAC_PI_4;
+                let probe = [
+                    position[0] + ring * a.cos(),
+                    position[1],
+                    position[2] + ring * a.sin(),
+                ];
+                if let Some(d) = field.distance(probe)
+                    && best.is_none_or(|(b, _)| d < b)
+                {
+                    best = Some((d, [a.cos(), a.sin()]));
+                }
+            }
+            if best.is_some() {
+                break;
+            }
+        }
+        best.map(|(_, dir)| dir)
+    });
+    let Some([dx, dz]) = direction else {
+        state.status = NavStatus::Unreachable;
+        state.issue = Some(NavIssue::NoPath {
+            reachable: position,
+        });
+        return [0.0; 3];
+    };
+    state.status = NavStatus::Moving;
+    state.issue = None;
+    let max_speed = state.max_speed(agent);
+    let slow = (agent.radius * 2.0).max(0.25);
+    let speed = max_speed
+        .min(max_speed * remaining / slow)
+        .min(remaining / cfg.dt);
+    let ahead = [position[0] + dx * 0.5, position[1], position[2] + dz * 0.5];
+    let rise = match (field.height(ahead), field.height(position)) {
+        (Some(a), Some(b)) => (a - b) / 0.5,
+        _ => 0.0,
+    };
+    [dx * speed, rise * speed, dz * speed]
+}

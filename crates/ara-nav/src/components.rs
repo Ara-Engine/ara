@@ -275,6 +275,10 @@ pub struct NavAgentState {
     /// Runtime speed cap below `NavAgent::max_speed` (AI gaits: walk, run).
     #[serde(default)]
     pub speed_limit: Option<f32>,
+    /// Shared flow field (`NavWorld::set_flow_field`) steering this agent instead
+    /// of its own corridor: massed groups with one destination skip planning.
+    #[serde(default)]
+    pub flow: Option<u32>,
 }
 impl NavAgentState {
     /// Creates idle deterministic state with a stable simulation ID.
@@ -297,7 +301,13 @@ impl NavAgentState {
             issue: None,
             route: None,
             speed_limit: None,
+            flow: None,
         }
+    }
+    /// Follows shared flow field `field` toward `goal` (its arrival point).
+    pub fn follow_flow(&mut self, field: u32, goal: [f32; 3]) {
+        self.set_target(Some(goal));
+        self.flow = Some(field);
     }
     /// Effective maximum speed: the authored speed capped by `speed_limit`.
     pub fn max_speed(&self, agent: &NavAgent) -> f32 {
@@ -308,6 +318,7 @@ impl NavAgentState {
     /// Sets a new goal, clearing the corridor so the next tick plans afresh.
     pub fn set_target(&mut self, target: Option<[f32; 3]>) {
         self.target = target;
+        self.flow = None;
         self.path = None;
         self.route = None;
         self.corner = 0;

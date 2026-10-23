@@ -129,6 +129,10 @@ pub enum Builtin {
     Remap,
     /// `inverse(x, max)`: 1 - clamp(x / max).
     Inverse,
+    /// `direction(a, b)`: unit XZ vector from a to b (zero when coincident).
+    Direction,
+    /// `dot(a, b)`: dot product of two vec3.
+    Dot,
 }
 
 struct Signature {
@@ -140,6 +144,7 @@ struct Signature {
 #[derive(Clone, Copy, PartialEq)]
 enum Arg {
     Float,
+    Vec3,
     Pos,
     Entity,
     Str,
@@ -271,6 +276,18 @@ const BUILTINS: &[Signature] = &[
         name: "inverse",
         builtin: Builtin::Inverse,
         args: &[Arg::Float, Arg::Float],
+        ret: Type::Float,
+    },
+    Signature {
+        name: "direction",
+        builtin: Builtin::Direction,
+        args: &[Arg::Pos, Arg::Pos],
+        ret: Type::Vec3,
+    },
+    Signature {
+        name: "dot",
+        builtin: Builtin::Dot,
+        args: &[Arg::Vec3, Arg::Vec3],
         ret: Type::Float,
     },
 ];
@@ -1105,6 +1122,7 @@ impl<'a> Compiler<'a> {
                     let (id, ty) = self.expr(arg, record);
                     let ok = match want {
                         Arg::Float => ty == Ty::T(Type::Float),
+                        Arg::Vec3 => ty == Ty::T(Type::Vec3),
                         Arg::Pos => ty.positional(),
                         Arg::Entity => ty.fits(Type::Entity),
                         Arg::Str => ty == Ty::Str,
