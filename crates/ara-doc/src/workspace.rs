@@ -31,8 +31,20 @@ impl Workspace {
     /// Adds or replaces a document at `path` and indexes it.
     pub fn insert(&mut self, path: impl Into<String>, doc: Document) {
         let path = path.into();
+        self.insert_with_asset_path(path.clone(), doc, path);
+    }
+
+    /// Loads a document at `path` while references to its ID resolve to `asset_path`.
+    /// Import settings can therefore be saved as a sidecar of their source media.
+    pub fn insert_with_asset_path(
+        &mut self,
+        path: impl Into<String>,
+        doc: Document,
+        asset_path: impl Into<String>,
+    ) {
+        let path = path.into();
         self.index
-            .insert(doc.id.to_string(), path.clone(), Some(doc.kind.clone()));
+            .insert(doc.id.to_string(), asset_path, Some(doc.kind.clone()));
         self.docs.insert(doc.id.clone(), (path, doc));
     }
 

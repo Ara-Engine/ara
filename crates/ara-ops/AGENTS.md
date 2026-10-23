@@ -25,6 +25,8 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
   restart (same ID and revisions); `apply` re-applies its ops first.
 - `load_doc(path, doc)` / `unload_doc(id)`: a document file appeared or was
   deleted. Not edits: no ops are recorded.
+- `load_doc_with_asset_path(save_path, doc, source_path)`: load sidecar settings
+  while references resolve to source media; transactions still save the sidecar.
 
 ## Semantics
 
