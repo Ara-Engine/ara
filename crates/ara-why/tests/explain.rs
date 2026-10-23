@@ -545,3 +545,37 @@ fn unclear_questions_say_what_can_be_asked() {
         r.answer
     );
 }
+
+#[test]
+fn a_vague_name_prefers_the_entity_the_bus_has_errors_about() {
+    let mut f = Fixture::scene();
+    for (id, name) in [("e_brl1", "Barrel"), ("e_brl3", "Barrel.002")] {
+        f.add(
+            id,
+            name,
+            None,
+            json!({
+                "Transform": { "position": [3, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1] },
+                "MeshRenderer": { "mesh": "@meshes/crate.glb#ms_crate001" },
+            }),
+        );
+    }
+    f.bus.push(
+        Diagnostic::error(
+            codes::RENDER_NON_FINITE_TRANSFORM,
+            "`Barrel.002` has a NaN position",
+        )
+        .subject(Subject::entity("e_brl3")),
+        Meta::default(),
+    );
+    let r = f.why("one of the barrels vanished after the game started");
+    assert!(
+        r.subject.as_deref().is_some_and(|s| s.contains("e_brl3")),
+        "{}",
+        r.text()
+    );
+    assert_eq!(
+        top(&r),
+        (codes::RENDER_NON_FINITE_TRANSFORM, Likelihood::High)
+    );
+}

@@ -175,8 +175,34 @@ pub(crate) fn resolve(q: &Question, facts: &dyn Facts) -> Result<Entity, Vec<Dia
     if let Some(sel) = q.entities.first() {
         return facts.entity(sel, q.doc.as_deref());
     }
+    let candidates = q.name_candidates(WORDS);
+    // "One of the barrels vanished": of the entities a name could mean, prefer the
+    // one the bus has errors about (`Barrel.002`, not the healthy `Barrel`).
+    let errors = facts.diagnostics(&Filter {
+        severity: Some(Severity::Error),
+        ..Filter::default()
+    });
+    for r in errors.iter().rev() {
+        for s in r
+            .subjects()
+            .into_iter()
+            .filter(|s| s.kind == ara_diag::SubjectKind::Entity)
+        {
+            let Ok(e) = facts.entity(&s.value, q.doc.as_deref()) else {
+                continue;
+            };
+            let base = e
+                .name
+                .as_deref()
+                .map(|n| n.split('.').next().unwrap_or(n).to_lowercase())
+                .unwrap_or_default();
+            if !base.is_empty() && candidates.iter().any(|c| c.to_lowercase() == base) {
+                return Ok(e);
+            }
+        }
+    }
     let mut last = None;
-    for n in q.name_candidates(WORDS) {
+    for n in candidates {
         match facts.entity(&format!("name:{n}"), q.doc.as_deref()) {
             Ok(e) => return Ok(e),
             Err(d) => last = Some(d),
@@ -495,25 +521,13 @@ fn mesh(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
             cx.facts,
         ));
     }
+    // A missing source alone proves nothing (the import may be cached); it is a note
+    // unless the importer reported a failure above.
+    let mut note = asset.path.clone().unwrap_or_default();
     if records.is_empty() && asset.source_exists == Some(false) {
-        f.cause(
-            Cause::new(
-                codes::ASSET_SOURCE_MISSING,
-                Likelihood::Low,
-                format!(
-                    "The mesh source `{}` is missing next to its sidecar; without a cached import there is nothing to draw",
-                    asset.path.as_deref().unwrap_or(reference)
-                ),
-            )
-            .subject(subject.clone())
-            .advice("restore the source file (`git lfs pull`) or point the renderer at another mesh"),
-        );
+        note.push_str("; its source file is not on disk, an imported copy may be cached");
     }
-    f.check(
-        "mesh",
-        if ok { Status::Ok } else { Status::Fail },
-        asset.path.clone().unwrap_or_default(),
-    );
+    f.check("mesh", if ok { Status::Ok } else { Status::Fail }, note);
     vec![subject]
 }
 

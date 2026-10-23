@@ -141,7 +141,8 @@ impl Question {
 
     /// Words that may name an entity, best first: capitalized words, then adjacent
     /// pairs joined in title case (`gate crate` → `GateCrate`), then single words in
-    /// title case (`workbench` → `Workbench`). Topic words (`stems`) are left out.
+    /// title case (`workbench` → `Workbench`), then singular forms of plurals
+    /// (`barrels` → `Barrel`). Topic words (`stems`) are left out.
     pub fn name_candidates(&self, stems: &[&str]) -> Vec<String> {
         let title = |w: &str| {
             let mut c = w.chars();
@@ -157,6 +158,13 @@ impl Question {
                 .map(|w| format!("{}{}", title(w[0]), title(w[1]))),
         );
         out.extend(words.iter().map(|w| title(w)));
+        // Plurals: "the barrels" may mean `Barrel`.
+        out.extend(
+            words
+                .iter()
+                .filter(|w| w.len() > 3 && w.ends_with('s') && !w.ends_with("ss"))
+                .map(|w| title(&w[..w.len() - 1])),
+        );
         let mut seen = std::collections::BTreeSet::new();
         out.retain(|c| seen.insert(c.clone()));
         out
