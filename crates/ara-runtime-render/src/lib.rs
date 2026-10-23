@@ -9,6 +9,7 @@
 //! captures composite ara-landscape terrain and foliage instead.
 #![warn(missing_docs)]
 
+extern crate glam34 as glam;
 pub mod geometry;
 pub mod landscape;
 pub mod terrain_mesh;

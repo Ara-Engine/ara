@@ -3,6 +3,7 @@
 //! back over localhost WebSocket with the session token and idles at zero CPU until
 //! `play.start` assigns a role and a shared-memory snapshot; then it runs that world
 //! (windowed through SDL3, or headless) and exits on `play.stop`.
+extern crate glam34 as glam;
 mod crash;
 mod device;
 mod net;

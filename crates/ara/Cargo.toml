@@ -21,11 +21,11 @@ ara-play-host = { path = "../ara-play-host" }
 ara-proto.workspace = true
 ara-rpc.workspace = true
 ara-schema.workspace = true
-clap.workspace = true
-serde_json.workspace = true
+clap = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
-insta.workspace = true
+insta = { workspace = true }
 
 [lints]
 workspace = true

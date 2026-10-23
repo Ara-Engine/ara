@@ -7,7 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-gpu = { path = "../ara-gpu" }
@@ -19,13 +19,12 @@ ara-schema.workspace = true
 ara-terrain = { path = "../ara-terrain" }
 ara-vfx = { path = "../ara-vfx" }
 ara-vfx-gpu = { path = "../ara-vfx-gpu" }
-bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
-serde_json.workspace = true
-glam = "0.34"
-image = { version = "0.25", default-features = false, features = ["png"] }
-# ara-render's scene/camera API uses glam 0.30 types.
-glam30 = { package = "glam", version = "0.30" }
-texture2ddecoder = "0.1.2"
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+image = { workspace = true, features = ["png"] }
+texture2ddecoder = { workspace = true }
+glam34 = { workspace = true }
+glam30.workspace = true
 
 [dev-dependencies]
 ara-asset = { path = "../ara-asset" }
@@ -33,7 +32,7 @@ ara-doc.workspace = true
 ara-importers = { path = "../ara-importers" }
 ara-input = { path = "../ara-input" }
 ara-sim = { path = "../ara-sim" }
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ links = "ara_sdl3"
 sdl3-sys = { version = "0.7.2", default-features = false, features = ["no-link"] }
 
 [build-dependencies]
-cc = { version = "1.2", features = ["parallel"] }
+cc = { workspace = true, features = ["parallel"] }
 
 [lints]
 workspace = true

@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+extern crate glam34 as glam;
 use ara_anim::{
     data::*,
     glam::{Mat4, Quat, Vec3},

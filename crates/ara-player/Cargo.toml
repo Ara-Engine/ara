@@ -7,7 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
 ara-gpu = { path = "../ara-gpu" }
@@ -24,13 +24,13 @@ ara-runtime-render = { path = "../ara-runtime-render" }
 ara-runtime-script = { path = "../ara-runtime-script" }
 ara-sim = { path = "../ara-sim" }
 ara-doc.workspace = true
-clap.workspace = true
-serde.workspace = true
-glam = "0.34"
-serde_json.workspace = true
+clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+glam34 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
 
 [dev-dependencies]
 ara-host.workspace = true

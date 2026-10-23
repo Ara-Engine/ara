@@ -11,18 +11,18 @@ ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
 ara-import2d = { path = "../ara-import2d" }
 ara-json.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 ara-importers = { path = "../ara-importers" }
 
 [dev-dependencies]
 ara-asset-format = { path = "../ara-asset-format" }
 ara-doc = { path = "../ara-doc" }
 ara-schema = { path = "../ara-schema" }
-serde_json.workspace = true
-tempfile = "3.23"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
-gltf = { version = "1.4", default-features = false }
-texture2ddecoder = "0.1.2"
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+tempfile = { workspace = true }
+image = { workspace = true, features = ["png"] }
+gltf = { workspace = true }
+texture2ddecoder = { workspace = true }
 
 [lints]
 workspace = true

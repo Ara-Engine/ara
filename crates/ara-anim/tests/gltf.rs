@@ -1,5 +1,6 @@
 //! Generated glTF fixture exercises the real gltf skin/channel readers without downloads.
 #![allow(clippy::unwrap_used)]
+extern crate glam34 as glam;
 use ara_anim::{
     data::*,
     glam::{Mat4, Quat},

@@ -37,6 +37,7 @@
 //! the fixed-tick phase and never mutates the world.
 #![warn(missing_docs)]
 
+extern crate glam34 as glam;
 pub mod ai;
 pub mod animation;
 pub mod assets;

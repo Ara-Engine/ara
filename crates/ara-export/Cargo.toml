@@ -13,21 +13,21 @@ ara-bridge = { path = "../ara-bridge" }
 ara-diag.workspace = true
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
-anyhow = "1.0.103"
-blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
-clap.workspace = true
+anyhow = { workspace = true }
+blake3 = { workspace = true, features = ["std", "pure"] }
+clap = { workspace = true, features = ["derive"] }
 dunce = "1.0.5"
 quick-xml = "0.38.4"
-roxmltree = "0.21.1"
-serde.workspace = true
-serde_json.workspace = true
+roxmltree = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 tar = "0.4"
 flate2 = "1.1"
 backhand = { version = "0.25.5", default-features = false, features = ["gzip", "error-strings"] }
 
 [dev-dependencies]
-tempfile = "3.27.0"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

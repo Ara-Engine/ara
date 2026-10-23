@@ -7,9 +7,9 @@ publish.workspace = true
 
 [dependencies]
 base64 = "0.22.1"
-serde.workspace = true
-serde_json.workspace = true
-thiserror = "2.0.18"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+thiserror = { workspace = true }
 tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 
 [lints]
