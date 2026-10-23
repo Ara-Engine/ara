@@ -38,6 +38,7 @@ mod material_inspector;
 pub mod overlay;
 mod palette;
 mod panels;
+pub mod prefab_ops;
 mod profiler_panel;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};

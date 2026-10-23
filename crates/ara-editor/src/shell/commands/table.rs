@@ -88,6 +88,65 @@ fn graph_open(c: &Ctx) -> Avail {
         Avail::Blocked("Open a material, VFX or animation graph first".into())
     }
 }
+fn in_instance(c: &Ctx) -> Avail {
+    match c.target.entity(c.state) {
+        Some(entity)
+            if crate::shell::prefab_ops::instance(c.store, &c.state.doc, entity).is_some() =>
+        {
+            Avail::Ready
+        }
+        Some(_) => Avail::Blocked(
+            "Not a prefab instance; use Create > Prefab from Selection to make one".into(),
+        ),
+        None => Avail::Blocked("Select a prefab instance first".into()),
+    }
+}
+fn has_overrides(c: &Ctx) -> Avail {
+    match c
+        .target
+        .entity(c.state)
+        .and_then(|e| crate::shell::prefab_ops::instance(c.store, &c.state.doc, e))
+    {
+        Some(found) if !found.overrides.is_empty() => Avail::Ready,
+        Some(_) => {
+            Avail::Blocked("This instance has no overrides; edit a field to make one".into())
+        }
+        None => in_instance(c),
+    }
+}
+fn field_overridden(c: &Ctx) -> Avail {
+    let Target::Field(path) = c.target else {
+        return Avail::Blocked("Right-click a field".into());
+    };
+    let Some(entity) = c.state.selection.first() else {
+        return Avail::Blocked("Select a prefab instance first".into());
+    };
+    match crate::shell::prefab_ops::instance(c.store, &c.state.doc, entity) {
+        Some(found)
+            if found.overrides.iter().any(|k| {
+                k == path
+                    || k.starts_with(&format!("{path}."))
+                    || path.starts_with(&format!("{k}."))
+            }) =>
+        {
+            Avail::Ready
+        }
+        Some(_) => Avail::Blocked("This field follows the prefab (not overridden)".into()),
+        None => Avail::Blocked("Not a prefab instance".into()),
+    }
+}
+fn prefab_source(c: &Ctx) -> Avail {
+    match c.target.entity(c.state) {
+        Some(entity)
+            if entity.contains('/')
+                || crate::shell::prefab_ops::instance(c.store, &c.state.doc, entity).is_some() =>
+        {
+            Avail::Blocked("Already a prefab instance; unpack it first".into())
+        }
+        Some(_) => Avail::Ready,
+        None => Avail::Blocked("Select the entity to turn into a prefab".into()),
+    }
+}
 fn agent_target(c: &Ctx) -> Avail {
     match c.target {
         Target::Text(agent) if c.state.presence.contains_key(agent) => Avail::Ready,
@@ -536,6 +595,29 @@ fn build() -> Vec<Spec> {
             let locked = e.state.locked.contains(&entity);
             act(e, "editor.lock", json!({"entity": entity, "enabled": !locked}))
         }).when(|c| match c.target.entity(c.state) { Some(id) => Avail::Checked(c.state.locked.contains(id)), None => has_entity(c) }),
+        cmd("prefab.open", "Open Prefab", "package-open", "", "Edit the prefab itself in the Scene view; every instance follows.", |_, e, t| {
+            let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
+            let found = crate::shell::prefab_ops::instance(e.host.store(), &e.state.doc, &entity).ok_or("not a prefab instance")?;
+            act(e, "editor.scene.open", json!({"scene": found.prefab_doc}))
+        }).when(in_instance),
+        cmd("prefab.apply_all", "Apply All Overrides", "save", "", "Write this instance's overrides into the prefab, so every instance gets them.", |s, e, t| {
+            let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
+            s.apply_overrides(e, &entity, None)
+        }).when(has_overrides),
+        cmd("prefab.revert_all", "Revert All Overrides", "undo-2", "", "Drop this instance's overrides; it follows the prefab again.", |_, e, t| {
+            let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
+            apply(e, vec![json!({"cmd": "prefab.override.revert", "args": {"entity": entity}})], "Revert overrides")
+        }).when(has_overrides),
+        cmd("prefab.apply_override", "Apply Override to Prefab", "save", "", "Write this field's override into the prefab, so every instance gets it.", |s, e, t| {
+            let Target::Field(path) = t else { return Err("choose a field".into()) };
+            let entity = e.state.selection.first().ok_or("select a prefab instance")?.clone();
+            s.apply_overrides(e, &entity, Some(path))
+        }).when(field_overridden),
+        cmd("prefab.revert_override", "Revert Override", "undo-2", "", "Drop this field's override; it follows the prefab again.", |_, e, t| {
+            let Target::Field(path) = t else { return Err("choose a field".into()) };
+            let entity = e.state.selection.first().ok_or("select a prefab instance")?.clone();
+            apply(e, vec![json!({"cmd": "prefab.override.revert", "args": {"entity": entity, "path": path}})], "Revert override")
+        }).when(field_overridden),
         cmd("prefab.unpack", "Unpack Prefab", "package", "", "Turn a prefab instance into ordinary entities.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             apply(e, vec![json!({"cmd": "editor.prefab.unpack", "args": {"entity": entity}})], "Unpack prefab")
@@ -739,7 +821,7 @@ fn build() -> Vec<Spec> {
         later("create.ui.world", "World-space UI", "", "", "World-space UI components are not in the runtime schema yet."),
         cmd("create.gameplay.player", "Player", "user", "", "Capsule driven by PlayerControl.", |_, e, t| create(e, t, "Player", json!({"PlayerControl": {}, "MeshRenderer": {"shape": "capsule", "size": [0.6, 1.8, 0.6]}}), false)).when(|c| with_components(c, &["PlayerControl", "MeshRenderer"])),
         later("create.gameplay.spawn", "Spawn Point", "", "", "Spawn points are not in the gameplay schema yet."),
-        later("create.prefab", "Prefab from Selection", "package", "", "Creating a prefab document from entities needs a typed prefab.create command."),
+        cmd("create.prefab", "Prefab from Selection", "package", "", "Turn the selected entity and its children into a prefab; the scene keeps a linked instance.", |s, e, t| s.prefab_from_selection(e, t)).when(prefab_source),
     ]);
     // Assets
     c.extend([
@@ -749,7 +831,7 @@ fn build() -> Vec<Spec> {
         cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, _| s.create_resource(e, "vfx")),
         cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, _| s.create_resource(e, "animation")),
         later("assets.create.script", "C# Script", "file-code", "", "Create scripts in your IDE; the C# host hot-reloads them."),
-        later("assets.create.prefab", "Prefab", "package", "", "Prefab documents need a typed prefab.create command."),
+        cmd("assets.create.prefab", "Prefab from Selection", "package", "", "Turn the selected entity and its children into a prefab under prefabs/.", |s, e, t| s.prefab_from_selection(e, t)).when(prefab_source),
         cmd("assets.reimport", "Reimport", "refresh-cw", "", "Run the importer again for the selected asset.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
             s.forget_thumbnail(&path);

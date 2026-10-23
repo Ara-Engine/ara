@@ -729,9 +729,12 @@ impl EditorService {
                         ))]
                     })?
                     .to_string();
-                if workspace.doc(&id).is_none_or(|d| d.kind != "scene") {
+                if workspace
+                    .doc(&id)
+                    .is_none_or(|d| !matches!(d.kind.as_str(), "scene" | "prefab"))
+                {
                     return Err(vec![crate::invalid(format!(
-                        "`{}` is not a scene",
+                        "`{}` is not a scene or prefab",
                         p.scene
                     ))]);
                 }

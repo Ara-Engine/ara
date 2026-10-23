@@ -588,3 +588,87 @@ fn console_logs_problems_explain_and_editor_failures_reach_the_bus() {
         .unwrap();
     assert!(shell.ui.find(&format!("{problem}-explain")).is_some());
 }
+#[test]
+fn prefab_from_selection_overrides_apply_revert_and_open() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell
+        .run_command(&mut editor, "create.prefab", &Default::default())
+        .unwrap();
+    // The subtree became prefabs/salvage_crate.prefab; the scene keeps a linked instance.
+    let workspace = editor.host.store().workspace();
+    let prefab = workspace
+        .find("prefabs/salvage_crate.prefab")
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        workspace.doc(&prefab).unwrap().records().len(),
+        2,
+        "root and child"
+    );
+    let instance = editor.state.selection[0].clone();
+    let scene = workspace.doc("sc_test0001").unwrap();
+    assert!(scene.record("e_crate001").is_none());
+    assert!(ara_doc::prefab_of(scene.record(&instance).unwrap()).is_some());
+    let view = editor.view().unwrap();
+    assert_eq!(view.entities().len(), 2, "instance root and its child");
+    // Override a field on the instance, then apply it to the prefab.
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":instance,"path":"Transform.scale","value":[2,2,2]}})],
+            "Scale crate",
+            None,
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let overrides = shell.ui.find("prefab-overrides").unwrap();
+    assert_eq!(
+        shell.ui.nodes[overrides].text.as_ref().unwrap().value,
+        "1 override"
+    );
+    shell
+        .run_command(&mut editor, "prefab.apply_all", &Default::default())
+        .unwrap();
+    let store = editor.host.store();
+    let root = store
+        .workspace()
+        .doc(&prefab)
+        .unwrap()
+        .records()
+        .iter()
+        .find(|(_, r)| r.get("parent").is_none())
+        .map(|(_, r)| r.clone())
+        .unwrap();
+    assert_eq!(root["Transform"]["scale"], json!([2, 2, 2]));
+    assert!(
+        ara_editor::shell::prefab_ops::instance(store, "sc_test0001", &instance)
+            .unwrap()
+            .overrides
+            .is_empty()
+    );
+    // A new override can be reverted; Open edits the prefab in the Scene view.
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":instance,"path":"name","value":"Special crate"}})],
+            "Rename crate",
+            None,
+        )
+        .unwrap();
+    shell
+        .run_command(&mut editor, "prefab.revert_all", &Default::default())
+        .unwrap();
+    assert!(
+        ara_editor::shell::prefab_ops::instance(editor.host.store(), "sc_test0001", &instance)
+            .unwrap()
+            .overrides
+            .is_empty()
+    );
+    shell
+        .run_command(&mut editor, "prefab.open", &Default::default())
+        .unwrap();
+    assert_eq!(editor.state.doc, prefab);
+}

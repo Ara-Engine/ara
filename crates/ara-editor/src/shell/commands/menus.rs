@@ -510,7 +510,17 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("edit.hide"),
             C("edit.lock"),
             S,
-            C("prefab.unpack"),
+            C("create.prefab"),
+            Sub(
+                "Prefab",
+                &[
+                    C("prefab.open"),
+                    C("prefab.apply_all"),
+                    C("prefab.revert_all"),
+                    S,
+                    C("prefab.unpack"),
+                ],
+            ),
             C("assets.show"),
         ],
         Context::Hierarchy => &[
@@ -592,6 +602,9 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("field.paste"),
             C("field.reset"),
             C("field.copy_path"),
+            S,
+            C("prefab.apply_override"),
+            C("prefab.revert_override"),
             S,
             C("field.why"),
         ],
