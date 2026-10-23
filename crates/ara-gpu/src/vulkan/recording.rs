@@ -16,7 +16,7 @@ pub(super) fn access(
     let shader = if queue == Queue::Compute {
         S::COMPUTE_SHADER
     } else {
-        S::VERTEX_SHADER | S::FRAGMENT_SHADER | S::COMPUTE_SHADER
+        S::ALL_GRAPHICS | S::COMPUTE_SHADER
     };
     match usage {
         Access::Undefined => (S::NONE, A::NONE, L::UNDEFINED),
@@ -348,17 +348,21 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Invalid indexed draw".into()));
                     }
                 }
-                Command::DrawIndirect { arguments, offset } => {
+                Command::DrawIndirect { arguments, offset }
+                | Command::DrawMeshTasksIndirect { arguments, offset } => {
+                    let mesh_draw = matches!(c, Command::DrawMeshTasksIndirect { .. });
                     self.validate_attachment_formats(bound, &color_formats, depth_format)?;
                     let buffer = self.buffers.get(*arguments)?;
                     if !rendering
                         || pipeline != Some(false)
                         || bound.is_none_or(|h| {
-                            self.pipelines.get(h).is_ok_and(|p| p.vertex_stride != 0)
+                            self.pipelines
+                                .get(h)
+                                .is_ok_and(|p| p.vertex_stride != 0 || p.mesh != mesh_draw)
                         })
                         || offset % 4 != 0
                         || offset
-                            .checked_add(16)
+                            .checked_add(if mesh_draw { 12 } else { 16 })
                             .is_none_or(|end| end > buffer.raw.size)
                         || !buffer
                             .raw
@@ -370,7 +374,10 @@ impl VulkanDevice {
                 }
                 Command::Fullscreen => {
                     self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    if !rendering || pipeline != Some(false) {
+                    if !rendering
+                        || pipeline != Some(false)
+                        || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
+                    {
                         return Err(GpuError::Contract("Draw outside graphics scope".into()));
                     }
                 }
@@ -385,6 +392,7 @@ impl VulkanDevice {
                     if !rendering
                         || pipeline != Some(false)
                         || native.vertex_stride != 0
+                        || native.mesh
                         || *vertices == 0
                         || *instances == 0
                     {

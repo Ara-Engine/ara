@@ -117,14 +117,24 @@ impl Gpu {
             let mut acceleration_features =
                 vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
             let mut ray = vk::PhysicalDeviceRayQueryFeaturesKHR::default();
+            let mut mesh_features = vk::PhysicalDeviceMeshShaderFeaturesEXT::default();
             let mut supported = vk::PhysicalDeviceFeatures2::default()
                 .push(&mut v11)
                 .push(&mut v12)
                 .push(&mut v13)
                 .push(&mut acceleration_features)
+                .push(&mut mesh_features)
                 .push(&mut ray);
             instance.get_physical_device_features2(physical, &mut supported);
             let core_supported = supported.features;
+            let mesh_shading = has_extension(ash::ext::mesh_shader::NAME)
+                && mesh_features.mesh_shader != 0
+                && mesh_features.task_shader != 0;
+            let buffer_int64_atomics =
+                core_supported.shader_int64 != 0 && v12.shader_buffer_int64_atomics != 0;
+            if mesh_shading {
+                device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
+            }
             let ray_tracing = rt_extensions
                 && acceleration_features.acceleration_structure != 0
                 && ray.ray_query != 0
@@ -174,6 +184,7 @@ impl Gpu {
             let mut v11 =
                 vk::PhysicalDeviceVulkan11Features::default().shader_draw_parameters(true);
             let mut v12 = vk::PhysicalDeviceVulkan12Features::default()
+                .shader_buffer_int64_atomics(buffer_int64_atomics)
                 .timeline_semaphore(true)
                 .buffer_device_address(true)
                 .descriptor_indexing(true)
@@ -194,6 +205,7 @@ impl Gpu {
                     .descriptor_binding_acceleration_structure_update_after_bind(ray_tracing);
             let mut ray = vk::PhysicalDeviceRayQueryFeaturesKHR::default().ray_query(ray_tracing);
             let core = vk::PhysicalDeviceFeatures::default()
+                .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
                 .shader_storage_buffer_array_dynamic_indexing(true)
@@ -210,6 +222,12 @@ impl Gpu {
                 .push(&mut v13);
             if ray_tracing {
                 device_info = device_info.push(&mut acceleration_features).push(&mut ray);
+            }
+            let mut mesh_features = vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
+                .mesh_shader(mesh_shading)
+                .task_shader(mesh_shading);
+            if mesh_shading {
+                device_info = device_info.push(&mut mesh_features);
             }
             let device = instance.create_device(physical, &device_info, None)?;
             guard.device = Some(device.clone());
@@ -249,6 +267,8 @@ impl Gpu {
                 vendor_id: properties.vendor_id,
                 device_id: properties.device_id,
                 ray_tracing,
+                mesh_shading,
+                buffer_int64_atomics,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,
                 graphics_family,
@@ -271,6 +291,7 @@ impl Gpu {
                 info.name
             );
             guard.disarm();
+            let mesh = ash::ext::mesh_shader::Device::load(&instance, &device);
             Ok(Self {
                 _entry: entry,
                 instance,
@@ -281,6 +302,7 @@ impl Gpu {
                 graphics_pool,
                 compute_pool,
                 acceleration,
+                mesh,
                 info,
                 validation,
                 memory,

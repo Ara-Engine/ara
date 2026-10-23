@@ -10,6 +10,7 @@ use std::{io::Cursor, path::Path};
 pub(super) struct NativePipeline {
     pub handle: vk::Pipeline,
     pub compute: bool,
+    pub mesh: bool,
     pub colors: Vec<vk::Format>,
     pub depth: Option<vk::Format>,
     pub vertex_stride: u32,
@@ -25,6 +26,21 @@ pub(super) fn create(
     if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
         return Err(GpuError::Contract(
             "Cooked layout/schema mismatch; recook shaders".into(),
+        ));
+    }
+    let mesh = cooked.stages.iter().any(|s| s.stage == Stage::Mesh);
+    let task = cooked.stages.iter().any(|s| s.stage == Stage::Task);
+    if (mesh || task)
+        && (!gpu.info.mesh_shading
+            || !mesh
+            || cooked
+                .stages
+                .iter()
+                .any(|s| matches!(s.stage, Stage::Vertex | Stage::Compute))
+            || cooked.state.vertex_stride != 0)
+    {
+        return Err(GpuError::Contract(
+            "Mesh/task pipeline unavailable or incompatible stages".into(),
         ));
     }
     let mut modules = Vec::new();
@@ -65,6 +81,8 @@ pub(super) fn create(
                         Stage::Vertex => vk::ShaderStageFlags::VERTEX,
                         Stage::Fragment => vk::ShaderStageFlags::FRAGMENT,
                         Stage::Compute => vk::ShaderStageFlags::COMPUTE,
+                        Stage::Task => vk::ShaderStageFlags::TASK_EXT,
+                        Stage::Mesh => vk::ShaderStageFlags::MESH_EXT,
                     }))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -155,22 +173,22 @@ pub(super) fn create(
                             .map(vk::Format::from_raw)
                             .unwrap_or(vk::Format::UNDEFINED),
                     );
-                gpu.device.create_graphics_pipelines(
-                    cache,
-                    &[vk::GraphicsPipelineCreateInfo::default()
-                        .stages(&stages)
+                let mut info = vk::GraphicsPipelineCreateInfo::default()
+                    .stages(&stages)
+                    .viewport_state(&viewport)
+                    .rasterization_state(&raster)
+                    .multisample_state(&samples)
+                    .depth_stencil_state(&depth)
+                    .color_blend_state(&blend)
+                    .dynamic_state(&dynamic)
+                    .layout(layout)
+                    .push(&mut rendering);
+                if !mesh {
+                    info = info
                         .vertex_input_state(&input)
-                        .input_assembly_state(&assembly)
-                        .viewport_state(&viewport)
-                        .rasterization_state(&raster)
-                        .multisample_state(&samples)
-                        .depth_stencil_state(&depth)
-                        .color_blend_state(&blend)
-                        .dynamic_state(&dynamic)
-                        .layout(layout)
-                        .push(&mut rendering)],
-                    None,
-                )
+                        .input_assembly_state(&assembly);
+                }
+                gpu.device.create_graphics_pipelines(cache, &[info], None)
             }
         }
         .map_err(|(partial, error)| {
@@ -185,6 +203,7 @@ pub(super) fn create(
         Ok(NativePipeline {
             handle,
             compute,
+            mesh,
             colors: cooked
                 .state
                 .color_formats

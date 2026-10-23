@@ -125,7 +125,7 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
                 ]);
                 if target == "spirv" {
                     cmd.args(["-D", "VULKAN=1"]);
-                    if stage == Stage::Vertex {
+                    if matches!(stage, Stage::Vertex | Stage::Mesh) {
                         cmd.arg("-fvk-invert-y");
                     }
                 }
