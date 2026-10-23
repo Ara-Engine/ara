@@ -1,0 +1,85 @@
+{
+  "arch": "x86_64",
+  "instrumented": false,
+  "os": "windows",
+  "records": [
+    {
+      "activeAtEnd": 20000,
+      "araMs": {
+        "mean": 39.50492116666668,
+        "p50": 35.2957,
+        "p95": 79.73049999999999
+      },
+      "bodies": 20000,
+      "columnExtractionMs": {
+        "mean": 0.48232183333333345,
+        "p50": 0.3737,
+        "p95": 1.1553
+      },
+      "contacts": false,
+      "crossPlatformFp": true,
+      "deterministicOrdering": true,
+      "escaped": 0,
+      "extractionMs": {
+        "mean": 0.9167523333333328,
+        "p50": 0.7391,
+        "p95": 1.7193
+      },
+      "identicalFinalState": true,
+      "loadAfter": {
+        "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+        "cpuPercent": 85,
+        "freeMemoryKiB": 6238116,
+        "logicalProcessors": 16,
+        "processCount": 654,
+        "utc": "2026-10-23T03:38:13.8383171Z"
+      },
+      "loadBefore": {
+        "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+        "cpuPercent": 79,
+        "freeMemoryKiB": 6210228,
+        "logicalProcessors": 16,
+        "processCount": 650,
+        "utc": "2026-10-23T03:37:23.0191614Z"
+      },
+      "meanOverheadPercent": -1.1920230960093647,
+      "nativeInnerMs": {
+        "mean": 39.97977383333334,
+        "p50": 34.8492,
+        "p95": 83.7927
+      },
+      "nativeMs": {
+        "mean": 39.98150999999998,
+        "p50": 34.851,
+        "p95": 83.7946
+      },
+      "phaseCpuMsPerTick": [0, 0, 0, 0, 0, 0, 0, 0],
+      "phaseOrder": [
+        "broadphase",
+        "narrowphase",
+        "constraint_setup",
+        "velocity_solver",
+        "position_solver",
+        "integration_ccd",
+        "islands",
+        "bookkeeping"
+      ],
+      "positionSteps": 2,
+      "preset": "s6",
+      "round": 0,
+      "scenario": "s6_bowl",
+      "scratchFallbackAllocations": 600,
+      "scratchPeakBytes": 3782400,
+      "setupMs": 17.1543,
+      "sharedPool": false,
+      "sleepSeconds": 0.5,
+      "sleepSpeed": 0.029999999329447746,
+      "speculativeContactMeters": 0.019999999552965164,
+      "splitter": true,
+      "steps": 600,
+      "threads": 8,
+      "velocitySteps": 15
+    }
+  ],
+  "schemaVersion": 1
+}

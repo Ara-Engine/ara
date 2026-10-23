@@ -4,6 +4,7 @@ mod support;
 use ara_physics::*;
 use std::time::Instant;
 use support::*;
+use ara_physics_jolt::JoltWorld;
 
 fn percentile(values: &mut [f64], p: f64) -> f64 {
     values.sort_by(f64::total_cmp);
@@ -17,7 +18,16 @@ fn run(
     steps: usize,
 ) -> std::result::Result<serde_json::Value, Box<dyn std::error::Error>> {
     let start = Instant::now();
-    let mut w = world(threads, count as u32 + 16);
+    let preset = std::env::var("ARA_PHYSICS_BENCH_PRESET").unwrap_or_else(|_| "s6".into());
+    let settings = match preset.as_str() {
+        "s6" => PhysicsConfig::default(),
+        "game_default" => PhysicsConfig::game_default(),
+        "stress" => PhysicsConfig::stress(),
+        "deterministic_network" => PhysicsConfig::deterministic_network(),
+        _ => return Err(format!("unknown preset {preset}").into()),
+    };
+    let max_bodies=count as u32+16;
+    let mut w=JoltWorld::new(PhysicsConfig{threads,max_bodies,max_pairs:(max_bodies*16).max(4096),max_contacts:(max_bodies*16).max(4096),event_capacity:0,..settings})?;
     bowl(&mut w, Vec3::ZERO, 25.0, 12.0);
     let ids = grid(&mut w, count, Vec3::Y * 13.0, 50, 7);
     w.backend_mut().optimize()?;
@@ -60,7 +70,7 @@ fn run(
         warm_restore.push(start.elapsed().as_secs_f64() * 1000.0);
     }
     Ok(
-        serde_json::json!({"bodies":count,"threads":threads,"steps":steps,"deterministic":w.backend().deterministic(),
+        serde_json::json!({"bodies":count,"threads":threads,"steps":steps,"preset":preset,"scratchMiB":w.config().scratch_mb,"deterministic":w.backend().deterministic(),
         "velocitySteps":w.config().velocity_steps,"setupMs":setup_ms,"p50Ms":percentile(&mut samples,0.5),"p95Ms":percentile(&mut samples,0.95),
         "extractP50Ms":percentile(&mut extraction,0.5),"activeAtEnd":w.backend().active_count(),"escaped":escaped,
         "nativeSnapshotBytes":snapshot.native().byte_len(),"saveMs":save_ms,"restoreMs":restore_ms,
@@ -94,7 +104,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
     }
     if let Some(path) = std::env::var_os("ARA_PHYSICS_BENCH_OUTPUT") {
-        let artifact = serde_json::json!({"scenario":"S6 bowl: mixed boxes/spheres, 15 velocity / 2 position steps, contact collection disabled",
+        let artifact = serde_json::json!({"scenario":"S6 bowl: mixed boxes/spheres, solver iterations recorded per row, contact collection disabled",
             "architecture":std::env::consts::ARCH,"os":std::env::consts::OS,"records":records});
         std::fs::write(
             path,

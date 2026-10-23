@@ -28,6 +28,10 @@ typedef struct {
     uint32_t event_capacity;
     uint32_t layer_masks[16];
     AraVec3 gravity;
+    float speculative_contact_distance;
+    float time_before_sleep;
+    float sleep_velocity_threshold;
+    uint32_t settings_flags;
 } AraWorldDesc;
 typedef struct {
     uint32_t kind;
@@ -174,6 +178,11 @@ typedef struct {
     float lower[6];
     float upper[6];
 } AraJointDesc;
+void ara_jobs_begin(AraWorld* world, uint32_t workers);
+uint32_t ara_bodies_read_columns(const AraWorld* world, const uint32_t* bodies, uint32_t count, AraVec3* positions, AraQuat* rotations, AraVec3* linear, AraVec3* angular, uint32_t* active);
+void ara_jobs_end(AraWorld* world);
+void ara_jobs_run(AraWorld* world);
+uint32_t ara_bodies_destroy(AraWorld* world, const uint32_t* bodies, uint32_t count);
 size_t ara_last_error(char* out, size_t capacity);
 uint32_t ara_abi_layout(uint32_t* out, uint32_t capacity);
 uint32_t ara_deterministic(void);

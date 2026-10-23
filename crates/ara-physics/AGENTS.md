@@ -8,6 +8,8 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
 - `register_schemas(&mut SchemaDb)` registers authoring, input and mirrored-state types.
 - `PhysicsBackend`: batch body commands/extraction, shapes, six joints, narrowphase
   queries, CharacterVirtual-style movement, wheeled vehicles, snapshots and debug data.
+- `BodyColumns`: reusable SoA position/rotation/velocity/awake columns for ECS.
+  The native backend fills these without an intermediate BodyState conversion.
 - `PhysicsWorld<B>`: immutable fixed interval, tick number, events and native checkpoints.
 - `register::<B>(&mut World, &mut Schedule, config)` installs the `PhysicsSet` boundary.
 - `PhysicsId` is nonzero, unique and stable across peers. Creation/input ordering uses
@@ -56,10 +58,18 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
 
 - All reflected fields need documentation, units/ranges where meaningful, and defaults
   identical to Rust/Serde. Tests validate schema metadata and every default.
-- Native bodies/characters are mirrored into ECS on every completed boundary. Effects
+- Native bodies/characters are mirrored into ECS on every completed boundary; equal
+  values retain Bevy change ticks, and missing mirrored columns are reinstalled. Effects
   carry tick IDs; rollback consumers replace/reconcile effects for replayed ticks.
 - Query results are precise and sorted; never use unordered broadphase results in gameplay.
 - 15 velocity / 2 position iterations are the production defaults (S6 tower requirement).
+- `PhysicsConfig::{game_default,stress,deterministic_network}` select documented
+  solver/memory/effect policies; see ara-physics-jolt/benches/RESULTS.md. Default
+  still reproduces S6. Sleeping/speculative distances and island splitting are explicit.
+- ECS lifecycle batches preserve PhysicsId construction order across actor kinds.
+  A failed batch discards unfinished bindings so correcting a scene permits retry.
+- The `bench` feature adds PhysicsTimings for lifecycle, inputs, step, extraction
+  and writeback. Wall-clock diagnostics never exist in ordinary simulation builds.
 - `cargo test -p ara-physics`; behavior tests are in `ara-physics-jolt`.
 - `cargo clippy -p ara-physics --all-targets -- -D warnings`.
 - `cargo fmt -p ara-physics -- --check`.

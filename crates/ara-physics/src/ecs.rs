@@ -4,6 +4,8 @@ mod snapshot;
 pub use snapshot::{EcsPhysicsSnapshot, restore_ecs, snapshot_ecs};
 
 use crate::*;
+use bevy_ecs::change_detection::DetectChangesMut;
+use bevy_ecs::component::{Component, Mutable};
 use bevy_ecs::prelude::{
     Entity, IntoScheduleConfigs, Mut, QueryState, Resource, Schedule, SystemSet, World,
 };
@@ -78,6 +80,22 @@ pub struct PhysicsStatus {
     pub error: Option<PhysicsError>,
 }
 
+/// Last-boundary wall timings, enabled only in benchmark builds. Not gameplay state.
+#[cfg(feature = "bench")]
+#[derive(Default, Resource)]
+pub struct PhysicsTimings {
+    /// Lifecycle discovery and native creation/removal.
+    pub synchronize_ns: u64,
+    /// Input extraction, commands and character movement.
+    pub inputs_ns: u64,
+    /// Rigid-body update and effect decoding.
+    pub step_ns: u64,
+    /// Native body-column extraction.
+    pub extraction_ns: u64,
+    /// Component comparison and changed-value writes, including characters/vehicles.
+    pub writeback_ns: u64,
+}
+
 /// Ordering seam for ara-sim: gameplay inputs before this set, presentation afterward.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SystemSet)]
 pub struct PhysicsSet;
@@ -101,7 +119,10 @@ struct Runtime {
     bindings: BTreeMap<u64, Binding>,
     commands: Vec<BodyCommand>,
     bodies: Vec<BodyHandle>,
-    states: Vec<BodyState>,
+    columns: BodyColumns,
+    pending: Vec<BodyDesc>,
+    spawned: Vec<BodyHandle>,
+    despawned: Vec<BodyHandle>,
 }
 
 /// Installs one physics backend into a Bevy 0.20 world and fixed schedule.
@@ -127,10 +148,15 @@ pub fn register<B: PhysicsBackend>(
         bindings: BTreeMap::new(),
         commands: Vec::new(),
         bodies: Vec::new(),
-        states: Vec::new(),
+        columns: BodyColumns::default(),
+        pending: Vec::new(),
+        spawned: Vec::new(),
+        despawned: Vec::new(),
     });
     world.init_resource::<PhysicsCommands>();
     world.init_resource::<PhysicsStatus>();
+    #[cfg(feature = "bench")]
+    world.init_resource::<PhysicsTimings>();
     schedule.add_systems(scheduled_tick::<B>.in_set(PhysicsSet));
     Ok(())
 }
@@ -182,14 +208,20 @@ fn run<B: PhysicsBackend>(
     physics: &mut PhysicsWorld<B>,
     r: &mut Runtime,
 ) -> Result<()> {
+    #[cfg(feature = "bench")]
+    let start = std::time::Instant::now();
     synchronize(world, physics, r)?;
+    #[cfg(feature = "bench")]
+    {
+        world.resource_mut::<PhysicsTimings>().synchronize_ns = start.elapsed().as_nanos() as u64;
+    }
+    #[cfg(feature = "bench")]
+    let start = std::time::Instant::now();
     r.commands.clear();
     r.bodies.clear();
-    for &(id, e) in &r.rows {
-        let b = r
-            .bindings
-            .get(&id)
-            .ok_or_else(|| PhysicsError("missing extraction binding".into()))?;
+    // synchronize establishes one binding per sorted row. Walk both ordered
+    // collections together instead of doing a tree lookup for every column.
+    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values()) {
         if let Some(body) = b.body() {
             let pose = world.get::<PhysicsPose>(e).copied().unwrap_or_default();
             let velocity = world.get::<Velocity>(e).copied().unwrap_or_default();
@@ -219,11 +251,7 @@ fn run<B: PhysicsBackend>(
         queue.bodies.clear();
         Ok(())
     })?;
-    for &(id, e) in &r.rows {
-        let b = r
-            .bindings
-            .get(&id)
-            .ok_or_else(|| PhysicsError("missing movement binding".into()))?;
+    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values()) {
         if let Some(c) = b.character {
             physics.step_character(
                 c,
@@ -236,7 +264,17 @@ fn run<B: PhysicsBackend>(
                 .drive(v, world.get::<VehicleInput>(e).copied().unwrap_or_default())?;
         }
     }
+    #[cfg(feature = "bench")]
+    {
+        world.resource_mut::<PhysicsTimings>().inputs_ns = start.elapsed().as_nanos() as u64;
+    }
+    #[cfg(feature = "bench")]
+    let start = std::time::Instant::now();
     physics.step()?;
+    #[cfg(feature = "bench")]
+    {
+        world.resource_mut::<PhysicsTimings>().step_ns = start.elapsed().as_nanos() as u64;
+    }
     writeback(world, physics, r)
 }
 
@@ -245,21 +283,29 @@ fn writeback<B: PhysicsBackend>(
     physics: &mut PhysicsWorld<B>,
     r: &mut Runtime,
 ) -> Result<()> {
+    #[cfg(feature = "bench")]
+    let start = std::time::Instant::now();
     physics
         .backend_mut()
-        .read_bodies(&r.bodies, &mut r.states)?;
+        .read_body_columns(&r.bodies, &mut r.columns)?;
+    #[cfg(feature = "bench")]
+    {
+        world.resource_mut::<PhysicsTimings>().extraction_ns = start.elapsed().as_nanos() as u64;
+    }
+    #[cfg(feature = "bench")]
+    let start = std::time::Instant::now();
     let mut index = 0;
-    for &(id, e) in &r.rows {
-        let b = r
-            .bindings
-            .get_mut(&id)
-            .ok_or_else(|| PhysicsError("missing writeback binding".into()))?;
+    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values_mut()) {
         if b.body().is_some() {
-            let state = r.states[index];
+            let (pose, velocity) = r
+                .columns
+                .state(index)
+                .ok_or_else(|| PhysicsError("incomplete extraction columns".into()))?;
             index += 1;
-            b.last_pose = state.pose;
-            b.last_velocity = state.velocity;
-            world.entity_mut(e).insert((state.pose, state.velocity));
+            b.last_pose = pose;
+            b.last_velocity = velocity;
+            write_changed(world, e, pose);
+            write_changed(world, e, velocity);
         }
         if let Some(c) = b.character {
             let s = physics.backend().character_state(c)?;
@@ -273,27 +319,51 @@ fn writeback<B: PhysicsBackend>(
             };
             b.last_pose = pose;
             b.last_velocity = velocity;
-            world.entity_mut(e).insert((
-                pose,
-                velocity,
+            write_changed(world, e, pose);
+            write_changed(world, e, velocity);
+            write_changed(
+                world,
+                e,
                 CharacterMotion {
                     grounded: s.grounded,
                     crouched: s.crouched,
                     ground_velocity: s.ground_velocity,
                     ground_normal: s.ground_normal,
                 },
-            ));
+            );
         }
         if let Some(v) = b.vehicle {
             let s = physics.backend().vehicle_state(v)?;
-            world.entity_mut(e).insert(VehicleTelemetry {
-                wheels_in_contact: s.wheels_in_contact,
-                engine_rpm: s.engine_rpm,
-                gear: s.gear,
-            });
+            write_changed(
+                world,
+                e,
+                VehicleTelemetry {
+                    wheels_in_contact: s.wheels_in_contact,
+                    engine_rpm: s.engine_rpm,
+                    gear: s.gear,
+                },
+            );
         }
     }
+    #[cfg(feature = "bench")]
+    {
+        world.resource_mut::<PhysicsTimings>().writeback_ns = start.elapsed().as_nanos() as u64;
+    }
     Ok(())
+}
+
+// Check the actual ECS value: gameplay may remove a mirrored component between
+// boundaries, in which case it must be reinstalled even if native state is quiet.
+fn write_changed<T: Component<Mutability = Mutable> + PartialEq>(
+    world: &mut World,
+    e: Entity,
+    value: T,
+) {
+    if let Some(mut current) = world.get_mut::<T>(e) {
+        current.set_if_neq(value);
+    } else {
+        world.entity_mut(e).insert(value);
+    }
 }
 
 fn synchronize<B: PhysicsBackend>(
@@ -301,6 +371,16 @@ fn synchronize<B: PhysicsBackend>(
     physics: &mut PhysicsWorld<B>,
     r: &mut Runtime,
 ) -> Result<()> {
+    let result = synchronize_inner(world, physics, r);
+    if result.is_err() {
+        r.bindings.retain(|_, binding| !binding.incomplete());
+        r.pending.clear();
+        r.spawned.clear();
+    }
+    result
+}
+
+fn synchronize_inner<B: PhysicsBackend>(world: &mut World, physics: &mut PhysicsWorld<B>, r: &mut Runtime) -> Result<()> {
     r.rows.clear();
     r.rows
         .extend(r.query.iter(world).map(|(entity, id)| (id.value, entity)));
@@ -336,6 +416,7 @@ fn synchronize<B: PhysicsBackend>(
             b.joint_settings = None;
         }
     }
+    r.despawned.clear();
     for id in &r.removed {
         if let Some(b) = r.bindings.remove(id) {
             if let Ok(i) = r.rows.binary_search_by_key(id, |r| r.0) {
@@ -347,13 +428,41 @@ fn synchronize<B: PhysicsBackend>(
                     world.entity_mut(e).remove::<VehicleTelemetry>();
                 }
             }
-            b.destroy(physics.backend_mut())?;
+            if b.vehicle.is_some() || b.character.is_some() {
+                physics.backend_mut().destroy_bodies(&r.despawned)?;
+                r.despawned.clear();
+                b.destroy(physics.backend_mut())?;
+            } else if let Some(body) = b.body {
+                r.despawned.push(body);
+            }
         }
     }
-    for &(id, e) in &r.rows {
-        if let std::collections::btree_map::Entry::Vacant(entry) = r.bindings.entry(id) {
-            entry.insert(Binding::create(world, e, id, physics.backend_mut())?);
+    physics.backend_mut().destroy_bodies(&r.despawned)?;
+    r.pending.clear();
+    r.spawned.clear();
+    let optimize = !r.removed.is_empty()
+        || r.rows.iter().any(|(id, _)| !r.bindings.contains_key(id));
+    // Flush before a different actor kind so native construction still follows
+    // PhysicsId across rigid bodies, vehicles and characters, not just within a batch.
+    for index in 0..r.rows.len() {
+        let (id, e) = r.rows[index];
+        if !r.bindings.contains_key(&id) {
+            if world.get::<CharacterController>(e).is_some() || world.get::<Vehicle>(e).is_some() {
+                flush_bodies(physics.backend_mut(), r)?;
+            }
+            let binding = Binding::create(
+                world,
+                e,
+                id,
+                physics.backend_mut(),
+                &mut r.pending,
+            )?;
+            r.bindings.insert(id, binding);
         }
+    }
+    flush_bodies(physics.backend_mut(), r)?;
+    if optimize {
+        physics.backend_mut().optimize()?;
     }
     if rebuild_joints {
         // Resolve connected bodies only after the complete sorted create batch exists.
@@ -387,5 +496,21 @@ fn synchronize<B: PhysicsBackend>(
             }
         }
     }
+    Ok(())
+}
+
+fn flush_bodies<B: PhysicsBackend>(backend: &mut B, r: &mut Runtime) -> Result<()> {
+    if r.pending.is_empty() { return Ok(()); }
+    r.spawned.clear();
+    backend.create_bodies(&r.pending, &mut r.spawned)?;
+    if r.pending.len() != r.spawned.len() {
+        return Err(PhysicsError("backend returned an incomplete create batch".into()));
+    }
+    for (desc, &body) in r.pending.iter().zip(&r.spawned) {
+        let binding = r.bindings.get_mut(&desc.user_data)
+            .ok_or_else(|| PhysicsError("missing create binding".into()))?;
+        binding.body = Some(body);
+    }
+    r.pending.clear();
     Ok(())
 }

@@ -22,6 +22,36 @@ mod types;
 pub use types::*;
 
 unsafe extern "C" {
+    /// Extracts directly into separate position, rotation, velocity and awake columns.
+    /// # Safety
+    /// All input/output columns contain count entries and do not overlap; world
+    /// is live with no concurrent mutation. Every generation is checked first.
+    pub fn ara_bodies_read_columns(
+        world: *const AraWorld,
+        bodies: *const u32,
+        count: u32,
+        positions: *mut AraVec3,
+        rotations: *mut AraQuat,
+        linear: *mut AraVec3,
+        angular: *mut AraVec3,
+        active: *mut u32,
+    ) -> u32;
+    /// Starts a host-job boundary, after all preceding workers have joined.
+    /// # Safety
+    /// World must be exclusive, live and configured with host jobs and >1 threads.
+    pub fn ara_jobs_begin(world: *mut AraWorld, workers: u32);
+    /// Releases host workers after the native update barrier has completed.
+    /// # Safety
+    /// A matching begin must precede this call; workers must be joined afterward.
+    pub fn ara_jobs_end(world: *mut AraWorld);
+    /// Borrows the host queue on a worker until the boundary ends.
+    /// # Safety
+    /// Only queue access may overlap the update; join before dropping the world.
+    pub fn ara_jobs_run(world: *mut AraWorld);
+    /// Validates and removes a complete body batch, rejecting duplicate handles.
+    /// # Safety
+    /// IDs must contain count initialized elements; world must be exclusive.
+    pub fn ara_bodies_destroy(world: *mut AraWorld, bodies: *const u32, count: u32) -> u32;
     /// Copies the thread-local error; returns required bytes including NUL.
     /// # Safety
     /// `out` must have `capacity` writable bytes, or be null when capacity is zero.

@@ -20,7 +20,19 @@ fn platform(t: f32) -> Vec3 {
 }
 impl Scene {
     fn new(threads: u32, perturb: bool) -> Self {
-        let mut w = world(threads, 2048);
+        Self::with_jobs(threads, perturb, false)
+    }
+    fn with_jobs(threads: u32, perturb: bool, shared_job_pool: bool) -> Self {
+        let mut w = JoltWorld::new(PhysicsConfig {
+            threads,
+            shared_job_pool,
+            max_bodies: 2048,
+            max_pairs: 32768,
+            max_contacts: 32768,
+            event_capacity: 0,
+            ..PhysicsConfig::deterministic_network()
+        })
+        .expect("network preset fixture");
         ground(&mut w, 100.0);
         bowl(&mut w, Vec3::ZERO, 8.0, 4.0);
         stairs(&mut w, -20.0, -10.0);
@@ -143,6 +155,25 @@ fn in_process_thread_count_and_negative_control() {
         "240-tick body/character/drivetrain hash at 1/4/8 threads: {:016x}",
         baseline[239]
     );
+}
+
+#[test]
+fn host_compute_pool_matches_dedicated_workers_and_restores_between_pools() {
+    let mut baseline = Scene::new(1, false);
+    let expected = baseline.run(0..240);
+    for threads in [4, 8] {
+        assert_eq!(Scene::with_jobs(threads, false, true).run(0..240), expected);
+    }
+    let mut dedicated = Scene::new(8, false);
+    dedicated.run(0..145);
+    let snapshot = dedicated.world.snapshot().expect("dedicated snapshot");
+    let expected = dedicated.run(145..240);
+    let mut shared = Scene::with_jobs(4, false, true);
+    shared
+        .world
+        .restore(&snapshot)
+        .expect("restore on host workers");
+    assert_eq!(shared.run(145..240), expected);
 }
 
 #[test]

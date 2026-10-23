@@ -140,6 +140,46 @@ pub struct BodyState {
     pub active: bool,
 }
 
+/// Reusable structure-of-arrays extraction for ECS columns, in requested body order.
+/// Capacity is retained across ticks. No native ABI layout is imposed on components.
+#[derive(Default)]
+pub struct BodyColumns {
+    /// World-space body origins.
+    pub positions: Vec<[f32; 3]>,
+    /// XYZW unit rotations.
+    pub rotations: Vec<[f32; 4]>,
+    /// Linear velocities in meters per second.
+    pub linear: Vec<[f32; 3]>,
+    /// Angular velocities in radians per second.
+    pub angular: Vec<[f32; 3]>,
+    /// One for awake, zero for static or sleeping.
+    pub active: Vec<u32>,
+    pub(crate) fallback: Vec<BodyState>,
+}
+impl BodyColumns {
+    /// Sizes all columns together, retaining allocations after the initial reserve.
+    pub fn resize(&mut self, len: usize) {
+        self.positions.resize(len, [0.0; 3]);
+        self.rotations.resize(len, [0.0; 4]);
+        self.linear.resize(len, [0.0; 3]);
+        self.angular.resize(len, [0.0; 3]);
+        self.active.resize(len, 0);
+    }
+    /// Reconstructs one pose/velocity pair for ECS writeback.
+    pub fn state(&self, index: usize) -> Option<(PhysicsPose, Velocity)> {
+        Some((
+            PhysicsPose {
+                position: *self.positions.get(index)?,
+                rotation: crate::Rotation(*self.rotations.get(index)?),
+            },
+            Velocity {
+                linear: *self.linear.get(index)?,
+                angular: *self.angular.get(index)?,
+            },
+        ))
+    }
+}
+
 /// Typed runtime intent; these never edit authoring documents.
 #[derive(Debug, Clone, Copy)]
 pub enum BodyCommand {
