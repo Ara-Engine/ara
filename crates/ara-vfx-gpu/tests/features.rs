@@ -15,6 +15,8 @@ fn ribbon_mesh_surface_and_depth_collision_execute_on_gpu() {
         return;
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let captures = root.join("../../target/ara-vfx-gpu/features");
+    std::fs::create_dir_all(&captures).unwrap();
     let mut gpu = VulkanDevice::new(&[], root.join(".cache/features")).unwrap();
     for (effect, tick) in ara_vfx::samples::additional() {
         let mut system = GpuSystem::new(
@@ -51,7 +53,7 @@ fn ribbon_mesh_surface_and_depth_collision_execute_on_gpu() {
             );
         }
         capture
-            .write(&root.join("captures").join(format!("{}.png", effect.name)))
+            .write(&captures.join(format!("{}.png", effect.name)))
             .unwrap();
         system.retire(&mut gpu).unwrap();
     }
@@ -64,6 +66,8 @@ fn composites_into_renderer_hdr_and_preserves_imported_states() {
         return;
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let captures = root.join("../../target/ara-vfx-gpu/composite");
+    std::fs::create_dir_all(&captures).unwrap();
     let scene = Scene {
         meshes: vec![sphere(1, "sphere".into(), Vec3::new(-1.2, 0.5, 0.), 0.5, 0)],
         materials: vec![Material::default()],
@@ -114,9 +118,7 @@ fn composites_into_renderer_hdr_and_preserves_imported_states() {
     }
     let pixels = system.read_output(renderer.gpu_mut()).unwrap();
     let image = image::RgbaImage::from_raw(960, 540, pixels).unwrap();
-    image
-        .save(root.join("captures/scene-composite.png"))
-        .unwrap();
+    image.save(captures.join("scene-composite.png")).unwrap();
     assert!(system.stats(renderer.gpu()).unwrap().particles_alive > 0);
     system.retire(renderer.gpu_mut()).unwrap();
     renderer.render(&view.camera, 1.).unwrap();

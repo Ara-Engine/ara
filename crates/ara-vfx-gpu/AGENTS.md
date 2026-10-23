@@ -40,6 +40,8 @@ Set CARGO_BUILD_JOBS=2. `run.ps1 -Mode Check` scopes the renderer's implicit-lay
 workaround and runs crate gates. Capture/timing modes run headlessly.
 Ordinary cargo test includes CPU contract tests; GPU goldens are explicitly
 enabled with ARA_VFX_GPU_TESTS=1. They require this device/driver and SDK layers.
+GPU test captures and measurements go under target/ara-vfx-gpu; tracked evidence
+and goldens stay unchanged unless the explicit golden update flag is set.
 ARA_UPDATE_GOLDENS=1 deliberately updates six still/sequence PNG baseline pairs.
 Inspect captures before accepting them. Gallery frames use lit geometry and the
 fidelity post stack; benchmark sprites intentionally isolate simulation/fill cost.
