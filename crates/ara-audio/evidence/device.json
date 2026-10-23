@@ -1,0 +1,17 @@
+{
+  "capacityFrames": 1056,
+  "device": "{0.0.0.00000000}.{74d7e156-bf79-4d0b-9bf8-0c55e731d69e}",
+  "deviceRate": 48000,
+  "driver": "IAudioClient3 RAW GameEffects",
+  "hardwareFrames": 480,
+  "latencyEstimate": {
+    "estimatedOutputMs": 20,
+    "queuedFrames": 480
+  },
+  "maxPumpMs": 2.9283,
+  "maxQueuedFrames": 480,
+  "note": "Known queue + period estimate; independent loopback.json measures command to output mix.",
+  "reopenSucceeded": true,
+  "reportedLatencyMs": 0,
+  "submittedFrames": 142080
+}

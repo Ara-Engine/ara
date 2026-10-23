@@ -1,0 +1,286 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_outpost1",
+  "records": {
+    "e_beacon1": {
+      "name": "Beacon",
+      "order": "a3",
+      "MeshRenderer": {
+        "mesh": "@meshes/lamp.glb#ms_lamp0001"
+      },
+      "Transform": {
+        "position": [-2, 3, 10]
+      }
+    },
+    "e_bench1": {
+      "name": "Workbench",
+      "order": "a9",
+      "Collider": {
+        "size": [2, 1, 1]
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/bench.glb#ms_bench001"
+      },
+      "Transform": {
+        "position": [2, 0, -6]
+      }
+    },
+    "e_brl001": {
+      "name": "Barrel",
+      "order": "a6",
+      "Collider": {
+        "shape": "capsule"
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/barrel.glb#ms_barrel01"
+      },
+      "RigidBody": {
+        "mass": 30
+      },
+      "Transform": {
+        "position": [-3, 0, 2]
+      }
+    },
+    "e_brl002": {
+      "name": "Barrel.001",
+      "order": "a7",
+      "Collider": {
+        "shape": "capsule"
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/barrel.glb#ms_barrel01"
+      },
+      "RigidBody": {
+        "mass": 30
+      },
+      "Transform": {
+        "position": [-3, 0, 3.2]
+      }
+    },
+    "e_brl003": {
+      "name": "Barrel.002",
+      "order": "a8",
+      "Collider": {
+        "shape": "capsule"
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/barrel.glb#ms_barrel01"
+      },
+      "RigidBody": {
+        "mass": 30
+      },
+      "Transform": {
+        "position": [-3, 5, 4.4]
+      }
+    },
+    "e_dlamp1": {
+      "name": "DoorLamp",
+      "parent": "e_gate01",
+      "order": "a1",
+      "prefab": "@prefabs/lamp.prefab#pf_lamp0001",
+      "overrides": {
+        "Transform.position": [1.5, 3, 0]
+      }
+    },
+    "e_door01": {
+      "name": "GateDoor",
+      "parent": "e_gate01",
+      "order": "a0",
+      "Collider": {
+        "size": [3, 3, 0.3]
+      },
+      "Door": {
+        "speed": 1.2
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/door.glb#ms_door0001"
+      },
+      "Transform": {}
+    },
+    "e_flood1": {
+      "name": "Floodlight",
+      "order": "aE",
+      "Light": {
+        "kind": "spot",
+        "intensity": 0,
+        "range": 20
+      },
+      "Transform": {
+        "position": [-10, 4, 0]
+      }
+    },
+    "e_floor1": {
+      "name": "Floor",
+      "order": "a0",
+      "Collider": {
+        "size": [40, 0.5, 40]
+      },
+      "Transform": {}
+    },
+    "e_gate01": {
+      "name": "Gate",
+      "order": "aC",
+      "Transform": {
+        "position": [14, 0, 0]
+      }
+    },
+    "e_gcrt01": {
+      "name": "GeneratorCrate",
+      "order": "a4",
+      "prefab": "@prefabs/crate.prefab#pf_crate001",
+      "overrides": {
+        "Transform.position": [7.5, 0, -4]
+      }
+    },
+    "e_gen001": {
+      "name": "Generator",
+      "order": "a2",
+      "Collider": {
+        "size": [2, 2, 1]
+      },
+      "MeshRenderer": {
+        "mesh": "@meshes/generator.glb#ms_genr0001"
+      },
+      "Transform": {
+        "position": [6, 0, -4]
+      }
+    },
+    "e_gtcrt1": {
+      "name": "GateCrate",
+      "order": "a5",
+      "prefab": "@prefabs/crate.prefab#pf_crate001",
+      "overrides": {
+        "Transform.position": [12, 0, 2],
+        "Transform.scale": [2, 2, 2],
+        "e_lid001/MeshRenderer.tint": [0, 1, 0, 1]
+      }
+    },
+    "e_patrol": {
+      "name": "Patrol",
+      "order": "aB"
+    },
+    "e_radio1": {
+      "name": "Radio",
+      "parent": "e_shelf1",
+      "order": "a0",
+      "MeshRenderer": {
+        "mesh": "@meshes/radio.glb#ms_radio001"
+      },
+      "Transform": {
+        "position": [0, 1.5, 0]
+      }
+    },
+    "e_rubbl1": {
+      "name": "Rubble",
+      "parent": "e_ruins1",
+      "order": "a1",
+      "Transform": {
+        "position": [2, 0, 1]
+      }
+    },
+    "e_ruins1": {
+      "name": "Ruins",
+      "order": "aF",
+      "Transform": {
+        "position": [-12, 0, -12]
+      }
+    },
+    "e_rwall1": {
+      "name": "BrokenWall",
+      "parent": "e_ruins1",
+      "order": "a0",
+      "MeshRenderer": {
+        "mesh": "@meshes/wall.glb#ms_wall0001"
+      },
+      "Transform": {}
+    },
+    "e_shelf1": {
+      "name": "Shelf",
+      "order": "aA",
+      "Transform": {
+        "position": [-6, 0, -6]
+      }
+    },
+    "e_sign01": {
+      "name": "RuinsSign",
+      "order": "aG",
+      "Transform": {
+        "position": [-9, 0, -9]
+      }
+    },
+    "e_spawn1": {
+      "name": "PlayerSpawn",
+      "order": "a1",
+      "Transform": {}
+    },
+    "e_stone1": {
+      "name": "Stone",
+      "parent": "e_rubbl1",
+      "order": "a0",
+      "Transform": {
+        "position": [0, 0.3, 0]
+      }
+    },
+    "e_tools1": {
+      "name": "Toolbox",
+      "parent": "e_bench1",
+      "order": "a1",
+      "Transform": {
+        "position": [0.5, 1, 0]
+      }
+    },
+    "e_wlight1": {
+      "name": "WorkLight",
+      "parent": "e_bench1",
+      "order": "a0",
+      "Light": {
+        "intensity": 1200,
+        "range": 6
+      },
+      "Transform": {
+        "position": [0, 2, 0]
+      }
+    },
+    "e_wp001": {
+      "name": "WP1",
+      "parent": "e_patrol",
+      "order": "a1",
+      "Transform": {
+        "position": [0, 0, 10]
+      }
+    },
+    "e_wp002": {
+      "name": "WP2",
+      "parent": "e_patrol",
+      "order": "a3",
+      "Transform": {
+        "position": [5, 0, 12]
+      }
+    },
+    "e_wp003": {
+      "name": "WP3",
+      "parent": "e_patrol",
+      "order": "a0",
+      "Transform": {
+        "position": [10, 0, 10]
+      }
+    },
+    "e_wp004": {
+      "name": "WP4",
+      "parent": "e_patrol",
+      "order": "a2",
+      "Transform": {
+        "position": [10, 0, 0]
+      }
+    },
+    "e_ylamp1": {
+      "name": "YardLamp",
+      "order": "aD",
+      "prefab": "@prefabs/lamp.prefab#pf_lamp0001",
+      "overrides": {
+        "Transform.position": [0, 0, 8],
+        "e_bulb01/Light.color": [1, 0, 0, 1]
+      }
+    }
+  }
+}

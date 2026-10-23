@@ -1,0 +1,26 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_lamp0001",
+  "records": {
+    "e_bulb01": {
+      "name": "Bulb",
+      "parent": "e_lpost1",
+      "order": "a0",
+      "Light": {
+        "intensity": 800,
+        "range": 8
+      },
+      "Transform": {
+        "position": [0, 2.5, 0]
+      }
+    },
+    "e_lpost1": {
+      "name": "Lamp",
+      "order": "a0",
+      "MeshRenderer": {
+        "mesh": "@meshes/lamp.glb#ms_lamp0001"
+      },
+      "Transform": {}
+    }
+  }
+}

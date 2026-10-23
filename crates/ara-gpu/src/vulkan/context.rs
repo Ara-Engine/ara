@@ -25,9 +25,12 @@ pub struct Validation {
     pub messages: Mutex<Vec<Diagnostic>>,
 }
 
+/// Counts validation and performance messages. General messages come from the loader
+/// and third-party implicit layers (overlays, capture hooks with stale manifests); they
+/// describe the machine, not our API usage, so they are recorded but never counted.
 unsafe extern "system" fn debug_callback(
     severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    _kind: vk::DebugUtilsMessageTypeFlagsEXT,
+    kind: vk::DebugUtilsMessageTypeFlagsEXT,
     data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
     user: *mut c_void,
 ) -> vk::Bool32 {
@@ -38,15 +41,28 @@ unsafe extern "system" fn debug_callback(
         let message = CStr::from_ptr((*data).p_message)
             .to_string_lossy()
             .into_owned();
-        if severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR) {
-            state.errors.fetch_add(1, Ordering::Relaxed);
-        } else {
-            state.warnings.fetch_add(1, Ordering::Relaxed);
+        let counted = kind.intersects(
+            vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        );
+        if counted {
+            let counter = if severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR) {
+                &state.errors
+            } else {
+                &state.warnings
+            };
+            counter.fetch_add(1, Ordering::Relaxed);
         }
-        eprintln!("VALIDATION {severity:?}: {message}");
+        let label = if counted { "VALIDATION" } else { "ENVIRONMENT" };
+        eprintln!("{label} {severity:?}: {message}");
         if let Ok(mut messages) = state.messages.lock() {
             messages.push(Diagnostic {
-                code: "ARA_GPU_VALIDATION".into(),
+                code: if counted {
+                    "ARA_GPU_VALIDATION"
+                } else {
+                    "ARA_GPU_ENVIRONMENT"
+                }
+                .into(),
                 id: if (*data).p_message_id_name.is_null() {
                     String::new()
                 } else {
@@ -65,7 +81,8 @@ unsafe extern "system" fn debug_callback(
 /// One validation-layer diagnostic suitable for a diagnostics bus.
 #[derive(Clone, Debug, Serialize)]
 pub struct Diagnostic {
-    /// Stable engine diagnostic code.
+    /// `ARA_GPU_VALIDATION` (counted by `assert_clean`) or `ARA_GPU_ENVIRONMENT`
+    /// (loader and third-party layer messages, recorded only).
     pub code: String,
     /// Layer message identifier.
     pub id: String,

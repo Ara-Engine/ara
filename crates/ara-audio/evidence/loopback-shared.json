@@ -1,0 +1,19 @@
+{
+  "capacityFrames": 1056,
+  "capturedPeak": 0.20000000298023224,
+  "commandQpc100ns": [4867063962870, 4867066455619, 4867068961710, 4867071467544, 4867073957015, 4867076466912, 4867078957885, 4867081455205],
+  "correlations": [1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002],
+  "device": "default console output",
+  "driver": "IAudioClient3",
+  "hardwareFrames": 480,
+  "latencyEstimate": {
+    "estimatedOutputMs": 20,
+    "queuedFrames": 480
+  },
+  "latencyMs": [71.02743330078125, 69.75633330078125, 69.8133, 69.90436669921876, 71.62003330078124, 68.62953330078125, 70.1971, 71.13366669921875],
+  "limitation": "Measures command to Windows output mix; excludes DAC, wireless and acoustic propagation.",
+  "method": "WASAPI loopback packet QPC timestamp + 768-frame MLS correlation",
+  "p50Ms": 70.05073334960937,
+  "p95Ms": 71.44980499023437,
+  "submittedFrames": 144480
+}

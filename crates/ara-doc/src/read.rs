@@ -169,15 +169,34 @@ fn read_inner(
     for c in &conflicts {
         let record = c.get("record").and_then(Value::as_str).unwrap_or_default();
         let path = c.get("path").and_then(Value::as_str).unwrap_or_default();
-        out.push(
-            Diagnostic::error(
-                codes::UNRESOLVED_CONFLICT,
-                "unresolved merge conflict; pick a value and delete the `$conflicts` entry",
-            )
-            .record(record)
-            .path(path)
-            .within(base),
-        );
+        let key = if path.is_empty() {
+            record.to_owned()
+        } else {
+            format!("{record}:{path}")
+        };
+        let file = base.file.clone().unwrap_or_default();
+        let mut d = Diagnostic::error(
+            codes::UNRESOLVED_CONFLICT,
+            "unresolved merge conflict; pick a side with `ara resolve` (or set the value and delete the `$conflicts` entry)",
+        )
+        .record(record)
+        .path(path)
+        .within(base);
+        for side in ["ours", "theirs"] {
+            let shown = c.get(side).map_or("deleted".to_owned(), Value::to_string);
+            d = d.with_fix(
+                format!("Keep {side} ({shown})"),
+                FixAction::Cli {
+                    args: vec![
+                        "resolve".into(),
+                        file.clone(),
+                        "--pick".into(),
+                        format!("{key}={side}"),
+                    ],
+                },
+            );
+        }
+        out.push(d);
     }
 
     let mut doc = Document::new(kind.name.clone(), id);

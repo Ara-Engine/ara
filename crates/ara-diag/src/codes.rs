@@ -138,6 +138,12 @@ codes! {
     COMPONENT_MISSING = 1607,
     /// The registry entry has a different kind (command, query or job) than requested.
     WRONG_KIND = 1608,
+    /// An entity selector (`name:Crate`) matches more than one entity; use an ID or a
+    /// longer name path (`name:Floor/Crate`).
+    AMBIGUOUS_ENTITY = 1609,
+    /// An agent's change has no `why`; agent transactions say why they were made, for
+    /// the human who reviews them.
+    MISSING_WHY = 1610,
 
     /// Both sides of a merge changed the same field differently.
     MERGE_CONFLICT = 1701,
@@ -170,6 +176,9 @@ codes! {
     SESSION_APPROVED = 1812,
     /// The transaction or entity has nothing left to review.
     NOT_REVIEWABLE = 1813,
+    /// The call names no document and none can be inferred from its entities or the
+    /// project's main scene; pass `doc`.
+    DOC_REQUIRED = 1814,
 
     /// No `ara.project.json` was found; the command needs a project.
     NO_PROJECT = 1901,
