@@ -12,6 +12,8 @@
 mod composite;
 pub mod geometry;
 pub mod landscape;
+#[cfg(test)]
+mod landscape_tests;
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
