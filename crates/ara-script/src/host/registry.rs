@@ -105,10 +105,21 @@ impl ModuleRecord {
         let systems = |m: &ModuleRecord| -> Vec<_> {
             m.systems
                 .iter()
-                .map(|s| (s.id, s.name.clone(), s.order, s.columns.clone(), s.resources.clone(), s.with.clone(), s.without.clone()))
+                .map(|s| {
+                    (
+                        s.id,
+                        s.name.clone(),
+                        s.order,
+                        s.columns.clone(),
+                        s.resources.clone(),
+                        s.with.clone(),
+                        s.without.clone(),
+                    )
+                })
                 .collect()
         };
-        let behaviours = |m: &ModuleRecord| -> Vec<_> { m.behaviours.iter().map(|b| (b.id, b.data)).collect() };
+        let behaviours =
+            |m: &ModuleRecord| -> Vec<_> { m.behaviours.iter().map(|b| (b.id, b.data)).collect() };
         systems(self) == systems(other) && behaviours(self) == behaviours(other)
     }
 }
@@ -212,7 +223,11 @@ fn check_layout(db: &SchemaDb, d: &LayoutDecl) -> Result<StructLayout, Diagnosti
 }
 
 /// Registers a plain-data component (no drop) with the canonical layout.
-fn register_bevy_component(world: &mut World, name: &str, layout: &StructLayout) -> Result<ComponentId, Diagnostic> {
+fn register_bevy_component(
+    world: &mut World,
+    name: &str,
+    layout: &StructLayout,
+) -> Result<ComponentId, Diagnostic> {
     let l = Layout::from_size_align(layout.size, layout.align)
         .map_err(|e| error(codes::LAYOUT_MISMATCH, format!("`{name}`: {e}")))?;
     // SAFETY: script components are plain data (blittable fields only, no drop glue),
@@ -237,7 +252,9 @@ fn register_bevy_component(world: &mut World, name: &str, layout: &StructLayout)
 fn convert(db: &SchemaDb, old: &StructLayout, new: &StructLayout, bytes: &[u8]) -> Vec<u8> {
     let mut out = value::default_bytes(db, new);
     for nf in &new.fields {
-        if let Some(of) = old.field(&nf.name).filter(|of| of.ty == nf.ty && of.layout == nf.layout)
+        if let Some(of) = old
+            .field(&nf.name)
+            .filter(|of| of.ty == nf.ty && of.layout == nf.layout)
             && let Some(src) = bytes.get(of.offset..of.offset + of.layout.size)
         {
             out[nf.offset..nf.offset + nf.layout.size].copy_from_slice(src);
@@ -261,37 +278,65 @@ impl Registry {
 
     /// Index of a component by schema name.
     pub fn component(&self, name: &str) -> Option<u32> {
-        self.components.iter().position(|c| c.name == name).and_then(|i| u32::try_from(i).ok())
+        self.components
+            .iter()
+            .position(|c| c.name == name)
+            .and_then(|i| u32::try_from(i).ok())
     }
 
     fn resource(&self, name: &str) -> Option<u32> {
-        self.resources.iter().position(|c| c.name == name).and_then(|i| u32::try_from(i).ok())
+        self.resources
+            .iter()
+            .position(|c| c.name == name)
+            .and_then(|i| u32::try_from(i).ok())
     }
 
     /// The catalog the command-buffer code reads from the world.
     pub fn catalog(&self) -> ScriptCatalog {
         ScriptCatalog {
-            components: self.components.iter().map(|c| (c.id, c.layout.size)).collect(),
+            components: self
+                .components
+                .iter()
+                .map(|c| (c.id, c.layout.size))
+                .collect(),
         }
     }
 
     /// Registers one module generation. On error nothing changes and the old
     /// generation keeps running.
-    pub fn register_module(&mut self, world: &mut World, json: &[u8]) -> Result<Value, Vec<Diagnostic>> {
-        let mut shape: Value = serde_json::from_slice(json)
-            .map_err(|e| vec![error(codes::BAD_DESCRIPTOR, format!("module descriptor: {e}"))])?;
+    pub fn register_module(
+        &mut self,
+        world: &mut World,
+        json: &[u8],
+    ) -> Result<Value, Vec<Diagnostic>> {
+        let mut shape: Value = serde_json::from_slice(json).map_err(|e| {
+            vec![error(
+                codes::BAD_DESCRIPTOR,
+                format!("module descriptor: {e}"),
+            )]
+        })?;
         let generation = shape.as_object_mut().and_then(|o| o.remove("generation"));
-        let slot = shape["slot"].as_u64().and_then(|s| u32::try_from(s).ok()).unwrap_or(u32::MAX);
+        let slot = shape["slot"]
+            .as_u64()
+            .and_then(|s| u32::try_from(s).ok())
+            .unwrap_or(u32::MAX);
         // Fast path: an L3 that changed only code declares exactly what the running generation did.
         if let Some(prev) = self.modules.get_mut(&slot)
             && prev.shape == shape
         {
-            prev.generation = generation.and_then(|g| g.as_u64()).and_then(|g| u32::try_from(g).ok()).unwrap_or(prev.generation);
+            prev.generation = generation
+                .and_then(|g| g.as_u64())
+                .and_then(|g| u32::try_from(g).ok())
+                .unwrap_or(prev.generation);
             prev.hot = shape["hot"].as_bool().unwrap_or(prev.hot);
             return Ok(self.response());
         }
-        let d: Descriptor = serde_json::from_slice(json)
-            .map_err(|e| vec![error(codes::BAD_DESCRIPTOR, format!("module descriptor: {e}"))])?;
+        let d: Descriptor = serde_json::from_slice(json).map_err(|e| {
+            vec![error(
+                codes::BAD_DESCRIPTOR,
+                format!("module descriptor: {e}"),
+            )]
+        })?;
         let owner = Owner::Module(d.slot);
         let mut problems = Vec::new();
 
@@ -323,23 +368,28 @@ impl Registry {
         }
 
         // 2. Layouts.
-        let checked = |decls: &[LayoutDecl], problems: &mut Vec<Diagnostic>| -> Vec<(String, StructLayout)> {
-            decls
-                .iter()
-                .filter_map(|l| match check_layout(&schema, l) {
-                    Ok(c) => Some((l.name.clone(), c)),
-                    Err(e) => {
-                        problems.push(e);
-                        None
-                    }
-                })
-                .collect()
-        };
+        let checked =
+            |decls: &[LayoutDecl], problems: &mut Vec<Diagnostic>| -> Vec<(String, StructLayout)> {
+                decls
+                    .iter()
+                    .filter_map(|l| match check_layout(&schema, l) {
+                        Ok(c) => Some((l.name.clone(), c)),
+                        Err(e) => {
+                            problems.push(e);
+                            None
+                        }
+                    })
+                    .collect()
+            };
         let comps = checked(&d.components, &mut problems);
         let ress = checked(&d.resources, &mut problems);
         let cues = checked(&d.cues, &mut problems);
         for (name, _) in &ress {
-            if let Some(r) = self.resources.iter().find(|r| &r.name == name && r.owner != owner) {
+            if let Some(r) = self
+                .resources
+                .iter()
+                .find(|r| &r.name == name && r.owner != owner)
+            {
                 problems.push(error(
                     codes::BAD_DESCRIPTOR,
                     format!("resource `{name}` is already declared by {:?}", r.owner),
@@ -347,7 +397,11 @@ impl Registry {
             }
         }
         for (name, _) in &comps {
-            if let Some(c) = self.components.iter().find(|c| &c.name == name && c.owner != owner) {
+            if let Some(c) = self
+                .components
+                .iter()
+                .find(|c| &c.name == name && c.owner != owner)
+            {
                 problems.push(error(
                     codes::BAD_DESCRIPTOR,
                     format!("component `{name}` is already declared by {:?}", c.owner),
@@ -370,38 +424,58 @@ impl Registry {
         }
 
         // 3. Resolve names: existing components plus this module's.
-        let known_component = |name: &str| self.component(name).is_some() || comps.iter().any(|(n, _)| n == name);
-        let known_resource = |name: &str| self.resource(name).is_some() || ress.iter().any(|(n, _)| n == name);
+        let known_component =
+            |name: &str| self.component(name).is_some() || comps.iter().any(|(n, _)| n == name);
+        let known_resource =
+            |name: &str| self.resource(name).is_some() || ress.iter().any(|(n, _)| n == name);
         for s in &d.systems {
             for a in &s.columns {
                 if !known_component(&a.name) {
-                    problems.push(error(codes::UNKNOWN_COMPONENT, format!("system `{}` uses unknown component `{}`", s.name, a.name)));
+                    problems.push(error(
+                        codes::UNKNOWN_COMPONENT,
+                        format!("system `{}` uses unknown component `{}`", s.name, a.name),
+                    ));
                 }
             }
             for a in &s.resources {
                 if !known_resource(&a.name) {
-                    problems.push(error(codes::UNKNOWN_COMPONENT, format!("system `{}` uses unknown resource `{}`", s.name, a.name)));
+                    problems.push(error(
+                        codes::UNKNOWN_COMPONENT,
+                        format!("system `{}` uses unknown resource `{}`", s.name, a.name),
+                    ));
                 }
             }
             for n in s.with.iter().chain(&s.without) {
                 if !known_component(n) {
-                    problems.push(error(codes::UNKNOWN_COMPONENT, format!("system `{}` filters on unknown component `{n}`", s.name)));
+                    problems.push(error(
+                        codes::UNKNOWN_COMPONENT,
+                        format!("system `{}` filters on unknown component `{n}`", s.name),
+                    ));
                 }
             }
             let mut seen = std::collections::BTreeSet::new();
             if s.columns.iter().any(|a| !seen.insert(&a.name)) {
-                problems.push(error(codes::BAD_DESCRIPTOR, format!("system `{}` takes the same component twice", s.name)));
+                problems.push(error(
+                    codes::BAD_DESCRIPTOR,
+                    format!("system `{}` takes the same component twice", s.name),
+                ));
             }
         }
         for b in &d.behaviours {
             if !known_component(&b.data) {
-                problems.push(error(codes::UNKNOWN_COMPONENT, format!("behaviour `{}` has no data component `{}`", b.name, b.data)));
+                problems.push(error(
+                    codes::UNKNOWN_COMPONENT,
+                    format!("behaviour `{}` has no data component `{}`", b.name, b.data),
+                ));
             }
         }
         for c in &d.commands {
             for n in c.reads.iter().chain(&c.writes) {
                 if !known_component(n) {
-                    problems.push(error(codes::UNKNOWN_COMPONENT, format!("command `{}` uses unknown component `{n}`", c.name)));
+                    problems.push(error(
+                        codes::UNKNOWN_COMPONENT,
+                        format!("command `{}` uses unknown component `{n}`", c.name),
+                    ));
                 }
             }
         }
@@ -418,12 +492,22 @@ impl Registry {
                     let id = register_bevy_component(world, &name, &layout).map_err(|e| vec![e])?;
                     let old = self.components[i as usize].clone();
                     migrate(world, &schema, &old, id, &layout);
-                    self.components[i as usize] = ScriptComponent { name, id, layout, owner };
+                    self.components[i as usize] = ScriptComponent {
+                        name,
+                        id,
+                        layout,
+                        owner,
+                    };
                     ids_changed = true;
                 }
                 None => {
                     let id = register_bevy_component(world, &name, &layout).map_err(|e| vec![e])?;
-                    self.components.push(ScriptComponent { name, id, layout, owner });
+                    self.components.push(ScriptComponent {
+                        name,
+                        id,
+                        layout,
+                        owner,
+                    });
                     self.catalog_dirty = true;
                 }
             }
@@ -437,14 +521,20 @@ impl Registry {
             let id = register_bevy_component(world, &name, &layout).map_err(|e| vec![e])?;
             let bytes = match existing.and_then(|i| {
                 let r = &self.resources[i as usize];
-                r.id.and_then(|rid| resource_bytes(world, rid, r.layout.size)).map(|b| (r.layout.clone(), b))
+                r.id.and_then(|rid| resource_bytes(world, rid, r.layout.size))
+                    .map(|b| (r.layout.clone(), b))
             }) {
                 Some((old, b)) => convert(&schema, &old, &layout, &b),
                 None => value::default_bytes(&schema, &layout),
             };
             insert_resource_bytes(world, id, &bytes);
             ids_changed = true;
-            let rec = ScriptData { name, id: Some(id), layout, owner };
+            let rec = ScriptData {
+                name,
+                id: Some(id),
+                layout,
+                owner,
+            };
             match existing {
                 Some(i) => self.resources[i as usize] = rec,
                 None => self.resources.push(rec),
@@ -453,7 +543,12 @@ impl Registry {
         for (name, layout) in cues {
             match self.cues.iter().position(|c| c.name == name) {
                 Some(i) => self.cues[i].layout = layout,
-                None => self.cues.push(ScriptData { name, id: None, layout, owner }),
+                None => self.cues.push(ScriptData {
+                    name,
+                    id: None,
+                    layout,
+                    owner,
+                }),
             }
         }
 
@@ -474,8 +569,16 @@ impl Registry {
                     id: id(i),
                     name: s.name.clone(),
                     order: s.order,
-                    columns: s.columns.iter().map(|a| (resolve(&a.name), a.write)).collect(),
-                    resources: s.resources.iter().map(|a| (self.resource(&a.name).unwrap_or(u32::MAX), a.write)).collect(),
+                    columns: s
+                        .columns
+                        .iter()
+                        .map(|a| (resolve(&a.name), a.write))
+                        .collect(),
+                    resources: s
+                        .resources
+                        .iter()
+                        .map(|a| (self.resource(&a.name).unwrap_or(u32::MAX), a.write))
+                        .collect(),
                     with: s.with.iter().map(|n| resolve(n)).collect(),
                     without: s.without.iter().map(|n| resolve(n)).collect(),
                 })
@@ -484,7 +587,11 @@ impl Registry {
                 .behaviours
                 .iter()
                 .enumerate()
-                .map(|(i, b)| BehaviourDecl { id: id(i), name: b.name.clone(), data: resolve(&b.data) })
+                .map(|(i, b)| BehaviourDecl {
+                    id: id(i),
+                    name: b.name.clone(),
+                    data: resolve(&b.data),
+                })
                 .collect(),
             commands: d
                 .commands
@@ -507,7 +614,10 @@ impl Registry {
                 .collect(),
         };
         // An L3 that only changed code keeps the schedule: systems are ids into the C# table.
-        let same = self.modules.get(&d.slot).is_some_and(|prev| prev.same_shape(&record));
+        let same = self
+            .modules
+            .get(&d.slot)
+            .is_some_and(|prev| prev.same_shape(&record));
         self.dirty |= ids_changed || !same;
         self.catalog_dirty |= ids_changed;
         self.modules.insert(d.slot, record);
@@ -518,7 +628,12 @@ impl Registry {
     /// The registration response: every script index by name.
     fn response(&self) -> Value {
         let index = |items: Vec<(String, usize)>| -> Value {
-            Value::Object(items.into_iter().map(|(n, i)| (n, json!(i))).collect::<Map<_, _>>())
+            Value::Object(
+                items
+                    .into_iter()
+                    .map(|(n, i)| (n, json!(i)))
+                    .collect::<Map<_, _>>(),
+            )
         };
         json!({
             "ok": true,
@@ -530,11 +645,19 @@ impl Registry {
 }
 
 /// Moves every entity's `old` component into the new component `id` (new layout).
-fn migrate(world: &mut World, schema: &SchemaDb, old: &ScriptComponent, id: ComponentId, layout: &StructLayout) {
+fn migrate(
+    world: &mut World,
+    schema: &SchemaDb,
+    old: &ScriptComponent,
+    id: ComponentId,
+    layout: &StructLayout,
+) {
     let mut q = QueryBuilder::<Entity>::new(world).with_id(old.id).build();
     let entities: Vec<Entity> = q.iter(world).collect();
     for e in entities {
-        let Some(bytes) = cmdbuf::component_bytes(world, e, old.id, old.layout.size) else { continue };
+        let Some(bytes) = cmdbuf::component_bytes(world, e, old.id, old.layout.size) else {
+            continue;
+        };
         let next = convert(schema, &old.layout, layout, &bytes);
         cmdbuf::insert_bytes(world, e, id, &next);
         if let Ok(mut em) = world.get_entity_mut(e) {

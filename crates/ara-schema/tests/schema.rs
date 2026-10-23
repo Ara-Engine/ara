@@ -342,10 +342,18 @@ fn struct_layout_follows_c_rules() {
         .collect();
     assert_eq!(
         offsets,
-        [("flag", 0), ("hp", 2), ("owner", 8), ("mode", 16), ("at", 20)]
+        [
+            ("flag", 0),
+            ("hp", 2),
+            ("owner", 8),
+            ("mode", 16),
+            ("at", 20)
+        ]
     );
     assert_eq!((probe.size, probe.align), (32, 8));
-    let err = db.struct_layout("Named").expect_err("strings are not blittable");
+    let err = db
+        .struct_layout("Named")
+        .expect_err("strings are not blittable");
     assert!(err.contains("`Named.name`"), "{err}");
 }
 

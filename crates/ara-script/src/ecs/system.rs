@@ -11,7 +11,9 @@ use bevy_ecs::change_detection::Tick as BevyTick;
 use bevy_ecs::component::{ComponentId, IS_RESOURCE};
 use bevy_ecs::query::{FilteredAccess, QueryBuilder, QueryState};
 use bevy_ecs::storage::TableRow;
-use bevy_ecs::system::{SystemAccess, SystemMeta, SystemParam, SystemParamBuilder, SystemParamValidationError};
+use bevy_ecs::system::{
+    SystemAccess, SystemMeta, SystemParam, SystemParamBuilder, SystemParamValidationError,
+};
 use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
 use bevy_ecs::world::{FilteredEntityMut, World};
 use bevy_tasks::ComputeTaskPool;
@@ -122,9 +124,16 @@ unsafe impl SystemParam for ScriptQuery<'_, '_> {
         unreachable!("ScriptQuery state is always built by ScriptQueryBuilder")
     }
 
-    fn init_access(state: &Self::State, meta: &mut SystemMeta, access: &mut SystemAccess, world: &mut World) {
+    fn init_access(
+        state: &Self::State,
+        meta: &mut SystemMeta,
+        access: &mut SystemAccess,
+        world: &mut World,
+    ) {
         let set = access.require_shared_access::<Self>(meta);
-        state.query.init_access(None, set, world.as_unsafe_world_cell_readonly());
+        state
+            .query
+            .init_access(None, set, world.as_unsafe_world_cell_readonly());
         for (id, write) in &state.plan.resources {
             let mut filter = FilteredAccess::default();
             if *write {
@@ -163,7 +172,11 @@ unsafe impl SystemParam for ScriptQuery<'_, '_> {
         change_tick: BevyTick,
     ) -> Result<Self::Item<'w, 's>, SystemParamValidationError> {
         state.query.update_archetypes_unsafe_world_cell(world);
-        Ok(ScriptQuery { world, state, this_run: change_tick })
+        Ok(ScriptQuery {
+            world,
+            state,
+            this_run: change_tick,
+        })
     }
 }
 
@@ -197,7 +210,9 @@ impl ScriptQuery<'_, '_> {
         let storages = unsafe { self.world.storages() };
         let mut total = 0usize;
         'tables: for table_id in st.query.matched_tables() {
-            let Some(table) = storages.tables.get(table_id) else { continue };
+            let Some(table) = storages.tables.get(table_id) else {
+                continue;
+            };
             let len = table.entity_count() as usize;
             if len == 0 {
                 continue;
@@ -210,7 +225,9 @@ impl ScriptQuery<'_, '_> {
                 };
                 // SAFETY: `len > 0`, so row 0 exists. Column data lives in interior-mutable
                 // storage, so writing through the pointer is fine under the declared access.
-                let base = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }.as_ptr().cast_mut();
+                let base = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }
+                    .as_ptr()
+                    .cast_mut();
                 if *write {
                     // SAFETY: the system has write access to this column and `len` is its row count.
                     for t in unsafe { col.get_changed_ticks_slice(len) } {
@@ -223,16 +240,22 @@ impl ScriptQuery<'_, '_> {
                 }
                 scratch.cols.push(base);
             }
-            scratch.tables.push((table.entities().as_ptr().cast::<u64>(), len, first));
+            scratch
+                .tables
+                .push((table.entities().as_ptr().cast::<u64>(), len, first));
             total += len;
         }
         for (id, write) in &st.plan.resources {
             // SAFETY: the resource access was declared in `init_access`.
             let ptr = unsafe {
                 if *write {
-                    self.world.get_resource_mut_by_id(*id).map(|m| m.into_inner().as_ptr())
+                    self.world
+                        .get_resource_mut_by_id(*id)
+                        .map(|m| m.into_inner().as_ptr())
                 } else {
-                    self.world.get_resource_by_id(*id).map(|p| p.as_ptr().cast_mut())
+                    self.world
+                        .get_resource_by_id(*id)
+                        .map(|p| p.as_ptr().cast_mut())
                 }
             };
             match ptr {
@@ -250,7 +273,11 @@ impl ScriptQuery<'_, '_> {
             (total / (pool.thread_num().max(1) * 4)).max(MIN_CHUNK_ROWS)
         };
         // Chunk column pointers go after the per-table bases; reserve so they never move.
-        let chunk_count: usize = scratch.tables.iter().map(|(_, len, _)| len.div_ceil(batch.min(*len))).sum();
+        let chunk_count: usize = scratch
+            .tables
+            .iter()
+            .map(|(_, len, _)| len.div_ceil(batch.min(*len)))
+            .sum();
         scratch.cols.reserve(chunk_count * ncols);
         scratch.calls.reserve(chunk_count);
         if st.buffers.len() < chunk_count {
@@ -268,7 +295,9 @@ impl ScriptQuery<'_, '_> {
                 let col_at = scratch.cols.len();
                 for (c, (_, _, size)) in st.plan.columns.iter().enumerate() {
                     // SAFETY: `start < len`, so the offset stays inside the column.
-                    scratch.cols.push(unsafe { scratch.cols[first + c].add(start * size) });
+                    scratch
+                        .cols
+                        .push(unsafe { scratch.cols[first + c].add(start * size) });
                 }
                 scratch.calls.push(SystemCall {
                     system: st.plan.id,
@@ -292,7 +321,9 @@ impl ScriptQuery<'_, '_> {
             unsafe { run(&scratch.calls[0]) };
             return;
         }
-        scratch.sends.extend(scratch.calls.iter().map(|c| SendPtr(c)));
+        scratch
+            .sends
+            .extend(scratch.calls.iter().map(|c| SendPtr(c)));
         let sends = &scratch.sends;
         pool.scope(|s| {
             for &call in sends {

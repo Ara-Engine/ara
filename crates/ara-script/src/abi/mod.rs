@@ -286,10 +286,7 @@ abi_structs! { INIT_STRUCTS;
 
 /// Every ABI struct, in generation order.
 pub fn structs() -> impl Iterator<Item = &'static AbiStruct> {
-    PUBLIC_STRUCTS
-        .iter()
-        .chain(ABI_STRUCTS)
-        .chain(INIT_STRUCTS)
+    PUBLIC_STRUCTS.iter().chain(ABI_STRUCTS).chain(INIT_STRUCTS)
 }
 
 /// Hash of every ABI descriptor plus the engine component layouts (name, size, field

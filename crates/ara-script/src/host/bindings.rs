@@ -51,7 +51,11 @@ impl EngineBindings {
 
     /// Binds `T` as schema component `name`. Prefer [`bind_component!`](crate::bind_component),
     /// which fills `offsets` with `offset_of!`.
-    pub fn component<T: Component>(mut self, name: &str, offsets: &[(&'static str, usize)]) -> Self {
+    pub fn component<T: Component>(
+        mut self,
+        name: &str,
+        offsets: &[(&'static str, usize)],
+    ) -> Self {
         self.items.push(Binding {
             name: name.to_owned(),
             register: |w| w.register_component::<T>(),
@@ -68,7 +72,11 @@ impl EngineBindings {
     }
 
     /// Checks every binding against the schema and registers it with the world.
-    pub(crate) fn resolve(&self, db: &SchemaDb, world: &mut World) -> Result<Vec<(String, ComponentId, StructLayout)>, Diagnostic> {
+    pub(crate) fn resolve(
+        &self,
+        db: &SchemaDb,
+        world: &mut World,
+    ) -> Result<Vec<(String, ComponentId, StructLayout)>, Diagnostic> {
         self.items
             .iter()
             .map(|b| {

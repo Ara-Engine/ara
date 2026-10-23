@@ -36,7 +36,8 @@ impl Job {
                     return None;
                 }
                 let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                info.BasicLimitInformation.LimitFlags =
+                    JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
                 info.ProcessMemoryLimit = usize::try_from(memory).unwrap_or(usize::MAX);
                 SetInformationJobObject(
                     handle,
@@ -61,7 +62,8 @@ impl Job {
         {
             let _ = child;
             use windows_sys::Win32::System::JobObjects::{
-                JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, QueryInformationJobObject,
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+                QueryInformationJobObject,
             };
             // SAFETY: `info` is a writable struct of the size passed; the handle is live.
             unsafe {
@@ -79,7 +81,14 @@ impl Job {
         #[cfg(target_os = "linux")]
         {
             let status = std::fs::read_to_string(format!("/proc/{}/status", child.id())).ok()?;
-            let kb: u64 = status.lines().find_map(|l| l.strip_prefix("VmRSS:"))?.trim().trim_end_matches("kB").trim().parse().ok()?;
+            let kb: u64 = status
+                .lines()
+                .find_map(|l| l.strip_prefix("VmRSS:"))?
+                .trim()
+                .trim_end_matches("kB")
+                .trim()
+                .parse()
+                .ok()?;
             Some(kb * 1024)
         }
         #[cfg(not(any(windows, target_os = "linux")))]

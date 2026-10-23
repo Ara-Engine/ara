@@ -17,7 +17,11 @@ pub const NULL_ENTITY: u64 = 0;
 /// Formats runtime entity bits as `"12v1"`, or `null` for invalid bits.
 pub fn entity_json(bits: u64) -> Value {
     Entity::try_from_bits(bits).map_or(Value::Null, |e| {
-        Value::String(format!("{}v{}", e.index().index(), e.generation().to_bits()))
+        Value::String(format!(
+            "{}v{}",
+            e.index().index(),
+            e.generation().to_bits()
+        ))
     })
 }
 
@@ -58,13 +62,7 @@ pub fn encode(
 /// The bytes of a struct with every field at its schema default.
 pub fn default_bytes(db: &SchemaDb, layout: &StructLayout) -> Vec<u8> {
     let mut out = vec![0u8; layout.size];
-    let _ = encode_into(
-        db,
-        layout,
-        &Value::Object(Map::new()),
-        "",
-        &mut out,
-    );
+    let _ = encode_into(db, layout, &Value::Object(Map::new()), "", &mut out);
     out
 }
 
@@ -76,12 +74,18 @@ fn encode_into(
     out: &mut [u8],
 ) -> Result<(), Diagnostic> {
     let obj = value.as_object().ok_or_else(|| {
-        Diagnostic::error(codes::TYPE_MISMATCH, format!("expected an object for `{}`", layout.name))
-            .path(path)
+        Diagnostic::error(
+            codes::TYPE_MISMATCH,
+            format!("expected an object for `{}`", layout.name),
+        )
+        .path(path)
     })?;
-    let ty = db
-        .get(&layout.name)
-        .ok_or_else(|| Diagnostic::error(codes::UNKNOWN_TYPE, format!("unknown type `{}`", layout.name)))?;
+    let ty = db.get(&layout.name).ok_or_else(|| {
+        Diagnostic::error(
+            codes::UNKNOWN_TYPE,
+            format!("unknown type `{}`", layout.name),
+        )
+    })?;
     for key in obj.keys() {
         if ty.field(key).is_none() {
             return Err(Diagnostic::error(
@@ -119,7 +123,11 @@ fn join(path: &str, key: &str) -> String {
 }
 
 fn mismatch(path: &str, expected: &str, v: &Value) -> Diagnostic {
-    Diagnostic::error(codes::TYPE_MISMATCH, format!("expected {expected}, got `{v}`")).path(path)
+    Diagnostic::error(
+        codes::TYPE_MISMATCH,
+        format!("expected {expected}, got `{v}`"),
+    )
+    .path(path)
 }
 
 fn number(v: &Value, f: Option<&FieldDesc>, ty: &ValueType, path: &str) -> Result<f64, Diagnostic> {
@@ -127,11 +135,10 @@ fn number(v: &Value, f: Option<&FieldDesc>, ty: &ValueType, path: &str) -> Resul
     if let Some((lo, hi)) = ty.int_bounds()
         && (n.fract() != 0.0 || (n as i128) < lo || (n as i128) > hi)
     {
-        return Err(Diagnostic::error(
-            codes::OUT_OF_RANGE,
-            format!("`{n}` is not a valid `{ty}`"),
-        )
-        .path(path));
+        return Err(
+            Diagnostic::error(codes::OUT_OF_RANGE, format!("`{n}` is not a valid `{ty}`"))
+                .path(path),
+        );
     }
     if let Some(r) = f.and_then(|f| f.range)
         && !r.contains(n)
@@ -158,7 +165,9 @@ fn encode_value(
         }};
     }
     match ty {
-        ValueType::Bool => out[0] = u8::from(v.as_bool().ok_or_else(|| mismatch(path, "a boolean", v))?),
+        ValueType::Bool => {
+            out[0] = u8::from(v.as_bool().ok_or_else(|| mismatch(path, "a boolean", v))?)
+        }
         ValueType::U8 => put!(u8),
         ValueType::U16 => put!(u16),
         ValueType::I32 => put!(i32),
@@ -184,13 +193,18 @@ fn encode_value(
         }
         ValueType::Named(name) => match db.get(name).map(|t| &t.shape) {
             Some(Shape::Enum { variants }) => {
-                let s = v.as_str().ok_or_else(|| mismatch(path, "a variant name", v))?;
+                let s = v
+                    .as_str()
+                    .ok_or_else(|| mismatch(path, "a variant name", v))?;
                 let i = variants
                     .iter()
                     .position(|x| x.name == s || x.aliases.iter().any(|a| a == s))
                     .ok_or_else(|| {
-                        Diagnostic::error(codes::UNKNOWN_VARIANT, format!("`{s}` is not a `{name}`"))
-                            .path(path)
+                        Diagnostic::error(
+                            codes::UNKNOWN_VARIANT,
+                            format!("`{s}` is not a `{name}`"),
+                        )
+                        .path(path)
                     })?;
                 out.copy_from_slice(&u32::try_from(i).unwrap_or(u32::MAX).to_le_bytes());
             }
@@ -201,7 +215,11 @@ fn encode_value(
                 encode_into(db, &nested, v, path, out)?;
             }
             None => {
-                return Err(Diagnostic::error(codes::UNKNOWN_TYPE, format!("unknown type `{name}`")).path(path));
+                return Err(Diagnostic::error(
+                    codes::UNKNOWN_TYPE,
+                    format!("unknown type `{name}`"),
+                )
+                .path(path));
             }
         },
         other => {
@@ -219,7 +237,9 @@ fn encode_value(
 pub fn decode(db: &SchemaDb, layout: &StructLayout, bytes: &[u8]) -> Value {
     let mut obj = Map::new();
     for fl in &layout.fields {
-        let slot = bytes.get(fl.offset..fl.offset + fl.layout.size).unwrap_or(&[]);
+        let slot = bytes
+            .get(fl.offset..fl.offset + fl.layout.size)
+            .unwrap_or(&[]);
         obj.insert(fl.name.clone(), decode_value(db, &fl.ty, slot));
     }
     Value::Object(obj)
@@ -297,16 +317,28 @@ mod tests {
     fn round_trips_with_defaults_and_checks() {
         let db = db();
         let layout = db.struct_layout("Probe").expect("blittable");
-        let bytes = encode(&db, &layout, &json!({ "who": "12v1", "at": [1, 0.5, -2], "mode": "run" }), "params")
-            .expect("encodes");
+        let bytes = encode(
+            &db,
+            &layout,
+            &json!({ "who": "12v1", "at": [1, 0.5, -2], "mode": "run" }),
+            "params",
+        )
+        .expect("encodes");
         assert_eq!(
             decode(&db, &layout, &bytes),
             json!({ "who": "12v1", "hp": 50, "at": [1.0, 0.5, -2.0], "mode": "run" })
         );
         assert_eq!(entity_json(NULL_ENTITY), Value::Null);
-        assert_eq!(parse_entity(&json!("12v1")).map(entity_json), Some(json!("12v1")));
-        let err = encode(&db, &layout, &json!({ "who": null, "hp": 101 }), "params").expect_err("range");
-        assert_eq!((err.code, err.location.path.as_deref()), (codes::OUT_OF_RANGE, Some("params.hp")));
+        assert_eq!(
+            parse_entity(&json!("12v1")).map(entity_json),
+            Some(json!("12v1"))
+        );
+        let err =
+            encode(&db, &layout, &json!({ "who": null, "hp": 101 }), "params").expect_err("range");
+        assert_eq!(
+            (err.code, err.location.path.as_deref()),
+            (codes::OUT_OF_RANGE, Some("params.hp"))
+        );
         let err = encode(&db, &layout, &json!({}), "params").expect_err("required");
         assert_eq!(err.code, codes::MISSING_REQUIRED);
     }

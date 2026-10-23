@@ -50,10 +50,13 @@ impl ModuleSpec {
     /// Reads `dir/ara.module.toml`. The module is watched by default.
     pub fn from_dir(dir: &Path) -> Result<Self, Diagnostic> {
         let path = dir.join(MODULE_FILE);
-        let text = std::fs::read_to_string(&path)
-            .map_err(|e| Diagnostic::error(codes::IO, format!("read `{}`: {e}", path.display())).file(path.display().to_string()))?;
+        let text = std::fs::read_to_string(&path).map_err(|e| {
+            Diagnostic::error(codes::IO, format!("read `{}`: {e}", path.display()))
+                .file(path.display().to_string())
+        })?;
         let file: ModuleFile = toml::from_str(&text).map_err(|e| {
-            Diagnostic::error(codes::INVALID_PARAMS, format!("`{}`: {e}", path.display())).file(path.display().to_string())
+            Diagnostic::error(codes::INVALID_PARAMS, format!("`{}`: {e}", path.display()))
+                .file(path.display().to_string())
         })?;
         Ok(ModuleSpec {
             name: file.module.name,
@@ -73,6 +76,9 @@ mod tests {
     fn reads_the_sample_module() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/samples/Outpost.Sample");
         let spec = ModuleSpec::from_dir(&dir).expect("sample module file");
-        assert_eq!((spec.name.as_str(), spec.hot, spec.watch), ("Outpost.Sample", false, true));
+        assert_eq!(
+            (spec.name.as_str(), spec.hot, spec.watch),
+            ("Outpost.Sample", false, true)
+        );
     }
 }

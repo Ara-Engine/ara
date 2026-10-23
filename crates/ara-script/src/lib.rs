@@ -24,6 +24,7 @@ pub use boost::register_tick_thread;
 pub use clr::Runtime;
 pub use ecs::cmdbuf::Applied;
 pub use host::{
-    Boundary, CommandRecord, ComponentWrite, Cue, EngineBindings, LogSink, ModuleStatus, ScriptConfig, ScriptHost,
+    Boundary, CommandRecord, ComponentWrite, Cue, EngineBindings, LogSink, ModuleStatus,
+    ScriptConfig, ScriptHost,
 };
 pub use module::{MODULE_FILE, ModuleSpec};

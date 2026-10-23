@@ -15,7 +15,13 @@ use support::EcsTransform;
 fn host(world: &mut World, modules: &[(&str, &str)]) -> ScriptHost {
     support::build();
     let (db, engine) = support::engine();
-    let mut host = ScriptHost::start(ScriptConfig::jit(support::bin("Ara.Host")), db, &engine, world).expect("host starts");
+    let mut host = ScriptHost::start(
+        ScriptConfig::jit(support::bin("Ara.Host")),
+        db,
+        &engine,
+        world,
+    )
+    .expect("host starts");
     let specs: Vec<ModuleSpec> = modules
         .iter()
         .map(|(project, dir)| {
@@ -25,7 +31,8 @@ fn host(world: &mut World, modules: &[(&str, &str)]) -> ScriptHost {
             spec
         })
         .collect();
-    host.load_modules(world, &specs).unwrap_or_else(|e| panic!("modules load: {e:#?}"));
+    host.load_modules(world, &specs)
+        .unwrap_or_else(|e| panic!("modules load: {e:#?}"));
     host
 }
 
@@ -34,7 +41,13 @@ fn sample(world: &mut World) -> ScriptHost {
 }
 
 fn tick(frame: u64) -> Tick {
-    Tick { frame, seed: 7, elapsed: frame as f64 * 0.1, dt: 0.1, reserved: 0 }
+    Tick {
+        frame,
+        seed: 7,
+        elapsed: frame as f64 * 0.1,
+        dt: 0.1,
+        reserved: 0,
+    }
 }
 
 fn errors(d: &[Diagnostic]) -> Vec<&Diagnostic> {
@@ -63,7 +76,10 @@ fn csharp_types_register_into_the_schema_db() {
     assert_eq!(types["Door"]["kind"], "component");
     assert_eq!(types["Door"]["fields"]["openAngle"]["unit"], "deg");
     assert_eq!(types["GameRules"]["kind"], "resource");
-    assert_eq!(types["UseMedkitParams"]["fields"]["actor"]["required"], true);
+    assert_eq!(
+        types["UseMedkitParams"]["fields"]["actor"]["required"],
+        true
+    );
     assert_eq!(types["MedkitUsed"]["kind"], "struct");
     // The JSON Schema generator works on C# types like on Rust ones.
     let schema = db.type_json_schema(db.get("Vitality").expect("registered"));
@@ -74,7 +90,10 @@ fn csharp_types_register_into_the_schema_db() {
     assert_eq!(catalog["game.UseMedkit"]["writes"], json!(["Vitality"]));
     assert_eq!(catalog["game.UseMedkit"]["expose"]["caller"], "owner");
     let m = &host.modules()[0];
-    assert_eq!((m.name.as_str(), m.hot, m.counts), ("Outpost.Sample", false, (2, 1, 1)));
+    assert_eq!(
+        (m.name.as_str(), m.hot, m.counts),
+        ("Outpost.Sample", false, (2, 1, 1))
+    );
 }
 
 /// Gravity then Movement (ordered: both touch Velocity) over three tables, checked
@@ -87,11 +106,14 @@ fn systems_run_over_every_chunk_in_parallel() {
     let mut bodies = Vec::new();
     for i in 0..30_000u32 {
         let e = world.spawn(EcsTransform::default()).id();
-        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] })).expect("velocity");
+        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] }))
+            .expect("velocity");
         let mass = if i % 3 == 0 { 0.0 } else { 2.0 };
-        host.insert_component(&mut world, e, "Mass", &json!({ "value": mass })).expect("mass");
+        host.insert_component(&mut world, e, "Mass", &json!({ "value": mass }))
+            .expect("mass");
         if i % 2 == 0 {
-            host.insert_component(&mut world, e, "Vitality", &json!({ "hp": 10 })).expect("third table");
+            host.insert_component(&mut world, e, "Vitality", &json!({ "hp": 10 }))
+                .expect("third table");
         }
         bodies.push((e, mass));
     }
@@ -112,7 +134,10 @@ fn systems_run_over_every_chunk_in_parallel() {
         let t = world.get::<EcsTransform>(e).expect("transform");
         assert_eq!(t.position, [px, py, 0.0], "entity {e} (mass {mass})");
     }
-    assert!(host.diag(DIAG_THREADS_SEEN) > 1, "C# systems ran on task-pool threads");
+    assert!(
+        host.diag(DIAG_THREADS_SEEN) > 1,
+        "C# systems ran on task-pool threads"
+    );
     assert!(errors(&host.take_diagnostics()).is_empty());
 }
 
@@ -122,21 +147,45 @@ fn behaviours_tick_with_ecs_backed_properties() {
     let mut world = World::new();
     let mut host = sample(&mut world);
     let door = world.spawn(EcsTransform::default()).id();
-    host.insert_component(&mut world, door, "Door", &json!({ "openAngle": 90, "isOpen": true })).expect("door");
+    host.insert_component(
+        &mut world,
+        door,
+        "Door",
+        &json!({ "openAngle": 90, "isOpen": true }),
+    )
+    .expect("door");
     for f in 0..5 {
         host.run_tick(&mut world, tick(f));
     }
     // 90 deg/s for 0.5 s.
-    assert_eq!(world.get::<EcsTransform>(door).expect("transform").rotation[1], 45.0);
-    host.insert_component(&mut world, door, "Door", &json!({ "openAngle": 90, "isOpen": false })).expect("close");
+    assert_eq!(
+        world.get::<EcsTransform>(door).expect("transform").rotation[1],
+        45.0
+    );
+    host.insert_component(
+        &mut world,
+        door,
+        "Door",
+        &json!({ "openAngle": 90, "isOpen": false }),
+    )
+    .expect("close");
     host.run_tick(&mut world, tick(5));
-    assert_eq!(world.get::<EcsTransform>(door).expect("transform").rotation[1], 36.0);
+    assert_eq!(
+        world.get::<EcsTransform>(door).expect("transform").rotation[1],
+        36.0
+    );
     assert!(errors(&host.take_diagnostics()).is_empty());
 }
 
 fn survivor(host: &ScriptHost, world: &mut World, hp: u16, medkits: u8) -> Entity {
     let e = world.spawn_empty().id();
-    host.insert_component(world, e, "Vitality", &json!({ "hp": hp, "medkits": medkits })).expect("vitality");
+    host.insert_component(
+        world,
+        e,
+        "Vitality",
+        &json!({ "hp": hp, "medkits": medkits }),
+    )
+    .expect("vitality");
     e
 }
 
@@ -151,29 +200,65 @@ fn commands_apply_as_one_undoable_step() {
     let mut host = sample(&mut world);
     let e = survivor(&host, &mut world, 50, 2);
     let record = host
-        .execute_command(&mut world, "game.UseMedkit", &json!({ "actor": actor(e) }), Some(e))
+        .execute_command(
+            &mut world,
+            "game.UseMedkit",
+            &json!({ "actor": actor(e) }),
+            Some(e),
+        )
         .expect("heals");
-    assert_eq!(host.read_component(&world, e, "Vitality"), Some(json!({ "hp": 75, "medkits": 1 })));
+    assert_eq!(
+        host.read_component(&world, e, "Vitality"),
+        Some(json!({ "hp": 75, "medkits": 1 }))
+    );
     let described = host.describe(&record);
-    assert_eq!(described["ops"][0]["before"], json!({ "hp": 50, "medkits": 2 }));
-    assert_eq!(described["cues"], json!([{ "cue": "MedkitUsed", "value": { "actor": actor(e) } }]));
+    assert_eq!(
+        described["ops"][0]["before"],
+        json!({ "hp": 50, "medkits": 2 })
+    );
+    assert_eq!(
+        described["cues"],
+        json!([{ "cue": "MedkitUsed", "value": { "actor": actor(e) } }])
+    );
     host.undo(&mut world, &record).expect("undo");
-    assert_eq!(host.read_component(&world, e, "Vitality"), Some(json!({ "hp": 50, "medkits": 2 })));
+    assert_eq!(
+        host.read_component(&world, e, "Vitality"),
+        Some(json!({ "hp": 50, "medkits": 2 }))
+    );
 
     // A rejection changes nothing.
     let full = survivor(&host, &mut world, 100, 3);
     let err = host
-        .execute_command(&mut world, "game.UseMedkit", &json!({ "actor": actor(full) }), None)
+        .execute_command(
+            &mut world,
+            "game.UseMedkit",
+            &json!({ "actor": actor(full) }),
+            None,
+        )
         .expect_err("full health");
     assert_eq!(err.code, codes::COMMAND_REJECTED);
     assert!(err.message.contains("cannot_heal"), "{}", err.message);
-    assert_eq!(host.read_component(&world, full, "Vitality"), Some(json!({ "hp": 100, "medkits": 3 })));
+    assert_eq!(
+        host.read_component(&world, full, "Vitality"),
+        Some(json!({ "hp": 100, "medkits": 3 }))
+    );
 
     // Params are validated against the C#-declared params type.
-    let err = host.execute_command(&mut world, "game.UseMedkit", &json!({}), None).expect_err("missing actor");
-    assert_eq!((err.code, err.location.path.as_deref()), (codes::INVALID_PARAMS, Some("params.actor")));
-    let err = host.execute_command(&mut world, "game.UseMedkt", &json!({}), None).expect_err("typo");
-    assert!(err.message.contains("did you mean `game.UseMedkit`"), "{}", err.message);
+    let err = host
+        .execute_command(&mut world, "game.UseMedkit", &json!({}), None)
+        .expect_err("missing actor");
+    assert_eq!(
+        (err.code, err.location.path.as_deref()),
+        (codes::INVALID_PARAMS, Some("params.actor"))
+    );
+    let err = host
+        .execute_command(&mut world, "game.UseMedkt", &json!({}), None)
+        .expect_err("typo");
+    assert!(
+        err.message.contains("did you mean `game.UseMedkit`"),
+        "{}",
+        err.message
+    );
 }
 
 #[test]
@@ -184,40 +269,82 @@ fn faults_are_contained_and_structural_commands_undo() {
     let calm: Vec<Entity> = (0..100)
         .map(|_| {
             let e = world.spawn_empty().id();
-            host.insert_component(&mut world, e, "Counter", &json!({})).expect("counter");
+            host.insert_component(&mut world, e, "Counter", &json!({}))
+                .expect("counter");
             e
         })
         .collect();
     let lit = world.spawn_empty().id();
     for name in ["Counter", "Bomb"] {
-        host.insert_component(&mut world, lit, name, &json!({})).expect("component");
+        host.insert_component(&mut world, lit, name, &json!({}))
+            .expect("component");
     }
-    host.insert_component(&mut world, lit, "Fuse", &json!({ "lit": true })).expect("fuse");
+    host.insert_component(&mut world, lit, "Fuse", &json!({ "lit": true }))
+        .expect("fuse");
     for f in 0..3 {
         host.run_tick(&mut world, tick(f));
     }
     // `Explode` and `Bomb` threw; each is disabled, reported once, and `Count` kept running.
     let diags = host.take_diagnostics();
-    let faults: Vec<&Diagnostic> = diags.iter().filter(|d| d.code == codes::SYSTEM_FAULT || d.code == codes::BEHAVIOUR_FAULT).collect();
+    let faults: Vec<&Diagnostic> = diags
+        .iter()
+        .filter(|d| d.code == codes::SYSTEM_FAULT || d.code == codes::BEHAVIOUR_FAULT)
+        .collect();
     assert_eq!(faults.len(), 2, "{diags:#?}");
-    assert!(faults.iter().any(|d| d.message.contains("Counting.Explode") && d.message.contains("fuse lit")));
-    let at = faults.iter().find(|d| d.code == codes::SYSTEM_FAULT).expect("system fault");
-    assert!(at.location.file.as_deref().is_some_and(|f| f.ends_with("Probes.cs")) && at.location.line.is_some(), "{at:?}");
+    assert!(
+        faults
+            .iter()
+            .any(|d| d.message.contains("Counting.Explode") && d.message.contains("fuse lit"))
+    );
+    let at = faults
+        .iter()
+        .find(|d| d.code == codes::SYSTEM_FAULT)
+        .expect("system fault");
+    assert!(
+        at.location
+            .file
+            .as_deref()
+            .is_some_and(|f| f.ends_with("Probes.cs"))
+            && at.location.line.is_some(),
+        "{at:?}"
+    );
     for e in calm.iter().chain([&lit]) {
-        assert_eq!(host.read_component(&world, *e, "Counter").expect("counter")["value"], 3);
+        assert_eq!(
+            host.read_component(&world, *e, "Counter").expect("counter")["value"],
+            3
+        );
     }
-    let sum = host.read_component(&world, calm[7], "Counter").expect("counter")["entitySum"].as_u64();
+    let sum = host
+        .read_component(&world, calm[7], "Counter")
+        .expect("counter")["entitySum"]
+        .as_u64();
     assert_eq!(sum, Some(3 * u64::from(calm[7].index().index())));
 
     // A throwing command rolls back its writes.
-    let err = host.execute_command(&mut world, "test.Fail", &json!({ "target": actor(calm[0]) }), None).expect_err("throws");
+    let err = host
+        .execute_command(
+            &mut world,
+            "test.Fail",
+            &json!({ "target": actor(calm[0]) }),
+            None,
+        )
+        .expect_err("throws");
     assert_eq!(err.code, codes::COMMAND_FAULT);
-    assert_eq!(host.read_component(&world, calm[0], "Counter").expect("counter")["value"], 3);
+    assert_eq!(
+        host.read_component(&world, calm[0], "Counter")
+            .expect("counter")["value"],
+        3
+    );
 
     // Structural ops apply after the command and undo in reverse.
     let before = world.entities().count_spawned();
     let record = host
-        .execute_command(&mut world, "test.Shuffle", &json!({ "victim": actor(calm[1]), "count": 4 }), None)
+        .execute_command(
+            &mut world,
+            "test.Shuffle",
+            &json!({ "victim": actor(calm[1]), "count": 4 }),
+            None,
+        )
         .expect("shuffles");
     assert_eq!(world.entities().count_spawned(), before + 3);
     assert!(world.get_entity(calm[1]).is_err());

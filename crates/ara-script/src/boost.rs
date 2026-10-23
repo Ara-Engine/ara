@@ -27,7 +27,11 @@ pub fn register_tick_thread() {
         // SAFETY: plain Win32 calls on the current thread's id. The handle is never closed:
         // registered threads (tick thread, task pool) live as long as the process.
         let handle = unsafe {
-            OpenThread(THREAD_SET_INFORMATION | THREAD_QUERY_INFORMATION, 0, GetCurrentThreadId())
+            OpenThread(
+                THREAD_SET_INFORMATION | THREAD_QUERY_INFORMATION,
+                0,
+                GetCurrentThreadId(),
+            )
         };
         if !handle.is_null()
             && let Ok(mut threads) = THREADS.lock()
@@ -52,7 +56,9 @@ impl Boost {
 
     /// Raises (`true`) or restores (`false`) registered threads' priority.
     pub fn set(&self, active: bool) {
-        if self.disabled.load(Ordering::Relaxed) || self.active.swap(active, Ordering::AcqRel) == active {
+        if self.disabled.load(Ordering::Relaxed)
+            || self.active.swap(active, Ordering::AcqRel) == active
+        {
             return;
         }
         #[cfg(windows)]
@@ -60,12 +66,18 @@ impl Boost {
             use windows_sys::Win32::System::Threading::{
                 SetThreadPriority, THREAD_PRIORITY_ABOVE_NORMAL, THREAD_PRIORITY_NORMAL,
             };
-            let priority = if active { THREAD_PRIORITY_ABOVE_NORMAL } else { THREAD_PRIORITY_NORMAL };
+            let priority = if active {
+                THREAD_PRIORITY_ABOVE_NORMAL
+            } else {
+                THREAD_PRIORITY_NORMAL
+            };
             if let Ok(threads) = THREADS.lock() {
                 for &h in threads.iter() {
                     // SAFETY: `h` is a thread handle opened by `register_tick_thread` with
                     // THREAD_SET_INFORMATION and never closed.
-                    unsafe { SetThreadPriority(h as windows_sys::Win32::Foundation::HANDLE, priority) };
+                    unsafe {
+                        SetThreadPriority(h as windows_sys::Win32::Foundation::HANDLE, priority)
+                    };
                 }
             }
         }

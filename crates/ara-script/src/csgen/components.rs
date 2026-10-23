@@ -147,11 +147,7 @@ fn write_struct(
                 literal(&t.name),
                 literal(&t.module)
             );
-            let _ = writeln!(
-                o,
-                "public partial struct {0} : IComponent<{0}>\n{{",
-                t.name
-            );
+            let _ = writeln!(o, "public partial struct {0} : IComponent<{0}>\n{{", t.name);
         }
         None => {
             let _ = writeln!(o, "public partial struct {}\n{{", t.name);
@@ -193,7 +189,12 @@ fn nested_types(db: &SchemaDb, layouts: &[StructLayout]) -> BTreeSet<String> {
             continue;
         }
         if let Some(t) = db.get(&n) {
-            stack.extend(t.fields().iter().flat_map(|f| f.ty.named()).map(str::to_owned));
+            stack.extend(
+                t.fields()
+                    .iter()
+                    .flat_map(|f| f.ty.named())
+                    .map(str::to_owned),
+            );
         }
     }
     seen
@@ -202,7 +203,9 @@ fn nested_types(db: &SchemaDb, layouts: &[StructLayout]) -> BTreeSet<String> {
 /// Renders `Components.g.cs` for the engine components (`layouts`, in binding order).
 pub fn render(db: &SchemaDb, layouts: &[StructLayout]) -> Result<String, String> {
     let mut o = String::from(HEADER);
-    o.push_str("using System.Numerics;\nusing System.Runtime.InteropServices;\n\nnamespace Ara;\n\n");
+    o.push_str(
+        "using System.Numerics;\nusing System.Runtime.InteropServices;\n\nnamespace Ara;\n\n",
+    );
     for (i, l) in layouts.iter().enumerate() {
         let t = db
             .get(&l.name)

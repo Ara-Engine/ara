@@ -58,7 +58,10 @@ impl ScriptConfig {
     /// A JIT host from an `Ara.Host` build directory, EnC on, no compile server.
     pub fn jit(dir: impl Into<PathBuf>) -> Self {
         ScriptConfig {
-            runtime: Runtime::Jit { dir: dir.into(), enc: true },
+            runtime: Runtime::Jit {
+                dir: dir.into(),
+                enc: true,
+            },
             compile_server: None,
             boost_ticks: true,
             log: None,
@@ -68,7 +71,9 @@ impl ScriptConfig {
     /// A NativeAOT host from a module image exporting `ara_script_init`.
     pub fn native_aot(library: impl Into<PathBuf>) -> Self {
         ScriptConfig {
-            runtime: Runtime::NativeAot { library: library.into() },
+            runtime: Runtime::NativeAot {
+                library: library.into(),
+            },
             compile_server: None,
             boost_ticks: false,
             log: None,
@@ -146,16 +151,34 @@ impl ScriptHost {
     /// types to the host's copy ([`ScriptHost::schema`]). On non-Windows platforms call
     /// this before other threads read the environment: EnC needs an environment
     /// variable set before .NET starts.
-    pub fn start(config: ScriptConfig, schema: SchemaDb, engine: &EngineBindings, world: &mut World) -> Result<Self, Vec<Diagnostic>> {
-        ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().on_thread_spawn(crate::boost::register_tick_thread).build());
+    pub fn start(
+        config: ScriptConfig,
+        schema: SchemaDb,
+        engine: &EngineBindings,
+        world: &mut World,
+    ) -> Result<Self, Vec<Diagnostic>> {
+        ComputeTaskPool::get_or_init(|| {
+            TaskPoolBuilder::new()
+                .on_thread_spawn(crate::boost::register_tick_thread)
+                .build()
+        });
         crate::boost::register_tick_thread();
         let mut registry = Registry::new(schema);
-        let resolved = engine.resolve(&registry.schema, world).map_err(|d| vec![d])?;
+        let resolved = engine
+            .resolve(&registry.schema, world)
+            .map_err(|d| vec![d])?;
         let layouts: Vec<_> = resolved.iter().map(|(_, _, l)| l.clone()).collect();
         for (name, id, layout) in resolved {
-            registry.components.push(ScriptComponent { name, id, layout, owner: Owner::Engine });
+            registry.components.push(ScriptComponent {
+                name,
+                id,
+                layout,
+                owner: Owner::Engine,
+            });
         }
-        let ctx = Box::new(HostCtx::new(config.log.unwrap_or_else(|| Box::new(default_log))));
+        let ctx = Box::new(HostCtx::new(
+            config.log.unwrap_or_else(|| Box::new(default_log)),
+        ));
         if !config.boost_ticks {
             ctx.boost.disable();
         }
@@ -173,15 +196,29 @@ impl ScriptHost {
         // `ctx` (boxed, owned by the returned host) outlives the runtime's use of it.
         let rc = unsafe { init(&host, api.as_mut_ptr()) };
         if rc != 0 {
-            let mut problems = std::mem::take(&mut *ctx.diagnostics.lock().map_err(|_| Vec::<Diagnostic>::new())?);
-            problems.push(Diagnostic::error(codes::RUNTIME_START, format!("ara_script_init failed with {rc}")));
+            let mut problems = std::mem::take(
+                &mut *ctx
+                    .diagnostics
+                    .lock()
+                    .map_err(|_| Vec::<Diagnostic>::new())?,
+            );
+            problems.push(Diagnostic::error(
+                codes::RUNTIME_START,
+                format!("ara_script_init failed with {rc}"),
+            ));
             return Err(problems);
         }
         // SAFETY: `ara_script_init` returned 0, which means it filled every entry.
         let api = unsafe { api.assume_init() };
         world.insert_resource(registry.catalog());
         world.insert_resource(ScriptEvents::default());
-        world.insert_resource(ScriptTick(Tick { frame: 0, seed: 0, elapsed: 0.0, dt: 0.0, reserved: 0 }));
+        world.insert_resource(ScriptTick(Tick {
+            frame: 0,
+            seed: 0,
+            elapsed: 0.0,
+            dt: 0.0,
+            reserved: 0,
+        }));
         Ok(ScriptHost {
             ctx,
             api,
@@ -193,13 +230,25 @@ impl ScriptHost {
             phase_buf: CmdBuf::default(),
             phase_scratch: PhaseScratch(Vec::new()),
             sequence: 0,
-            tick: Tick { frame: 0, seed: 0, elapsed: 0.0, dt: 0.0, reserved: 0 },
+            tick: Tick {
+                frame: 0,
+                seed: 0,
+                elapsed: 0.0,
+                dt: 0.0,
+                reserved: 0,
+            },
             shut_down: false,
         })
     }
 
     /// Runs `f` with exclusive world access published to C#.
-    fn exclusive<R>(&mut self, world: &mut World, register: bool, journal: Option<&mut ctx::Journal>, f: impl FnOnce(&ScriptApi) -> R) -> R {
+    fn exclusive<R>(
+        &mut self,
+        world: &mut World,
+        register: bool,
+        journal: Option<&mut ctx::Journal>,
+        f: impl FnOnce(&ScriptApi) -> R,
+    ) -> R {
         let mut scope = Scope {
             world: world.as_unsafe_world_cell(),
             registry: &raw mut self.registry,
@@ -213,7 +262,11 @@ impl ScriptHost {
 
     /// Loads modules (compiled by the compile server when configured, otherwise from
     /// their prebuilt `assembly`) and registers them. Errors leave earlier modules running.
-    pub fn load_modules(&mut self, world: &mut World, modules: &[ModuleSpec]) -> Result<(), Vec<Diagnostic>> {
+    pub fn load_modules(
+        &mut self,
+        world: &mut World,
+        modules: &[ModuleSpec],
+    ) -> Result<(), Vec<Diagnostic>> {
         let config = json!({
             "compileServer": self.compile_server.as_ref().map(|p| p.display().to_string()),
             "modules": modules.iter().map(|m| json!({
@@ -227,13 +280,25 @@ impl ScriptHost {
         .to_string();
         let rc = self.exclusive(world, true, None, |api| {
             // SAFETY: the JSON span is valid for the call; world access is published.
-            unsafe { (api.load_modules)(config.as_ptr(), u32::try_from(config.len()).unwrap_or(u32::MAX)) }
+            unsafe {
+                (api.load_modules)(
+                    config.as_ptr(),
+                    u32::try_from(config.len()).unwrap_or(u32::MAX),
+                )
+            }
         });
         self.rebuild(world);
-        let problems: Vec<Diagnostic> = self.take_diagnostics().into_iter().filter(Diagnostic::is_error).collect();
+        let problems: Vec<Diagnostic> = self
+            .take_diagnostics()
+            .into_iter()
+            .filter(Diagnostic::is_error)
+            .collect();
         if rc != 0 || !problems.is_empty() {
             return Err(if problems.is_empty() {
-                vec![Diagnostic::error(codes::LOAD_FAILED, format!("load_modules failed with {rc}"))]
+                vec![Diagnostic::error(
+                    codes::LOAD_FAILED,
+                    format!("load_modules failed with {rc}"),
+                )]
             } else {
                 problems
             });
@@ -272,31 +337,65 @@ impl ScriptHost {
         }
         self.registry.dirty = false;
         let reg = &self.registry;
-        let mut systems: Vec<_> = reg.modules.values().flat_map(|m| m.systems.iter()).collect();
+        let mut systems: Vec<_> = reg
+            .modules
+            .values()
+            .flat_map(|m| m.systems.iter())
+            .collect();
         systems.sort_by(|a, b| (a.order, &a.name, a.id).cmp(&(b.order, &b.name, b.id)));
         let mut schedule = Schedule::default();
         schedule.set_executor(MultiThreadedExecutor::new());
         let comp = |i: u32| reg.components.get(i as usize);
         for (k, s) in systems.iter().enumerate() {
-            let columns: Option<Vec<_>> = s.columns.iter().map(|&(i, w)| comp(i).map(|c| (c.id, w, c.layout.size))).collect();
+            let columns: Option<Vec<_>> = s
+                .columns
+                .iter()
+                .map(|&(i, w)| comp(i).map(|c| (c.id, w, c.layout.size)))
+                .collect();
             let resources: Option<Vec<_>> = s
                 .resources
                 .iter()
-                .map(|&(i, w)| reg.resources.get(i as usize).and_then(|r| r.id).map(|id| (id, w)))
+                .map(|&(i, w)| {
+                    reg.resources
+                        .get(i as usize)
+                        .and_then(|r| r.id)
+                        .map(|id| (id, w))
+                })
                 .collect();
-            let with: Option<Vec<ComponentId>> = s.with.iter().map(|&i| comp(i).map(|c| c.id)).collect();
-            let without: Option<Vec<ComponentId>> = s.without.iter().map(|&i| comp(i).map(|c| c.id)).collect();
-            let (Some(columns), Some(resources), Some(with), Some(without)) = (columns, resources, with, without) else {
-                self.ctx.report(Diagnostic::error(codes::UNKNOWN_COMPONENT, format!("system `{}` refers to an unregistered type; not scheduled", s.name)));
+            let with: Option<Vec<ComponentId>> =
+                s.with.iter().map(|&i| comp(i).map(|c| c.id)).collect();
+            let without: Option<Vec<ComponentId>> =
+                s.without.iter().map(|&i| comp(i).map(|c| c.id)).collect();
+            let (Some(columns), Some(resources), Some(with), Some(without)) =
+                (columns, resources, with, without)
+            else {
+                self.ctx.report(Diagnostic::error(
+                    codes::UNKNOWN_COMPONENT,
+                    format!(
+                        "system `{}` refers to an unregistered type; not scheduled",
+                        s.name
+                    ),
+                ));
                 continue;
             };
-            let plan = SystemPlan { id: s.id, columns, resources, with, without, api: self.api };
+            let plan = SystemPlan {
+                id: s.id,
+                columns,
+                resources,
+                with,
+                without,
+                api: self.api,
+            };
             let state: SystemState<(ScriptQuery<'static, 'static>, Res<'static, ScriptTick>)> =
                 (ScriptQueryBuilder(plan), ParamBuilder).build_state(world);
-            let system = state.build_system(|mut q: ScriptQuery<'_, '_>, tick: Res<'_, ScriptTick>| q.run(&tick.0));
+            let system =
+                state.build_system(|mut q: ScriptQuery<'_, '_>, tick: Res<'_, ScriptTick>| {
+                    q.run(&tick.0)
+                });
             let conflicts = |a: &registry::SystemDecl, b: &registry::SystemDecl| {
                 let clash = |x: &[(u32, bool)], y: &[(u32, bool)]| {
-                    x.iter().any(|(i, w)| y.iter().any(|(j, v)| i == j && (*w || *v)))
+                    x.iter()
+                        .any(|(i, w)| y.iter().any(|(j, v)| i == j && (*w || *v)))
                 };
                 clash(&a.columns, &b.columns) || clash(&a.resources, &b.resources)
             };
@@ -314,7 +413,10 @@ impl ScriptHost {
             .filter_map(|b| {
                 let found = comp(b.data).map(|c| (b.id, c.id));
                 if found.is_none() {
-                    self.ctx.report(Diagnostic::error(codes::UNKNOWN_COMPONENT, format!("behaviour `{}` has no registered data component", b.name)));
+                    self.ctx.report(Diagnostic::error(
+                        codes::UNKNOWN_COMPONENT,
+                        format!("behaviour `{}` has no registered data component", b.name),
+                    ));
                 }
                 found
             })
@@ -348,10 +450,28 @@ impl ScriptHost {
         self.phase_buf.reset(world.entity_allocator());
         let tick = self.tick;
         let cell = world.as_unsafe_world_cell();
-        let mut scope = Scope { world: cell, registry: &raw mut self.registry, journal: None, thread: std::thread::current().id(), register: false };
-        let (plans, api, buf, scratch) = (&mut self.behaviours, &self.api, &mut self.phase_buf, &mut self.phase_scratch.0);
+        let mut scope = Scope {
+            world: cell,
+            registry: &raw mut self.registry,
+            journal: None,
+            thread: std::thread::current().id(),
+            register: false,
+        };
+        let (plans, api, buf, scratch) = (
+            &mut self.behaviours,
+            &self.api,
+            &mut self.phase_buf,
+            &mut self.phase_scratch.0,
+        );
         self.ctx.with_scope(&mut scope, || {
-            behaviour::run_phase(cell, plans, api, phase, &tick, frame, buf, this_run, scratch);
+            let p = behaviour::Phase {
+                api,
+                phase,
+                tick: &tick,
+                frame,
+                this_run,
+            };
+            behaviour::run_phase(cell, plans, &p, buf, scratch);
         });
         if self.phase_buf.ops.is_empty() {
             return;
@@ -390,18 +510,30 @@ impl ScriptHost {
 
     /// Cues emitted since the last call, decoded to JSON.
     pub fn take_cues(&mut self, world: &mut World) -> Vec<Cue> {
-        let raw = world.get_resource_mut::<ScriptEvents>().map(|mut e| std::mem::take(&mut e.cues)).unwrap_or_default();
-        raw.into_iter().filter_map(|c| self.decode_cue(&c)).collect()
+        let raw = world
+            .get_resource_mut::<ScriptEvents>()
+            .map(|mut e| std::mem::take(&mut e.cues))
+            .unwrap_or_default();
+        raw.into_iter()
+            .filter_map(|c| self.decode_cue(&c))
+            .collect()
     }
 
     fn decode_cue(&self, c: &RawCue) -> Option<Cue> {
         let cue = self.registry.cues.get(c.cue as usize)?;
-        Some(Cue { name: cue.name.clone(), value: value::decode(&self.registry.schema, &cue.layout, &c.data) })
+        Some(Cue {
+            name: cue.name.clone(),
+            value: value::decode(&self.registry.schema, &cue.layout, &c.data),
+        })
     }
 
     /// Diagnostics reported since the last call (faults, compile errors, registration).
     pub fn take_diagnostics(&self) -> Vec<Diagnostic> {
-        self.ctx.diagnostics.lock().map(|mut d| std::mem::take(&mut *d)).unwrap_or_default()
+        self.ctx
+            .diagnostics
+            .lock()
+            .map(|mut d| std::mem::take(&mut *d))
+            .unwrap_or_default()
     }
 
     /// The Schema DB with every C# module's types registered (`reflection.json` source).
@@ -411,7 +543,9 @@ impl ScriptHost {
 
     /// The bevy component holding schema component `name`.
     pub fn component_id(&self, name: &str) -> Option<ComponentId> {
-        self.registry.component(name).map(|i| self.registry.components[i as usize].id)
+        self.registry
+            .component(name)
+            .map(|i| self.registry.components[i as usize].id)
     }
 
     /// A component's value as JSON (agent inspection).
@@ -422,17 +556,28 @@ impl ScriptHost {
     }
 
     /// Inserts (or replaces) a component from JSON; missing fields take their defaults.
-    pub fn insert_component(&self, world: &mut World, entity: Entity, name: &str, v: &Value) -> Result<(), Diagnostic> {
-        let i = self
-            .registry
-            .component(name)
-            .ok_or_else(|| Diagnostic::error(codes::UNKNOWN_COMPONENT, format!("no script component `{name}`")))?;
+    pub fn insert_component(
+        &self,
+        world: &mut World,
+        entity: Entity,
+        name: &str,
+        v: &Value,
+    ) -> Result<(), Diagnostic> {
+        let i = self.registry.component(name).ok_or_else(|| {
+            Diagnostic::error(
+                codes::UNKNOWN_COMPONENT,
+                format!("no script component `{name}`"),
+            )
+        })?;
         let c = &self.registry.components[i as usize];
         let bytes = value::encode(&self.registry.schema, &c.layout, v, name)?;
         if cmdbuf::insert_bytes(world, entity, c.id, &bytes) {
             Ok(())
         } else {
-            Err(Diagnostic::error(codes::UNDO_FAILED, format!("entity {entity} does not exist")))
+            Err(Diagnostic::error(
+                codes::UNDO_FAILED,
+                format!("entity {entity} does not exist"),
+            ))
         }
     }
 

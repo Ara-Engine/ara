@@ -55,10 +55,26 @@ pub fn publish_aot() -> PathBuf {
     static PUBLISHED: OnceLock<PathBuf> = OnceLock::new();
     PUBLISHED
         .get_or_init(|| {
-            let rid = if cfg!(windows) { "win-x64" } else if cfg!(target_os = "macos") { "osx-arm64" } else { "linux-x64" };
+            let rid = if cfg!(windows) {
+                "win-x64"
+            } else if cfg!(target_os = "macos") {
+                "osx-arm64"
+            } else {
+                "linux-x64"
+            };
             let mut cmd = Command::new("dotnet");
-            cmd.args(["publish", "samples/Outpost.Sample.Aot", "-c", "Release", "-r", rid, "--nologo", "-v", "q"])
-                .current_dir(dotnet());
+            cmd.args([
+                "publish",
+                "samples/Outpost.Sample.Aot",
+                "-c",
+                "Release",
+                "-r",
+                rid,
+                "--nologo",
+                "-v",
+                "q",
+            ])
+            .current_dir(dotnet());
             if cfg!(windows) {
                 // VS 2026's vcvarsall expects vswhere.exe on PATH; the NativeAOT linker probe runs it.
                 let installer = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer";
@@ -74,8 +90,17 @@ pub fn publish_aot() -> PathBuf {
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             );
-            let lib = if cfg!(windows) { "Outpost.Sample.Native.dll" } else if cfg!(target_os = "macos") { "Outpost.Sample.Native.dylib" } else { "Outpost.Sample.Native.so" };
-            dotnet().join("artifacts/publish/Outpost.Sample.Aot").join(format!("release_{rid}")).join(lib)
+            let lib = if cfg!(windows) {
+                "Outpost.Sample.Native.dll"
+            } else if cfg!(target_os = "macos") {
+                "Outpost.Sample.Native.dylib"
+            } else {
+                "Outpost.Sample.Native.so"
+            };
+            dotnet()
+                .join("artifacts/publish/Outpost.Sample.Aot")
+                .join(format!("release_{rid}"))
+                .join(lib)
         })
         .clone()
 }

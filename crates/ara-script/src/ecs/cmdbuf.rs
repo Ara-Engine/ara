@@ -117,7 +117,12 @@ pub enum Applied {
 
 /// Inserts raw component bytes; false if the entity is missing. `bytes` must be the
 /// component's full layout.
-pub(crate) fn insert_bytes(world: &mut World, entity: Entity, id: ComponentId, bytes: &[u8]) -> bool {
+pub(crate) fn insert_bytes(
+    world: &mut World,
+    entity: Entity,
+    id: ComponentId,
+    bytes: &[u8],
+) -> bool {
     let Ok(mut e) = world.get_entity_mut(entity) else {
         return false;
     };
@@ -134,7 +139,12 @@ pub(crate) fn insert_bytes(world: &mut World, entity: Entity, id: ComponentId, b
 }
 
 /// The bytes of a component on an entity, if present.
-pub(crate) fn component_bytes(world: &World, entity: Entity, id: ComponentId, size: usize) -> Option<Vec<u8>> {
+pub(crate) fn component_bytes(
+    world: &World,
+    entity: Entity,
+    id: ComponentId,
+    size: usize,
+) -> Option<Vec<u8>> {
     let ptr = world.get_entity(entity).ok()?.get_by_id(id).ok()?;
     // SAFETY: the component's storage holds `size` initialized bytes (its layout size),
     // and `&World` keeps it from changing while we copy.
@@ -142,7 +152,11 @@ pub(crate) fn component_bytes(world: &World, entity: Entity, id: ComponentId, si
 }
 
 /// Every script-visible component an entity has, as `(index, bytes)`.
-pub(crate) fn snapshot(world: &World, catalog: &ScriptCatalog, entity: Entity) -> Vec<(u32, Vec<u8>)> {
+pub(crate) fn snapshot(
+    world: &World,
+    catalog: &ScriptCatalog,
+    entity: Entity,
+) -> Vec<(u32, Vec<u8>)> {
     (0u32..)
         .zip(&catalog.components)
         .filter_map(|(i, (id, size))| component_bytes(world, entity, *id, *size).map(|b| (i, b)))
@@ -161,13 +175,19 @@ pub(crate) fn apply(
 ) {
     for op in ops {
         if op.op == CMD_CUE {
-            cues.push(RawCue { cue: op.type_index, data: op.data.clone() });
+            cues.push(RawCue {
+                cue: op.type_index,
+                data: op.data.clone(),
+            });
             continue;
         }
         let bad = |what: String| {
             Diagnostic::error(
                 codes::BAD_DESCRIPTOR,
-                format!("command buffer: {what} ({})", crate::value::entity_json(op.entity)),
+                format!(
+                    "command buffer: {what} ({})",
+                    crate::value::entity_json(op.entity)
+                ),
             )
         };
         let Some(entity) = Entity::try_from_bits(op.entity) else {
@@ -185,12 +205,13 @@ pub(crate) fn apply(
                 Err(e) => problems.push(bad(format!("cannot spawn: {e}"))),
             },
             (CMD_DESPAWN, _) => {
-                let components = applied
-                    .is_some()
-                    .then(|| snapshot(world, catalog, entity));
+                let components = applied.is_some().then(|| snapshot(world, catalog, entity));
                 if world.despawn(entity) {
                     if let (Some(a), Some(components)) = (applied.as_deref_mut(), components) {
-                        a.push(Applied::Despawn { entity: op.entity, components });
+                        a.push(Applied::Despawn {
+                            entity: op.entity,
+                            components,
+                        });
                     }
                 } else {
                     problems.push(bad("despawn of a missing entity".into()));
@@ -203,7 +224,11 @@ pub(crate) fn apply(
                     .flatten();
                 if insert_bytes(world, entity, id, &op.data) {
                     if let Some(a) = applied.as_deref_mut() {
-                        a.push(Applied::Insert { entity: op.entity, component: op.type_index, previous });
+                        a.push(Applied::Insert {
+                            entity: op.entity,
+                            component: op.type_index,
+                            previous,
+                        });
                     }
                 } else {
                     problems.push(bad("insert on a missing entity".into()));
@@ -215,12 +240,19 @@ pub(crate) fn apply(
                 {
                     e.remove_by_id(id);
                     if let Some(a) = applied.as_deref_mut() {
-                        a.push(Applied::Remove { entity: op.entity, component: op.type_index, bytes });
+                        a.push(Applied::Remove {
+                            entity: op.entity,
+                            component: op.type_index,
+                            bytes,
+                        });
                     }
                 }
             }
             (CMD_INSERT | CMD_REMOVE, _) => {
-                problems.push(bad(format!("unknown component #{} or wrong size", op.type_index)));
+                problems.push(bad(format!(
+                    "unknown component #{} or wrong size",
+                    op.type_index
+                )));
             }
             (other, _) => problems.push(bad(format!("unknown op {other}"))),
         }

@@ -33,19 +33,37 @@ impl BehaviourPlan {
     }
 }
 
+/// What one behaviour phase runs with.
+pub(crate) struct Phase<'a> {
+    /// The C# entry points.
+    pub api: &'a ScriptApi,
+    /// `PHASE_TICK` or `PHASE_FRAME`.
+    pub phase: u32,
+    /// The current tick.
+    pub tick: &'a Tick,
+    /// The current frame (frame phase only).
+    pub frame: Option<&'a Frame>,
+    /// The change tick written rows are marked with.
+    pub this_run: BevyTick,
+}
+
 /// Runs one phase of every behaviour. The caller holds exclusive access to the world
 /// (`cell` was made from `&mut World`) and has published it to C# for `Get<T>()`.
+/// `chunks` is reusable scratch.
 pub(crate) fn run_phase(
     cell: UnsafeWorldCell<'_>,
     plans: &mut [BehaviourPlan],
-    api: &ScriptApi,
-    phase: u32,
-    tick: &Tick,
-    frame: Option<&Frame>,
+    p: &Phase<'_>,
     buf: &mut CmdBuf,
-    this_run: BevyTick,
     chunks: &mut Vec<(*const u64, *mut u8, usize)>,
 ) {
+    let Phase {
+        api,
+        phase,
+        tick,
+        frame,
+        this_run,
+    } = *p;
     // `(entities, data, len)` per table, gathered before calling C# so no Rust borrow of
     // the storage is held while C# reads and writes components.
     for plan in plans.iter_mut() {
@@ -54,16 +72,22 @@ pub(crate) fn run_phase(
         // SAFETY: exclusive world access (see above).
         let storages = unsafe { cell.storages() };
         for table_id in plan.query.matched_tables() {
-            let Some(table) = storages.tables.get(table_id) else { continue };
+            let Some(table) = storages.tables.get(table_id) else {
+                continue;
+            };
             let len = table.entity_count() as usize;
-            let Some(col) = table.get_column(plan.data) else { continue };
+            let Some(col) = table.get_column(plan.data) else {
+                continue;
+            };
             if len == 0 {
                 continue;
             }
             // SAFETY: `len > 0`, so row 0 exists.
             // Column data lives in interior-mutable storage, so writing through it is fine
             // under exclusive access.
-            let data = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }.as_ptr().cast_mut();
+            let data = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }
+                .as_ptr()
+                .cast_mut();
             if phase != PHASE_FRAME {
                 // Properties are written through `data`; mark the rows changed.
                 // SAFETY: exclusive access; `len` is the column's row count.

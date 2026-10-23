@@ -75,7 +75,9 @@ fn filler(i: usize) -> String {
         "namespace Bench;\n\n/// <summary>Filler state {i}.</summary>\n[Component]\npublic partial struct Filler{i}\n{{\n    /// <summary>A value.</summary>\n    public float A;\n    /// <summary>Another value.</summary>\n    public float B;\n}}\n\n/// <summary>Filler systems {i}.</summary>\npublic static partial class FillerSystems{i}\n{{\n    [Query]\n    static void Step(ref Filler{i} f, in Tick t)\n    {{\n"
     );
     for k in 0..12 {
-        s.push_str(&format!("        f.A = f.A * 0.5f + {k}.25f * t.Dt;\n        f.B = MathF.Max(f.B, f.A - {k});\n"));
+        s.push_str(&format!(
+            "        f.A = f.A * 0.5f + {k}.25f * t.Dt;\n        f.B = MathF.Max(f.B, f.A - {k});\n"
+        ));
     }
     s.push_str("    }\n\n    /// <summary>A helper.</summary>\n    public static float Helper(float x)\n    {\n");
     for k in 0..8 {
@@ -128,16 +130,28 @@ fn main() {
     config.compile_server = Some(bin("Ara.CompileServer").join("Ara.CompileServer.dll"));
     let t0 = Instant::now();
     let mut host = ScriptHost::start(config, db, &engine, &mut world).expect("host");
-    host.load_modules(&mut world, &[ModuleSpec::from_dir(&dir).expect("module")]).expect("initial compile");
-    println!("start + initial compile: {:.0} ms", t0.elapsed().as_secs_f64() * 1e3);
+    host.load_modules(&mut world, &[ModuleSpec::from_dir(&dir).expect("module")])
+        .expect("initial compile");
+    println!(
+        "start + initial compile: {:.0} ms",
+        t0.elapsed().as_secs_f64() * 1e3
+    );
 
     for n in 0..20_000 {
         let e = world.spawn(EcsTransform::default()).id();
-        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] })).expect("velocity");
-        host.insert_component(&mut world, e, "Mass", &json!({ "value": if n % 2 == 0 { 1 } else { 0 } })).expect("mass");
+        host.insert_component(&mut world, e, "Velocity", &json!({ "linear": [1, 0, 0] }))
+            .expect("velocity");
+        host.insert_component(
+            &mut world,
+            e,
+            "Mass",
+            &json!({ "value": if n % 2 == 0 { 1 } else { 0 } }),
+        )
+        .expect("mass");
     }
     let probe = world.spawn_empty().id();
-    host.insert_component(&mut world, probe, "BenchProbe", &json!({})).expect("probe");
+    host.insert_component(&mut world, probe, "BenchProbe", &json!({}))
+        .expect("probe");
 
     let visible = Arc::new(AtomicI64::new(i64::MIN));
     let done = Arc::new(AtomicBool::new(false));
@@ -162,14 +176,22 @@ fn main() {
             for e in 0..=edits {
                 value += 1;
                 let structural = e == 0 || e % 3 == 2;
-                text = text.replace(&format!("p.Value = {};", value - 1), &format!("p.Value = {value};"));
+                text = text.replace(
+                    &format!("p.Value = {};", value - 1),
+                    &format!("p.Value = {value};"),
+                );
                 if structural {
-                    text = text.replace("// @pad", &format!("static int Pad{e}() => {e};\n    // @pad"));
+                    text = text.replace(
+                        "// @pad",
+                        &format!("static int Pad{e}() => {e};\n    // @pad"),
+                    );
                 }
                 std::fs::write(&file, &text).expect("save");
                 let saved = Instant::now();
                 match wait(value) {
-                    Some(seen) if e > 0 => results.push((structural, (seen - saved).as_secs_f64() * 1e3)),
+                    Some(seen) if e > 0 => {
+                        results.push((structural, (seen - saved).as_secs_f64() * 1e3))
+                    }
                     Some(_) => {}
                     None => eprintln!("edit {e} never became visible"),
                 }
@@ -193,14 +215,29 @@ fn main() {
             boundaries.push(start.elapsed().as_secs_f64() * 1e3);
         }
         reports.extend(b.reports);
-        host.run_tick(&mut world, Tick { frame, seed: 1, elapsed: frame as f64 * dt, dt: dt as f32, reserved: 0 });
+        host.run_tick(
+            &mut world,
+            Tick {
+                frame,
+                seed: 1,
+                elapsed: frame as f64 * dt,
+                dt: dt as f32,
+                reserved: 0,
+            },
+        );
         ticks.push(start.elapsed().as_secs_f64() * 1e3);
-        let v = host.read_component(&world, probe, "BenchProbe").and_then(|p| p["value"].as_i64()).unwrap_or(-1);
+        let v = host
+            .read_component(&world, probe, "BenchProbe")
+            .and_then(|p| p["value"].as_i64())
+            .unwrap_or(-1);
         visible.store(v, Ordering::Release);
         frame += 1;
         next += Duration::from_secs_f64(dt);
         // Sleep most of the gap (high-resolution timers), spin only the last half millisecond.
-        if let Some(gap) = next.checked_duration_since(Instant::now()).and_then(|g| g.checked_sub(Duration::from_micros(500))) {
+        if let Some(gap) = next
+            .checked_duration_since(Instant::now())
+            .and_then(|g| g.checked_sub(Duration::from_micros(500)))
+        {
             std::thread::sleep(gap);
         }
         while Instant::now() < next {
@@ -211,7 +248,11 @@ fn main() {
     let mut l1: Vec<f64> = results.iter().filter(|r| !r.0).map(|r| r.1).collect();
     let mut l3: Vec<f64> = results.iter().filter(|r| r.0).map(|r| r.1).collect();
     let kinds = |k: u32| reports.iter().filter(|r| r.kind == k).count();
-    println!("reload reports: {} L1, {} L3", kinds(RELOAD_L1), kinds(RELOAD_L3));
+    println!(
+        "reload reports: {} L1, {} L3",
+        kinds(RELOAD_L1),
+        kinds(RELOAD_L3)
+    );
     println!(
         "L1 save→visible (n={}): p50 {:.1} ms, p95 {:.1} ms, max {:.1} ms",
         l1.len(),
@@ -234,8 +275,10 @@ fn main() {
         println!(
             "{name} phase medians: server (event→sent) {:.1} ms, staging {:.1} ms, wait for boundary {:.1} ms",
             phase(k, &|r| r.server_us as f64 / 1e3),
-            phase(k, &|r| (r.t_staged.saturating_sub(r.t_received)) as f64 / 1e6),
-            phase(k, &|r| (r.t_applied.saturating_sub(r.t_staged)) as f64 / 1e6),
+            phase(k, &|r| (r.t_staged.saturating_sub(r.t_received)) as f64
+                / 1e6),
+            phase(k, &|r| (r.t_applied.saturating_sub(r.t_staged)) as f64
+                / 1e6),
         );
     }
     let mut all = ticks.clone();
@@ -250,7 +293,11 @@ fn main() {
         percentile(&mut boundaries.clone(), 0.5),
         boundaries.iter().copied().fold(0.0, f64::max)
     );
-    let errors: Vec<_> = host.take_diagnostics().into_iter().filter(|d| d.is_error()).collect();
+    let errors: Vec<_> = host
+        .take_diagnostics()
+        .into_iter()
+        .filter(|d| d.is_error())
+        .collect();
     if !errors.is_empty() {
         println!("errors: {errors:#?}");
     }

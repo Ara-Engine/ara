@@ -25,10 +25,7 @@ fn cs_type(rust: &str) -> Result<String, String> {
         });
     }
     let public = PUBLIC_STRUCTS.iter().any(|s| s.name == t);
-    let hosting = ABI_STRUCTS
-        .iter()
-        .chain(INIT_STRUCTS)
-        .any(|s| s.name == t)
+    let hosting = ABI_STRUCTS.iter().chain(INIT_STRUCTS).any(|s| s.name == t)
         || t == HOST_API.name
         || t == SCRIPT_API.name;
     Ok(match t.as_str() {
@@ -140,7 +137,9 @@ pub fn render(engine: &[StructLayout]) -> Result<String, String> {
     table_def(&mut o, &HOST_API)?;
     table_def(&mut o, &SCRIPT_API)?;
 
-    o.push_str("    /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>\n");
+    o.push_str(
+        "    /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>\n",
+    );
     o.push_str("    public static class AbiConst\n    {\n");
     for c in ABI_CONSTS {
         doc(&mut o, "        ", c.doc);
