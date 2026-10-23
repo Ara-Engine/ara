@@ -556,6 +556,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-player"
+version = "0.0.0"
+
+[[package]]
 name = "ara-proto"
 version = "0.0.0"
 dependencies = [
@@ -604,6 +608,50 @@ dependencies = [
  "serde",
  "serde_json",
  "tungstenite 0.30.0",
+]
+
+[[package]]
+name = "ara-runtime"
+version = "0.0.0"
+dependencies = [
+ "ara-anim",
+ "ara-asset",
+ "ara-asset-format",
+ "ara-components",
+ "ara-doc",
+ "ara-importers",
+ "ara-input",
+ "ara-json",
+ "ara-nav",
+ "ara-ops",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "bytemuck",
+ "glam 0.34.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-runtime-render"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset",
+ "ara-asset-format",
+ "ara-doc",
+ "ara-importers",
+ "ara-input",
+ "ara-render",
+ "ara-runtime",
+ "ara-sim",
+ "glam 0.30.9",
+ "glam 0.34.1",
+ "serde_json",
+ "texture2ddecoder",
 ]
 
 [[package]]
