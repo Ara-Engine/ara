@@ -1,0 +1,16 @@
+[package]
+name = "ara-brand"
+description = "Dev-only tool: exports the Ara logo set (PNG, ICO) and compresses README media."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+clap.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
+resvg = { version = "0.45", default-features = false }
