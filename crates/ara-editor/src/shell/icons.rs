@@ -44,9 +44,36 @@ pub(crate) fn install(renderer: &mut Renderer, _light: bool, dpi: f32) -> ara_ui
             },
         )?;
     }
+    // The menu bar's app logo keeps its own colours (not a tinted icon).
+    let logo = (22. * dpi.max(2.)).ceil() as u32;
+    let tree = resvg::usvg::Tree::from_str(BRAND, &resvg::usvg::Options::default())?;
+    let mut pixels = resvg::tiny_skia::Pixmap::new(logo, logo).ok_or("logo extent")?;
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(logo as f32 / 64., logo as f32 / 64.),
+        &mut pixels.as_mut(),
+    );
+    let mut rgba = pixels.take();
+    for pixel in rgba.as_chunks_mut::<4>().0 {
+        if pixel[3] > 0 {
+            for n in 0..3 {
+                pixel[n] = ((u32::from(pixel[n]) * 255) / u32::from(pixel[3])).min(255) as u8;
+            }
+        }
+    }
+    renderer.image(
+        stable_id("brand-logo") as u32 & 0x7fff_ffff,
+        Image {
+            width: logo,
+            height: logo,
+            rgba,
+        },
+    )?;
     renderer.set_raster_scale(dpi)?;
     Ok(())
 }
+/// The Ara app icon (`assets/brand/ara-icon.svg`, 64-unit view box).
+const BRAND: &str = include_str!("../../../../assets/brand/ara-icon.svg");
 const ASSETS: &[(&str, &str)] = &[
     ("activity", include_str!("../../assets/icons/activity.svg")),
     (

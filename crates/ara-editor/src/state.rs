@@ -459,7 +459,7 @@ fn add_tab(dock: &mut DockLayout, area: &str, panel: &str) -> ara_ui::Result<()>
     if !visit(&mut root, area, panel)
         && !floating.iter_mut().any(|f| visit(&mut f.root, area, panel))
     {
-        return Err("ARA7042: dock destination missing".into());
+        return Err("ARA4042: dock destination missing".into());
     }
     *dock = DockLayout::with_floating(root, floating)?;
     Ok(())

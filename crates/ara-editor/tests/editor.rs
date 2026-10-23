@@ -160,6 +160,8 @@ fn mcp_actions_agent_review_provenance_and_revert_are_live() {
     editor
         .action("editor.focus", json!({"panel":"agents"}))
         .unwrap();
+    // The window observes agent history at its frame boundary.
+    editor.tick();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     assert!(shell.ui.find(&format!("turn-{txn}")).is_some());
     assert_eq!(
@@ -311,7 +313,7 @@ fn layout_persistence_units_and_multi_edit_are_validated() {
 }
 
 #[test]
-fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_reviewable() {
+fn agent_presence_does_not_take_the_human_camera_and_agent_deletes_apply_with_turn_undo() {
     let project = Project::new();
     let mut editor = project.open();
     editor
@@ -342,18 +344,29 @@ fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_revi
     assert_eq!(editor.state.camera, human);
     assert_eq!(editor.state.selection, ["e_child001"]);
     assert_eq!(editor.state.presence[&agent].selection, ["e_crate001"]);
+    // The human is told what the agent looks at, with View/Follow; nothing moves.
+    assert!(editor.activity.notices().iter().any(|n| {
+        n.text == "Presence is viewing main.scene · Salvage crate"
+            && n.kind
+                == ara_editor::activity::NoticeKind::AgentView {
+                    agent: agent.clone(),
+                }
+    }));
     editor
         .action("editor.follow", json!({"agent":agent}))
         .unwrap();
     assert_eq!(editor.state.camera.distance, 6.);
     editor.action("editor.follow", json!({})).unwrap();
     let result=Endpoint::call(&mut editor,"cmd.apply",json!({"session":agent,"doc":"sc_test0001","why":"Remove obsolete crate","commands":[{"cmd":"entity.delete","args":{"entities":["e_crate001"]}}]})).unwrap();
+    // D24: the delete just applies (no reviewable ghost); the turn can be undone.
     let view = editor.view().unwrap();
     assert!(view.entities().is_empty());
     let scene = view.scene(&project.0, &editor.state, None).unwrap();
-    assert_eq!(scene.meshes.len(), 1);
-    assert!(scene.meshes[0].name.contains("deleted"));
-    assert_eq!(scene.materials[scene.meshes[0].material].flags[0], 2);
+    assert!(
+        !scene.meshes.iter().any(|m| m.name.contains("deleted")),
+        "{:?}",
+        scene.meshes.iter().map(|m| &m.name).collect::<Vec<_>>()
+    );
     editor
         .action("review.revert", json!({"txn":result["txn"]}))
         .unwrap();

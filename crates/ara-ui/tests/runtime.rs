@@ -53,7 +53,7 @@ fn incremental_lanes_and_runtime_theme_switch() -> Result<()> {
     )
     .err()
     .expect("fixture declares this value");
-    assert!(error.to_string().contains("ARA7018"));
+    assert!(error.to_string().contains("ARA4018"));
     Ok(())
 }
 #[test]

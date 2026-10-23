@@ -14,7 +14,7 @@ fn mnemonic_width(c: char) -> f32 {
 }
 impl Shell {
     pub(super) fn menubar(&mut self, editor: &mut Editor, out: &mut String) {
-        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><text id='brand-mark' text='a' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
+        out.push_str("<panel id='menubar' class='menubar'><panel id='brand' class='brand' label='Ara'><image id='brand-logo' class='brand-logo' src='brand-logo' /></panel><panel id='menu-titles' style='flex-direction:row;gap:0px;padding-left:4px'>");
         for (i, menu) in MENUS.iter().enumerate() {
             let open = matches!(&self.menu, Some(m) if m.bar() == Some(i));
             let id = format!("menu-title-{i}");
@@ -93,15 +93,18 @@ impl Shell {
                 _ => {}
             }
         }
-        let agent_changes = editor.unreviewed_ops().count();
+        // D24: agents present (and whether one edited just now), not a review count.
+        let agents = editor.state.presence.len();
+        let active = editor.activity.agent_active(std::time::Instant::now());
         out.push_str("<panel id='chips' style='flex-direction:row;align-items:center;gap:2px;padding-left:6px'>");
         if errors + warnings > 0 {
             self.bind_command("chip-problems", "window.console", Target::None);
             out.push_str(&format!("<button id='chip-problems' class='chip' label='Problems' description='{errors} errors, {warnings} warnings · open Console' action='Dispatch'>{}<text id='chip-problems-text' class='{}' text='{}' /></button>",icons::icon_in("chip-problems","triangle-alert",if errors>0{"destructive"}else{"warning"}),if errors>0{"destructive"}else{"warning"},errors+warnings));
         }
-        if agent_changes > 0 {
+        if agents > 0 || active {
             self.bind_command("chip-agents", "window.agents", Target::None);
-            out.push_str(&format!("<button id='chip-agents' class='chip' label='Agent changes' description='{agent_changes} agent changes to review · open Agents' action='Dispatch'>{}<text id='chip-agents-text' class='warning' text='{agent_changes}' /></button>",icons::icon_in("chip-agents","bot","warning")));
+            let tint = if active { "accent" } else { "muted" };
+            out.push_str(&format!("<button id='chip-agents' class='chip' label='Agents' description='{agents} agents connected{} · open the activity feed' action='Dispatch'>{}<text id='chip-agents-text' class='{tint}' text='{}' /></button>",if active{" · editing now"}else{""},icons::icon_in("chip-agents","bot",tint),agents.max(1)));
         }
         self.bind_command("chip-settings", "edit.preferences", Target::None);
         out.push_str(&format!("<button id='chip-settings' class='ghost icon-button' label='Preferences' description='Preferences · Ctrl+,' action='Dispatch'>{}</button></panel></panel>",icons::icon("chip-settings","settings-2")));

@@ -23,7 +23,8 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .tint-play { color:var(--success-foreground); }
 
 .menubar { height:36px; flex-shrink:0; flex-direction:row; align-items:center; padding-left:6px; padding-right:6px; gap:2px; background:var(--chrome); }
-.brand { width:26px; height:26px; flex-shrink:0; align-items:center; justify-content:center; border-radius:var(--radius-sm); background:var(--primary); color:var(--primary-foreground); font-size:14px; }
+.brand { width:26px; height:26px; flex-shrink:0; align-items:center; justify-content:center; }
+.brand-logo { width:22px; height:22px; flex-shrink:0; }
 .menu-title { height:26px; padding-left:8px; padding-right:8px; background:transparent; border-width:0px; border-radius:var(--radius-sm); color:var(--foreground); font-size:13px; }
 .menu-title:hover { background:var(--raised); }
 .menu-title-open { background:var(--hover-surface); }

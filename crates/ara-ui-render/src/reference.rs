@@ -18,7 +18,7 @@ impl CpuGpu {
     pub fn pixmap(&self) -> Result<&tiny_skia::Pixmap> {
         self.target
             .as_ref()
-            .ok_or_else(|| "ARA7052: no CPU frame has been rendered".into())
+            .ok_or_else(|| "ARA4052: no CPU frame has been rendered".into())
     }
     /// Write the completed frame as PNG.
     pub fn save(&self, path: &std::path::Path) -> Result<()> {
@@ -34,7 +34,7 @@ impl UiGpu for CpuGpu {
             .map(|n| n as usize)
             != Some(t.rgba.len())
         {
-            return Err("ARA7052: invalid texture upload".into());
+            return Err("ARA4052: invalid texture upload".into());
         }
         self.textures.insert(
             t.id,
@@ -54,7 +54,7 @@ impl UiGpu for CpuGpu {
         if resize {
             self.target = Some(
                 tiny_skia::Pixmap::new(size[0], size[1])
-                    .ok_or("ARA7052: invalid target dimensions")?,
+                    .ok_or("ARA4052: invalid target dimensions")?,
             );
         }
         if let Some(p) = &mut self.target {
@@ -63,7 +63,7 @@ impl UiGpu for CpuGpu {
         Ok(())
     }
     fn draw(&mut self, batch: &Batch, instances: &[Instance], clips: &[Clip]) -> Result<()> {
-        let target = self.target.as_mut().ok_or("ARA7052: draw before begin")?;
+        let target = self.target.as_mut().ok_or("ARA4052: draw before begin")?;
         let width = target.width();
         let height = target.height();
         let texture = if matches!(batch.pipeline, Pipeline::Shape | Pipeline::Line) {
@@ -72,11 +72,11 @@ impl UiGpu for CpuGpu {
             Some(
                 self.textures
                     .get(&batch.texture)
-                    .ok_or("ARA7052: texture not uploaded")?,
+                    .ok_or("ARA4052: texture not uploaded")?,
             )
         };
         if batch.clip >= clips.len() {
-            return Err("ARA7052: invalid clip chain".into());
+            return Err("ARA4052: invalid clip chain".into());
         }
         for i in instances {
             let r = Box2 {
@@ -95,7 +95,7 @@ impl UiGpu for CpuGpu {
                     let mut clip = Some(batch.clip);
                     let mut visible = true;
                     while let Some(c) = clip {
-                        let c = clips.get(c).ok_or("ARA7052: invalid clip parent")?;
+                        let c = clips.get(c).ok_or("ARA4052: invalid clip parent")?;
                         if !c.rect.contains(p[0], p[1]) || distance(c.rect, c.radius, p) > 0.0 {
                             visible = false;
                             break;

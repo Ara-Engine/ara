@@ -1698,7 +1698,7 @@ dependencies = [
 
 [[package]]
 name = "ara-samples"
-version = "0.0.0"
+version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-anim",

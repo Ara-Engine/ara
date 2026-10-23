@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod actions;
+pub mod activity;
 mod app;
 mod asset_tools;
 mod authoring;

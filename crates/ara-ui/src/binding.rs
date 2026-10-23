@@ -83,7 +83,7 @@ impl<T: BindingValue + Clone> Bindings<T> {
         model: &impl ReadBinding<T>,
         ui: &mut Ui,
     ) -> Result<()> {
-        let index = ui.by_id(node).ok_or("ARA7043: binding node missing")?;
+        let index = ui.by_id(node).ok_or("ARA4043: binding node missing")?;
         model.read(key)?.apply(ui, index)?;
         let list = self.subscribers.entry(key.id).or_default();
         if !list.contains(&node) {

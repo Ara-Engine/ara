@@ -89,7 +89,7 @@ pub fn check_editor(markup: &str, css: &str) -> Result<()> {
         for d in ara_ui_document::stylesheet::declarations(&block.value, 0)? {
             if d.value.contains('#') || d.value.contains("rgb(") || d.value.contains("rgba(") {
                 return Err(ara_ui_document::Diagnostic::new(
-                    7018,
+                    ara_ui_document::codes::RAW_COLOR,
                     markup,
                     block.bytes,
                     format!("Raw color in editor node {}", block.id),

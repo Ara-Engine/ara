@@ -1,5 +1,6 @@
 //! Lossless native UI source, compiled syntax and revision-checked designer operations.
 #![warn(missing_docs)]
+pub mod codes;
 mod diagnostic;
 mod edit;
 mod markup;

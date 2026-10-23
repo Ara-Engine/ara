@@ -120,7 +120,7 @@ impl InputState {
         modal: bool,
     ) -> Result<()> {
         if ui.by_id(root).is_none() {
-            return Err("ARA7045: input scope root not found".into());
+            return Err("ARA4045: input scope root not found".into());
         }
         if let Some(s) = self.scopes.last_mut() {
             s.focus = self.focus;
@@ -189,7 +189,7 @@ impl InputState {
             .is_none_or(|i| !is_focusable(&ui.nodes[i]) || !self.in_scope(ui, i))
         {
             return Err(
-                "ARA7045: focus target is disabled, clipped or outside the active scope".into(),
+                "ARA4045: focus target is disabled, clipped or outside the active scope".into(),
             );
         }
         self.focus_to(ui, Some(id));
@@ -215,7 +215,7 @@ impl InputState {
     pub fn begin_drag(&mut self, payload: serde_json::Value) -> Result<()> {
         let source = self
             .capture
-            .ok_or("ARA7045: drag requires pointer capture")?;
+            .ok_or("ARA4045: drag requires pointer capture")?;
         self.drag = Some((source, payload));
         Ok(())
     }

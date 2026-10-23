@@ -67,7 +67,7 @@ impl VirtualTree {
         let mut depth = Vec::with_capacity(items.len());
         for (i, n) in items.iter().enumerate() {
             if !keys.insert(n.key) || n.parent.is_some_and(|p| p >= i) {
-                return Err("ARA7041: duplicate tree key or invalid parent order".into());
+                return Err("ARA4041: duplicate tree key or invalid parent order".into());
             }
             depth.push(n.parent.map_or(0, |p| depth[p] + 1));
         }
@@ -96,7 +96,7 @@ impl VirtualTree {
             .items
             .iter_mut()
             .find(|n| n.key == key)
-            .ok_or("ARA7041: unknown tree key")?;
+            .ok_or("ARA4041: unknown tree key")?;
         if n.expanded != expanded {
             n.expanded = expanded;
             self.rebuild();
@@ -173,17 +173,17 @@ impl VirtualView {
             || columns.is_empty()
             || columns.iter().any(|v| !v.is_finite() || *v <= 0.0)
         {
-            return Err("ARA7041: invalid virtual viewport/columns".into());
+            return Err("ARA4041: invalid virtual viewport/columns".into());
         }
         let namespace = ui
             .nodes
             .get(parent)
-            .ok_or("ARA7041: virtual parent not found")?
+            .ok_or("ARA4041: virtual parent not found")?
             .element
             .id
             .clone();
         if !ui.nodes[parent].element.children.is_empty() {
-            return Err("ARA7041: mount requires an empty scroll node".into());
+            return Err("ARA4041: mount requires an empty scroll node".into());
         }
         let count = (viewport / row_height).ceil() as usize + 2;
         let mut slots = Vec::with_capacity(count);
@@ -240,7 +240,7 @@ impl VirtualView {
         viewport: f32,
     ) -> Result<()> {
         if !offset.is_finite() || !viewport.is_finite() {
-            return Err("ARA7041: nonfinite scroll".into());
+            return Err("ARA4041: nonfinite scroll".into());
         }
         let offset = offset.clamp(
             0.0,
@@ -252,7 +252,7 @@ impl VirtualView {
         let mut wanted = BTreeSet::new();
         for r in &rows {
             if !wanted.insert(r.key) || r.cells.len() != self.columns.len() {
-                return Err("ARA7041: duplicate visible key or wrong column count".into());
+                return Err("ARA4041: duplicate visible key or wrong column count".into());
             }
         }
         let existing: BTreeMap<_, _> = self
@@ -274,7 +274,7 @@ impl VirtualView {
             let slot = if let Some(i) = existing.get(&row.key) {
                 *i
             } else {
-                free.pop().ok_or("ARA7041: row pool exhausted")?
+                free.pop().ok_or("ARA4041: row pool exhausted")?
             };
             let s = &mut self.slots[slot];
             let entering = s.key != Some(row.key);

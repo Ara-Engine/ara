@@ -193,16 +193,20 @@ impl Shell {
         self.asset_offset = self
             .asset_offset
             .clamp(0., (self.asset_grid_extent - height).max(0.));
-        let first = (self.asset_offset / row_step).floor() as usize * columns;
+        let first_row = (self.asset_offset / row_step).floor() as usize;
+        let first = first_row * columns;
         let count = ((height / row_step).ceil() as usize + 2) * columns;
-        out.push_str("<panel id='asset-grid' style='flex-grow:1;flex-basis:0px;overflow:hidden'>");
+        // Cards sit at non-negative offsets from the first visible row; the partial-row
+        // scroll is a translation (ARA4014 rejects negative lengths, FINDINGS #18).
+        let scroll = self.asset_offset - first_row as f32 * row_step;
+        out.push_str(&format!("<panel id='asset-grid' style='flex-grow:1;flex-basis:0px;overflow:hidden'><panel id='asset-grid-rows' style='position:absolute;left:0px;top:0px;width:100%;height:100%;translate-y:-{scroll}px'>"));
         for (n, asset) in items.iter().enumerate().skip(first).take(count) {
             let id = format!("asset-card-{n}");
             self.bindings.insert(
                 ara_ui::source::stable_id(&id),
                 Binding::Asset(asset.clone()),
             );
-            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns) as f32*row_step-self.asset_offset,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
+            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns-first_row) as f32*row_step,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
             self.asset_thumbnail(asset, out, &id, thumbnail);
             if compact {
                 out.push_str(&format!("<panel id='{id}-caption' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:3px'>"));
@@ -226,7 +230,7 @@ impl Shell {
             }
             out.push_str("</button>");
         }
-        out.push_str("</panel></panel>");
+        out.push_str("</panel></panel></panel>");
         self.asset_footer(out, items.len(), editor);
     }
     fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {

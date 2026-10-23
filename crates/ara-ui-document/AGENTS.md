@@ -9,7 +9,7 @@ Public API:
 - `SourceOp::inverse` reverses all patches in post-operation byte coordinates.
 - `parse` retains authored structure; `compile` expands templates and named slots.
 - `stylesheet::Stylesheet` retains declaration/rule spans and global tokens.
-- `Diagnostic` supplies ARA7000–ARA7099 UI codes, byte/line/column location and a fix.
+- `Diagnostic` supplies ARA4000–ARA4199 UI codes (table: `codes.rs`, catalog: `ara-diag/codes/ui.md`), byte/line/column location and a fix.
 
 Rules:
 - Never serialize a runtime tree over authored source. `serialize` is the lossless writer.

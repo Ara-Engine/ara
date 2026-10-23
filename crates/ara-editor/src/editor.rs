@@ -58,6 +58,8 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
+    pub activity: crate::activity::Activity,
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -122,6 +124,7 @@ impl Editor {
             .map(|d| d.id.to_string())
             .ok_or_else(|| anyhow::anyhow!("project has no scene; run ara init first"))?;
         let settings = crate::settings::Settings::open(root, user_settings)?;
+        let activity = crate::activity::Activity::new(host.store().revision());
         let mut state = EditorState {
             doc,
             ..Default::default()
@@ -188,6 +191,7 @@ impl Editor {
             review_revision: 0,
             extraction_revision: 0,
             queued_commands: Vec::new(),
+            activity,
         })
     }
     /// Push native human activity into the non-disruption boundary.
@@ -246,6 +250,30 @@ impl Editor {
             self.view_revision += 1;
             changed = true;
         }
+        if changed {
+            let now = std::time::Instant::now();
+            let store = self.host.store();
+            let describe = |doc: &str, selection: &[String]| {
+                let scene = store
+                    .workspace()
+                    .path_of(doc)
+                    .map(|p| p.rsplit('/').next().unwrap_or(p).to_owned())
+                    .unwrap_or_else(|| doc.to_owned());
+                let entity = selection.first().and_then(|id| {
+                    crate::world::resolve(store, doc).ok().and_then(|r| {
+                        r.get(id)
+                            .and_then(|e| e.record.get("name"))
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                    })
+                });
+                match entity {
+                    Some(name) => format!("{scene} · {name}"),
+                    None => scene,
+                }
+            };
+            self.activity.observe_presence(&self.state, describe, now);
+        }
         while let Ok(control) = self.controls.try_recv() {
             match control {
                 Control::ProfileFreeze { baseline, job } => {
@@ -288,10 +316,34 @@ impl Editor {
     pub fn tick(&mut self) {
         self.host.tick();
         self.sync();
+        let now = std::time::Instant::now();
+        let mut activity = self.activity.observe_history(self.host.store(), now);
+        if let Some(since) = self.activity.log_poll(now) {
+            let logs = self
+                .action(
+                    "logs",
+                    json!({"since": since, "codes": ["ARA2503"], "limit": 20}),
+                )
+                .unwrap_or(Value::Null);
+            if let Some(cursor) = logs["cursor"].as_u64() {
+                let messages = logs["entries"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|e| e["diagnostic"]["message"].as_str().map(str::to_owned))
+                    .collect();
+                self.activity.logs_read(cursor, messages, now);
+            }
+        }
+        activity |= self.activity.expire(now);
+        if activity {
+            self.review_revision += 1;
+            self.panels_revision += 1;
+        }
     }
     /// Read-only current edit-world adapter.
     pub fn view(&self) -> anyhow::Result<DocumentView> {
-        let mut view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
+        let view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
             anyhow::anyhow!(
                 d.iter()
                     .map(ToString::to_string)
@@ -299,37 +351,6 @@ impl Editor {
                     .join("\n")
             )
         })?;
-        let document = self
-            .host
-            .store()
-            .workspace()
-            .doc(&self.state.doc)
-            .ok_or_else(|| anyhow::anyhow!("scene disappeared"))?;
-        let mut deleted = ara_doc::Document::new("scene", document.id.clone());
-        for op in self.unreviewed_ops() {
-            if let ara_doc::Op::Delete { doc, id, snapshot } = op
-                && doc.as_str() == self.state.doc
-            {
-                deleted.insert_unchecked(id.clone(), snapshot.clone());
-            }
-        }
-        if !deleted.records().is_empty() {
-            let mut diagnostics = Vec::new();
-            let ghosts = ara_doc::prefab::resolve(
-                &deleted,
-                self.host.store().schema(),
-                self.host.store().workspace(),
-                &Default::default(),
-                &mut diagnostics,
-            );
-            for (id, entity) in ghosts {
-                let mut record = entity.record;
-                if let Some(parent) = entity.parent {
-                    record.insert("parent".into(), parent.into());
-                }
-                view.ghost(id, record);
-            }
-        }
         Ok(view)
     }
     /// Start a spatial gesture at the current revision.
@@ -415,10 +436,13 @@ impl Editor {
     pub(crate) fn report_error(&mut self, message: &str) {
         let _ = self.action("editor.report", json!({"message":message}));
     }
-    /// Applied agent field preimages for provenance and review overlays.
+    /// Fields agents changed within the activity glow, with their previous values.
     pub fn agent_fields(&self) -> BTreeMap<(String, String), Value> {
         let mut fields = BTreeMap::new();
-        for op in self.unreviewed_ops() {
+        for op in self
+            .activity
+            .recent_ops(self.host.store(), std::time::Instant::now())
+        {
             if op.doc().as_str() != self.state.doc {
                 continue;
             }
@@ -453,35 +477,13 @@ impl Editor {
         }
         fields
     }
-    pub(crate) fn unreviewed_ops(&self) -> impl Iterator<Item = &ara_doc::Op> {
-        self.host
-            .store()
-            .history()
-            .iter()
-            .filter_map(|t| self.host.review_entities(&t.id).map(|review| (t, review)))
-            .flat_map(|(t, review)| {
-                t.ops.iter().filter(move |op| {
-                    review.get(&ara_host::review::entity_key(
-                        op.doc().as_str(),
-                        op.id().as_str(),
-                    )) == Some(&ara_host::params::ReviewStatus::Applied)
-                })
-            })
-    }
+    /// Viewport/hierarchy tints of records agents changed in the open scene just now.
     pub(crate) fn review_tints(&self) -> BTreeMap<u64, &'static str> {
-        self.unreviewed_ops()
-            .filter(|op| op.doc().as_str() == self.state.doc)
-            .map(|op| {
-                (
-                    crate::world::render_id(op.id().as_str()),
-                    match op {
-                        ara_doc::Op::Create { .. } => "success-foreground",
-                        ara_doc::Op::Delete { .. } => "destructive-foreground",
-                        _ => "warning-foreground",
-                    },
-                )
-            })
-            .collect()
+        self.activity.tints(
+            self.host.store(),
+            &self.state.doc,
+            std::time::Instant::now(),
+        )
     }
 }
 impl Endpoint for Editor {
