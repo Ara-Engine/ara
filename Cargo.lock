@@ -965,6 +965,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-hub"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-crash",
+ "ara-diag",
+ "ara-editor-gpu",
+ "ara-gpu",
+ "ara-hub-service",
+ "ara-json",
+ "ara-platform",
+ "ara-proto",
+ "ara-rpc",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-text",
+ "embed-resource",
+ "image",
+ "resvg",
+ "sdl3-sys",
+ "serde",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
 name = "ara-hub-service"
 version = "0.0.1-alpha"
 dependencies = [

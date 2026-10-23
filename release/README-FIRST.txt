@@ -24,8 +24,9 @@ Restart your terminal after installation to pick up the per-user PATH entry.
   ara hub install-mcp --client codex
 The last two commands print client configuration; follow their output once.
 
-The Hub UI slot is ara-hub.exe. If not included yet, the Ara Hub shortcut explains
-the slot and lists registered projects. The service and global MCP already work.
+Start "Ara Hub" from the Start menu (ara-hub.exe). It registers this build on first
+run. Create projects from templates and the Outpost/Showcase samples, open them in
+the editor or headless, pin engine versions, and connect agents on its Agents page.
 The player is started by the editor or Engine Protocol; do not run it directly.
 templates/starter comes from ara init. Samples and assets.lock.json are included
 when present at packaging time. Follow each sample's asset setup instructions.
