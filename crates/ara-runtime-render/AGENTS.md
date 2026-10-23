@@ -31,7 +31,8 @@ renderer and per-draw upload state; no simulation, window or process code.
   effect's space; `Presenter::capture` composites before resizing back.
 - `landscape::Landscapes`: ara-landscape (CDLOD terrain + scattered foliage) rendered
   from the capture camera with the scene projection and merged by depth, after VFX
-  (whose delta carries onto terrain). Square, origin-anchored terrains only.
+  (whose delta carries onto terrain). Square terrain extents; atlas tiles are relative
+  to Header.min. Nonzero world origins require ara-landscape's CPU rebase support.
 - `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d. `atlases(world,
   assets)` loads every referenced atlas generation (normal atlases linear);
   `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
