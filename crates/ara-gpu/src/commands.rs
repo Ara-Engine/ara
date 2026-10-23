@@ -33,6 +33,20 @@ pub enum Command {
     BuildAccelerationStructure(AccelerationStructure),
     /// Dispatch compute workgroups.
     Dispatch([u32; 3]),
+    /// Dispatch using three U32 workgroup counts at an aligned buffer offset.
+    DispatchIndirect {
+        /// Buffer allocated with native indirect usage.
+        arguments: Buffer,
+        /// Byte offset of the 12-byte dispatch record.
+        offset: u64,
+    },
+    /// Draw procedural/instanced vertices using a GPU-generated 16-byte record.
+    DrawIndirect {
+        /// Buffer allocated with native indirect usage.
+        arguments: Buffer,
+        /// Byte offset of vertex count, instance count, first vertex and first instance.
+        offset: u64,
+    },
     /// Begin dynamic rendering.
     BeginRendering {
         /// Color outputs.

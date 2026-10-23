@@ -95,6 +95,16 @@ impl Renderer {
     pub fn gpu(&self) -> &VulkanDevice {
         &self.gpu
     }
+    /// Frame-boundary integration borrow for features that own their GPU resources.
+    /// Imported renderer resources must return to their advertised access/ownership.
+    pub fn feature_gpu(&mut self) -> &mut VulkanDevice {
+        &mut self.gpu
+    }
+    /// Opaque reversed-Z depth, sampled index and actual state for feature graphs.
+    /// Feature consumers must return it to Graphics/ShaderRead before the next frame.
+    pub fn feature_depth(&self) -> (Image, u32, State) {
+        (self.targets.images[DEPTH], self.targets.sampled[DEPTH], self.targets.states[DEPTH])
+    }
     /// Upload an extraction snapshot and prewarm its complete cooked pipeline set.
     /// Shader cooking must have happened offline, before this call.
     pub fn new(
