@@ -147,7 +147,7 @@ fn contacts(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
     )
 }
 
-fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
+pub(super) fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
     use ara_physics_jolt::JoltBackend;
     use bevy_ecs::prelude::{Schedule, World};
     let load_before = load();
@@ -217,7 +217,13 @@ fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
             times.push(value as f64 / 1e6);
         }
     }
+    let handles = (1..=20001)
+        .map(|id| body_for_id(&world, id).ok_or("missing ECS body"))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let physics = world.resource::<JoltWorld>();
+    let final_hash = hash(physics, &handles, &[], &[]);
+    let settings = physics.config();
     Ok(
-        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"setupMs":setup_ms,"totalIncludesTrackerMaintenance":true,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback","tracker_maintenance"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>(),"loadBefore":load_before,"loadAfter":load()}),
+        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"preset":"game_default","velocitySteps":settings.velocity_steps,"positionSteps":settings.position_steps,"scratchMiB":settings.scratch_mb,"sharedPool":settings.shared_job_pool,"crossPlatformFp":physics.backend().deterministic(),"setupMs":setup_ms,"totalIncludesTrackerMaintenance":true,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback","tracker_maintenance"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>(),"finalStateHash":format!("{final_hash:016x}"),"loadBefore":load_before,"loadAfter":load()}),
     )
 }

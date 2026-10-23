@@ -292,7 +292,11 @@ fn main() -> BenchResult<()> {
         }
     }
     if std::env::var("ARA_PHYSICS_BENCH_EXTRAS").is_ok_and(|s| s == "1") {
-        records.extend(workloads::run(threads, steps)?);
+        if std::env::var("ARA_PHYSICS_BENCH_ECS_ONLY").is_ok_and(|s| s == "1") {
+            records.push(workloads::ecs(threads, steps)?);
+        } else {
+            records.extend(workloads::run(threads, steps)?);
+        }
     }
     let text = persist(&records, true)?;
     print!("{text}");

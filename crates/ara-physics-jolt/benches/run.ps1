@@ -31,7 +31,7 @@ if (-not $RunOnly) {
 }
 if ($BuildOnly) { $global:LASTEXITCODE = 0; return }
 $run = New-BenchmarkRun $repo $results
-foreach ($setting in @('EXTRAS','SCRATCH_MB','NATIVE_SCRATCH_MB','POOL','NATIVE_POOL','SPLITTER','NATIVE_SPLITTER','ORDERING','NATIVE_ORDERING')) {
+foreach ($setting in @('EXTRAS','ECS_ONLY','SCRATCH_MB','NATIVE_SCRATCH_MB','POOL','NATIVE_POOL','SPLITTER','NATIVE_SPLITTER','ORDERING','NATIVE_ORDERING')) {
     Remove-Item "Env:ARA_PHYSICS_BENCH_$setting" -ErrorAction SilentlyContinue
 }
 $env:ARA_PHYSICS_BENCH_THREADS = '8'

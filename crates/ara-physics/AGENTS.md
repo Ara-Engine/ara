@@ -70,6 +70,8 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
   still reproduces S6. Sleeping/speculative distances and island splitting are explicit.
 - ECS lifecycle batches preserve PhysicsId construction order across actor kinds.
   A failed batch discards unfinished bindings so correcting a scene permits retry.
+  Stable identity sets use linear configuration/joint checks; identity or collider
+  changes retain the full structural synchronization and broadphase optimization.
 - The `bench` feature adds PhysicsTimings for lifecycle, inputs, step, extraction
   and writeback. Wall-clock diagnostics never exist in ordinary simulation builds.
 - `cargo test -p ara-physics`; behavior tests are in `ara-physics-jolt`.

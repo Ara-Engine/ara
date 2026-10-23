@@ -397,21 +397,40 @@ fn synchronize_inner<B: PhysicsBackend>(
         binding::validate(world, e)?;
     }
     r.removed.clear();
-    for (&id, b) in &r.bindings {
-        if let Ok(i) = r.rows.binary_search_by_key(&id, |r| r.0) {
-            if !b.matches(world, r.rows[i].1) {
+    let same_ids = r.rows.len() == r.bindings.len()
+        && r.rows.iter().map(|r| r.0).eq(r.bindings.keys().copied());
+    if same_ids {
+        // Most ticks keep the same identities. Both sequences are ordered, so
+        // validate configuration without a binary search for every body.
+        for (&(id, e), b) in r.rows.iter().zip(r.bindings.values()) {
+            if !b.matches(world, e) {
                 r.removed.push(id);
             }
-        } else {
-            r.removed.push(id);
+        }
+    } else {
+        for (&id, b) in &r.bindings {
+            if let Ok(i) = r.rows.binary_search_by_key(&id, |r| r.0) {
+                if !b.matches(world, r.rows[i].1) {
+                    r.removed.push(id);
+                }
+            } else {
+                r.removed.push(id);
+            }
         }
     }
     let rebuild_joints = !r.removed.is_empty()
-        || r.rows.iter().any(|(id, e)| {
-            r.bindings
-                .get(id)
-                .is_none_or(|b| b.joint_settings != world.get::<Joint>(*e).copied())
-        });
+        || if same_ids {
+            r.rows
+                .iter()
+                .zip(r.bindings.values())
+                .any(|(&(_, e), b)| b.joint_settings != world.get::<Joint>(e).copied())
+        } else {
+            r.rows.iter().any(|(id, e)| {
+                r.bindings
+                    .get(id)
+                    .is_none_or(|b| b.joint_settings != world.get::<Joint>(*e).copied())
+            })
+        };
     if rebuild_joints {
         for b in r.bindings.values_mut() {
             if let Some(j) = b.joint.take() {
@@ -444,22 +463,23 @@ fn synchronize_inner<B: PhysicsBackend>(
     physics.backend_mut().destroy_bodies(&r.despawned)?;
     r.pending.clear();
     r.spawned.clear();
-    let optimize =
-        !r.removed.is_empty() || r.rows.iter().any(|(id, _)| !r.bindings.contains_key(id));
+    let optimize = !r.removed.is_empty() || !same_ids;
     // Flush before a different actor kind so native construction still follows
     // PhysicsId across rigid bodies, vehicles and characters, not just within a batch.
-    for index in 0..r.rows.len() {
-        let (id, e) = r.rows[index];
-        if !r.bindings.contains_key(&id) {
-            if world.get::<CharacterController>(e).is_some() || world.get::<Vehicle>(e).is_some() {
-                flush_bodies(physics.backend_mut(), r)?;
-            }
-            let binding = Binding::create(world, e, id, physics.backend_mut(), &mut r.pending)?;
-            r.bindings.insert(id, binding);
-        }
-    }
-    flush_bodies(physics.backend_mut(), r)?;
     if optimize {
+        for index in 0..r.rows.len() {
+            let (id, e) = r.rows[index];
+            if !r.bindings.contains_key(&id) {
+                if world.get::<CharacterController>(e).is_some()
+                    || world.get::<Vehicle>(e).is_some()
+                {
+                    flush_bodies(physics.backend_mut(), r)?;
+                }
+                let binding = Binding::create(world, e, id, physics.backend_mut(), &mut r.pending)?;
+                r.bindings.insert(id, binding);
+            }
+        }
+        flush_bodies(physics.backend_mut(), r)?;
         physics.backend_mut().optimize()?;
     }
     if rebuild_joints {

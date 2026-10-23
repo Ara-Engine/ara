@@ -16,6 +16,7 @@ $env:ARA_PHYSICS_BENCH_STEPS = "$Steps"
 $env:ARA_PHYSICS_BENCH_PRESET = 'game_default'
 $env:ARA_PHYSICS_BENCH_ROUNDS = '0'
 $env:ARA_PHYSICS_BENCH_EXTRAS = '1'
+$env:ARA_PHYSICS_BENCH_ECS_ONLY = '0'
 $run = New-BenchmarkRun $repo $results -IncludeMatrix:$IncludeMatrix
 function Measure-Binary([string]$Binary, [string]$Name) {
     Invoke-Benchmark $run $repo $results $Binary $Name
