@@ -12,6 +12,65 @@ use std::{
 use support::*;
 
 #[test]
+fn spawn_baselines_preserve_projection_ownership() -> Result<()> {
+    let mut registry = ara_sim::SimRegistry::new(schema())?;
+    registry.register_component::<Item>()?;
+    let scene = ara_doc::read(
+        r#"{"$schema":"ara://schema/scene/1","id":"sc_baselines","records":{"e_projected":{"Item":{"x":0.0,"available":true}}}}"#,
+        "scene.scene", registry.schema(), None,
+    ).doc.expect("projected baseline fixture");
+    let mut sim = ara_sim::Session::local(
+        ara_sim::EditWorld::new(registry, scene)?,
+        ara_sim::TickConfig::default(),
+        1,
+        Default::default(),
+    )?;
+    sim.world_mut().spawn((
+        ara_sim::Identity("e_runtime".into()),
+        Item {
+            x: 2.0,
+            available: true,
+        },
+    ));
+    let mut server = Server::<Movement>::new(
+        sim,
+        policies()?,
+        ServerConfig {
+            tick_limit: Some(1),
+            ..Default::default()
+        },
+    )?;
+    let endpoint = server.address()?;
+    let mut client = Client::<Movement>::new(
+        policies()?,
+        ClientConfig {
+            player: PlayerId(0),
+            endpoint,
+            hz: 60,
+            tick_limit: Some(1),
+        },
+        server.token(PlayerId(0), endpoint)?,
+    )?;
+    let start = Instant::now();
+    loop {
+        server.poll()?;
+        client.poll()?;
+        let spawns = client.spawns();
+        if spawns.len() == 2 {
+            for spawn in spawns {
+                assert_eq!(spawn.projected, spawn.identity == "e_projected");
+            }
+            return Ok(());
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "spawn baselines did not arrive"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
 fn local_has_zero_serialization_or_network_resources() -> Result<()> {
     use std::sync::atomic::Ordering;
     let mut sim = session()?;
@@ -254,6 +313,7 @@ fn schema_privacy_quantization_intent_replay_and_lifecycle() -> Result<()> {
     let spawn = Spawn {
         id: new,
         identity: "two".into(),
+        projected: false,
         prefab: "@a.prefab#e_0001".into(),
         version: [0; 32],
         owner: Some(PlayerId(2)),
@@ -614,6 +674,7 @@ fn run(mode: SessionMode) -> Result<()> {
         corrections += status.corrections.len();
         max_correction = max_correction.max(status.corrections.into_iter().fold(0.0, f64::max));
         for spawn in client.spawns() {
+            assert!(!spawn.projected, "these lifetimes were created at runtime");
             if spawn.identity.starts_with("player") {
                 let inv = client.component(spawn.id, "Inventory")?.unwrap();
                 assert_eq!(inv["secret"], serde_json::Value::Null);
