@@ -40,6 +40,7 @@ pub const ATTRIBUTES: &[&str] = &[
     "src",
     "label",
     "description",
+    "test-id",
     "value",
     "min",
     "max",

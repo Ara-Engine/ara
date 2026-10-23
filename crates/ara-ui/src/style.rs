@@ -171,6 +171,7 @@ impl Selector {
 /// Compiled selector and validated native declarations.
 pub struct Rule {
     selector: Selector,
+    source_selector: String,
     declarations: Vec<ara_ui_document::stylesheet::Declaration>,
     body_offset: usize,
 }
@@ -223,6 +224,7 @@ impl Sheet {
             }
             sheet.rules.push(Rule {
                 selector: Selector::parse(&rule.selector)?,
+                source_selector: rule.selector,
                 declarations: rule.declarations,
                 body_offset: rule.bytes.start,
             });
@@ -256,7 +258,7 @@ impl Sheet {
             if rule.selector.matches(e, state) {
                 for d in &rule.declarations {
                     let (k, v) = (&d.name, &d.value);
-                    values.push(serde_json::json!({"selector":rule.selector.name,"property":k,"authored":v,"resolved":self.resolve(v).ok(),"byte":rule.body_offset}));
+                    values.push(serde_json::json!({"selector":rule.source_selector,"property":k,"authored":v,"resolved":self.resolve(v).ok(),"byte":rule.body_offset,"valueBytes":d.bytes}));
                 }
             }
         }
