@@ -61,6 +61,7 @@ pub struct Shell {
     modal_open: bool,
     pub(crate) version: u64,
     tooltip_text: Option<String>,
+    field_request: Option<String>,
 }
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
@@ -118,6 +119,7 @@ impl Shell {
             modal_open: false,
             version: 0,
             tooltip_text: None,
+            field_request: None,
         };
         shell.rebuild(editor)?;
         Ok(shell)
@@ -147,7 +149,9 @@ impl Shell {
             Binding::Protocol("editor.theme", json!({"light":!editor.state.light})),
             "quiet",
         ));
-        markup.push_str("</panel><panel id='dock-root' style='flex-grow:1; min-height:0px'>");
+        markup.push_str(
+            "</panel><panel id='dock-root' style='flex-grow:1; flex-basis:0px; min-height:0px'>",
+        );
         self.dock(&editor.state.layout.clone(), "root", editor, &mut markup)?;
         markup.push_str("</panel>");
         let jobs = editor.action("jobs.list", json!({})).unwrap_or(Value::Null);
@@ -237,12 +241,24 @@ impl Shell {
             let _ = self.input.focus(&mut self.ui, id);
         }
         self.paint_swatches();
-        if let Some(path) = editor.state.focus_field.as_deref() {
-            self.reveal_field(path)?;
+        if self.field_request != editor.state.focus_field {
+            if let Some(path) = editor.state.focus_field.as_deref() {
+                self.reveal_field(path)?;
+            }
+            self.field_request = editor.state.focus_field.clone();
         }
         Ok(())
     }
     fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
+        let (path, axis) = path
+            .rsplit_once('.')
+            .and_then(|(base, axis)| {
+                ["x", "y", "z", "w"]
+                    .iter()
+                    .position(|v| *v == axis)
+                    .map(|n| (base, Some(n)))
+            })
+            .unwrap_or((path, None));
         let id = path.replace('.', "-");
         let Some(row) = self.ui.find(&format!("field-{id}")) else {
             return Ok(());
@@ -255,7 +271,7 @@ impl Shell {
         if let Some(field) = self
             .ui
             .find(&format!("edit-{id}"))
-            .or_else(|| self.ui.find(&format!("edit-{id}-0")))
+            .or_else(|| self.ui.find(&format!("edit-{id}-{}", axis.unwrap_or(0))))
         {
             let key = ara_ui::source::stable_id(&self.ui.nodes[field].element.id);
             self.input.focus(&mut self.ui, key)?;

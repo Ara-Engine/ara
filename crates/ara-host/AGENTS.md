@@ -28,6 +28,8 @@ Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag
   `Scope::agent_default()`); the decision is stored on the session, journaled and
   logged (ARA1812, denials ARA1805).
 - `core_methods()`: the core catalog without a host (offline `ara docs`).
+- `Host::review_entities(txn)`: read-only per-entity review status for native
+  hierarchy/viewport overlays; uses the same state as review accept/revert.
 - Modules: `params` (all core params types), `query` (compact syntax), `text`
   (scene-to-text), `docs` (llms.txt), `journal`, `logs`, `review`, `jobs`, `tree`.
 

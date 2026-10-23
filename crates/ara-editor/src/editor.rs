@@ -66,6 +66,7 @@ impl Editor {
     /// Open the project, register editor commands/services and create the window's human session.
     pub fn open(root: &Path) -> anyhow::Result<Self> {
         let mut project = Project::open(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let main_scene = project.main_scene();
         crate::commands::register(&mut project.registry, &mut project.db);
         let command_schemas = project
             .registry
@@ -82,12 +83,19 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        let doc = host
-            .store()
-            .workspace()
-            .docs()
-            .find(|(_, d)| d.kind == "scene")
-            .map(|(_, d)| d.id.to_string())
+        let workspace = host.store().workspace();
+        let doc = main_scene
+            .as_deref()
+            .and_then(|path| workspace.find(path))
+            .and_then(|id| workspace.doc(id.as_str()))
+            .filter(|d| d.kind == "scene")
+            .or_else(|| {
+                workspace
+                    .docs()
+                    .find(|(_, d)| d.kind == "scene")
+                    .map(|(_, d)| d)
+            })
+            .map(|d| d.id.to_string())
             .ok_or_else(|| anyhow::anyhow!("project has no scene; run ara init first"))?;
         let state = EditorState {
             doc,
@@ -337,10 +345,11 @@ impl Editor {
                     self.host.call(conn, "cmd.apply", dry)?;
                 }
                 if let Some(key) = params["idempotencyKey"].as_str()
-                    && let Some(p) = self
-                        .pending
-                        .iter()
-                        .find(|p| p.params["idempotencyKey"].as_str() == Some(key))
+                    && let Some(p) = self.pending.iter().find(|p| {
+                        p.method == method
+                            && p.params["session"] == params["session"]
+                            && p.params["idempotencyKey"].as_str() == Some(key)
+                    })
                 {
                     return Ok(json!({"queued":true,"ticket":p.id}));
                 }

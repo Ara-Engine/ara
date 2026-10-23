@@ -56,6 +56,53 @@ pub struct Handles {
     pub ends: [[f32; 2]; 3],
     /// Handle extent in world metres.
     pub length: f32,
+    /// World-space axes, including the active entity's local orientation.
+    pub axes: [Vec3; 3],
+    tool: Tool,
+    camera: Camera,
+    rect: Box2,
+}
+impl Handles {
+    /// One projected rotation-ring segment, shared by drawing and pointer hit testing.
+    pub fn ring_segment(&self, axis: usize, n: usize) -> Option<[[f32; 2]; 2]> {
+        let u = self.axes[(axis + 1) % 3];
+        let v = self.axes[axis].cross(u);
+        let a = n as f32 / 48. * std::f32::consts::TAU;
+        let b = (n + 1) as f32 / 48. * std::f32::consts::TAU;
+        let point = |angle: f32| self.pivot + (u * angle.cos() + v * angle.sin()) * self.length;
+        Some([
+            project(&self.camera, self.rect, point(a))?,
+            project(&self.camera, self.rect, point(b))?,
+        ])
+    }
+}
+/// Intersect a logical pointer ray with the chosen gizmo plane.
+pub fn plane_point(
+    camera: &Camera,
+    rect: Box2,
+    pointer: [f32; 2],
+    pivot: Vec3,
+    normal: Vec3,
+) -> Option<Vec3> {
+    let c = camera
+        .spec()
+        .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
+        .ok()?;
+    let inverse = (c.projection * c.view).inverse();
+    let near = inverse
+        * glam::Vec4::new(
+            (pointer[0] - rect.x) / rect.w * 2. - 1.,
+            1. - (pointer[1] - rect.y) / rect.h * 2.,
+            1.,
+            1.,
+        );
+    let direction = (near.truncate() / near.w - c.position).normalize_or_zero();
+    let denominator = direction.dot(normal);
+    if denominator.abs() < 0.0001 {
+        return None;
+    }
+    let t = (pivot - c.position).dot(normal) / denominator;
+    (t > 0.).then_some(c.position + direction * t)
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
@@ -76,24 +123,39 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
     let length = state.camera.distance * 0.12;
     let origin = project(&state.camera, rect, pivot)?;
     let (_, rotation, _) = matrix.to_scale_rotation_translation();
-    let ends = [Vec3::X, Vec3::Y, Vec3::Z].map(|axis| {
-        project(
-            &state.camera,
-            rect,
-            pivot + (if state.local { rotation * axis } else { axis }) * length,
-        )
-        .unwrap_or(origin)
-    });
+    let axes =
+        [Vec3::X, Vec3::Y, Vec3::Z].map(|axis| if state.local { rotation * axis } else { axis });
+    let ends =
+        axes.map(|axis| project(&state.camera, rect, pivot + axis * length).unwrap_or(origin));
     Some(Handles {
         pivot,
         origin,
         ends,
         length,
+        axes,
+        tool: state.tool,
+        camera: state.camera,
+        rect,
     })
 }
 /// Return the nearest transform handle within a ten-pixel interaction target.
 pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<usize> {
     let p = Vec2::from(pointer);
+    if handles.tool == Tool::Rotate {
+        return (0..3)
+            .flat_map(|axis| {
+                (0..48).filter_map(move |n| {
+                    let [a, b] = handles.ring_segment(axis, n)?;
+                    let (a, b) = (Vec2::from(a), Vec2::from(b));
+                    let ab = b - a;
+                    let t = ((p - a).dot(ab) / ab.length_squared().max(0.001)).clamp(0., 1.);
+                    let d = p.distance(a + ab * t);
+                    (d < 10.).then_some((axis, d))
+                })
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(axis, _)| axis);
+    }
     let a = Vec2::from(handles.origin);
     handles
         .ends
@@ -180,18 +242,8 @@ pub fn build(
         {
             let tint = color(token, 1.)?;
             if state.tool == Tool::Rotate {
-                let normal = [Vec3::X, Vec3::Y, Vec3::Z][axis];
-                let u = if axis == 0 { Vec3::Y } else { Vec3::X };
-                let v = normal.cross(u);
                 for n in 0..48 {
-                    let a = n as f32 / 48. * std::f32::consts::TAU;
-                    let b = (n + 1) as f32 / 48. * std::f32::consts::TAU;
-                    let a = handles.pivot + (u * a.cos() + v * a.sin()) * handles.length;
-                    let b = handles.pivot + (u * b.cos() + v * b.sin()) * handles.length;
-                    if let (Some(from), Some(to)) = (
-                        project(&state.camera, rect, a),
-                        project(&state.camera, rect, b),
-                    ) {
+                    if let Some([from, to]) = handles.ring_segment(axis, n) {
                         overlays.push(Overlay::Line {
                             from,
                             to,

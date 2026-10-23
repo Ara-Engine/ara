@@ -7,6 +7,7 @@ struct GizmoDrag {
     start: [f32; 2],
     vector: Vec2,
     length: f32,
+    rotation: Option<(Vec3, Vec3, Vec3)>,
 }
 #[derive(Default)]
 pub(super) struct Controller {
@@ -71,7 +72,27 @@ impl Controller {
                             movement.dot(drag.vector) / drag.vector.length_squared().max(0.01);
                         let amount = match gesture.tool {
                             crate::state::Tool::Translate => amount * drag.length,
-                            crate::state::Tool::Rotate => amount * 90.,
+                            crate::state::Tool::Rotate => {
+                                if let (Some((pivot, normal, start)), Some(rect)) =
+                                    (drag.rotation, shell.viewport())
+                                {
+                                    overlay::plane_point(
+                                        &editor.state.camera,
+                                        rect,
+                                        position,
+                                        pivot,
+                                        normal,
+                                    )
+                                    .map(|point| {
+                                        let a = (start - pivot).normalize_or_zero();
+                                        let b = (point - pivot).normalize_or_zero();
+                                        normal.dot(a.cross(b)).atan2(a.dot(b)).to_degrees()
+                                    })
+                                    .unwrap_or(0.)
+                                } else {
+                                    amount * 90.
+                                }
+                            }
                             crate::state::Tool::Scale => amount,
                         };
                         let mut delta = Vec3::ZERO;
@@ -150,6 +171,18 @@ impl Controller {
                                     vector: Vec2::from(handles.ends[axis])
                                         - Vec2::from(handles.origin),
                                     length: handles.length,
+                                    rotation: (editor.state.tool == crate::state::Tool::Rotate)
+                                        .then(|| {
+                                            overlay::plane_point(
+                                                &editor.state.camera,
+                                                rect,
+                                                shell.pointer,
+                                                handles.pivot,
+                                                handles.axes[axis],
+                                            )
+                                            .map(|start| (handles.pivot, handles.axes[axis], start))
+                                        })
+                                        .flatten(),
                                 });
                             } else {
                                 let x = ((shell.pointer[0] - rect.x) / rect.w

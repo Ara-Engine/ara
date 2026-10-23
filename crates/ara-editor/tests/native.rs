@@ -44,7 +44,7 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
     let output = project.0.join(".ara/verification");
     let status = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
         .arg(&project.0)
-        .args(["--sample", "--verify", "--frames", "20", "--output"])
+        .args(["--sample", "--verify", "--frames", "256", "--output"])
         .arg(&output)
         .status()
         .unwrap();

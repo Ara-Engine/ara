@@ -33,8 +33,8 @@ gltf = "1.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sdl3-sys = { version = "=0.7.2", default-features = false }
-accesskit = { version = "=0.25.1", features = ["serde"] }
+sdl3-sys = { version = "0.7", default-features = false }
+accesskit = { version = "0.25", features = ["serde"] }
 
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"

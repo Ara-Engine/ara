@@ -8,12 +8,12 @@ text { flex-shrink:0; white-space:nowrap; }
 .warning { color:var(--warning-foreground); }
 .destructive { color:var(--destructive-foreground); }
 .accent { color:var(--accent); }
-.dock { flex-grow:1; background:var(--card); overflow:hidden; }
+.dock { flex-grow:1; flex-basis:0px; background:var(--card); overflow:hidden; }
 .tabbar { height:34px; flex-shrink:0; flex-direction:row; padding:3px; gap:3px; background:var(--background); }
 .tab { height:28px; font-size:12px; padding:4px; background:var(--background); border-width:0px; border-radius:4px; }
 .tab-selected { background:var(--card); color:var(--foreground); }
 .toolbar { height:34px; flex-shrink:0; flex-direction:row; align-items:center; padding:4px; gap:5px; }
-.body { flex-grow:1; padding:8px; gap:7px; overflow:hidden; }
+.body { flex-grow:1; flex-basis:0px; min-height:0px; padding:8px; gap:7px; overflow:hidden; }
 .row { flex-direction:row; align-items:center; gap:6px; min-height:28px; }
 .field-row { gap:3px;  }
 .field-label { font-size:12px; color:var(--muted-foreground); }
@@ -35,7 +35,7 @@ field:focus { border-color:var(--ring); }
 toggle { height:28px; padding:4px; background:var(--secondary); color:var(--foreground); }
 slider { height:24px; background:var(--secondary); color:var(--accent); }
 dropdown { height:28px; padding:4px; background:var(--secondary); color:var(--foreground); }
-scroll { overflow:hidden; }
+scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .virtual-row { height:26px; padding:3px; background:var(--card); border-width:0px; border-radius:0px; }
 .virtual-row:hover { background:var(--accent-surface); }
 .virtual-row:focus { background:var(--accent-surface); }

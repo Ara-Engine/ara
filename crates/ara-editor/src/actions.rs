@@ -204,6 +204,9 @@ impl Service for EditorService {
             }
             "editor.select" => {
                 let p: EditorSelect = parse(params)?;
+                if !separate {
+                    state.focus_field = None;
+                }
                 if let Some(doc) = p.doc {
                     let d = cx
                         .store()

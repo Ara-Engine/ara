@@ -27,7 +27,7 @@ impl Shell {
                 second,
             } => {
                 let row = *axis == Axis::Horizontal;
-                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-direction:{}; gap:1px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
+                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:1px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
                 self.dock(first, &format!("{path}-a"), editor, out)?;
                 out.push_str(&format!("</panel><splitter id='splitter-{path}' style='width:{}px; height:{}px; background:var(--border)' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{3}else{0},if row{0}else{3},1.-ratio));
                 self.dock(second, &format!("{path}-b"), editor, out)?;

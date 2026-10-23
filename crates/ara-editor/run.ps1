@@ -6,10 +6,13 @@ param(
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $previous=@{}
-foreach($key in @('CARGO_BUILD_JOBS','VULKAN_SDK','VK_IMPLICIT_LAYER_PATH','VK_LAYER_PATH')) { $previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process') }
+foreach($key in @('CARGO_BUILD_JOBS','CARGO_INCREMENTAL','CARGO_PROFILE_DEV_DEBUG','CARGO_PROFILE_TEST_DEBUG','VULKAN_SDK','VK_IMPLICIT_LAYER_PATH','VK_LAYER_PATH')) { $previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process') }
 Push-Location $repo
 try {
     $env:CARGO_BUILD_JOBS='2'
+    $env:CARGO_INCREMENTAL='0'
+    $env:CARGO_PROFILE_DEV_DEBUG='0'
+    $env:CARGO_PROFILE_TEST_DEBUG='0'
     if (-not $env:VULKAN_SDK) { $env:VULKAN_SDK='C:/VulkanSDK/1.4.363.0' }
     $empty=Join-Path $PSScriptRoot 'evidence/empty-vulkan-layers'
     New-Item -ItemType Directory -Force $empty | Out-Null

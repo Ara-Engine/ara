@@ -208,6 +208,21 @@ fn deferred_agent_batches_preserve_attribution_and_do_not_change_documents_befor
         Endpoint::call(&mut editor, "cmd.apply", params).unwrap()["ticket"],
         queued["ticket"]
     );
+    let second = Endpoint::call(
+        &mut editor,
+        "session.begin",
+        json!({"client":"other-policy-test","author":"agent:other-policy"}),
+    )
+    .unwrap()["session"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let other = Endpoint::call(&mut editor,"cmd.apply",json!({"session":second,"doc":"sc_test0001","why":"Independent request","idempotencyKey":"policy-test-1","commands":[{"cmd":"transform.set","args":{"entities":["e_child001"],"position":[8,0,0]}}]})).unwrap();
+    assert_ne!(
+        queued["ticket"], other["ticket"],
+        "idempotency keys belong to their session"
+    );
+    editor.reject(other["ticket"].as_str().unwrap()).unwrap();
     editor.tick();
     assert_eq!(x(&editor), 0.);
     editor.approve(queued["ticket"].as_str().unwrap()).unwrap();
@@ -217,6 +232,58 @@ fn deferred_agent_batches_preserve_attribution_and_do_not_change_documents_befor
         editor.host.store().history().last().unwrap().author,
         ara_ops::Author::Agent("policy".into())
     );
+}
+
+#[test]
+fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
+    use ara_editor::{shell::overlay, state::Tool, world::gesture::Gesture};
+    let project = Project::new();
+    let mut editor = project.open();
+    editor.apply(vec![json!({"cmd":"transform.set","args":{"entities":["e_crate001"],"rotation":[0,0,90]}})],"Rotate fixture",None).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let view = editor.view().unwrap();
+    for (local, expected) in [
+        (false, Vec3::new(1., 2., 1.)),
+        (true, Vec3::new(2., 1., 1.)),
+    ] {
+        let mut state = editor.state.clone();
+        state.tool = Tool::Scale;
+        state.local = local;
+        let mut gesture =
+            Gesture::begin(view.entities(), &state, editor.host.store().revision()).unwrap();
+        gesture.update(Vec3::X);
+        let scale = gesture.current["e_crate001"]
+            .to_scale_rotation_translation()
+            .0;
+        assert!(scale.abs_diff_eq(expected, 0.001), "{local}: {scale:?}");
+        gesture.update(Vec3::ZERO);
+        assert!(gesture.commands().is_empty());
+    }
+    let mut state = editor.state.clone();
+    state.tool = Tool::Rotate;
+    state.local = true;
+    let rect = ara_ui::paint::Box2 {
+        x: 0.,
+        y: 0.,
+        w: 800.,
+        h: 600.,
+    };
+    let handles = overlay::handles(&view, &state, rect).unwrap();
+    for axis in 0..3 {
+        let ring = (0..48)
+            .find_map(|n| {
+                let [a, b] = handles.ring_segment(axis, n)?;
+                let p = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+                (overlay::hit(&handles, p) == Some(axis)).then_some(p)
+            })
+            .expect("visible ring must be pickable");
+        let point =
+            overlay::plane_point(&state.camera, rect, ring, handles.pivot, handles.axes[axis])
+                .unwrap();
+        assert!((point - handles.pivot).dot(handles.axes[axis]).abs() < 0.001);
+    }
 }
 
 #[test]

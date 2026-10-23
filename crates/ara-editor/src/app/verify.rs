@@ -6,6 +6,7 @@ pub(super) struct Verification {
     output: PathBuf,
     entity: Option<String>,
     txn: Option<String>,
+    captures: Vec<String>,
     samples: Vec<Value>,
     started: Instant,
 }
@@ -16,12 +17,13 @@ impl Verification {
             output: output.into(),
             entity: None,
             txn: None,
+            captures: Vec::new(),
             samples: Vec::new(),
             started: Instant::now(),
         }
     }
     pub fn finished(&self) -> bool {
-        self.step >= 12
+        self.step >= 14
     }
     pub fn step(
         &mut self,
@@ -151,10 +153,47 @@ impl Verification {
                 gpu_cpu(&self.output, renderer)?;
             }
             11 => {
+                let mut mcp = ara_mcp::Adapter::new();
+                for target in ["viewport", "editor", "layout"] {
+                    let arguments=json!({"session":editor.session,"target":target,"path":format!(".ara/captures/verification-{target}.png")}).as_object().cloned().ok_or("capture argument object")?;
+                    let result = mcp
+                        .call_tool(editor, "ara_capture", arguments)
+                        .map_err(|e| e.to_string())?;
+                    self.captures.push(
+                        result["structuredContent"]["job"]
+                            .as_str()
+                            .ok_or("capture job result")?
+                            .to_owned(),
+                    );
+                }
+            }
+            12 => {
+                for job in &self.captures {
+                    let status = editor.action("jobs.status", json!({"job":job}))?;
+                    match status["status"].as_str() {
+                        Some("running") => {
+                            if self.started.elapsed() > Duration::from_secs(30) {
+                                return Err("MCP captures timed out".into());
+                            }
+                            return Ok(false);
+                        }
+                        Some("done") => {
+                            let path = status["result"]["path"]
+                                .as_str()
+                                .ok_or("capture output path")?;
+                            if !std::path::Path::new(path).is_file() {
+                                return Err("capture completed without an output artifact".into());
+                            }
+                        }
+                        _ => return Err(format!("capture failed: {status}").into()),
+                    }
+                }
+            }
+            13 => {
                 std::fs::write(
                     self.output.join("interactions.json"),
                     ara_json::to_canonical_string(
-                        &json!({"verified":true,"steps":self.samples,"totalMs":self.started.elapsed().as_secs_f64()*1000.,"flow":["hierarchy selection","unit-aware inspector position","coalesced simulated gizmo","keyboard undo","agent batch via generated MCP","Agents panel turn","Revert via UI button","Escape cancels gesture"]}),
+                        &json!({"verified":true,"steps":self.samples,"totalMs":self.started.elapsed().as_secs_f64()*1000.,"flow":["hierarchy selection","unit-aware inspector position","coalesced simulated gizmo","keyboard undo","agent batch via generated MCP","Agents panel turn","Revert via UI button","Escape cancels gesture","MCP viewport/editor/layout capture jobs completed"]}),
                     ),
                 )?;
             }

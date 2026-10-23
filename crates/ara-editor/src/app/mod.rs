@@ -367,6 +367,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 native.wait(remaining);
             }
         }
+        if verification.as_ref().is_some_and(|v| !v.finished()) {
+            return Err("native verification did not complete within the frame budget".into());
+        }
         editor.host.flush();
         renderer.gpu().assert_clean()?;
         if options.verify {

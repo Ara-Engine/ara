@@ -21,8 +21,8 @@ pub struct Gesture {
     parents: BTreeMap<String, Mat4>,
     pivot: Vec3,
     centre: bool,
-    local: bool,
     snap: Option<f32>,
+    axes: Quat,
 }
 impl Gesture {
     /// Capture all selected transforms once. Selected descendants follow their selected ancestor.
@@ -79,6 +79,16 @@ impl Gesture {
             Tool::Rotate => state.rotate_snap,
             Tool::Scale => state.scale_snap,
         });
+        let axes = if state.local {
+            state
+                .selection
+                .first()
+                .and_then(|id| worlds.get(id))
+                .map(|m| m.to_scale_rotation_translation().1)
+                .unwrap_or(Quat::IDENTITY)
+        } else {
+            Quat::IDENTITY
+        };
         Ok(Self {
             base,
             tool: state.tool,
@@ -87,8 +97,8 @@ impl Gesture {
             parents,
             pivot,
             centre: state.centre,
-            local: state.local,
             snap,
+            axes,
         })
     }
     /// Update the provisional delta from the original pose, never from the preceding sample.
@@ -98,27 +108,29 @@ impl Gesture {
         } else {
             delta
         };
+        if delta == Vec3::ZERO {
+            for (id, matrix) in &self.initial {
+                if let Some(current) = self.current.get_mut(id) {
+                    *current = *matrix;
+                }
+            }
+            return;
+        }
         for (id, start) in &self.initial {
             let parent = self.parents[id];
-            let (scale, rotation, position) = start.to_scale_rotation_translation();
+            let (scale, rotation, _) = start.to_scale_rotation_translation();
             let world = parent * (*start);
-            let (_, world_rotation, world_position) = world.to_scale_rotation_translation();
+            let world_position = world.transform_point3(Vec3::ZERO);
             let next = match self.tool {
                 Tool::Translate => {
-                    let movement = if self.local {
-                        world_rotation * delta
-                    } else {
-                        delta
-                    };
+                    let movement = self.axes * delta;
                     let p = parent.inverse().transform_point3(world_position + movement);
                     Mat4::from_scale_rotation_translation(scale, rotation, p)
                 }
                 Tool::Rotate => {
                     let d = delta.map(f32::to_radians);
                     let q = Quat::from_euler(EulerRot::XYZ, d.x, d.y, d.z);
-                    if self.local && !self.centre {
-                        Mat4::from_scale_rotation_translation(scale, rotation * q, position)
-                    } else {
+                    {
                         let pivot = if self.centre {
                             self.pivot
                         } else {
@@ -126,24 +138,30 @@ impl Gesture {
                         };
                         parent.inverse()
                             * Mat4::from_translation(pivot)
-                            * Mat4::from_quat(q)
+                            * Mat4::from_quat(self.axes * q * self.axes.inverse())
                             * Mat4::from_translation(-pivot)
                             * world
                     }
                 }
                 Tool::Scale => {
                     let factor = (Vec3::ONE + delta).max(Vec3::splat(0.001));
-                    let p = if self.centre {
-                        parent
-                            .inverse()
-                            .transform_point3(self.pivot + (world_position - self.pivot) * factor)
+                    let pivot = if self.centre {
+                        self.pivot
                     } else {
-                        position
+                        world_position
                     };
-                    Mat4::from_scale_rotation_translation(scale * factor, rotation, p)
+                    parent.inverse()
+                        * Mat4::from_translation(pivot)
+                        * Mat4::from_quat(self.axes)
+                        * Mat4::from_scale(factor)
+                        * Mat4::from_quat(self.axes.inverse())
+                        * Mat4::from_translation(-pivot)
+                        * world
                 }
             };
-            self.current.insert(id.clone(), next);
+            if let Some(current) = self.current.get_mut(id) {
+                *current = next;
+            }
         }
     }
     /// One transform.set per affected entity; the caller commits this list as one cmd.apply.
