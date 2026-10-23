@@ -4,6 +4,7 @@ using Ara.Hosting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Ara.CompileServer;
 
@@ -15,7 +16,7 @@ namespace Ara.CompileServer;
 internal sealed record ModuleState(
     CSharpCompilation User,
     Compilation Final,
-    ImmutableDictionary<string, string> Generated,
+    ImmutableDictionary<string, SourceText> Generated,
     ImmutableDictionary<string, SyntaxTree> Trees,
     ImmutableDictionary<string, string> Texts,
     EmitBaseline? Baseline,

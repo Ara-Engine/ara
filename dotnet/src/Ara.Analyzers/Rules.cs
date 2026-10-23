@@ -45,4 +45,47 @@ public static class Rules
         "{0} does not work in NativeAOT builds (shipping, iOS); use generated code or static references instead",
         "Ara.Aot", DiagnosticSeverity.Error,
         "Shipping builds are NativeAOT: no runtime code generation, no dynamic loading, no unannotated reflection.");
+
+    static DiagnosticDescriptor Api(string id, string title, string description) => Rule(id, title,
+        "`{0}` is not available to {1} modules: {2}", "Ara.Api", DiagnosticSeverity.Error, description);
+
+    /// <summary>An API outside the module profile's allowlist (see <see cref="ApiProfiles"/>).</summary>
+    public static readonly DiagnosticDescriptor ApiNotAllowed = Api("ARA0500", "API not on the allowlist",
+        "Gameplay modules compile against an allowlist: the language runtime, Ara and module types. Editor modules (profile = \"editor\") get a broader one.");
+
+    /// <summary>File-system access.</summary>
+    public static readonly DiagnosticDescriptor ApiFileSystem = Api("ARA0501", "File system access",
+        "Gameplay code has no file system: data comes in through assets, state lives in components.");
+
+    /// <summary>Network access.</summary>
+    public static readonly DiagnosticDescriptor ApiNetwork = Api("ARA0502", "Network access",
+        "Gameplay code has no sockets or HTTP; replication is the engine's.");
+
+    /// <summary>Reflection, dynamic code or assembly loading.</summary>
+    public static readonly DiagnosticDescriptor ApiReflection = Api("ARA0503", "Reflection or dynamic code",
+        "Reflection and dynamic code break NativeAOT and reload; generated code covers registration and serialization.");
+
+    /// <summary>Threads, locks, tasks or async.</summary>
+    public static readonly DiagnosticDescriptor ApiThreading = Api("ARA0504", "Threads, locks or tasks",
+        "Gameplay code runs on the engine's schedule; systems already run in parallel over chunks.");
+
+    /// <summary>Native interop.</summary>
+    public static readonly DiagnosticDescriptor ApiInterop = Api("ARA0505", "Native interop",
+        "P/Invoke, Marshal and native libraries are the engine's; modules call Ara APIs.");
+
+    /// <summary>Process state: console, environment, GC, debugger, other processes.</summary>
+    public static readonly DiagnosticDescriptor ApiProcess = Api("ARA0506", "Process or environment access",
+        "The process belongs to the editor or the player; use Log for output and the Tick for time. The code fix rewrites console output to Log.");
+
+    /// <summary>The descriptor for an area.</summary>
+    public static DiagnosticDescriptor For(ApiArea area) => area switch
+    {
+        ApiArea.FileSystem => ApiFileSystem,
+        ApiArea.Network => ApiNetwork,
+        ApiArea.Reflection => ApiReflection,
+        ApiArea.Threading => ApiThreading,
+        ApiArea.Interop => ApiInterop,
+        ApiArea.Process => ApiProcess,
+        _ => ApiNotAllowed,
+    };
 }

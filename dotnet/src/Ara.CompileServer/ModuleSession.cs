@@ -4,6 +4,7 @@ using Ara.Hosting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Ara.CompileServer;
 
@@ -148,7 +149,7 @@ internal sealed class ModuleSession
         var hot = _startHot && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
         var user = _compiler.Create([.. trees.Values, _usings], hot, refs.Values);
-        var start = new ModuleState(user, user, ImmutableDictionary<string, string>.Empty, trees.ToImmutable(), texts.ToImmutable(),
+        var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
             null, hot, 0, null, surfaces, refs);
         p.Parse = p.Mark();
         var kind = _state is null ? AbiConst.ReloadInitial : AbiConst.ReloadL3;
@@ -244,7 +245,7 @@ internal sealed class ModuleSession
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
         if (cls is not null) escalation = cls.Escalation;
         p.Parse = p.Mark();
-        (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, string>)? reuse = null;
+        (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, SourceText>)? reuse = null;
         if (escalation == Escalation.None && cls is not null)
         {
             // The generator reads declarations, attributes and doc comments only. Body edits keep
@@ -313,19 +314,20 @@ internal sealed class ModuleSession
         _ => c,
     };
 
-    static bool Same(ImmutableDictionary<string, string> a, ImmutableDictionary<string, string> b) =>
-        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && v == kv.Value);
+    /// <summary>Same generated output: the driver hands back the same text objects for cached outputs, so most compare by reference.</summary>
+    static bool Same(ImmutableDictionary<string, SourceText> a, ImmutableDictionary<string, SourceText> b) =>
+        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && (ReferenceEquals(v, kv.Value) || v.ContentEquals(kv.Value)));
 
     Outcome Errors(Phases p, List<Diagnostic> problems) =>
         new(this, OutcomeKind.Errors) { Problems = problems, Timing = p };
 
     /// <summary>Runs the generator over a user compilation.</summary>
-    (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, string> Generated) Generate(CSharpCompilation user, CancellationToken ct)
+    (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated) Generate(CSharpCompilation user, CancellationToken ct)
     {
         _driver = _driver.RunGeneratorsAndUpdateCompilation(user, out var final, out var diags, ct);
         var generated = _driver.GetRunResult().Results
             .SelectMany(r => r.GeneratedSources)
-            .ToImmutableDictionary(s => s.HintName, s => s.SourceText.ToString());
+            .ToImmutableDictionary(s => s.HintName, s => s.SourceText);
         return (final, diags, generated);
     }
 
@@ -349,7 +351,7 @@ internal sealed class ModuleSession
     /// </summary>
     Outcome Build(CSharpCompilation user, ModuleState start, uint kind, Escalation escalation, Phases p,
         IReadOnlyCollection<SyntaxTree> analyze,
-        (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, string> Generated)? reuse,
+        (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated)? reuse,
         ICompileContext ctx, bool surface, CancellationToken ct)
     {
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
