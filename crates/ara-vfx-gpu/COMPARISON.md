@@ -12,6 +12,24 @@ GPU stage medians omit queue/barrier/host overhead. They are not whole-frame FPS
 The benchmark isolates simple unlit sprites; the gallery's textured effects,
 scene transport, probes and fidelity bloom have separate capture timings.
 
+## Ara measurements, RTX 4070 SUPER
+
+Merged main through `41cbc25`, Windows 11 / Vulkan, 2026-10-23. Values are GPU
+stage medians in milliseconds; the sum includes all reported stages, including
+background and tone mapping. Queue/barrier/host gaps are excluded.
+
+| Diameter | Queue | Update | Draw | All-stage median sum | Estimated coverage layers | Alive / submitted |
+|---|---|---:|---:|---:|---:|---:|
+| 0.003 m | Graphics | 0.279552 | 0.616096 | 1.406976 | 0.2712673 | 1M / 1M |
+| 0.003 m | Dedicated compute | 0.277504 | 0.560000 | 1.337568 | 0.2712673 | 1M / 1M |
+| 0.05 m | Graphics | 0.280576 | 10.858176 | 11.610816 | 36.044125 | 1M / 1M |
+| 0.05 m | Dedicated compute | 0.277504 | 10.860064 | 11.604384 | 36.044125 | 1M / 1M |
+
+Coverage is a conservative projected-area estimate, not hardware fragment-count
+instrumentation. It includes the minimum pixel footprint. The final run followed
+the exit of another agent's path tracer; `timings.shared-gpu.json` retains the
+earlier contended run (large-sprite dedicated-compute sum 24.324352 ms).
+
 ## Closest published measurements found
 
 | System / source | Workload and hardware | Published measurements | Comparison limits |
@@ -26,3 +44,6 @@ sprite test on a 4070 SUPER with a documented 0.05 m footprint. Their numbers ar
 recorded for context; no Niagara/VFX Graph speedup ratio is justified. A direct
 comparison needs the same camera, footprint/overdraw, spawn/update modules,
 blending, sorting, material, resolution, visibility and timing boundaries.
+The paper's Niagara marker is residual work outside its more granular markers;
+it is not the total particle-system cost. Neither its 0.28 ms nor Unity's maximum
+whole-frame time should be divided into Ara's stage sums as a speedup.

@@ -151,27 +151,29 @@ published Niagara/VFX Graph numbers and the differences preventing a speedup cla
 Same-device GPU replay is exact; cross-vendor floating-point identity is not
 promised. Async compute stays opt-in because this workload offers little overlap.
 
-Measured on the RTX 4070 SUPER with Vulkan SDK 1.4.363.0, the parallel group-prefix
-pass reduced its 1M-particle median from 0.423 ms to about 0.018 ms. Update is
-about 0.28 ms and the 6M-vertex instanced sprite draw about 0.56–0.62 ms. Summed
-stage medians, including the 1440p background and tone mapper, are about
-1.2–1.3 ms. The workload uses 0.003 m sprites distributed across an 8×5×2 m box;
-this measures simulation and geometry throughput with low fill cost. Raw reports
-retain the quality-cap and prefix-scan measurements before and after the change.
+Measured on the RTX 4070 SUPER with Vulkan SDK 1.4.363.0 after merging main
+through `41cbc25` (2026-10-23), in ms:
 
-Final measurements after merging main through `b7c63d3` (2026-10-23), in ms:
+| Stage, median | 0.003 m graphics | 0.003 m compute | 0.05 m graphics | 0.05 m compute |
+|---|---:|---:|---:|---:|
+| Update | 0.279552 | 0.277504 | 0.280576 | 0.277504 |
+| Compact scan | 0.132096 | 0.131072 | 0.133120 | 0.132096 |
+| Compact prefix | 0.018432 | 0.017408 | 0.018432 | 0.017408 |
+| Compact scatter | 0.107520 | 0.106496 | 0.107520 | 0.106496 |
+| Draw | 0.616096 | 0.560000 | 10.858176 | 10.860064 |
+| Tone map | 0.112640 | 0.111616 | 0.072704 | 0.072704 |
+| Sum of all stage medians | 1.406976 | 1.337568 | 11.610816 | 11.604384 |
+| Estimated full-screen coverage layers | 0.2712673 | 0.2712673 | 36.044125 | 36.044125 |
 
-| Stage, median | Graphics queue | Dedicated compute |
-|---|---:|---:|
-| Update | 0.275456 | 0.272384 |
-| Compact scan | 0.089088 | 0.088064 |
-| Compact prefix | 0.017408 | 0.017408 |
-| Compact scatter | 0.065536 | 0.065536 |
-| Draw | 0.559104 | 0.559200 |
-| Tone map | 0.100352 | 0.099328 |
-| Sum of all stage medians | 1.240608 | 1.231872 |
+The raw report includes every stage and its p95. All four runs update and submit
+every one of the 1,000,000 particles. The larger footprint makes blending/fill
+dominate; the small-sprite result does not predict dense smoke or fire cost.
+Dedicated compute remains opt-in: these isolated stages do not establish overlap
+with a game's graphics work. `timings.shared-gpu.json` preserves an earlier run
+affected by another agent's active path tracer; the final report was repeated
+after that process exited. Earlier optimization reports retain the prefix-scan
+change from 0.423 ms to about 0.018 ms under the previous box/camera settings.
 
-The raw report includes every stage and its p95. Both runs retain and draw all
-1,000,000 particles. The same merged source passed 21 tests, including the six
-unchanged goldens and CPU/GPU state comparisons, plus check, clippy with warnings
-denied and formatting checks for both VFX crates and the two integration crates.
+[QUALITY.md](QUALITY.md) records the visual inspection and remaining limits.
+These effects improve the starter baseline but do not yet match Niagara showcase
+art: visible sprite layering and repeated silhouettes still need artist work.

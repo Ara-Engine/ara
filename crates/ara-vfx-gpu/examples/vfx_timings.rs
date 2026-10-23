@@ -4,7 +4,29 @@ use ara_gpu::vulkan::VulkanDevice;
 use ara_render::scene::CameraSpec;
 use ara_vfx_gpu::{GpuSystem, View};
 use glam::Vec3;
+use serde::Serialize;
 use std::{collections::BTreeMap, path::Path};
+
+#[derive(Serialize)]
+struct StageTiming {
+    pass: String,
+    p50_ms: f64,
+    p95_ms: f64,
+}
+#[derive(Serialize)]
+struct BenchmarkReport {
+    sprite_diameter_m: f32,
+    async_compute: bool,
+    resolution: [u32; 2],
+    warmup: u32,
+    samples: u32,
+    stats: ara_vfx_gpu::Stats,
+    stages: Vec<StageTiming>,
+    camera: CameraSpec,
+    box_size_m: [f32; 3],
+    coverage_budget_layers: u32,
+    niagara_comparison: &'static str,
+}
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut gpu = VulkanDevice::new(&[], root.join(".cache"))?;
@@ -48,12 +70,34 @@ fn main() -> Result<()> {
                 }
             }
             let stats = system.stats(&gpu)?;
-            let stages=samples.into_iter().map(|(pass,mut ms)|{ms.sort_by(f64::total_cmp);serde_json::json!({"pass":pass,"p50_ms":ms[ms.len()/2],"p95_ms":ms[ms.len()*95/100]})}).collect::<Vec<_>>();
-            results.push(serde_json::json!({"sprite_diameter_m":ara_json::to_value(&diameter)?,"async_compute":async_compute,"resolution":[2560,1440],"warmup":30,"samples":120,"stats":ara_json::to_value(&stats)?,"stages":stages,"camera":ara_json::to_value(&view.camera)?,"box_size_m":[6,3.6,1.6],"coverage_budget_layers":64,"niagara_comparison":"See COMPARISON.md; published workloads are not matched benchmarks."}));
+            let stages = samples
+                .into_iter()
+                .map(|(pass, mut ms)| {
+                    ms.sort_by(f64::total_cmp);
+                    StageTiming {
+                        pass,
+                        p50_ms: ms[ms.len() / 2],
+                        p95_ms: ms[ms.len() * 95 / 100],
+                    }
+                })
+                .collect();
             println!(
                 "{diameter} m, async={async_compute}: {} alive, {} drawn, {:.3} estimated layers",
                 stats.particles_alive, stats.emitters[0].rendered, stats.overdraw_estimate
             );
+            results.push(BenchmarkReport {
+                sprite_diameter_m: diameter,
+                async_compute,
+                resolution: [2560, 1440],
+                warmup: 30,
+                samples: 120,
+                stats,
+                stages,
+                camera: view.camera,
+                box_size_m: [6., 3.6, 1.6],
+                coverage_budget_layers: 64,
+                niagara_comparison: "See COMPARISON.md; published workloads are not matched benchmarks.",
+            });
             system.retire(&mut gpu)?;
         }
     }
