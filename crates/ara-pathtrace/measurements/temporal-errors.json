@@ -1,0 +1,23 @@
+[
+  {
+    "frames": 12,
+    "maximum_residual": 0.0,
+    "mean_residual": 0.0,
+    "reset_residual": 0.0013531025578956445,
+    "scene": "moving_emissive"
+  },
+  {
+    "frames": 12,
+    "maximum_residual": 0.0,
+    "mean_residual": 0.0,
+    "reset_residual": 0.001229121278140918,
+    "scene": "time_of_day"
+  },
+  {
+    "frames": 12,
+    "maximum_residual": 0.009935327072004865,
+    "mean_residual": 0.007790238644477351,
+    "reset_residual": 0.0005481320100056892,
+    "scene": "disocclusion"
+  }
+]
