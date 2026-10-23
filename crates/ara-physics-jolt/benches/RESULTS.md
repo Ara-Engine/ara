@@ -257,6 +257,9 @@ subscriptions explicitly rather than applying the listener-free table unchanged.
   complete ECS bowl harness, reusing the same bowl and seeded grid generators.
   Earlier probes, including a detected shared-Cargo-cache ECS contamination,
   are excluded.
+- Audio-v2 main `e6d471d` was subsequently merged as `46570fe`. It changes no
+  owned physics implementation. The full default tests, benchmark-enabled tests,
+  strict default Clippy and formatting gates pass again on that integration.
 - Release Rust benchmark binaries; native Jolt stays `/O2`, AVX2. Default build
   defines `JPH_CROSS_PLATFORM_DETERMINISTIC`, `/fp:precise`, no FMA; local build
   disables that feature and uses `/fp:fast` plus FMA. Runtime deterministic
