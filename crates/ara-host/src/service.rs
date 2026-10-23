@@ -185,6 +185,11 @@ impl Cx<'_> {
         &self.st.root
     }
 
+    /// Current startup scene, including command edits that have not flushed to disk yet.
+    pub fn main_scene(&self) -> Option<&str> {
+        self.st.main.as_deref()
+    }
+
     /// Create a document through the shared typed command, including attribution and undo.
     pub fn create_document(&mut self, path: &str, kind: &str) -> Result<String, Diagnostic> {
         let session = self.session.clone().ok_or_else(|| {

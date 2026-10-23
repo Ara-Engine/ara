@@ -14,6 +14,9 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 - `Registry::builtin(&mut db)`; `reg.command::<C>(&mut db)`, `.query::<Q>()`,
   `.job::<J>()` (registers the params type too); `info(name)`, `infos()`,
   `catalog()` (the `commands` section of reflection.json), `check_examples(&db)`.
+- `document_template(kind, factory)` initializes a format's canonical skeleton
+  through staged edits; `EditCtx::create_from_template` dispatches it. Factories
+  call `create_document` for the lifecycle and `apply_edit` for initial records.
 - `reg.apply(&mut store, &Batch, &Session) -> Result<BatchResult, Vec<Diagnostic>>`;
   `reg.run(..., progress)` also reports job progress.
 - `Batch { doc, calls: Vec<Call { command, params }>, why, idempotencyKey, base,

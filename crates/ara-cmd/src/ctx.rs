@@ -275,9 +275,22 @@ pub struct EditCtx<'a, 's> {
     pub(crate) staged: &'a mut Staged<'s>,
     pub(crate) doc: AssetId,
     pub(crate) symbols: &'a mut BTreeMap<String, String>,
+    pub(crate) templates: &'a BTreeMap<&'static str, crate::registry::DocumentTemplate>,
 }
 
 impl EditCtx<'_, '_> {
+    /// Creates a registered format's skeleton, falling back to an empty JSON document.
+    pub fn create_from_template(
+        &mut self,
+        path: &str,
+        kind: &str,
+        id: Option<&str>,
+    ) -> Result<AssetId, Diagnostic> {
+        match self.templates.get(kind).copied() {
+            Some(template) => template(self, path, id),
+            None => self.create_document(path, kind, id),
+        }
+    }
     /// Apply an existing subsystem's typed intent after it lowers to a kernel edit.
     pub fn apply_edit(&mut self, edit: Edit) -> Result<(), Diagnostic> {
         self.staged.apply(edit).map(drop)

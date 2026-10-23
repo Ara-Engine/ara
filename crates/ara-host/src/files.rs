@@ -257,7 +257,16 @@ impl State {
                 .map(|s| s.text.clone())
                 .unwrap_or_default()
         } else {
-            let text = write(doc, self.store.schema());
+            let text = match crate::ui_document::validate(doc, &path)
+                .and_then(|()| write(doc, self.store.schema()))
+            {
+                Ok(text) => text,
+                Err(diagnostic) => {
+                    self.files.changed.insert(id.clone(), Instant::now());
+                    self.log(diagnostic.file(path));
+                    return;
+                }
+            };
             if let Err(e) = write_atomic(&abs, &text) {
                 self.files.changed.insert(id.clone(), Instant::now());
                 self.log(
