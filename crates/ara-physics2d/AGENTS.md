@@ -38,4 +38,4 @@ Mirrors ara-physics' 3D vocabulary with dimension-specific 2D geometry.
 
 Set CARGO_BUILD_JOBS=2. `cargo test -p ara-physics2d` (includes a cross-process
 determinism harness). `cargo clippy -p ara-physics2d --all-targets -- -D warnings`.
-Timings: `cargo run -p ara-physics2d --example physics2d-timings [--release]`.
+Timings: `cargo run -p ara-physics2d --example physics2d-timings`.

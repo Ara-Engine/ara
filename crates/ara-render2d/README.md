@@ -1,61 +1,68 @@
 # Ara 2D toolset integration
 
-The four new crates are discovered by the root workspace wildcard; no root manifest
-change is needed. The integration deliberately keeps protocol/editor routing in the
-host's ownership. Register `ara_2d::register`, `ara_physics2d::register` and both
-`commands::register` functions in the shared SchemaDb/Registry. Install their
-`register_sim` bridges before constructing EditWorld or Session. Diagnostics use
-ARA3601 (2D authoring) and ARA3602 (physics authoring).
+The four crates (`ara-2d`, `ara-import2d`, `ara-physics2d`, `ara-render2d`) are picked
+up by the root workspace wildcard; no root manifest change is needed. Protocol/editor
+routing stays with the host.
 
-Install `ara_import2d::{AtlasImporter, TilemapImporter}` in an ara-asset worker
-registry, never on the editor frame. Atlas settings crop source PNGs and pack them
-with deterministic gutters/pivots/borders; optional dependency PNG paths are supplied
-as immutable ImportInput snapshots by the host. Canonical metadata has no GPU slots.
-AR2A v1 is an LE versioned header followed by RGBA8; color uploads are SRGB and
-normal uploads UNORM. A tilemap's canonical text contains its complete source cells;
-AR2C 32x32 tile/terrain payloads are disposable content-addressed cache objects.
-`AtlasImage::from_cooked` validates pixels before upload. Source import settings and
-assets can use ara-asset's existing typed sidecar mutation API and D20 publication.
+## Host wiring
 
-Submit all pointer samples between pointer-down/up in one ara-cmd Batch, or provide
-all samples to `tilemap.paint`. No document changes occur before that transaction.
-`tilemap.fill` is a bounded connected flood fill, `tilemap.erase` uses the same cell
-ops, and `tilemap.rule.apply` reads one immutable neighborhood snapshot. Stable layer
-IDs use `l_ground` syntax. Each changed cell has its own op/precondition, so disjoint
-edits retain ordinary kernel collaboration and per-author undo behavior.
+- Schemas and commands: `ara_2d::commands::register` and
+  `ara_physics2d::commands::register` on the shared SchemaDb/Registry (they also call
+  the plain `register`). Diagnostics: ARA3601 (2D authoring), ARA3602 (physics).
+- Simulation: `ara_2d::register_sim` and `ara_physics2d::register_sim` before building
+  EditWorld/Session, then `ara_physics2d::install(session, config)` after gameplay
+  input systems. Pause the session when `Physics2dStatus::error` is set.
+- Assets: install `ara_import2d::{AtlasImporter, TilemapImporter}` in an ara-asset
+  worker registry, never on the editor frame. Dependency PNGs arrive as immutable
+  `ImportInput` snapshots. Canonical atlas metadata has no GPU slots.
+- Rendering: `Scene2d::extract` from a fixed-tick snapshot plus boundary-published
+  atlases, then `Renderer2d::new` off the human's frame; swap at frame boundaries
+  (D20). Ordinary camera frames update constants only.
+- Capture: route protocol captures here when the view selects a `Camera2d`. The
+  daemon router is not changed by these crates.
 
-`Scene2d::extract` consumes a fixed-tick ECS snapshot and boundary-published assets.
-It evaluates flipbooks at the supplied tick, composes XY hierarchy transforms and
-uses Body2d's absolute pose for physics entities. `Renderer2d::new` uploads that
-immutable extraction; stage replacement renderers off the human's frame and swap
-only at allowed frame boundaries, respecting the host's last-good/apply policy.
-Ordinary camera frames update constants only. World/material extraction changes
-require another staged extraction; GPU instance streaming is not implicit.
+## Authoring model
 
-Camera2d uses art pixels/metre, integer zoom and nearest sampling in pixel mode.
-Renderer batches preserve sorting layer/order and stable entity identity. Nine-slice
-draws use 54 procedural vertices; ordinary sprites use six. Tile layer chunks retain
-separate draw/culling bounds. Normal lights and segment shadows are opt-in per sprite
-or tile definition. Unlit draws bypass light/shadow loops. Main-renderer exposure,
-ACES fit and sRGB output are reused; pixel art has no jitter/TAA. The current common
-Vulkan heap bounds the resident atlas count; overflow is a structured GPU error.
+Every 2D asset and scene is canonical text. A tilemap's text holds its source cells
+(one short line per cell); AR2C 32x32 chunk payloads are disposable cache objects.
+`sample/platformer.commands.json` shows the whole agent surface: it is a list of
+Engine Protocol batches (`tilemap.set`, `tilemap.fill` with `autotile`,
+`tilemap.paint`, `tilemap.erase`, `tilemap.colliders.generate`, `sprite.set`,
+`flipbook.set`, `physics2d.set`, `light2d.set`, `camera2d.set`) that produces
+`platformer.scene` exactly. Each batch is one undo item; a pointer stroke is one batch.
 
-`capture` uses the shared PNG, entity IDs, picking, marks, comparison and provenance
-contract. Route 2D protocol captures here when a view selects Camera2d; this crate
-does not change the daemon's router. Lit/albedo/normals/entity_ids/shadow visibility
-views are implemented. The orthographic CameraSpec and external capture-channel
-constructor are additive shared hooks, as are ToneMap and DrawProcedural.
+## Rendering
 
-On Windows, set SDL3_LIB_DIR to the existing main renderer SDL SDK when it is not
-installed in ara-platform/native. `run.ps1` scopes Vulkan's implicit-layer workaround
-and CARGO_BUILD_JOBS=2. Run `-Mode Cook` only after shader changes, `-Mode Capture` for
-the sample, `-Mode Benchmark` for 100k sprites, and `-Mode Check` for local gates.
-The sample's source PNG/settings/scene are committed. Import workers rebuild cache
-objects on a miss; no derived atlas/chunk payloads are committed as source assets.
-The `platformer prepare` example deliberately regenerates only those sample sources.
+Orthographic `Camera2d` in art pixels per metre with integer zoom and nearest
+sampling in pixel mode. Bindless atlases, procedural instancing (6 vertices, nine-slice
+54), stable painter sort. Tile layers become immutable 32x32 batches culled per chunk
+with parallax-aware bounds; layers have parallax and tint. Normal-mapped lights and
+outline shadows are opt-in per sprite or tile definition; unlit draws skip the light
+loop. Post reuses the main renderer's exposure/ACES/sRGB `ToneMap`; pixel art never
+jitters. The resident atlas count is bounded by the common Vulkan heap; overflow is a
+structured GPU error.
 
-GPU measurements are actual Vulkan timestamps, 8 warm-up + 120 measured frames at
-1280x720, with immutable resident instances, unlit sprites and one frame in flight.
-Sprite, post and diagnostic readback costs are reported separately; they do not
-measure dynamic CPU extraction or import. The before-hierarchy baseline and final
-measurement are in `measurements/`. Reference images/provenance are in tests/goldens.
+Additive shared hooks (minimal): `Command::DrawProcedural` in ara-gpu; in ara-render
+`CameraSpec::Orthographic`, public `CaptureContext`/`Capture::from_render`, and
+`renderer::post::ToneMap`.
+
+## Measurements (RTX 4070 SUPER, 1280x720, Vulkan timestamps)
+
+| Workload | Sprite pass p50 / p95 |
+|---|---|
+| 100k unlit sprites, 2.5 px | 0.124 / 0.133 ms |
+| 100k unlit sprites, 14 px (~21x overdraw) | 1.43 / 1.59 ms |
+| Platformer sample, 3 shadowed lights, 22 edges | 0.081 / 0.083 ms |
+
+Shared ToneMap is 0.03 ms; capture readback 0.28 ms is diagnostic-only. 8 warm-up +
+120 measured frames, immutable resident instances, one frame in flight; CPU extraction
+and import are not included. Data: `measurements/100k-sprites.json` (the previous
+build's single-workload run is kept as `100k-sprites-before-outline-shadows.json`).
+Reproduce with `./run.ps1 -Mode Benchmark`.
+
+## Running
+
+`./run.ps1` sets CARGO_BUILD_JOBS=2 and the Vulkan SDK `Bin` on PATH. Modes: Check
+(test, clippy -D warnings, fmt), Cook (after shader edits), Prepare (replay the
+command script into the sample sources), Capture, Benchmark. Goldens need this PC's
+Vulkan SDK; `ARA_UPDATE_2D_GOLDENS=1` deliberately rewrites them.

@@ -48,14 +48,19 @@ fn main() -> Result<()> {
                 let scene = common::benchmark(root, 100_000, size)?;
                 let mut renderer =
                     Renderer2d::new(&scene, [1280, 720], root.join("../../.sn/gpu2d"))?;
-                runs.push(serde_json::json!({"sprite_size":label,"sprites":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().context().info.name}));
+                runs.push(serde_json::json!({"workload":format!("100k unlit sprites, {label}"),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().context().info.name}));
             }
+            // The lit path: the platformer sample with three shadowed lights, same framing.
+            let (scene, mut sample_camera) = common::scene(root, None)?;
+            sample_camera.zoom *= 2.;
+            let mut renderer = Renderer2d::new(&scene, [1280, 720], root.join("../../.sn/gpu2d"))?;
+            runs.push(serde_json::json!({"workload":format!("platformer sample, {} lights, {} shadow edges", scene.lights.len(), scene.occluders.len()),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &sample_camera)?,"device":renderer.gpu().context().info.name}));
             let profile = if cfg!(debug_assertions) {
                 "dev opt-level=1, dependencies=3"
             } else {
                 "release"
             };
-            let report = serde_json::json!({"size":[1280,720],"instances_per_draw":100000,"vertices_per_instance":6,"runs":runs,"profile":profile,"uploads":"immutable device-local instances; frame constants only per frame","lighting":false,"frames_in_flight":1,"method":"Vulkan timestamps, 8 warm-up + 120 measured frames"});
+            let report = serde_json::json!({"size":[1280,720],"instances_per_draw":100000,"vertices_per_instance":6,"runs":runs,"profile":profile,"uploads":"immutable device-local instances; frame constants only per frame","frames_in_flight":1,"method":"Vulkan timestamps, 8 warm-up + 120 measured frames"});
             std::fs::create_dir_all(root.join("measurements"))?;
             ara_gpu::cooked::write_json(&root.join("measurements/100k-sprites.json"), &report)?;
             println!("{}", serde_json::to_string_pretty(&report)?);

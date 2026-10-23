@@ -1,26 +1,26 @@
 {
   "backend": "Rapier2D enhanced-determinism, serial",
   "hz": 60,
-  "includes": "stable-ID ECS sync, collider validation, solver step and component writeback",
+  "includes": "stable-ID ECS sync, validation, solver step and component writeback",
   "profile": "dev opt-level=1, dependencies=3",
   "results": [
     {
       "bodies": 129,
-      "restore_ms": 1.5204000000000002,
+      "restore_ms": 0.7528,
       "samples": 120,
-      "snapshot_bytes": 205113,
-      "snapshot_ms": 2.5156,
-      "step_p50_ms": 0.0666,
-      "step_p95_ms": 0.0932
+      "snapshot_bytes": 209802,
+      "snapshot_ms": 0.5195,
+      "step_p50_ms": 0.0691,
+      "step_p95_ms": 0.0869
     },
     {
       "bodies": 1025,
-      "restore_ms": 11.048,
+      "restore_ms": 5.8082,
       "samples": 120,
-      "snapshot_bytes": 1796177,
-      "snapshot_ms": 25.0003,
-      "step_p50_ms": 0.6315000000000001,
-      "step_p95_ms": 1.0855000000000001
+      "snapshot_bytes": 1833146,
+      "snapshot_ms": 4.162,
+      "step_p50_ms": 0.6504,
+      "step_p95_ms": 1.1216
     }
   ]
 }

@@ -61,12 +61,7 @@ fn main() -> Result<()> {
     let output = serde_json::json!({"backend":"Rapier2D enhanced-determinism, serial","profile":profile,"hz":60,"includes":"stable-ID ECS sync, validation, solver step and component writeback","results":report});
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("measurements");
     std::fs::create_dir_all(&dir)?;
-    let name = if cfg!(debug_assertions) {
-        "solver.json"
-    } else {
-        "solver-release.json"
-    };
-    std::fs::write(dir.join(name), ara_2d::canonical_json(&output))?;
+    std::fs::write(dir.join("solver.json"), ara_2d::canonical_json(&output))?;
     println!("{}", serde_json::to_string_pretty(&output)?);
     Ok(())
 }

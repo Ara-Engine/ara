@@ -10,7 +10,7 @@ try {
     if ($Mode -eq 'Cook') { cargo run -p ara-shader-cook -- crates/ara-render2d/shaders/pipelines.json crates/ara-render2d/cooked }
     elseif ($Mode -eq 'Prepare') { cargo run -p ara-render2d --example platformer -- prepare }
     elseif ($Mode -eq 'Capture') { cargo run -p ara-render2d --example platformer -- capture }
-    elseif ($Mode -eq 'Benchmark') { cargo run --release -p ara-render2d --example platformer -- benchmark }
+    elseif ($Mode -eq 'Benchmark') { cargo run -p ara-render2d --example platformer -- benchmark }
     else {
         $packages=@('-p','ara-2d','-p','ara-import2d','-p','ara-physics2d','-p','ara-render2d')
         cargo test @packages

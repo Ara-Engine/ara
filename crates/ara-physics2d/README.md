@@ -28,20 +28,26 @@ include the application build hash, as ara-sim's checkpoint contract requires.
 | Determinism | `enhanced-determinism` (cross-platform IEEE mode); bit-exact here across processes and insertion orders | Cross-platform determinism advertised since v3.1 |
 | Snapshot/restore | Serde of the complete world; versioned by us | `b2World_GetSnapshot` exists but is marked experimental with an unstable format |
 | Character control | Kinematic controller: slopes, autostep, snap-to-ground | Character mover primitives (plane solving, casts) |
-| Performance | 0.6 ms/tick for 1k boxes (dev profile, ECS sync included) | Likely faster (SIMD solver); not measured here |
+| Performance | 0.65 ms/tick for 1k boxes, ECS sync included (Rapier built at opt-level 3) | Likely faster (SIMD solver); not measured here |
 | Maintenance | Pure Rust, Cargo only, no ABI | C via an owned `cc` shim like S6 (Jolt), ~vendored revision upkeep |
 
 Rapier wins on the two netcode-critical criteria: a stable, complete serialization
 path we version ourselves, and no foreign ABI to maintain for a secondary feature
 (D8). Its known costs are larger snapshots (≈1.8 MB for 1k bodies) and a slower
-restore than Jolt (S6). S6's 3D moving-platform failure is avoided by our own
-controller policy; 2D moving platforms (ground velocity) are not implemented yet.
+restore than Jolt (S6). S6 saw Rapier riders fall off moving platforms; 2D characters
+do not inherit ground velocity yet, so moving platforms are the next controller feature.
 
 ## Measurements
 
-`measurements/solver.json` (dev profile) and `solver-release.json` (release) hold
-ECS-inclusive step, snapshot size and snapshot/restore costs for 129 and 1025 bodies.
-Reproduce with `cargo run -p ara-physics2d --example physics2d-timings [--release]`.
+| Bodies | Step p50 / p95 | Snapshot | Snapshot / restore |
+|---|---|---|---|
+| 129 | 0.069 / 0.087 ms | 210 KB | 0.52 / 0.75 ms |
+| 1025 | 0.65 / 1.12 ms | 1.83 MB | 4.2 / 5.8 ms |
+
+ECS-inclusive (stable-ID sync, validation, step, writeback), 120 ticks after 60 warm-up
+ticks, dev profile with dependencies at opt-level 3. `measurements/solver.json`; the
+pre-refactor run is `solver-before-component-split.json` (0.067 / 0.63 ms p50).
+Reproduce with `cargo run -p ara-physics2d --example physics2d-timings`.
 
 ## Authoring
 

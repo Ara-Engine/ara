@@ -1,72 +1,95 @@
 {
-  "device": {
-    "api_version": "1.4.351",
-    "compute_family": 2,
-    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
-    "descriptor_heap_available": true,
-    "device_id": 10115,
-    "driver_version": 2588114944,
-    "graphics_family": 0,
-    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
-    "max_image_dimension": 32768,
-    "name": "NVIDIA GeForce RTX 4070 SUPER",
-    "pipeline_cache_uuid": [
-      100,
-      75,
-      136,
-      101,
-      121,
-      38,
-      56,
-      71,
-      180,
-      10,
-      171,
-      50,
-      87,
-      147,
-      32,
-      126
-    ],
-    "ray_tracing": true,
-    "timestamp_period_ns": 1.0,
-    "timestamp_valid_bits": [
-      64,
-      64
-    ],
-    "vendor_id": 4318
-  },
   "frames_in_flight": 1,
   "instances_per_draw": 100000,
-  "lighting": false,
-  "passes": {
-    "CaptureReadback": {
-      "p50_ms": 0.281728,
-      "p95_ms": 0.288704,
-      "samples": 120
-    },
-    "Exposure.ACESFitted.SDR": {
-      "p50_ms": 0.031744,
-      "p95_ms": 0.034816,
-      "samples": 120
-    },
-    "HostReadback": {
-      "p50_ms": 0.000064,
-      "p95_ms": 0.000064,
-      "samples": 120
-    },
-    "Sprites.TileChunks.Bindless": {
-      "p50_ms": 0.1072,
-      "p95_ms": 0.115616,
-      "samples": 120
-    }
-  },
+  "method": "Vulkan timestamps, 8 warm-up + 120 measured frames",
   "profile": "dev opt-level=1, dependencies=3",
+  "runs": [
+    {
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 100000,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.278144,
+          "p95_ms": 0.281824,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.031744,
+          "p95_ms": 0.034816,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000096,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 0.123712,
+          "p95_ms": 0.132576,
+          "samples": 120
+        }
+      },
+      "workload": "100k unlit sprites, 2.5px"
+    },
+    {
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 100000,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.279872,
+          "p95_ms": 0.282816,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.028672,
+          "p95_ms": 0.031744,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000096,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 1.42976,
+          "p95_ms": 1.588576,
+          "samples": 120
+        }
+      },
+      "workload": "100k unlit sprites, 14px, ~21x overdraw"
+    },
+    {
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 282,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.279424,
+          "p95_ms": 0.282272,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.029696,
+          "p95_ms": 0.032768,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000096,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 0.081408,
+          "p95_ms": 0.082912,
+          "samples": 120
+        }
+      },
+      "workload": "platformer sample, 3 lights, 22 shadow edges"
+    }
+  ],
   "size": [
     1280,
     720
   ],
-  "sprites": 100000,
   "uploads": "immutable device-local instances; frame constants only per frame",
   "vertices_per_instance": 6
 }
