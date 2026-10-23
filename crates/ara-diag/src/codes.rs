@@ -8,6 +8,7 @@
 //! visibility, `6000` GPU. Other crates own their ranges (see the crate's
 //! `AGENTS.md`); every code has a doc entry in [`crate::catalog`]. Add new codes at
 //! the end of their range; never renumber or reuse one.
+//! Shared play asset failures use `7303`.
 
 use crate::Code;
 
@@ -283,6 +284,9 @@ codes! {
     GPU_VALIDATION = 6004,
     /// A message from the GPU driver or loader environment (`ARA_GPU_ENVIRONMENT`).
     GPU_ENVIRONMENT = 6005,
+
+    /// A play asset is unavailable or failed to import; shared by the runtime and play host.
+    PLAY_ASSETS = 7303,
 }
 
 #[cfg(test)]

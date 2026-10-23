@@ -40,7 +40,7 @@ pub mod codes {
     /// Unknown world ID.
     pub const UNKNOWN_WORLD: Code = Code(7302);
     /// Assets are not imported (yet) or failed to import.
-    pub const ASSETS: Code = Code(7303);
+    pub const ASSETS: Code = ara_diag::codes::PLAY_ASSETS;
     /// A playtest assertion failed.
     pub const TEST_FAILED: Code = Code(7304);
     /// Invalid play request (scene, mode, spec).

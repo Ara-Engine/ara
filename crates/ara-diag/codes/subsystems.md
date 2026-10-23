@@ -603,10 +603,11 @@ Fixes:
 - List live worlds with `ara_play` (`action: status`) and use one of their IDs, or omit `world` to target the latest world.
 - Start a new world with `play.start`.
 
-## ARA7303 play::ASSETS: Play assets not ready
+## ARA7303 PLAY_ASSETS: Play assets not ready
 owner: ara-play-host
+aliases: play::ASSETS, ASSETS
 
-The scene references assets that are not imported yet or failed to import, so the player cannot load them.
+The scene references assets that are not imported yet or failed to import. Play preparation can fail; a running world uses visible model placeholders until the assets recover. The runtime and play host share `ara_diag::codes::PLAY_ASSETS`.
 
 Causes:
 - An import is still running for a referenced asset.

@@ -498,7 +498,7 @@ impl Runtime {
     pub fn asset_diagnostics(&self) -> impl Iterator<Item = ara_diag::Diagnostic> + '_ {
         self.asset_errors
             .iter()
-            .map(|message| ara_diag::Diagnostic::warning(ara_diag::Code(7303), message))
+            .map(|message| ara_diag::Diagnostic::warning(ara_diag::codes::PLAY_ASSETS, message))
     }
 
     /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).

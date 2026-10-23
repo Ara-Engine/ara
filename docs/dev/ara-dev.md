@@ -141,3 +141,9 @@ A 5 × 30-million-call Rust 1.99.1 opt-level-3 microbenchmark of the edited guar
 measured medians 2.203 → 2.231 ns/call without an armed hook and 2.224 → 2.170 ns/call
 with one. Sample ranges overlap on this shared machine. The normal movement
 kernel is unchanged.
+
+Serial test execution exposed a collaboration demo startup hang: libtest prefixes
+the child readiness line with its test name. Its authority helper now uses quiet
+harness output so the readiness protocol works with one test thread, too.
+The runtime and play host now share the existing ARA7303 asset diagnostic constant
+in ara-diag, removing a duplicate definition while preserving its code and meaning.
