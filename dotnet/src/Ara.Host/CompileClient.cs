@@ -40,17 +40,25 @@ internal sealed class CompileClient : IDisposable
         if (!connect.Wait(TimeSpan.FromSeconds(30)))
             throw new TimeoutException("the compile server did not connect within 30 s");
         Protocol.Send(_pipe, MessageKind.Hello, new Protocol.Writer()
-            .U32(Protocol.Version).U32((uint)Environment.ProcessId).Bool(MetadataUpdater.IsSupported).ToArray());
+            .U32(Protocol.Version).U32((uint)Environment.ProcessId).Bool(MetadataUpdater.IsSupported).Str(Capabilities()).ToArray());
         _reader = new Thread(ReadLoop) { Name = "ara-compile-client", IsBackground = true };
         _reader.Start();
     }
 
-    /// <summary>Asks the server to compile and watch a module folder.</summary>
-    internal void Watch(uint slot, string name, string dir, bool hot) =>
+    /// <summary>Asks the server to compile and watch a module folder (after the modules it references).</summary>
+    internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyCollection<string> references, string profile, bool watch) =>
         Protocol.Send(_pipe, MessageKind.Watch, new Protocol.Writer()
             .U32(slot).Str(name).Str(dir).Bool(hot)
             .Strs([typeof(ScriptRuntime).Assembly.Location])
+            .Strs(references).Str(profile).Bool(watch)
             .ToArray());
+
+    /// <summary>Asks for a compile of changed files; agent edits are coalesced and run behind human ones.</summary>
+    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin)
+    {
+        try { Protocol.Send(_pipe, MessageKind.Change, new Protocol.Writer().U32(slot).Strs(paths).U32(origin).ToArray()); }
+        catch (IOException) { /* the server is gone; ReadLoop reports it */ }
+    }
 
     /// <summary>Asks for a hot (Debug IL, EnC) or cold (optimized) rebuild.</summary>
     internal void SetHeat(uint slot, bool hot) =>
@@ -61,6 +69,21 @@ internal sealed class CompileClient : IDisposable
     {
         try { Protocol.Send(_pipe, MessageKind.Rebuild, new Protocol.Writer().U32(slot).U32(escalation).ToArray()); }
         catch (IOException) { /* the server is gone; ReadLoop reports it */ }
+    }
+
+    /// <summary>
+    /// The runtime's EnC capabilities (what <c>dotnet watch</c> asks for): they decide which
+    /// additive edits can take L2. Empty when EnC is off.
+    /// </summary>
+    static string Capabilities()
+    {
+        if (!MetadataUpdater.IsSupported) return "";
+        try
+        {
+            return typeof(MetadataUpdater).GetMethod("GetCapabilities", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                ?.Invoke(null, null) as string ?? "";
+        }
+        catch (Exception) { return ""; }
     }
 
     void ReadLoop()
@@ -75,14 +98,17 @@ internal sealed class CompileClient : IDisposable
                     case MessageKind.CompileState:
                         Host.CompileState(r.Bool());
                         break;
-                    case MessageKind.Image:
-                        _loader.OnImage(r.U32(), r.U32(), r.Bool(), r.U32(), r.U32(), r.U64(), r.Bytes(), r.Bytes());
+                    case MessageKind.Reload:
+                        _loader.OnReload(r);
                         break;
                     case MessageKind.Delta:
-                        _loader.OnDelta(r.U32(), r.U32(), r.U32(), r.U64(), r.Bytes(), r.Bytes(), r.Bytes());
+                        _loader.OnDelta(r);
                         break;
                     case MessageKind.Diagnostics:
-                        _loader.OnDiagnostics(r.U32(), r.U32(), r.Str(), r.U64());
+                        _loader.OnDiagnostics(r);
+                        break;
+                    case MessageKind.Restart:
+                        _loader.OnRestart(r);
                         break;
                     case MessageKind.Log:
                         Host.Log(r.U32(), "[compile server] " + r.Str());

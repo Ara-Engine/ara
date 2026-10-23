@@ -73,6 +73,8 @@ impl<B: PhysicsBackend> PhysicsWorld<B> {
     }
     /// Completes one fixed tick after all character and vehicle inputs were submitted.
     pub fn step(&mut self) -> Result<()> {
+        #[cfg(feature = "profiling")]
+        ara_profile::scope!("physics.step");
         let next = self
             .tick
             .checked_add(1)

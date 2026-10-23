@@ -90,7 +90,7 @@ pub struct LegendEntry {
 /// Reproduction data written next to every capture.
 #[derive(Serialize)]
 pub struct CaptureMetadata {
-    /// SHA-256 of uploaded scene content, including textures and HDR pixels.
+    /// Renderer or feature content identity, including contributing scene assets.
     pub scene_hash: String,
     /// Complete deterministic request.
     pub request: CaptureRequest,
@@ -133,7 +133,39 @@ pub struct Capture {
     entities: Vec<Option<u64>>,
     render_ids: Vec<u32>,
 }
+/// Channels and provenance from an external render-graph feature, such as VFX.
+pub struct FeatureCapture<'a> {
+    /// Tightly packed RGBA8 display pixels.
+    pub rgba: Vec<u8>,
+    /// Compact feature IDs; zero is background, one-based indices address names.
+    pub ids: Vec<u32>,
+    /// Stable external identities and labels.
+    pub names: &'a [(u64, String)],
+    /// Deterministic source content hash.
+    pub hash: &'a str,
+    /// Actual native device provenance.
+    pub device: &'a DeviceInfo,
+    /// Measured feature pass timestamps.
+    pub timings: &'a [PassTiming],
+    /// Matching offline shader provenance.
+    pub shaders: &'a ShaderMetadata,
+}
 impl Capture {
+    /// Assemble feature-owned GPU readbacks using the standard capture contract.
+    pub fn from_feature(input: FeatureCapture<'_>, request: &CaptureRequest) -> Result<Self> {
+        Self::from_render(
+            input.rgba,
+            input.ids,
+            request,
+            CaptureContext {
+                names: input.names,
+                hash: input.hash,
+                device: input.device,
+                timings: input.timings,
+                shaders: input.shaders,
+            },
+        )
+    }
     pub(crate) fn from_render(
         rgba: Vec<u8>,
         ids: Vec<u32>,
@@ -188,7 +220,7 @@ impl Capture {
                     .enumerate()
                     .map(|(i, (id, name))| (i as u32 + 1, *id, name.clone()))
                     .collect(),
-                device: serde_json::to_value(device)?,
+                device: ara_json::to_value(device)?,
                 timings: timings.to_vec(),
             },
         })

@@ -33,6 +33,13 @@ pub enum Command {
     BuildAccelerationStructure(AccelerationStructure),
     /// Dispatch compute workgroups.
     Dispatch([u32; 3]),
+    /// Dispatch using three U32 workgroup counts at an aligned buffer offset.
+    DispatchIndirect {
+        /// Buffer allocated with native indirect usage.
+        arguments: Buffer,
+        /// Byte offset of the 12-byte dispatch record.
+        offset: u64,
+    },
     /// Begin dynamic rendering.
     BeginRendering {
         /// Color outputs.
@@ -61,6 +68,13 @@ pub enum Command {
     },
     /// Fullscreen triangle without vertex input.
     Fullscreen,
+    /// Procedural instanced draw using SV_VertexID/SV_InstanceID, without vertex input.
+    DrawProcedural {
+        /// Vertices in each instance; nonzero.
+        vertices: u32,
+        /// Number of instances; nonzero.
+        instances: u32,
+    },
     /// End dynamic rendering.
     EndRendering,
     /// Buffer-to-image upload with tightly packed pixels.

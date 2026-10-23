@@ -186,7 +186,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Timing and outcome of one reload, reported by C# when it is applied.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 72)]
+    [StructLayout(LayoutKind.Explicit, Size = 120)]
     public unsafe partial struct ReloadReport
     {
         /// <summary>
@@ -222,25 +222,73 @@ namespace Ara.Hosting
         /// </summary>
         [FieldOffset(28)] public uint Hot;
         /// <summary>
+        /// Who triggered it: <c>ORIGIN_HUMAN</c> (file watcher, editor) or <c>ORIGIN_AGENT</c> (<c>request_compile</c>).
+        /// </summary>
+        [FieldOffset(32)] public uint Origin;
+        /// <summary>
+        /// Modules swapped together in this reload (a dependency cascade); 1 when alone.
+        /// </summary>
+        [FieldOffset(36)] public uint Cascade;
+        /// <summary>
+        /// Phase: file event to the compile starting (watcher settle, queueing), in µs.
+        /// </summary>
+        [FieldOffset(40)] public uint DetectUs;
+        /// <summary>
+        /// Phase: reading, parsing and classifying the changed files, in µs.
+        /// </summary>
+        [FieldOffset(44)] public uint ParseUs;
+        /// <summary>
+        /// Phase: the Ara source generator, in µs (0 when L1/L2 skipped it).
+        /// </summary>
+        [FieldOffset(48)] public uint GenerateUs;
+        /// <summary>
+        /// Phase: Roslyn emit (full image or EnC delta), in µs.
+        /// </summary>
+        [FieldOffset(52)] public uint EmitUs;
+        /// <summary>
+        /// Phase: analyzers after the emit (the API allowlist and Ara rules), in µs.
+        /// </summary>
+        [FieldOffset(56)] public uint AnalyzeUs;
+        /// <summary>
+        /// Phase: compile server message sent to received by the host, in µs.
+        /// </summary>
+        [FieldOffset(60)] public uint TransferUs;
+        /// <summary>
+        /// Phase: loading the image into a collectible ALC (includes the Windows AMSI scan), in µs.
+        /// </summary>
+        [FieldOffset(64)] public uint LoadUs;
+        /// <summary>
+        /// Phase: pre-JIT of generated entry points, in µs.
+        /// </summary>
+        [FieldOffset(68)] public uint PrejitUs;
+        /// <summary>
+        /// Phase: the generated <c>Register</c> (declarations collected while staging), in µs.
+        /// </summary>
+        [FieldOffset(72)] public uint RegisterUs;
+        /// <summary>
+        /// Phase: at the tick boundary, host registration, column migration and the table swap, in µs.
+        /// </summary>
+        [FieldOffset(76)] public uint ApplyUs;
+        /// <summary>
         /// Compile-server time from file event to message sent, in microseconds.
         /// </summary>
-        [FieldOffset(32)] public ulong ServerUs;
+        [FieldOffset(80)] public ulong ServerUs;
         /// <summary>
         /// Host clock (ns) when the message arrived.
         /// </summary>
-        [FieldOffset(40)] public ulong TReceived;
+        [FieldOffset(88)] public ulong TReceived;
         /// <summary>
         /// Host clock when the update was staged (ALC loaded and registered, or delta ready).
         /// </summary>
-        [FieldOffset(48)] public ulong TStaged;
+        [FieldOffset(96)] public ulong TStaged;
         /// <summary>
         /// Host clock when it was applied at a tick boundary.
         /// </summary>
-        [FieldOffset(56)] public ulong TApplied;
+        [FieldOffset(104)] public ulong TApplied;
         /// <summary>
         /// Bytes received (PE + PDB for L3; metadata + IL + PDB for L1).
         /// </summary>
-        [FieldOffset(64)] public ulong Bytes;
+        [FieldOffset(112)] public ulong Bytes;
     }
 
     /// <summary>
@@ -298,12 +346,12 @@ namespace Ara.Hosting
         // (void* ctx, global::Ara.Hosting.ReloadReport* report)
         [FieldOffset(24)] public delegate* unmanaged<void*, global::Ara.Hosting.ReloadReport*, void> ReportReload;
         /// <summary>
-        /// Registers a module's descriptor (UTF-8 JSON) and writes the response JSON to <c>out</c>.
-        /// Returns the bytes written, or <c>-needed</c> when <c>cap</c> is too small. Only valid during
-        /// <c>load_modules</c> and <c>tick_boundary</c>.
+        /// Registers module descriptors (a UTF-8 JSON array, in dependency order) all or nothing,
+        /// and writes the response JSON to <c>out</c>. Returns the bytes written, or <c>-needed</c> when <c>cap</c>
+        /// is too small. Only valid during <c>load_modules</c> and <c>tick_boundary</c>.
         /// </summary>
         // (void* ctx, byte* json, uint len, byte* out, uint cap)
-        [FieldOffset(32)] public delegate* unmanaged<void*, byte*, uint, byte*, uint, int> RegisterModule;
+        [FieldOffset(32)] public delegate* unmanaged<void*, byte*, uint, byte*, uint, int> RegisterModules;
         /// <summary>
         /// Pointer to <c>entity</c>'s component (script index <c>component</c>), or null. Valid in
         /// exclusive phases (behaviours, commands) until the phase ends. <c>write</c> journals it.
@@ -340,7 +388,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the C# runtime fills in for the host. Exceptions never cross them.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 72)]
+    [StructLayout(LayoutKind.Explicit, Size = 80)]
     public unsafe partial struct ScriptApi
     {
         /// <summary>
@@ -379,15 +427,21 @@ namespace Ara.Hosting
         // (uint module, uint hot)
         [FieldOffset(48)] public delegate* unmanaged<uint, uint, int> SetHeat;
         /// <summary>
+        /// Asks for a compile of changed files (UTF-8 JSON <c>{"module", "paths", "origin"}</c>). Agent edits
+        /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
+        /// </summary>
+        // (byte* json, uint len)
+        [FieldOffset(56)] public delegate* unmanaged<byte*, uint, int> RequestCompile;
+        /// <summary>
         /// Diagnostics counters (<c>DIAG_*</c>).
         /// </summary>
         // (uint key)
-        [FieldOffset(56)] public delegate* unmanaged<uint, ulong> Diag;
+        [FieldOffset(64)] public delegate* unmanaged<uint, ulong> Diag;
         /// <summary>
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.
         /// </summary>
         // ()
-        [FieldOffset(64)] public delegate* unmanaged<int> Shutdown;
+        [FieldOffset(72)] public delegate* unmanaged<int> Shutdown;
     }
 
     /// <summary>Constants shared with the Rust host (`ara_script::abi`).</summary>
@@ -406,9 +460,18 @@ namespace Ara.Hosting
         /// </summary>
         public const uint ReloadL1 = 1u;
         /// <summary>
+        /// <c>ReloadReport::kind</c>: an additive EnC delta (new methods, fields on classes, new types, lambdas in new members).
+        /// </summary>
+        public const uint ReloadL2 = 2u;
+        /// <summary>
         /// <c>ReloadReport::kind</c>: a module swap into a new collectible ALC.
         /// </summary>
         public const uint ReloadL3 = 3u;
+        /// <summary>
+        /// <c>ReloadReport::kind</c>: the change cannot be applied in this process (engine bindings changed, a
+        /// generation leaked); the last good code keeps running until the play process restarts from a snapshot.
+        /// </summary>
+        public const uint ReloadL4 = 4u;
         /// <summary>
         /// <c>ReloadReport::kind</c>: the edit did not compile; the last good code keeps running.
         /// </summary>
@@ -418,11 +481,11 @@ namespace Ara.Hosting
         /// </summary>
         public const uint EscNone = 0u;
         /// <summary>
-        /// Escalation: a file was added, removed or renamed.
+        /// Escalation: a file was removed or renamed.
         /// </summary>
         public const uint EscFileSet = 1u;
         /// <summary>
-        /// Escalation: something outside a method body changed.
+        /// Escalation: a declaration changed or was removed (signatures, struct fields, attributes, virtual members).
         /// </summary>
         public const uint EscStructural = 2u;
         /// <summary>
@@ -457,6 +520,30 @@ namespace Ara.Hosting
         /// Escalation: the host asked for a full image (load failure, heat change).
         /// </summary>
         public const uint EscRequested = 10u;
+        /// <summary>
+        /// Escalation: the runtime rejected an EnC delta (<c>ApplyUpdate</c> threw); the edit was rebuilt as L3.
+        /// </summary>
+        public const uint EscRuntimeRejected = 11u;
+        /// <summary>
+        /// Escalation: the runtime lacks the EnC capability the additive edit needs.
+        /// </summary>
+        public const uint EscCapability = 12u;
+        /// <summary>
+        /// Escalation: a referenced module changed its public surface, so this module was rebuilt against it.
+        /// </summary>
+        public const uint EscDependency = 13u;
+        /// <summary>
+        /// Escalation: a referenced module got a new generation; this module's image was reloaded against it unchanged.
+        /// </summary>
+        public const uint EscRelink = 14u;
+        /// <summary>
+        /// <c>ReloadReport::origin</c>: a human edit (file watcher, editor).
+        /// </summary>
+        public const uint OriginHuman = 0u;
+        /// <summary>
+        /// <c>ReloadReport::origin</c>: an agent edit (<c>request_compile</c> with the agent origin); coalesced and run behind human work.
+        /// </summary>
+        public const uint OriginAgent = 1u;
         /// <summary>
         /// <c>tick_boundary</c> bit: code changed.
         /// </summary>
@@ -547,9 +634,9 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 1;
+        public const uint Version = 2;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0xAD089A32A509B4D0UL;
+        public const ulong LayoutHash = 0x7A85E63E68A33AF0UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -559,7 +646,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.SystemCall>() != 48) return "global::Ara.Hosting.SystemCall: expected 48 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.SystemCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 72) return "global::Ara.Hosting.ReloadReport: expected 72 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
             if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 112) return "global::Ara.Hosting.HostInit: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;

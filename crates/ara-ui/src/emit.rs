@@ -118,6 +118,15 @@ impl Ui {
                             .max(1.0),
                     );
                 }
+                if c.text_end && !node.state.focus {
+                    origin[0] += (l.size.width
+                        - l.padding.left
+                        - l.padding.right
+                        - l.border.left
+                        - l.border.right
+                        - text.layout.width())
+                    .max(0.);
+                }
                 for line in text.layout.lines() {
                     for item in line.items() {
                         if let PositionedLayoutItem::GlyphRun(run) = item {

@@ -1,0 +1,332 @@
+[
+  {
+    "bbox": [
+      81,
+      107,
+      175,
+      232
+    ],
+    "entity": 1,
+    "mark": 1,
+    "name": "walk tick 0"
+  },
+  {
+    "bbox": [
+      81,
+      444,
+      152,
+      231
+    ],
+    "entity": 2,
+    "mark": 2,
+    "name": "hand FABRIK tick 0"
+  },
+  {
+    "bbox": [
+      56,
+      767,
+      196,
+      301
+    ],
+    "entity": 3,
+    "mark": 3,
+    "name": "retarget 1.3x tick 0"
+  },
+  {
+    "bbox": [
+      334,
+      107,
+      174,
+      232
+    ],
+    "entity": 4,
+    "mark": 4,
+    "name": "walk tick 6400"
+  },
+  {
+    "bbox": [
+      334,
+      444,
+      152,
+      231
+    ],
+    "entity": 5,
+    "mark": 5,
+    "name": "hand FABRIK tick 6400"
+  },
+  {
+    "bbox": [
+      308,
+      767,
+      197,
+      301
+    ],
+    "entity": 6,
+    "mark": 6,
+    "name": "retarget 1.3x tick 6400"
+  },
+  {
+    "bbox": [
+      586,
+      107,
+      175,
+      232
+    ],
+    "entity": 7,
+    "mark": 7,
+    "name": "walk tick 12800"
+  },
+  {
+    "bbox": [
+      586,
+      444,
+      152,
+      231
+    ],
+    "entity": 8,
+    "mark": 8,
+    "name": "hand FABRIK tick 12800"
+  },
+  {
+    "bbox": [
+      561,
+      767,
+      196,
+      301
+    ],
+    "entity": 9,
+    "mark": 9,
+    "name": "retarget 1.3x tick 12800"
+  },
+  {
+    "bbox": [
+      839,
+      107,
+      175,
+      232
+    ],
+    "entity": 10,
+    "mark": 10,
+    "name": "walk tick 19200"
+  },
+  {
+    "bbox": [
+      839,
+      444,
+      152,
+      231
+    ],
+    "entity": 11,
+    "mark": 11,
+    "name": "hand FABRIK tick 19200"
+  },
+  {
+    "bbox": [
+      813,
+      767,
+      197,
+      301
+    ],
+    "entity": 12,
+    "mark": 12,
+    "name": "retarget 1.3x tick 19200"
+  },
+  {
+    "bbox": [
+      1092,
+      107,
+      174,
+      232
+    ],
+    "entity": 13,
+    "mark": 13,
+    "name": "walk tick 25600"
+  },
+  {
+    "bbox": [
+      1092,
+      444,
+      152,
+      231
+    ],
+    "entity": 14,
+    "mark": 14,
+    "name": "hand FABRIK tick 25600"
+  },
+  {
+    "bbox": [
+      1066,
+      767,
+      197,
+      301
+    ],
+    "entity": 15,
+    "mark": 15,
+    "name": "retarget 1.3x tick 25600"
+  },
+  {
+    "bbox": [
+      1344,
+      107,
+      175,
+      232
+    ],
+    "entity": 16,
+    "mark": 16,
+    "name": "walk tick 32000"
+  },
+  {
+    "bbox": [
+      1344,
+      442,
+      153,
+      233
+    ],
+    "entity": 17,
+    "mark": 17,
+    "name": "hand FABRIK tick 32000"
+  },
+  {
+    "bbox": [
+      1319,
+      766,
+      197,
+      302
+    ],
+    "entity": 18,
+    "mark": 18,
+    "name": "retarget 1.3x tick 32000"
+  },
+  {
+    "bbox": [
+      81,
+      1174,
+      175,
+      231
+    ],
+    "entity": 19,
+    "mark": 19,
+    "name": "motion match clip 0 tick 0"
+  },
+  {
+    "bbox": [
+      334,
+      1174,
+      174,
+      231
+    ],
+    "entity": 20,
+    "mark": 20,
+    "name": "motion match clip 1 tick 144800"
+  },
+  {
+    "bbox": [
+      586,
+      1174,
+      175,
+      231
+    ],
+    "entity": 21,
+    "mark": 21,
+    "name": "motion match clip 2 tick 107200"
+  },
+  {
+    "bbox": [
+      839,
+      1174,
+      175,
+      231
+    ],
+    "entity": 22,
+    "mark": 22,
+    "name": "motion match clip 3 tick 112800"
+  },
+  {
+    "bbox": [
+      1092,
+      1174,
+      174,
+      231
+    ],
+    "entity": 23,
+    "mark": 23,
+    "name": "motion match clip 6 tick 22400"
+  },
+  {
+    "bbox": [
+      1344,
+      1174,
+      175,
+      231
+    ],
+    "entity": 24,
+    "mark": 24,
+    "name": "motion match clip 6 tick 28800"
+  },
+  {
+    "bbox": [
+      81,
+      1511,
+      175,
+      231
+    ],
+    "entity": 25,
+    "mark": 25,
+    "name": "Jolt Animated tick 0"
+  },
+  {
+    "bbox": [
+      314,
+      1533,
+      216,
+      226
+    ],
+    "entity": 26,
+    "mark": 26,
+    "name": "Jolt Ragdoll tick 25"
+  },
+  {
+    "bbox": [
+      653,
+      1550,
+      41,
+      222
+    ],
+    "entity": 27,
+    "mark": 27,
+    "name": "Jolt Ragdoll tick 50"
+  },
+  {
+    "bbox": [
+      805,
+      1659,
+      206,
+      84
+    ],
+    "entity": 28,
+    "mark": 28,
+    "name": "Jolt GettingUp tick 90"
+  },
+  {
+    "bbox": [
+      1121,
+      1517,
+      116,
+      225
+    ],
+    "entity": 29,
+    "mark": 29,
+    "name": "Jolt GettingUp tick 120"
+  },
+  {
+    "bbox": [
+      1344,
+      1511,
+      175,
+      231
+    ],
+    "entity": 30,
+    "mark": 30,
+    "name": "Jolt Animated tick 180"
+  }
+]

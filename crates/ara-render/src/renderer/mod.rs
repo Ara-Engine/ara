@@ -1,6 +1,9 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
+mod edit;
 mod frame;
+mod hash;
 mod passes;
+pub mod post;
 mod transfer;
 mod upload;
 use crate::{
@@ -85,15 +88,36 @@ pub struct Renderer {
     previous_vp: Mat4,
     frame_number: u32,
     scene_hash: String,
+    static_scene_hash: String,
     shader_metadata: crate::capture::ShaderMetadata,
     entity_names: Vec<(u64, String)>,
     last_timings: Vec<PassTiming>,
+    scene_textures: Vec<u32>,
+    dynamic: Vec<Resource>,
 }
 
 impl Renderer {
     /// Read-only GPU diagnostics and native presentation integration.
     pub fn gpu(&self) -> &VulkanDevice {
         &self.gpu
+    }
+    /// Opaque reversed-Z depth, sampled index and actual state for feature graphs.
+    /// Feature consumers must return it to Graphics/ShaderRead before the next frame.
+    pub fn feature_depth(&self) -> (Image, u32, State) {
+        (
+            self.targets.images[DEPTH],
+            self.targets.sampled[DEPTH],
+            self.targets.states[DEPTH],
+        )
+    }
+    /// Linear HDR scene color for transparent graph features after a completed frame.
+    /// Consumers must preserve content and return it to Graphics/ShaderRead.
+    pub fn feature_color(&self) -> (Image, u32, State) {
+        (
+            self.targets.images[HDR],
+            self.targets.sampled[HDR],
+            self.targets.states[HDR],
+        )
     }
     /// Borrow the device between completed frames to record independent graph extensions.
     /// Extensions own their targets and must preserve this renderer's resource states.
@@ -155,6 +179,15 @@ impl Renderer {
     pub fn output(&self) -> Image {
         self.targets.images[OUTPUT]
     }
+    /// Last completed entity-ID texture, in CopySource layout after rendering.
+    /// The editor samples this on the same device for selection/review outlines.
+    pub fn entity_channel(&self) -> Image {
+        self.targets.images[ID]
+    }
+    /// Compact channel index (slice index + 1) to external entity identity and label.
+    pub fn entities(&self) -> &[(u64, String)] {
+        &self.entity_names
+    }
     /// Last measured pass timings, including actual dedicated-queue execution.
     pub fn timings(&self) -> &[PassTiming] {
         &self.last_timings
@@ -180,6 +213,8 @@ impl Renderer {
     }
     /// Render live with TAA jitter and camera reprojection at a locked physical exposure.
     pub fn render(&mut self, camera: &CameraSpec, exposure: f32) -> Result<()> {
+        #[cfg(feature = "profiling")]
+        ara_profile::scope!("render.frame");
         self.render_frame(camera, exposure, false, crate::capture::ViewMode::Lit)?;
         Ok(())
     }

@@ -1,0 +1,37 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "9f51371ecbb188316a98b48cb7fe12d36e3e045cbf8bbec5ae2ce5b3c031af32",
+  "stages": [
+    {
+      "dxil": "9f51371ecbb188316a98b48cb7fe12d36e3e045cbf8bbec5ae2ce5b3c031af32/backdropFragment.dxil",
+      "dxil_hash": "7f44eb02aada336faf7e65ec3740bd03b4ca81f955f782e355f20a6ebaf77b0d",
+      "source_entry": "backdropFragment",
+      "spirv": "9f51371ecbb188316a98b48cb7fe12d36e3e045cbf8bbec5ae2ce5b3c031af32/backdropFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "3397a18c29117f8e1db0fb8b53c7398e06999a91f59a7a5df7768480e65488dd",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "9f51371ecbb188316a98b48cb7fe12d36e3e045cbf8bbec5ae2ce5b3c031af32/screenVertex.dxil",
+      "dxil_hash": "b9e64d59497ad3f256cef5a57e9b679e98c1a935fbfd9d8610b6789cdda2eafe",
+      "source_entry": "screenVertex",
+      "spirv": "9f51371ecbb188316a98b48cb7fe12d36e3e045cbf8bbec5ae2ce5b3c031af32/screenVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "355196214be9615bef01ad6af76e915afc39b52d4d87188f6fb43f92aa42909e",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      109,
+      100
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

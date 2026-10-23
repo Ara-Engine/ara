@@ -1,0 +1,179 @@
+{
+  "name": "rain",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "rain",
+      "capacity": 8192,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 1000
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 1.2,
+              "size": 0.025,
+              "color": [0.3, 0.6, 0.9, 0.5]
+            }
+          },
+          {
+            "name": "cloud",
+            "module": {
+              "op": "box",
+              "center": [0, 4, 0],
+              "extent": [2, 0.1, 2]
+            }
+          },
+          {
+            "name": "fall",
+            "module": {
+              "op": "velocity",
+              "value": [0.3, -6, 0],
+              "spread": [0.05, 0.5, 0.05]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "floor",
+            "module": {
+              "op": "plane_collision",
+              "normal": [0, 1, 0],
+              "offset": 0.01,
+              "restitution": 0
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "splash",
+            "module": {
+              "op": "event_spawn",
+              "trigger": "collision",
+              "target": "splash",
+              "count": 1
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 2,
+              "shutter": 0.8
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "splash",
+      "capacity": 4096,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 0.3,
+              "size": 0.35,
+              "color": [0.5, 0.6, 0.7, 0.12]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.5, 0.6, 0.7, 0.16]
+                },
+                {
+                  "t": 1,
+                  "value": [0.5, 0.6, 0.7, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.003,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "ring",
+              "blend": "alpha",
+              "alignment": "ground",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "frames_in_flight": 1,
+  "instances_per_draw": 100000,
+  "lighting": false,
+  "passes": {
+    "CaptureReadback": {
+      "p50_ms": 0.281728,
+      "p95_ms": 0.288704,
+      "samples": 120
+    },
+    "Exposure.ACESFitted.SDR": {
+      "p50_ms": 0.031744,
+      "p95_ms": 0.034816,
+      "samples": 120
+    },
+    "HostReadback": {
+      "p50_ms": 0.000064,
+      "p95_ms": 0.000064,
+      "samples": 120
+    },
+    "Sprites.TileChunks.Bindless": {
+      "p50_ms": 0.1072,
+      "p95_ms": 0.115616,
+      "samples": 120
+    }
+  },
+  "profile": "dev opt-level=1, dependencies=3",
+  "size": [
+    1280,
+    720
+  ],
+  "sprites": 100000,
+  "uploads": "immutable device-local instances; frame constants only per frame",
+  "vertices_per_instance": 6
+}

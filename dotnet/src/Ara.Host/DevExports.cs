@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Loader;
 
 namespace Ara.Hosting;
 
@@ -21,12 +23,15 @@ public static unsafe class DevExports
 /// <summary>
 /// Collectible context for one generation of one gameplay module. <c>Ara.Runtime</c>
 /// resolves to the host's copy in the default context, so module types bind to the one
-/// runtime (S2 finding 14).
+/// runtime (S2 finding 14); referenced modules resolve to the generations staged when this
+/// context was created (<paramref name="modules"/>, by assembly name).
 /// </summary>
-internal sealed class ModuleLoadContext(string name) : System.Runtime.Loader.AssemblyLoadContext(name, isCollectible: true)
+internal sealed class ModuleLoadContext(string name, IReadOnlyDictionary<string, Assembly> modules)
+    : AssemblyLoadContext(name, isCollectible: true)
 {
-    static readonly System.Reflection.Assembly Runtime = typeof(ScriptRuntime).Assembly;
+    static readonly Assembly Runtime = typeof(ScriptRuntime).Assembly;
+    static readonly string RuntimeName = Runtime.GetName().Name!;
 
-    protected override System.Reflection.Assembly? Load(System.Reflection.AssemblyName n) =>
-        n.Name == Runtime.GetName().Name ? Runtime : null;
+    protected override Assembly? Load(AssemblyName n) =>
+        n.Name == RuntimeName ? Runtime : n.Name is { } other && modules.TryGetValue(other, out var asm) ? asm : null;
 }

@@ -11,6 +11,7 @@ use glam::Vec3;
 use sha2::{Digest, Sha256};
 
 mod acceleration;
+mod emitters;
 mod packing;
 mod upload;
 use packing::{content_hash, pack, texture_hash, validate};
@@ -23,6 +24,7 @@ struct Geometry {
     hash: [u8; 32],
     topology_hash: [u8; 32],
     blas: AccelerationStructure,
+    ray_mask: u8,
     buffers: [Buffer; 2],
 }
 /// Counts from the last scene update. Native refit is unavailable in the merged
@@ -35,7 +37,7 @@ pub struct AccelerationUpdate {
     pub rebuilt_blas: usize,
     /// Same-topology deformations rebuilt because the backend only supports static AS.
     pub refit_fallbacks: usize,
-    /// Whether instance storage was rebuilt; light/material-only updates skip this.
+    /// Whether instance storage was rebuilt; opaque/masked classification changes require it.
     pub tlas_rebuilt: bool,
 }
 
@@ -55,6 +57,7 @@ pub struct GpuScene {
     pub(crate) bounds: [Vec3; 2],
     pub(crate) sun_direction: Vec3,
     pub(crate) sun_lux: Vec3,
+    pub(crate) has_emitters: bool,
     pub(crate) hash: String,
     geometry: Vec<Geometry>,
     acceleration_update: AccelerationUpdate,
@@ -85,6 +88,11 @@ impl GpuScene {
             bounds: [Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)],
             sun_direction: scene.sun_direction.normalize(),
             sun_lux: scene.sun_lux,
+            has_emitters: scene.meshes.iter().any(|m| {
+                scene.materials[m.material].emissive_roughness[..3]
+                    .iter()
+                    .any(|v| *v > 0.)
+            }),
             hash: String::new(),
             geometry: Vec::new(),
             acceleration_update: AccelerationUpdate::default(),
@@ -163,6 +171,11 @@ impl GpuScene {
         self.motion_pending = true;
         self.sun_direction = scene.sun_direction.normalize();
         self.sun_lux = scene.sun_lux;
+        self.has_emitters = scene.meshes.iter().any(|m| {
+            scene.materials[m.material].emissive_roughness[..3]
+                .iter()
+                .any(|v| *v > 0.)
+        });
         self.hash = content_hash(scene, &self.ids, &mut bounds);
         self.bounds = bounds;
         gpu.collect()?;

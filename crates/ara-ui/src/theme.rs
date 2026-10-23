@@ -37,6 +37,32 @@ impl EditorTheme {
                 .into_iter()
                 .map(|(k, v)| (format!("--radius-{k}"), format!("{v}px"))),
         );
+        // Older palette files omit two status surfaces. Derive their documented
+        // tint from the same canonical foreground/background tokens.
+        for status in ["success", "info"] {
+            let key = format!("--{status}-surface");
+            if !out.contains_key(&key) {
+                let parse = |name: &str| -> Result<u32> {
+                    Ok(u32::from_str_radix(
+                        out.get(name)
+                            .ok_or("missing status color")?
+                            .trim_start_matches('#'),
+                        16,
+                    )?)
+                };
+                let base = parse("--background")?;
+                let tint = parse(&format!("--{status}-foreground"))?;
+                let channel = |shift: u32| {
+                    (((base >> shift) & 255u32) as f32 * 0.88
+                        + ((tint >> shift) & 255u32) as f32 * 0.12)
+                        .round() as u8
+                };
+                out.insert(
+                    key,
+                    format!("#{:02x}{:02x}{:02x}", channel(16), channel(8), channel(0)),
+                );
+            }
+        }
         Ok(out)
     }
 }

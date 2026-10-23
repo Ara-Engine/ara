@@ -1,0 +1,138 @@
+{
+  "name": "mesh",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "sparks",
+      "capacity": 4096,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 220
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 2,
+              "size": 0.1,
+              "color": [3, 1, 0.2, 1]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "mesh_surface",
+              "triangles": [
+                [
+                  [-0.3, 0.7, -0.3],
+                  [0.3, 0.7, -0.3],
+                  [0, 0.7, 0.3]
+                ]
+              ]
+            }
+          },
+          {
+            "name": "spray",
+            "module": {
+              "op": "velocity",
+              "value": [0, 3, 0],
+              "spread": [2.6, 2, 2.6]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "gravity",
+            "module": {
+              "op": "gravity",
+              "acceleration": [0, -9.81, 0]
+            }
+          },
+          {
+            "name": "floor",
+            "module": {
+              "op": "plane_collision",
+              "normal": [0, 1, 0],
+              "offset": 0,
+              "restitution": 0.6
+            }
+          },
+          {
+            "name": "cool",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [18, 8, 2, 1]
+                },
+                {
+                  "t": 0.5,
+                  "value": [9, 1.8, 0.1, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [1, 0.05, 0, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "mesh",
+              "triangles": [
+                [
+                  [-0.5, 0, 0],
+                  [0.5, 0, 0],
+                  [0, 1, 0]
+                ]
+              ],
+              "domain": "surface",
+              "sorting": "age"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3,
+              "shutter": 0.85
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

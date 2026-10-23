@@ -51,7 +51,7 @@ pub struct EraseParams {
     pub id: String,
 }
 fn rec(v: &impl Serialize) -> Result<ara_doc::Record, Diagnostic> {
-    match serde_json::to_value(v).map_err(|e| invalid(e.to_string()))? {
+    match ara_json::to_value(v).map_err(|e| invalid(e.to_string()))? {
         Value::Object(v) => Ok(v),
         _ => Err(invalid("expected record")),
     }

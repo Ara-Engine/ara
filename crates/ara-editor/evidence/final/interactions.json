@@ -1,0 +1,69 @@
+{
+  "verified": true,
+  "steps": [
+    {
+      "step": 0,
+      "cpuMs": 0.0191
+    },
+    {
+      "step": 1,
+      "cpuMs": 3.0155
+    },
+    {
+      "step": 2,
+      "cpuMs": 2.3437
+    },
+    {
+      "step": 3,
+      "cpuMs": 3.8219
+    },
+    {
+      "step": 4,
+      "cpuMs": 2.7066999999999997
+    },
+    {
+      "step": 5,
+      "cpuMs": 4.5297
+    },
+    {
+      "step": 6,
+      "cpuMs": 78.83840000000001
+    },
+    {
+      "step": 7,
+      "cpuMs": 3.4836
+    },
+    {
+      "step": 8,
+      "cpuMs": 84.5631
+    },
+    {
+      "step": 9,
+      "cpuMs": 87.7119
+    },
+    {
+      "step": 10,
+      "cpuMs": 92.3511
+    },
+    {
+      "step": 11,
+      "cpuMs": 0.9831
+    },
+    {
+      "step": 12,
+      "cpuMs": 0.2264
+    }
+  ],
+  "totalMs": 584.3571,
+  "flow": [
+    "hierarchy selection",
+    "unit-aware inspector position",
+    "coalesced simulated gizmo",
+    "keyboard undo",
+    "agent batch via generated MCP",
+    "Agents panel turn",
+    "Revert via UI button",
+    "Escape cancels gesture",
+    "MCP viewport/editor/layout capture jobs completed"
+  ]
+}

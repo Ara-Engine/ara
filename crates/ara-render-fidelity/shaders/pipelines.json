@@ -41,6 +41,20 @@
       "vertex_stride": 0
     }
   },
+  "ddgi_emissive": {
+    "entries": {
+      "ddgiEmissiveMain": "compute"
+    },
+    "source": "ddgi_emissive.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "exposure": {
     "entries": {
       "exposureMain": "compute"
@@ -60,6 +74,20 @@
       "hybridMain": "compute"
     },
     "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "hybrid_emissive": {
+    "entries": {
+      "hybridEmissiveMain": "compute"
+    },
+    "source": "transport_emissive.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -111,6 +139,20 @@
       "vertex_stride": 0
     }
   },
+  "primary_emissive": {
+    "entries": {
+      "primaryEmissiveMain": "compute"
+    },
+    "source": "transport_emissive.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "primary_raster": {
     "entries": {
       "primaryRasterMain": "compute"
@@ -130,6 +172,20 @@
       "referenceMain": "compute"
     },
     "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reference_emissive": {
+    "entries": {
+      "referenceEmissiveMain": "compute"
+    },
+    "source": "transport_emissive.slang",
     "state": {
       "blend": false,
       "color_formats": [],

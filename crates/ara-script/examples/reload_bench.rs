@@ -1,13 +1,15 @@
-//! Save → visible latency of L1 and L3 reloads through the out-of-process compile server.
+//! Save → visible latency of L1, L2 and L3 reloads through the out-of-process compile
+//! server, with a per-phase breakdown (p50 and p95).
 //!
 //! The module is the Outpost sample plus generated filler systems (about 5k lines, the
 //! soft cap) and a probe system whose constant each edit changes. A 60 Hz tick loop runs
 //! the sample's systems over 20k entities; an "editor" thread saves edits and waits for
 //! the first tick whose code wrote the new constant. Latency is save → end of that tick.
+//! Edits cycle: L1 (a body), L2 (a new method), L3 (a signature change).
 //!
 //! ```sh
 //! dotnet build dotnet/Ara.slnx -c Release
-//! cargo run -p ara-script --release --example reload_bench -- [--edits 40] [--lines 5000]
+//! cargo run -p ara-script --release --example reload_bench -- [--edits 60] [--lines 5000] [--verbose]
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -16,7 +18,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
 use ara_schema::SchemaDb;
-use ara_script::abi::{RELOAD_L1, RELOAD_L3, ReloadReport, Tick};
+use ara_script::abi::{RELOAD_L1, RELOAD_L2, RELOAD_L3, ReloadReport, Tick};
 use ara_script::{EngineBindings, ModuleSpec, ScriptConfig, ScriptHost, bind_component};
 use bevy_ecs::component::Component;
 use bevy_ecs::world::World;
@@ -48,6 +50,10 @@ fn arg(name: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+/// The probe helper's two signatures: each L3 edit swaps one for the other.
+const SHAPE_INT: &str = "static int Shape(int x) => x;";
+const SHAPE_LONG: &str = "static int Shape(long x) => (int)x;";
+
 const PROBE: &str = "namespace Bench;
 
 /// <summary>What the edited system writes.</summary>
@@ -63,8 +69,10 @@ public static partial class BenchProbes
     [Query]
     static void Run(ref BenchProbe p)
     {
-        p.Value = 0; // @value
+        p.Value = Shape(0); // @value
     }
+
+    static int Shape(int x) => x;
     // @pad
 }
 ";
@@ -95,8 +103,56 @@ fn percentile(v: &mut [f64], p: f64) -> f64 {
     v[((v.len() as f64 - 1.0) * p).round() as usize]
 }
 
+/// System-wide CPU busy fraction since the previous call (Windows; NaN elsewhere).
+struct Cpu(u64, u64);
+
+impl Cpu {
+    fn now() -> Self {
+        let (idle, total) = cpu_times();
+        Cpu(idle, total)
+    }
+
+    fn busy_since(&self) -> f64 {
+        let (idle, total) = cpu_times();
+        let (di, dt) = (idle.saturating_sub(self.0), total.saturating_sub(self.1));
+        if dt == 0 {
+            f64::NAN
+        } else {
+            1.0 - di as f64 / dt as f64
+        }
+    }
+}
+
+#[cfg(windows)]
+fn cpu_times() -> (u64, u64) {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::GetSystemTimes;
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut idle, mut kernel, mut user) = (zero, zero, zero);
+    // SAFETY: three valid out-pointers.
+    unsafe { GetSystemTimes(&mut idle, &mut kernel, &mut user) };
+    let v = |f: FILETIME| (u64::from(f.dwHighDateTime) << 32) | u64::from(f.dwLowDateTime);
+    (v(idle), v(kernel) + v(user)) // kernel time includes idle time
+}
+
+#[cfg(not(windows))]
+fn cpu_times() -> (u64, u64) {
+    (0, 0)
+}
+
+/// One measured edit: its kind, save → visible latency, the report and the first tick on it.
+struct Sample {
+    kind: u32,
+    total_ms: f64,
+    report: ReloadReport,
+    first_tick_ms: f64,
+}
+
 fn main() {
-    let edits = arg("--edits", 45);
+    let edits = arg("--edits", 60);
     let lines_target = arg("--lines", 5000);
     let dir = std::env::temp_dir().join(format!("ara-reload-bench-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -158,7 +214,7 @@ fn main() {
     let editor = {
         let (visible, done, file) = (visible.clone(), done.clone(), dir.join("Probe.cs"));
         std::thread::spawn(move || {
-            let mut results: Vec<(bool, f64)> = Vec::new();
+            let mut results: Vec<(u32, f64)> = Vec::new();
             let wait = |k: i64| -> Option<Instant> {
                 let deadline = Instant::now() + Duration::from_secs(20);
                 while Instant::now() < deadline {
@@ -171,27 +227,34 @@ fn main() {
             };
             std::thread::sleep(Duration::from_secs(2)); // let the prewarm finish
             let mut text = PROBE.to_owned();
-            let mut value = 0i64;
-            // Edit 0 makes the cold module hot (one L3); then L1 and L3 edits alternate 2:1.
-            for e in 0..=edits {
-                value += 1;
-                let structural = e == 0 || e % 3 == 2;
-                text = text.replace(
-                    &format!("p.Value = {};", value - 1),
-                    &format!("p.Value = {value};"),
-                );
-                if structural {
+            let mut long = false;
+            // Edit 0 makes the cold module hot (one L3); then L1, L2 and L3 edits rotate.
+            for e in 0..=edits as i64 {
+                let kind = if e == 0 {
+                    RELOAD_L3
+                } else {
+                    [RELOAD_L1, RELOAD_L2, RELOAD_L3][(e as usize - 1) % 3]
+                };
+                text = text.replace(&format!("Shape({e});"), &format!("Shape({});", e + 1));
+                if kind == RELOAD_L2 {
                     text = text.replace(
                         "// @pad",
                         &format!("static int Pad{e}() => {e};\n    // @pad"),
                     );
                 }
+                if kind == RELOAD_L3 && e > 0 {
+                    let (from, to) = if long {
+                        (SHAPE_LONG, SHAPE_INT)
+                    } else {
+                        (SHAPE_INT, SHAPE_LONG)
+                    };
+                    text = text.replace(from, to);
+                    long = !long;
+                }
                 std::fs::write(&file, &text).expect("save");
                 let saved = Instant::now();
-                match wait(value) {
-                    Some(seen) if e > 0 => {
-                        results.push((structural, (seen - saved).as_secs_f64() * 1e3))
-                    }
+                match wait(e + 1) {
+                    Some(seen) if e > 0 => results.push((kind, (seen - saved).as_secs_f64() * 1e3)),
                     Some(_) => {}
                     None => eprintln!("edit {e} never became visible"),
                 }
@@ -204,17 +267,18 @@ fn main() {
 
     let dt = 1.0 / 60.0;
     let mut frame = 0u64;
-    let mut reports: Vec<ReloadReport> = Vec::new();
+    let mut reports: Vec<(ReloadReport, f64)> = Vec::new();
     let mut ticks: Vec<f64> = Vec::new();
     let mut boundaries: Vec<f64> = Vec::new();
     let mut next = Instant::now();
+    let cpu = Cpu::now();
     while !done.load(Ordering::Acquire) {
         let start = Instant::now();
         let b = host.tick_boundary(&mut world);
         if b.reloaded {
             boundaries.push(start.elapsed().as_secs_f64() * 1e3);
         }
-        reports.extend(b.reports);
+        let tick_start = Instant::now();
         host.run_tick(
             &mut world,
             Tick {
@@ -225,6 +289,8 @@ fn main() {
                 reserved: 0,
             },
         );
+        let tick_ms = tick_start.elapsed().as_secs_f64() * 1e3;
+        reports.extend(b.reports.into_iter().map(|r| (r, tick_ms)));
         ticks.push(start.elapsed().as_secs_f64() * 1e3);
         let v = host
             .read_component(&world, probe, "BenchProbe")
@@ -244,43 +310,32 @@ fn main() {
             std::hint::spin_loop();
         }
     }
+    let busy = cpu.busy_since();
     let results = editor.join().expect("editor thread");
-    let mut l1: Vec<f64> = results.iter().filter(|r| !r.0).map(|r| r.1).collect();
-    let mut l3: Vec<f64> = results.iter().filter(|r| r.0).map(|r| r.1).collect();
-    let kinds = |k: u32| reports.iter().filter(|r| r.kind == k).count();
+    // Reports and edits pair up in order (the warm-up L3 is the first report after the initial load).
+    let edits_reports: Vec<_> = reports
+        .iter()
+        .filter(|(r, _)| matches!(r.kind, RELOAD_L1 | RELOAD_L2 | RELOAD_L3))
+        .skip(1)
+        .collect();
+    let samples: Vec<Sample> = results
+        .iter()
+        .zip(&edits_reports)
+        .map(|(&(kind, total_ms), &&(report, first_tick_ms))| Sample {
+            kind,
+            total_ms,
+            report,
+            first_tick_ms,
+        })
+        .collect();
+    let mismatched = samples.iter().filter(|s| s.kind != s.report.kind).count();
     println!(
-        "reload reports: {} L1, {} L3",
-        kinds(RELOAD_L1),
-        kinds(RELOAD_L3)
+        "edits: {} measured, {} took a different level than intended; system CPU busy {:.0}% during the run",
+        samples.len(),
+        mismatched,
+        busy * 100.0
     );
-    println!(
-        "L1 save→visible (n={}): p50 {:.1} ms, p95 {:.1} ms, max {:.1} ms",
-        l1.len(),
-        percentile(&mut l1, 0.5),
-        percentile(&mut l1, 0.95),
-        l1.iter().copied().fold(0.0, f64::max)
-    );
-    println!(
-        "L3 save→visible (n={}): p50 {:.1} ms, p95 {:.1} ms, max {:.1} ms",
-        l3.len(),
-        percentile(&mut l3, 0.5),
-        percentile(&mut l3, 0.95),
-        l3.iter().copied().fold(0.0, f64::max)
-    );
-    let phase = |k: u32, f: &dyn Fn(&ReloadReport) -> f64| -> f64 {
-        let mut v: Vec<f64> = reports.iter().filter(|r| r.kind == k).map(f).collect();
-        percentile(&mut v, 0.5)
-    };
-    for (name, k) in [("L1", RELOAD_L1), ("L3", RELOAD_L3)] {
-        println!(
-            "{name} phase medians: server (event→sent) {:.1} ms, staging {:.1} ms, wait for boundary {:.1} ms",
-            phase(k, &|r| r.server_us as f64 / 1e3),
-            phase(k, &|r| (r.t_staged.saturating_sub(r.t_received)) as f64
-                / 1e6),
-            phase(k, &|r| (r.t_applied.saturating_sub(r.t_staged)) as f64
-                / 1e6),
-        );
-    }
+    print_table(&samples);
     let mut all = ticks.clone();
     println!(
         "tick (systems + behaviours, 20k entities): p50 {:.2} ms, p99 {:.2} ms, max {:.2} ms",
@@ -303,4 +358,54 @@ fn main() {
     }
     println!("leaked generations at shutdown: {}", host.shutdown());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Microseconds to milliseconds.
+fn us(v: u32) -> f64 {
+    f64::from(v) / 1e3
+}
+
+/// Prints p50/p95 of every phase for each reload level (milliseconds).
+fn print_table(samples: &[Sample]) {
+    type Phase = (&'static str, fn(&Sample) -> f64);
+    let phases: [Phase; 13] = [
+        ("edit detect", |s| us(s.report.detect_us)),
+        ("parse+classify", |s| us(s.report.parse_us)),
+        ("generators", |s| us(s.report.generate_us)),
+        ("emit", |s| us(s.report.emit_us)),
+        ("analyzers", |s| us(s.report.analyze_us)),
+        ("transfer", |s| us(s.report.transfer_us)),
+        ("load (AMSI)", |s| us(s.report.load_us)),
+        ("pre-JIT", |s| us(s.report.prejit_us)),
+        ("register", |s| us(s.report.register_us)),
+        ("wait for boundary", |s| {
+            (s.report.t_applied.saturating_sub(s.report.t_staged) as f64 / 1e6
+                - f64::from(s.report.apply_us) / 1e3)
+                .max(0.0)
+        }),
+        ("state migration", |s| us(s.report.apply_us)),
+        ("first tick", |s| s.first_tick_ms),
+        ("save→visible", |s| s.total_ms),
+    ];
+    let levels = [("L1", RELOAD_L1), ("L2", RELOAD_L2), ("L3", RELOAD_L3)];
+    print!("{:<20}", "phase (ms)");
+    for (name, kind) in levels {
+        let n = samples.iter().filter(|s| s.report.kind == kind).count();
+        print!("{:>22}", format!("{name} p50 / p95 (n={n})"));
+    }
+    println!();
+    for (name, f) in phases {
+        print!("{name:<20}");
+        for (_, kind) in levels {
+            let mut v: Vec<f64> = samples
+                .iter()
+                .filter(|s| s.report.kind == kind)
+                .map(f)
+                .collect();
+            let p50 = percentile(&mut v, 0.5);
+            let p95 = percentile(&mut v, 0.95);
+            print!("{:>22}", format!("{p50:.1} / {p95:.1}"));
+        }
+        println!();
+    }
 }

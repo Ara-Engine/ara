@@ -8,7 +8,12 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+profiling = ["dep:ara-profile"]
+
 [dependencies]
+ara-json.workspace = true
+ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-gpu = { path = "../ara-gpu" }
 ara-platform = { path = "../ara-platform" }
 anyhow = "1"

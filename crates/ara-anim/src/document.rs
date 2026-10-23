@@ -25,11 +25,35 @@ pub struct AnimAsset {
     pub clip: Option<ClipData>,
     /// State-machine and pose-graph source, independent of editor layout.
     pub controller: Option<ControllerData>,
+    /// Humanoid role bindings for import-time or runtime retargeting.
+    pub rig: Option<crate::retarget::RigMap>,
+    /// Procedural contact chains and ground-probe settings.
+    pub ik: Option<IkSetup>,
+    /// Offline pose/trajectory feature database configuration.
+    pub motion_database: Option<crate::matching::MatchConfig>,
+    /// Powered bodies, constraints and spring gains for physical animation.
+    pub ragdoll: Option<crate::physical::RagdollProfile>,
+}
+
+/// Canonical procedural rig setup; goal values are fixed-tick gameplay inputs.
+#[derive(Debug, Clone, Default, PartialEq, Schema, Serialize, Deserialize)]
+#[ara(module = "animation")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct IkSetup {
+    /// Stable pelvis joint ID for full-body and foot-placement solvers.
+    pub pelvis: String,
+    /// Ordered chains used by body and hand goals.
+    pub chains: Vec<crate::ik::ChainData>,
+    /// Foot chains and anatomical sole-up vectors.
+    pub feet: Vec<crate::ik::Foot>,
+    /// Ground probe, slope and pelvis bounds.
+    pub ground: crate::ik::FootSettings,
 }
 
 /// Registers the animation record, nested data/parameters and `.animation` kind.
 pub fn register(db: &mut SchemaDb) -> Result<(), Error> {
     db.register::<AnimAsset>();
+    db.register::<crate::physical::PhysicalState>();
     db.add_kind(DocKindDesc {
         name: "animation".into(),
         version: 1,
@@ -77,6 +101,8 @@ pub fn asset(doc: &Document, id: &RecordId) -> Result<AnimAsset, Error> {
 /// Typed mutation intent. Submit the returned edit through ara-ops, never write a
 /// document or cache from an editor widget or plugin.
 #[derive(Debug)]
+// Cold authoring intents retain the existing by-value Create API.
+#[allow(clippy::large_enum_variant)]
 pub enum AnimationCommand {
     /// Creates a stable animation record.
     Create(AnimAsset),
@@ -86,6 +112,14 @@ pub enum AnimationCommand {
     SetClip(ClipData),
     /// Replaces the controller after a graph edit.
     SetController(ControllerData),
+    /// Replaces the semantic humanoid bone map.
+    SetRig(crate::retarget::RigMap),
+    /// Replaces the validated-at-cook procedural setup.
+    SetIk(IkSetup),
+    /// Replaces the cook-time pose-search feature configuration.
+    SetMotionDatabase(crate::matching::MatchConfig),
+    /// Replaces the powered-ragdoll source profile.
+    SetRagdoll(crate::physical::RagdollProfile),
     /// Changes one schema-addressed field; the kernel validates its typed value.
     SetField {
         /// Stable field path, shared with the inspector and timeline.
@@ -97,7 +131,7 @@ pub enum AnimationCommand {
 impl AnimationCommand {
     /// Lowers the typed intent into a kernel edit with automatic inverse ops.
     pub fn edit(self, doc: AssetId, id: RecordId) -> Result<Edit, Error> {
-        let encode = |value| serde_json::to_value(value).map_err(|e| Error(e.to_string()));
+        let encode = |value| ara_json::to_value(&value).map_err(|e| Error(e.to_string()));
         let (path, value) = match self {
             Self::Create(asset) => {
                 let value = encode(asset)?;
@@ -109,17 +143,33 @@ impl AnimationCommand {
             }
             Self::SetSkeleton(data) => (
                 "skeleton".parse().map_err(Error)?,
-                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetClip(data) => (
                 "clip".parse().map_err(Error)?,
-                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetController(data) => (
                 "controller".parse().map_err(Error)?,
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
+            ),
+            Self::SetRig(data) => (
+                "rig".parse().map_err(Error)?,
+                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+            ),
+            Self::SetIk(data) => (
+                "ik".parse().map_err(Error)?,
                 Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetField { path, value } => (path, value),
+            Self::SetRagdoll(data) => (
+                "ragdoll".parse().map_err(Error)?,
+                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+            ),
+            Self::SetMotionDatabase(data) => (
+                "motionDatabase".parse().map_err(Error)?,
+                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+            ),
         };
         Ok(Edit::Set {
             doc,

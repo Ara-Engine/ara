@@ -103,8 +103,8 @@ impl DockLayout {
     }
     /// Stable JSON serialization; field order follows the typed enum schema.
     pub fn serialize(&self) -> Result<String> {
-        Ok(ara_json::to_canonical_string(&serde_json::to_value(
-            &self.root,
+        Ok(ara_json::to_canonical_string(&ara_json::to_value(
+            &&self.root,
         )?))
     }
     /// Atomically load a saved layout, retaining the original reset baseline.

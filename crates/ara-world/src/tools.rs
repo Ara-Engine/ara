@@ -110,14 +110,14 @@ impl WorldTools {
             }
             "world.entity.move_to_cell" => {
                 let command = WorldCommand::MoveToCell(serde_json::from_value(params)?);
-                Ok(serde_json::to_value(
-                    command.apply(store, &self.world, meta)?.txn(),
+                Ok(ara_json::to_value(
+                    &command.apply(store, &self.world, meta)?.txn(),
                 )?)
             }
             "world.layer.set" => {
                 let command = WorldCommand::SetLayer(serde_json::from_value(params)?);
-                Ok(serde_json::to_value(
-                    command.apply(store, &self.world, meta)?.txn(),
+                Ok(ara_json::to_value(
+                    &command.apply(store, &self.world, meta)?.txn(),
                 )?)
             }
             _ => Err(invalid(format!("unknown world tool {name}"))),

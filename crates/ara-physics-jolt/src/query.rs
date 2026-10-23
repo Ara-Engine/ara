@@ -3,6 +3,35 @@ use ara_jolt_sys as sys;
 use ara_physics::*;
 
 impl JoltBackend {
+    /// Closest narrowphase ray hit without temporary buffers or tick allocations.
+    /// Ties use body/subshape order, matching the batch query contract.
+    pub fn ray_closest(
+        &self,
+        origin: [f32; 3],
+        displacement: [f32; 3],
+        filter: QueryFilter,
+    ) -> Result<Option<QueryHit>> {
+        if let Some(body) = filter.ignore {
+            self.require_body(body)?;
+        }
+        let query = sys::AraQuery {
+            kind: 0,
+            shape: sys::INVALID,
+            layer_mask: filter.layer_mask,
+            sensors: u32::from(filter.sensors),
+            ignore: filter.ignore.map_or(sys::INVALID, BodyHandle::raw),
+            position: v(origin),
+            rotation: q(Rotation([0.0, 0.0, 0.0, 1.0])),
+            displacement: v(displacement),
+        };
+        let mut result = sys::AraHit::default();
+        // SAFETY: live shared world between updates and valid stack-owned records.
+        match unsafe { sys::ara_ray_closest(self.ptr(), &query, &mut result) } {
+            0 => Ok(None),
+            1 => Ok(Some(hit(result))),
+            _ => Err(Self::error()),
+        }
+    }
     pub(crate) fn query_batch(&self, queries: &[Query], out: &mut QueryResults) -> Result<()> {
         let mut raw = Vec::with_capacity(queries.len());
         for query in queries {

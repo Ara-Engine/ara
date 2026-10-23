@@ -217,19 +217,33 @@ public static class Extract
         _ => System.Convert.ToDouble(v, System.Globalization.CultureInfo.InvariantCulture).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
     };
 
-    /// <summary>Modules linked from referenced assemblies (<c>[assembly: AraModule]</c>), for the NativeAOT entry point.</summary>
+    /// <summary>
+    /// Modules linked from referenced assemblies (<c>[assembly: AraModule]</c>), for the NativeAOT
+    /// entry point, in dependency order: a module comes after every module it references, so
+    /// registration sees the types it uses. Ties sort by name (deterministic output).
+    /// </summary>
     public static List<LinkedModule> LinkedModules(Compilation c)
     {
-        var list = new List<LinkedModule>();
+        var modules = new Dictionary<IAssemblySymbol, LinkedModule>(SymbolEqualityComparer.Default);
         foreach (var asm in c.SourceModule.ReferencedAssemblySymbols)
         {
             foreach (var a in asm.GetAttributes())
             {
                 if (a.AttributeClass?.Name != "AraModuleAttribute" || a.ConstructorArguments.Length != 2) continue;
                 if (a.ConstructorArguments[0].Value is string n && a.ConstructorArguments[1].Value is INamedTypeSymbol entry)
-                    list.Add(new LinkedModule(n, entry.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                    modules[asm] = new LinkedModule(n, entry.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
             }
         }
+        var list = new List<LinkedModule>();
+        var done = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+        void Visit(IAssemblySymbol asm)
+        {
+            if (!done.Add(asm)) return;
+            foreach (var dep in asm.Modules.SelectMany(m => m.ReferencedAssemblySymbols).Where(modules.ContainsKey).OrderBy(d => modules[d].Name, System.StringComparer.Ordinal))
+                Visit(dep);
+            list.Add(modules[asm]);
+        }
+        foreach (var asm in modules.Keys.OrderBy(a => modules[a].Name, System.StringComparer.Ordinal)) Visit(asm);
         return list;
     }
 }

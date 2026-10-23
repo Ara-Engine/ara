@@ -33,6 +33,8 @@ pub enum JobPoll {
 
 /// Out-of-process background bake; dropping cancels without waiting on the tick.
 pub struct BakeJob {
+    #[cfg(feature = "profiling")]
+    started: std::time::Instant,
     result: Receiver<Result<(BakeArtifact, NavMesh), NavError>>,
     cancel: Sender<()>,
     finished: bool,
@@ -50,6 +52,8 @@ impl BakeJob {
                 let _ = tx.send(response);
             })?;
         Ok(Self {
+            #[cfg(feature = "profiling")]
+            started: std::time::Instant::now(),
             result,
             cancel,
             finished: false,
@@ -58,6 +62,8 @@ impl BakeJob {
     /// Reads readiness without waiting. Publication remains a caller-controlled
     /// tick-boundary action, respecting Play and agent-approval policy.
     pub fn poll(&mut self) -> JobPoll {
+        #[cfg(feature = "profiling")]
+        ara_profile::scope!("jobs.nav.poll");
         if self.finished {
             return JobPoll::Finished;
         }
@@ -79,6 +85,24 @@ impl BakeJob {
     /// Requests cancellation; the coordinator kills/reaps the worker off-thread.
     pub fn cancel(&self) {
         let _ = self.cancel.send(());
+    }
+
+    /// Records coordinator/process elapsed activity alongside a readiness poll.
+    /// `worker` is the caller's job identity; this interval is not CPU self time.
+    #[cfg(feature = "profiling")]
+    pub fn record_profile(
+        &self,
+        profiler: &mut ara_profile::Profiler,
+        frame: u64,
+        worker: u64,
+    ) -> bool {
+        profiler.job_activity(
+            frame,
+            "nav.bake",
+            worker,
+            self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+            self.finished,
+        )
     }
 }
 impl Drop for BakeJob {

@@ -42,7 +42,7 @@ pub(crate) fn inspect(ui: &Ui, view: &StoryView, renderer: &Renderer) -> Result<
             shaping: n
                 .text
                 .as_ref()
-                .map(|t| serde_json::to_value(ara_ui_text::inspect(t)))
+                .map(|t| ara_json::to_value(&ara_ui_text::inspect(t)))
                 .transpose()?,
             style: ComputedStyle {
                 background: rgba(n.computed.background),

@@ -56,6 +56,10 @@ unwrap_used = "warn"
 # so the editor, importers and renderer stay usable in debug (decode, compression, meshopt).
 [profile.dev]
 opt-level = 1
+# Line tables keep backtraces and profiler symbols while shrinking each worktree's
+# build cache several-fold (a dozen agent worktrees share one disk).
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
+debug = false

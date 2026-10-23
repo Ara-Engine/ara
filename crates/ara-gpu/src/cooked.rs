@@ -116,7 +116,7 @@ pub fn write_json(path: &std::path::Path, value: &impl Serialize) -> anyhow::Res
             value => value,
         }
     }
-    let mut bytes = serde_json::to_vec_pretty(&sorted(serde_json::to_value(value)?))?;
+    let mut bytes = serde_json::to_vec_pretty(&sorted(ara_json::to_value(value)?))?;
     bytes.push(b'\n');
     std::fs::write(path, bytes)?;
     Ok(())

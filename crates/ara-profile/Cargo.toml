@@ -1,0 +1,27 @@
+[package]
+name = "ara-profile"
+description = "Bounded CPU/GPU frame profiling, captures and performance comparisons."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+instrumentation = []
+tracy = ["instrumentation", "dep:tracy-client"]
+allocation = []
+gpu = ["dep:ara-gpu"]
+
+[dependencies]
+ara-json.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+postcard = { version = "1.1", features = ["alloc"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracy-client = { version = "0.18", optional = true, default-features = false, features = ["enable"] }
+ara-gpu = { path = "../ara-gpu", optional = true }
+
+[lints]
+workspace = true

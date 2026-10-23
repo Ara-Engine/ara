@@ -19,13 +19,15 @@ pub(crate) struct GpuFrame {
     probes: [u32; 4],
     sun_direction: [f32; 4],
     sun_lux: [f32; 4],
-    temporal: [f32; 4],
+    pub(crate) temporal: [f32; 4],
     post: [f32; 4],
+    metering: [f32; 4],
+    display: [u32; 4],
     lens: [f32; 4],
-    control: [u32; 4],
-    transport: [u32; 4],
+    pub(crate) control: [u32; 4],
+    pub(crate) transport: [u32; 4],
     pub(crate) jitter: [f32; 4],
-    read: [[u32; 4]; 6],
+    pub(crate) read: [[u32; 4]; 6],
     write: [[u32; 4]; 6],
 }
 impl FidelityView {
@@ -40,8 +42,8 @@ impl FidelityView {
         let mut jitter = glam::Vec2::ZERO;
         if !input.deterministic && matches!(s.mode, Mode::Hybrid) {
             jitter = glam::Vec2::new(
-                halton(input.tick % 16 + 1, 2) - 0.5,
-                halton(input.tick % 16 + 1, 3) - 0.5,
+                halton(input.tick % 256 + 1, 2) - 0.5,
+                halton(input.tick % 256 + 1, 3) - 0.5,
             );
             projection = Mat4::from_translation(Vec3::new(
                 jitter.x * 2. / s.render_size[0] as f32,
@@ -58,7 +60,14 @@ impl FidelityView {
             .map(|ev| exposure_from_ev100(ev, p.compensation))
             .unwrap_or(-2.0_f32.powf(p.compensation));
         let (reference, batch, bounces) = match s.mode {
-            Mode::Hybrid => (0, 1, 1),
+            Mode::Hybrid => (
+                0,
+                1,
+                u32::from(
+                    self.scene.motion_pending && self.scene.acceleration_update().tlas_rebuilt,
+                ) | (self.gather_events << 1)
+                    | (u32::from(self.transport_stride == 4 || self.gather_events == 1) << 5),
+            ),
             Mode::Reference { samples, bounces } => (
                 1,
                 samples
@@ -127,6 +136,13 @@ impl FidelityView {
                 s.reflection_cutoff,
             ],
             post: [exposure, p.adaptation, p.bloom, p.fog_density],
+            metering: [
+                p.auto_exposure.minimum_ev100,
+                p.auto_exposure.maximum_ev100,
+                p.auto_exposure.low_percentile,
+                p.auto_exposure.high_percentile,
+            ],
+            display: [p.tone_mapper as u32, 0, 0, 0],
             lens: [
                 p.focus_distance,
                 p.aperture,
@@ -147,7 +163,18 @@ impl FidelityView {
                 reference,
                 batch,
                 bounces,
-                if reset { 0 } else { self.samples },
+                if reference == 0 {
+                    u32::from(
+                        !input.deterministic
+                            && !reset
+                            && !self.scene.motion_pending
+                            && unjittered == self.previous_vp,
+                    )
+                } else if reset {
+                    0
+                } else {
+                    self.samples
+                },
             ],
             jitter: [
                 jitter.x,

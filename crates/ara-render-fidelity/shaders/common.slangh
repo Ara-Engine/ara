@@ -20,7 +20,7 @@ struct Frame {
     float4x4 inverseVp;float4x4 vp;float4x4 previousVp;
     float4 camera;float4 previousCamera;uint4 sizes;uint4 scene;
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
-    float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 lens;
+    float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;uint4 read[6];uint4 write[6];
 };
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
@@ -67,17 +67,22 @@ Surface surface(Frame f,uint id,uint primitive,float2 bary){
     s.emissive=max(mat.emissiveRoughness.rgb*tex(mat.textures.w,uv).rgb,0);s.id=id;s.material=m.w;return s;
 }
 struct Hit {float distance;uint id;uint primitive;float2 bary;bool front;};
-bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,out Hit hit){
+bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,bool shadow,out Hit hit){
     hit=(Hit)0;hit.distance=maximum;
 #ifndef RASTER
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
-    // Fully opaque extractions bypass candidate material loads. Masked/blended
-    // scenes retain candidate evaluation, including stochastic alpha transmission.
-    uint flags=buffers[NonUniformResourceIndex(f.scene.x)].Load(16)!=0?RAY_FLAG_FORCE_OPAQUE:RAY_FLAG_FORCE_NON_OPAQUE;
-    RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],flags,255,ray);
-    while(q.Proceed()){if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),rng))q.CommitNonOpaqueTriangleHit();}
-    if(q.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)return false;
-    hit.distance=q.CommittedRayT();hit.id=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();hit.bary=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();return true;
+    // Internal instance masks partition opaque and alpha-tested geometry. The
+    // opaque traversal stays in hardware even in a forest or a masked interior.
+    uint terminate=shadow?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:0;
+    RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],RAY_FLAG_FORCE_OPAQUE|terminate,1,ray);
+    while(opaque.Proceed()){}
+    bool found=opaque.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
+    if(found){hit.distance=opaque.CommittedRayT();hit.id=opaque.CommittedInstanceID();hit.primitive=opaque.CommittedPrimitiveIndex();hit.bary=opaque.CommittedTriangleBarycentrics();hit.front=opaque.CommittedTriangleFrontFace();if(shadow)return true;}
+    if(buffers[NonUniformResourceIndex(f.scene.x)].Load(16)==0){
+        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],RAY_FLAG_FORCE_NON_OPAQUE|terminate,2,ray);
+        while(masked.Proceed()){if(masked.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,masked.CandidateInstanceID(),masked.CandidatePrimitiveIndex(),masked.CandidateTriangleBarycentrics(),rng))masked.CommitNonOpaqueTriangleHit();}
+        if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
+    }return found;
 #else
     bool found=false;uint count=buffers[NonUniformResourceIndex(f.scene.x)].Load(0);
     for(uint id=0;id<count;id++){uint4 m=mesh(f,id);for(uint p=0;p<m.z/3;p++){
@@ -87,6 +92,8 @@ bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,o
     }}return found;
 #endif
 }
+bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,out Hit hit){return traceImpl(f,origin,direction,maximum,rng,false,hit);}
+bool occluded(Frame f,float3 origin,float3 direction,float maximum,inout uint rng){Hit hit;return traceImpl(f,origin,direction,maximum,rng,true,hit);}
 // Offset on the geometric side used by the outgoing ray, never along a perturbed normal.
 float3 rayOrigin(Surface s,float3 outgoing){return s.position+s.geometricNormal*(dot(outgoing,s.geometricNormal)>=0?0.001:-0.001);}
 float smith(float cosine,float a2){return 2*cosine/max(cosine+sqrt(a2+(1-a2)*cosine*cosine),1e-6);}
@@ -114,10 +121,30 @@ float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
     }else l=cosineDirection(s.normal,rng);
     float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }
+// Explicit area-light sampling is the sole emitter estimator after the camera
+// event. Non-primary BSDF hits omit emission, avoiding a second energy estimate.
+// All BSDF lobes have finite roughness; there are no delta lobes to exclude.
+float3 emissiveDirect(Frame f,Surface s,float3 v,inout uint rng){
+#ifdef EMISSIVE_LIGHTS
+    uint4 distribution=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(16);uint count=distribution.z;float total=asfloat(distribution.w);if(count==0)return 0;
+    float choice=random(rng)*total;uint low=0,high=count-1;
+    while(low<high){uint middle=(low+high)/2;float cdf=buffers[NonUniformResourceIndex(f.scene.x)].Load<float>(distribution.y+middle*64+12);if(cdf<choice)low=middle+1;else high=middle;}
+    uint offset=distribution.y+low*64;float4 a=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset),b=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+16),c=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+32);uint4 record=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(offset+48);
+    float u=sqrt(random(rng)),t=random(rng);float2 bary=float2(u*(1-t),u*t);
+    if(!accept(f,record.x,record.y,bary,rng))return 0;
+    float3 position=a.xyz*(1-u)+b.xyz*bary.x+c.xyz*bary.y,delta=position-s.position;float distance=length(delta);float3 l=delta/max(distance,1e-6);
+    float lightCosine=abs(dot(normalize(cross(b.xyz-a.xyz,c.xyz-a.xyz)),-l));if(lightCosine<1e-6 || dot(s.normal,l)<=0 || distance<0.003)return 0;
+    float pdf=(c.w/(total*b.w))*distance*distance/lightCosine;
+    if(occluded(f,rayOrigin(s,s.normal),l,max(0.001,distance-0.003),rng))return 0;
+    float bsdfPdf;return evaluate(s,v,l,bsdfPdf)*surface(f,record.x,record.y,bary).emissive/max(pdf,1e-12);
+#else
+    return 0;
+#endif
+}
 float3 direct(Frame f,Surface s,float3 v,inout uint rng){
-    float3 origin=rayOrigin(s,s.normal);Hit hit;float pdf;float3 sum=0;
+    float3 origin=rayOrigin(s,s.normal);Hit hit;float pdf;float3 sum=emissiveDirect(f,s,v,rng);
     float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng);
-    if(dot(s.normal,l)>0 && !trace(f,origin,l,10000,rng,hit))sum+=evaluate(s,v,l,pdf)*f.sunLux.rgb;
+    if(any(f.sunLux.rgb>0) && dot(s.normal,l)>0 && !occluded(f,origin,l,10000,rng))sum+=evaluate(s,v,l,pdf)*f.sunLux.rgb;
     uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
     for(uint i=0;i<head.w;i++){
         float4 position=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64);
@@ -127,7 +154,7 @@ float3 direct(Frame f,Surface s,float3 v,inout uint rng){
         float3 delta=position.xyz-s.position;float dist=length(delta);l=delta/max(dist,1e-5);if(dist>position.w)continue;
         float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
         float fade=pow(saturate(1-pow(dist/position.w,4)),2);float3 sampled=coneDirection(l,0.025/max(dist,0.025),rng);
-        if(dot(s.normal,sampled)>0 && !trace(f,origin,sampled,max(dist-0.03,0.001),rng,hit))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
+        if(dot(s.normal,sampled)>0 && !occluded(f,origin,sampled,max(dist-0.03,0.001),rng))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
     }return sum;
 }
 float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
@@ -158,7 +185,10 @@ float3 irradianceBiased(Frame f,float3 position,float3 normal,uint probeBuffer,f
     }return total>1e-6?sum/total:float3(0);
 }
 float3 irradiance(Frame f,float3 position,float3 normal,uint probeBuffer){return irradianceBiased(f,position,normal,probeBuffer,normal*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2));}
-float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 gn=dot(s.geometricNormal,v)>0?s.geometricNormal:-s.geometricNormal;float3 bias=gn*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2)+v*0.05;float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04),s.albedo,s.metal));return irradianceBiased(f,s.position,s.normal,probes,bias)*s.albedo*(1-s.metal)*(1-F)/PI;}
+float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 gn=dot(s.geometricNormal,v)>0?s.geometricNormal:-s.geometricNormal;float3 bias=gn*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2)+v*0.05;float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04),s.albedo,s.metal));return irradianceBiased(f,s.position,normalize(lerp(s.normal,reflect(-v,s.normal),s.metal*(1-s.roughness))),probes,bias)*(s.albedo*(1-s.metal)*(1-F)+F)/PI;}
+// Filter irradiance-like radiance, then restore high-frequency material colour.
+// BASE.w stores an exactly representable 24-bit UNORM RGB integer, not ray depth.
+float3 demodulation(Frame f,uint2 p){uint packed=uint(pixel(f,BASE,p).w);return pixel(f,WORLD+f.control.x,p).w==0?float3(1):max(float3(packed&255,(packed>>8)&255,(packed>>16)&255)/255.,float3(0.04));}
 float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.sizes.xy);float4 p=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,1,1));return normalize(p.xyz/p.w-f.camera.xyz);}
 
 // Shared validity is also used by checkerboard transport, so uncovered pixels
@@ -166,10 +196,15 @@ float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.
 bool reproject(Frame f,uint2 p,out float2 uv,out int2 at){
     uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p),normal=pixel(f,NORMAL+slot,p),motion=pixel(f,MOTION,p);
     uv=(float2(p)+0.5)/float2(f.sizes.xy)+motion.xy+(f.jitter.zw-f.jitter.xy)/float2(f.sizes.xy);at=int2(uv*f.sizes.xy);
-    if(f.temporal.x>0 || f.temporal.y>0 || world.w==0 || any(uv<=0) || any(uv>=1))return false;
+    if(f.temporal.x>0 || f.temporal.y>0)return false;
+    // A stationary pixel integrates its area across subpixel samples, including
+    // changing coverage at silhouettes. Reprojecting each individual hit instead
+    // of the pixel footprint erases this antialiasing and smears fine textures.
+    if(f.transport.w==1){uv=(float2(p)+0.5)/float2(f.sizes.xy);at=int2(p);return true;}
+    if(world.w==0 || any(uv<=0) || any(uv>=1))return false;
     float4 oldWorld=pixel(f,WORLD+1-slot,at),oldNormal=pixel(f,NORMAL+1-slot,at);
     float3 currentDirect=pixel(f,DIRECT,p).rgb,oldDirect=pixel(f,DIRECT_HISTORY+1-slot,at).rgb;
-    bool illumination=length(currentDirect-oldDirect)<=max(0.2,length(oldDirect)*0.25);
+    bool illumination=(f.transport.z&1)==0 || length(currentDirect-oldDirect)<=max(0.2,length(oldDirect)*0.25);
     return illumination && oldWorld.w==world.w && abs(length(oldWorld.xyz-f.previousCamera.xyz)-motion.z)<max(0.015,motion.z*0.01)
         && dot(normal.xyz,oldNormal.xyz)>0.92 && abs(normal.w-oldNormal.w)<0.1;
 }

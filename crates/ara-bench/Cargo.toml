@@ -1,0 +1,43 @@
+[package]
+name = "ara-bench"
+description = "Shared scenario and interleaved A/B performance harness for Ara."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["instrumentation"]
+instrumentation = ["ara-profile/instrumentation"]
+scenario = ["instrumentation", "ara-sim/profiling"]
+tracy = ["instrumentation", "ara-profile/tracy"]
+allocation = ["ara-profile/allocation"]
+
+[dependencies]
+ara-profile = { path = "../ara-profile" }
+ara-json.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+
+[dev-dependencies]
+ara-host.workspace = true
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+divan = "0.1"
+ara-sim = { path = "../ara-sim" }
+ara-schema.workspace = true
+ara-components.workspace = true
+ara-doc.workspace = true
+ara-input = { path = "../ara-input" }
+
+[[bench]]
+name = "scopes"
+harness = false
+
+[[example]]
+name = "scenario"
+required-features = ["scenario"]
+
+[lints]
+workspace = true

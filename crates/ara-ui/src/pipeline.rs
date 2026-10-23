@@ -22,8 +22,20 @@ impl Ui {
                     self.tree.set_style(node.layout_id, layout)?;
                     node.dirty.layout = true;
                 }
-                if computed.font_size != node.computed.font_size {
+                if computed.font_family != node.computed.font_family {
                     if let Some(text) = &mut node.text {
+                        text.family.clone_from(&computed.font_family);
+                        text.dirty = true;
+                    }
+                    self.tree.mark_dirty(node.layout_id)?;
+                    node.dirty.layout = true;
+                }
+                if computed.font_size != node.computed.font_size
+                    || computed.wrap_text != node.computed.wrap_text
+                {
+                    if let Some(text) = &mut node.text
+                        && computed.font_size != node.computed.font_size
+                    {
                         text.dirty = true;
                     }
                     self.tree.mark_dirty(node.layout_id)?;
@@ -60,12 +72,18 @@ impl Ui {
                             let Some(text) = &mut node.text else {
                                 return Size::ZERO;
                             };
+                            if text.family != node.computed.font_family {
+                                text.family.clone_from(&node.computed.font_family);
+                                text.dirty = true;
+                            }
                             let width = known.width.or(match available.width {
                                 AvailableSpace::Definite(w) => Some(w),
                                 AvailableSpace::MinContent => Some(1.0),
                                 _ => None,
                             });
-                            let width = if matches!(node.element.tag.as_str(), "field" | "input") {
+                            let width = if !node.computed.wrap_text
+                                || matches!(node.element.tag.as_str(), "field" | "input")
+                            {
                                 None
                             } else {
                                 width
@@ -83,10 +101,16 @@ impl Ui {
             // Fully constrained leaves may skip intrinsic measurement; finalize text at the actual content width.
             for node in &mut self.nodes {
                 if let Some(text) = &mut node.text {
+                    if text.family != node.computed.font_family {
+                        text.family.clone_from(&node.computed.font_family);
+                        text.dirty = true;
+                    }
                     let l = self.tree.layout(node.layout_id)?;
                     text_system.measure(
                         text,
-                        if matches!(node.element.tag.as_str(), "field" | "input") {
+                        if !node.computed.wrap_text
+                            || matches!(node.element.tag.as_str(), "field" | "input")
+                        {
                             None
                         } else {
                             Some(

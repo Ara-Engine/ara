@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -33,13 +34,27 @@ internal sealed class ModuleCompiler
     /// <summary>Doc comments must be parsed: the generator turns them into schema docs.</summary>
     internal static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest, DocumentationMode.Parse);
 
+    /// <summary>Framework references, shared by every module (Roslyn shares their metadata).</summary>
+    static readonly Lazy<ImmutableArray<MetadataReference>> Framework = new(() => [.. FrameworkReferences()]);
+    static readonly Dictionary<string, MetadataReference> FileReferences = new(StringComparer.OrdinalIgnoreCase);
+
     internal readonly string AssemblyName;
     internal readonly ImmutableArray<MetadataReference> References;
 
+    /// <summary>A module compiled against the framework and <paramref name="extraReferences"/> (assembly paths: Ara.Runtime).</summary>
     internal ModuleCompiler(string assemblyName, IEnumerable<string> extraReferences)
     {
         AssemblyName = assemblyName;
-        References = [.. FrameworkReferences(), .. extraReferences.Select(p => MetadataReference.CreateFromFile(p))];
+        References = [.. Framework.Value, .. extraReferences.Select(FileReference)];
+    }
+
+    static MetadataReference FileReference(string path)
+    {
+        lock (FileReferences)
+        {
+            if (!FileReferences.TryGetValue(path, out var r)) FileReferences[path] = r = MetadataReference.CreateFromFile(path);
+            return r;
+        }
     }
 
     internal static CSharpCompilationOptions Options(bool debugIL) => new(
@@ -71,22 +86,62 @@ internal sealed class ModuleCompiler
     internal static SyntaxTree Parse(string path, string text) =>
         CSharpSyntaxTree.ParseText(text, ParseOptions, path, Encoding.UTF8);
 
-    internal CSharpCompilation Create(IEnumerable<SyntaxTree> trees, bool debugIL) =>
-        CSharpCompilation.Create(AssemblyName, trees, References, Options(debugIL));
+    /// <summary>A compilation of <paramref name="trees"/> that also references other modules (<paramref name="modules"/>).</summary>
+    internal CSharpCompilation Create(IEnumerable<SyntaxTree> trees, bool debugIL, IEnumerable<MetadataReference> modules) =>
+        CSharpCompilation.Create(AssemblyName, trees, [.. References, .. modules], Options(debugIL));
 
     /// <summary>A generator driver running the Ara module generator over a module's compilation.</summary>
     internal static GeneratorDriver Driver() =>
         CSharpGeneratorDriver.Create([new Ara.Generators.ModuleGenerator().AsSourceGenerator()], parseOptions: ParseOptions);
 
-    /// <summary>Emits the whole module; returns null and the errors on failure.</summary>
-    internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Errors) Emit(Compilation c)
+    /// <summary>Emits the whole module (PE plus portable PDB); returns null and the errors on failure.</summary>
+    internal static (ModuleImage? Image, ImmutableArray<Diagnostic> Errors) Emit(Compilation c, CancellationToken ct = default)
     {
         using var pe = new MemoryStream();
         using var pdb = new MemoryStream();
-        var r = c.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
+        var r = c.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb), cancellationToken: ct);
         return r.Success
             ? (new ModuleImage(pe.ToArray(), pdb.ToArray()), [])
             : (null, [.. r.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)]);
+    }
+
+    static readonly SymbolDisplayFormat SurfaceFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .WithMemberOptions(SymbolDisplayMemberOptions.IncludeParameters | SymbolDisplayMemberOptions.IncludeType | SymbolDisplayMemberOptions.IncludeModifiers
+            | SymbolDisplayMemberOptions.IncludeAccessibility | SymbolDisplayMemberOptions.IncludeRef | SymbolDisplayMemberOptions.IncludeConstantValue
+            | SymbolDisplayMemberOptions.IncludeExplicitInterface | SymbolDisplayMemberOptions.IncludeContainingType)
+        .WithParameterOptions(SymbolDisplayParameterOptions.IncludeType | SymbolDisplayParameterOptions.IncludeName | SymbolDisplayParameterOptions.IncludeParamsRefOut
+            | SymbolDisplayParameterOptions.IncludeDefaultValue | SymbolDisplayParameterOptions.IncludeExtensionThis)
+        .WithGenericsOptions(SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeTypeConstraints | SymbolDisplayGenericsOptions.IncludeVariance)
+        .WithKindOptions(SymbolDisplayKindOptions.IncludeTypeKeyword | SymbolDisplayKindOptions.IncludeMemberKeyword);
+
+    /// <summary>
+    /// A hash of what other modules can bind to: every public or protected type and member
+    /// (signatures, constant and default values, base types, interfaces, attributes). Code that
+    /// references this module stays valid against a new generation with the same surface, so it
+    /// is relinked instead of rebuilt. Private and compiler-generated members (closures) are out.
+    /// </summary>
+    internal static string Surface(Compilation c)
+    {
+        var lines = new List<string>();
+        void Visit(INamespaceOrTypeSymbol container)
+        {
+            foreach (var member in container.GetMembers())
+            {
+                if (member is INamespaceSymbol ns) { Visit(ns); continue; }
+                if (member.IsImplicitlyDeclared && member is not INamedTypeSymbol) continue;
+                if (member.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal)) continue;
+                var line = member.ToDisplayString(SurfaceFormat);
+                if (member is INamedTypeSymbol t)
+                    line += $" : {t.BaseType?.ToDisplayString(SurfaceFormat)} [{string.Join(",", t.Interfaces.Select(i => i.ToDisplayString(SurfaceFormat)))}]";
+                if (member is IFieldSymbol { IsConst: true } f) line += " = " + f.ConstantValue;
+                line += " " + string.Join(",", member.GetAttributes().Select(a => a.ToString()));
+                lines.Add(line);
+                if (member is INamedTypeSymbol type) Visit(type);
+            }
+        }
+        Visit(c.Assembly.GlobalNamespace);
+        lines.Sort(StringComparer.Ordinal);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", lines))));
     }
 
     /// <summary>The EnC baseline of a freshly emitted image, with EnC maps read from its PDB.</summary>
@@ -122,14 +177,17 @@ internal sealed class ModuleCompiler
         return EditAndContinueMethodDebugInformation.Create(slots, lambdas, states);
     }
 
-    /// <summary>Emits an EnC delta of <paramref name="next"/> against <paramref name="baseline"/>; null on any failure.</summary>
+    /// <summary>
+    /// Emits an EnC delta of <paramref name="next"/> against <paramref name="baseline"/>; null on any failure.
+    /// <paramref name="added"/> are the symbols new since the baseline (L2 inserts).
+    /// </summary>
     internal static (ModuleDelta? Delta, ImmutableArray<Diagnostic> Errors) EmitDelta(
-        Compilation next, EmitBaseline baseline, IEnumerable<SemanticEdit> edits)
+        Compilation next, EmitBaseline baseline, IEnumerable<SemanticEdit> edits, IReadOnlySet<ISymbol> added, CancellationToken ct = default)
     {
         using var md = new MemoryStream();
         using var il = new MemoryStream();
         using var pdb = new MemoryStream();
-        var r = next.EmitDifference(baseline, edits, _ => false, md, il, pdb, CancellationToken.None);
+        var r = next.EmitDifference(baseline, edits, s => added.Contains(s), md, il, pdb, ct);
         return r.Success && r.Baseline is { } nextBaseline
             ? (new ModuleDelta(md.ToArray(), il.ToArray(), pdb.ToArray(), nextBaseline), [])
             : (null, [.. r.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)]);

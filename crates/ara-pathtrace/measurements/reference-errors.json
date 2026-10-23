@@ -6,15 +6,15 @@
       "rmse": 0.0011868581000354054
     },
     "radiance": {
-      "mae": 0.0007489785148451725,
-      "relative_rmse": 0.006492074767161772,
-      "rmse": 0.006440392235440137
+      "mae": 0.0006932405904970235,
+      "relative_rmse": 0.006219853336454331,
+      "rmse": 0.006170337922831676
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "furnace",
     "scene_hash": "5a6ebffe2873581e4edfecfc77173b20f19db1d2dff89952d217018f8cb547d4",
-    "ssim_error": 0.0011620970541246075
+    "ssim_error": 0.0010765172606524171
   },
   {
     "convergence_error": {
@@ -23,32 +23,32 @@
       "rmse": 0.043042417762156386
     },
     "radiance": {
-      "mae": 0.12996306073663433,
-      "relative_rmse": 0.09642910214576818,
-      "rmse": 0.27938819390694974
+      "mae": 0.11770737029078178,
+      "relative_rmse": 0.09037120733291323,
+      "rmse": 0.2618363941599882
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "thin_wall",
     "scene_hash": "85a9016668afa42cfd9a1b18cb5cade28fe6e494a0bc1eb69a2203cf0409b939",
-    "ssim_error": 0.06888647970298505
+    "ssim_error": 0.06511586478439772
   },
   {
     "convergence_error": {
-      "mae": 0.03642340768495126,
-      "relative_rmse": 0.016864890153428083,
-      "rmse": 0.06106208060114816
+      "mae": 0.030872579153855675,
+      "relative_rmse": 0.014183271724864912,
+      "rmse": 0.051310904911263
     },
     "radiance": {
-      "mae": 0.12352517093771018,
-      "relative_rmse": 0.1132798430358202,
-      "rmse": 0.41014811498980575
+      "mae": 0.08635607506188332,
+      "relative_rmse": 0.1357436230918202,
+      "rmse": 0.49108049763751177
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "moving_emissive",
-    "scene_hash": "f7864d9b903814c2201f190783d9a42cccb550b48727c3287e668713e0c3e43b",
-    "ssim_error": 0.04957948644099092
+    "scene_hash": "a5965299586de470ad4ec760fb3568d75155b66a665745bfa7348a18578d80c8",
+    "ssim_error": 0.043389150455380006
   },
   {
     "convergence_error": {
@@ -57,15 +57,15 @@
       "rmse": 0.04358901615092819
     },
     "radiance": {
-      "mae": 0.10775587327135899,
-      "relative_rmse": 0.07270697657693126,
-      "rmse": 0.2344409390694594
+      "mae": 0.08696427919879068,
+      "relative_rmse": 0.06846229050957464,
+      "rmse": 0.22075410687622155
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "time_of_day",
     "scene_hash": "f83f39442749c001293caa808d118e599cf2787f60f652d08e5ce89015c4bf9f",
-    "ssim_error": 0.0443989569898999
+    "ssim_error": 0.043894397958564146
   },
   {
     "convergence_error": {
@@ -74,15 +74,15 @@
       "rmse": 0.038646226729063385
     },
     "radiance": {
-      "mae": 0.08924555946309637,
-      "relative_rmse": 0.055277818722358124,
-      "rmse": 0.1471686303702407
+      "mae": 0.0709625356953755,
+      "relative_rmse": 0.04892944434391172,
+      "rmse": 0.13026706688695516
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "disocclusion",
     "scene_hash": "cc7c1b9ddee574d2cc96b3a90ecbd2aa8934481dd71e2d17fa2677ac96a6eeff",
-    "ssim_error": 0.0416671949360015
+    "ssim_error": 0.04066787089972153
   },
   {
     "convergence_error": {
@@ -91,15 +91,15 @@
       "rmse": 0.04141029814792922
     },
     "radiance": {
-      "mae": 0.09815691633183397,
-      "relative_rmse": 0.06987742567840928,
-      "rmse": 0.1988206640880665
+      "mae": 0.07810419554952912,
+      "relative_rmse": 0.06469097546968758,
+      "rmse": 0.18406377422347106
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "glossy_interior",
     "scene_hash": "c6ed6fd343d66b9e78c7f24f9ec29cf584776d6b9ed6c012a4549df769bacfcd",
-    "ssim_error": 0.043105184999555526
+    "ssim_error": 0.0422643323975968
   },
   {
     "convergence_error": {
@@ -108,14 +108,14 @@
       "rmse": 0.036700266278255345
     },
     "radiance": {
-      "mae": 0.09317426663503284,
-      "relative_rmse": 0.09429852195425524,
-      "rmse": 0.24744989755698624
+      "mae": 0.07658133570399109,
+      "relative_rmse": 0.0902642551485693,
+      "rmse": 0.23686352900002403
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "foliage_alpha",
     "scene_hash": "6404f571fcd05d90d0de1cfad2b97790efe4b920dd7d9990808b22e38fba8a43",
-    "ssim_error": 0.05429176275859119
+    "ssim_error": 0.052739169586028194
   }
 ]

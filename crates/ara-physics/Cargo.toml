@@ -8,8 +8,9 @@ publish.workspace = true
 
 [features]
 bench = []
-
+profiling = ["dep:ara-profile"]
 [dependencies]
+ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-schema = { path = "../ara-schema" }
 ara-diag = { path = "../ara-diag" }
 bevy_ecs = "0.20"

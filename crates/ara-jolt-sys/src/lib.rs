@@ -139,6 +139,12 @@ unsafe extern "C" {
         capacity: u32,
         offsets: *mut u32,
     ) -> u32;
+    /// Allocation-free closest ray hit, breaking ties by body and subshape ID.
+    /// Returns 0 for no hit, 1 for a hit, or INVALID on error.
+    /// # Safety
+    /// World is live and shared between updates; query and hit point to valid records.
+    pub fn ara_ray_closest(world: *const AraWorld, query: *const AraQuery, hit: *mut AraHit)
+    -> u32;
     /// Drains contact notifications between ticks; returns count, or INVALID on overflow.
     /// # Safety
     /// World exclusively borrowed; out holds capacity records.

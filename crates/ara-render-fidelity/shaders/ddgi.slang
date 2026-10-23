@@ -21,7 +21,7 @@ void ddgiMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
         // visibility-filtered irradiance back as a first bounce creates artificial
         // absorption in enclosed rooms, especially across thin partitions.
         for(uint bounce=0;bounce<5;bounce++){
-            incoming+=throughput*(s.emissive+direct(f,s,-pathDirection,rng));
+            incoming+=throughput*((bounce==0?s.emissive:float3(0))+direct(f,s,-pathDirection,rng));
             if(bounce==4){incoming+=throughput*indirect(f,s,-pathDirection,f.probes.x);break;}
             float3 weight;pathDirection=sampleBrdf(s,-pathDirection,rng,weight);throughput*=weight;
             if(max(max(throughput.x,throughput.y),throughput.z)<0.001)break;
@@ -37,7 +37,7 @@ void ddgiMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     else if(nearest<0.12)relocation-=directions[nearestLane]*(0.12-nearest);
     relocation=clamp(relocation,-f.spacing.xyz*0.45,f.spacing.xyz*0.45);
     bool moved=length(relocation-meta.xyz)>0.005;if(!moved)relocation=meta.xyz;
-    float hysteresis=(f.sunLux.w>0 || meta.w<0.5 || moved)?0.15:0.95;
+    float hysteresis=(meta.w<0.5 || moved)?0:(f.sunLux.w>0?0.15:0.95);
     if(lane<36){
         float3 n=octDecode((float2(lane%6,lane/6)+0.5)/6);float3 sum=0;float normalization=0;
         for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}

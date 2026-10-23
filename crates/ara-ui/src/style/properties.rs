@@ -39,6 +39,21 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
         "color" => c.color = Color::parse(v)?,
         "border-color" => c.border_color = Color::parse(v)?,
         "font-size" => c.font_size = scalar(v)?,
+        "font-family" => c.font_family = Some(v.to_owned()),
+        "text-align" => {
+            c.text_end = match v {
+                "left" => false,
+                "right" => true,
+                _ => return Err("text-align must be left or right".into()),
+            }
+        }
+        "white-space" => {
+            c.wrap_text = match v {
+                "normal" => true,
+                "nowrap" => false,
+                _ => return Err("white-space must be normal or nowrap".into()),
+            }
+        }
         "border-radius" => c.radius = scalar(v)?,
         "border-width" => {
             c.border = scalar(v)?;
@@ -49,6 +64,7 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
         "max-width" => c.layout.max_size.width = limit(v)?,
         "max-height" => c.layout.max_size.height = limit(v)?,
         "flex-shrink" => c.layout.flex_shrink = scalar(v)?,
+        "flex-basis" => c.layout.flex_basis = dimension(v)?,
         "position" => {
             c.layout.position = match v {
                 "relative" => Position::Relative,

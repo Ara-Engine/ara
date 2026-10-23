@@ -1,0 +1,140 @@
+{
+  "name": "smoke",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "smoke",
+      "capacity": 2048,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 35
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 4,
+              "size": 0.45,
+              "color": [0.2, 0.23, 0.28, 0.14]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "cone",
+              "origin": [0, 0.1, 0],
+              "height": 0.4,
+              "radius": 0.3
+            }
+          },
+          {
+            "name": "rise",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.8, 0],
+              "spread": [0.15, 0.2, 0.15]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 1.5,
+              "strength": 0.45
+            }
+          },
+          {
+            "name": "grow",
+            "module": {
+              "op": "size_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 0.45
+                },
+                {
+                  "t": 1,
+                  "value": 1.5
+                }
+              ]
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.35, 0.39, 0.44, 0]
+                },
+                {
+                  "t": 0.15,
+                  "value": [0.55, 0.58, 0.63, 0.55]
+                },
+                {
+                  "t": 0.75,
+                  "value": [0.55, 0.58, 0.63, 0.2]
+                },
+                {
+                  "t": 1,
+                  "value": [0.55, 0.58, 0.63, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "surface",
+              "soft_distance": 0.3,
+              "sorting": "depth"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "smoke",
+              "blend": "alpha",
+              "alignment": "camera",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
