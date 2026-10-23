@@ -1,0 +1,44 @@
+{
+  "texture_publish": {
+    "entries": {
+      "publishMain": "compute"
+    },
+    "source": "stream.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "texture_reset": {
+    "entries": {
+      "resetMain": "compute"
+    },
+    "source": "stream.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "texture_upload": {
+    "entries": {
+      "uploadMain": "compute"
+    },
+    "source": "stream.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  }
+}
