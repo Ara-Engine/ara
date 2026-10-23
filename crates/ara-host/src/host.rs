@@ -71,6 +71,8 @@ pub(crate) struct State {
     pub(crate) profile_attached: bool,
     pub(crate) root: PathBuf,
     pub(crate) name: String,
+    /// The project's main scene (path), the default document of calls naming none.
+    pub(crate) main: Option<String>,
     pub(crate) type_files: Vec<(PathBuf, Option<std::time::SystemTime>)>,
     pub(crate) store: Store,
     pub(crate) registry: Registry,
@@ -139,6 +141,7 @@ impl Host {
         let lock = lock(&state_dir)?;
         let (ws, per_file) = project.load(&[]);
         let name = project.name();
+        let main = project.main_scene();
         let Project {
             root,
             db,
@@ -185,6 +188,7 @@ impl Host {
             profile_attached: false,
             root,
             name,
+            main,
             type_files,
             store,
             registry,
@@ -247,18 +251,22 @@ impl Host {
         let name = service.name();
         self.services.push(service);
         for m in methods {
+            let mut params = self
+                .st
+                .proto
+                .get(&m.params)
+                .map(|t| self.st.proto.type_json_schema(t))
+                .unwrap_or(Value::Null);
+            if m.name == "cmd.apply" {
+                crate::core::list_commands(&mut params, &self.st.registry, self.st.store.schema());
+            }
             self.st.catalog.push(MethodInfo {
                 name: m.name.clone(),
                 summary: m.summary.clone(),
                 scope: m.scope,
                 hints: m.hints,
                 tool: m.tool.clone(),
-                params: self
-                    .st
-                    .proto
-                    .get(&m.params)
-                    .map(|t| self.st.proto.type_json_schema(t))
-                    .unwrap_or(Value::Null),
+                params,
                 service: name.to_owned(),
             });
             self.routes.insert(m.name.clone(), (index, m));

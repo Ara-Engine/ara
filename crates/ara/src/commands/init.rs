@@ -1,6 +1,6 @@
 //! `ara init [dir]`: a new project with the files agents and git need.
 //!
-//! Writes `ara.project.json`, `AGENTS.md` (engine conventions), `.gitattributes`
+//! Writes `ara.project.json` (name and main scene), `AGENTS.md` (engine conventions), `.gitattributes`
 //! (`ara merge` as the merge driver for documents), `.gitignore` (`.ara/` local
 //! state), `.mcp.json` (the MCP server for Claude Code / Codex) and a starter scene.
 //! Existing files are kept; `.gitignore`/`.gitattributes` get missing lines
@@ -30,23 +30,34 @@ edit.
   layout.
 - **IDs:** `<prefix>_<base32>`: entities `e_8b21`, scenes `sc_…`, prefabs `pf_…`.
   An entity inside a prefab instance is addressed through it: `e_4f9a/e_m4tz`.
+- **Naming entities in commands:** an ID or address, a batch symbol (`$crate`),
+  or a name: `name:Crate`, or `name:Floor/Crate` when the name alone matches
+  several entities.
 - **References:** `@path#id` (`@prefabs/crate.prefab#pf_crate001`). Either half
   repairs the other.
 - **Use commands, not raw file surgery, for graphs**, hierarchy (parents, order)
-  and prefab overrides: `ara_apply` over MCP or `ara do <command> --doc <doc>
-  --args '<json>'`. Batches are atomic; mint IDs with `"as": "$crate"` and use
-  them in later calls. Preview with `dryRun`. Small value edits straight in the
-  JSON are fine: the engine validates them and reports problems.
-- **Review:** every change is a transaction with a `why`. Agent changes apply live
-  but stay unreviewed until a human runs `ara accept` or `ara revert`.
+  and prefab overrides: `ara_apply` over MCP or `ara do <command> -p key=value`.
+  `doc` is optional: the engine picks the document holding the entities you name,
+  else the main scene (`levels/main.scene`). Batches are atomic; mint IDs with
+  `"as": "$crate"` and use them in later calls. Preview with `dryRun`. Small
+  value edits straight in the JSON are fine: the engine validates them.
+- **Review:** every change is a transaction with a `why` (agents must give one).
+  Agent changes apply live but stay unreviewed until a human runs `ara accept` or
+  `ara revert`.
 
 ## Tools
 
-- MCP: `.mcp.json` starts `ara mcp` (12 tools; begin with `ara_session`
-  `{"action": "begin", "client": "<you>"}`). Codex: add
-  `[mcp_servers.ara]` with `command = "ara"`, `args = ["mcp"]` to its config.
-- CLI: `ara check` (validate), `ara query "Light"`, `ara inspect --doc <doc>`,
-  `ara history`, `ara undo`, `ara logs`, `ara schema`. Add `--json` to any.
+- MCP: `.mcp.json` starts `ara mcp` (12 tools). Over `ara mcp` the session is
+  optional (one begins on first use); `ara_session {"action": "begin", "client":
+  "<you>"}` names yours. Codex: add `[mcp_servers.ara]` with `command = "ara"`,
+  `args = ["mcp"]` to its config.
+- CLI: `ara check` (validate), `ara query "Light"` / `ara query Crate`,
+  `ara inspect` (main scene) or `ara inspect --doc outpost name:Crate`,
+  `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500
+  --why "<reason>"`, `ara history`, `ara undo`, `ara logs`, `ara schema`. Add
+  `--json` to any. `--args` takes JSON with or without quotes (`{entity: e_8b21}`),
+  `@file.json` or `-` (stdin). The CLI attributes changes to the agent running it
+  (Codex, Claude Code) or to `ARA_AUTHOR`.
 - Reference for this engine version: `ara docs --llms` writes
   `.ara/docs/llms.txt` and per-type pages.
 - `ara serve` runs the project daemon; the CLI and `ara mcp` use it when it runs.
@@ -176,7 +187,8 @@ pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bo
         created: Vec::new(),
         kept: Vec::new(),
     };
-    let marker = ara_json::to_canonical_string(&json!({ "name": name }));
+    let marker =
+        ara_json::to_canonical_string(&json!({ "name": name, "main": "levels/main.scene" }));
     r.write(&root, MARKER, &marker)?;
     r.write(&root, "AGENTS.md", &AGENTS.replace("{name}", &name))?;
     r.lines(&root, ".gitattributes", GITATTRIBUTES)?;

@@ -8,7 +8,7 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
 
 - `TypeDesc { name, doc, module, version, aliases, deprecated, shape, upgrade }`
   - `Shape::Struct { role, fields }` with `StructRole::{Component, Record(RecordInfo),
-    Params, Value}`, or `Shape::Enum { variants }` (first variant is the default).
+    Params, Value, Resource}`, or `Shape::Enum { variants }` (first variant is the default).
 - `FieldDesc { name, ty, doc, default, required, unit, range, examples, since,
   deprecated, aliases, replicate, editor }`.
 - `ValueType`: `bool i32 i64 u8 u16 u32 u64 f32 f64 string vec2 vec3 vec4 quat color
@@ -35,6 +35,12 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
   `Inventory.slots[s_7c].count`), `db.resolve_path(record_type, &path)` →
   `Resolved { steps, ty, field }`, and `path::{get, get_effective, set}`.
 - `grammar`: names, IDs, entity addresses, `@path#id` syntax.
+- Layout: `db.struct_layout(name) -> StructLayout { size, align, fields: [FieldLayout] }`
+  and `db.value_layout(ty)`: the canonical C layout of blittable structs (fields in
+  reflection order, C alignment) that ECS columns and generated C# share. Not blittable:
+  `string`, `asset`, `json`, `option`, `list`, `keyed`, `map`.
+- Runtime types: `db.remove(name)` drops a type and its aliases (C# modules re-register
+  on reload); `StructRole::Resource` / kind `resource` marks world singletons.
 
 ## Rules and gotchas
 
@@ -58,5 +64,6 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
 
 `cargo test -p ara-schema`. `tests/schema.rs` covers derive output (insta snapshot),
 reflection → dynamic round trip, verification, validation diagnostics and fixes,
-canonical form, JSON Schema (snapshot), path resolution and upgrades. Accept
+canonical form, JSON Schema (snapshot), path resolution, upgrades, canonical C
+layouts, and replacing runtime types (resources). Accept
 intended snapshot changes with `INSTA_UPDATE=always` and review the diff.

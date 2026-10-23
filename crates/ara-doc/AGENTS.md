@@ -38,7 +38,9 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   `subtree()`; helpers `parent_of`, `order_of`, `prefab_of`, `is_component_key`.
 - `Edit` → `doc.apply(edit, &db) -> Result<Op, Diagnostic>`; `Op::inverse()`,
   `Op::to_edit()`, `Op::touches()`; `doc.revert(&op, &db)` (rollback).
-- `refs::{AssetIndex, resolve, repair_record}`; `prefab::{resolve, DocLookup,
+- `refs::{AssetIndex, resolve, repair_record}` (`AssetIndex::closest`: the nearest
+  assets of a kind to a broken reference; ARA1302 carries a `set` fix per tied
+  candidate); `prefab::{resolve, DocLookup,
   ResolvedEntity}`; `validate::{check_record, check_structure, check_entity_refs,
   record_type}` (dangling `entity` fields are warnings, `ARA1212`).
 - `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`,
@@ -59,6 +61,8 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   checked syntactically. The ID wins when the halves disagree.
 - Overrides apply in sorted key order (whole component before its fields);
   `removed` applies first.
+- `$conflicts` entries read as ARA1209 with `ara resolve <file> --pick
+  <record>:<path>=ours|theirs` fixes (`Cli` actions); the file needs a location.
 - Problems inside a prefab are reported when that prefab is checked, not by every
   scene that instantiates it.
 - Diagnostics follow file order of records; resolution output is sorted by address.

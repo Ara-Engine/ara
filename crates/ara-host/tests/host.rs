@@ -451,7 +451,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     call(
         &mut h,
         "cmd.apply",
-        json!({ "session": s, "doc": "levels/arena.scene",
+        json!({ "session": s, "doc": "levels/arena.scene", "why": "rename the floor",
                 "commands": [{ "cmd": "property.set", "args": { "entity": "e_flr1", "path": "name", "value": "Agent" } }] }),
     );
     let human_text = scene(&dir).replace("\"Ground floor\"", "\"Human\"");
@@ -705,4 +705,119 @@ fn subscribers_get_ops_history_and_job_progress() {
         json!({ "session": s, "doc": "levels/arena.scene", "job": "test.spawn", "args": { "count": 1 } }),
     );
     assert!(h.drain_outbox().is_empty());
+}
+
+#[test]
+fn calls_find_their_document_and_report_created_ids_plainly() {
+    let dir = project("infer");
+    let mut h = open(&dir, 11);
+    let s = begin(&mut h, "agent:claude");
+    let begun = call(&mut h, "session.begin", json!({ "client": "codex" }));
+    assert_eq!(
+        begun["documents"].as_array().map(Vec::len),
+        Some(3),
+        "scene and two prefabs"
+    );
+
+    // No `doc`: the entity named by its selector picks the scene; `as` may repeat `id`.
+    let r = call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": s, "why": "A pad on the floor",
+                "commands": [
+                    { "cmd": "entity.create", "as": "$pad", "args": { "id": "$pad", "name": "Pad", "parent": "name:Floor" } },
+                    { "cmd": "property.set", "args": { "entity": "name:Floor", "path": "name", "value": "Ground" } }
+                ] }),
+    );
+    let pad = r["ids"]["$pad"].as_str().expect("pad").to_owned();
+    assert_eq!(r["doc"], "levels/arena.scene");
+    let text = r["text"].as_str().expect("text");
+    assert!(
+        text.starts_with("applied tx_") && text.contains("to levels/arena.scene"),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("created: {pad} Pad ($pad)")),
+        "{text}"
+    );
+    assert!(text.contains("modified: e_flr1 Ground"), "{text}");
+
+    // `as` without its `$`; `schema.describe` with one `name`.
+    let r = call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": s, "why": "A marker", "commands": [
+            { "cmd": "entity.create", "as": "marker", "args": { "name": "Marker" } },
+            { "cmd": "property.set", "args": { "entity": "$marker", "path": "name", "value": "Mark" } }
+        ] }),
+    );
+    assert!(r["ids"]["$marker"].is_string(), "{r}");
+    let d = call(
+        &mut h,
+        "schema.describe",
+        json!({ "session": s, "name": "Transform" }),
+    );
+    assert_eq!(d["items"][0]["name"], "Transform");
+
+    // Lenient document names, name selectors and the main-scene default for reads.
+    let one = call(
+        &mut h,
+        "inspect",
+        json!({ "session": s, "doc": "arena", "entities": ["name:Pad"] }),
+    );
+    assert!(
+        one["text"]
+            .as_str()
+            .is_some_and(|t| t.starts_with(&format!("{pad} Pad"))),
+        "{one}"
+    );
+    let all = call(&mut h, "inspect", json!({ "session": s }));
+    assert!(
+        all["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("levels/arena.scene"))
+    );
+
+    // A dry run says what it would do.
+    let dry = call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": s, "dryRun": true, "commands": [{ "cmd": "entity.delete", "args": { "entities": [pad] } }] }),
+    );
+    let text = dry["text"].as_str().expect("text");
+    assert!(
+        text.contains("nothing was applied") && text.contains(&format!("would delete: {pad} Pad")),
+        "{text}"
+    );
+}
+
+#[test]
+fn agent_changes_need_a_why_and_get_every_problem_at_once() {
+    let dir = project("why");
+    let mut h = open(&dir, 12);
+    let s = begin(&mut h, "agent:claude");
+    let diags = h
+        .call(
+            ConnId::LOCAL,
+            "cmd.apply",
+            json!({ "session": s, "commands": [{ "cmd": "property.set", "args": { "entity": "Floor", "path": "name", "value": "X" } }] }),
+        )
+        .expect_err("no why")
+        .diagnostics();
+    let codes_seen: Vec<_> = diags.iter().map(|d| d.code).collect();
+    assert_eq!(codes_seen, [codes::TYPE_MISMATCH, codes::MISSING_WHY]);
+    assert_eq!(diags[0].fixes[0].title, "Use `e_flr1` (Floor)");
+    assert!(
+        matches!(&diags[0].fixes[0].action, ara_diag::FixAction::Set { path, .. } if path == "commands[0].args.entity")
+    );
+    assert_eq!(
+        call(&mut h, "history.list", json!({ "session": s }))["items"],
+        json!([])
+    );
+    let human = begin(&mut h, "human");
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": human, "commands": [{ "cmd": "property.set", "args": { "entity": "e_flr1", "path": "name", "value": "X" } }] }),
+    );
 }

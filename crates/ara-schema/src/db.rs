@@ -75,6 +75,16 @@ impl SchemaDb {
         Ok(())
     }
 
+    /// Removes a type (and its aliases) by current name, returning it. Hosts that
+    /// register types at runtime (C# modules) use this to replace a type's definition
+    /// when its module reloads.
+    pub fn remove(&mut self, name: &str) -> Option<TypeDesc> {
+        let desc = self.types.remove(name)?;
+        self.aliases.retain(|_, owner| owner != name);
+        self.rust.remove(name);
+        Some(desc)
+    }
+
     /// The current type that owns `name` as its name or an alias.
     fn claimant(&self, name: &str) -> Option<&str> {
         self.types

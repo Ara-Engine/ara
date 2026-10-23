@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The facade ara_run scripts compile against: typed engine calls through ICommandSink,
+       nothing else. The worker's sink speaks to its supervisor; an Engine Protocol client
+       replaces it later. JIT-only (the worker uses reflection-based JSON). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Ara.Agent</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

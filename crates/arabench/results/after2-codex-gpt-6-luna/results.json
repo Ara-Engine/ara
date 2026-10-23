@@ -1,0 +1,1285 @@
+{
+  "label": "after2",
+  "agent": "codex:gpt-6-luna",
+  "suite": "v0",
+  "started": "2026-10-23T01:48:23Z",
+  "engine": "09cc127+dirty",
+  "results": [
+    {
+      "task": "scene-floor-crate",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Floor` in levels/main.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Floor has a box collider",
+          "ok": true,
+          "detail": "Some(String(\"box\"))"
+        },
+        {
+          "what": "Floor collider is 20 x 0.5 x 20 m",
+          "ok": true
+        },
+        {
+          "what": "one `Crate` in levels/main.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Crate` is a child of Floor",
+          "ok": true,
+          "detail": "parent is Some(\"e_bvgv\")"
+        },
+        {
+          "what": "Crate local position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "shell": 5
+      },
+      "wallMs": 31094,
+      "tokens": {
+        "input": 27697,
+        "cacheRead": 114432,
+        "cacheWrite": 0,
+        "output": 996
+      },
+      "codes": {
+        "ARA1106": 2
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Created Floor with a 20 × 0.5 × 20 m box collider, and Crate as its child at local position (2, 0.5, 3). The scene validates with no errors or warnings.\n\nTransaction `tx_4kw8wys9` is awaiting review."
+    },
+    {
+      "task": "scene-turn-and-raise",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Generator` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Generator turned 90 degrees about Y",
+          "ok": true,
+          "detail": "rotation [0.0, 90.0, 0.0]"
+        },
+        {
+          "what": "Generator raised 1.5 m",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 2,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 1
+      },
+      "wallMs": 15016,
+      "tokens": {
+        "input": 19912,
+        "cacheRead": 92416,
+        "cacheWrite": 0,
+        "output": 267
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Updated the Generator in `levels/outpost.scene`: rotated it 90° around Y and raised it from Y=0 to Y=1.5 m. The change is recorded as a reviewable transaction."
+    },
+    {
+      "task": "scene-group-barrels",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Barrels` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Barrels` is a child of the scene root",
+          "ok": true,
+          "detail": "parent is None"
+        },
+        {
+          "what": "Barrels holds Barrel, Barrel.001, Barrel.002 in order",
+          "ok": true,
+          "detail": "children [\"Barrel\", \"Barrel.001\", \"Barrel.002\"]"
+        },
+        {
+          "what": "`e_brl001` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "Barrels sits at the origin",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "shell": 9
+      },
+      "wallMs": 41381,
+      "tokens": {
+        "input": 9686,
+        "cacheRead": 195584,
+        "cacheWrite": 0,
+        "output": 1544
+      },
+      "codes": {
+        "ARA1106": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "Added `Barrels` at the origin and placed `Barrel`, `Barrel.001`, and `Barrel.002` beneath it in that order. Their positions remain unchanged, so they haven’t moved in the world. The change is recorded as transaction `tx_y80czycb` and awaits review."
+    },
+    {
+      "task": "component-beacon-light",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Beacon` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Beacon has a Light",
+          "ok": true,
+          "detail": "no Light"
+        },
+        {
+          "what": "the light is a point light",
+          "ok": true,
+          "detail": "Some(String(\"point\"))"
+        },
+        {
+          "what": "intensity is 1500 lm",
+          "ok": true
+        },
+        {
+          "what": "range is 8 m",
+          "ok": true
+        },
+        {
+          "what": "the light is orange",
+          "ok": true,
+          "detail": "color [1.0, 0.25, 0.0, 1.0]"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 23169,
+      "tokens": {
+        "input": 15437,
+        "cacheRead": 85120,
+        "cacheWrite": 0,
+        "output": 487
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Added an orange point light to the Beacon in [outpost.scene](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-component-beacon-light-42588-11be0f30-3/proj/levels/outpost.scene): 1500 lumens, 8 m range, color `(1, 0.25, 0, 1)`. The change is recorded as transaction `tx_d40qvzqh` and awaits human review."
+    },
+    {
+      "task": "property-halve-lights",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "still four lights",
+          "ok": true,
+          "detail": "4 lights"
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 2
+      },
+      "wallMs": 17769,
+      "tokens": {
+        "input": 19146,
+        "cacheRead": 151424,
+        "cacheWrite": 0,
+        "output": 574
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Halved the outpost lights: WorkLight is now 600, and both lamp bulbs are 400. Floodlight was already at 0, so it remains 0. The changes are recorded as transaction `tx_q8yb2mhy` for human review."
+    },
+    {
+      "task": "component-remove-rigidbody",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel has no RigidBody",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "Barrel keeps its Collider",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_query": 2
+      },
+      "wallMs": 14053,
+      "tokens": {
+        "input": 18483,
+        "cacheRead": 169472,
+        "cacheWrite": 0,
+        "output": 332
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Removed the `RigidBody` from the first `Barrel` in `levels/outpost.scene`. Its `Collider` remains intact. The change is recorded for human review."
+    },
+    {
+      "task": "prefab-stack-crates",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "two new crate instances",
+          "ok": true,
+          "detail": "2 new"
+        },
+        {
+          "what": "lower crate at (4, 0, 2)",
+          "ok": true
+        },
+        {
+          "what": "upper crate at (4, 1, 2)",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_session": 1
+      },
+      "wallMs": 18088,
+      "tokens": {
+        "input": 17975,
+        "cacheRead": 208384,
+        "cacheWrite": 0,
+        "output": 782
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "Added two instances of the crate prefab to the outpost level: the bottom crate is at **(4, 0, 2)** and the top crate is at **(4, 1, 2)**. Verified both are linked to the prefab and have 1 m collider heights. The change is applied and awaiting human review."
+    },
+    {
+      "task": "prefab-tint-one-crate",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_gcrt01` still exists",
+          "ok": true
+        },
+        {
+          "what": "GeneratorCrate body is red",
+          "ok": true,
+          "detail": "tint [1.0, 0.0, 0.0, 1.0]"
+        },
+        {
+          "what": "`e_gcrt01/e_lid001` still exists",
+          "ok": true
+        },
+        {
+          "what": "its lid keeps the prefab tint",
+          "ok": true
+        },
+        {
+          "what": "`e_gtcrt1` still exists",
+          "ok": true
+        },
+        {
+          "what": "GateCrate is not tinted",
+          "ok": true
+        },
+        {
+          "what": "prefab files unchanged",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "shell": 7
+      },
+      "wallMs": 35136,
+      "tokens": {
+        "input": 12669,
+        "cacheRead": 142976,
+        "cacheWrite": 0,
+        "output": 680
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Painted the body of the crate beside the generator red. The lid and all other crates are unchanged. The Ara transaction is `tx_nv5cfg0m`; it’s applied and awaiting review."
+    },
+    {
+      "task": "prefab-revert-keep-position",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "only the position override is left",
+          "ok": true,
+          "detail": "overrides [\"Transform.position\"]"
+        },
+        {
+          "what": "nothing removed from the instance",
+          "ok": true,
+          "detail": "0 removed"
+        },
+        {
+          "what": "`e_gtcrt1` still exists",
+          "ok": true
+        },
+        {
+          "what": "GateCrate stays at (12, 0, 2)",
+          "ok": true
+        },
+        {
+          "what": "GateCrate scale is back to 1",
+          "ok": true
+        },
+        {
+          "what": "`e_gtcrt1/e_lid001` still exists",
+          "ok": true
+        },
+        {
+          "what": "its lid has the prefab tint",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 15,
+      "toolCalls": {
+        "shell": 15
+      },
+      "wallMs": 67345,
+      "tokens": {
+        "input": 23259,
+        "cacheRead": 297088,
+        "cacheWrite": 0,
+        "output": 1146
+      },
+      "codes": {
+        "ARA1106": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Restored the gate crate’s scale and lid tint to the prefab values. Its position remains `(12,0,2)`. The changes are recorded as two unreviewed Ara transactions."
+    },
+    {
+      "task": "prefab-blue-bulb",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the gate lamp's bulb is blue",
+          "ok": true,
+          "detail": "color [0.0, 0.0, 1.0, 1.0]"
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the yard lamp's bulb stays red",
+          "ok": true
+        },
+        {
+          "what": "prefab files unchanged",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_session": 1
+      },
+      "wallMs": 29861,
+      "tokens": {
+        "input": 24285,
+        "cacheRead": 255616,
+        "cacheWrite": 0,
+        "output": 592
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "The gate lamp’s bulb now shines blue. I applied a color override to that bulb in `levels/outpost.scene`, leaving the shared lamp prefab and other lamps unchanged."
+    },
+    {
+      "task": "hierarchy-radio-to-bench",
+      "area": "hierarchy",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`Radio` is a child of Workbench",
+          "ok": true,
+          "detail": "parent is Some(\"e_bench1\")"
+        },
+        {
+          "what": "Radio is the Workbench's first child",
+          "ok": true,
+          "detail": "first child Some(\"Radio\")"
+        },
+        {
+          "what": "Radio local position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 11,
+      "toolCalls": {
+        "shell": 11
+      },
+      "wallMs": 48229,
+      "tokens": {
+        "input": 33701,
+        "cacheRead": 242688,
+        "cacheWrite": 0,
+        "output": 1568
+      },
+      "codes": {
+        "ARA1101": 1,
+        "ARA1105": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Moved the Radio from the shelf to the Workbench as its first child, at local position `(0, 1, 0)`. The change is applied and awaits human review with `ara accept` or `ara revert`."
+    },
+    {
+      "task": "hierarchy-order-waypoints",
+      "area": "hierarchy",
+      "pass": true,
+      "checks": [
+        {
+          "what": "Patrol's children are WP1, WP2, WP3, WP4",
+          "ok": true,
+          "detail": "children [\"WP1\", \"WP2\", \"WP3\", \"WP4\"]"
+        },
+        {
+          "what": "`e_wp001` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp001` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp002` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp003` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp004` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp004` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 2
+      },
+      "wallMs": 14376,
+      "tokens": {
+        "input": 16047,
+        "cacheRead": 118656,
+        "cacheWrite": 0,
+        "output": 409
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Reordered the Patrol children to **WP1, WP2, WP3, WP4** and verified the hierarchy. The change is recorded for human review."
+    },
+    {
+      "task": "refs-fix-broken",
+      "area": "references",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "YardLamp is an instance of the lamp prefab again",
+          "ok": true,
+          "detail": "prefab \"@prefabs/lamp.prefab#pf_lamp0001\""
+        },
+        {
+          "what": "`e_ylamp1` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp keeps its position",
+          "ok": true
+        },
+        {
+          "what": "YardLamp keeps its red bulb",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "Generator mesh is the generator mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator.glb#ms_genr0001\"))"
+        }
+      ],
+      "turns": 12,
+      "toolCalls": {
+        "shell": 12
+      },
+      "wallMs": 58557,
+      "tokens": {
+        "input": 16062,
+        "cacheRead": 298880,
+        "cacheWrite": 0,
+        "output": 2477
+      },
+      "codes": {
+        "ARA1111": 1,
+        "ARA1302": 3,
+        "ARA1401": 2
+      },
+      "rawEdits": [
+        "\"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command '$p = '\"'levels\\\\outpost.scene'; \"'$s = Get-Content -Raw $p; $s = $s.Replace('\"'@prefa"
+      ],
+      "externalEdits": 1,
+      "dryRuns": 0,
+      "finalMessage": "Fixed both broken references in [outpost.scene](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-refs-fix-broken-42588-acaf530-12/proj/levels/outpost.scene): the generator mesh now points to `generator.glb`, and the yard lamp points to the renamed `lamp.prefab`.\n\n`ara check levels\\outpost.scene` passes with 0 errors and 0 warnings. The generator fix is recorded as an agent transaction; the prefab reference was a direct value edit because Ara has no command for changing an instance’s prefab reference."
+    },
+    {
+      "task": "merge-resolve-conflict",
+      "area": "merge",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "no `$conflicts` left",
+          "ok": true,
+          "detail": "still in the file"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "barrel keeps our name",
+          "ok": true,
+          "detail": "named \"Fuel Barrel\""
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "their floodlight change is kept",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "our generator move is kept",
+          "ok": true
+        },
+        {
+          "what": "git has no unmerged paths",
+          "ok": true
+        },
+        {
+          "what": "the merge is committed",
+          "ok": true,
+          "detail": "MERGE_HEAD still set"
+        },
+        {
+          "what": "HEAD is a merge commit",
+          "ok": true,
+          "detail": "2 parents"
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "shell": 6
+      },
+      "wallMs": 58642,
+      "tokens": {
+        "input": 23138,
+        "cacheRead": 130944,
+        "cacheWrite": 0,
+        "output": 999
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Resolved the barrel name as **Fuel Barrel** and completed the merge in commit `ffe734a`. The working tree is clean, and `ara check` passed with no errors or warnings."
+    },
+    {
+      "task": "diag-fix-typos",
+      "area": "diagnostics",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Workbench collider keeps its 2 x 1 x 1 m size",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps 1200 lm",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps its 6 m range",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "shell": 6
+      },
+      "wallMs": 37370,
+      "tokens": {
+        "input": 16876,
+        "cacheRead": 149760,
+        "cacheWrite": 0,
+        "output": 1093
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 1,
+      "dryRuns": 0,
+      "finalMessage": "Fixed both misspelled fields in [outpost.scene](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-diag-fix-typos-42588-20ced4-14/proj/levels/outpost.scene): `sise` → `size` and `intensty` → `intensity`. Their values were preserved.\n\n`ara check` now reports 0 errors and 0 warnings across all 4 files."
+    },
+    {
+      "task": "schema-door-fields",
+      "area": "schema",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_door01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the door opens by itself",
+          "ok": true,
+          "detail": "Some(Bool(true))"
+        },
+        {
+          "what": "trigger radius is 3 m",
+          "ok": true
+        },
+        {
+          "what": "speed halved to 0.6 m/s",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "shell": 9
+      },
+      "wallMs": 27761,
+      "tokens": {
+        "input": 5888,
+        "cacheRead": 124672,
+        "cacheWrite": 0,
+        "output": 1014
+      },
+      "codes": {
+        "ARA1204": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The GateDoor in `levels/outpost.scene` now opens automatically within 3 m and slides at 0.6 m/s, half its previous 1.2 m/s speed. The changes were applied as three Ara transactions and confirmed by inspection. They’re live but unreviewed until accepted with `ara accept`."
+    },
+    {
+      "task": "undo-other-agent",
+      "area": "undo",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl001` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the human's light change is kept",
+          "ok": true
+        },
+        {
+          "what": "the other agent's transaction is reverted",
+          "ok": true,
+          "detail": "still applied"
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ara_session": 3
+      },
+      "wallMs": 20639,
+      "tokens": {
+        "input": 16354,
+        "cacheRead": 147328,
+        "cacheWrite": 0,
+        "output": 398
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Reverted the barrel move transaction `tx_cm6g3xja`. The later “Brighter work light” change remains intact."
+    },
+    {
+      "task": "docs-cheatsheet",
+      "area": "docs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "CHEATSHEET.md exists",
+          "ok": true
+        },
+        {
+          "what": "says Y is up",
+          "ok": true
+        },
+        {
+          "what": "says rotations are in degrees",
+          "ok": true
+        },
+        {
+          "what": "says Light.range is in meters",
+          "ok": true
+        },
+        {
+          "what": "names `prefab.override.revert`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "shell": 4
+      },
+      "wallMs": 16905,
+      "tokens": {
+        "input": 11362,
+        "cacheRead": 87424,
+        "cacheWrite": 0,
+        "output": 729
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Created [CHEATSHEET.md](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-docs-cheatsheet-42588-1e256e8-17/proj/CHEATSHEET.md) with the four answers, sourced from the engine-generated docs in `.ara/docs`."
+    },
+    {
+      "task": "batch-watchtower",
+      "area": "batch",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Watchtower` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Watchtower` is a child of the scene root",
+          "ok": true,
+          "detail": "parent is None"
+        },
+        {
+          "what": "Watchtower at (10, 0, -6)",
+          "ok": true
+        },
+        {
+          "what": "one `Platform` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Platform` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_6pqq\")"
+        },
+        {
+          "what": "Platform local position",
+          "ok": true
+        },
+        {
+          "what": "one `Ladder` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Ladder` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_6pqq\")"
+        },
+        {
+          "what": "Ladder local position",
+          "ok": true
+        },
+        {
+          "what": "a lamp instance on the Platform",
+          "ok": true
+        },
+        {
+          "what": "all of it was created in one transaction",
+          "ok": true,
+          "detail": "created by [\"tx_g8pbxkcn\", \"tx_g8pbxkcn\", \"tx_g8pbxkcn\", \"tx_g8pbxkcn\"]"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "shell": 8
+      },
+      "wallMs": 32394,
+      "tokens": {
+        "input": 9100,
+        "cacheRead": 173184,
+        "cacheWrite": 0,
+        "output": 1712
+      },
+      "codes": {
+        "ARA1106": 2,
+        "ARA1602": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Built the Watchtower in `levels/outpost.scene` as one transaction. It is at `(10, 0, -6)`, with Platform at local `(0, 4, 0)`, Ladder at `(1, 2, 0)`, and a lamp prefab instance standing on the Platform.\n\nThe resulting hierarchy and positions were verified with `ara inspect`. The change is applied and awaiting review."
+    },
+    {
+      "task": "dryrun-clear-ruins",
+      "area": "dry-run",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_ruins1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Ruins is empty",
+          "ok": true,
+          "detail": "0 children left"
+        },
+        {
+          "what": "`e_rwall1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_rubbl1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_stone1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_sign01` still exists",
+          "ok": true
+        },
+        {
+          "what": "a dry run came before the delete",
+          "ok": true,
+          "detail": "dry run at Some(4), delete at Some(5)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "shell": 6
+      },
+      "wallMs": 25329,
+      "tokens": {
+        "input": 18010,
+        "cacheRead": 116992,
+        "cacheWrite": 0,
+        "output": 586
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "Cleared the Ruins contents. The dry run showed only `BrokenWall`, `Rubble`, and its nested `Stone` would be deleted, all inside the Ruins group. The deletion is applied; the Ruins group and the outside `RuinsSign` remain."
+    },
+    {
+      "task": "multi-storage-room",
+      "area": "multi-step",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `StorageRoom` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageRoom at (-8, 0, 4)",
+          "ok": true
+        },
+        {
+          "what": "StorageRoom has a box collider",
+          "ok": true,
+          "detail": "Some(String(\"box\"))"
+        },
+        {
+          "what": "collider is 6 x 3 x 6 m",
+          "ok": true
+        },
+        {
+          "what": "three crates inside the room",
+          "ok": true,
+          "detail": "3 crates"
+        },
+        {
+          "what": "a crate at local (-1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (0, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "only the middle crate is red",
+          "ok": true,
+          "detail": "red [false, true, false]"
+        },
+        {
+          "what": "one `StorageLight` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageLight is a point light",
+          "ok": true,
+          "detail": "Some(String(\"point\"))"
+        },
+        {
+          "what": "StorageLight is 600 lm",
+          "ok": true
+        },
+        {
+          "what": "StorageLight 2.5 m above the center",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 21,
+      "toolCalls": {
+        "shell": 21
+      },
+      "wallMs": 41238,
+      "tokens": {
+        "input": 29307,
+        "cacheRead": 232448,
+        "cacheWrite": 0,
+        "output": 1798
+      },
+      "codes": {
+        "ARA1106": 3
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Added `StorageRoom` at `(-8, 0, 4)` with a `6 × 3 × 6 m` box collider. It contains three crate prefab instances in a row at local X positions `-1.5`, `0`, and `1.5 m`; the middle crate’s body is tinted red. `StorageLight` is at local `(0, 2.5, 0)` with a point light set to `600 lm`.\n\n`ara check` reports 0 errors and 0 warnings. The changes are in transaction `tx_cdmjcwaq` and are awaiting review."
+    },
+    {
+      "task": "multi-qa-fixes",
+      "area": "multi-step",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Floodlight is 1000 lm",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 is on the ground",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp bulb has the prefab color",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp stays at (0, 0, 8)",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "shell": 6
+      },
+      "wallMs": 26045,
+      "tokens": {
+        "input": 6680,
+        "cacheRead": 146816,
+        "cacheWrite": 0,
+        "output": 1189
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Fixed all three outpost issues:\n\n- Floodlight is set to **1000 lm**.\n- Barrel.002 is on the ground at **Y = 0**, matching the other barrels.\n- YardLamp’s bulb is white, matching the lamp prefab.\n\n`ara check` passed: 4 files checked, 0 errors, 0 warnings. The changes are applied as Ara transactions and remain unreviewed until accepted."
+    }
+  ]
+}
