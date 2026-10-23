@@ -42,8 +42,9 @@ public sealed class AllocationAnalyzer : DiagnosticAnalyzer
 
     static void Check(OperationAnalysisContext c)
     {
-        // Attribute arguments are metadata, not code that runs on the tick.
-        if (!OnTickPath(c.ContainingSymbol) || c.Operation.Syntax.FirstAncestorOrSelf<AttributeSyntax>() is not null) return;
+        // Attribute arguments are metadata, and `throw new ...` is the exceptional path.
+        if (!OnTickPath(c.ContainingSymbol) || c.Operation.Syntax.FirstAncestorOrSelf<AttributeSyntax>() is not null
+            || c.Operation.Parent is IThrowOperation || c.Operation.Parent is IConversionOperation { Parent: IThrowOperation }) return;
         var what = c.Operation switch
         {
             IObjectCreationOperation { Type: { IsReferenceType: true } t } => $"`new {t.Name}(...)`",

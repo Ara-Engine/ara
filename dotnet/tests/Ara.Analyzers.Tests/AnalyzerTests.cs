@@ -172,6 +172,7 @@ public class AllocationTests
                     object boxed = [|h.Value|];
                     Span<int> fine = stackalloc int[4];
                     h.Value += fine.Length;
+                    if (h.Value < 0) throw new InvalidOperationException("exceptional paths may allocate");
                 }
                 static void NotTick() { var list = new List<int>(); }
             }
