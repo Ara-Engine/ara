@@ -293,12 +293,14 @@ fn a_material_that_does_not_compile_is_located() {
     );
     f.files.insert(
         "materials/crate.material".into(),
-        "material Crate : surface budget 1 {\n  param tint : ColorLinear = linear(1, 1, 1);\n  output baseColor = tnit;\n}\n".into(),
+        "material Crate : surface budget 1 {\n  param tint : ColorLinear = linear(1, 1, 1);\n  output baseColor = tin;\n}\n".into(),
     );
     let r = f.why("why can't I see name:Crate");
     assert_eq!(top(&r), (codes::RENDER_MATERIAL, Likelihood::High));
+    let evidence = &r.causes[0].evidence[0];
     assert!(
-        r.causes[0].evidence[0].contains("materials/crate.material"),
+        evidence.contains("in `output baseColor = tin;`; did you mean `tint`?")
+            && evidence.contains("materials/crate.material:3:22"),
         "{}",
         r.text()
     );

@@ -24,6 +24,50 @@ impl MaterialStatus {
     }
 }
 
+/// Points an error that names an identifier (`unknown output value `pain``) at the
+/// line that uses it, quotes that line, and suggests the declared name it most
+/// likely meant. Parser locations can point at the end of the file.
+fn pinpoint(mut d: Diagnostic, source: &str) -> Diagnostic {
+    let Some(name) = d.message.split('`').nth(1).map(str::to_owned) else {
+        return d;
+    };
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let found = source.lines().enumerate().find_map(|(i, line)| {
+        let code = line.split("//").next().unwrap_or(line);
+        code.match_indices(name.as_str())
+            .find(|(at, _)| {
+                let before = code[..*at].chars().next_back();
+                let after = code[at + name.len()..].chars().next();
+                !before.is_some_and(is_word) && !after.is_some_and(is_word)
+            })
+            .map(|(at, _)| (i, at, line.trim()))
+    });
+    let Some((line, column, text)) = found else {
+        return d;
+    };
+    d.location.line = Some(line as u32 + 1);
+    d.location.column = Some(column as u32 + 1);
+    d.message.push_str(&format!(" in `{text}`"));
+    // Declared names: `param x`, `static param x`, `let x`.
+    let declared: Vec<&str> = source
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let rest = l
+                .strip_prefix("static param ")
+                .or_else(|| l.strip_prefix("param "))
+                .or_else(|| l.strip_prefix("let "))?;
+            rest.split(|c: char| !is_word(c)).next()
+        })
+        .collect();
+    if !declared.contains(&name.as_str())
+        && let Some(near) = ara_diag::did_you_mean(&name, declared.iter().copied())
+    {
+        d.message.push_str(&format!("; did you mean `{near}`?"));
+    }
+    d
+}
+
 /// Inspects a resolved `.material` asset; `None` for other assets or unreadable files.
 pub(crate) fn inspect(facts: &dyn Facts, asset: &Asset) -> Option<MaterialStatus> {
     let path = asset.path.as_deref()?;
@@ -37,11 +81,12 @@ pub(crate) fn inspect(facts: &dyn Facts, asset: &Asset) -> Option<MaterialStatus
             .into_iter()
             .filter(Diagnostic::is_error)
             .map(|d| {
-                if d.location.file.is_none() {
+                let d = if d.location.file.is_none() {
                     d.file(path)
                 } else {
                     d
-                }
+                };
+                pinpoint(d, &source)
             })
             .collect()
     };
