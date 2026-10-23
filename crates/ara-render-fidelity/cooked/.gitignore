@@ -1,0 +1,3 @@
+# Slang reflection is an offline compiler cache; runtime artifacts are the binaries
+# and the pipeline descriptions directly in this directory.
+/*/*.json

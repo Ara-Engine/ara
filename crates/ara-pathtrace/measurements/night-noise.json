@@ -1,0 +1,42 @@
+[
+  {
+    "block_size": 16,
+    "frames": 64,
+    "low_frequency_luminance_delta_rms": 0.005035844882887253,
+    "pixel_luminance_delta_rms": 0.04018165438159868,
+    "reservoirs": false,
+    "roi": [
+      0,
+      144,
+      480,
+      256
+    ],
+    "scene_hash": "3c14e52ed70bc41a14e6b01b2589e2aef6d79e647ff3157d8b4807ecb0e15d3e",
+    "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+    "size": [
+      480,
+      270
+    ],
+    "warmup": 256
+  },
+  {
+    "block_size": 16,
+    "frames": 64,
+    "low_frequency_luminance_delta_rms": 0.0030310671031893734,
+    "pixel_luminance_delta_rms": 0.011185930362594172,
+    "reservoirs": true,
+    "roi": [
+      0,
+      144,
+      480,
+      256
+    ],
+    "scene_hash": "3c14e52ed70bc41a14e6b01b2589e2aef6d79e647ff3157d8b4807ecb0e15d3e",
+    "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+    "size": [
+      480,
+      270
+    ],
+    "warmup": 256
+  }
+]

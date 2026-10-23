@@ -32,6 +32,12 @@ pub(crate) struct GpuFrame {
     weather: [f32; 4],
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
+    // Shader helpers fetch descriptor rows by offset; their by-value Frame ends
+    // at weather. This upload retains the stable seven read/write row contract.
+    reservoirs: [[u32; 4]; 2],
+    extra_read: [[u32; 4]; 3],
+    extra_write: [[u32; 4]; 3],
+    shadow: [u32; 4],
 }
 impl FidelityView {
     pub(crate) fn frame(&self, input: &FrameInput<'_>) -> Result<(GpuFrame, Mat4, Vec3)> {
@@ -80,6 +86,28 @@ impl FidelityView {
                 bounces,
             ),
         };
+        let mut extra_read = [[0; 4]; 3];
+        let mut extra_write = [[0; 4]; 3];
+        for i in 28..crate::targets::COUNT {
+            extra_read[(i - 28) / 4][(i - 28) % 4] = self.targets.sampled[i];
+            extra_write[(i - 28) / 4][(i - 28) % 4] = self.targets.storage[i];
+        }
+        let reservoirs =
+            self.reservoirs
+                .as_ref()
+                .filter(|_| reference == 0)
+                .map_or([[0; 4]; 2], |r| {
+                    let slot = self.slot;
+                    [
+                        [r.indices[1 - slot], r.indices[2], r.indices[slot], 1],
+                        [
+                            r.indices[4 - slot],
+                            r.indices[5],
+                            r.indices[3 + slot],
+                            u32::from(self.scene.motion_pending) | (self.transport_stride << 1),
+                        ],
+                    ]
+                });
         let f = GpuFrame {
             inverse_vp: vp.inverse(),
             vp: unjittered,
@@ -198,8 +226,18 @@ impl FidelityView {
             weather: self
                 .atmosphere
                 .map_or([0.; 4], |a| [a.cloud_coverage, a.cloud_height, 0., 0.]),
-            read: self.targets.sampled.as_chunks::<4>().0.try_into()?,
-            write: self.targets.storage.as_chunks::<4>().0.try_into()?,
+            read: self.targets.sampled[..28].as_chunks::<4>().0.try_into()?,
+            write: self.targets.storage[..28].as_chunks::<4>().0.try_into()?,
+            reservoirs,
+            extra_read,
+            extra_write,
+            shadow: match self.shadow_source {
+                crate::SunShadowSource::RayQueries => [0; 4],
+                crate::SunShadowSource::VirtualShadowMap {
+                    visibility,
+                    render_size,
+                } => [visibility.sampled_index, 1, render_size[0], render_size[1]],
+            },
         };
         Ok((f, unjittered, camera.position))
     }

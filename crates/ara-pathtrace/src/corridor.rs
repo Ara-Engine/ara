@@ -49,11 +49,14 @@ pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         );
         large::save_hdr(&root.join(format!(".sn/corridor-{name}.f32")), &data)?;
         view.capture(gpu)?
-            .save(root.join(format!(".sn/corridor-{name}.png")))?;
+            .save(output_path(root, format!("captures/corridor-{name}.png"))?)?;
         results.push(serde_json::json!({"name":name,"events":events,"frames":frames,"roi":regional,"global":global}));
         view.destroy(gpu)?;
     }
-    ara_gpu::cooked::write_json(&root.join(".sn/corridor-diagnosis.json"), &results)?;
+    ara_gpu::cooked::write_json(
+        &output_path(root, "measurements/corridor-diagnosis.json")?,
+        &results,
+    )?;
     gpu.assert_clean()?;
     Ok(())
 }

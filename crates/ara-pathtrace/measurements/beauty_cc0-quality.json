@@ -1,0 +1,36 @@
+{
+  "bounces": 12,
+  "convergence": {
+    "mae": 1.9485182186716918,
+    "relative_rmse": 0.008133229527124124,
+    "rmse": 3.1349179059266765
+  },
+  "error": {
+    "mae": 5.734262730991532,
+    "relative_rmse": 0.03166368100779493,
+    "rmse": 12.204627968243967
+  },
+  "ev100": 8.0,
+  "point_lights": 0,
+  "reference_model": "independent surface transport; shared sky/froxel composition, HDR error before fog",
+  "reference_samples": 4096,
+  "scene_hash": "2ce1c1c96df27b8473cb4f20dde11ac568c9d9360d5b1c2a8d07fb310b71b0c9",
+  "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "size": [
+    640,
+    360
+  ],
+  "source": "CC0 Poly Haven PBR furniture; see THIRD_PARTY_NOTICES.md",
+  "surface_roi": "lower half",
+  "surface_roi_convergence": {
+    "mae": 1.3353727078027764,
+    "relative_rmse": 0.010850194637038757,
+    "rmse": 2.376386001433562
+  },
+  "surface_roi_error": {
+    "mae": 4.571264202586953,
+    "relative_rmse": 0.04648877761033682,
+    "rmse": 10.181870835739533
+  },
+  "triangles": 27135
+}

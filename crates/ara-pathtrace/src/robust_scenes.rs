@@ -15,6 +15,9 @@ pub fn configure_view(
     // Spend the small-room budget on two events and half-rate rather than quarter-rate rays.
     view.set_gather_events(if outdoor { 1 } else { 2 })?;
     view.set_transport_stride(if outdoor { 4 } else { 2 })?;
+    if !outdoor {
+        view.set_reservoir_sampling(gpu, true)?;
+    }
     if outdoor {
         view.set_atmosphere(Some(Default::default()))?;
         view.set_probe_volume(

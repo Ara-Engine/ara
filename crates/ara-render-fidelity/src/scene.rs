@@ -59,6 +59,7 @@ pub struct GpuScene {
     pub(crate) sun_direction: Vec3,
     pub(crate) sun_lux: Vec3,
     pub(crate) has_emitters: bool,
+    pub(crate) many_local_lights: bool,
     pub(crate) has_layers: bool,
     pub(crate) hash: String,
     geometry: Vec<Geometry>,
@@ -96,6 +97,7 @@ impl GpuScene {
                     .any(|v| *v > 0.)
             }),
             has_layers: crate::material::has_layers(&scene.materials),
+            many_local_lights: scene.lights.len() > 8,
             hash: String::new(),
             geometry: Vec::new(),
             acceleration_update: AccelerationUpdate::default(),
@@ -170,6 +172,7 @@ impl GpuScene {
         self.sun_direction = scene.sun_direction.normalize();
         self.sun_lux = scene.sun_lux;
         self.has_layers = crate::material::has_layers(&scene.materials);
+        self.many_local_lights = scene.lights.len() > 8;
         self.has_emitters = scene.meshes.iter().any(|m| {
             scene.materials[m.material].emissive_roughness[..3]
                 .iter()

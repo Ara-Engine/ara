@@ -58,7 +58,8 @@ pub(super) fn texture(
         &atlas,
     )
 }
-fn decode(v: f32) -> f32 {
+/// Decode the same sRGB transfer used by uploaded material textures.
+pub(super) fn decode(v: f32) -> f32 {
     if v <= 0.04045 {
         v / 12.92
     } else {

@@ -69,7 +69,7 @@ pub fn reference(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     save_hdr(&root.join(".sn/sponza-reference.f32"), &ground)?;
     reference
         .capture(gpu)?
-        .save(root.join("captures/sponza-reference.png"))?;
+        .save(output_path(root, "captures/sponza-reference.png")?)?;
     let convergence = metrics::radiance(&half, &ground)?;
     let regional = metrics::radiance(&corridor::roi(&half), &corridor::roi(&ground))?;
     println!("Reference corridor residual {:.5}", regional.relative_rmse);
@@ -79,7 +79,7 @@ pub fn reference(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         "Reference needs more samples"
     );
     write_json(
-        &root.join("measurements/sponza-reference.json"),
+        &output_path(root, "measurements/sponza-reference.json")?,
         &serde_json::json!({"size":SIZE,"camera":camera,"scene_hash":reference.scene_hash(),"reference_samples":32768,"bounces":12,"ev100":5.5,"tone_mapper":"PBR Neutral","shader_revision":reference.shader_revision(),"precision":"RGBA32F linear accumulation, unfiltered","convergence":convergence,"corridor_convergence":regional}),
     )?;
     reference.destroy(gpu)?;
@@ -102,16 +102,18 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         view.render(gpu, &request)?;
     }
     let data = view.capture_radiance(gpu)?;
-    let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(
-        root.join("measurements/sponza-reference.json"),
-    )?)?;
+    let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(output_path(
+        root,
+        "measurements/sponza-reference.json",
+    )?)?)?;
     anyhow::ensure!(
         manifest["scene_hash"].as_str() == Some(view.scene_hash())
             && manifest["shader_revision"].as_str() == Some(view.shader_revision()),
         "Cached reference scene or shader cohort differs"
     );
     let ground = load_hdr(&root.join(".sn/sponza-reference.f32"))?;
-    display(&ground, SIZE, fixed_post()).save(root.join("captures/sponza-reference.png"))?;
+    display(&ground, SIZE, fixed_post())
+        .save(output_path(root, "captures/sponza-reference.png")?)?;
     anyhow::ensure!(
         manifest["size"] == serde_json::json!(SIZE)
             && manifest["camera"] == serde_json::to_value(&camera)?
@@ -137,7 +139,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         regional.relative_rmse
     );
     let hybrid = view.capture(gpu)?;
-    hybrid.save(root.join("captures/sponza-hybrid.png"))?;
+    hybrid.save(output_path(root, "captures/sponza-hybrid.png")?)?;
     let golden = root.join("tests/goldens/sponza.png");
     if std::env::var("ARA_UPDATE_FIDELITY_GOLDENS").as_deref() == Ok("1") {
         hybrid.save(&golden)?;
@@ -149,8 +151,10 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         "Sponza display golden changed: {}",
         comparison.score
     );
-    side_by_side(&hybrid, &display(&ground, SIZE, fixed_post()))
-        .save(root.join("captures/sponza-reference-side-by-side.png"))?;
+    side_by_side(&hybrid, &display(&ground, SIZE, fixed_post())).save(output_path(
+        root,
+        "captures/sponza-reference-side-by-side.png",
+    )?)?;
     save_hdr(&root.join(".sn/sponza-hybrid.f32"), &data)?;
     let bake = view.bake_snapshot(gpu)?;
     let active = bake
@@ -161,7 +165,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         .filter(|p| p[100][3] > 0.5)
         .count();
     write_json(
-        &root.join("measurements/sponza-quality.json"),
+        &output_path(root, "measurements/sponza-quality.json")?,
         &serde_json::json!({"size":SIZE,"settle_frames":192,"sampling":"256-phase Halton pixel-area integration including remodulation; four-phase transport; one-event lobe mixture; mip-filtered materials","ev100":5.5,"tone_mapper":"PBR Neutral","error":error,"corridor_roi":[170,235,430,350],"corridor_error":regional,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"volume":bake.volume,"active_probes":active,"probes":bake.volume.len()}),
     )?;
     // Exercise real content with camera reprojection and four-phase repair.
@@ -185,7 +189,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             );
         }
     }
-    sequence.save(root.join("captures/sponza-pan-sequence.png"))?;
+    sequence.save(output_path(root, "captures/sponza-pan-sequence.png")?)?;
     view.destroy(gpu)?;
     gpu.assert_clean()?;
     anyhow::ensure!(regional.relative_rmse <= 0.12, "Corridor exceeds 12% RMSE");

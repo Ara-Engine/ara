@@ -6,7 +6,6 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let camera = scenes::camera();
     let mut passed = true;
     let mut report = Vec::new();
-    std::fs::create_dir_all(root.join(".sn/quality"))?;
     for (name, target) in [
         ("glossy_interior", 0.08),
         ("thin_wall", 0.1),
@@ -23,7 +22,10 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         }
         let hybrid = view.capture_radiance(gpu)?;
         view.capture(gpu)?
-            .save(root.join(format!(".sn/quality/{name}-quality.png")))?;
+            .save(ara_pathtrace::artifacts::temporary_path(
+                root,
+                format!("quality/{name}-quality.png"),
+            )?)?;
         view.destroy(gpu)?;
         let mut reference = Reference::new(gpu, &scene, [320, 180], 4096, 12, s.post)?;
         for _ in 0..256 {
@@ -34,7 +36,10 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let ground = reference.radiance(gpu)?;
         reference
             .capture(gpu)?
-            .save(root.join(format!(".sn/quality/{name}-ground.png")))?;
+            .save(ara_pathtrace::artifacts::temporary_path(
+                root,
+                format!("quality/{name}-ground.png"),
+            )?)?;
         let error = metrics::radiance(&hybrid, &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
         println!(
@@ -52,12 +57,21 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 .flatten()
                 .flat_map(|v| v.to_le_bytes())
                 .collect::<Vec<_>>();
-            std::fs::write(root.join(format!(".sn/quality/{name}-{kind}.f32")), bytes)?;
+            std::fs::write(
+                ara_pathtrace::artifacts::temporary_path(
+                    root,
+                    format!("quality/{name}-{kind}.f32"),
+                )?,
+                bytes,
+            )?;
         }
         passed &= error.relative_rmse <= target;
         reference.destroy(gpu)?;
     }
-    ara_gpu::cooked::write_json(&root.join("measurements/quality-targets.json"), &report)?;
+    ara_gpu::cooked::write_json(
+        &output_path(root, "measurements/quality-targets.json")?,
+        &report,
+    )?;
     gpu.assert_clean()?;
     anyhow::ensure!(passed, "Quality targets failed");
     Ok(())

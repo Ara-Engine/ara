@@ -24,7 +24,14 @@ pub(crate) const TRANSMITTANCE: usize = 24;
 pub(crate) const MULTISCATTER: usize = 25;
 pub(crate) const SKYVIEW: usize = 26;
 pub(crate) const FROXELS: usize = 27;
-pub(crate) const COUNT: usize = 28;
+pub(crate) const SPEC_RAW: usize = 28;
+pub(crate) const SPEC_HISTORY0: usize = 29;
+pub(crate) const SPEC_MOMENTS0: usize = 31;
+pub(crate) const SPEC_FILTER0: usize = 33;
+pub(crate) const SPEC_FILTER1: usize = 34;
+pub(crate) const SURFACE_ALBEDO: usize = 35;
+pub(crate) const SURFACE_GEOMETRY: usize = 36;
+pub(crate) const COUNT: usize = 37;
 
 pub(crate) struct Targets {
     pub images: Vec<Image>,
@@ -45,8 +52,8 @@ impl Targets {
             storage: [0; COUNT],
             states: Vec::new(),
         };
-        for i in 0..COUNT {
-            let size = if i >= TRANSMITTANCE {
+        for i in 0..28 {
+            let size = if (TRANSMITTANCE..28).contains(&i) {
                 [[256, 64], [32, 32], [192, 108], [4096, 36]][i - TRANSMITTANCE]
             } else if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
                 display
@@ -58,7 +65,9 @@ impl Targets {
                 size[1],
                 if i == OUTPUT {
                     vk::Format::R8G8B8A8_UNORM
-                } else if !reference && matches!(i, 2 | 3 | 7 | 8 | 9 | 13..=17 | 19..=23) {
+                } else if !reference
+                    && matches!(i, 2 | 3 | 7 | 8 | 9 | 13..=17 | 19..=23 | 28..=30 | 33..=34)
+                {
                     vk::Format::R16G16B16A16_SFLOAT
                 } else {
                     vk::Format::R32G32B32A32_SFLOAT
@@ -81,6 +90,36 @@ impl Targets {
             });
         }
         Ok(t)
+    }
+    /// Preserve the classic view's descriptor/memory footprint until split signals
+    /// are requested. Public G-buffer and feature slots remain the first 28 images.
+    pub fn enable_split(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
+        if self.images.len() == COUNT {
+            return Ok(());
+        }
+        for i in self.images.len()..COUNT {
+            let format = if (SPEC_MOMENTS0..SPEC_MOMENTS0 + 2).contains(&i) {
+                vk::Format::R32G32B32A32_SFLOAT
+            } else {
+                vk::Format::R16G16B16A16_SFLOAT
+            };
+            let image = gpu.create_image(
+                size[0],
+                size[1],
+                format,
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )?;
+            self.sampled[i] = gpu.sampled_image(image, false)?.index;
+            self.storage[i] = gpu.storage_image(image)?.index;
+            self.images.push(image);
+            self.states.push(State {
+                access: Access::Undefined,
+                queue: Queue::Graphics,
+            });
+        }
+        Ok(())
     }
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         for i in self.images {

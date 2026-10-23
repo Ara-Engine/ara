@@ -24,6 +24,16 @@ The runner isolates Windows implicit Vulkan layers exactly as ara-render does;
 Khronos API and synchronization validation remain enabled. Captures are explicit
 GPU readbacks; ordinary render frames do not copy image data to the CPU.
 Goldens update only with process-local `ARA_UPDATE_FIDELITY_GOLDENS=1`.
+Tests always write generated measurements to scratch space and read committed
+goldens. CLI measurements and captures also default to ignored
+`target/ara-pathtrace/` at the workspace root, or
+`CARGO_TARGET_TMPDIR/ara-pathtrace/` when set. Checked-in `measurements/` and
+`captures/` are updated only with `ARA_UPDATE_MEASUREMENTS=1` or the runner's
+`-UpdateMeasurements` switch. Golden updates use the separate `-UpdateGoldens`
+switch. `Check` clears both opt-ins; the round-3 wrapper publishes test receipts
+only as an explicit step after successful checks with `-UpdateMeasurements`.
+Keep one output policy for paired Sponza reference/quality runs so their generated
+reference manifest matches the ignored HDR cache.
 
 `Check` runs crate tests, clippy with warnings denied, and rustfmt checks. The GPU
 test compares seven committed 320x180 goldens at 1-SSIM <= 0.005, checks finite HDR
@@ -399,3 +409,7 @@ Verification: both crates passed tests, all-target clippy with warnings denied a
 rustfmt checks; the denser night preset also passed the focused golden test. All 31
 SPIR-V modules passed spirv-val for Vulkan 1.3. Validation and synchronization
 validation reported no errors. Scratch/reference HDR caches remain ignored.
+
+## Fidelity round 3
+
+See [the round-3 report](FIDELITY_ROUND3.md) for low-light reservoirs, CC0 beauty content, independent references, temporal noise, shared-GPU median/p95/spikes, per-pass deltas and remaining UE5 quality gaps.

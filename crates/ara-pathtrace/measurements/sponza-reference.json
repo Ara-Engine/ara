@@ -15,20 +15,20 @@
     "vertical_fov": 1.0499999523162842
   },
   "convergence": {
-    "mae": 0.15439568504356363,
-    "relative_rmse": 0.003194140585073849,
-    "rmse": 0.35207580936394267
+    "mae": 0.1543974890854076,
+    "relative_rmse": 0.0031941630602173414,
+    "rmse": 0.35207829052146206
   },
   "corridor_convergence": {
-    "mae": 0.33638567275499537,
-    "relative_rmse": 0.02801306336017309,
-    "rmse": 0.5277809590687328
+    "mae": 0.3363948239707217,
+    "relative_rmse": 0.02801388393530483,
+    "rmse": 0.5277965090730911
   },
   "ev100": 5.5,
   "precision": "RGBA32F linear accumulation, unfiltered",
   "reference_samples": 32768,
   "scene_hash": "15b0e2c469e8cea8f719599b22306bd0e4b33d3c85e786c605596e3b6dda38b1",
-  "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
+  "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
   "size": [
     640,
     360

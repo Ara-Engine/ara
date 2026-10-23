@@ -21,7 +21,9 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let mut report = Vec::new();
     let update = std::env::var("ARA_UPDATE_FIDELITY_GOLDENS").as_deref() == Ok("1");
     let goldens = root.join("tests/goldens");
-    std::fs::create_dir_all(&goldens)?;
+    if update {
+        std::fs::create_dir_all(&goldens)?;
+    }
     for name in scenes::NAMES {
         println!("Capturing {name}: 96 hybrid settle frames, 4096 reference spp / 12 bounces");
         let scene = scenes::scene(name, 0);
@@ -35,7 +37,7 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         }
         let hybrid = view.capture(gpu)?;
         let hdr = view.capture_radiance(gpu)?;
-        hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
+        hybrid.save(output_path(root, format!("captures/{name}-hybrid.png"))?)?;
         let golden = goldens.join(format!("{name}.png"));
         if update {
             hybrid.save(&golden)?;
@@ -57,7 +59,7 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             fallback.render(gpu, &input(&camera, 95, true))?;
             fallback
                 .capture(gpu)?
-                .save(root.join("captures/baked-raster.png"))?;
+                .save(output_path(root, "captures/baked-raster.png")?)?;
             fallback.destroy(gpu)?;
         }
         view.destroy(gpu)?;
@@ -69,11 +71,11 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         reference.converge(gpu, &camera)?;
         let image = reference.capture(gpu)?;
         let ground = reference.radiance(gpu)?;
-        image.save(root.join(format!("captures/{name}-reference.png")))?;
+        image.save(output_path(root, format!("captures/{name}-reference.png"))?)?;
         let display = compare(&hybrid, &image, 2.)?;
         display
             .diff
-            .save(root.join(format!("captures/{name}-diff.png")))?;
+            .save(output_path(root, format!("captures/{name}-diff.png"))?)?;
         let error = metrics::radiance(&hdr, &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
         println!(
@@ -91,22 +93,28 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         });
         reference.destroy(gpu)?;
     }
-    write_json(&root.join("measurements/reference-errors.json"), &report)?;
+    write_json(
+        &output_path(root, "measurements/reference-errors.json")?,
+        &report,
+    )?;
     let shaders: ara_gpu::cooked::CookedPipeline = serde_json::from_slice(&std::fs::read(
         root.join("../ara-render-fidelity/cooked/primary.json"),
     )?)?;
     write_json(
-        &root.join("measurements/capture-provenance.json"),
+        &output_path(root, "measurements/capture-provenance.json")?,
         &serde_json::json!({"camera":camera,"render_size":size,"display_size":size,"hybrid_settle_frames":96,"hybrid_ticks":[0,95],"reference_samples":4096,"reference_bounces":12,"sampling":"integer hash of pixel and sample/tick; no wall clock","exposure_ev100":{"furnace":0,"other_scenes":3},"golden_ssim_tolerance":0.005,"shaders":shaders}),
     )?;
     write_json(
-        &root.join("measurements/validation.json"),
+        &output_path(root, "measurements/validation.json")?,
         &gpu.diagnostics(),
     )?;
 
     sequences(gpu, root)?;
     lag::capture(gpu, root)?;
-    write_json(&root.join("measurements/device.json"), &gpu.context().info)?;
+    write_json(
+        &output_path(root, "measurements/device.json")?,
+        &gpu.context().info,
+    )?;
     gpu.assert_clean()?;
     Ok(())
 }
@@ -168,7 +176,7 @@ pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             })?;
             errors.push(error);
         }
-        sheet.save(root.join(format!("captures/{name}-sequence.png")))?;
+        sheet.save(output_path(root, format!("captures/{name}-sequence.png"))?)?;
         let request = input(&camera, 47, true);
         view.render(gpu, &request)?;
         let a = view.capture(gpu)?;
@@ -196,7 +204,10 @@ pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         view.destroy(gpu)?;
         fresh_view.destroy(gpu)?;
     }
-    write_json(&root.join("measurements/temporal-errors.json"), &reports)?;
+    write_json(
+        &output_path(root, "measurements/temporal-errors.json")?,
+        &reports,
+    )?;
     Ok(())
 }
 #[derive(Serialize)]
@@ -232,7 +243,6 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let scene = scenes::scene("glossy_interior", 0);
     let camera = scenes::camera();
     let mut results = Vec::new();
-    std::fs::create_dir_all(root.join("measurements"))?;
     for (render, budget) in [([2560, 1440], 8.), ([1707, 960], 5.)] {
         let mut s = settings(render, [2560, 1440]);
         s.post = PostSettings {
@@ -258,8 +268,10 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 totals.push(total);
             }
         }
-        view.capture(gpu)?
-            .save(root.join(format!("captures/interior-{}p.png", render[1])))?;
+        view.capture(gpu)?.save(output_path(
+            root,
+            format!("captures/interior-{}p.png", render[1]),
+        )?)?;
         let total = distribution(totals);
         println!(
             "{}x{} -> 2560x1440: GPU sum p50 {:.3} ms p95 {:.3} ms, budget {budget}",
@@ -287,12 +299,18 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         });
         view.destroy(gpu)?;
     }
-    write_json(&root.join("measurements/gpu-timings.json"), &results)?;
+    write_json(
+        &output_path(root, "measurements/gpu-timings.json")?,
+        &results,
+    )?;
     anyhow::ensure!(
         results.iter().all(|result| result.budget_passed),
         "Native or upscaled p95 GPU budget exceeded"
     );
-    write_json(&root.join("measurements/device.json"), &gpu.context().info)?;
+    write_json(
+        &output_path(root, "measurements/device.json")?,
+        &gpu.context().info,
+    )?;
     gpu.assert_clean()?;
     Ok(())
 }

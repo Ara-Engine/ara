@@ -64,7 +64,7 @@ pub fn capture(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let reached = normalized.iter().position(|v| *v >= 0.9).map(|i| i + 1);
     println!("DDGI four-stop response: 90% in {reached:?} frames");
     write_json(
-        &root.join("measurements/lighting-step-response.json"),
+        &output_path(root, "measurements/lighting-step-response.json")?,
         &Response {
             old_irradiance: old,
             target_irradiance: target,

@@ -23,6 +23,17 @@ impl FidelityView {
         let probes =
             [0, 1].map(|i| graph.import(Resource::Buffer(self.probes[i]), self.probe_states[i]));
         let exposure = graph.import(Resource::Buffer(self.exposure), self.exposure_state);
+        let shadow = match self.shadow_source {
+            crate::SunShadowSource::RayQueries => None,
+            crate::SunShadowSource::VirtualShadowMap { visibility, .. } => {
+                Some(graph.import(Resource::Image(visibility.image), visibility.state))
+            }
+        };
+        let reservoir_ids = self.reservoirs.as_ref().map(|r| {
+            std::array::from_fn::<_, 6, _>(|i| {
+                graph.import(Resource::Buffer(r.buffers[i]), r.states[i])
+            })
+        });
         let mut shared = self
             .scene
             .resources()
@@ -77,10 +88,16 @@ impl FidelityView {
          -> Result<()> {
             let id = graph.pass(name, Queue::Graphics, uses);
             graph.accesses(id, shared.iter().copied())?;
+            if pipeline.starts_with("primary")
+                && let Some(shadow) = shadow
+            {
+                graph.accesses(id, [(shadow, Access::ShaderRead)])?;
+            }
             if self.atmosphere.is_some()
                 && (pipeline.starts_with("primary")
                     || pipeline.starts_with("hybrid")
                     || pipeline.starts_with("reference")
+                    || pipeline.starts_with("reservoir")
                     || pipeline.starts_with("ddgi"))
             {
                 graph.accesses(
@@ -100,6 +117,7 @@ impl FidelityView {
         let lighting_response = !reset && (input.lighting_changed || self.responsive_frames > 0);
         let rt = self.settings.tier == Tier::Rt;
         let reference = matches!(self.settings.mode, Mode::Reference { .. });
+        let resampling = reservoir_ids.is_some() && rt && !reference;
         if self.atmosphere.is_some() {
             if self.atmosphere_dirty {
                 add(
@@ -158,7 +176,17 @@ impl FidelityView {
                 RAW,
             ]
             .map(|i| (ids[i], Access::Storage))
-            .to_vec(),
+            .into_iter()
+            .chain(if resampling {
+                vec![
+                    (ids[SPEC_RAW], Access::Storage),
+                    (ids[SURFACE_ALBEDO], Access::Storage),
+                    (ids[SURFACE_GEOMETRY], Access::Storage),
+                ]
+            } else {
+                vec![]
+            })
+            .collect(),
         )?;
         if rt && !reference {
             add(
@@ -172,6 +200,113 @@ impl FidelityView {
                 ],
             )?;
         }
+        if let Some(r) = reservoir_ids.filter(|_| resampling) {
+            let mut guides = vec![
+                (ids[WORLD0 + slot], Access::ShaderRead),
+                (ids[NORMAL0 + slot], Access::ShaderRead),
+                (ids[BASE], Access::ShaderRead),
+                (ids[MOTION], Access::ShaderRead),
+                (ids[SURFACE_ALBEDO], Access::ShaderRead),
+                (ids[SURFACE_GEOMETRY], Access::ShaderRead),
+                (probes[self.probe_slot], Access::ShaderRead),
+            ];
+            if !reset {
+                guides.extend(
+                    [
+                        WORLD0 + previous,
+                        NORMAL0 + previous,
+                        DIRECT_HISTORY0 + previous,
+                    ]
+                    .map(|i| (ids[i], Access::ShaderRead)),
+                );
+            }
+            let mut init = guides.to_vec();
+            init.extend([
+                (ids[DIRECT], Access::ShaderRead),
+                (r[2], Access::Storage),
+                (r[5], Access::Storage),
+                (ids[SPEC_RAW], Access::Storage),
+            ]);
+            if !reset {
+                init.extend([
+                    (r[previous], Access::ShaderRead),
+                    (r[3 + previous], Access::ShaderRead),
+                ]);
+            }
+            add(
+                "ReSTIR.Candidates.Temporal",
+                if self.atmosphere.is_some() {
+                    "reservoir_init_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_init_layers"
+                } else {
+                    "reservoir_init"
+                },
+                0,
+                [render[0].div_ceil(16), render[1].div_ceil(16), 1],
+                init,
+            )?;
+            let mut trace = guides.to_vec();
+            trace.extend([(r[5], Access::Storage), (ids[SPEC_RAW], Access::Storage)]);
+            add(
+                "ReSTIR.GI.CompactTrace",
+                if self.atmosphere.is_some() {
+                    "reservoir_trace_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_trace_layers"
+                } else {
+                    "reservoir_trace"
+                },
+                0,
+                if reset || lighting_response {
+                    [render[0].div_ceil(16), render[1].div_ceil(16), 1]
+                } else {
+                    [
+                        render[0].div_ceil(16 * (self.transport_stride / 2).max(1)),
+                        render[1].div_ceil(16),
+                        1,
+                    ]
+                },
+                trace,
+            )?;
+            let mut specular = guides.to_vec();
+            specular.push((ids[SPEC_RAW], Access::Storage));
+            add(
+                "ReSTIR.Specular.Dense",
+                if self.atmosphere.is_some() {
+                    "reservoir_specular_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_specular_layers"
+                } else {
+                    "reservoir_specular"
+                },
+                0,
+                dispatch,
+                specular,
+            )?;
+            guides.extend([
+                (r[2], Access::ShaderRead),
+                (r[5], Access::ShaderRead),
+                (r[slot], Access::Storage),
+                (r[3 + slot], Access::Storage),
+                (ids[RAW], Access::Storage),
+                (ids[DIRECT], Access::Storage),
+                (ids[SPEC_RAW], Access::Storage),
+            ]);
+            add(
+                "ReSTIR.Spatial.Visibility.Shade",
+                if self.atmosphere.is_some() {
+                    "reservoir_spatial_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_spatial_layers"
+                } else {
+                    "reservoir_spatial"
+                },
+                0,
+                dispatch,
+                guides,
+            )?;
+        }
         let mut transport_history = Vec::new();
         if !reset && !reference {
             transport_history.extend(
@@ -183,45 +318,47 @@ impl FidelityView {
                 .map(|i| (ids[i], Access::ShaderRead)),
             );
         }
-        add(
-            if reference {
-                "Reference.PathTransport"
-            } else {
-                "RT.Reflections.SoftShadows.DDGI"
-            },
-            self.transport_pipeline(if reference {
-                Transport::Reference
-            } else {
-                Transport::Gather
-            }),
-            if !reference && !reset && !lighting_response {
-                if self.transport_stride == 4 { 3 } else { 1 }
-            } else {
-                0
-            },
-            if !reference && !reset && !lighting_response {
-                [
-                    render[0].div_ceil(8 * self.transport_stride),
-                    render[1].div_ceil(8),
-                    1,
+        if !resampling {
+            add(
+                if reference {
+                    "Reference.PathTransport"
+                } else {
+                    "RT.Reflections.SoftShadows.DDGI"
+                },
+                self.transport_pipeline(if reference {
+                    Transport::Reference
+                } else {
+                    Transport::Gather
+                }),
+                if !reference && !reset && !lighting_response {
+                    if self.transport_stride == 4 { 3 } else { 1 }
+                } else {
+                    0
+                },
+                if !reference && !reset && !lighting_response {
+                    [
+                        render[0].div_ceil(8 * self.transport_stride),
+                        render[1].div_ceil(8),
+                        1,
+                    ]
+                } else {
+                    dispatch
+                },
+                vec![
+                    (ids[RAW], Access::Storage),
+                    (ids[DIRECT], Access::ShaderRead),
+                    (ids[WORLD0 + slot], Access::ShaderRead),
+                    (ids[NORMAL0 + slot], Access::ShaderRead),
+                    (ids[MOTION], Access::ShaderRead),
+                    (ids[BASE], Access::ShaderRead),
+                    (probes[self.probe_slot], Access::ShaderRead),
                 ]
-            } else {
-                dispatch
-            },
-            vec![
-                (ids[RAW], Access::Storage),
-                (ids[DIRECT], Access::ShaderRead),
-                (ids[WORLD0 + slot], Access::ShaderRead),
-                (ids[NORMAL0 + slot], Access::ShaderRead),
-                (ids[MOTION], Access::ShaderRead),
-                (ids[BASE], Access::ShaderRead),
-                (probes[self.probe_slot], Access::ShaderRead),
-            ]
-            .into_iter()
-            .chain(transport_history)
-            .collect(),
-        )?;
-        if !reference && !reset && !lighting_response && frame.transport[3] == 0 {
+                .into_iter()
+                .chain(transport_history)
+                .collect(),
+            )?;
+        }
+        if !resampling && !reference && !reset && !lighting_response && frame.transport[3] == 0 {
             add(
                 "RT.Disocclusion.Repair",
                 self.transport_pipeline(Transport::Gather),
@@ -267,13 +404,30 @@ impl FidelityView {
                 .map(|i| (ids[i], Access::ShaderRead)),
             );
         }
+        if resampling {
+            temporal.extend([
+                (ids[SPEC_RAW], Access::ShaderRead),
+                (ids[SPEC_HISTORY0 + slot], Access::Storage),
+                (ids[SPEC_MOMENTS0 + slot], Access::Storage),
+            ]);
+            if !reset {
+                temporal.extend([
+                    (ids[SPEC_HISTORY0 + previous], Access::ShaderRead),
+                    (ids[SPEC_MOMENTS0 + previous], Access::ShaderRead),
+                ]);
+            }
+        }
         add(
             if reference {
                 "Reference.Accumulate.Undenoised"
             } else {
                 "SVGF.Reproject.Reject.Moments"
             },
-            "temporal",
+            if resampling {
+                "temporal_split"
+            } else {
+                "temporal"
+            },
             0,
             dispatch,
             temporal,
@@ -301,13 +455,32 @@ impl FidelityView {
                 ]
                 .map(|j| (ids[j], Access::ShaderRead)),
             );
+            if resampling {
+                let source = if i == 0 {
+                    SPEC_HISTORY0 + slot
+                } else if i == 1 {
+                    SPEC_FILTER0
+                } else {
+                    SPEC_FILTER1
+                };
+                let target = if i == 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
+                uses.extend([
+                    (ids[source], Access::ShaderRead),
+                    (ids[target], Access::Storage),
+                    (ids[SPEC_MOMENTS0 + slot], Access::ShaderRead),
+                ]);
+            }
             add(
                 if reference {
                     "Reference.Copy"
                 } else {
-                    ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
+                    if resampling {
+                        ["SVGF.Atrous.1", "SVGF.Atrous.3", "SVGF.Atrous.8"][i]
+                    } else {
+                        ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
+                    }
                 },
-                "atrous",
+                if resampling { "atrous_split" } else { "atrous" },
                 i as u32,
                 dispatch,
                 uses,
@@ -446,6 +619,11 @@ impl FidelityView {
             self.probe_states[i] = compiled.final_states[id.0];
         }
         self.exposure_state = compiled.final_states[exposure.0];
+        if let (Some(r), Some(ids)) = (&mut self.reservoirs, reservoir_ids) {
+            for (i, id) in ids.iter().enumerate() {
+                r.states[i] = compiled.final_states[id.0];
+            }
+        }
         if let Mode::Reference { samples, .. } = self.settings.mode {
             self.samples = if reset { 0 } else { self.samples };
             self.samples = (self.samples + 8).min(samples);

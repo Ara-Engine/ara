@@ -16,11 +16,11 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         float3 source=sunlight*visibility*(sr*phaseR(dot(d,f.sunDirection.xyz))+sm*phaseM(dot(d,f.sunDirection.xyz),0.8)+density*f.atmosphere.w*phaseM(dot(d,f.sunDirection.xyz),0.3));
         float3 sky=multiScattering(f,height,f.sunDirection.y)*f.sunLux.rgb;
         source+=(sr+sm+density*f.atmosphere.w)*sky;
-        uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
+        uint4 head=buffers[f.scene.x].Load<uint4>(0);
         for(uint i=0;i<head.w;i++){
-            float4 p=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64),c=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+16);
+            float4 p=buffers[f.scene.x].Load<float4>(head.z+i*64),c=buffers[f.scene.x].Load<float4>(head.z+i*64+16);
             float3 delta=p.xyz-at;float distance=length(delta);if(distance>p.w)continue;
-            float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+32),params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+48);
+            float4 cone=buffers[f.scene.x].Load<float4>(head.z+i*64+32),params=buffers[f.scene.x].Load<float4>(head.z+i*64+48);
             float3 l=delta/max(distance,0.001);float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));float fade=pow(saturate(1-pow(distance/p.w,4)),2);
             if(!occluded(f,at,l,max(0.001,distance-0.02),rng))source+=density*f.atmosphere.w*c.rgb*c.w/(4*PI*max(distance*distance,0.01))*fade*spot*phaseM(dot(d,l),0.3);
         }

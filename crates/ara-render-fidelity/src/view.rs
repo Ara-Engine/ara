@@ -49,6 +49,8 @@ pub struct FidelityView {
     pub(crate) texture_bias: f32,
     pub(crate) transport_stride: u32,
     pub(crate) timings: Vec<PassTiming>,
+    pub(crate) reservoirs: Option<crate::resampling::Reservoirs>,
+    pub(crate) shadow_source: crate::SunShadowSource,
 }
 impl FidelityView {
     /// Upload immutable extraction, prewarm cooked pipelines and allocate view storage.
@@ -222,6 +224,8 @@ impl FidelityView {
             texture_bias: 0.,
             transport_stride: 2,
             timings: Vec::new(),
+            reservoirs: None,
+            shadow_source: crate::SunShadowSource::RayQueries,
         })
     }
     /// Bound traced secondary surfaces before the DDGI terminal. One event is
@@ -312,14 +316,22 @@ impl FidelityView {
         {
             return Ok(());
         }
-        let replacement = Targets::new(
+        let mut replacement = Targets::new(
             gpu,
             render_size,
             display_size,
             matches!(self.settings.mode, Mode::Reference { .. }),
         )?;
+        if self.reservoirs.is_some() {
+            replacement.enable_split(gpu, render_size)?;
+        }
         std::mem::replace(&mut self.targets, replacement).destroy(gpu)?;
+        if let Some(old) = self.reservoirs.take() {
+            self.reservoirs = Some(crate::resampling::Reservoirs::new(gpu, render_size)?);
+            old.destroy(gpu)?;
+        }
         self.settings = settings;
+        self.shadow_source = crate::SunShadowSource::RayQueries;
         self.history = false;
         self.samples = 0;
         gpu.collect()?;
@@ -437,6 +449,9 @@ impl FidelityView {
     }
     /// Release view-owned resources after its last completed frame.
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+        if let Some(r) = self.reservoirs {
+            r.destroy(gpu)?;
+        }
         self.targets.destroy(gpu)?;
         self.scene.destroy(gpu)?;
         for b in self

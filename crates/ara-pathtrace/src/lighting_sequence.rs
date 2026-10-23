@@ -174,10 +174,10 @@ pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         );
         events.push(serde_json::json!({"event":name,"convergence_frames":convergence,"flicker_variance":flicker,"flicker_rms":mean_square.sqrt(),"display_pixel_flicker_rms":display_rms,"pixel_flicker_variance":spatial_deltas.iter().sum::<f64>()/spatial_deltas.len() as f64/(steady*steady),"steady_luminance":steady,"steady_indirect_luminance":steady_indirect,"luminance":samples,"direct_luminance":direct,"incident_luminance":incident,"active_probes":probe_counts}));
     }
-    strip.save(root.join("captures/sponza-lighting-sequence.png"))?;
+    strip.save(output_path(root, "captures/sponza-lighting-sequence.png")?)?;
     view.destroy(gpu)?;
     write_json(
-        &root.join("measurements/lighting-stability.json"),
+        &output_path(root, "measurements/lighting-stability.json")?,
         &serde_json::json!({"fps":60,"roi":[170,235,430,350],"metric":"filtered indirect HDR (direct subtracted): 8 consecutive samples within 5% of 32-frame settled indirect mean; static final-frame luminance-delta variance; display RMS in decoded linear sRGB","events":events}),
     )?;
     anyhow::ensure!(

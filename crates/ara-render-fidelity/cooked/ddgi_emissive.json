@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
+  "key": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
   "stages": [
     {
-      "dxil": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64/ddgiEmissiveMain.dxil",
-      "dxil_hash": "7f542c09c6a4469228010a0a0ecdf563c6904ab4e0450622957d682ab39b5855",
+      "dxil": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/ddgiEmissiveMain.dxil",
+      "dxil_hash": "94329b12a3c21e736b0561a4bbc7de54f7020a8cadd8d82d55f91e5baf929e22",
       "source_entry": "ddgiEmissiveMain",
-      "spirv": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64/ddgiEmissiveMain.spv",
+      "spirv": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/ddgiEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "c1979844b27a8f14e192a607a27f335531b10f6eae62777c8b0d9ef68ca0ead5",
+      "spirv_hash": "369504c0989feeaf934168e3ce9811bc7f38e2b890f33c3ecaa670096c91df69",
       "stage": "compute"
     }
   ],

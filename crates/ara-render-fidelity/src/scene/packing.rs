@@ -60,7 +60,7 @@ pub(super) fn validate(s: &Scene) -> Result<()> {
         );
     }
     ensure!(
-        s.lights.len() <= 64
+        s.lights.len() <= 4096
             && s.sun_direction.is_finite()
             && s.sun_direction.length_squared() > 1e-8
             && s.sun_lux.is_finite()

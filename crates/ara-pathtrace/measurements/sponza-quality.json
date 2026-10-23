@@ -1,9 +1,9 @@
 {
   "active_probes": 5837,
   "corridor_error": {
-    "mae": 0.9850166254245791,
-    "relative_rmse": 0.08963493875697519,
-    "rmse": 1.6887697477057069
+    "mae": 0.9850149908266264,
+    "relative_rmse": 0.08963519003499952,
+    "rmse": 1.6887747696760447
   },
   "corridor_roi": [
     170,
@@ -12,16 +12,16 @@
     350
   ],
   "error": {
-    "mae": 1.605090154863245,
-    "relative_rmse": 0.04594775924940848,
-    "rmse": 5.0646156909280355
+    "mae": 1.6050891101933134,
+    "relative_rmse": 0.04594777780882751,
+    "rmse": 5.064617791644991
   },
   "ev100": 5.5,
   "probes": 6318,
   "sampling": "256-phase Halton pixel-area integration including remodulation; four-phase transport; one-event lobe mixture; mip-filtered materials",
   "scene_hash": "15b0e2c469e8cea8f719599b22306bd0e4b33d3c85e786c605596e3b6dda38b1",
   "settle_frames": 192,
-  "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
+  "shader_revision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
   "size": [
     640,
     360

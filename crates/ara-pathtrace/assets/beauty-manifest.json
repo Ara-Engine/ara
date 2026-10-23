@@ -1,0 +1,190 @@
+{
+  "assets": [
+    {
+      "authors": {
+        "Fran Calvente": "All"
+      },
+      "files": [
+        {
+          "path": "sofa_03/model.gltf",
+          "sha256": "885fd91183328e44af4e2766044c6636fde31ad10af27bb8eb0d57a775ca92c7",
+          "size": 4465,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/sofa_03/sofa_03_2k.gltf"
+        },
+        {
+          "path": "sofa_03/textures/sofa_03_rough_2k.jpg",
+          "sha256": "b358e40506dc1cfd55911eba718195c4a8ea10c12b8ddc9d5aecb12bd7e71524",
+          "size": 613551,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/sofa_03/sofa_03_rough_2k.jpg"
+        },
+        {
+          "path": "sofa_03/textures/sofa_03_nor_gl_2k.jpg",
+          "sha256": "24ea0b754eef8ea7af5e8bb1939df1c395b0d60b387f39b2bd6194bed3f89062",
+          "size": 319647,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/sofa_03/sofa_03_nor_gl_2k.jpg"
+        },
+        {
+          "path": "sofa_03/sofa_03.bin",
+          "sha256": "e524350933d3d2a84c28f13bc042888a4768adeef88d630111015caede1c2e98",
+          "size": 228984,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/sofa_03/sofa_03.bin"
+        },
+        {
+          "path": "sofa_03/textures/sofa_03_diff_2k.jpg",
+          "sha256": "1e334e40065b5591b35351124ad5ba74a32337581aa4c0af49fe935ef4648fef",
+          "size": 563414,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/sofa_03/sofa_03_diff_2k.jpg"
+        }
+      ],
+      "id": "sofa_03",
+      "source": "https://polyhaven.com/a/sofa_03"
+    },
+    {
+      "authors": {
+        "Kuutti Siitonen": "All"
+      },
+      "files": [
+        {
+          "path": "mid_century_lounge_chair/model.gltf",
+          "sha256": "c626222ebe4bc2b98bc1f5ca0cb6ae6f649d995a8f2cee6a6c1d78f060859baa",
+          "size": 2884,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/mid_century_lounge_chair/mid_century_lounge_chair_2k.gltf"
+        },
+        {
+          "path": "mid_century_lounge_chair/textures/mid_century_lounge_chair_nor_gl_2k.jpg",
+          "sha256": "3228f6785de5f4f06149a03dab95cf68f6c85f42ecbba8e33f48e40d941d9b96",
+          "size": 2646290,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/mid_century_lounge_chair/mid_century_lounge_chair_nor_gl_2k.jpg"
+        },
+        {
+          "path": "mid_century_lounge_chair/textures/mid_century_lounge_chair_diff_2k.jpg",
+          "sha256": "8129cc8c7c7c8db652aad062545a9f776b7ff4c00c4d9ab8387f3ad98315a932",
+          "size": 2444450,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/mid_century_lounge_chair/mid_century_lounge_chair_diff_2k.jpg"
+        },
+        {
+          "path": "mid_century_lounge_chair/textures/mid_century_lounge_chair_arm_2k.jpg",
+          "sha256": "74ffb5899e592f842bf39b8a62a01ae7f737de5980790598fc0f4d587d53bf4a",
+          "size": 2476056,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/mid_century_lounge_chair/mid_century_lounge_chair_arm_2k.jpg"
+        },
+        {
+          "path": "mid_century_lounge_chair/mid_century_lounge_chair.bin",
+          "sha256": "26346cdc548ad74b1b6db5734c8c231c3c740656b012de2cc3bbc2b3b975200c",
+          "size": 171384,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/mid_century_lounge_chair/mid_century_lounge_chair.bin"
+        }
+      ],
+      "id": "mid_century_lounge_chair",
+      "source": "https://polyhaven.com/a/mid_century_lounge_chair"
+    },
+    {
+      "authors": {
+        "Ulan Cabanilla": "All"
+      },
+      "files": [
+        {
+          "path": "coffee_table_round_01/model.gltf",
+          "sha256": "6b9dbd17317c9289ab8e008b05abd146dbe0831c975871732def694de4ad407d",
+          "size": 2776,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/coffee_table_round_01/coffee_table_round_01_2k.gltf"
+        },
+        {
+          "path": "coffee_table_round_01/textures/coffee_table_round_01_arm_2k.jpg",
+          "sha256": "fa00d2026a24f65cd825f565e010d498206d68ede792fcc5f058f20a3d94aa88",
+          "size": 2631627,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coffee_table_round_01/coffee_table_round_01_arm_2k.jpg"
+        },
+        {
+          "path": "coffee_table_round_01/textures/coffee_table_round_01_nor_gl_2k.jpg",
+          "sha256": "b8e4f0780ee2008e33a3049656fcf3168d1036ad8d5cf368e925374123a5c553",
+          "size": 1177563,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coffee_table_round_01/coffee_table_round_01_nor_gl_2k.jpg"
+        },
+        {
+          "path": "coffee_table_round_01/coffee_table_round_01.bin",
+          "sha256": "9605a0c156bff4ec87e8717a79978d85d4e750d21b3193a3d08bed16e8666035",
+          "size": 131112,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/coffee_table_round_01/coffee_table_round_01.bin"
+        },
+        {
+          "path": "coffee_table_round_01/textures/coffee_table_round_01_diff_2k.jpg",
+          "sha256": "d63b809f381622925f852f6d1b0f712428cbe75837298073ad0424069d60870d",
+          "size": 1721075,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/coffee_table_round_01/coffee_table_round_01_diff_2k.jpg"
+        }
+      ],
+      "id": "coffee_table_round_01",
+      "source": "https://polyhaven.com/a/coffee_table_round_01"
+    },
+    {
+      "authors": {
+        "James Ray Cock": "All"
+      },
+      "files": [
+        {
+          "path": "potted_plant_04/model.gltf",
+          "sha256": "3f9502718be285a6614622774a6b19fd9014e2d5e05e6a08f822321dd157e6d5",
+          "size": 7081,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/potted_plant_04/potted_plant_04_2k.gltf"
+        },
+        {
+          "path": "potted_plant_04/textures/potted_plant_04_diff_2k.jpg",
+          "sha256": "088004de42f405aaa5e14b22f9376e066d3b1ba58e957ad7a67a14697f086bcf",
+          "size": 1804144,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/potted_plant_04/potted_plant_04_diff_2k.jpg"
+        },
+        {
+          "path": "potted_plant_04/potted_plant_04.bin",
+          "sha256": "158c1d27503d4845eb3573f00c01ae3f4f77f1d6ca8754c67bf1762745946f7f",
+          "size": 241800,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/potted_plant_04/potted_plant_04.bin"
+        },
+        {
+          "path": "potted_plant_04/textures/potted_plant_04_nor_gl_2k.jpg",
+          "sha256": "d4ba8dce3a46ab10bf95cf643838222f50778c718fe16acf0f95cba9b599b8a7",
+          "size": 2723926,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/potted_plant_04/potted_plant_04_nor_gl_2k.jpg"
+        },
+        {
+          "path": "potted_plant_04/textures/potted_plant_04_arm_2k.jpg",
+          "sha256": "95fed5f61ce04485b9233f81459fa4f2c7e51ed93a96f8e4470a0db75ce16288",
+          "size": 1480527,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/potted_plant_04/potted_plant_04_arm_2k.jpg"
+        }
+      ],
+      "id": "potted_plant_04",
+      "source": "https://polyhaven.com/a/potted_plant_04"
+    },
+    {
+      "authors": {
+        "Dimitrios Savva": "All"
+      },
+      "files": [
+        {
+          "path": "wood_floor/diff.png",
+          "sha256": "33040146e3ea6fa47d7bbf4ccdecdf3443cdb831e72e1f33dede6ad6542b2b7c",
+          "size": 21423099,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/wood_floor/wood_floor_diff_2k.png"
+        },
+        {
+          "path": "wood_floor/normal.png",
+          "sha256": "2364421a19aba9392bcd0ba14617e7e91ac2869ca3fab16d83563b5250d71bc8",
+          "size": 19399802,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/wood_floor/wood_floor_nor_gl_2k.png"
+        },
+        {
+          "path": "wood_floor/orm.png",
+          "sha256": "8e586020caf49073e3a3e7e6af3ab298dcd468db9ffa6dc4c62dd37728d38b45",
+          "size": 16651290,
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/wood_floor/wood_floor_arm_2k.png"
+        }
+      ],
+      "id": "wood_floor",
+      "source": "https://polyhaven.com/a/wood_floor"
+    }
+  ],
+  "credit": "Powered by Poly Haven",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+}

@@ -9,6 +9,7 @@ The reference never uses DDGI, spatial filters, temporal clipping or upscaling.
 - `Reference`: progressive finite sample/bounce budget with explicit reset.
 - `scenes`: furnace, thin wall, moving emissive, disocclusion, glossy, alpha foliage.
 - `metrics`: linear radiance RMSE and temporal residual metrics.
+- `artifacts`: scratch output paths; checked-in reports require explicit opt-in.
 
 ## Verification
 Set CARGO_BUILD_JOBS=2. `./run.ps1 -Mode Check` runs local tests/clippy/fmt.
@@ -18,7 +19,22 @@ Set CARGO_BUILD_JOBS=2. `./run.ps1 -Mode Check` runs local tests/clippy/fmt.
 `fetch-sponza.ps1` fetches pinned local content; `-Mode Content` records its honest
 per-pass timing distributions separately from the diagnostic budget gate.
 Use `-Mode Smoke` for a bounded 160x90 hardware/validation integration check.
+`fetch-beauty.ps1` obtains pinned CC0 PBR assets; licenses live in THIRD_PARTY_NOTICES.md.
+`-Mode Beauty` is the main authored-content golden; `-Mode Many-Lights` traces
+the 1000-light corridor independently. Matching *-Timings modes measure full frames.
+`-Mode Night-Noise` records 16x16 block and per-pixel luminance deltas and a strip.
+Night references use 32768 spp; the 1000-light reference uses 65536 spp and 32 RIS
+candidates per vertex. Report lower-half residuals as well as whole-image error.
+Timing reports retain chronological frame samples, median, p95, maximum and load.
+`./verify-round3.ps1 -SharedGpu` reproduces the full round, retaining timing
+failures for shared-load reporting. Omit SharedGpu for strict budget gates.
+`-TimingsOnly` reruns only the four timing modes and preserves quality receipts.
 Goldens update only with `ARA_UPDATE_FIDELITY_GOLDENS=1`; regular tests compare.
-All output/provenance goes under this crate; root files/docs remain untouched.
+Tests never publish measurements. CLI output defaults to workspace
+`target/ara-pathtrace`, or `CARGO_TARGET_TMPDIR/ara-pathtrace` when set.
+Only `ARA_UPDATE_MEASUREMENTS=1` / `-UpdateMeasurements` updates checked-in
+measurements/captures. Goldens use the separate explicit opt-in above.
+The round-3 wrapper promotes test receipts only after successful checks when
+UpdateMeasurements is requested. Keep root files/docs untouched.
 Runtime shader cooking is forbidden. Recook fidelity offline before testing edits.
 Never substitute denoised reference images for independently converged radiance.
