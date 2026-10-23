@@ -1,0 +1,7 @@
+profile=bench optimized=true rustc=1.99.1 code=f0c57d7 main=8ddc11b CARGO_BUILD_JOBS=2
+world_km2=16 authored_entities=1000000 cells=256 passes=2 frames=102471 elapsed_s=64.52 cooked_MiB=56.01
+activation_all_ms p50=0.0479 p95=0.1000 p99=0.1371 max=6.5174
+empty_boundary_p99_ms=0.0002 streaming_boundary_p99_ms=0.1386 sampled_working_set_MiB=112.44 sampled_private_MiB=113.53
+activation_busy_ms frames=63334 p50=0.0671 p95=0.1155 p99=0.1436 max=6.5174
+spawned=1996094 despawned=1996094 peak_entities=7814 peak_reserved_MiB=32.00 peak_retained_estimate_MiB=30.90 final_entities=0 final_reserved=0
+fully_activated_unique_cells=256

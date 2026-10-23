@@ -339,6 +339,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-foliage"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "ara-terrain",
+ "bytemuck",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
@@ -476,6 +492,30 @@ dependencies = [
  "serde",
  "serde_json",
  "writeable",
+]
+
+[[package]]
+name = "ara-landscape"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset-format",
+ "ara-doc",
+ "ara-foliage",
+ "ara-gpu",
+ "ara-json",
+ "ara-material",
+ "ara-render",
+ "ara-schema",
+ "ara-shader-cook",
+ "ara-terrain",
+ "blake3",
+ "bytemuck",
+ "glam 0.30.9",
+ "half",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -769,6 +809,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-terrain"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-nav",
+ "ara-ops",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-schema",
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-ui"
 version = "0.0.0"
 dependencies = [
@@ -839,6 +897,29 @@ dependencies = [
  "parley",
  "serde",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "ara-world"
+version = "0.0.0"
+dependencies = [
+ "ara-asset",
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-merge",
+ "ara-ops",
+ "ara-pack",
+ "ara-schema",
+ "ara-sim",
+ "blake3",
+ "ciborium",
+ "glam 0.30.9",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

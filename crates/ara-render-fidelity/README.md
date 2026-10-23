@@ -28,17 +28,38 @@ interactive frame loop and apply them at a frame boundary (D20).
 * Visibility: inline hardware triangle queries, stable external entity -> 24-bit
   scene ID, opaque/masked/stochastic-alpha candidate evaluation. RT hit, shadow,
   probe and reference paths use the same texture/normal/material evaluation.
-* One automatic 10x6x10 probe volume, 64 spherical Fibonacci rays/update, a strict
-  primary-probe ray budget, 6x6 octahedral irradiance, 8x8 distance moments,
-  relocation/classification, trilinear/normal/Chebyshev visibility weights,
-  irradiance-change detection and hysteresis. Secondary shadow rays used to shade
-  probe hits are additional to the declared 64-ray probe update budget.
-* Directional and point/spot soft visibility; one GGX specular ray below a
-  roughness cutoff, with rough environment/probe lighting outside that range.
-* SVGF-style combined-radiance reprojection, stable-ID/depth/normal/roughness
-  rejection, reactive emission, neighborhood variance clipping and three full
-  5x5 B-spline a-trous iterations (1/2/4 pixel spacing). Shared-memory halo loads
-  preserve the full kernel. No NRD implementation code is copied.
+* One automatic 10x6x10 half-cell-padded probe volume; 64 Fibonacci paths/update
+  with a full sphere rotation, 6x6 octahedral irradiance and 8x8 distance moments.
+  Seam-folded bilinear directional lookup removes quantized angular patches.
+  Relocation follows the nearest back hit; relocated probes stay unclassified
+  until sampled from their new origin. Geometric-normal and view bias, moment
+  visibility, classification, irradiance-change detection and hysteresis bound
+  leakage and temporal debt. Each budgeted primary path resolves up to five
+  surfaces, plus explicit shadow rays; the 16384 budget counts primary paths.
+* Primary visibility also evaluates full-rate direct lighting. Hardware-opaque
+  queries avoid material candidate loads when the entire extraction is opaque;
+  masked/blended extractions retain candidate evaluation. Geometric ray origins
+  prevent shading-normal offsets from starting rays inside tessellated surfaces.
+* Two-surface cosine final gathering resolves diffuse local occlusion; GGX visible
+  normals resolve selective specular with bounded grazing-angle weights. The last
+  event uses the probe field. Traced specular fades into directional probe lighting
+  over 0.1 roughness below the cutoff, rather than an unoccluded sky fallback.
+  Diffuse Fresnel uses a hemispherical approximation rather than view Fresnel.
+* Transport uses compact checkerboard dispatches after initialization, plus a
+  separate full-validity disocclusion repair dispatch. A skipped sample retains
+  reprojected incident radiance; new geometry, illumination discontinuities and
+  lighting resets receive new rays. Motion vectors remain unjittered UV deltas.
+* Direct radiance has separate temporal history and never enters the incident
+  radiance spatial blur. SVGF-style reconstruction validates ID/depth/normal/
+  roughness/direct-light changes, validates bilinear history footprints, caps
+  moving-surface history, rejects 12-sigma incident outliers and bootstraps fresh
+  variance. Three shared-memory 3x3 wavelet iterations use plane distance and
+  roughness-aware normal weights. This preserves direct highlights, silhouettes
+  and slanted surfaces. No NRD implementation code is copied.
+* Hybrid radiance/normal/post intermediates use RGBA16F where possible; world
+  positions, motion, hit records, moments and final HDR readback remain RGBA32F.
+  Every reference intermediate and its accumulation are RGBA32F: repeatedly
+  averaging thousands of samples into half precision loses reference energy.
 * Engine TAAU keeps display-resolution history. FSR1 runs the official EASU/RCAS
   float implementation after transport temporal AA and the display transform.
   Motion is previous UV minus current UV, excludes jitter, and includes extracted
@@ -81,7 +102,7 @@ This is a verified rendering foundation, not completion of the full M3 brief.
    not a shipping raster replacement. Importing M1's raster G-buffer/shadow atlas
    is still needed for production non-RT performance. Mobile hardware is untested.
 3. **NRD:** current SDK input contracts separate diffuse/specular signals and hit
-   distances. This view currently filters combined radiance. The current
+   distances. This view separates direct radiance, but still filters diffuse and specular incident radiance together. The current
    [SDK license](https://github.com/NVIDIA-RTX/NRD/blob/master/LICENSE.txt) and
    [signal contracts](https://github.com/NVIDIA-RTX/NRD) were reviewed; NRD is not
    vendored and quality equivalence with NRD is not claimed.
@@ -97,9 +118,25 @@ This is a verified rendering foundation, not completion of the full M3 brief.
    This code uses the graph's existing serialized diagnostic execution; timestamps
    sum GPU pass durations, not CPU wall time or overlapped frame time.
 
-The v1 heap has 64 storage-image slots: this view consumes 21. Resize temporarily
-needs another 21; multiple editor views must account for that capacity. Textures
+The v1 heap has 64 storage-image slots: this view consumes 24. Resize temporarily
+needs another 24; multiple editor views must account for that capacity. Textures
 and the environment require a replacement view, while geometry/lights/material
 parameters update in place. Call `destroy` before dropping a borrowed device.
 
 See `../ara-pathtrace/README.md` for reproducible captures, errors and timings.
+
+## Quality pass evidence
+
+The apparent diagonal seam on the right diagnostic wall is the ceiling edge's
+physical sun shadow: it also appears with DDGI disabled in the direct-only
+reference (`../ara-pathtrace/captures/direct-shadow-reference.png`). Removing it
+would disagree with the reference scene. Angular probe blocks and rim speckles
+are reconstruction defects and are addressed by the changes above.
+
+The original diagnostic views, resolution, RMSE definition, 96 settle frames and
+4096 reference spp are retained. The reference now uses visible GGX normals with
+its corresponding PDF; this changes sampling variance, not the BRDF. See the
+before/after errors and per-pass GPU table in `../ara-pathtrace/README.md`.
+Algorithms follow [Heitz's visible GGX distribution](https://jcgt.org/published/0007/04/01/)
+and [visibility-aware irradiance fields](https://research.nvidia.com/publication/2019-05_dynamic-diffuse-global-illumination-ray-traced-irradiance-fields).
+The probes and reconstruction are Ara implementations.

@@ -16,6 +16,7 @@ mod registry;
 mod session;
 mod snapshot;
 mod source;
+mod streaming;
 
 pub use ara_input as input;
 pub use bevy_ecs;
@@ -40,6 +41,7 @@ pub use projection::{EditWorld, Identity, SceneMetadata};
 pub use registry::SimRegistry;
 pub use session::{BoundaryCommand, Session, SessionAdapter, SessionMode, TickRecord};
 pub use snapshot::{Replay, Snapshot, StateHash};
+pub use streaming::{PreparedStreamEntity, StreamChange, StreamingBoundary};
 
 /// A rejected simulation operation, with a stable readable description.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,0 +1,265 @@
+{
+  "capture_mode": "serialized diagnostics with asynchronous cache reads and bounded page publication",
+  "detail_page_capacity": 256,
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "frames_in_flight": 1,
+  "height_content": "013d88813ee8590a7d0617e976799e3e7ddf9962d547dab13bbe6d48ea1e11f1",
+  "instance_content": "8251f4131805a525d60e0bae66bec459a2d3fa0b40848c791a23c8ad84e5e42f",
+  "instances": 1390348,
+  "max_tile_upload_bytes_per_frame": 13084,
+  "measured_frames": 32,
+  "resolution": [
+    2560,
+    1440
+  ],
+  "seed": 42,
+  "states": {
+    "dusk": {
+      "cpu_frame_record_submit_p50_ms": 0.9068,
+      "cpu_frame_record_submit_p95_ms": 1.9547,
+      "passes": {
+        "foliage_color": {
+          "p50_ms": 0.057344,
+          "p95_ms": 0.06144,
+          "p99_ms": 0.064512,
+          "samples": 32
+        },
+        "foliage_cull": {
+          "p50_ms": 0.18432,
+          "p95_ms": 0.198656,
+          "p99_ms": 0.208896,
+          "samples": 32
+        },
+        "foliage_depth": {
+          "p50_ms": 0.03584,
+          "p95_ms": 0.04096,
+          "p99_ms": 0.044032,
+          "samples": 32
+        },
+        "foliage_shadow": {
+          "p50_ms": 0.034144,
+          "p95_ms": 0.036864,
+          "p99_ms": 0.038304,
+          "samples": 32
+        },
+        "hzb": {
+          "p50_ms": 0.01024,
+          "p95_ms": 0.011264,
+          "p99_ms": 0.017408,
+          "samples": 32
+        },
+        "reset": {
+          "p50_ms": 0.005184,
+          "p95_ms": 0.008064,
+          "p99_ms": 0.013216,
+          "samples": 32
+        },
+        "select": {
+          "p50_ms": 0.002048,
+          "p95_ms": 0.002048,
+          "p99_ms": 0.002048,
+          "samples": 32
+        },
+        "sky": {
+          "p50_ms": 0.038912,
+          "p95_ms": 0.362496,
+          "p99_ms": 0.508928,
+          "samples": 32
+        },
+        "terrain_color": {
+          "p50_ms": 0.216064,
+          "p95_ms": 0.685056,
+          "p99_ms": 0.693248,
+          "samples": 32
+        },
+        "terrain_cull": {
+          "p50_ms": 0.004096,
+          "p95_ms": 0.004096,
+          "p99_ms": 0.00512,
+          "samples": 32
+        },
+        "terrain_depth": {
+          "p50_ms": 0.041984,
+          "p95_ms": 0.045056,
+          "p99_ms": 0.0512,
+          "samples": 32
+        },
+        "terrain_shadow": {
+          "p50_ms": 0.043648,
+          "p95_ms": 0.04496,
+          "p99_ms": 0.044992,
+          "samples": 32
+        }
+      },
+      "visibility": {
+        "foliage_instances": [
+          191,
+          2027,
+          10751,
+          158,
+          1328,
+          5694,
+          33,
+          300,
+          1588
+        ],
+        "terrain_patches": [
+          15,
+          28,
+          106,
+          339,
+          509,
+          2253
+        ]
+      }
+    },
+    "noon": {
+      "cpu_frame_record_submit_p50_ms": 0.9127000000000001,
+      "cpu_frame_record_submit_p95_ms": 3.7033,
+      "passes": {
+        "foliage_color": {
+          "p50_ms": 0.057344,
+          "p95_ms": 0.058368,
+          "p99_ms": 0.058368,
+          "samples": 32
+        },
+        "foliage_cull": {
+          "p50_ms": 0.183296,
+          "p95_ms": 0.200704,
+          "p99_ms": 0.200704,
+          "samples": 32
+        },
+        "foliage_depth": {
+          "p50_ms": 0.03584,
+          "p95_ms": 0.03584,
+          "p99_ms": 0.285696,
+          "samples": 32
+        },
+        "foliage_shadow": {
+          "p50_ms": 0.031328,
+          "p95_ms": 0.03568,
+          "p99_ms": 0.03568,
+          "samples": 32
+        },
+        "hzb": {
+          "p50_ms": 0.01024,
+          "p95_ms": 0.011264,
+          "p99_ms": 0.011264,
+          "samples": 32
+        },
+        "reset": {
+          "p50_ms": 0.004384,
+          "p95_ms": 0.013312,
+          "p99_ms": 0.013824,
+          "samples": 32
+        },
+        "select": {
+          "p50_ms": 0.002048,
+          "p95_ms": 0.002048,
+          "p99_ms": 0.002048,
+          "samples": 32
+        },
+        "sky": {
+          "p50_ms": 0.287744,
+          "p95_ms": 0.566272,
+          "p99_ms": 0.630784,
+          "samples": 32
+        },
+        "terrain_color": {
+          "p50_ms": 0.21504,
+          "p95_ms": 0.479232,
+          "p99_ms": 0.663552,
+          "samples": 32
+        },
+        "terrain_cull": {
+          "p50_ms": 0.004096,
+          "p95_ms": 0.00512,
+          "p99_ms": 0.00512,
+          "samples": 32
+        },
+        "terrain_depth": {
+          "p50_ms": 0.04096,
+          "p95_ms": 0.041984,
+          "p99_ms": 0.041984,
+          "samples": 32
+        },
+        "terrain_shadow": {
+          "p50_ms": 0.070912,
+          "p95_ms": 0.07232,
+          "p99_ms": 0.072448,
+          "samples": 32
+        },
+        "tile_upload": {
+          "p50_ms": 0.007712,
+          "p95_ms": 0.015488,
+          "p99_ms": 0.015488,
+          "samples": 16
+        }
+      },
+      "visibility": {
+        "foliage_instances": [
+          191,
+          2027,
+          10751,
+          158,
+          1276,
+          4931,
+          33,
+          300,
+          1268
+        ],
+        "terrain_patches": [
+          15,
+          28,
+          106,
+          285,
+          459,
+          2253
+        ]
+      }
+    }
+  },
+  "terrain_m": [
+    4096,
+    4096
+  ],
+  "tick": 120,
+  "tiles_streamed": 16,
+  "warmup_frames": 8
+}
