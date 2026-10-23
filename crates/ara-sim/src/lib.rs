@@ -8,6 +8,7 @@
 mod command;
 mod context;
 mod dynamic;
+mod feature;
 mod fixed;
 mod persistent;
 mod play;
@@ -34,6 +35,7 @@ pub fn initialize_compute_pool(workers: std::num::NonZeroUsize) -> usize {
 pub use command::{CommandContext, SimCommand};
 pub use context::{SimContext, StreamRng};
 pub use dynamic::{DynamicLayout, LayoutField};
+pub use feature::{PredictionKey, SimulationFeature};
 pub use fixed::{Clock, FixedTick, FrameAdvance, TickConfig};
 pub use persistent::{PersistenceSelection, PersistentCursor, PersistentEntity, PersistentState};
 pub use play::{PlayControl, PlayState, Sample, StepInput, StepReport, Watch};
