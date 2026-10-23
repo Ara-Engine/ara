@@ -14,6 +14,7 @@ use crate::{
     model::Model,
     skin::{Skin, TICKS_PER_SECOND},
 };
+use ara_ai::LocomotionIntent;
 use ara_anim::{
     CompressionSettings, Controller, CookedClip, RootMotion,
     glam::{Mat4, Vec3},
@@ -360,22 +361,30 @@ pub fn adopt_slots(world: &mut World) {
     let _ = ensure_slots(world, hz);
 }
 
-/// Fixed-tick animation: sets `speed` from the entity's ground velocity (navigation
-/// state when present, else physics velocity) and advances one tick, keeping the
-/// extracted root displacement. Entities are independent, so order is irrelevant.
+/// Fixed-tick animation: sets `speed` from the entity's ground velocity (an NPC's
+/// `LocomotionIntent`, else navigation state, else physics velocity) and advances one
+/// tick, keeping the extracted root displacement. Motion matching steers toward the
+/// intent's desired velocity. Entities are independent, so order is irrelevant.
 pub fn animate(
     context: Res<SimContext>,
-    mut query: Query<(&mut AnimatorSlot, Option<&Velocity>, Option<&NavAgentState>)>,
+    mut query: Query<(
+        &mut AnimatorSlot,
+        Option<&Velocity>,
+        Option<&NavAgentState>,
+        Option<&LocomotionIntent>,
+    )>,
 ) {
     let dt = context.dt() as f32;
-    for (mut slot, velocity, nav) in &mut query {
+    for (mut slot, velocity, nav, intent) in &mut query {
         if slot.fault.is_some() {
             continue;
         }
-        let v = nav
-            .map(|n| n.velocity)
+        let v = intent
+            .map(|i| i.velocity)
+            .or_else(|| nav.map(|n| n.velocity))
             .or_else(|| velocity.map(|v| v.linear))
             .unwrap_or_default();
+        let desired = intent.map_or(v, |i| i.desired);
         let speed = (v[0] * v[0] + v[2] * v[2]).sqrt();
         let slot = &mut *slot;
         let program = &*slot.program;
@@ -389,7 +398,7 @@ pub fn animate(
                     matching,
                     program.skin(),
                     &mut slot.animator,
-                    Vec3::from_array(v),
+                    Vec3::from_array(desired),
                     dt,
                 ),
                 _ => Ok(()),

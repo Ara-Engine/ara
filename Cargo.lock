@@ -395,6 +395,7 @@ dependencies = [
 name = "ara"
 version = "0.0.0"
 dependencies = [
+ "ara-ai",
  "ara-audio-why",
  "ara-diag",
  "ara-doc",
@@ -747,6 +748,7 @@ dependencies = [
  "accesskit 0.25.1",
  "accesskit_windows 0.35.1",
  "anyhow",
+ "ara-ai",
  "ara-anim",
  "ara-asset",
  "ara-asset-format",
@@ -1481,6 +1483,7 @@ version = "0.0.0"
 dependencies = [
  "ara-2d",
  "ara-acoustics",
+ "ara-ai",
  "ara-anim",
  "ara-asset",
  "ara-asset-format",
@@ -1492,6 +1495,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-foliage",
+ "ara-graph",
  "ara-importers",
  "ara-input",
  "ara-json",
@@ -1500,6 +1504,7 @@ dependencies = [
  "ara-music",
  "ara-nav",
  "ara-ops",
+ "ara-perception",
  "ara-physics",
  "ara-physics-jolt",
  "ara-physics2d",
@@ -1589,11 +1594,13 @@ version = "0.0.0"
 dependencies = [
  "ara-components",
  "ara-diag",
+ "ara-input",
  "ara-runtime",
  "ara-schema",
  "ara-script",
  "ara-sim",
  "bevy_ecs",
+ "serde",
  "serde_json",
 ]
 

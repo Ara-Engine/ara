@@ -339,6 +339,7 @@ impl Session {
         self.pending_commands.clear();
         self.pending_typed.clear();
         self.pending_ops.clear();
+        self.applied.clear();
         self.sequences.clear();
         self.fault = None;
         self.edit.mapping = current

@@ -240,7 +240,10 @@ fn fox_animations(schema: &SchemaDb) -> Vec<(&'static str, String)> {
     };
     let (path, id) = ANIMATION;
     let mut workspace = Workspace::default();
-    workspace.insert(path, Document::new("animation", AssetId::parse(id).unwrap()));
+    workspace.insert(
+        path,
+        Document::new("animation", AssetId::parse(id).unwrap()),
+    );
     let mut store = ara_ops::Store::new(schema.clone(), workspace);
     let reference = |record: &str| AssetRef(format!("@{path}#{record}"));
     let float = || Parameter {

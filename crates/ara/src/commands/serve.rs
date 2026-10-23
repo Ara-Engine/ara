@@ -99,6 +99,8 @@ fn run_daemon(
     let root = host.root().to_path_buf();
     // "Why can't I hear X?" next to the built-in explainers.
     ara_audio_why::register(host.why());
+    // "Why is this NPC stuck?": brain, perception and navigation causes.
+    host.why().register(Box::new(ara_ai::why::NpcExplainer));
     // World cells, spatial queries and attributed multi-document cell moves.
     ara_world::service::register(&mut host).map_err(|d| d.to_string())?;
     // Play and test run in pooled ara-player processes owned by this daemon.

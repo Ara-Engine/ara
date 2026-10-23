@@ -575,6 +575,36 @@ fn malformed_command_is_rejected_before_a_boundary_and_handler_failure_is_recove
 }
 
 #[test]
+fn commands_executed_between_ticks_are_recorded_for_replay() {
+    let mut play = control(9);
+    let target = play.session().projection().entity("e_0001").unwrap();
+    play.record().unwrap();
+    play.step(1, &[]).unwrap();
+    // The host ran the command itself between ticks (an agent's command while paused).
+    play.session_mut()
+        .world_mut()
+        .get_mut::<Transform>(target)
+        .unwrap()
+        .position[0] = 7.;
+    play.session_mut()
+        .record_applied(BoundaryCommand {
+            kind: "setPosition".into(),
+            player: PlayerId(1),
+            sequence: 0,
+            target: Some("e_0001".into()),
+            payload: json!({"x": 7}),
+        })
+        .unwrap();
+    play.step(2, &[]).unwrap();
+    let hash = play.session().state_hash().unwrap();
+    let replay = play.finish_recording().unwrap();
+    assert!(replay.ticks[0].commands.is_empty());
+    assert_eq!(replay.ticks[1].commands.len(), 1);
+    assert_eq!(replay.ticks[1].commands[0].sequence, 1);
+    assert_eq!(play.replay(&replay).unwrap(), hash);
+}
+
+#[test]
 fn replay_includes_tick_boundary_authoring_ops() {
     let mut play = control(6);
     let db = schema();

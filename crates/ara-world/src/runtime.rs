@@ -310,6 +310,32 @@ impl Streaming {
         Ok(())
     }
 
+    /// `update`, then waits for every cook and retirement it started (repeating until
+    /// nothing is in flight, at most `timeout`), so the next `activate` sees every
+    /// wanted cell loaded. Hosts that need reproducible arrival ticks (agent
+    /// playtests, replays, load screens) call it instead of `update`: arrivals then
+    /// depend only on sources and ticks, never on worker speed. False on timeout
+    /// (whatever finished is admitted; the rest stays in flight).
+    pub fn settle(
+        &mut self,
+        manifest: &Manifest,
+        sources: &[StreamingSource],
+        tick: u64,
+        interest: &mut impl Interest,
+        timeout: Duration,
+    ) -> Result<bool> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            self.update(manifest, sources, tick, interest)?;
+            if !self.workers.pending() {
+                return Ok(true);
+            }
+            if !self.workers.wait_idle(deadline) {
+                return Ok(false);
+            }
+        }
+    }
+
     /// Spreads activation and unloading across frames. Call from the closure passed
     /// to `Session::step_with_streaming`. Clock decisions stay in this host crate;
     /// ara-sim records the resulting structural arrivals for deterministic replay.

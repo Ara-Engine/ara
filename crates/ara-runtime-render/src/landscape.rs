@@ -3,7 +3,7 @@
 //! camera with the scene renderer's projection (infinite reversed-Z, same field of
 //! view and near plane), so per pixel the nearer of landscape and scene wins. VFX
 //! drawn over the scene carries over onto terrain as its colour delta. Detail pages
-//! follow the resident `TerrainTile`s (a coarse 8 m fallback covers the rest).
+//! follow the resident `TerrainChunk`s (a coarse 8 m fallback covers the rest).
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{Access, Device, Queue, Resource, commands::Command, vk};
 use ara_landscape::{Landscape, View, sample::LandscapeData};

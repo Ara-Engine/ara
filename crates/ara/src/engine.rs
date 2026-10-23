@@ -33,6 +33,7 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
         match Host::open(crate::project::load(root)?, HostConfig::default()) {
             Ok(mut h) => {
                 ara_audio_why::register(h.why());
+                h.why().register(Box::new(ara_ai::why::NpcExplainer));
                 ara_world::service::register(&mut h)?;
                 return Ok(Box::new(h));
             }

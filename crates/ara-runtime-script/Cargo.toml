@@ -9,11 +9,13 @@ publish.workspace = true
 [dependencies]
 ara-components.workspace = true
 ara-diag.workspace = true
+ara-input = { path = "../ara-input" }
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
 ara-script = { path = "../ara-script" }
 ara-sim = { path = "../ara-sim" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+serde.workspace = true
 serde_json.workspace = true
 
 [lints]

@@ -21,7 +21,12 @@ use ara_runtime_world::{CellEvent, WorldStreaming};
 use ara_schema::AssetRef;
 use ara_sim::{TickConfig, Watch};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::PathBuf, sync::atomic::Ordering, time::Instant};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+    time::Instant,
+};
 
 /// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
 const CHUNK: u32 = 30;
@@ -69,11 +74,13 @@ fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAsse
 impl World {
     /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
     /// worlds copy player avatars, install the net plugin and wrap the runtime in a
-    /// server (authorities) or connect a mirror (clients).
+    /// server (authorities) or connect a mirror (clients). Headless worlds settle world
+    /// streaming (reproducible arrivals); `windowed` ones stream live.
     pub fn build(
         scene: &PlayScene,
         role: ara_play::Role,
         net: Option<&ara_play::NetStart>,
+        windowed: bool,
     ) -> Result<(Self, f64)> {
         let started = Instant::now();
         let schema = ara_runtime::schema(&scene.types)?;
@@ -105,7 +112,15 @@ impl World {
         }
         // Last: the world workers prepare rows against the complete registry.
         let mut cells = None;
-        if let Some((plugin, events)) = WorldStreaming::from_workspace(&workspace, &schema)? {
+        if let Some((plugin, events)) =
+            WorldStreaming::from_workspace(&workspace, &schema, id.as_str())?
+        {
+            // Headless (agent) play settles streaming: arrivals are reproducible.
+            let plugin = if windowed {
+                plugin
+            } else {
+                plugin.settled(std::time::Duration::from_secs(10))
+            };
             let acoustics = plugin
                 .manifest()
                 .cells
@@ -161,15 +176,9 @@ impl World {
         Ok(())
     }
 
-    /// The audio listener: at the camera, facing its view direction.
-    pub fn listener(&mut self, frame: &mut RenderFrame) -> ara_audio::AudioListener {
-        self.runtime.extract(frame);
-        let mut listener = ara_audio::AudioListener::default();
-        if let Some(camera) = &frame.camera {
-            listener.position = camera.position;
-            listener.forward = camera.forward;
-        }
-        listener
+    /// The asset source of the current pins, shared with presentation workers.
+    pub fn asset_source(&self) -> Result<Arc<dyn ara_runtime::assets::AssetSource>> {
+        Ok(Arc::new(assets(&self.cache, &self.pins)?))
     }
 
     /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`), after
@@ -200,18 +209,13 @@ impl World {
             .unwrap_or_default()
     }
 
-    /// One live audio update (windowed players, every presented frame).
-    pub fn audio(&mut self, audio: &mut AudioPresenter, frame: &mut RenderFrame) -> Result<()> {
-        let listener = self.listener(frame);
-        let resident = self.resident_acoustics();
-        let source: std::sync::Arc<dyn ara_runtime::assets::AssetSource> =
-            std::sync::Arc::new(assets(&self.cache, &self.pins)?);
-        audio.stream_cells(&resident, &source);
-        let assets = assets(&self.cache, &self.pins)?;
-        audio.update(self.runtime.world(), &listener, &mut |reference| {
-            ara_runtime_audio::clip(&assets, reference)
-        })?;
-        Ok(())
+    /// The live audio inputs of this frame, gathered on the frame thread (draining the
+    /// streaming events): resident cells with baked acoustics and the asset source.
+    pub fn audio_inputs(&mut self) -> Result<AudioInputs> {
+        Ok(AudioInputs {
+            resident: self.resident_acoustics(),
+            assets: self.asset_source()?,
+        })
     }
 
     /// A fresh audio presenter for this world (its project mixer, room reverb).
@@ -229,16 +233,14 @@ impl World {
         frame: &mut RenderFrame,
     ) -> Result<Value> {
         let mut audio = self.audio_presenter()?;
-        let listener = self.listener(frame);
-        let resident = self.resident_acoustics();
-        let source: std::sync::Arc<dyn ara_runtime::assets::AssetSource> =
-            std::sync::Arc::new(assets(&self.cache, &self.pins)?);
-        let probes = audio.stream_cells(&resident, &source);
+        self.runtime.extract(frame);
+        let listener = listener(frame);
+        let AudioInputs { resident, assets } = self.audio_inputs()?;
+        let probes = audio.stream_cells(&resident, &assets);
         audio.wait_cells(std::time::Duration::from_secs(5));
-        let probes = probes.max(audio.stream_cells(&resident, &source));
-        let assets = assets(&self.cache, &self.pins)?;
+        let probes = probes.max(audio.stream_cells(&resident, &assets));
         let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
-            ara_runtime_audio::clip(&assets, reference)
+            ara_runtime_audio::clip(assets.as_ref(), reference)
         })?;
         let capture = audio.capture(params.seconds)?;
         let path = std::path::Path::new(&params.path);
@@ -283,9 +285,9 @@ impl World {
             // Commands run on the authority; clients see their effects replicated.
             return Ok(json!({"mirror": true}));
         }
-        let world = self.runtime.play_mut().session_mut().world_mut();
+        let session = self.runtime.play_mut().session_mut();
         Ok(ara_runtime_script::execute(
-            world,
+            session,
             &command.name,
             &command.params,
         )?)
@@ -623,6 +625,40 @@ impl World {
                 .collect::<Vec<_>>()
         ))
     }
+}
+
+/// The audio listener of an extracted frame: at the camera, facing its view direction.
+pub fn listener(frame: &RenderFrame) -> ara_audio::AudioListener {
+    let mut listener = ara_audio::AudioListener::default();
+    if let Some(camera) = &frame.camera {
+        listener.position = camera.position;
+        listener.forward = camera.forward;
+    }
+    listener
+}
+
+/// What a live audio update needs besides the world (see [`World::audio_inputs`]).
+pub struct AudioInputs {
+    /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`).
+    pub resident: Vec<(String, AssetRef)>,
+    /// Clips, graphs and probes resolve through the current pins.
+    pub assets: Arc<dyn ara_runtime::assets::AssetSource>,
+}
+
+/// One live audio update: streams cell probes, then evaluates acoustics against the
+/// physics scene and retargets voices. Reads the simulation only, so the player runs
+/// it on a worker thread while the frame presents (physics is not stepping then).
+pub fn update_audio(
+    audio: &mut AudioPresenter,
+    world: &ara_sim::bevy_ecs::world::World,
+    listener: &ara_audio::AudioListener,
+    inputs: &AudioInputs,
+) -> Result<()> {
+    audio.stream_cells(&inputs.resident, &inputs.assets);
+    audio.update(world, listener, &mut |reference| {
+        ara_runtime_audio::clip(inputs.assets.as_ref(), reference)
+    })?;
+    Ok(())
 }
 
 fn samples(samples: &[ara_sim::Sample]) -> Vec<Sample> {

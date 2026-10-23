@@ -8,16 +8,21 @@
 //! - Each tick: `before_tick` applies staged reloads (`ScriptHost::tick_boundary`, the
 //!   only place code changes); the `scripts` system runs C# systems and behaviours at
 //!   `Stage::Gameplay`, in the host's deterministic `(Order, name)` order.
+//! - Entities C# spawns (systems, behaviours, commands) get a stable identity
+//!   (`e_cs<tick>x<n>`, numbered in content order), so snapshots, state hashes and
+//!   replays include them like authored entities.
 //! - [`ScriptProvider`] captures C# components (by entity identity) and resources into
 //!   snapshots and state hashes, and restores them.
 //! - [`execute`], [`catalog`] and [`request_compile`] serve play commands and agent
-//!   edits between ticks. Reload reports, diagnostics and L4 restarts arrive on the
-//!   [`ScriptEvent`] channel.
+//!   edits between ticks. Executed commands are recorded with the next tick
+//!   ([`COMMAND`] boundary commands), so recordings replay them. Reload reports,
+//!   diagnostics and L4 restarts arrive on the [`ScriptEvent`] channel.
 use ara_diag::Diagnostic;
 use ara_runtime::{
     Result, RuntimeError,
     plugin::{RuntimePlugin, Stage},
 };
+use ara_schema::Schema;
 use ara_schema::SchemaDb;
 use ara_script::{
     EditOrigin, EngineBindings, ModuleSpec, ScriptConfig, ScriptHost,
@@ -25,9 +30,11 @@ use ara_script::{
     bind_component,
 };
 use ara_sim::{
-    ExternalWrites, Identity, Session, SimContext, SimError, SimRegistry, StateProvider,
+    BoundaryCommand, ExternalWrites, Identity, Session, SimContext, SimError, SimRegistry,
+    StateProvider,
 };
-use bevy_ecs::{component::ComponentId, prelude::*};
+use bevy_ecs::{component::ComponentId, prelude::*, resource::IsResource};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::{
     any::TypeId,
@@ -156,6 +163,7 @@ impl RuntimePlugin for ScriptPlugin {
         for name in &self.components {
             registry.register_external(name)?;
         }
+        registry.register_command::<ScriptCommand>(COMMAND, replay_command)?;
         Ok(())
     }
 
@@ -254,7 +262,8 @@ fn apply_writes(scripts: &Scripts, world: &mut World) {
     }
 }
 
-/// The `scripts` system: applies projected values, then runs C# systems and behaviours.
+/// The `scripts` system: applies projected values, then runs C# systems and behaviours
+/// and names the entities they spawned.
 fn run_scripts(world: &mut World) {
     let context = world.resource::<SimContext>();
     let tick = Tick {
@@ -267,12 +276,89 @@ fn run_scripts(world: &mut World) {
     world.resource_scope::<Scripts, _>(|world, mut scripts| {
         apply_writes(&scripts, world);
         scripts.host.run_tick(world, tick);
+        identify_spawns(&scripts, world, &format!("e_cs{}x", tick.frame));
     });
 }
 
+/// Gives every entity C# spawned (no `Identity` yet) a stable one, `<prefix><n>`,
+/// numbered in content order (Transform plus C# component values): spawn handles
+/// depend on allocator history, content does not, and equal entities are
+/// interchangeable. Snapshots, state hashes and replays then include them.
+fn identify_spawns(scripts: &Scripts, world: &mut World, prefix: &str) {
+    let fresh: Vec<Entity> = world
+        .query_filtered::<Entity, (Without<Identity>, Without<IsResource>)>()
+        .iter(world)
+        .collect();
+    if fresh.is_empty() {
+        return;
+    }
+    let mut names = scripts.host.module_components();
+    names.sort_unstable();
+    let key = |entity: Entity| {
+        let transform = world
+            .get::<ara_components::Transform>(entity)
+            .map(|t| json!([t.position, t.rotation, t.scale]));
+        let values: Vec<Option<Value>> = names
+            .iter()
+            .map(|n| scripts.host.read_component(world, entity, n))
+            .collect();
+        json!([transform, values]).to_string()
+    };
+    let mut keyed: Vec<(String, Entity)> = fresh.into_iter().map(|e| (key(e), e)).collect();
+    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    for (n, (_, entity)) in keyed.into_iter().enumerate() {
+        world
+            .entity_mut(entity)
+            .insert(Identity(format!("{prefix}{n}")));
+    }
+}
+
+/// Boundary command name of a C# `[Command]` run between ticks ([`execute`]).
+pub const COMMAND: &str = "script.command";
+
+/// A C# `[Command]` invocation recorded for replay.
+#[derive(Debug, Clone, Default, PartialEq, Schema, Serialize, Deserialize)]
+#[ara(module = "scripts")]
+#[serde(default, rename_all = "camelCase")]
+pub struct ScriptCommand {
+    /// Command name (`game.UseMedkit`).
+    pub name: String,
+    /// Parameters with entities as document addresses (`e_fox`).
+    pub params: Value,
+}
+
+/// Replays a recorded C# command at its boundary.
+fn replay_command(
+    world: &mut World,
+    _: &BoundaryCommand,
+    command: ScriptCommand,
+) -> std::result::Result<(), SimError> {
+    run_command(world, &command.name, &command.params, "r")
+        .map(drop)
+        .map_err(|e| SimError(e.0))
+}
+
+/// Runs a command with resolved entity parameters and names what it spawned.
+fn run_command(world: &mut World, name: &str, params: &Value, tag: &str) -> Result<Value> {
+    if !world.contains_resource::<Scripts>() {
+        return Err(RuntimeError("this world runs no C# modules".into()));
+    }
+    let mut params = params.clone();
+    resolve_entities(world, &mut params);
+    let prefix = format!("e_cs{}{tag}", world.resource::<SimContext>().tick());
+    world.resource_scope::<Scripts, _>(|world, mut scripts| {
+        let record = scripts
+            .host
+            .execute_command(world, name, &params, None)
+            .map_err(|d| RuntimeError(d.to_string()))?;
+        identify_spawns(&scripts, world, &prefix);
+        Ok(scripts.host.describe(&record))
+    })
+}
+
 /// Captures C# components (by entity identity) and C# resources into snapshots and
-/// state hashes; restores them through the host. Entities without an identity (spawned
-/// by C# at runtime) are not captured yet.
+/// state hashes; restores them through the host (C#-spawned entities included: they
+/// are named when spawned).
 pub struct ScriptProvider;
 
 impl StateProvider for ScriptProvider {
@@ -380,21 +466,22 @@ fn resolve_entities(world: &mut World, params: &mut Value) {
 }
 
 /// Runs a C# `[Command]` (`game.UseMedkit`) against the play world between ticks as
-/// one undoable step. Entity params may use document addresses. Returns the command's
-/// description (`ScriptHost::describe`: writes, cues, outcome).
-pub fn execute(world: &mut World, name: &str, params: &Value) -> Result<Value> {
-    if !world.contains_resource::<Scripts>() {
-        return Err(RuntimeError("this world runs no C# modules".into()));
-    }
-    let mut params = params.clone();
-    resolve_entities(world, &mut params);
-    world.resource_scope::<Scripts, _>(|world, mut scripts| {
-        let record = scripts
-            .host
-            .execute_command(world, name, &params, None)
-            .map_err(|d| RuntimeError(d.to_string()))?;
-        Ok(scripts.host.describe(&record))
-    })
+/// one undoable step, and records it with the next tick (agent player 0) so
+/// recordings replay it. Entity params may use document addresses. Returns the
+/// command's description (`ScriptHost::describe`: writes, cues, outcome).
+pub fn execute(session: &mut Session, name: &str, params: &Value) -> Result<Value> {
+    let described = run_command(session.world_mut(), name, params, "c")?;
+    session.record_applied(BoundaryCommand {
+        kind: COMMAND.into(),
+        player: ara_input::PlayerId(0),
+        sequence: 0,
+        target: None,
+        payload: serde_json::to_value(ScriptCommand {
+            name: name.to_owned(),
+            params: params.clone(),
+        })?,
+    })?;
+    Ok(described)
 }
 
 /// A C# component's value on `entity` (inspection, `play.read`), when it has one.

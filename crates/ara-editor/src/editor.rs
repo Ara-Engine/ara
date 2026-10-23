@@ -105,6 +105,7 @@ impl Editor {
         })
         .map_err(anyhow::Error::msg)?;
         ara_audio_why::register(host.why());
+        host.why().register(Box::new(ara_ai::why::NpcExplainer));
         ara_world::service::register(&mut host).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let workspace = host.store().workspace();
         let doc = main_scene

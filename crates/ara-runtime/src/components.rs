@@ -338,6 +338,19 @@ impl Default for Animator {
     }
 }
 
+/// Streams a `.world`'s cells into play around the players (`ara-runtime-world`).
+/// Put it on one entity of the level scene; the cell documents stay out of the
+/// projection and arrive at tick boundaries. With a `Terrain`, navigation then
+/// follows the resident `TerrainChunk`s.
+#[derive(Debug, Clone, Default, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "world")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct StreamedWorld {
+    /// The world manifest (`.world` document).
+    #[ara(asset_kind = "world")]
+    pub world: Option<AssetRef>,
+}
+
 /// Plays a `.music` document's interactive score (segments, transitions, intensity
 /// layers) from this entity, non-spatial. Presentation intent: gameplay writes
 /// `intensity` and `segment`; the audio presenter follows them.
@@ -418,8 +431,9 @@ pub fn register_schemas(db: &mut SchemaDb) {
         .register::<Wanderer>()
         .register::<Animator>()
         .register::<VisualEffect>()
+        .register::<StreamedWorld>()
         .register::<MusicSource>()
         .register::<AudioGraphSource>()
         .register::<crate::terrain::Terrain>()
-        .register::<crate::terrain::TerrainTile>();
+        .register::<crate::terrain::TerrainChunk>();
 }

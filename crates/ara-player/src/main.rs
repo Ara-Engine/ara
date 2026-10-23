@@ -208,15 +208,41 @@ impl Player {
                 let result = serde_json::to_value(world.patched(patch.tick, &patch.sets))?;
                 self.link.respond(patch.id, Ok(result))?;
             }
-            if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.presenter) {
-                window.present(&mut world.runtime, presenter, &mut self.frame)?;
+            if self.window.is_some() {
+                world.runtime.extract(&mut self.frame);
             }
-            let mut audio_failed = None;
-            if let Some((audio, device)) = &mut self.audio {
-                let result = world
-                    .audio(audio, &mut self.frame)
-                    .and_then(|()| Ok(audio.pump(device, AUDIO_WATERMARK)?));
-                audio_failed = result.err();
+            let inputs = match &self.audio {
+                Some(_) => Some(world.audio_inputs()?),
+                None => None,
+            };
+            // Acoustics and voice updates read the simulation only (physics is not
+            // stepping between ticks): a worker runs them while the GPU frame presents.
+            let listener = world::listener(&self.frame);
+            let simulation = world.runtime.world();
+            let (presented, audio) = std::thread::scope(|scope| {
+                let job = match (&mut self.audio, &inputs) {
+                    (Some((audio, _)), Some(inputs)) => Some(
+                        scope.spawn(|| world::update_audio(audio, simulation, &listener, inputs)),
+                    ),
+                    _ => None,
+                };
+                let presented = match (&mut self.window, &mut self.presenter) {
+                    (Some(window), Some(presenter)) => window.present(presenter, &self.frame),
+                    _ => Ok(()),
+                };
+                let audio = job.map(|job| {
+                    job.join()
+                        .unwrap_or_else(|_| Err(anyhow!("audio worker panicked")))
+                });
+                (presented, audio)
+            });
+            presented?;
+            let mut audio_failed = audio.and_then(Result::err);
+            if audio_failed.is_none()
+                && let Some((audio, device)) = &mut self.audio
+                && let Err(error) = audio.pump(device, AUDIO_WATERMARK)
+            {
+                audio_failed = Some(error.into());
             }
             if let Some(error) = audio_failed {
                 eprintln!("ara-player: audio off: {error:#}");
@@ -377,7 +403,7 @@ impl Player {
                     fault: None,
                     audio: false,
                     net: None,
-                cells: Vec::new(),
+                    cells: Vec::new(),
                 };
                 let _ = link.notify(STATUS, &status);
                 let _ = link.flush();
@@ -525,7 +551,12 @@ impl Player {
             }
         };
         let decode_ms = decode.elapsed().as_secs_f64() * 1000.0;
-        let (mut world, build_ms) = World::build(&scene, start.role, start.net.as_ref())?;
+        let (mut world, build_ms) = World::build(
+            &scene,
+            start.role,
+            start.net.as_ref(),
+            self.window.is_some(),
+        )?;
         let mut handshake = None;
         if start.role == ara_play::Role::Client {
             let t = Instant::now();

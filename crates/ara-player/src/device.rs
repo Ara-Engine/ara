@@ -4,7 +4,6 @@ use anyhow::Result;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_platform::{Event, Present, Window};
 use ara_runtime::{
-    Runtime,
     components::{Environment, MeshShape},
     control::{JUMP, LOOK, MOVE, SPRINT},
     extract::{Draw, Geometry, RenderFrame},
@@ -165,20 +164,15 @@ impl Windowed {
         Ok((quit, inputs))
     }
 
-    /// Extracts, renders and presents one frame, recreating the swapchain on resize.
-    pub fn present(
-        &mut self,
-        runtime: &mut Runtime,
-        presenter: &mut Presenter,
-        frame: &mut RenderFrame,
-    ) -> Result<()> {
+    /// Renders and presents one extracted frame, recreating the swapchain on resize.
+    /// Touches no simulation state, so it overlaps the frame's audio worker.
+    pub fn present(&mut self, presenter: &mut Presenter, frame: &RenderFrame) -> Result<()> {
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());
         }
-        runtime.extract(frame);
         if presenter.renderer().is_some_and(|r| r.size() != size) {
             self.recreate(presenter)?;
             presenter.resize(size)?;

@@ -3,11 +3,11 @@
 //! navigation bakes over the heightfields, foliage scatters once for the renderer and
 //! [`TerrainState`] keeps the immutable tiles.
 //!
-//! Collision follows [`TerrainTile`] entities (authored in world cells, so it streams
+//! Collision follows [`TerrainChunk`] entities (authored in world cells, so it streams
 //! with them; or in the level): each becomes an ECS-bound static Jolt heightfield
 //! body (`Collider { kind: Cooked }`), so snapshots, restores, replays and network
 //! replication treat it like any body. Cooked shapes are runtime handles: they are
-//! re-cooked after every native rebuild ([`cook_tiles`]).
+//! re-cooked after every native rebuild ([`cook_chunks`]).
 use crate::{Result, RuntimeError, assets::asset_id};
 use ara_doc::Workspace;
 use ara_foliage::{Bounds, Instance, Rule, SurfaceSample};
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
 /// Puts a `.terrain` heightfield (and its `.foliage` scatter) in play: rendered by the
-/// landscape renderer, walkable for navigation, solid where `TerrainTile`s exist.
+/// landscape renderer, walkable for navigation, solid where `TerrainChunk`s exist.
 #[derive(Debug, Clone, Default, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "terrain")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -41,7 +41,7 @@ pub struct Terrain {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "terrain")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct TerrainTile {
+pub struct TerrainChunk {
     /// Tile index along world X.
     pub x: i32,
     /// Tile index along world Z.
@@ -69,10 +69,10 @@ impl TerrainData {
         let h = |x: f32, z: f32| self.height(x, z);
         let center = h(p[0], p[1])?;
         let s = self.header.spacing;
-        let dx = (h(p[0] + s, p[1]).unwrap_or(center) - h(p[0] - s, p[1]).unwrap_or(center))
-            / (2.0 * s);
-        let dz = (h(p[0], p[1] + s).unwrap_or(center) - h(p[0], p[1] - s).unwrap_or(center))
-            / (2.0 * s);
+        let dx =
+            (h(p[0] + s, p[1]).unwrap_or(center) - h(p[0] - s, p[1]).unwrap_or(center)) / (2.0 * s);
+        let dz =
+            (h(p[0], p[1] + s).unwrap_or(center) - h(p[0], p[1] - s).unwrap_or(center)) / (2.0 * s);
         let n = glam::Vec3::new(-dx, 1.0, -dz).normalize();
         let (tile, i) = self.sample_index(p[0], p[1])?;
         let w = tile.weights.get(i).copied().unwrap_or([255, 0, 0, 0]);
@@ -158,7 +158,9 @@ pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainS
         .collect();
     // Worker threads: evaluation (strokes, erosion halos) never runs on a tick.
     let workers = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(1, 4));
-    let chunks: Vec<&[TileCoord]> = coords.chunks(coords.len().div_ceil(workers).max(1)).collect();
+    let chunks: Vec<&[TileCoord]> = coords
+        .chunks(coords.len().div_ceil(workers).max(1))
+        .collect();
     let evaluated: Vec<std::result::Result<Vec<(TileCoord, Tile)>, String>> =
         std::thread::scope(|scope| {
             let handles: Vec<_> = chunks
@@ -180,7 +182,10 @@ pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainS
                 .collect();
             handles
                 .into_iter()
-                .map(|h| h.join().unwrap_or_else(|_| Err("terrain worker panicked".into())))
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err("terrain worker panicked".into()))
+                })
                 .collect()
         });
     let mut tiles = BTreeMap::new();
@@ -259,16 +264,22 @@ pub fn tile_physics_id(coord: TileCoord) -> u64 {
     0x7e44_0000_0000_0000 | (u64::from(coord.x as u16) << 16) | u64::from(coord.z as u16)
 }
 
-/// Gives every `TerrainTile` without a cooked collider its static heightfield body:
+/// Gives every `TerrainChunk` without a cooked collider its static heightfield body:
 /// tiles spawned by streaming, and all of them after a native physics rebuild.
-pub fn cook_tiles(world: &mut World) -> Result<()> {
+pub fn cook_chunks(world: &mut World) -> Result<()> {
     let Some(state) = world.get_resource::<TerrainState>().cloned() else {
         return Ok(());
     };
     let mut wanted = Vec::new();
-    let mut query = world.query_filtered::<(Entity, &TerrainTile), Without<CookedCollider>>();
+    let mut query = world.query_filtered::<(Entity, &TerrainChunk), Without<CookedCollider>>();
     for (entity, tile) in query.iter(world) {
-        wanted.push((entity, TileCoord { x: tile.x, z: tile.z }));
+        wanted.push((
+            entity,
+            TileCoord {
+                x: tile.x,
+                z: tile.z,
+            },
+        ));
     }
     if wanted.is_empty() {
         return Ok(());
@@ -307,8 +318,8 @@ pub fn cook_tiles(world: &mut World) -> Result<()> {
 }
 
 /// The fixed-tick hook: streamed-in tiles get their bodies before physics.
-pub fn adopt_tiles(world: &mut World) {
-    if let Err(error) = cook_tiles(world) {
+pub fn adopt_chunks(world: &mut World) {
+    if let Err(error) = cook_chunks(world) {
         world.resource_mut::<ara_physics::PhysicsStatus>().error =
             Some(ara_physics::PhysicsError(format!("terrain: {}", error.0)));
     }

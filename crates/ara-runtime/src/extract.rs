@@ -101,7 +101,7 @@ pub struct CameraView {
 }
 
 /// Terrain for presentation: the shared evaluated tiles and foliage, and the tiles
-/// whose `TerrainTile` entities are resident (detail pages follow them).
+/// whose `TerrainChunk` entities are resident (detail pages follow them).
 #[derive(Clone)]
 pub struct TerrainView {
     /// Immutable evaluated terrain (shared, never copied per frame).
@@ -200,9 +200,10 @@ impl RenderFrame {
             if let Some(light) = entity.get::<Light>() {
                 self.light(light, &pose);
             }
-            if let (Some(tile), Some(terrain)) =
-                (entity.get::<crate::terrain::TerrainTile>(), &mut self.terrain)
-            {
+            if let (Some(tile), Some(terrain)) = (
+                entity.get::<crate::terrain::TerrainChunk>(),
+                &mut self.terrain,
+            ) {
                 terrain.tiles.push(ara_terrain::TileCoord {
                     x: tile.x,
                     z: tile.z,

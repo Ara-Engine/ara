@@ -29,6 +29,8 @@ pub struct WorkerPool {
     busy: Vec<bool>,
     results: mpsc::Receiver<(usize, Completion)>,
     retired: VecDeque<Box<LoadedCell>>,
+    /// Completions received by `wait_idle`, handed out by `poll` first.
+    ready: VecDeque<Completion>,
 }
 impl WorkerPool {
     /// Creates 1..=16 workers, with a hard per-cell retained-memory admission limit.
@@ -86,6 +88,7 @@ impl WorkerPool {
             busy: vec![false; workers],
             results,
             retired: VecDeque::new(),
+            ready: VecDeque::new(),
         })
     }
 
@@ -101,11 +104,33 @@ impl WorkerPool {
         }
     }
     pub(crate) fn poll(&mut self) -> Option<Completion> {
+        if let Some(completion) = self.ready.pop_front() {
+            return Some(completion);
+        }
         if let Ok((slot, completion)) = self.results.try_recv() {
             self.busy[slot] = false;
             return Some(completion);
         }
         None
+    }
+    /// Blocks until no worker is busy (results are kept for `poll`) or `deadline`
+    /// passes. False on timeout.
+    pub(crate) fn wait_idle(&mut self, deadline: std::time::Instant) -> bool {
+        while self.busy.iter().any(|b| *b) {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            match self.results.recv_timeout(left) {
+                Ok((slot, completion)) => {
+                    self.busy[slot] = false;
+                    self.ready.push_back(completion);
+                }
+                Err(_) => return false,
+            }
+        }
+        true
+    }
+    /// Whether any job (load or retirement) is in flight or queued.
+    pub(crate) fn pending(&self) -> bool {
+        self.busy.iter().any(|b| *b) || !self.retired.is_empty() || !self.ready.is_empty()
     }
     pub(crate) fn retire(&mut self, cell: LoadedCell) {
         self.retired.push_back(Box::new(cell));

@@ -110,6 +110,8 @@ pub struct Session {
     pub(crate) pending_commands: BTreeMap<u64, Vec<BoundaryCommand>>,
     pub(crate) pending_typed: BTreeMap<u64, Vec<Box<dyn crate::command::QueuedTyped>>>,
     pub(crate) pending_ops: BTreeMap<u64, Vec<Op>>,
+    /// Commands the host already executed between ticks, recorded with the next tick.
+    pub(crate) applied: BTreeMap<u64, Vec<BoundaryCommand>>,
     pub(crate) sequences: BTreeMap<PlayerId, u64>,
     pub(crate) mode: SessionMode,
     pub(crate) record_hashes: bool,
@@ -147,6 +149,7 @@ impl Session {
             pending_commands: BTreeMap::new(),
             pending_typed: BTreeMap::new(),
             pending_ops: BTreeMap::new(),
+            applied: BTreeMap::new(),
             sequences: BTreeMap::new(),
             mode: SessionMode::Local,
             record_hashes: false,
@@ -381,6 +384,26 @@ impl Session {
         Ok(())
     }
 
+    /// Records a command the host already executed between ticks (an agent's play
+    /// command on a paused world): the next tick's record carries it, so replays and
+    /// recordings re-run it at that boundary through its registered handler. The
+    /// session assigns `sequence` (the owner's next); the payload must validate.
+    /// Replays apply it after that boundary's inputs, live patches and streaming.
+    pub fn record_applied(&mut self, mut command: BoundaryCommand) -> Result<()> {
+        self.edit.registry.prepare_command(&mut command)?;
+        let sequence = self
+            .sequences
+            .get(&command.player)
+            .map_or(1, |last| last + 1);
+        command.sequence = sequence;
+        self.sequences.insert(command.player, sequence);
+        self.applied
+            .entry(self.tick() + 1)
+            .or_default()
+            .push(command);
+        Ok(())
+    }
+
     /// Queues a committed authoring transaction for the edit/play bridge.
     /// This administrative path must never be exposed as a public gameplay RPC.
     pub fn patch(&mut self, tick: u64, transaction: &ara_ops::Transaction) -> Result<()> {
@@ -476,7 +499,8 @@ impl Session {
             context.inputs.apply(&self.actions, tick, &inputs)?;
             context.tick = tick;
         }
-        let mut commands = Vec::new();
+        // Already executed between ticks: recorded here, never re-run live.
+        let mut commands = self.applied.remove(&tick).unwrap_or_default();
         for command in pending {
             match command {
                 crate::command::Pending::Data(command) => {

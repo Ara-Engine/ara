@@ -183,7 +183,10 @@ impl WorldService {
             Err(RecvTimeoutError::Timeout) => return Ok(()),
             Err(RecvTimeoutError::Disconnected) => Err(crate::invalid("index worker stopped")),
         };
-        let build = self.build.take().ok_or_else(|| fail("index build vanished"))?;
+        let build = self
+            .build
+            .take()
+            .ok_or_else(|| fail("index build vanished"))?;
         let index = index.map_err(world_error)?;
         self.tools = Some((
             build.world.clone(),
@@ -277,8 +280,10 @@ impl Service for WorldService {
                 let world = world_of(cx, world.as_deref())?;
                 let tools = self.current(cx, &world)?;
                 // Reads: the tools take the store mutably but commit nothing.
-                cx.transact(None, |store, meta| tools.call(method, args, store, meta, resident))?
-                    .map_err(world_error)
+                cx.transact(None, |store, meta| {
+                    tools.call(method, args, store, meta, resident)
+                })?
+                .map_err(world_error)
             }
             "world.entity.move_to_cell" | "world.layer.set" => {
                 let (world, why, command) = if method == "world.layer.set" {

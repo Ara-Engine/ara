@@ -218,3 +218,112 @@ fn async_cached_text_activation_layers_grace_memory_and_unload_are_bounded() {
     assert_eq!(streaming.reserved_bytes(), 0);
     assert_eq!(events.removed, ["c_a", "c_b"]);
 }
+
+/// Cooks cells from an in-memory workspace, slowly (a busy worker machine).
+struct SlowSource {
+    manifest: Manifest,
+    workspace: Workspace,
+    db: SchemaDb,
+}
+impl CellSource for SlowSource {
+    fn load(&self, cell: &str, _: usize) -> ara_world::Result<CellBlob> {
+        std::thread::sleep(Duration::from_millis(40));
+        cook_cell(&self.manifest, cell, &self.workspace, &self.db, None)
+    }
+}
+
+#[test]
+fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
+    let mut db = SchemaDb::new();
+    register(&mut db);
+    ara_components::register(&mut db);
+    let registry = SimRegistry::new(db.clone()).unwrap();
+    let mut root = Document::new("world", AssetId::parse("wd_test").unwrap());
+    for (id, value) in [
+        ("w_grid", json!({"cellSize":32})),
+        (
+            "l_art",
+            json!({"name":"Art","loaded":true,"visible":true,"range":4,"graceTicks":3}),
+        ),
+        (
+            "c_a",
+            json!({"x":0,"z":0,"slot":0,"layer":"l_art","documents":["@a.scene#sc_a"]}),
+        ),
+        (
+            "c_b",
+            json!({"x":1,"z":0,"slot":0,"layer":"l_art","documents":["@b.scene#sc_b"]}),
+        ),
+    ] {
+        root.insert_unchecked(
+            RecordId::parse(id).unwrap(),
+            serde_json::from_value(value).unwrap(),
+        );
+    }
+    let manifest = Manifest::read(&root).unwrap();
+    let mut workspace = Workspace::default();
+    for (id, file, cell) in [("sc_a", "a.scene", 0), ("sc_b", "b.scene", 1)] {
+        let mut scene = Document::new("scene", AssetId::parse(id).unwrap());
+        for i in 0..4 {
+            scene.insert_unchecked(
+                RecordId::parse(&format!("e_{}", cell * 100 + i)).unwrap(),
+                serde_json::from_value(
+                    json!({"Transform":{"position":[cell as f32*32.0+i as f32,0,0]}}),
+                )
+                .unwrap(),
+            );
+        }
+        workspace.insert(file, scene);
+    }
+    let source = Arc::new(SlowSource {
+        manifest: manifest.clone(),
+        workspace,
+        db: db.clone(),
+    });
+    let pool = WorkerPool::new(source, registry.clone(), 1, 1024 * 1024).unwrap();
+    let mut streaming = Streaming::new(
+        &manifest,
+        pool,
+        StreamConfig {
+            memory_bytes: 4 * 1024 * 1024,
+            cell_reservation: 1024 * 1024,
+            lookahead_seconds: 0.0,
+        },
+    )
+    .unwrap();
+    let edit = EditWorld::new(
+        registry,
+        Document::new("scene", AssetId::parse("sc_empty").unwrap()),
+    )
+    .unwrap();
+    let mut session = Session::local(edit, TickConfig::default(), 1, Default::default()).unwrap();
+    // Near the shared edge: both cells are wanted, one worker cooks them in turn.
+    let near_both = StreamingSource {
+        position: [31.0, 0.0, 16.0],
+        velocity: [0.0; 3],
+        range_scale: 1.0,
+    };
+    let budget = ActivationBudget {
+        time: Duration::from_secs(1),
+        max_entities: 64,
+    };
+    let mut events = Events::default();
+    let settled = streaming
+        .settle(
+            &manifest,
+            &[near_both],
+            1,
+            &mut events,
+            Duration::from_secs(10),
+        )
+        .unwrap();
+    assert!(settled);
+    session
+        .step_with_streaming(|boundary| {
+            streaming.activate(boundary, budget, &mut events).unwrap();
+            Ok(())
+        })
+        .unwrap();
+    assert!(streaming.is_resident("c_a") && streaming.is_resident("c_b"));
+    assert_eq!(events.ready, ["c_a", "c_b"]);
+    assert_eq!(streaming.entity_count(), 8);
+}

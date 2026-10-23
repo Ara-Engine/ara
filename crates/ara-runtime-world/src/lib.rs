@@ -8,6 +8,7 @@
 //! - [`WorldStreaming`]: the plugin. `before_tick` plans interest from every
 //!   `PlayerControl` entity's pose; `stream` activates within an entity budget;
 //!   `mirror` streams a networked client's never-stepped world around its own player.
+//!   [`WorldStreaming::settled`] makes arrivals reproducible (waits for cooks).
 //!   Cell readiness and removal go out as [`CellEvent`]s for presentation consumers
 //!   (baked `AcousticCell` probes, terrain tiles), in order.
 //!
@@ -18,8 +19,8 @@ use ara_runtime::{RuntimeError, components::PlayerControl, plugin::RuntimePlugin
 use ara_schema::SchemaDb;
 use ara_sim::{Session, SimRegistry, StreamingBoundary};
 use ara_world::{
-    ActivationBudget, CellBlob, CellKey, CellSource, HlodProxy, Interest, Manifest,
-    StreamConfig, Streaming, StreamingSource, WorkerPool, cook_cell,
+    ActivationBudget, CellBlob, CellKey, CellSource, HlodProxy, Interest, Manifest, StreamConfig,
+    Streaming, StreamingSource, WorkerPool, cook_cell,
 };
 use std::{
     sync::{
@@ -100,6 +101,8 @@ pub struct WorldStreaming {
     events: Events,
     budget: ActivationBudget,
     workers: usize,
+    /// Wait for in-flight cooks before each boundary (reproducible arrivals).
+    settle: Option<Duration>,
 }
 
 /// The streaming state through `&mut` (the mutex is never locked, so never poisoned).
@@ -114,15 +117,26 @@ fn runtime_error(e: ara_world::Error) -> RuntimeError {
 }
 
 impl WorldStreaming {
-    /// The plugin for the snapshot's world document, if it has one (several: the
-    /// first by ID). Returns the plugin and its cell event receiver.
+    /// The plugin for the world `scene` streams (its `StreamedWorld` component), if it
+    /// streams one. Returns the plugin and its cell event receiver.
     pub fn from_workspace(
         workspace: &Workspace,
         schema: &SchemaDb,
+        scene: &str,
     ) -> ara_runtime::Result<Option<(Self, Receiver<CellEvent>)>> {
-        let Some((_, world)) = workspace.docs().find(|(_, d)| d.kind == "world") else {
+        let Some(reference) = workspace.doc(scene).and_then(|doc| {
+            doc.records().values().find_map(|record| {
+                let world = record.get("StreamedWorld")?.get("world")?.as_str()?;
+                Some(ara_schema::AssetRef(world.to_owned()))
+            })
+        }) else {
             return Ok(None);
         };
+        let id = ara_runtime::assets::asset_id(&reference)?;
+        let world = workspace
+            .doc(id)
+            .filter(|d| d.kind == "world")
+            .ok_or_else(|| RuntimeError(format!("{} is not a loaded world", reference.0)))?;
         let manifest = Manifest::read(world).map_err(runtime_error)?;
         let (tx, rx) = channel();
         Ok(Some((
@@ -142,9 +156,20 @@ impl WorldStreaming {
                     max_entities: 64,
                 },
                 workers: 2,
+                settle: None,
             },
             rx,
         )))
+    }
+
+    /// Settled streaming: before each boundary, waits (at most `timeout`) until every
+    /// wanted cell is cooked, so cells arrive at the first boundary after they become
+    /// wanted, whatever the worker speed. Same seed and inputs then give the same state
+    /// hash across runs and machines (agent playtests, headless players). Live windowed
+    /// play leaves it off: a slow cook never stalls a frame.
+    pub fn settled(mut self, timeout: Duration) -> Self {
+        self.settle = Some(timeout);
+        self
     }
 
     /// The world's cell documents: the projected scene must not also contain them.
@@ -177,9 +202,22 @@ impl WorldStreaming {
             .collect();
         sources.sort_by_key(|(player, _)| *player);
         let sources: Vec<StreamingSource> = sources.into_iter().map(|(_, s)| s).collect();
-        streaming
-            .update(&self.manifest, &sources, tick, &mut self.events)
-            .map_err(runtime_error)
+        match self.settle {
+            Some(timeout) => {
+                let settled = streaming
+                    .settle(&self.manifest, &sources, tick, &mut self.events, timeout)
+                    .map_err(runtime_error)?;
+                if !settled {
+                    return Err(RuntimeError(format!(
+                        "world streaming: cells were not cooked within {timeout:?}"
+                    )));
+                }
+                Ok(())
+            }
+            None => streaming
+                .update(&self.manifest, &sources, tick, &mut self.events)
+                .map_err(runtime_error),
+        }
     }
 
     fn activate(&mut self, boundary: &mut StreamingBoundary<'_>) -> ara_runtime::Result<()> {
@@ -256,7 +294,11 @@ mod tests {
     fn events_forward_interest_in_order() {
         let (tx, rx) = channel();
         let mut events = Events(tx);
-        let key = CellKey { x: 1, z: 0, slot: 0 };
+        let key = CellKey {
+            x: 1,
+            z: 0,
+            slot: 0,
+        };
         events.ready("c_a", key, true, &[]);
         events.removed("c_a", key);
         let got: Vec<_> = rx.try_iter().collect();

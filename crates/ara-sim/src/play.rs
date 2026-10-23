@@ -348,6 +348,7 @@ impl PlayControl {
         self.session.pending_commands.clear();
         self.session.pending_typed.clear();
         self.session.pending_ops.clear();
+        self.session.applied.clear();
         let was_hashing = self.session.record_hashes;
         self.session.record_hashes = true;
         let result = (|| {

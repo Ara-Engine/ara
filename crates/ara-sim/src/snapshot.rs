@@ -445,6 +445,7 @@ impl Session {
         self.pending_commands = snapshot.commands.clone();
         self.pending_typed.clear();
         self.pending_ops = snapshot.ops.clone();
+        self.applied.clear();
         self.sequences = snapshot.sequences.clone();
         self.mode = snapshot.mode;
         self.fault = None;

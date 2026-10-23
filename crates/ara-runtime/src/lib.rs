@@ -5,27 +5,39 @@
 //!
 //! # Fixed-tick system order
 //!
+//! Before the systems, the boundary applies inputs, live patches, commands and
+//! streamed cell arrivals (plugins' `stream`).
+//!
 //! | # | System | Does |
 //! |---|---|---|
 //! | 0 | `poses.remember` | last world poses become the interpolation start |
 //! | 1 | `input.cameras` | `Look` steers follow-camera rigs |
-//! | 2 | `input.players` | `Move`/`Sprint`/`Jump` → character input, facing |
+//! | 2 | `input.players`, `input.players2d` | `Move`/`Sprint`/`Jump` → character input, facing |
 //! | 3 | plugins [`Stage::Gameplay`] | C# script systems |
 //! | 4 | `ai.wander` | wanderers choose navmesh goals (session RNG) |
-//! | 5 | `navigation` | Detour crowd step (exclusive) |
-//! | 6 | `animation` ∥ `navigation.follow` | animator tick ∥ agent poses (parallel group) |
-//! | 7 | `animation.root` | root motion moves free animated entities |
-//! | 8 | `physics.push` | edited bodies teleport to their `Transform` |
-//! | 9 | `physics` | Jolt boundary: extract → step → mirror (exclusive) |
-//! | 10 | `physics.pull` | moving bodies/characters → `Transform` |
-//! | 11 | `camera.place` | rigs placed behind targets |
-//! | 12 | plugins [`Stage::Late`] | replication, audio/VFX emission |
-//! | 13 | `poses.resolve` | world poses for presentation (exclusive) |
+//! | 5 | `animation.slots`, `navigation.adopt` | streamed animators/agents/obstacles get runtime state |
+//! | 6 | `navigation.stream` | resident terrain chunks changed → streamed navmesh assembled, staged |
+//! | 7 | `navigation.obstacles` | obstacles follow their world pose |
+//! | 8 | `ai.adopt`, `ai.poses` | streamed brains; perception poses of players/props |
+//! | 9 | `ai.sync` → `ai.perceive` → `ai.think` → `ai.bridge` | brains perceive, think, steer navigation |
+//! | 10 | `navigation` | publish meshes, obstacle rebakes, ORCA crowd step (exclusive) |
+//! | 11 | `ai.locomotion` → `ai.report` | locomotion intents for animation; `ara why` reports |
+//! | 12 | `animation` ∥ `navigation.follow` | animator tick ∥ agent poses (parallel group) |
+//! | 13 | `animation.root` | root motion moves free animated entities |
+//! | 14 | `terrain.chunks`, `physics.adopt` | streamed terrain chunks / bodies get native bodies |
+//! | 15 | `physics.push` | edited bodies teleport to their `Transform` |
+//! | 16 | `physics` | Jolt boundary: extract → step → mirror (exclusive) |
+//! | 17 | `physics.pull` | moving bodies/characters → `Transform` |
+//! | 18 | 2D physics (only with 2D bodies) | Rapier2D step |
+//! | 19 | `camera.place` | rigs placed behind targets |
+//! | 20 | plugins [`Stage::Late`] | replication, audio/VFX emission |
+//! | 21 | `poses.resolve` | world poses for presentation (exclusive) |
 //!
 //! Presentation runs between ticks: [`Runtime::extract`] interpolates world poses with
 //! the fixed-tick phase and never mutates the world.
 #![warn(missing_docs)]
 
+pub mod ai;
 pub mod animation;
 pub mod assets;
 pub mod components;
@@ -177,6 +189,12 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<ara_nav::NavMeshSurface>()?;
     registry.register_component::<ara_nav::NavLink>()?;
     registry.register_component::<ara_nav::NavArea>()?;
+    registry.register_component::<ara_nav::NavObstacle>()?;
+    registry.register_component::<ara_nav::NavAgentType>()?;
+    registry.register_component::<ara_ai::Brain>()?;
+    registry.register_component::<ara_perception::Perceiver>()?;
+    registry.register_component::<ara_perception::Stimulus>()?;
+    registry.register_component::<components::StreamedWorld>()?;
     registry.register_component::<MeshRenderer>()?;
     registry.register_component::<Light>()?;
     registry.register_component::<Environment>()?;
@@ -189,7 +207,7 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<components::MusicSource>()?;
     registry.register_component::<components::AudioGraphSource>()?;
     registry.register_component::<terrain::Terrain>()?;
-    registry.register_component::<terrain::TerrainTile>()?;
+    registry.register_component::<terrain::TerrainChunk>()?;
     // Presentation sound intent; playback cursors never enter the simulation.
     registry.register_component::<ara_audio::AudioSource>()?;
     registry.register_component::<ara_audio::AudioListener>()?;
@@ -363,12 +381,20 @@ impl Runtime {
             .map(|(&e, &m)| (e, Pose::from_matrix(m)))
             .collect();
         physics::install(world, &config.physics, &poses)?;
+        let streamed = world
+            .query::<&components::StreamedWorld>()
+            .iter(world)
+            .any(|s| s.world.is_some());
         navigation::install(
             world,
-            config.physics.fixed_dt,
-            config.nav_cache.clone(),
-            &poses.iter().copied().collect(),
+            navigation::NavSetup {
+                fixed_dt: config.physics.fixed_dt,
+                cache: config.nav_cache.clone(),
+                poses: &poses.iter().copied().collect(),
+                streamed,
+            },
         )?;
+        ai::install(world, &baseline, config.physics.fixed_dt)?;
         animation::ensure_slots(world, hz)?;
         // Cameras start behind their targets rather than at their authored pose.
         world
@@ -382,6 +408,7 @@ impl Runtime {
             config: config.physics.clone(),
         })?;
         session.add_provider(navigation::NavigationProvider)?;
+        session.add_provider(ai::AiProvider)?;
         session.add_provider(AnimationProvider { hz })?;
 
         session.add_system("poses.remember", sync::remember_poses)?;
@@ -393,13 +420,24 @@ impl Runtime {
         }
         session.add_system("ai.wander", navigation::wander)?;
         session.add_system("animation.slots", animation::adopt_slots)?;
+        session.add_system("navigation.adopt", navigation::adopt)?;
+        session.add_system("navigation.stream", navigation::stream)?;
+        session.add_system("navigation.obstacles", navigation::obstacles)?;
+        session.add_system("ai.adopt", ai::adopt)?;
+        session.add_system("ai.poses", ai::poses)?;
+        session.add_system("ai.sync", ara_ai::sync)?;
+        session.add_system("ai.perceive", ara_ai::perceive)?;
+        session.add_system("ai.think", ara_ai::think)?;
+        session.add_system("ai.bridge", ara_ai::bridge)?;
         session.add_system("navigation", ara_nav::tick)?;
+        session.add_system("ai.locomotion", ara_ai::locomotion)?;
+        session.add_system("ai.report", ara_ai::why::report)?;
         session.add_parallel_systems(vec![
             ("animation", boxed(animation::animate)),
             ("navigation.follow", boxed(navigation::follow)),
         ])?;
         session.add_system("animation.root", sync::apply_root_motion)?;
-        session.add_system("terrain.tiles", terrain::adopt_tiles)?;
+        session.add_system("terrain.chunks", terrain::adopt_chunks)?;
         session.add_system("physics.adopt", physics::adopt)?;
         session.add_system("physics.push", sync::push_poses)?;
         session.add_system("physics", physics::step)?;
@@ -660,6 +698,12 @@ impl Runtime {
             .and_then(|s| s.error.as_ref())
         {
             return Some(format!("physics: {error}"));
+        }
+        if let Some(error) = world
+            .get_resource::<navigation::NavStreaming>()
+            .and_then(|s| s.error.clone())
+        {
+            return Some(error);
         }
         world
             .iter_entities()
