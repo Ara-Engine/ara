@@ -9,11 +9,13 @@
 //! errors.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::fmt::Write;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
-use crate::bus::{Event, EventId, Lost, Meta, Origin, fnv};
+use crate::bus::{Event, EventId, Fnv, Lost, Meta, Origin};
 use crate::{Code, Diagnostic, Severity, Subject, codes};
 
 /// How many records of each severity are kept, and for how long.
@@ -201,10 +203,10 @@ impl Filter {
 #[derive(Debug)]
 pub struct Store {
     records: BTreeMap<u64, Record>,
-    by_key: HashMap<u64, u64>,
+    by_key: HashMap<u64, u64, Hash>,
     by_severity: [BTreeSet<u64>; 3],
     /// Event IDs → dedup keys, for causal links; bounded FIFO.
-    ids: HashMap<EventId, u64>,
+    ids: HashMap<EventId, u64, Hash>,
     id_order: VecDeque<EventId>,
     next: u64,
     next_local: u32,
@@ -219,17 +221,28 @@ impl Default for Store {
     }
 }
 
+/// The store's maps are keyed by hashes and sequence numbers; FNV is plenty.
+type Hash = BuildHasherDefault<Fnv>;
+
+/// The default dedup key: code, severity, location, subjects and message, hashed
+/// without allocating.
 fn dedup_key(d: &Diagnostic) -> u64 {
-    let subjects: Vec<String> = d.subjects.iter().map(ToString::to_string).collect();
-    let text = format!(
-        "{}|{}|{}|{}|{}",
-        d.code,
-        d.severity,
-        d.location,
-        subjects.join(","),
-        d.message
-    );
-    fnv(text.as_bytes())
+    let mut h = Fnv::default();
+    h.write_u16(d.code.0);
+    h.write_u8(rank(d.severity));
+    let loc = &d.location;
+    for part in [&loc.file, &loc.doc, &loc.record, &loc.path] {
+        h.write(part.as_deref().unwrap_or("").as_bytes());
+        h.write_u8(0xff);
+    }
+    h.write_u64(u64::from(loc.line.unwrap_or(0)) << 32 | u64::from(loc.column.unwrap_or(0)));
+    h.write_u64(loc.command.map_or(u64::MAX, |c| c as u64));
+    for s in &d.subjects {
+        let _ = write!(h, "{s}");
+        h.write_u8(0xfe);
+    }
+    h.write(d.message.as_bytes());
+    h.finish()
 }
 
 impl Store {
@@ -240,9 +253,9 @@ impl Store {
             .map_or(0, |d| d.as_millis() as u64);
         Store {
             records: BTreeMap::new(),
-            by_key: HashMap::new(),
+            by_key: HashMap::default(),
             by_severity: Default::default(),
-            ids: HashMap::new(),
+            ids: HashMap::default(),
             id_order: VecDeque::new(),
             next: 0,
             next_local: 0,

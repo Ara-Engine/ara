@@ -160,9 +160,44 @@ pub struct Event {
 
 /// FNV-1a, for dedup keys (stable across runs, unlike `DefaultHasher`).
 pub(crate) fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
-        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
-    })
+    let mut h = Fnv::default();
+    std::hash::Hasher::write(&mut h, bytes);
+    h.0
+}
+
+/// Streaming FNV-1a: a `Hasher` for the store's maps and a `fmt::Write` sink, so
+/// dedup keys hash formatted parts without allocating.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Fnv(pub(crate) u64);
+
+impl Default for Fnv {
+    fn default() -> Self {
+        Fnv(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl std::hash::Hasher for Fnv {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 = (self.0 ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        // Keys are already hashes or sequence numbers: one multiply mixes enough.
+        self.0 = (self.0 ^ n).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    }
+}
+
+impl fmt::Write for Fnv {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        std::hash::Hasher::write(self, s.as_bytes());
+        Ok(())
+    }
 }
 
 /// A thread's ring plus the counters the consumer reads.
