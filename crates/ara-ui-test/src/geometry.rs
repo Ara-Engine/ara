@@ -158,6 +158,19 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
             .commands
             .iter()
             .map(|draw| match draw {
+                Draw::Line {
+                    node,
+                    from,
+                    to,
+                    width,
+                    color,
+                } => Draw::Line {
+                    node: *node,
+                    from: from.map(|v| v * scale),
+                    to: to.map(|v| v * scale),
+                    width: width * scale,
+                    color: *color,
+                },
                 Draw::Rect { node, rect, color } => Draw::Rect {
                     node: *node,
                     rect: scaled(*rect, scale),

@@ -7,6 +7,9 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
+        if editor.state.asset_path.is_some() {
+            return self.import_panel(editor, out);
+        }
         let resolved = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;
         out.push_str("<scroll id='inspector-scroll' class='body'>");

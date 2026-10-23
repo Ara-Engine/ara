@@ -30,6 +30,16 @@ impl Service for EditorService {
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         use ara_host::params::SessionParams;
         let methods = vec![
+            Method::new::<EditorCanvas>(
+                db,
+                "editor.canvas",
+                "Set graph pan, zoom, selection and search-to-add visibility.",
+            ),
+            Method::new::<EditorWorkspace>(
+                db,
+                "editor.workspace",
+                "Select assets, folders and authoring documents, or switch thumbnail/list presentation.",
+            ),
             Method::new::<EditorPreferences>(
                 db,
                 "editor.preferences",
@@ -190,6 +200,68 @@ impl Service for EditorService {
             state.camera = presence.camera;
         }
         match method {
+            "editor.canvas" => {
+                let p: EditorCanvas = parse(params)?;
+                if let Some(pan) = p.pan {
+                    if pan.iter().any(|v| !v.is_finite()) {
+                        return Err(vec![crate::invalid("pan must be finite")]);
+                    }
+                    state.canvas.pan = pan;
+                }
+                if let Some(zoom) = p.zoom {
+                    if !zoom.is_finite() || !(0.2..=2.5).contains(&zoom) {
+                        return Err(vec![crate::invalid("zoom outside 0.2..2.5")]);
+                    }
+                    state.canvas.zoom = zoom;
+                }
+                if let Some(selection) = p.selection {
+                    state.canvas_selection = selection.into_iter().collect();
+                }
+                if let Some(add) = p.add {
+                    state.canvas_add = add;
+                }
+            }
+            "editor.workspace" => {
+                let p: EditorWorkspace = parse(params)?;
+                if let Some(path) = p.asset {
+                    state.asset_path = (!path.is_empty()).then_some(path);
+                }
+                if let Some(folder) = p.folder {
+                    state.asset_folder = folder;
+                }
+                if let Some(grid) = p.grid {
+                    state.asset_grid = grid;
+                }
+                if let Some(resource) = p.resource {
+                    let id = cx
+                        .store()
+                        .workspace()
+                        .find(&resource)
+                        .ok_or_else(|| vec![crate::invalid("resource document not found")])?;
+                    state.resource = Some(id.to_string());
+                    let doc = cx
+                        .store()
+                        .workspace()
+                        .doc(id.as_str())
+                        .ok_or_else(|| vec![crate::invalid("resource missing")])?;
+                    let panel = if doc.kind == "animation" {
+                        "animation"
+                    } else {
+                        doc.record("g_meta")
+                            .and_then(|r| r.get("domain"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("material")
+                    };
+                    if matches!(panel, "material" | "vfx" | "animation") {
+                        let mut dock = layout(&state.layout)?;
+                        dock.activate(panel).map_err(ui_error)?;
+                        state.layout = dock.root().clone();
+                        state.focus = panel.into();
+                    }
+                    state.canvas = Default::default();
+                    state.canvas_selection.clear();
+                }
+            }
             "editor.preferences" => {
                 let p: EditorPreferences = parse(params)?;
                 if let Some(v) = p.reduce_motion {
@@ -217,6 +289,7 @@ impl Service for EditorService {
                 state.follow = p.agent;
             }
             "editor.select" => {
+                state.asset_path = None;
                 let p: EditorSelect = parse(params)?;
                 if !separate {
                     state.focus_field = None;

@@ -39,3 +39,10 @@ extents and UI glyph raster scale change together. Keep the separate SDL window,
 editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
 bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
 1440x900 at 1x and 2560x1440 at 2x, including palettes and review cards.
+
+Panel authoring: asset_tools owns isolated import jobs and cached off-thread
+thumbnails. authoring registers graph/material/VFX/animation commands; graph is
+the shared culled canvas and pre-shaped label cache. Preserve domain identities.
+Importer sidecars and material instances currently both claim i_; register graph
+material commands without the conflicting material-instance schema in this host.
+

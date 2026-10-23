@@ -199,6 +199,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             server.pump(&mut editor);
             editor.tick();
             if shell.poll_assets() {
+                shell.upload_thumbnails(&mut ui_renderer)?;
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }

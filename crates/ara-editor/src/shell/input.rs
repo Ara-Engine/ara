@@ -80,6 +80,20 @@ impl Shell {
                         };
                         rebuild = true;
                     }
+                    Binding::ResourceContent(doc, commands, why) => {
+                        editor.apply_to(doc, commands.clone(), why)?;
+                        rebuild = true;
+                    }
+                    Binding::ImportField(doc, key) => {
+                        self.drafts.insert(
+                            format!("@import|{doc}|{key}"),
+                            action
+                                .value
+                                .as_str()
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| action.value.to_string()),
+                        );
+                    }
                     Binding::Scrub(_, _) => {}
                     Binding::ColorPicker(path) => {
                         self.color_picker = if self.color_picker.as_ref() == Some(path) {
@@ -104,6 +118,12 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::Protocol(method, params) => {
+                        if matches!(*method, "editor.asset.reimport" | "editor.asset.import")
+                            && let Some(path) = params["path"].as_str()
+                        {
+                            self.thumbnails.invalidate(path);
+                            self.thumbnail_slots.remove(path);
+                        }
                         editor.action(method, params.clone())?;
                         rebuild = true;
                     }
@@ -213,6 +233,8 @@ impl Shell {
                         }
                     }
                     Binding::Asset(asset) => {
+                        editor.action("editor.workspace", json!({"asset":asset.path}))?;
+                        rebuild = true;
                         if let Some(path) = self.pick_field.take()
                             && let Some(reference) = &asset.reference
                         {
@@ -225,6 +247,7 @@ impl Shell {
                                 "Pick asset reference",
                                 None,
                             )?;
+                            editor.action("editor.workspace", json!({"asset":""}))?;
                             rebuild = true;
                         }
                     }
@@ -280,6 +303,11 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let imported = self.commit_import_fields(editor)?;
+        if imported && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if self.drafts.is_empty() {
             return Ok(false);
         }

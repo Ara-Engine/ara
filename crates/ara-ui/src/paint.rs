@@ -56,6 +56,19 @@ pub struct Glyph {
 #[derive(Serialize)]
 #[serde(tag = "op")]
 pub enum Draw {
+    /// Antialiased round-capped line in logical viewport coordinates.
+    Line {
+        /// Stable widget or connection identity.
+        node: u64,
+        /// First endpoint.
+        from: [f32; 2],
+        /// Second endpoint.
+        to: [f32; 2],
+        /// Full stroke width in logical pixels.
+        width: f32,
+        /// Straight working-space stroke color.
+        color: Color,
+    },
     /// Solid rectangular fill.
     Rect {
         /// Stable source node identity.
@@ -160,6 +173,7 @@ impl DisplayList {
             let key = match draw {
                 Draw::GlyphRun { font, .. } => (1, *font),
                 Draw::Image { image, .. } => (2, *image),
+                Draw::Line { .. } => (3, 0),
                 Draw::Rect { .. } | Draw::RoundedRect { .. } | Draw::Border { .. } => (0, 0),
                 _ => {
                     breaks.push(BatchBreak {

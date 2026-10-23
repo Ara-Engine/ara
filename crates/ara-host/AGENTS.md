@@ -103,3 +103,8 @@ round trips, scopes, dry run = apply, symbols, review per entity, rollback, cras
 replay, external edits/conflicts, service registration, subscriptions with a
 registry job's progress, document inference + apply text, required agent
 `why`. Snapshots: scene-to-text.
+
+Cx::create_document establishes an empty canonical document identity for a typed
+subsystem create action. Initialize semantic records with Cx::apply, which provides
+normal attribution/review/undo; undoing initialization leaves the empty asset.
+

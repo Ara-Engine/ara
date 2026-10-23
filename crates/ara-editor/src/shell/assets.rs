@@ -8,6 +8,7 @@ pub(crate) struct Asset {
     pub path: String,
     pub reference: Option<String>,
     pub kind: String,
+    pub uses: Vec<String>,
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
@@ -77,6 +78,9 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                 .and_then(|e| e.to_str())
                 .unwrap_or("file")
                 .to_owned();
+            if relative.ends_with(".import.json") {
+                continue;
+            }
             let id = if kind == "scene" || kind == "prefab" {
                 std::fs::read_to_string(&path)
                     .ok()
@@ -93,7 +97,32 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                 reference: id.map(|id| format!("@{relative}#{id}")),
                 path: relative,
                 kind,
+                uses: std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|s| ara_json::parse(&s).ok())
+                    .map(|v| {
+                        let mut refs = Vec::new();
+                        references(&v, &mut refs);
+                        refs
+                    })
+                    .unwrap_or_default(),
             });
         }
+    }
+}
+fn references(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) if s.starts_with('@') => out.push(s.clone()),
+        Value::Array(a) => {
+            for v in a {
+                references(v, out);
+            }
+        }
+        Value::Object(o) => {
+            for v in o.values() {
+                references(v, out);
+            }
+        }
+        _ => {}
     }
 }

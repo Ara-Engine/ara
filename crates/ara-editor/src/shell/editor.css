@@ -97,3 +97,7 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .cap-z { color:var(--info-foreground); border-color:var(--info-foreground); background:var(--info-surface); }
 .cap-negative { background:var(--card); }
 .view-cap:hover { background:var(--accent-surface); border-width:2px; border-color:var(--foreground); }
+.asset-card { flex-direction:column; align-items:center; padding:4px; gap:3px; background:var(--card); border-color:var(--border); border-radius:var(--radius-md); overflow:hidden; }
+.asset-card:hover { background:var(--muted); }
+.asset-card.selected { background:var(--accent-surface); border-color:var(--primary); }
+.folder-row { justify-content:start; overflow:hidden; }

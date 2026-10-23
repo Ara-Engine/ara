@@ -22,6 +22,8 @@ pub enum Pipeline {
     Msdf = 3,
     /// Color glyph, preserving authored glyph color.
     ColorGlyph = 4,
+    /// Analytic round-capped line; modes 5 and 7 are editor viewport overlays.
+    Line = 6,
 }
 /// Exact 64-byte Slang instance ABI, four float4 records, alignment 16.
 #[repr(C, align(16))]
@@ -208,6 +210,27 @@ impl Renderer {
                 params: [0.0; 4],
             };
             match command {
+                Draw::Line {
+                    from,
+                    to,
+                    width,
+                    color,
+                    ..
+                } => {
+                    let pad = width * 0.5 + 1.;
+                    let x = from[0].min(to[0]) - pad;
+                    let y = from[1].min(to[1]) - pad;
+                    instance.rect = [
+                        x + t[0],
+                        y + t[1],
+                        (to[0] - from[0]).abs() + 2. * pad,
+                        (to[1] - from[1]).abs() + 2. * pad,
+                    ];
+                    instance.uv = [from[0] - x, from[1] - y, to[0] - x, to[1] - y];
+                    instance.params[0] = width * 0.5;
+                    instance.color = color_array(*color);
+                    self.push(Pipeline::Line, 0, clip, instance);
+                }
                 Draw::PushTransform { translation } => {
                     transforms.push([t[0] + translation[0], t[1] + translation[1]]);
                 }

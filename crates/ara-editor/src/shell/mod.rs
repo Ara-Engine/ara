@@ -11,6 +11,7 @@ mod scrub;
 use drag::Drag;
 mod assets_panel;
 mod hierarchy;
+mod import_panel;
 mod inspector_panel;
 pub mod overlay;
 mod palette;
@@ -55,6 +56,12 @@ pub struct Shell {
     asset_entries: BTreeMap<u64, assets::Asset>,
     asset_view: Option<VirtualView>,
     asset_offset: f32,
+    thumbnails: crate::asset_tools::thumbnails::Thumbnails,
+    thumbnail_slots: BTreeMap<String, usize>,
+    thumbnail_next: usize,
+    thumbnail_uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
+    asset_grid_extent: f32,
+    asset_grid_dirty: bool,
     drafts: BTreeMap<String, String>,
     pub(crate) context: bool,
     pub(crate) palette_command: Option<String>,
@@ -87,6 +94,8 @@ pub(crate) enum Binding {
     PaletteRun,
     Select(String),
     Asset(assets::Asset),
+    ResourceContent(String, Vec<Value>, String),
+    ImportField(String, String),
     Fix(ara_diag::Diagnostic, usize),
     Approve(String),
     Reject(String),
@@ -132,6 +141,12 @@ impl Shell {
             asset_entries: BTreeMap::new(),
             asset_view: None,
             asset_offset: 0.,
+            thumbnails: crate::asset_tools::thumbnails::Thumbnails::new(editor.host.root()),
+            thumbnail_slots: BTreeMap::new(),
+            thumbnail_next: 0,
+            thumbnail_uploads: Vec::new(),
+            asset_grid_extent: 0.,
+            asset_grid_dirty: false,
             drafts: BTreeMap::new(),
             context: false,
             palette_command: None,
@@ -437,7 +452,44 @@ impl Shell {
         Ok(work)
     }
     pub(crate) fn poll_assets(&mut self) -> bool {
-        self.browser.poll()
+        let mut changed = self.browser.poll() || std::mem::take(&mut self.asset_grid_dirty);
+        for result in self.thumbnails.poll() {
+            match result {
+                Ok(thumb) => {
+                    let slot = if let Some(slot) = self.thumbnail_slots.get(&thumb.key) {
+                        *slot
+                    } else {
+                        let slot = self.thumbnail_next % 48;
+                        self.thumbnail_next += 1;
+                        self.thumbnail_slots.retain(|_, v| *v != slot);
+                        self.thumbnail_slots.insert(thumb.key, slot);
+                        slot
+                    };
+                    let name = crate::asset_tools::thumbnails::image_name(slot);
+                    self.thumbnail_uploads.push((
+                        ara_ui::source::stable_id(&name) as u32 & 0x7fff_ffff,
+                        ara_ui_render::gpu::Image {
+                            width: thumb.image.width(),
+                            height: thumb.image.height(),
+                            rgba: thumb.image.into_raw(),
+                        },
+                    ));
+                    changed = true;
+                }
+                Err(error) => eprintln!("thumbnail: {error}"),
+            }
+        }
+        changed
+    }
+    /// Drain completed background thumbnails into the same-device UI image registry.
+    pub fn upload_thumbnails(
+        &mut self,
+        renderer: &mut ara_ui_render::gpu::Renderer,
+    ) -> ara_ui::Result<()> {
+        for (id, image) in self.thumbnail_uploads.drain(..) {
+            renderer.image(id, image)?;
+        }
+        Ok(())
     }
     /// Current scene image rectangle, also the picking and spatial-input boundary.
     pub fn viewport(&self) -> Option<Box2> {

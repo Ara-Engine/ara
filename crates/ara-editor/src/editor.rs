@@ -67,6 +67,8 @@ impl Editor {
     pub fn open(root: &Path) -> anyhow::Result<Self> {
         let mut project = Project::open(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let main_scene = project.main_scene();
+        crate::asset_tools::prepare(&mut project)?;
+        crate::authoring::register(&mut project.registry, &mut project.db);
         crate::commands::register(&mut project.registry, &mut project.db);
         let command_schemas = project
             .registry
@@ -82,6 +84,10 @@ impl Editor {
             return Err(anyhow::anyhow!(d.to_string()));
         }
         let mut host = Host::open(project, HostConfig::default())
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(crate::asset_tools::AssetService::new()))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let workspace = host.store().workspace();
         let doc = main_scene

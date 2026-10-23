@@ -514,3 +514,57 @@ fn numeric_scrubbing_is_one_undoable_batch_and_escape_is_nonmutating() {
     assert!(editor.state.reduce_motion);
     assert!(!editor.state.quality);
 }
+
+#[test]
+fn import_settings_are_typed_attributed_and_undoable() {
+    let project = Project::new();
+    std::fs::write(
+        project.0.join("paint.png"),
+        b"invalid source; settings test does not run an importer",
+    )
+    .unwrap();
+    let mut editor = project.open();
+    let result = editor
+        .action("editor.asset.import", json!({"path":"paint.png"}))
+        .unwrap();
+    editor
+        .action("jobs.cancel", json!({"job":result["job"]}))
+        .unwrap();
+    let doc = editor
+        .host
+        .store()
+        .workspace()
+        .find("paint.png.import.json")
+        .unwrap()
+        .to_string();
+    editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .unwrap()
+            .record("i_settings")
+            .unwrap()["settings"]["usage"],
+        "normal"
+    );
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .unwrap()
+            .record("i_settings")
+            .unwrap()["settings"],
+        json!({})
+    );
+    assert!(editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
+    assert!(
+        editor
+            .action("editor.asset.import", json!({"path":"../escape.png"}))
+            .is_err()
+    );
+}

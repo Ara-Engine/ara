@@ -1,7 +1,7 @@
 //! Temporary document-to-render extraction, isolated for ara-sim's edit-world projection.
 pub mod gesture;
 mod ghosts;
-mod gltf;
+pub(crate) mod gltf;
 use crate::state::EditorState;
 use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
