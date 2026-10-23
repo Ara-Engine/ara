@@ -69,6 +69,26 @@ pub trait SessionAdapter {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Order(usize);
 
+#[cfg(feature = "profiling")]
+struct ProfileSystem(tracing::Span);
+
+#[cfg(feature = "profiling")]
+impl<S: bevy_ecs::system::System<In = (), Out = ()>> bevy_ecs::system::Adapt<S> for ProfileSystem {
+    type In = ();
+    type Out = ();
+
+    fn adapt(
+        &mut self,
+        input: (),
+        run: impl FnOnce(
+            bevy_ecs::system::SystemIn<'_, S>,
+        ) -> std::result::Result<(), bevy_ecs::system::RunSystemError>,
+    ) -> std::result::Result<(), bevy_ecs::system::RunSystemError> {
+        let _span = self.0.enter();
+        run(input)
+    }
+}
+
 /// One independent authority world and an explicitly ordered fixed schedule.
 /// No transport, replica world, global current player, or automatic state serialization.
 pub struct Session {
@@ -137,9 +157,14 @@ impl Session {
             self.schedule
                 .configure_sets(Order(index).after(Order(index - 1)));
         }
-        self.schedule.add_systems(
-            IntoSystem::into_system(system).with_name(name.to_owned()).in_set(Order(index)),
+        let system = IntoSystem::into_system(system);
+        #[cfg(feature = "profiling")]
+        let system = bevy_ecs::system::AdapterSystem::new(
+            ProfileSystem(tracing::info_span!(target: "ara_profile", "system", name)),
+            system,
+            name.to_owned().into(),
         );
+        self.schedule.add_systems(system.in_set(Order(index)));
         self.systems.push(name.into());
         Ok(())
     }

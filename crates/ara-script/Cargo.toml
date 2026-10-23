@@ -8,7 +8,11 @@ publish.workspace = true
 
 # Dependencies are declared here (not in the workspace table) while the root
 # Cargo.toml is owned by another task; move them to `workspace = true` later.
+[features]
+profiling = ["dep:ara-profile"]
+
 [dependencies]
+ara-profile = { path = "../ara-profile", optional = true }
 ara-components.workspace = true
 ara-diag.workspace = true
 ara-schema.workspace = true

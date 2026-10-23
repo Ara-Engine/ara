@@ -1,0 +1,99 @@
+# Ara runtime performance passes
+
+`ara-bench` measures engine/runtime performance. `arabench` measures agent
+ergonomics. Both are local D9 gates; no CI is required.
+
+## Instrument a frame
+
+```rust,ignore
+let mut profiler = ara_profile::Profiler::new(Default::default())?;
+profiler.register_thread("presentation").attach()?; // setup only
+profiler.start();
+let frame = profiler.begin_frame()?;
+{
+    let _span = ara_profile::scope("extract");
+    // Extract ECS state and submit render work.
+}
+// Keep frame.id() with the GPU submission/readback.
+profiler.gpu_timings(frame.id(), renderer.timings()); // feature `gpu`
+profiler.end_frame(counters, memory)?;
+```
+
+Register each task-pool worker during setup. Move a `ThreadRegistration` onto
+that worker and attach it once. Move the copyable `FrameToken` with queued work,
+then call `token.in_scope(|| { let _span = scope("job.name"); ... })` there.
+Workers never lock frame history, allocate records, wait for the host or publish
+authoring mutations. Collect at presentation boundaries; late data updates the
+original frame while retained. Stop producers before saving a complete capture.
+
+Enable subsystem features such as `ara-sim/profiling`, `ara-render/profiling`,
+`ara-anim/profiling`, `ara-physics/profiling`, `ara-nav/profiling`,
+`ara-audio/profiling`, `ara-asset/profiling`, `ara-script/profiling`.
+They default off. Compose `tracing_subscriber::registry().with(ProfileLayer)` to
+record Bevy's named system spans. Reuse tracing spans in per-frame code.
+
+`Host::profiler()` owns the recorder used by the automatically registered
+`profile` Engine Protocol service. `profile.start/stop/summary/hitches/compare`
+also back the generated `ara_profile` MCP tool. Parameters carry the session;
+summary parameters are `topN`, `limit`, `maxBytes`; compare accepts baseline/current
+JSON strings plus `relative` and `absoluteNs`. No service path opens arbitrary files.
+
+`ImportJob::record_profile` and `BakeJob::record_profile` attach job-manager samples
+alongside readiness polls. `Boundary::record_profile` imports compile-server
+microseconds as separate elapsed job durations. They do not become CPU self time.
+
+## Script scenes and compare
+
+Save a strict JSON script with a project path relative to the script, a scene
+path relative to that project, a seed and run settings:
+
+```json
+{
+  "project": "../../../ara-host/tests/fixtures/project",
+  "scene": "levels/arena.scene",
+  "seed": 1,
+  "run": { "warmup": 8, "frames": 120, "rounds": 4 }
+}
+```
+
+```powershell
+$env:CARGO_BUILD_JOBS = '2'
+cargo run -p ara-bench --release --features allocation --example scenario -- script.json result.araprof
+cargo run -p ara -- profile compare result.a.json result.b.json
+```
+
+The example exercises the same scene/seed twice as a harness calibration. Perf
+passes implement `Scenario` twice for their baseline and candidate, then use
+`interleave` unchanged. Each round reloads/reset state and reverses order on odd
+rounds. Outputs: binary `.araprof`, `.json` summary, `.a.json` / `.b.json` complete
+metric baselines, `.runs.json` with execution order/frame IDs/background CPU.
+OS sampling runs outside timing; intervals below the OS minimum are explicitly
+unavailable. Record sufficiently long scenarios to obtain load samples.
+
+The compare command needs no project/daemon. It returns 0 for pass, 1 for a
+regression/incomplete evidence, 2 for malformed input. `--json` prints a structured
+verdict; text prints a p95 delta table. Defaults: both >5% and >1000 ns increase
+must be exceeded. Missing/new metrics fail, and empty/lost/truncated metrics fail.
+Retain complete metric summaries for baselines; top-N is only for agent responses.
+
+## Editor frame inspector seam
+
+`Profile::frames` exposes chronological frames. `Frame::timeline()` supplies
+thread IDs, nanosecond ranges, parents and allocation totals. `flame_children`
+selects roots or children within one thread. `gpu` lists label/queue/duration;
+`jobs`, `counters`, `memory`, `load` and `dropped` complete the panel data.
+Resolve label indices through `Profile::labels` and worker IDs through `threads`.
+Durations do not imply absolute clock alignment or a cross-queue critical path.
+VRAM categories/counters come from their owning subsystems at `end_frame`.
+
+## Overhead measurements
+
+Run `cargo run -p ara-bench --release --example overhead`, then repeat with
+`--features tracy` and `--features allocation`. Each output records paired median
+added cost, 21 rounds, machine background CPU and the active features. Tracy is
+not on-demand: its zones are emitted even without an attached viewer.
+Recording uses two monotonic clock reads and bounded ring publication; collection
+and serialization are outside the timed scope loop. Compile-time-disabled subsystem
+markers emit no code. Allocation tests assert zero requested bytes across 100 warm
+native frames including collection and GPU/job import. Recorded results follow
+once the hardware gates and measurements finish.

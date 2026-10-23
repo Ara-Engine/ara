@@ -17,19 +17,33 @@ pub struct AllocationSample {
 }
 impl AllocationSample {
     /// Cumulative requested bytes on this thread, for allocation-free hot-loop checks.
-    pub fn thread_bytes() -> u64 { local_bytes() }
+    pub fn thread_bytes() -> u64 {
+        local_bytes()
+    }
     /// Process-wide snapshot; enabled only with the `allocation` feature.
-    pub fn now() -> Self { Self { bytes: BYTES.load(Relaxed), calls: CALLS.load(Relaxed) } }
+    pub fn now() -> Self {
+        Self {
+            bytes: BYTES.load(Relaxed),
+            calls: CALLS.load(Relaxed),
+        }
+    }
 }
 
-pub(crate) fn local_bytes() -> u64 { LOCAL.try_with(Cell::get).unwrap_or(0) }
+pub(crate) fn local_bytes() -> u64 {
+    LOCAL.try_with(Cell::get).unwrap_or(0)
+}
 
 /// Live requested heap bytes. Install `CountingAllocator<System>` in the dev executable.
-pub fn heap_bytes() -> u64 { LIVE.load(Relaxed) }
+pub fn heap_bytes() -> u64 {
+    LIVE.load(Relaxed)
+}
 
 /// Opt-in global allocator wrapper. Without `allocation`, delegates without counting.
 /// The executable chooses this allocator; libraries never install one implicitly.
-pub struct CountingAllocator<A>(pub A);
+pub struct CountingAllocator<A>(
+    /// Underlying allocator, normally `std::alloc::System`.
+    pub A,
+);
 
 fn allocated(bytes: usize) {
     if cfg!(feature = "allocation") {
@@ -40,7 +54,9 @@ fn allocated(bytes: usize) {
     }
 }
 fn freed(bytes: usize) {
-    if cfg!(feature = "allocation") { LIVE.fetch_sub(bytes as u64, Relaxed); }
+    if cfg!(feature = "allocation") {
+        LIVE.fetch_sub(bytes as u64, Relaxed);
+    }
 }
 
 // SAFETY: every operation delegates with the caller's original layout/pointer;
@@ -49,13 +65,17 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for CountingAllocator<A> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // SAFETY: forwarding GlobalAlloc's caller contract to the inner allocator.
         let p = unsafe { self.0.alloc(layout) };
-        if !p.is_null() { allocated(layout.size()); }
+        if !p.is_null() {
+            allocated(layout.size());
+        }
         p
     }
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         // SAFETY: forwarding GlobalAlloc's caller contract unchanged.
         let p = unsafe { self.0.alloc_zeroed(layout) };
-        if !p.is_null() { allocated(layout.size()); }
+        if !p.is_null() {
+            allocated(layout.size());
+        }
         p
     }
     unsafe fn dealloc(&self, p: *mut u8, layout: Layout) {
@@ -66,7 +86,10 @@ unsafe impl<A: GlobalAlloc> GlobalAlloc for CountingAllocator<A> {
     unsafe fn realloc(&self, p: *mut u8, layout: Layout, size: usize) -> *mut u8 {
         // SAFETY: forwarding the caller's valid allocation and new size unchanged.
         let next = unsafe { self.0.realloc(p, layout, size) };
-        if !next.is_null() { freed(layout.size()); allocated(size); }
+        if !next.is_null() {
+            freed(layout.size());
+            allocated(size);
+        }
         next
     }
 }

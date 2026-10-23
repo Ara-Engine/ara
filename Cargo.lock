@@ -194,6 +194,7 @@ version = "0.0.0"
 dependencies = [
  "ara-components",
  "ara-doc",
+ "ara-host",
  "ara-input",
  "ara-json",
  "ara-profile",
@@ -203,6 +204,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sysinfo",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -699,6 +702,7 @@ version = "0.0.0"
 dependencies = [
  "ara-components",
  "ara-diag",
+ "ara-profile",
  "ara-schema",
  "bevy_ecs",
  "bevy_tasks",
@@ -744,6 +748,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -985,7 +990,6 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror",
- "tracing",
  "variadics_please",
 ]
 

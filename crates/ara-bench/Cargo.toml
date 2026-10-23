@@ -18,6 +18,9 @@ serde_json.workspace = true
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 
 [dev-dependencies]
+ara-host.workspace = true
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 divan = "0.1"
 ara-sim = { path = "../ara-sim", features = ["profiling"] }
 ara-schema.workspace = true

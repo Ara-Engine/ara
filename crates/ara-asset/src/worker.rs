@@ -294,6 +294,19 @@ pub struct ImportJob {
     finished: bool,
 }
 impl ImportJob {
+    /// Adds a nonblocking worker activity sample to the given CPU frame. Duration
+    /// includes process startup/transport, so it is kept separate from CPU self time.
+    #[cfg(feature = "profiling")]
+    pub fn record_profile(&self, profiler: &mut ara_profile::Profiler, frame: u64) -> bool {
+        let worker = self.child.as_ref().map_or(0, |child| u64::from(child.id()));
+        profiler.job_activity(
+            frame,
+            "asset.import",
+            worker,
+            self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+            self.finished,
+        )
+    }
     /// Polls available progress/output; crashed workers become structured errors.
     pub fn poll(&mut self) -> Result<Option<JobEvent>> {
         #[cfg(feature = "profiling")]

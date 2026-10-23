@@ -152,10 +152,14 @@ pub struct Profile {
 
 impl Frame {
     /// CPU timeline; parent IDs form flame-graph edges within each thread.
-    pub fn timeline(&self) -> &[CpuSpan] { &self.spans }
+    pub fn timeline(&self) -> &[CpuSpan] {
+        &self.spans
+    }
 
     /// Direct children of a scope on one thread; zero selects flame-graph roots.
     pub fn flame_children(&self, thread: u32, parent: u64) -> impl Iterator<Item = &CpuSpan> {
-        self.spans.iter().filter(move |s| s.thread == thread && s.parent == parent)
+        self.spans
+            .iter()
+            .filter(move |s| s.thread == thread && s.parent == parent)
     }
 }

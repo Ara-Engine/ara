@@ -1,16 +1,32 @@
-use std::cell::RefCell;
-use tracing::{Subscriber, span::{Attributes, Id}, field::{Field, Visit}};
-use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 use crate::ring::{Name, PRODUCER};
+use std::cell::RefCell;
+use tracing::{
+    Subscriber,
+    field::{Field, Visit},
+    span::{Attributes, Id},
+};
+use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 
 thread_local! {
     static ENTERED: RefCell<[(u64, Option<u64>); 128]> = const { RefCell::new([(0, None); 128]) };
 }
-struct Label { name: String, owner: u64, index: u32 }
+struct Label {
+    name: String,
+    owner: u64,
+    index: u32,
+}
 struct NameVisitor(Option<String>);
 impl Visit for NameVisitor {
-    fn record_str(&mut self, field: &Field, value: &str) { if field.name() == "name" { self.0 = Some(value.into()); } }
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) { if field.name() == "name" { self.0 = Some(format!("{value:?}")); } }
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "name" {
+            self.0 = Some(value.into());
+        }
+    }
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "name" {
+            self.0 = Some(format!("{value:?}"));
+        }
+    }
 }
 /// Composable tracing adapter, including Bevy's dynamic system `name` field.
 /// Attach a profiler thread endpoint before entering spans. Each synchronous
@@ -20,35 +36,60 @@ impl Visit for NameVisitor {
 pub struct ProfileLayer;
 impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for ProfileLayer {
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, cx: Context<'_, S>) {
-        let Some(span) = cx.span(id) else { return; };
-        let mut visitor = NameVisitor(None); attrs.record(&mut visitor);
-        span.extensions_mut().insert(Label { name: visitor.0.unwrap_or_else(|| attrs.metadata().name().into()), owner: 0, index: 0 });
+        let Some(span) = cx.span(id) else {
+            return;
+        };
+        let mut visitor = NameVisitor(None);
+        attrs.record(&mut visitor);
+        span.extensions_mut().insert(Label {
+            name: visitor.0.unwrap_or_else(|| attrs.metadata().name().into()),
+            owner: 0,
+            index: 0,
+        });
     }
     fn on_enter(&self, id: &Id, cx: Context<'_, S>) {
-        let Some(span) = cx.span(id) else { return; };
-        let name = {
+        let Some(span) = cx.span(id) else {
+            return;
+        };
+        let scope = {
             let mut extensions = span.extensions_mut();
-            let Some(label) = extensions.get_mut::<Label>() else { return; };
-            PRODUCER.with_borrow(|p| {
+            let Some(label) = extensions.get_mut::<Label>() else {
+                return;
+            };
+            let name = PRODUCER.with_borrow(|p| {
                 let p = p.as_ref()?;
                 if label.owner != p.control.id {
-                    let mut names = p.control.names.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                    label.index = names.len() as u32; names.push(label.name.to_owned()); label.owner = p.control.id;
+                    let mut names = p
+                        .control
+                        .names
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    label.index = if let Some(index) = names.ids.get(&label.name) {
+                        *index
+                    } else {
+                        let index = names.values.len() as u32;
+                        names.values.push(label.name.to_owned());
+                        names.ids.insert(label.name.to_owned(), index);
+                        index
+                    };
+                    label.owner = p.control.id;
                 }
                 Some(Name::Registered(label.index))
-            })
+            });
+            name.and_then(|name| crate::ring::begin(name, &label.name))
         };
-        let Some(name) = name else { return; };
         ENTERED.with_borrow_mut(|entries| {
             if let Some(entry) = entries.iter_mut().find(|e| e.0 == 0) {
-                *entry = (id.into_u64(), crate::ring::begin(name));
+                *entry = (id.into_u64(), scope);
             }
         });
     }
     fn on_exit(&self, id: &Id, _: Context<'_, S>) {
         ENTERED.with_borrow_mut(|entries| {
             if let Some(entry) = entries.iter_mut().rfind(|e| e.0 == id.into_u64()) {
-                if let Some(scope) = entry.1 { crate::ring::end(scope); }
+                if let Some(scope) = entry.1 {
+                    crate::ring::end(scope);
+                }
                 *entry = (0, None);
             }
         });

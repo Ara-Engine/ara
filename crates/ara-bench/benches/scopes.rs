@@ -1,5 +1,7 @@
 //! Standard Ara kernel harness: Divan, no build-time dependencies beyond Rust/C++.
-fn main() { divan::main(); }
+fn main() {
+    divan::main();
+}
 
 #[divan::bench]
 fn unattached_scope() {
@@ -9,5 +11,5 @@ fn unattached_scope() {
 #[divan::bench]
 fn frame_distribution() {
     let profile = ara_profile::Profile::default();
-    std::hint::black_box(profile.summary(ara_profile::SummaryBudget::default())).ok();
+    let _ = std::hint::black_box(profile.summary(ara_profile::SummaryBudget::default()));
 }

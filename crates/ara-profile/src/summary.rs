@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-use serde::{Deserialize, Serialize};
 use crate::{Frame, Profile};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Nearest-rank frame-level distribution, including zero for inactive frames.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
@@ -15,8 +15,17 @@ pub struct Distribution {
 impl Distribution {
     pub(crate) fn samples(mut samples: Vec<u64>) -> Self {
         samples.sort_unstable();
-        let rank = |n: usize| samples.get((samples.len() * n).div_ceil(100).saturating_sub(1)).copied().unwrap_or(0);
-        Self { p50: rank(50), p95: rank(95), p99: rank(99) }
+        let rank = |n: usize| {
+            samples
+                .get((samples.len() * n).div_ceil(100).saturating_sub(1))
+                .copied()
+                .unwrap_or(0)
+        };
+        Self {
+            p50: rank(50),
+            p95: rank(95),
+            p99: rank(99),
+        }
     }
 }
 
@@ -61,7 +70,13 @@ pub struct SummaryBudget {
     pub max_bytes: usize,
 }
 impl Default for SummaryBudget {
-    fn default() -> Self { Self { top_n: 20, hitches: 5, max_bytes: 16_384 } }
+    fn default() -> Self {
+        Self {
+            top_n: 20,
+            hitches: 5,
+            max_bytes: 16_384,
+        }
+    }
 }
 
 /// Budgeted agent report and saved baseline format. Full captures retain all data.
@@ -92,27 +107,55 @@ pub struct Summary {
 }
 
 fn cpu_key(profile: &Profile, label: u32) -> String {
-    format!("cpu/{}", profile.labels.get(label as usize).map_or("<invalid label>", String::as_str))
+    format!(
+        "cpu/{}",
+        profile
+            .labels
+            .get(label as usize)
+            .map_or("<invalid label>", String::as_str)
+    )
 }
 fn gpu_key(profile: &Profile, pass: &crate::GpuPass) -> String {
-    let name = |label: u32| profile.labels.get(label as usize).map_or("<invalid label>", String::as_str);
+    let name = |label: u32| {
+        profile
+            .labels
+            .get(label as usize)
+            .map_or("<invalid label>", String::as_str)
+    };
     format!("gpu/{}/{}", name(pass.queue), name(pass.label))
 }
 fn contributions(profile: &Profile, frame: &Frame) -> Vec<(String, u64)> {
     let mut rows = BTreeMap::<String, u64>::new();
-    for span in &frame.spans { *rows.entry(cpu_key(profile, span.label)).or_default() += span.self_ns; }
-    for pass in &frame.gpu { *rows.entry(gpu_key(profile, pass)).or_default() += pass.duration_ns; }
+    for span in &frame.spans {
+        *rows.entry(cpu_key(profile, span.label)).or_default() += span.self_ns;
+    }
+    for pass in &frame.gpu {
+        *rows.entry(gpu_key(profile, pass)).or_default() += pass.duration_ns;
+    }
     let mut rows: Vec<_> = rows.into_iter().collect();
-    rows.sort_by(|a,b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0))); rows.truncate(5); rows
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    rows.truncate(5);
+    rows
 }
 
 impl Profile {
     /// Detects CPU wall hitches and individual over-budget GPU passes. No absolute
     /// GPU timestamps or queue critical path are inferred from duration-only data.
     pub fn hitches(&self, limit: usize) -> Vec<Hitch> {
-        let mut frames: Vec<_> = self.frames.iter().filter(|f| f.duration_ns > self.budget_ns
-            || f.gpu.iter().any(|p| p.duration_ns > self.budget_ns)).collect();
-        frames.sort_by_key(|f| std::cmp::Reverse(f.duration_ns.max(f.gpu.iter().map(|p| p.duration_ns).max().unwrap_or(0))));
+        let mut frames: Vec<_> = self
+            .frames
+            .iter()
+            .filter(|f| {
+                f.duration_ns > self.budget_ns
+                    || f.gpu.iter().any(|p| p.duration_ns > self.budget_ns)
+            })
+            .collect();
+        frames.sort_by_key(|f| {
+            std::cmp::Reverse(
+                f.duration_ns
+                    .max(f.gpu.iter().map(|p| p.duration_ns).max().unwrap_or(0)),
+            )
+        });
         frames.into_iter().take(limit.min(1024)).map(|f| {
             let contributors = contributions(self, f);
             let mut hints = Vec::new();
@@ -133,36 +176,77 @@ impl Profile {
     /// Computes bounded summaries. CPU percentiles are sums per label per frame;
     /// child time is subtracted, and frames where a label is absent contribute zero.
     pub fn summary(&self, budget: SummaryBudget) -> Result<Summary, &'static str> {
-        if !(512..=1_048_576).contains(&budget.max_bytes) { return Err("summary byte budget must be 512..=1048576"); }
+        if !(512..=1_048_576).contains(&budget.max_bytes) {
+            return Err("summary byte budget must be 512..=1048576");
+        }
         let mut values = BTreeMap::<String, (Vec<u64>, Vec<u64>, u64)>::new();
         for (index, frame) in self.frames.iter().enumerate() {
             for span in &frame.spans {
-                let row = values.entry(cpu_key(self, span.label)).or_insert_with(|| (vec![0; self.frames.len()], vec![0; self.frames.len()], 0));
-                row.0[index] += span.self_ns; row.1[index] += span.duration_ns; row.2 += span.self_allocated_bytes;
+                let row = values
+                    .entry(cpu_key(self, span.label))
+                    .or_insert_with(|| (vec![0; self.frames.len()], vec![0; self.frames.len()], 0));
+                row.0[index] += span.self_ns;
+                row.1[index] += span.duration_ns;
+                row.2 += span.self_allocated_bytes;
             }
             for pass in &frame.gpu {
-                let row = values.entry(gpu_key(self, pass)).or_insert_with(|| (vec![0; self.frames.len()], vec![0; self.frames.len()], 0));
-                row.0[index] += pass.duration_ns; row.1[index] += pass.duration_ns;
+                let row = values
+                    .entry(gpu_key(self, pass))
+                    .or_insert_with(|| (vec![0; self.frames.len()], vec![0; self.frames.len()], 0));
+                row.0[index] += pass.duration_ns;
+                row.1[index] += pass.duration_ns;
             }
         }
-        let mut metrics: Vec<_> = values.into_iter().map(|(key, (samples, inclusive, allocated_bytes))| Metric {
-            key, total_ns: samples.iter().sum(), time: Distribution::samples(samples), inclusive: Distribution::samples(inclusive), allocated_bytes,
-        }).collect();
-        metrics.sort_by(|a,b| b.total_ns.cmp(&a.total_ns).then_with(|| a.key.cmp(&b.key)));
+        let mut metrics: Vec<_> = values
+            .into_iter()
+            .map(|(key, (samples, inclusive, allocated_bytes))| Metric {
+                key,
+                total_ns: samples.iter().sum(),
+                time: Distribution::samples(samples),
+                inclusive: Distribution::samples(inclusive),
+                allocated_bytes,
+            })
+            .collect();
+        metrics.sort_by(|a, b| b.total_ns.cmp(&a.total_ns).then_with(|| a.key.cmp(&b.key)));
         let truncated = metrics.len() > budget.top_n.min(1024);
         metrics.truncate(budget.top_n.min(1024));
-        let hitch_count = self.frames.iter().filter(|f| f.duration_ns > self.budget_ns || f.gpu.iter().any(|p| p.duration_ns > self.budget_ns)).count();
-        let mut summary = Summary { version: 1, frames: self.frames.len(), budget_ns: self.budget_ns,
-            cpu_frame: Distribution::samples(self.frames.iter().map(|f| f.duration_ns).collect()), metrics,
-            hitches: self.hitches(budget.hitches), hitch_count, dropped: self.orphaned_results + self.frames.iter().map(|f| f.dropped).sum::<u64>(),
-            truncated: truncated || hitch_count > budget.hitches.min(1024), metrics_truncated: truncated,
-            background_cpu: self.frames.iter().filter_map(|f| f.load.background_cpu).max_by(f64::total_cmp) };
+        let hitch_count = self
+            .frames
+            .iter()
+            .filter(|f| {
+                f.duration_ns > self.budget_ns
+                    || f.gpu.iter().any(|p| p.duration_ns > self.budget_ns)
+            })
+            .count();
+        let mut summary = Summary {
+            version: 1,
+            frames: self.frames.len(),
+            budget_ns: self.budget_ns,
+            cpu_frame: Distribution::samples(self.frames.iter().map(|f| f.duration_ns).collect()),
+            metrics,
+            hitches: self.hitches(budget.hitches),
+            hitch_count,
+            dropped: self.orphaned_results + self.frames.iter().map(|f| f.dropped).sum::<u64>(),
+            truncated: truncated || hitch_count > budget.hitches.min(1024),
+            metrics_truncated: truncated,
+            background_cpu: self
+                .frames
+                .iter()
+                .filter_map(|f| f.load.background_cpu)
+                .max_by(f64::total_cmp),
+        };
         loop {
-            let bytes = serde_json::to_vec(&summary).map_err(|_| "cannot serialize profile summary")?.len();
-            if bytes <= budget.max_bytes { break; }
+            let bytes = serde_json::to_vec(&summary)
+                .map_err(|_| "cannot serialize profile summary")?
+                .len();
+            if bytes <= budget.max_bytes {
+                break;
+            }
             summary.truncated = true;
             if summary.hitches.pop().is_none() {
-                if summary.metrics.pop().is_none() { return Err("summary budget too small"); }
+                if summary.metrics.pop().is_none() {
+                    return Err("summary budget too small");
+                }
                 summary.metrics_truncated = true;
             }
         }

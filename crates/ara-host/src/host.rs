@@ -371,8 +371,7 @@ impl Host {
 
     /// Periodic work: external-edit checks, debounced flushes, service ticks.
     pub fn tick(&mut self) {
-        let profiling = self.st.profiler.is_recording()
-            && self.st.profiler.begin_frame().is_ok();
+        let profiling = self.st.profiler.is_recording() && self.st.profiler.begin_frame().is_ok();
         let span = profiling.then(|| ara_profile::scope("host.tick"));
         self.st.watch();
         self.st.drain();
@@ -388,14 +387,19 @@ impl Host {
         self.st.drain();
         drop(span);
         if profiling {
-            let _ = self.st.profiler.end_frame(Default::default(), Default::default());
+            let _ = self
+                .st
+                .profiler
+                .end_frame(Default::default(), Default::default());
         }
     }
 
     /// Frame-inspector integration: register render/simulation/worker endpoints,
     /// begin/end presentation frames, and attach delayed GPU results by frame ID.
     /// Host ticks make their own frames only when no presentation frame is open.
-    pub fn profiler(&mut self) -> &mut ara_profile::Profiler { &mut self.st.profiler }
+    pub fn profiler(&mut self) -> &mut ara_profile::Profiler {
+        &mut self.st.profiler
+    }
 
     /// Writes every document with unsaved changes now.
     pub fn flush(&mut self) {
@@ -425,7 +429,9 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
-        if self.st.profile_attached { ara_profile::ThreadRegistration::detach(); }
+        if self.st.profile_attached {
+            ara_profile::ThreadRegistration::detach();
+        }
         if !self.st.killed {
             self.flush();
         }

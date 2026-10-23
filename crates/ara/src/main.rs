@@ -414,14 +414,25 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
     let open = |files: &[PathBuf]| project::open(root_flag, files);
     let io = |msg: String| Diagnostic::error(codes::IO, msg);
     match cli.command {
-        Command::Profile { command: ProfileCommand::Compare { baseline, current, relative, absolute_ns } } => {
+        Command::Profile {
+            command:
+                ProfileCommand::Compare {
+                    baseline,
+                    current,
+                    relative,
+                    absolute_ns,
+                },
+        } => {
             let baseline = ara_profile::read_summary(&baseline).map_err(|e| io(e.to_string()))?;
             let current = ara_profile::read_summary(&current).map_err(|e| io(e.to_string()))?;
-            let report = ara_profile::compare(&baseline, &current, relative, absolute_ns).map_err(|e| io(e.into()))?;
+            let report = ara_profile::compare(&baseline, &current, relative, absolute_ns)
+                .map_err(|e| io(e.into()))?;
             if json {
                 let value = serde_json::to_value(&report).map_err(|e| io(e.to_string()))?;
                 print!("{}", ara_json::to_canonical_string(&value));
-            } else { print!("{}", report.table()); }
+            } else {
+                print!("{}", report.table());
+            }
             Ok(report.passed)
         }
         Command::Init { dir, name } => {
