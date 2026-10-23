@@ -127,6 +127,8 @@ fn schema_describes_named_types_and_commands() {
         "{out}"
     );
     assert!(out.contains("entity.create"), "{out}");
+    let (code, out) = ara("project", &["schema", "Light.intensity"]);
+    assert!(code == 0 && out.contains("# Component `Light`"), "{out}");
     let (code, out) = ara("project", &["schema", "Lights"]);
     assert_eq!(code, 1);
     assert!(out.contains("did you mean `Light`?"), "{out}");

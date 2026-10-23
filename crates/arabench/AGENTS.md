@@ -20,6 +20,7 @@ cargo run -p arabench -- list
 `run` builds `ara` first (same profile) and puts it first on the agent's `PATH`
 (`--ara <dir>/ara.exe` pins a frozen binary; it must be named `ara`). `--merge`
 re-runs some `--task`s into an existing `results.json` of the same label.
+Recorded runs and the before/after analysis: [`results/README.md`](results/README.md).
 Output: `results/<label>-<agent>/results.json`, `report.md` and
 `transcripts/<task>.jsonl` (trimmed, failures only). `--keep` keeps each attempt's
 temp project (`<temp>/arabench/<agent>-<task>-…/proj`, transcript beside it).

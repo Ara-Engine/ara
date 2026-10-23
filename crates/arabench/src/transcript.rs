@@ -62,16 +62,17 @@ impl ToolCall {
     }
 
     /// True if this call ran `command` (an Ara command such as `entity.delete`) for
-    /// real, through MCP or the CLI.
+    /// real, through MCP or `ara do` (not, say, `ara schema entity.delete`).
     pub fn applies(&self, command: &str) -> bool {
         if self.is_dry_run() || !self.ok {
             return false;
         }
         match self.tool.as_str() {
             "ara_apply" => self.input.to_string().contains(&format!("\"{command}\"")),
-            "shell" => self
-                .command()
-                .is_some_and(|c| c.contains("ara") && c.contains(command)),
+            "shell" => self.command().is_some_and(|c| {
+                let words = c.split(|ch: char| ch.is_whitespace() || "'\";".contains(ch));
+                c.contains(command) && words.into_iter().any(|w| w == "do")
+            }),
             _ => false,
         }
     }
@@ -431,6 +432,17 @@ mod tests {
         assert_eq!(t.turns, 2);
         assert!(t.calls[0].ok);
         assert_eq!(t.calls[1].codes, vec!["ARA1204".to_owned()]);
+        let shell = |c: &str| ToolCall {
+            tool: "shell".into(),
+            input: json!({ "command": c }),
+            ok: true,
+            ..ToolCall::default()
+        };
+        assert!(!shell("ara schema entity.delete").applies("entity.delete"));
+        assert!(
+            !shell("ara do entity.delete -p entities=[e_1] --dry-run").applies("entity.delete")
+        );
+        assert!(shell("ara do entity.delete -p entities=[e_1] --why 'x'").applies("entity.delete"));
         assert_eq!(t.tokens.map(|k| (k.input, k.cache_read)), Some((20, 100)));
     }
 }

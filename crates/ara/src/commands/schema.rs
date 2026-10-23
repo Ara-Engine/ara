@@ -33,8 +33,13 @@ fn describe(project: &Project, names: &[String], json: bool) -> bool {
     let short = |p: &docs::DocPage| p.id.rsplit('/').next().unwrap_or(&p.id).to_owned();
     let mut found = Vec::new();
     let mut missing = Vec::new();
+    let page = |name: &str| pages.iter().find(|p| short(p).eq_ignore_ascii_case(name));
     for name in names {
-        match pages.iter().find(|p| short(p).eq_ignore_ascii_case(name)) {
+        // A field path (`Transform.position`) shows its type's page.
+        let head = name.split_once('.').map(|(h, _)| h);
+        let hit = page(name)
+            .or_else(|| head.and_then(|h| page(h).filter(|p| p.id.starts_with("types/"))));
+        match hit {
             Some(p) => found.push(p),
             None => {
                 let all: Vec<String> = pages.iter().map(short).collect();

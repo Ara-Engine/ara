@@ -199,7 +199,16 @@ fn run(cmd: Cmd) -> Result<bool, String> {
             // Agents run one after the other; tasks within an agent run `jobs` at once.
             for agent in &agents {
                 let dir = base.join(format!("{label}-{}", agent.slug()));
-                let _ = fs::remove_dir_all(dir.join("transcripts"));
+                // Stale failure transcripts go; with `--merge`, only the re-run tasks'.
+                if merge {
+                    for t in &tasks {
+                        let _ = fs::remove_file(
+                            dir.join("transcripts").join(format!("{}.jsonl", t.id)),
+                        );
+                    }
+                } else {
+                    let _ = fs::remove_dir_all(dir.join("transcripts"));
+                }
                 let opts = RunOptions {
                     ara: ara.clone(),
                     jobs,
