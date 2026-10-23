@@ -71,6 +71,8 @@ allocations while rendering and retargeting, and the two-room golden capture
 (`tests/golden/two_rooms.json`: WAV BLAKE3 + meters + occlusion trace). Goldens are
 same-platform evidence; refresh with `ARA_UPDATE_GOLDENS=1` only for intended changes.
 Steam runtime path: `ARA_STEAM_AUDIO`, else `ara-audio/runtime/steam/.../phonon.dll`.
+Release bench (budget 1 ms per 128-frame block for 1,000 occluded voices with reverb sends):
+`cargo run -p ara-acoustics --release --example acoustics_bench` writes `evidence/benchmark.json`.
 
 ## Gotchas
 
