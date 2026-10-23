@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    S7 gameplay library. One source tree, two shipping lanes:
+      AraLane=aot (default): NativeAOT shared library exporting ara_script_init (no JIT).
+      AraLane=r2r: ReadyToRun IL plus a self-contained CoreCLR folder (JIT available; mods load).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Game</AssemblyName>
+    <RootNamespace>Ara.Game</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <Deterministic>true</Deterministic>
+    <AraLane Condition="'$(AraLane)' == ''">aot</AraLane>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AraLane)' == 'aot'">
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <OptimizationPreference>Speed</OptimizationPreference>
+  </PropertyGroup>
+
+  <!-- Exe only so the SDK lays out the self-contained runtime (it insists on an apphost, NETSDK1067;
+       the exporter drops it). The template hosts CoreCLR itself; Main never runs. -->
+  <PropertyGroup Condition="'$(AraLane)' == 'r2r'">
+    <OutputType>Exe</OutputType>
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+  </PropertyGroup>
+
+  <!-- Trimmed R2R: the host binds Exports.Init by name (coreclr_create_delegate), which the trimmer
+       can't see. NativeAOT roots [UnmanagedCallersOnly(EntryPoint)] itself; R2R must root the assembly. -->
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <TrimmerRootAssembly Include="Game" />
+  </ItemGroup>
+</Project>
