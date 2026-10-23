@@ -1,0 +1,125 @@
+{
+  "name": "magic_swirl",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "swirl",
+      "capacity": 8192,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 1600
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 3,
+              "size": 0.04500000178813934,
+              "color": [0.30000001192092896, 1.5, 5, 0.699999988079071]
+            }
+          },
+          {
+            "name": "sphere",
+            "module": {
+              "op": "sphere",
+              "center": [0, 1.399999976158142, 0],
+              "radius": 0.8500000238418579
+            }
+          },
+          {
+            "name": "velocity",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.3499999940395355, 0],
+              "spread": [0.10000000149011612, 0.10000000149011612, 0.10000000149011612]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "vortex",
+            "module": {
+              "op": "vortex",
+              "center": [0, 1.399999976158142, 0],
+              "axis": [0, 1, 0],
+              "strength": 2.200000047683716
+            }
+          },
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 2.4000000953674316,
+              "strength": 0.8999999761581421
+            }
+          },
+          {
+            "name": "pull",
+            "module": {
+              "op": "attractor",
+              "position": [0, 1.399999976158142, 0],
+              "strength": 3,
+              "softening": 0.20000000298023224
+            }
+          },
+          {
+            "name": "damping",
+            "module": {
+              "op": "drag",
+              "coefficient": 1.5
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.10000000149011612, 2, 6, 0.6000000238418579]
+                },
+                {
+                  "t": 0.6000000238418579,
+                  "value": [1.5, 0.10000000149011612, 4, 0.699999988079071]
+                },
+                {
+                  "t": 1,
+                  "value": [0.10000000149011612, 0, 1, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15000000596046448,
+              "sorting": "none"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

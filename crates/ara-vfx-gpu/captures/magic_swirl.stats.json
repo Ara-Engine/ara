@@ -1,0 +1,116 @@
+{
+  "tick": 140,
+  "particles_alive": 3733,
+  "emitters": [
+    {
+      "name": "swirl",
+      "alive": 3733,
+      "dead": 4459,
+      "rendered": 3733,
+      "events": 0,
+      "dropped_spawns": 0,
+      "dropped_events": 0
+    }
+  ],
+  "gpu_stages": [
+    {
+      "pass": "Vfx.Acquire",
+      "queue": "Graphics",
+      "milliseconds": 0.000064
+    },
+    {
+      "pass": "Vfx.Backdrop",
+      "queue": "Graphics",
+      "milliseconds": 0.020352
+    },
+    {
+      "pass": "Vfx.Prepare",
+      "queue": "Graphics",
+      "milliseconds": 0.003072
+    },
+    {
+      "pass": "Vfx.Spawn",
+      "queue": "Graphics",
+      "milliseconds": 0.002112
+    },
+    {
+      "pass": "Vfx.Update",
+      "queue": "Graphics",
+      "milliseconds": 0.002048
+    },
+    {
+      "pass": "Vfx.Compact.Scan",
+      "queue": "Graphics",
+      "milliseconds": 0.004096
+    },
+    {
+      "pass": "Vfx.Compact.Prefix",
+      "queue": "Graphics",
+      "milliseconds": 0.003072
+    },
+    {
+      "pass": "Vfx.Compact.Scatter",
+      "queue": "Graphics",
+      "milliseconds": 0.002048
+    },
+    {
+      "pass": "Vfx.Events",
+      "queue": "Graphics",
+      "milliseconds": 0.001024
+    },
+    {
+      "pass": "Vfx.Sort",
+      "queue": "Graphics",
+      "milliseconds": 0
+    },
+    {
+      "pass": "Vfx.IndirectArgs",
+      "queue": "Graphics",
+      "milliseconds": 0.001024
+    },
+    {
+      "pass": "Vfx.Draw",
+      "queue": "Graphics",
+      "milliseconds": 0.0152
+    },
+    {
+      "pass": "Vfx.Tonemap",
+      "queue": "Graphics",
+      "milliseconds": 0.008192
+    },
+    {
+      "pass": "Vfx.Readback",
+      "queue": "Graphics",
+      "milliseconds": 0.158432
+    },
+    {
+      "pass": "Vfx.Host",
+      "queue": "Graphics",
+      "milliseconds": 0.000064
+    }
+  ],
+  "overdraw_estimate": 0.10712035000324249,
+  "batches": 1,
+  "lights": 0,
+  "device": {
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "vendor_id": 4318,
+    "device_id": 10115,
+    "ray_tracing": true,
+    "max_image_dimension": 32768,
+    "api_version": "1.4.351",
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "compute_family": 2,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "timestamp_period_ns": 1,
+    "timestamp_valid_bits": [64, 64],
+    "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
+  },
+  "effect_hash": "df221973979ddaefdce4bf6b1d4ccaa875a99ec455db41c8ef6bd67922f2abbb",
+  "shader_key": "aa25fdd4b87fa1b605ed106180bf52aae29a01436f49c5d20466eb403d3686be",
+  "async_compute": false,
+  "diagnostics": []
+}

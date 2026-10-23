@@ -1,0 +1,45 @@
+{
+  "targetHz": 144,
+  "idleCpuMs": {
+    "samples": 8,
+    "p50": 0.0737,
+    "p95": 0.08349999999999999,
+    "p99": 0.08349999999999999,
+    "max": 0.08349999999999999
+  },
+  "dirtyRenderAndPresentMs": {
+    "samples": 12,
+    "p50": 8.898100000000001,
+    "p95": 14.4749,
+    "p99": 29.491799999999998,
+    "max": 29.491799999999998
+  },
+  "nativeInputToPresentMs": {
+    "samples": 1,
+    "p50": 53.7078,
+    "p95": 53.7078,
+    "p99": 53.7078,
+    "max": 53.7078
+  },
+  "idleSamplesMs": [0.0599, 0.07200000000000001, 0.076, 0.061900000000000004, 0.081, 0.08349999999999999, 0.0649, 0.0737],
+  "renderSamplesMs": [29.491799999999998, 10.551, 9.2192, 8.898100000000001, 8.0054, 14.4749, 5.4446, 6.0615, 9.4795, 7.277900000000001, 8.2633, 7.468],
+  "interactionSamplesMs": [53.7078],
+  "device": {
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "vendor_id": 4318,
+    "device_id": 10115,
+    "ray_tracing": true,
+    "max_image_dimension": 32768,
+    "api_version": "1.4.351",
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "compute_family": 2,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "timestamp_period_ns": 1,
+    "timestamp_valid_bits": [64, 64],
+    "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
+  },
+  "note": "CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."
+}

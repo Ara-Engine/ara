@@ -33,6 +33,13 @@ pub enum Command {
     BuildAccelerationStructure(AccelerationStructure),
     /// Dispatch compute workgroups.
     Dispatch([u32; 3]),
+    /// Dispatch using three U32 workgroup counts at an aligned buffer offset.
+    DispatchIndirect {
+        /// Buffer allocated with native indirect usage.
+        arguments: Buffer,
+        /// Byte offset of the 12-byte dispatch record.
+        offset: u64,
+    },
     /// Begin dynamic rendering.
     BeginRendering {
         /// Color outputs.

@@ -26,7 +26,11 @@ pub(super) fn access(
             L::GENERAL,
         ),
         Access::Index => (S::INDEX_INPUT, A::INDEX_READ, L::GENERAL),
-        Access::Indirect => (S::DRAW_INDIRECT, A::INDIRECT_COMMAND_READ, L::GENERAL),
+        Access::Indirect => (
+            S::DRAW_INDIRECT | shader,
+            A::INDIRECT_COMMAND_READ | A::SHADER_READ,
+            L::GENERAL,
+        ),
         Access::ShaderRead => (shader, A::SHADER_READ, L::SHADER_READ_ONLY_OPTIMAL),
         Access::Storage => (shader, A::SHADER_READ | A::SHADER_WRITE, L::GENERAL),
         Access::Color => (
@@ -373,6 +377,19 @@ impl VulkanDevice {
                 Command::Dispatch(_) => {
                     if rendering || pipeline != Some(true) {
                         return Err(GpuError::Contract("Dispatch outside compute scope".into()));
+                    }
+                }
+                Command::DispatchIndirect { arguments, offset } => {
+                    let buffer = self.buffers.get(*arguments)?.raw;
+                    if rendering
+                        || pipeline != Some(true)
+                        || offset % 4 != 0
+                        || offset.checked_add(12).is_none_or(|end| end > buffer.size)
+                        || !buffer.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid indirect dispatch scope, usage or range".into(),
+                        ));
                     }
                 }
                 Command::UploadImage {

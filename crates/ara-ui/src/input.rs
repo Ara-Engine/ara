@@ -74,6 +74,10 @@ impl InputState {
     pub fn focused(&self) -> Option<u64> {
         self.focus
     }
+    /// Release keyboard focus when a native host gives input to a scene/world surface.
+    pub fn blur(&mut self, ui: &mut Ui) {
+        self.focus_to(ui, None);
+    }
     /// Current pointer-capture identity.
     pub fn captured(&self) -> Option<u64> {
         self.capture

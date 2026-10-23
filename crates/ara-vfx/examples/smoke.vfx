@@ -1,0 +1,117 @@
+{
+  "name": "smoke",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "smoke",
+      "capacity": 2048,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 180
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 4,
+              "size": 0.44999998807907104,
+              "color": [0.20000000298023224, 0.23000000417232513, 0.2800000011920929, 0.14000000059604645]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "cone",
+              "origin": [0, 0.10000000149011612, 0],
+              "height": 0.4000000059604645,
+              "radius": 0.30000001192092896
+            }
+          },
+          {
+            "name": "rise",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.800000011920929, 0],
+              "spread": [0.15000000596046448, 0.20000000298023224, 0.15000000596046448]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 1.5,
+              "strength": 0.44999998807907104
+            }
+          },
+          {
+            "name": "grow",
+            "module": {
+              "op": "size_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 0.30000001192092896
+                },
+                {
+                  "t": 1,
+                  "value": 1.2999999523162842
+                }
+              ]
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.15000000596046448, 0.17000000178813934, 0.2199999988079071, 0]
+                },
+                {
+                  "t": 0.11999999731779099,
+                  "value": [0.25, 0.2800000011920929, 0.33000001311302185, 0.1599999964237213]
+                },
+                {
+                  "t": 1,
+                  "value": [0.4000000059604645, 0.4300000071525574, 0.47999998927116394, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "surface",
+              "soft_distance": 0.30000001192092896,
+              "sorting": "depth"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
