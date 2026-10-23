@@ -95,6 +95,24 @@ impl Renderer {
     pub fn gpu(&self) -> &VulkanDevice {
         &self.gpu
     }
+    /// Opaque reversed-Z depth, sampled index and actual state for feature graphs.
+    /// Feature consumers must return it to Graphics/ShaderRead before the next frame.
+    pub fn feature_depth(&self) -> (Image, u32, State) {
+        (
+            self.targets.images[DEPTH],
+            self.targets.sampled[DEPTH],
+            self.targets.states[DEPTH],
+        )
+    }
+    /// Linear HDR scene color for transparent graph features after a completed frame.
+    /// Consumers must preserve content and return it to Graphics/ShaderRead.
+    pub fn feature_color(&self) -> (Image, u32, State) {
+        (
+            self.targets.images[HDR],
+            self.targets.sampled[HDR],
+            self.targets.states[HDR],
+        )
+    }
     /// Borrow the device between completed frames to record independent graph extensions.
     /// Extensions own their targets and must preserve this renderer's resource states.
     pub fn gpu_mut(&mut self) -> &mut VulkanDevice {

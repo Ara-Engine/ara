@@ -112,6 +112,13 @@ impl VulkanDevice {
                 Command::Dispatch(groups) => {
                     device.cmd_dispatch(cmd, groups[0], groups[1], groups[2])
                 }
+                Command::DispatchIndirect { arguments, offset } => {
+                    device.cmd_dispatch_indirect(
+                        cmd,
+                        self.buffers.get(*arguments)?.raw.handle,
+                        *offset,
+                    );
+                }
                 Command::BeginRendering {
                     colors,
                     depth,

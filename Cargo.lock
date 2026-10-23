@@ -1137,6 +1137,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-vfx"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-material",
+ "ara-ops",
+ "ara-schema",
+ "bevy_ecs",
+ "blake3",
+ "glam 0.30.9",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-vfx-gpu"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-json",
+ "ara-material",
+ "ara-render",
+ "ara-shader-cook",
+ "ara-vfx",
+ "blake3",
+ "bytemuck",
+ "glam 0.30.9",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-world"
 version = "0.0.0"
 dependencies = [
