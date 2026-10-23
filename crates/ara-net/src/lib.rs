@@ -33,6 +33,12 @@ impl std::fmt::Display for NetError {
     }
 }
 impl std::error::Error for NetError {}
+impl From<&NetError> for ara_diag::Diagnostic {
+    /// The rejection as a bus diagnostic (`ARA2401`).
+    fn from(e: &NetError) -> ara_diag::Diagnostic {
+        ara_diag::Diagnostic::error(ara_diag::codes::NET_REJECTED, e.0.clone())
+    }
+}
 impl From<ara_sim::SimError> for NetError {
     fn from(value: ara_sim::SimError) -> Self {
         Self(value.0)

@@ -634,6 +634,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-bridge",
+ "ara-diag",
  "ara-json",
  "ara-pack",
  "ara-schema",
@@ -683,6 +684,7 @@ name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-diag",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "serde",
@@ -971,6 +973,7 @@ dependencies = [
 name = "ara-pack"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "blake3",
  "chacha20poly1305",

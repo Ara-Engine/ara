@@ -48,5 +48,19 @@ impl From<ara_asset_format::FormatError> for Error {
         Self::Invalid(e.to_string())
     }
 }
+impl Error {
+    /// The error as a bus diagnostic about `asset` (a path or `@path#id`).
+    pub fn diagnostic(&self, asset: &str) -> ara_diag::Diagnostic {
+        use ara_diag::{Diagnostic, Subject, codes};
+        let reference = if asset.starts_with('@') { asset.to_owned() } else { format!("@{asset}") };
+        let d = match self {
+            Error::Cancelled => Diagnostic::info(codes::ASSET_IMPORT_CANCELLED, format!("import of `{asset}` was cancelled or superseded")),
+            Error::Worker(m) => Diagnostic::error(codes::ASSET_WORKER_FAILED, format!("import worker failed on `{asset}`: {m}")),
+            other => Diagnostic::error(codes::ASSET_IMPORT_FAILED, format!("`{asset}` did not import: {other}")),
+        };
+        d.subject(Subject::asset(reference))
+    }
+}
+
 /// Result shared by pipeline and plugin importers.
 pub type Result<T> = std::result::Result<T, Error>;

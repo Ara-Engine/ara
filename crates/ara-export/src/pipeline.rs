@@ -149,6 +149,7 @@ pub fn export(request: &ExportRequest, sink: &mut dyn EventSink) -> Result<Expor
                 d.platform.name()
             )],
         };
+        ara_diag::Diagnostic::from(&diagnostic).emit();
         d.emit(EventKind::Error(diagnostic.clone()))?;
         tools::write_json(
             &d.work.join("report.json"),

@@ -33,6 +33,22 @@ pub enum Error {
     Json(#[from] serde_json::Error),
 }
 
+impl From<&Error> for ara_diag::Diagnostic {
+    /// The error as a bus diagnostic under its `ARA-EXP-PACK-*` named code.
+    fn from(e: &Error) -> ara_diag::Diagnostic {
+        let name = match e {
+            Error::Invalid(_) => "ARA-EXP-PACK-001",
+            Error::Key => "ARA-EXP-PACK-002",
+            Error::Io(_) => "ARA-EXP-PACK-003",
+            Error::Json(_) => "ARA-EXP-PACK-004",
+        };
+        let code = ara_diag::Code::parse(name).unwrap_or(ara_diag::codes::UNKNOWN_CODE);
+        let text = e.to_string();
+        let message = text.split_once(": ").map_or(text.as_str(), |(_, m)| m).to_owned();
+        ara_diag::Diagnostic::error(code, message)
+    }
+}
+
 pub(crate) fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }

@@ -780,10 +780,11 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
 }
 
 fn streaming(cx: &Ctx<'_>, f: &mut Findings) {
+    // Streaming reports name the entity or its cell document.
     let records = bus(
         cx.facts,
         &[codes::WORLD_NOT_RESIDENT, codes::WORLD_CELL_FAILED],
-        vec![Subject::entity(cx.e.address.clone())],
+        vec![Subject::entity(cx.e.address.clone()), Subject::document(cx.e.doc.clone())],
     );
     if records.is_empty() {
         f.check("streaming", Status::Skip, "no reports");

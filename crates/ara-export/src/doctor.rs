@@ -365,6 +365,7 @@ pub fn doctor(opts: &DoctorOptions, t: &Toolchain) -> Vec<Check> {
             json!({"protocol":"ara.export.agent/1","arch":"arm64"}),
         );
     }
+    crate::bus::emit_checks(&out);
     out
 }
 
@@ -435,5 +436,6 @@ pub fn doctor_for_preset(
             },
         });
     }
+    crate::bus::emit_checks(&checks);
     checks
 }

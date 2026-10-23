@@ -4,6 +4,7 @@
 #![warn(missing_docs)]
 pub mod android;
 pub mod apple;
+mod bus;
 /// Platform-scoped host prerequisites and runnable fixes.
 pub mod doctor;
 /// Versioned NDJSON progress/artifact/diagnostic stream.

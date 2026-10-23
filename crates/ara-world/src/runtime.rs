@@ -182,6 +182,7 @@ impl Streaming {
                 Ok(Some(cell)) => {
                     state.in_flight = false;
                     if cell.charge > self.config.cell_reservation || cell.blob.key != state.key {
+                        cell_failed(&completion.cell, "it exceeds the runtime reservation or its key differs");
                         state.failure =
                             Some("cell exceeds runtime reservation or key differs".into());
                         state.retiring = true;
@@ -198,6 +199,7 @@ impl Streaming {
                     state.retiring_charge = 0;
                 }
                 Err(error) => {
+                    cell_failed(&completion.cell, &error.to_string());
                     state.in_flight = false;
                     state.failure = Some(error.to_string());
                     self.reserved -= self.config.cell_reservation;
@@ -445,4 +447,14 @@ fn distance(key: CellKey, size: f32, position: [f32; 3]) -> f64 {
     let delta: [f64; 2] =
         std::array::from_fn(|i| (min[i] - point[i]).max(point[i] - (min[i] + size)).max(0.0));
     delta[0].hypot(delta[1])
+}
+
+/// Reports a failed cell on the diagnostics bus (`ARA2202`, about the cell).
+fn cell_failed(cell: &str, why: &str) {
+    ara_diag::Diagnostic::error(
+        ara_diag::codes::WORLD_CELL_FAILED,
+        format!("world cell `{cell}` failed to load: {why}; it stays unloaded until retried"),
+    )
+    .subject(ara_diag::Subject::document(cell))
+    .emit();
 }

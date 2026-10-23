@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 ara-pack = { path = "../ara-pack" }
 ara-bridge = { path = "../ara-bridge" }
+ara-diag.workspace = true
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
 anyhow = "1.0.103"
