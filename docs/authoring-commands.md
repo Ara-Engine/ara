@@ -85,3 +85,10 @@ targets, zero up vectors and singular parent transforms diagnose without editing
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.
 MCP's `as` binds a batch symbol in the same way as `entity.create`. Newly touched
 terrain tiles also derive stable IDs from their grid coordinates.
+
+Terrain grids may have a nonzero `origin` and signed tile bounds. A scene's
+`Terrain` entity may also have a translated `Transform`, including a translated
+parent: that offset reaches rendering, foliage, navigation and terrain collision.
+Strokes and foliage exclusions stay in the terrain document's authored coordinates.
+Bake rotation/scale into the grid; scene terrain transforms currently accept
+translation. The landscape pass retains its square extent and 32-cell tile ABI.
