@@ -122,6 +122,12 @@ impl Explainer for AssetExplainer {
                         .evidence(format!("at {}", d.location))
                         .subject(about.clone());
                     c.fixes = d.fixes.clone();
+                    if c.fixes.is_empty() {
+                        c = c.advice(format!(
+                            "edit the file at {} (a `.material` is source text: no command edits it)",
+                            d.location
+                        ));
+                    }
                     f.cause(c);
                 }
             }

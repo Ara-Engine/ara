@@ -26,6 +26,9 @@ Depends on ara-proto, ara-diag.
 - `ara_logs` returns the bus grouped by code within a character `budget`;
   `ara_why` (the `why` method) returns ranked causes with runnable fixes. The
   server instructions tell agents to ask `ara_why` first when something is wrong.
+- Claude Code gives the model `structuredContent`, not `content`: a result's JSON
+  is what agents pay for, so methods meant for agents keep it small (`why`, `logs`
+  answer with their text unless asked for more).
 
 - A tool's methods are the catalog entries whose `tool` binding names it.
   One method without `action`: the tool's input schema *is* its params schema.

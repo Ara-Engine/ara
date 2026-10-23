@@ -49,7 +49,10 @@ ara-why, ara-profile.
   directly, attributed to the calling session's author. Subsystems on the host's
   thread during a call are attributed through `bus::scope`.
 - `logs` (`ara_logs`): grouped by code (counts, subjects, newest message, best fix)
-  within `budget` characters; `group: false` lists entries. `diag.query` adds time,
+  within `budget` characters; `group: false` lists entries. Answers are the text
+  (`{cursor, total, text}`) unless `limit` asks for `entries` and `summary`: MCP
+  clients pass `structuredContent` to the model, so JSON costs tokens. `diag.query`
+  always answers in full and adds time,
   tick and text filters; `diag.subscribe` streams `diag.event {subscription,
   record}`; `diag.clear`; `diag.report` lets other processes push diagnostics
   (`engine: true`, `tick`, per-item `causedBy` index).
@@ -58,7 +61,9 @@ ara-why, ara-profile.
   not. Restored records keep causal links (by dedup key).
 - `why` (`ara_why`): `Why::explain` over `HostFacts` (resolved trees cached per
   question, effective component values, the asset index, project files, the bus,
-  a profiler summary); `list: true` lists explainers. `docs.search` answers a code
+  a profiler summary); `list: true` lists explainers. It answers `{text, fixes}`
+  (runnable fixes with their cause code); `full: true` returns the whole `Report`.
+  `docs.search` answers a code
   query with its `errors/<code>` page.
 
 ## Core methods (`core/`)

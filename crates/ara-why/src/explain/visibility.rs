@@ -625,7 +625,9 @@ fn materials(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
                     );
                 }
                 if let Some(at) = status.errors.first().map(|d| d.location.to_string()) {
-                    c = c.advice(format!("fix the material source at {at}, then ask again"));
+                    c = c.advice(format!(
+                        "edit the file at {at} (a `.material` is source text: no command edits it), then ask again"
+                    ));
                 }
                 f.cause(c);
             } else if !status.draws_meshes() {

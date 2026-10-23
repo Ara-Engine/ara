@@ -1,0 +1,203 @@
+{
+  "label": "why-without-r5",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T07:09:57Z",
+  "engine": "e988645+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "shell": 5
+      },
+      "wallMs": 21361,
+      "tokens": {
+        "input": 23597,
+        "cacheRead": 100736,
+        "cacheWrite": 0,
+        "output": 981
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The radio disappeared because its material declared `paint` but referenced the misspelled name `pain` in `output baseColor`. I corrected the reference in [radio.material](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-bad-material-51584-2f19a88c-4/proj/materials/radio.material). `ara check` reports no errors or warnings."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "shell": 9
+      },
+      "wallMs": 19415,
+      "tokens": {
+        "input": 12597,
+        "cacheRead": 104704,
+        "cacheWrite": 0,
+        "output": 794
+      },
+      "codes": {
+        "ARA1302": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because `outpost.scene` referenced the old mesh path and ID, `@meshes/generator.glb#ms_genr0001`, which no longer resolves after the re-export. I updated it to `@meshes/generator_v2.glb#ms_genr0002`.\n\n`ara check` now reports zero errors and warnings. The change is recorded as transaction `tx_vfjk56h1` and remains unreviewed until accepted, per the project workflow."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"default\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "shell": 6
+      },
+      "wallMs": 19083,
+      "tokens": {
+        "input": 18855,
+        "cacheRead": 140800,
+        "cacheWrite": 0,
+        "output": 694
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The workbench was invisible because its `MeshRenderer` used the `editor` layer, which the game camera doesn’t draw. I changed it to `default` and left the camera unchanged.\n\n`ara check` reports no errors or warnings. The scene change is recorded as transaction `tx_mj0dm488` and remains unreviewed until you accept it with `ara accept`."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 12,
+      "toolCalls": {
+        "shell": 12
+      },
+      "wallMs": 33574,
+      "tokens": {
+        "input": 20171,
+        "cacheRead": 173440,
+        "cacheWrite": 0,
+        "output": 2112
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "`Barrel.002` had a `RigidBody` with `mass: 0`. A zero-mass simulated body can produce invalid physics state, which explains why it vanished after startup.\n\nI set its mass to 30 kg to match the other barrels, using an Ara transaction with a `why`. `ara check` reports no errors or warnings. The change is applied and awaiting human review."
+    }
+  ]
+}
