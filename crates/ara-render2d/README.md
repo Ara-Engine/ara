@@ -17,7 +17,8 @@ routing stays with the host.
   `ImportInput` snapshots. Canonical atlas metadata has no GPU slots.
 - Rendering: `Scene2d::extract` from a fixed-tick snapshot plus boundary-published
   atlases, then `Renderer2d::new` off the human's frame; swap at frame boundaries
-  (D20). Ordinary camera frames update constants only.
+  (D20). Each simulation frame calls `update(scene)` (same device and atlases);
+  camera-only frames update constants only. New atlas pixels need a new renderer.
 - Capture: route protocol captures here when the view selects a `Camera2d`. The
   daemon router is not changed by these crates.
 
@@ -50,12 +51,15 @@ Additive shared hooks (minimal): `Command::DrawProcedural` in ara-gpu; in ara-re
 
 | Workload | Sprite pass p50 / p95 |
 |---|---|
-| 100k unlit sprites, 2.5 px | 0.124 / 0.133 ms |
+| 100k unlit sprites, 2.5 px | 0.132 / 0.133 ms |
 | 100k unlit sprites, 14 px (~21x overdraw) | 1.43 / 1.59 ms |
-| Platformer sample, 3 shadowed lights, 22 edges | 0.081 / 0.083 ms |
+| Platformer sample, 3 shadowed lights, 22 edges | 0.082 / 0.083 ms |
+
+A fully dynamic 100k-sprite frame (`update`: re-sort, rebuild, upload) costs 13 ms of
+CPU in the dev profile (75 ms before the allocation-free rewrite of `batch::prepare`).
 
 Shared ToneMap is 0.03 ms; capture readback 0.28 ms is diagnostic-only. 8 warm-up +
-120 measured frames, immutable resident instances, one frame in flight; CPU extraction
+120 measured frames, resident instances, one frame in flight; CPU extraction
 and import are not included. Data: `measurements/100k-sprites.json` (the previous
 build's single-workload run is kept as `100k-sprites-before-outline-shadows.json`).
 Reproduce with `./run.ps1 -Mode Benchmark`.

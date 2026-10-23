@@ -21,16 +21,24 @@ use std::{
 
 mod passes;
 mod upload;
-/// Persistent immutable extraction and per-view GPU targets. No gameplay state lives here.
+/// Resident 2D extraction and per-view GPU targets on one device. `update` replaces the
+/// extraction between frames; no gameplay state lives here.
 pub struct Renderer2d {
     gpu: VulkanDevice,
     pipeline: Pipeline,
     post: ToneMap,
     instances: Buffer,
+    staging: Buffer,
+    instance_capacity: u64,
     instance_index: u32,
+    instance_state: Access,
     frame: Buffer,
+    frame_capacity: u64,
     frame_index: u32,
     images: Vec<Image>,
+    indices: BTreeMap<String, u32>,
+    atlas_key: Vec<(String, u32, u32, bool)>,
+    atlas_digest: [u8; 32],
     targets: [Image; 3],
     states: [State; 3],
     hdr_index: u32,
@@ -39,11 +47,11 @@ pub struct Renderer2d {
     batches: Vec<Batch>,
     size: [u32; 2],
     scene_frame: Vec<u8>,
+    instance_bytes: Vec<u8>,
+    instance_count: usize,
     names: Vec<(u64, String)>,
-    hash: String,
     shaders: ShaderMetadata,
     timings: Vec<PassTiming>,
-    instance_count: usize,
 }
 impl Renderer2d {
     /// Device diagnostics and native texture presentation integration.
@@ -54,7 +62,7 @@ impl Renderer2d {
     pub fn output(&self) -> Image {
         self.targets[2]
     }
-    /// Uploaded sprite/tile instance count, before per-chunk view culling.
+    /// Resident sprite/tile instance count, before per-chunk view culling.
     pub fn instance_count(&self) -> usize {
         self.instance_count
     }
@@ -89,8 +97,7 @@ impl Renderer2d {
             .iter()
             .map(|b| f32::from_le_bytes(*b) as u32)
             .collect();
-        let mut hash = blake3::Hasher::new();
-        hash.update(self.hash.as_bytes());
+        let mut hash = self.content_hash()?;
         hash.update(&serde_json::to_vec(camera)?);
         Capture::from_render(
             rgba,

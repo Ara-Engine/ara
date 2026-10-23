@@ -8,15 +8,18 @@ Owned Vulkan 2D render path on ara-gpu, reusing ara-render's graph, ToneMap and 
   snapshot. Sprites, flipbooks (evaluated at `tick`), tilemaps, lights, shadow outlines.
   `PhysicsPose2d` wins over the Transform hierarchy for physics entities.
 - `AtlasImage::from_cooked`: validates an AR2A v1 payload (no native struct casts).
-- `Renderer2d::new(scene, size, cache)` uploads once; `render(camera, exposure)` updates
-  frame constants only; `capture(camera, request)` returns the shared capture contract
-  (PNG, entity IDs, picking, marks, provenance). Views: lit, albedo, normals,
-  entity_ids, shadow_cascades (2D shadow visibility).
+- `Renderer2d::new(scene, size, cache)` uploads atlases and the extraction (stage it
+  off-frame); `update(scene)` replaces the extraction between frames on the same device
+  (buffers grow; atlas set must match); `render(camera, exposure)` writes constants only;
+  `capture(camera, request)` returns the shared capture contract (PNG, entity IDs,
+  picking, marks, provenance hashed lazily from resident content). Views: lit,
+  albedo, normals, entity_ids, shadow_cascades (2D shadow visibility).
 
 ## Rules
 
 - Scene2d is never authoritative gameplay state; stage new renderers off the human's
-  frame and swap at frame boundaries (D20).
+  frame and swap at frame boundaries (D20). `batch::prepare` is per-frame code: borrow
+  from the extraction, no per-sprite allocation (100k sprites: 13 ms dev profile).
 - Sprites: procedural instancing (6 vertices; nine-slice 54), bindless atlases, stable
   painter sort (sorting layer, order, identity). Batches never merge across an
   intervening sort key. Tile layers become immutable 32x32 batches, culled per chunk

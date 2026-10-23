@@ -48,7 +48,15 @@ fn main() -> Result<()> {
                 let scene = common::benchmark(root, 100_000, size)?;
                 let mut renderer =
                     Renderer2d::new(&scene, [1280, 720], root.join("../../.sn/gpu2d"))?;
-                runs.push(serde_json::json!({"workload":format!("100k unlit sprites, {label}"),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().context().info.name}));
+                // CPU cost of a fully dynamic frame: re-sort, rebuild and upload every sprite.
+                let mut updates = Vec::new();
+                for _ in 0..20 {
+                    let at = std::time::Instant::now();
+                    renderer.update(&scene)?;
+                    updates.push(at.elapsed().as_secs_f64() * 1000.);
+                }
+                updates.sort_by(f64::total_cmp);
+                runs.push(serde_json::json!({"workload":format!("100k unlit sprites, {label}"),"instances":renderer.instance_count(),"passes":measure(&mut renderer, &camera)?,"device":renderer.gpu().context().info.name,"cpu_update_p50_ms":updates[10]}));
             }
             // The lit path: the platformer sample with three shadowed lights, same framing.
             let (scene, mut sample_camera) = common::scene(root, None)?;

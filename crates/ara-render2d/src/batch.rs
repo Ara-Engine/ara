@@ -1,8 +1,11 @@
-use crate::{Scene2d, scene::SpriteDraw};
+//! Per-frame instance building: stable painter sort, chunked tile batches, compact IDs.
+//! Runs on every `Renderer2d::update`, so it borrows from the extraction and allocates
+//! only the output vectors.
+use crate::Scene2d;
 use anyhow::{Result, ensure};
-use ara_2d::{Sprite, tilemap};
+use ara_2d::tilemap;
 use bytemuck::{Pod, Zeroable};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -20,161 +23,207 @@ pub(crate) struct Batch {
     pub first: u32,
     pub count: u32,
     pub vertices: u32,
-    pub bounds: Option<([f32; 4], [f32; 2])>,
-}
-struct Group {
-    sort: (i32, i32, u64, String, [i32; 2]),
-    instances: Vec<Instance>,
-    bounds: Option<([f32; 4], [f32; 2])>,
-    vertices: u32,
+    pub bounds: Option<Bounds>,
 }
 pub(crate) struct Prepared {
     pub instances: Vec<Instance>,
     pub batches: Vec<Batch>,
-    pub names: Vec<(u64, String)>,
+    /// Compact render ID - 1 to stable identity and name; None when unchanged.
+    pub names: Option<Vec<(u64, String)>>,
+}
+/// Painter key: sorting layer, order, entity, layer rank (0 = sprite), chunk. Unique by
+/// construction once entity identities are unique.
+type Key = (i32, i32, u64, u32, [i32; 2]);
+/// A chunk's world-space culling rectangle and its parallax factor.
+type Bounds = ([f32; 4], [f32; 2]);
+/// One borrowed draw; tiles never allocate a Sprite.
+struct Draw<'a> {
+    position: [f32; 2],
+    basis: [f32; 4],
+    atlas: &'a str,
+    normal: Option<&'a str>,
+    region: &'a str,
+    size: [f32; 2],
+    tint: [f32; 4],
+    parallax: [f32; 2],
+    flags: u32,
 }
 
-pub(crate) fn prepare(scene: &Scene2d, indices: &BTreeMap<String, u32>) -> Result<Prepared> {
+pub(crate) fn prepare(
+    scene: &Scene2d,
+    indices: &BTreeMap<String, u32>,
+    previous: &[(u64, String)],
+) -> Result<Prepared> {
     ensure!(
         scene.sprites.len() <= 1_000_000,
         "sprite extraction exceeds capacity"
     );
-    let mut identities = BTreeMap::new();
-    for sprite in &scene.sprites {
-        ensure!(
-            identities
-                .insert(sprite.entity, sprite.name.to_owned())
-                .is_none(),
-            "duplicate entity identity"
-        );
-    }
-    for map in &scene.tilemaps {
-        ensure!(
-            identities.insert(map.entity, map.name.to_owned()).is_none(),
-            "duplicate entity identity"
-        );
-    }
-    let names: Vec<_> = identities.into_iter().collect();
-    let ids: BTreeMap<_, _> = names
+    let mut identities: Vec<(u64, &str)> = scene
+        .sprites
         .iter()
-        .enumerate()
-        .map(|(i, (id, _))| (*id, i as u32 + 1))
+        .map(|s| (s.entity, s.name.as_str()))
+        .chain(scene.tilemaps.iter().map(|m| (m.entity, m.name.as_str())))
         .collect();
-    let mut groups = Vec::new();
+    identities.sort_unstable_by_key(|(entity, _)| *entity);
+    ensure!(
+        identities.windows(2).all(|p| p[0].0 != p[1].0),
+        "duplicate entity identity"
+    );
+    let id = |entity: u64| {
+        identities
+            .binary_search_by_key(&entity, |(e, _)| *e)
+            .map(|i| i as u32 + 1)
+            .map_err(|_| anyhow::anyhow!("unknown entity"))
+    };
+    let unchanged = identities.len() == previous.len()
+        && identities
+            .iter()
+            .zip(previous)
+            .all(|(a, b)| a.0 == b.0 && a.1 == b.1);
+    let names = (!unchanged).then(|| {
+        identities
+            .iter()
+            .map(|(e, n)| (*e, (*n).to_owned()))
+            .collect()
+    });
+    let mut resolver = Resolver::new(scene, indices);
+    let mut sprites: Vec<(Key, u32, Instance)> = Vec::with_capacity(scene.sprites.len());
     for sprite in &scene.sprites {
-        let vertices = if sprite.sprite.nine_slice { 54 } else { 6 };
-        groups.push(Group {
-            sort: (
-                sprite.sprite.sorting_layer,
-                sprite.sprite.order,
-                sprite.entity,
-                String::new(),
-                [0; 2],
-            ),
-            instances: vec![instance(sprite, scene, indices, ids[&sprite.entity])?],
-            bounds: None,
-            vertices,
-        });
+        let s = &sprite.sprite;
+        let draw = Draw {
+            position: sprite.position,
+            basis: sprite.basis,
+            atlas: &s
+                .atlas
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("sprite {} has no atlas", sprite.name))?
+                .0,
+            normal: s.normal_atlas.as_ref().map(|n| n.0.as_str()),
+            region: &s.region,
+            size: s.size,
+            tint: s.tint,
+            parallax: s.parallax,
+            flags: u32::from(s.nine_slice)
+                | (u32::from(s.lit) << 1)
+                | (u32::from(s.flip_x) << 2)
+                | (u32::from(s.flip_y) << 3),
+        };
+        let key = (s.sorting_layer, s.order, sprite.entity, 0, [0; 2]);
+        let vertices = if s.nine_slice { 54 } else { 6 };
+        sprites.push((key, vertices, resolver.instance(&draw, id(sprite.entity)?)?));
     }
+    sprites.sort_unstable_by_key(|(key, ..)| *key);
+    // (key, instances, world bounds, parallax) per tile chunk.
+    let mut chunks: Vec<(Key, Vec<Instance>, Bounds)> = Vec::new();
     for map in &scene.tilemaps {
         map.map.validate()?;
+        let atlas = map
+            .map
+            .atlas
+            .as_ref()
+            .map(|a| a.0.as_str())
+            .ok_or_else(|| anyhow::anyhow!("tilemap {} has no atlas", map.name))?;
+        let map_id = id(map.entity)?;
+        let mut ranks: Vec<_> = map.map.layers.iter().map(|l| l.id.as_str()).collect();
+        ranks.sort_unstable();
         for layer in &map.map.layers {
-            let mut chunks = BTreeMap::<[i32; 2], Vec<Instance>>::new();
-            let mut bounds = BTreeMap::<[i32; 2], [f32; 4]>::new();
+            let rank = ranks.binary_search(&layer.id.as_str()).unwrap_or(0) as u32 + 1;
+            let mut groups = BTreeMap::<[i32; 2], (Vec<Instance>, [f32; 4])>::new();
             for (key, tile) in &layer.cells {
                 let (x, y) = tilemap::coordinate(key)?;
-                let chunk = [x.div_euclid(32), y.div_euclid(32)];
                 let definition = map
                     .map
                     .definition(*tile)
                     .ok_or_else(|| anyhow::anyhow!("unknown tile {tile}"))?;
-                let centre = map.map.layout.centre(x, y, map.map.cell_size);
-                let draw = SpriteDraw {
-                    entity: map.entity,
-                    name: String::new(),
-                    position: [
-                        map.origin[0] + map.basis[0] * centre[0] + map.basis[1] * centre[1],
-                        map.origin[1] + map.basis[2] * centre[0] + map.basis[3] * centre[1],
-                    ],
-                    basis: map.basis,
-                    sprite: Sprite {
-                        atlas: map.map.atlas.to_owned(),
-                        normal_atlas: map.map.normal_atlas.to_owned(),
-                        region: definition.region.to_owned(),
-                        size: map.map.cell_size,
-                        lit: definition.lit,
-                        parallax: layer.parallax,
-                        tint: layer.tint,
-                        ..Default::default()
-                    },
-                };
-                chunks.entry(chunk).or_default().push(instance(
-                    &draw,
-                    scene,
-                    indices,
-                    ids[&map.entity],
-                )?);
-                let [sx, sy] = map.map.cell_size.map(|v| v * 0.5);
-                let ex = map.basis[0].abs() * sx + map.basis[1].abs() * sy;
-                let ey = map.basis[2].abs() * sx + map.basis[3].abs() * sy;
-                let rect = [
-                    draw.position[0] - ex,
-                    draw.position[1] - ey,
-                    draw.position[0] + ex,
-                    draw.position[1] + ey,
+                let [cx, cy] = map.map.layout.centre(x, y, map.map.cell_size);
+                let b = map.basis;
+                let position = [
+                    map.origin[0] + b[0] * cx + b[1] * cy,
+                    map.origin[1] + b[2] * cx + b[3] * cy,
                 ];
-                bounds
-                    .entry(chunk)
-                    .and_modify(|b| {
-                        b[0] = b[0].min(rect[0]);
-                        b[1] = b[1].min(rect[1]);
-                        b[2] = b[2].max(rect[2]);
-                        b[3] = b[3].max(rect[3]);
-                    })
-                    .or_insert(rect);
+                let draw = Draw {
+                    position,
+                    basis: b,
+                    atlas,
+                    normal: map.map.normal_atlas.as_ref().map(|n| n.0.as_str()),
+                    region: &definition.region,
+                    size: map.map.cell_size,
+                    tint: layer.tint,
+                    parallax: layer.parallax,
+                    flags: u32::from(definition.lit) << 1,
+                };
+                let [sx, sy] = map.map.cell_size.map(|v| v * 0.5);
+                let ex = b[0].abs() * sx + b[1].abs() * sy;
+                let ey = b[2].abs() * sx + b[3].abs() * sy;
+                let rect = [
+                    position[0] - ex,
+                    position[1] - ey,
+                    position[0] + ex,
+                    position[1] + ey,
+                ];
+                let (instances, bounds) = groups
+                    .entry([x.div_euclid(32), y.div_euclid(32)])
+                    .or_insert_with(|| (Vec::new(), rect));
+                instances.push(resolver.instance(&draw, map_id)?);
+                *bounds = [
+                    bounds[0].min(rect[0]),
+                    bounds[1].min(rect[1]),
+                    bounds[2].max(rect[2]),
+                    bounds[3].max(rect[3]),
+                ];
             }
-            for (chunk, instances) in chunks {
-                groups.push(Group {
-                    sort: (
-                        layer.sorting_layer,
-                        layer.order,
-                        map.entity,
-                        layer.id.to_owned(),
-                        chunk,
-                    ),
-                    instances,
-                    bounds: Some((bounds[&chunk], layer.parallax)),
-                    vertices: 6,
-                });
+            for (chunk, (instances, bounds)) in groups {
+                let key = (layer.sorting_layer, layer.order, map.entity, rank, chunk);
+                chunks.push((key, instances, (bounds, layer.parallax)));
             }
         }
     }
-    groups.sort_by(|a, b| a.sort.cmp(&b.sort));
+    chunks.sort_unstable_by_key(|(key, ..)| *key);
+    // Merge the two key-sorted streams into draws in painter order.
     let mut result = Prepared {
-        instances: Vec::new(),
+        instances: Vec::with_capacity(sprites.len()),
         batches: Vec::new(),
         names,
     };
-    let mut seen = BTreeSet::new();
-    for group in groups {
-        ensure!(seen.insert(group.sort), "ambiguous render sort key");
+    let (mut s, mut c) = (
+        sprites.into_iter().peekable(),
+        chunks.into_iter().peekable(),
+    );
+    loop {
+        let sprite_first = match (s.peek(), c.peek()) {
+            (Some(a), Some(b)) => a.0 < b.0,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
         let first = u32::try_from(result.instances.len())?;
-        let count = u32::try_from(group.instances.len())?;
-        result.instances.extend(group.instances);
-        if group.bounds.is_none()
-            && let Some(previous) = result.batches.last_mut()
-            && previous.bounds.is_none()
-            && previous.vertices == group.vertices
-        {
-            previous.count += count;
-            continue;
+        if sprite_first {
+            let (_, vertices, instance) = s.next().expect("peeked sprite");
+            result.instances.push(instance);
+            // Consecutive sprites with equal vertex counts share one procedural draw.
+            if let Some(previous) = result.batches.last_mut()
+                && previous.bounds.is_none()
+                && previous.vertices == vertices
+            {
+                previous.count += 1;
+                continue;
+            }
+            result.batches.push(Batch {
+                first,
+                count: 1,
+                vertices,
+                bounds: None,
+            });
+        } else {
+            let (_, instances, bounds) = c.next().expect("peeked chunk");
+            result.batches.push(Batch {
+                first,
+                count: u32::try_from(instances.len())?,
+                vertices: 6,
+                bounds: Some(bounds),
+            });
+            result.instances.extend(instances);
         }
-        result.batches.push(Batch {
-            first,
-            count,
-            vertices: group.vertices,
-            bounds: group.bounds,
-        });
     }
     ensure!(
         result.instances.len() <= 1_000_000,
@@ -182,79 +231,103 @@ pub(crate) fn prepare(scene: &Scene2d, indices: &BTreeMap<String, u32>) -> Resul
     );
     Ok(result)
 }
-fn instance(
-    draw: &SpriteDraw,
-    scene: &Scene2d,
-    indices: &BTreeMap<String, u32>,
-    id: u32,
-) -> Result<Instance> {
-    let sprite = &draw.sprite;
-    ensure!(
-        draw.position
-            .iter()
-            .chain(draw.basis.iter())
-            .chain(sprite.size.iter())
-            .chain(sprite.tint.iter())
-            .chain(sprite.parallax.iter())
-            .all(|v| v.is_finite())
-            && sprite.size.iter().all(|v| *v >= 0.),
-        "nonfinite sprite"
-    );
-    let asset = &sprite
-        .atlas
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("sprite has no atlas"))?
-        .0;
-    let atlas = scene
-        .atlases
-        .get(asset)
-        .ok_or_else(|| anyhow::anyhow!("missing atlas {asset}"))?;
-    let region = atlas
-        .atlas
-        .regions
-        .get(&sprite.region)
-        .ok_or_else(|| anyhow::anyhow!("missing sprite region {}", sprite.region))?;
-    ensure!(!atlas.linear, "color atlas must be sRGB");
-    let normal = if let Some(normal) = &sprite.normal_atlas {
-        let n = scene
+/// (atlas, normal atlas, region) references identifying one resolved draw.
+type DrawKey<'a> = (&'a str, Option<&'a str>, &'a str);
+/// Atlas data shared by every draw of one (atlas, normal, region) triple.
+#[derive(Clone, Copy)]
+struct Resolved {
+    textures: [u32; 2],
+    uv: [f32; 4],
+    pivot: [f32; 2],
+    borders: [f32; 4],
+    source: [f32; 2],
+}
+/// Builds instances, memoizing atlas lookups: the last (atlas, normal, region) hit is
+/// reused, and each color/normal pair's full region comparison runs once per prepare.
+struct Resolver<'a> {
+    scene: &'a Scene2d,
+    indices: &'a BTreeMap<String, u32>,
+    paired: Vec<(&'a str, &'a str)>,
+    last: Option<(DrawKey<'a>, Resolved)>,
+}
+impl<'a> Resolver<'a> {
+    fn new(scene: &'a Scene2d, indices: &'a BTreeMap<String, u32>) -> Self {
+        Self {
+            scene,
+            indices,
+            paired: Vec::new(),
+            last: None,
+        }
+    }
+    fn resolve(&mut self, draw: &Draw<'a>) -> Result<Resolved> {
+        let atlas = self
+            .scene
             .atlases
-            .get(&normal.0)
-            .ok_or_else(|| anyhow::anyhow!("missing normal atlas"))?;
+            .get(draw.atlas)
+            .ok_or_else(|| anyhow::anyhow!("missing atlas {}", draw.atlas))?;
+        let region = atlas
+            .atlas
+            .regions
+            .get(draw.region)
+            .ok_or_else(|| anyhow::anyhow!("missing sprite region {}", draw.region))?;
+        ensure!(!atlas.linear, "color atlas must be sRGB");
+        let normal = if let Some(normal) = draw.normal {
+            let n = self
+                .scene
+                .atlases
+                .get(normal)
+                .ok_or_else(|| anyhow::anyhow!("missing normal atlas"))?;
+            if !self.paired.contains(&(draw.atlas, normal)) {
+                ensure!(
+                    n.linear && n.atlas == atlas.atlas,
+                    "normal atlas must use matching regions and linear encoding"
+                );
+                self.paired.push((draw.atlas, normal));
+            }
+            self.indices[normal]
+        } else {
+            self.indices["__flat_normal"]
+        };
+        let [w, h] = [atlas.atlas.width as f32, atlas.atlas.height as f32];
+        let [rw, rh] = [region.width as f32, region.height as f32];
+        Ok(Resolved {
+            textures: [self.indices[draw.atlas], normal],
+            uv: [region.x as f32 / w, region.y as f32 / h, rw / w, rh / h],
+            pivot: region.pivot,
+            borders: region.borders,
+            source: [rw, rh],
+        })
+    }
+    fn instance(&mut self, draw: &Draw<'a>, id: u32) -> Result<Instance> {
         ensure!(
-            n.linear && n.atlas == atlas.atlas,
-            "normal atlas must use matching regions and linear encoding"
+            draw.position
+                .iter()
+                .chain(&draw.basis)
+                .chain(&draw.size)
+                .chain(&draw.tint)
+                .chain(&draw.parallax)
+                .all(|v| v.is_finite())
+                && draw.size.iter().all(|v| *v >= 0.),
+            "nonfinite sprite"
         );
-        indices[&normal.0]
-    } else {
-        indices["__flat_normal"]
-    };
-    let flags = u32::from(sprite.nine_slice)
-        | (u32::from(sprite.lit) << 1)
-        | (u32::from(sprite.flip_x) << 2)
-        | (u32::from(sprite.flip_y) << 3);
-    Ok(Instance {
-        pose: [draw.position[0], draw.position[1], 0., 0.],
-        size_pivot: [
-            sprite.size[0],
-            sprite.size[1],
-            region.pivot[0],
-            region.pivot[1],
-        ],
-        uv: [
-            region.x as f32 / atlas.atlas.width as f32,
-            region.y as f32 / atlas.atlas.height as f32,
-            region.width as f32 / atlas.atlas.width as f32,
-            region.height as f32 / atlas.atlas.height as f32,
-        ],
-        borders: region.borders,
-        color: sprite.tint,
-        info: [indices[asset], normal, id, flags],
-        parallax_source: [
-            sprite.parallax[0],
-            sprite.parallax[1],
-            region.width as f32,
-            region.height as f32,
-        ],
-        basis: draw.basis,
-    })
+        let key = (draw.atlas, draw.normal, draw.region);
+        let r = match self.last {
+            Some((last, resolved)) if last == key => resolved,
+            _ => {
+                let resolved = self.resolve(draw)?;
+                self.last = Some((key, resolved));
+                resolved
+            }
+        };
+        Ok(Instance {
+            pose: [draw.position[0], draw.position[1], 0., 0.],
+            size_pivot: [draw.size[0], draw.size[1], r.pivot[0], r.pivot[1]],
+            uv: r.uv,
+            borders: r.borders,
+            color: draw.tint,
+            info: [r.textures[0], r.textures[1], id, draw.flags],
+            parallax_source: [draw.parallax[0], draw.parallax[1], r.source[0], r.source[1]],
+            basis: draw.basis,
+        })
+    }
 }
