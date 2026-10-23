@@ -9,7 +9,7 @@ use ara_gpu::{
     vulkan::{Attachment, Command, PassTiming, VulkanDevice},
 };
 use ara_render::{
-    capture::{Capture, CaptureContext, CaptureRequest, ShaderMetadata, ViewMode},
+    capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode},
     graph::{Graph, State},
     renderer::post::ToneMap,
     scene::CameraSpec,
@@ -99,17 +99,17 @@ impl Renderer2d {
             .collect();
         let mut hash = self.content_hash()?;
         hash.update(&serde_json::to_vec(camera)?);
-        Capture::from_render(
-            rgba,
-            ids,
-            &request,
-            CaptureContext {
+        Capture::from_feature(
+            FeatureCapture {
+                rgba,
+                ids,
                 names: &self.names,
                 hash: hash.finalize().to_hex().as_ref(),
                 device: &self.gpu.context().info,
                 timings: &self.timings,
                 shaders: &self.shaders,
             },
+            &request,
         )
     }
 }

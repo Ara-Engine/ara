@@ -80,9 +80,17 @@ impl FidelityView {
             if rt { "primary" } else { "primary_raster" },
             0,
             dispatch,
-            [WORLD0 + slot, NORMAL0 + slot, BASE, MOTION, DEPTH]
-                .map(|i| (ids[i], Access::Storage))
-                .to_vec(),
+            [
+                WORLD0 + slot,
+                NORMAL0 + slot,
+                BASE,
+                MOTION,
+                DEPTH,
+                DIRECT,
+                RAW,
+            ]
+            .map(|i| (ids[i], Access::Storage))
+            .to_vec(),
         )?;
         if rt && !reference {
             add(
@@ -95,6 +103,17 @@ impl FidelityView {
                     (probes[self.probe_slot], Access::Storage),
                 ],
             )?;
+        }
+        let mut transport_history = Vec::new();
+        if !reset && !reference {
+            transport_history.extend(
+                [
+                    WORLD0 + previous,
+                    NORMAL0 + previous,
+                    DIRECT_HISTORY0 + previous,
+                ]
+                .map(|i| (ids[i], Access::ShaderRead)),
+            );
         }
         add(
             if reference {
@@ -109,15 +128,53 @@ impl FidelityView {
             } else {
                 "hybrid_raster"
             },
-            0,
-            dispatch,
+            if !reference && !reset && !input.lighting_changed {
+                1
+            } else {
+                0
+            },
+            if !reference && !reset && !input.lighting_changed {
+                [render[0].div_ceil(16), render[1].div_ceil(8), 1]
+            } else {
+                dispatch
+            },
             vec![
                 (ids[RAW], Access::Storage),
+                (ids[DIRECT], Access::ShaderRead),
+                (ids[WORLD0 + slot], Access::ShaderRead),
+                (ids[NORMAL0 + slot], Access::ShaderRead),
+                (ids[MOTION], Access::ShaderRead),
+                (ids[BASE], Access::ShaderRead),
                 (probes[self.probe_slot], Access::ShaderRead),
-            ],
+            ]
+            .into_iter()
+            .chain(transport_history)
+            .collect(),
         )?;
+        if !reference && !reset && !input.lighting_changed {
+            add(
+                "RT.Disocclusion.Repair",
+                if rt { "hybrid" } else { "hybrid_raster" },
+                2,
+                [render[0].div_ceil(16), render[1].div_ceil(8), 1],
+                vec![
+                    (ids[RAW], Access::Storage),
+                    (ids[DIRECT], Access::ShaderRead),
+                    (ids[WORLD0 + slot], Access::ShaderRead),
+                    (ids[NORMAL0 + slot], Access::ShaderRead),
+                    (ids[WORLD0 + previous], Access::ShaderRead),
+                    (ids[NORMAL0 + previous], Access::ShaderRead),
+                    (ids[DIRECT_HISTORY0 + previous], Access::ShaderRead),
+                    (ids[MOTION], Access::ShaderRead),
+                    (ids[BASE], Access::ShaderRead),
+                    (probes[self.probe_slot], Access::ShaderRead),
+                ],
+            )?;
+        }
         let mut temporal = vec![
             (ids[RAW], Access::ShaderRead),
+            (ids[DIRECT], Access::ShaderRead),
+            (ids[DIRECT_HISTORY0 + slot], Access::Storage),
             (ids[WORLD0 + slot], Access::ShaderRead),
             (ids[NORMAL0 + slot], Access::ShaderRead),
             (ids[MOTION], Access::ShaderRead),
@@ -130,6 +187,7 @@ impl FidelityView {
                     WORLD0 + previous,
                     NORMAL0 + previous,
                     HISTORY0 + previous,
+                    DIRECT_HISTORY0 + previous,
                     MOMENTS0 + previous,
                 ]
                 .map(|i| (ids[i], Access::ShaderRead)),
@@ -139,7 +197,7 @@ impl FidelityView {
             if reference {
                 "Reference.Accumulate.Undenoised"
             } else {
-                "SVGF.Reproject.Reject.Clamp.Moments"
+                "SVGF.Reproject.Reject.Outlier.Moments"
             },
             "temporal",
             0,
@@ -160,8 +218,14 @@ impl FidelityView {
                 (ids[target], Access::Storage),
             ];
             uses.extend(
-                [BASE, WORLD0 + slot, NORMAL0 + slot, MOMENTS0 + slot]
-                    .map(|j| (ids[j], Access::ShaderRead)),
+                [
+                    BASE,
+                    WORLD0 + slot,
+                    NORMAL0 + slot,
+                    MOMENTS0 + slot,
+                    DIRECT_HISTORY0 + slot,
+                ]
+                .map(|j| (ids[j], Access::ShaderRead)),
             );
             add(
                 if reference {

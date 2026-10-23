@@ -112,6 +112,13 @@ impl VulkanDevice {
                 Command::Dispatch(groups) => {
                     device.cmd_dispatch(cmd, groups[0], groups[1], groups[2])
                 }
+                Command::DispatchIndirect { arguments, offset } => {
+                    device.cmd_dispatch_indirect(
+                        cmd,
+                        self.buffers.get(*arguments)?.raw.handle,
+                        *offset,
+                    );
+                }
                 Command::BeginRendering {
                     colors,
                     depth,
@@ -183,6 +190,13 @@ impl VulkanDevice {
                     );
                     device.cmd_draw_indexed(cmd, d.index_count, 1, d.first_index, 0, 0);
                 }
+                Command::DrawIndirect { arguments, offset } => device.cmd_draw_indirect(
+                    cmd,
+                    self.buffers.get(*arguments)?.raw.handle,
+                    *offset,
+                    1,
+                    16,
+                ),
                 Command::Fullscreen => device.cmd_draw(cmd, 3, 1, 0, 0),
                 Command::DrawProcedural {
                     vertices,

@@ -43,6 +43,8 @@ impl std::fmt::Display for StateHash {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EntityState {
     pub id: String,
+    #[serde(default)]
+    pub mapped: bool,
     pub metadata: Option<SceneMetadata>,
     pub parent: Option<String>,
     pub components: BTreeMap<String, Value>,
@@ -139,6 +141,34 @@ fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 }
 
 impl Session {
+    /// Opt-in diagnostic view of all registered ECS state, ordered by stable identity.
+    /// No extraction/serialization occurs unless tooling explicitly calls this.
+    pub fn diagnostic_state(&self) -> Result<serde_json::Value> {
+        let (entities, resources) = self.capture_world()?;
+        Ok(
+            serde_json::json!({"entities": entities, "resources": resources, "context": self.context()}),
+        )
+    }
+
+    /// Replays a trusted applied boundary using the ordinary input/command/ops path.
+    /// This administrative recording API must never be exposed to game clients.
+    pub fn replay_tick(&mut self, record: &TickRecord) -> Result<TickRecord> {
+        if record.tick != self.tick() + 1 {
+            return Err(SimError("replay ticks must be contiguous".into()));
+        }
+        // A snapshot can already contain this boundary's queued work. The applied
+        // record replaces that queue; extending it would apply authoring ops twice.
+        self.pending_inputs.remove(&record.tick);
+        self.pending_commands.remove(&record.tick);
+        self.pending_typed.remove(&record.tick);
+        self.inject(record.tick, record.inputs.clone())?;
+        for command in &record.commands {
+            self.submit(record.tick, command.clone())?;
+        }
+        self.pending_ops.insert(record.tick, record.ops.clone());
+        self.step()
+    }
+
     /// Hashes schema values, hierarchy, explicit resources, RNG and active inputs.
     /// Pending external arrivals and host interpolation are excluded from a tick hash.
     pub fn state_hash(&self) -> Result<StateHash> {
@@ -357,9 +387,15 @@ impl Session {
         self.edit.workspace = projected.workspace;
         self.edit.scene = projected.scene;
         self.edit.resolved = projected.resolved;
+        let mapped: BTreeSet<_> = snapshot
+            .entities
+            .iter()
+            .filter(|row| row.mapped)
+            .map(|row| row.id.as_str())
+            .collect();
         self.edit.mapping = current
             .into_iter()
-            .filter(|(id, _)| self.edit.resolved.contains_key(id))
+            .filter(|(id, _)| self.edit.resolved.contains_key(id) || mapped.contains(id.as_str()))
             .collect();
         Ok(())
     }
@@ -411,6 +447,7 @@ impl Session {
                 })
                 .transpose()?;
             entities.push(EntityState {
+                mapped: self.edit.mapping.contains_key(&id),
                 id,
                 metadata: self.world().get::<SceneMetadata>(entity).cloned(),
                 parent,

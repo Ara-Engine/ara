@@ -10,9 +10,9 @@ use std::{io::Cursor, path::Path};
 pub(super) struct NativePipeline {
     pub handle: vk::Pipeline,
     pub compute: bool,
-    pub vertex_input: bool,
     pub colors: Vec<vk::Format>,
     pub depth: Option<vk::Format>,
+    pub vertex_stride: u32,
 }
 
 pub(super) fn create(
@@ -185,7 +185,6 @@ pub(super) fn create(
         Ok(NativePipeline {
             handle,
             compute,
-            vertex_input: cooked.state.vertex_stride != 0,
             colors: cooked
                 .state
                 .color_formats
@@ -193,6 +192,7 @@ pub(super) fn create(
                 .map(|f| vk::Format::from_raw(*f))
                 .collect(),
             depth: cooked.state.depth_format.map(vk::Format::from_raw),
+            vertex_stride: cooked.state.vertex_stride,
         })
     })();
     // SAFETY: Pipelines retain compiled shader state; modules are not needed after creation.

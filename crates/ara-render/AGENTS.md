@@ -11,6 +11,9 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `gpu()` access for diagnostics/native presentation. Resize resets history.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and
   camera pose/bounds requests. Materials use bindless texture indices.
+- `update_geometry`: atomically replace meshes/materials/lights, retaining the
+  device, targets and last good scene on failure. Textures/environment belong to
+  asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.

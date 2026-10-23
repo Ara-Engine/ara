@@ -113,17 +113,11 @@ pub struct ShaderMetadata {
     /// Hash of the shared native-backend binding contract.
     pub binding_layout_hash: String,
 }
-/// Provenance and stable entity mapping supplied by an alternate render path.
-pub struct CaptureContext<'a> {
-    /// Compact render IDs map to these stable identities in order, starting at one.
+pub(crate) struct CaptureContext<'a> {
     pub names: &'a [(u64, String)],
-    /// Content hash covering the extraction snapshot and its asset payloads.
     pub hash: &'a str,
-    /// Native device/driver provenance.
     pub device: &'a DeviceInfo,
-    /// GPU timestamps for the captured frame.
     pub timings: &'a [PassTiming],
-    /// Offline shader provenance for this render path.
     pub shaders: &'a ShaderMetadata,
 }
 /// Owned capture channels with stable pixel-to-entity lookup.
@@ -139,9 +133,40 @@ pub struct Capture {
     entities: Vec<Option<u64>>,
     render_ids: Vec<u32>,
 }
+/// Channels and provenance from an external render-graph feature, such as VFX.
+pub struct FeatureCapture<'a> {
+    /// Tightly packed RGBA8 display pixels.
+    pub rgba: Vec<u8>,
+    /// Compact feature IDs; zero is background, one-based indices address names.
+    pub ids: Vec<u32>,
+    /// Stable external identities and labels.
+    pub names: &'a [(u64, String)],
+    /// Deterministic source content hash.
+    pub hash: &'a str,
+    /// Actual native device provenance.
+    pub device: &'a DeviceInfo,
+    /// Measured feature pass timestamps.
+    pub timings: &'a [PassTiming],
+    /// Matching offline shader provenance.
+    pub shaders: &'a ShaderMetadata,
+}
 impl Capture {
-    /// Builds the shared capture/marks/picking result from completed GPU channels.
-    pub fn from_render(
+    /// Assemble feature-owned GPU readbacks using the standard capture contract.
+    pub fn from_feature(input: FeatureCapture<'_>, request: &CaptureRequest) -> Result<Self> {
+        Self::from_render(
+            input.rgba,
+            input.ids,
+            request,
+            CaptureContext {
+                names: input.names,
+                hash: input.hash,
+                device: input.device,
+                timings: input.timings,
+                shaders: input.shaders,
+            },
+        )
+    }
+    pub(crate) fn from_render(
         rgba: Vec<u8>,
         ids: Vec<u32>,
         request: &CaptureRequest,

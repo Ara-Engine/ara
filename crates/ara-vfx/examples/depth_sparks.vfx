@@ -1,0 +1,86 @@
+{
+  "name": "depth_sparks",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "sparks",
+      "capacity": 4096,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 650
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 2,
+              "size": 0.03500000014901161,
+              "color": [8, 2.799999952316284, 0.25, 0.8999999761581421]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "point",
+              "position": [0, 0.699999988079071, 0]
+            }
+          },
+          {
+            "name": "spray",
+            "module": {
+              "op": "velocity",
+              "value": [0, 3, 0],
+              "spread": [2.5999999046325684, 2, 2.5999999046325684]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "gravity",
+            "module": {
+              "op": "gravity",
+              "acceleration": [0, -9.8100004196167, 0]
+            }
+          },
+          {
+            "name": "floor",
+            "module": {
+              "op": "depth_collision",
+              "restitution": 0.6000000238418579,
+              "thickness": 0.5
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15000000596046448,
+              "sorting": "none"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

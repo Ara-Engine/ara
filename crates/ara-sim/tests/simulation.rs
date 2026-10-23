@@ -594,10 +594,10 @@ fn replay_includes_tick_boundary_authoring_ops() {
             }],
         )
         .unwrap();
-    play.record().unwrap();
     play.session_mut()
         .patch(2, store.history().last().unwrap())
         .unwrap();
+    play.record().unwrap();
     assert_eq!(
         play.session()
             .component("e_0001", "Stats")
@@ -609,6 +609,12 @@ fn replay_includes_tick_boundary_authoring_ops() {
     let expected = play.session().state_hash().unwrap();
     let replay = play.finish_recording().unwrap();
     assert_eq!(replay.ticks[1].ops.len(), 1);
+    let mut granular = control(6);
+    granular.restore(&replay.initial).unwrap();
+    for record in &replay.ticks {
+        granular.session_mut().replay_tick(record).unwrap();
+    }
+    assert_eq!(granular.session().state_hash().unwrap(), expected);
     assert_eq!(play.replay(&replay).unwrap(), expected);
     assert_eq!(
         play.session()

@@ -1,121 +1,121 @@
 [
   {
     "convergence_error": {
-      "mae": 0.0002541999332606792,
-      "relative_rmse": 0.0015299710969528403,
-      "rmse": 0.0015178277836699955
+      "mae": 0.00020324756391346455,
+      "relative_rmse": 0.0011963823384919731,
+      "rmse": 0.0011868581000354054
     },
     "radiance": {
-      "mae": 0.0022857551377577084,
-      "relative_rmse": 0.021510347715652415,
-      "rmse": 0.021339621032217464
+      "mae": 0.0007489785148451725,
+      "relative_rmse": 0.006492074767161772,
+      "rmse": 0.006440392235440137
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "furnace",
-    "scene_hash": "3519a5ce3f1c69df77dc90052f2faf1fb515de95d36a0e1d92fe01d8025d605a",
-    "ssim_error": 0.01090345417738825
+    "scene_hash": "5a6ebffe2873581e4edfecfc77173b20f19db1d2dff89952d217018f8cb547d4",
+    "ssim_error": 0.0011620970541246075
   },
   {
     "convergence_error": {
-      "mae": 0.02671196429820685,
-      "relative_rmse": 0.01714956494084071,
-      "rmse": 0.04971073568688224
+      "mae": 0.023335039023140516,
+      "relative_rmse": 0.014855823508312391,
+      "rmse": 0.043042417762156386
     },
     "radiance": {
-      "mae": 0.41266508855047235,
-      "relative_rmse": 0.2840737989763457,
-      "rmse": 0.8234329900026823
+      "mae": 0.12996306073663433,
+      "relative_rmse": 0.09642910214576818,
+      "rmse": 0.27938819390694974
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "thin_wall",
-    "scene_hash": "05ff8b02f08bff1cf8c00d8337dbbc2b865d7679f37beea592dc1fedaae3bdd9",
-    "ssim_error": 0.1755868519583989
+    "scene_hash": "85a9016668afa42cfd9a1b18cb5cade28fe6e494a0bc1eb69a2203cf0409b939",
+    "ssim_error": 0.06888647970298505
   },
   {
     "convergence_error": {
-      "mae": 0.04043436502179786,
-      "relative_rmse": 0.01899863047053931,
-      "rmse": 0.0686977372122075
+      "mae": 0.03642340768495126,
+      "relative_rmse": 0.016864890153428083,
+      "rmse": 0.06106208060114816
     },
     "radiance": {
-      "mae": 0.44101604424574126,
-      "relative_rmse": 0.19097299629645004,
-      "rmse": 0.6905451808510796
+      "mae": 0.12352517093771018,
+      "relative_rmse": 0.1132798430358202,
+      "rmse": 0.41014811498980575
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "moving_emissive",
-    "scene_hash": "8cd4591728492ff7262e687d7a4881c7c7b224348d1b0c8a38852f96cabc31d6",
-    "ssim_error": 0.10641902447647512
+    "scene_hash": "f7864d9b903814c2201f190783d9a42cccb550b48727c3287e668713e0c3e43b",
+    "ssim_error": 0.04957948644099092
   },
   {
     "convergence_error": {
-      "mae": 0.03286564522381889,
-      "relative_rmse": 0.015327687152048068,
-      "rmse": 0.049437825915574427
+      "mae": 0.029053501202379938,
+      "relative_rmse": 0.01351822590745572,
+      "rmse": 0.04358901615092819
     },
     "radiance": {
-      "mae": 0.44065681798078005,
-      "relative_rmse": 0.19754038801254506,
-      "rmse": 0.6371455273703385
+      "mae": 0.10775587327135899,
+      "relative_rmse": 0.07270697657693126,
+      "rmse": 0.2344409390694594
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "time_of_day",
-    "scene_hash": "ccf592021fb3a42af8536ebcfc4e0c3e91918ad9e1d518611c9d1e0848e8b981",
-    "ssim_error": 0.1037928764079378
+    "scene_hash": "f83f39442749c001293caa808d118e599cf2787f60f652d08e5ce89015c4bf9f",
+    "ssim_error": 0.0443989569898999
   },
   {
     "convergence_error": {
-      "mae": 0.027873827437180337,
-      "relative_rmse": 0.01649073789747862,
-      "rmse": 0.043914755076206236
+      "mae": 0.024693298888828225,
+      "relative_rmse": 0.014515859188591721,
+      "rmse": 0.038646226729063385
     },
     "radiance": {
-      "mae": 0.3318202043664685,
-      "relative_rmse": 0.19146913531711005,
-      "rmse": 0.5098813791340097
+      "mae": 0.08924555946309637,
+      "relative_rmse": 0.055277818722358124,
+      "rmse": 0.1471686303702407
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "disocclusion",
-    "scene_hash": "700d8410c7e8644bc38f4a3f51e80630067aa59988dd5f943a2fb13afa4c6d45",
-    "ssim_error": 0.0926230436231604
+    "scene_hash": "cc7c1b9ddee574d2cc96b3a90ecbd2aa8934481dd71e2d17fa2677ac96a6eeff",
+    "ssim_error": 0.0416671949360015
   },
   {
     "convergence_error": {
-      "mae": 0.03097896880541359,
-      "relative_rmse": 0.01643531420992531,
-      "rmse": 0.046779161873415916
+      "mae": 0.027504220344923884,
+      "relative_rmse": 0.014554045699550473,
+      "rmse": 0.04141029814792922
     },
     "radiance": {
-      "mae": 0.3623270446300739,
-      "relative_rmse": 0.18812908857882446,
-      "rmse": 0.5354641216662828
+      "mae": 0.09815691633183397,
+      "relative_rmse": 0.06987742567840928,
+      "rmse": 0.1988206640880665
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "glossy_interior",
-    "scene_hash": "d9737433b2167850a74524fb3988ff96659c94f28ea9521c903743045f98ae12",
-    "ssim_error": 0.09664419889578002
+    "scene_hash": "c6ed6fd343d66b9e78c7f24f9ec29cf584776d6b9ed6c012a4549df769bacfcd",
+    "ssim_error": 0.043105184999555526
   },
   {
     "convergence_error": {
-      "mae": 0.026004492162233134,
-      "relative_rmse": 0.01577938215401559,
-      "rmse": 0.04141516053238746
+      "mae": 0.023123101105512533,
+      "relative_rmse": 0.013985784191202092,
+      "rmse": 0.036700266278255345
     },
     "radiance": {
-      "mae": 0.30897840263545123,
-      "relative_rmse": 0.19254969307747863,
-      "rmse": 0.5053731744012766
+      "mae": 0.09317426663503284,
+      "relative_rmse": 0.09429852195425524,
+      "rmse": 0.24744989755698624
     },
     "reference_bounces": 12,
     "reference_samples": 4096,
     "scene": "foliage_alpha",
     "scene_hash": "6404f571fcd05d90d0de1cfad2b97790efe4b920dd7d9990808b22e38fba8a43",
-    "ssim_error": 0.10157341818499747
+    "ssim_error": 0.05429176275859119
   }
 ]

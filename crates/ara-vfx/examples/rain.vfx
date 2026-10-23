@@ -1,0 +1,140 @@
+{
+  "name": "rain",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "rain",
+      "capacity": 8192,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 1800
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 1.2000000476837158,
+              "size": 0.02500000037252903,
+              "color": [0.30000001192092896, 0.6000000238418579, 0.8999999761581421, 0.5]
+            }
+          },
+          {
+            "name": "cloud",
+            "module": {
+              "op": "box",
+              "center": [0, 4, 0],
+              "extent": [2, 0.10000000149011612, 2]
+            }
+          },
+          {
+            "name": "fall",
+            "module": {
+              "op": "velocity",
+              "value": [0.30000001192092896, -6, 0],
+              "spread": [0.05000000074505806, 0.5, 0.05000000074505806]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "floor",
+            "module": {
+              "op": "plane_collision",
+              "normal": [0, 1, 0],
+              "offset": 0.009999999776482582,
+              "restitution": 0
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15000000596046448,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "splash",
+            "module": {
+              "op": "event_spawn",
+              "trigger": "collision",
+              "target": "splash",
+              "count": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "splash",
+      "capacity": 4096,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 0.30000001192092896,
+              "size": 0.03500000014901161,
+              "color": [0.25, 0.6499999761581421, 1, 0.5]
+            }
+          },
+          {
+            "name": "spray",
+            "module": {
+              "op": "velocity",
+              "value": [0, 1.100000023841858, 0],
+              "spread": [0.699999988079071, 0.5, 0.699999988079071]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "gravity",
+            "module": {
+              "op": "gravity",
+              "acceleration": [0, -8, 0]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15000000596046448,
+              "sorting": "none"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
