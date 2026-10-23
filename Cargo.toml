@@ -56,9 +56,10 @@ unwrap_used = "warn"
 # so the editor, importers and renderer stay usable in debug (decode, compression, meshopt).
 [profile.dev]
 opt-level = 1
-# Line tables keep backtraces and profiler symbols while shrinking each worktree's
-# build cache several-fold (a dozen agent worktrees share one disk).
-debug = "line-tables-only"
+# No debug info by default: ~1,200 test executables each linking most of the engine
+# filled the disk with PDBs even at line-tables-only. Panic messages keep file:line.
+# Opt in when debugging: CARGO_PROFILE_DEV_DEBUG=line-tables-only (or `full`).
+debug = false
 
 [profile.dev.package."*"]
 opt-level = 3

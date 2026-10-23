@@ -61,6 +61,8 @@ reports/         HTML reports published to Snist
 - `cargo test -p <crate>`: tests for the crates you touched.
 - `cargo fmt --all`
 
+Dev builds carry no debug info, to save disk. Set `CARGO_PROFILE_DEV_DEBUG=line-tables-only` when you need symbolized backtraces or a debugger.
+
 There is no CI (D9). These local commands are the only gates, so run them before you call a task done.
 
 ## Rules
