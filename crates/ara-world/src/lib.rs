@@ -5,6 +5,7 @@ mod author;
 mod cook;
 mod index;
 mod model;
+mod reference;
 mod runtime;
 mod source;
 mod tools;
@@ -14,6 +15,7 @@ pub use author::{MoveToCell, SetLayer, WorldCommand};
 pub use cook::{CellBlob, CellEntity, HlodCooker, HlodProxy, cook_cell};
 pub use index::{IndexedEntity, TextIndex};
 pub use model::{Cell, CellKey, Layer, Manifest, WorldSettings, register};
+pub use reference::WorldEntityRef;
 pub use runtime::{
     ActivationBudget, FrameStats, Interest, StreamConfig, Streaming, StreamingSource,
 };

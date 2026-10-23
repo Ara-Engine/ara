@@ -21,6 +21,9 @@ cell membership changes. Canonical scene files merge using the existing
 `ara merge`; register the world schema before reading or merging manifests.
 Add `*.world merge=ara` alongside the project's scene/prefab git attributes when
 the host/CLI loads this crate's schema (the parent integration owns that wiring).
+Use `WorldEntityRef` for component fields that reference entities across cells;
+its ID-authoritative lookup repairs stale paths through `TextIndex`. It avoids
+asset-reference repair, which indexes document assets rather than entity IDs.
 
 The four typed tools are `world.cells.list`, `world.query`,
 `world.entity.move_to_cell`, and `world.layer.set`. `WorldTools::catalog` generates

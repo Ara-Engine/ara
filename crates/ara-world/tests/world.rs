@@ -5,6 +5,15 @@ use ara_schema::{FieldPath, SchemaDb};
 use ara_world::*;
 use serde_json::{Value, json};
 
+/// A cross-cell entity address stored with a readable path hint.
+#[derive(ara_schema::Schema)]
+#[ara(component)]
+#[allow(dead_code)]
+struct WorldLink {
+    /// Referenced entity, addressed by stable ID across cell moves.
+    target: WorldEntityRef,
+}
+
 fn schema() -> SchemaDb {
     let mut schema = SchemaDb::new();
     register(&mut schema);
@@ -215,6 +224,75 @@ fn standalone_actor_membership_moves_without_changing_its_readable_reference() {
         index.entity("e_radio").unwrap().reference,
         "@actors/e_radio.scene#e_radio"
     );
+}
+
+#[test]
+fn cross_cell_reference_repairs_share_the_move_transaction_and_undo() {
+    let (mut store, world) = fixture();
+    store.schema_mut().register::<WorldLink>();
+    store
+        .transact(
+            TxnMeta::by(Author::Human),
+            vec![Edit::Set {
+                doc: AssetId::parse("sc_b").unwrap(),
+                id: RecordId::parse("e_door").unwrap(),
+                path: FieldPath::field("WorldLink"),
+                value: Some(json!({"target":"@cells/a.scene#e_tree"})),
+            }],
+        )
+        .unwrap();
+    let transaction = WorldCommand::MoveToCell(MoveToCell {
+        entity: "e_tree".into(),
+        cell: "c_b".into(),
+    })
+    .apply(&mut store, &world, TxnMeta::by(Author::Human))
+    .unwrap()
+    .txn()
+    .unwrap()
+    .clone();
+    assert_eq!(transaction.ops.len(), 3);
+    assert_eq!(
+        store
+            .workspace()
+            .doc("sc_b")
+            .unwrap()
+            .record("e_door")
+            .unwrap()["WorldLink"]["target"],
+        "@cells/b.scene#e_tree"
+    );
+    store.undo(&transaction.id, Author::Human).unwrap();
+    assert_eq!(
+        store
+            .workspace()
+            .doc("sc_b")
+            .unwrap()
+            .record("e_door")
+            .unwrap()["WorldLink"]["target"],
+        "@cells/a.scene#e_tree"
+    );
+    let document = store.workspace().doc("sc_b").unwrap();
+    let read = ara_doc::read(
+        &ara_doc::write(document, store.schema()),
+        "cells/b.scene",
+        store.schema(),
+        Some(store.workspace().index()),
+    );
+    assert!(!read.diags.iter().any(|d| d.is_error()), "{:?}", read.diags);
+    assert_eq!(
+        read.doc.unwrap().record("e_door").unwrap()["WorldLink"]["target"],
+        "@cells/a.scene#e_tree"
+    );
+    let manifest = Manifest::read(store.workspace().doc(world.as_str()).unwrap()).unwrap();
+    let index = TextIndex::build(&manifest, store.workspace(), store.schema()).unwrap();
+    assert_eq!(
+        WorldEntityRef::parse("@old.scene#e_tree")
+            .unwrap()
+            .resolve(&index)
+            .unwrap()
+            .as_str(),
+        "@cells/a.scene#e_tree"
+    );
+    assert!(WorldEntityRef::parse("@../outside.scene#e_tree").is_err());
 }
 
 #[test]

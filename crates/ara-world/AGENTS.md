@@ -8,6 +8,8 @@ host-side streaming. Depends on the authoring kernel, ara-sim, ara-asset and ara
 - `register`: `world` kind (`.world`), `WorldSettings`, `Layer`, `Cell` records.
 - `Manifest::read` / `documents`: validated root and cell scene references.
 - `TextIndex::build` / `query`: immutable spatial index covering unloaded cells.
+- `WorldEntityRef`: typed `@path#e_id` references resolved by the world text index,
+  preserving entity IDs when the document asset index repairs asset references.
 - `WorldCommand::{MoveToCell, SetLayer}::apply`: attributed kernel transactions,
   including atomic multi-document moves, undo, stale bases and idempotency.
 - `WorldTools::{catalog, call}`: four reflected typed tools. The protocol adapter
