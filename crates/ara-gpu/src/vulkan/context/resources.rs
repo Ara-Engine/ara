@@ -85,7 +85,7 @@ impl Gpu {
         }
     }
 
-    fn memory_type(&self, bits: u32, flags: vk::MemoryPropertyFlags) -> Result<u32> {
+    pub(crate) fn memory_type(&self, bits: u32, flags: vk::MemoryPropertyFlags) -> Result<u32> {
         (0..self.memory.memory_type_count)
             .find(|i| {
                 bits & (1 << i) != 0
