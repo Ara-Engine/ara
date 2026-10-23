@@ -30,7 +30,7 @@ pub(super) fn run(threads: u32, steps: usize) -> BenchResult<Vec<serde_json::Val
     let mut legacy_times = Vec::with_capacity(steps);
     for tick in 0..steps {
         for side in 0..2 {
-            let tree = (side + tick) % 2 == 0;
+            let tree = (side + tick).is_multiple_of(2);
             let (world, actors) = if tree {
                 (&mut w, &characters)
             } else {
@@ -59,6 +59,7 @@ pub(super) fn run(threads: u32, steps: usize) -> BenchResult<Vec<serde_json::Val
         .backend_mut()
         .create_shape(Shape::Sphere { radius: 0.2 })?;
     for casts in [false, true] {
+        let load_before = load();
         let queries = (0..100000)
             .map(|i| {
                 let origin = [
@@ -93,7 +94,7 @@ pub(super) fn run(threads: u32, steps: usize) -> BenchResult<Vec<serde_json::Val
             w.backend().queries(&queries, &mut results)?;
             times.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        query_records.push(serde_json::json!({"scenario":if casts {"100k_shape_casts"}else{"100k_rays"},"queries":100000,"samples":5,"hits":results.hits.len(),"semantics":"all hits, sorted, includes FFI conversion/allocation","ms":distribution(&mut times)}));
+        query_records.push(serde_json::json!({"scenario":if casts {"100k_shape_casts"}else{"100k_rays"},"queries":100000,"samples":5,"hits":results.hits.len(),"semantics":"all hits, sorted, includes FFI conversion/allocation","ms":distribution(&mut times),"loadBefore":load_before,"loadAfter":load()}));
     }
     let mut states = Vec::new();
     w.backend_mut().read_bodies(&ids, &mut states)?;
@@ -149,6 +150,7 @@ fn contacts(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
 fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
     use ara_physics_jolt::JoltBackend;
     use bevy_ecs::prelude::{Schedule, World};
+    let load_before = load();
     let mut world = World::new();
     let mut schedule = Schedule::default();
     register::<JoltBackend>(
@@ -213,6 +215,6 @@ fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
         }
     }
     Ok(
-        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"setupMs":setup_ms,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>()}),
+        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"setupMs":setup_ms,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>(),"loadBefore":load_before,"loadAfter":load()}),
     )
 }

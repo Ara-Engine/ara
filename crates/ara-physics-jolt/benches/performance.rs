@@ -107,6 +107,7 @@ fn bowl_pair(
     let mut column_ms = Vec::with_capacity(steps);
     let mut columns = BodyColumns::default();
     let mut phases = [0u64; 8];
+    let mut ara_phases = [0u64; 8];
     let mut scratch_peak = 0;
     let mut fallbacks = 0;
     let mut ara_scratch_peak = 0;
@@ -115,7 +116,7 @@ fn bowl_pair(
     for tick in 0..steps {
         // AB/BA alternates every tick and round, so both see the same contention.
         for side in 0..2 {
-            let is_ara = (side + tick + round) % 2 == 0;
+            let is_ara = (side + tick + round).is_multiple_of(2);
             let world = if is_ara { &mut ara } else { &mut native };
             world.backend_mut().benchmark_reset();
             let start = Instant::now();
@@ -128,6 +129,9 @@ fn bowl_pair(
             let stats = world.backend().benchmark_stats();
             if is_ara {
                 ara_ms.push(elapsed);
+                for (total, value) in ara_phases.iter_mut().zip(stats) {
+                    *total += value;
+                }
                 ara_scratch_peak = ara_scratch_peak.max(stats[9]);
                 ara_fallbacks += stats[10];
             } else {
@@ -142,7 +146,7 @@ fn bowl_pair(
         }
         for side in 0..2 {
             let start = Instant::now();
-            if (side + tick) % 2 == 0 {
+            if (side + tick).is_multiple_of(2) {
                 ara.backend_mut().read_bodies(&ids, &mut states)?;
                 extract_ms.push(start.elapsed().as_secs_f64() * 1000.0);
             } else {
@@ -177,7 +181,8 @@ fn bowl_pair(
         "speculativeContactMeters":c.speculative_contact_distance,"sleepSeconds":c.time_before_sleep,"sleepSpeed":c.sleep_velocity_threshold,
         "splitter":c.large_island_splitter,"sharedPool":c.shared_job_pool,"contacts":false,"setupMs":setup_ms,
         "araMs":ara_dist,"nativeMs":native_dist,"nativeInnerMs":distribution(&mut inner_ms),"extractionMs":distribution(&mut extract_ms),
-        "sameSettings":same_settings,"meanAraVsNativePercent":100.0*(ara_mean/native_mean-1.0),"phaseCpuMsPerTick":phases.map(|v|v as f64/steps as f64/1e6),
+        "sameSettings":same_settings,"meanAraVsNativePercent":100.0*(ara_mean/native_mean-1.0),"phaseSummedWorkerElapsedMsPerTick":phases.map(|v|v as f64/steps as f64/1e6),
+        "araPhaseSummedWorkerElapsedMsPerTick":ara_phases.map(|v|v as f64/steps as f64/1e6),
         "scratchMiB":c.scratch_mb,"nativeScratchMiB":native_config.scratch_mb,"nativeSharedPool":native_config.shared_job_pool,"nativeSplitter":native_config.large_island_splitter,"nativeDeterministicOrdering":native_config.deterministic_simulation,
         "columnExtractionMs":distribution(&mut column_ms),"loadBefore":load_before,"loadAfter":load(),
         "phaseOrder":["broadphase","narrowphase","constraint_setup","velocity_solver","position_solver","integration_ccd","islands","bookkeeping"],

@@ -207,3 +207,53 @@ fn host_job_queue_reuses_slots_without_losing_jobs() {
         .benchmark_job_probe(65536)
         .expect("queue reuse at the next boundary");
 }
+
+#[cfg(feature = "bench")]
+#[test]
+fn spatial_character_bounds_preserve_padding_far_from_the_origin() {
+    for origin in [0.0, 1_048_577.0] {
+        let scene = |tree| {
+            let mut w = world(1, 8);
+            add_box(
+                &mut w,
+                Vec3::new(origin, -0.5, 0.0),
+                Quat::IDENTITY,
+                Vec3::new(10.0, 0.5, 10.0),
+                MotionType::Static,
+            );
+            let mut actors = Vec::new();
+            for x in [origin, origin + 0.75] {
+                actors.push(
+                    w.backend_mut()
+                        .create_character(CharacterDesc {
+                            user_data: 0,
+                            position: [x, 0.0, 0.0],
+                            controller: CharacterController {
+                                radius: 0.31,
+                                ..Default::default()
+                            },
+                        })
+                        .expect("character"),
+                );
+            }
+            w.backend_mut().benchmark_character_tree(tree);
+            (w, actors)
+        };
+        let (mut spatial, actors) = scene(true);
+        let (mut reference, other) = scene(false);
+        for tick in 0..12 {
+            for (w, ids) in [(&mut spatial, &actors), (&mut reference, &other)] {
+                w.step_character(ids[0], input(Vec3::X * 8.0))
+                    .expect("padded sweep");
+                w.step_character(ids[1], CharacterInput::default())
+                    .expect("standing contact");
+                w.step().expect("tick");
+            }
+            assert_eq!(
+                hash(&spatial, &[], &actors, &[]),
+                hash(&reference, &[], &other, &[]),
+                "origin {origin}, tick {tick}"
+            );
+        }
+    }
+}

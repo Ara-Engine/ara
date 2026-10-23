@@ -32,8 +32,9 @@ No CMake, bindgen, build-time download, or prebuilt library is involved.
   precise floating point and no FMA. S6 measured a 7–12% cost. Disabling defaults
   selects fast local simulation; peers/replays must agree on flags.
 - `bench` adds the direct C++ Update harness; `profile` also instruments copies in
-  OUT_DIR, never vendor/. Phase counters are exclusive summed worker CPU time,
-  not additive wall time. They are deliberately absent from ordinary game builds.
+  OUT_DIR, never vendor/. Phase counters sum exclusive worker elapsed scopes,
+  including descheduling; they are not on-CPU or additive wall time. They are
+  deliberately absent from ordinary game builds.
 - Use the MSVC C++ tools installed with VS 18 on Windows.
 
 ## Validation
@@ -55,7 +56,8 @@ Behavioral/rollback tests live in `ara-physics-jolt` and exercise this ABI.
   results before simulation consumes them. Contact stop also means body deactivation.
 - Virtual-character candidates use a refitted AABB tree and stable CharacterID
   order, then Jolt's exact collision implementation. Sweeps honor the collector's
-  fraction (which can exceed one for padding). Rebuild this cache after restore.
+  fraction (which can exceed one for padding). Conservative bounds retain padding
+  at large coordinates. Rebuild this cache after restore.
 - Body creation/removal and column extraction reuse world-owned scratch. The temp
   allocator retains Jolt's fallback; benchmark its peak and fallback count when
   changing contact capacity. The 20k fixture needs more than 128 MiB.

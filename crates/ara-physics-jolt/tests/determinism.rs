@@ -29,7 +29,6 @@ impl Scene {
             max_bodies: 2048,
             max_pairs: 32768,
             max_contacts: 32768,
-            event_capacity: 0,
             ..PhysicsConfig::deterministic_network()
         })
         .expect("network preset fixture");

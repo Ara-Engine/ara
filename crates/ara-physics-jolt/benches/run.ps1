@@ -1,4 +1,4 @@
-param([switch]$BuildOnly, [int]$Steps = 600, [int]$Rounds = 2)
+param([switch]$BuildOnly, [switch]$RunOnly, [int]$Steps = 600, [int]$Rounds = 2)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 Set-Location $repo
@@ -8,17 +8,24 @@ $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path 
 $bins = Join-Path $target 'physics-bench'
 $results = Join-Path $PSScriptRoot 'results'
 New-Item -ItemType Directory -Force $bins, $results | Out-Null
-function Build-Bench([string]$Name, [string[]]$Features) {
-    $messages = & cargo bench -p ara-physics-jolt --bench performance --no-run --message-format=json @Features
-    if ($LASTEXITCODE -ne 0) { throw "Build failed: $Name" }
-    $artifact = $messages | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'performance' -and $_.executable } | Select-Object -Last 1
-    if (-not $artifact) { throw "Missing performance executable: $Name" }
+function Build-Bench([string]$Name, [string[]]$Features, [string]$Bench = 'performance') {
+    $stdout = Join-Path $bins "build-$Name.jsonl"
+    $stderr = Join-Path $bins "build-$Name.log"
+    $arguments = @('bench', '-p', 'ara-physics-jolt', '--bench', $Bench, '--no-run', '--message-format=json') + $Features
+    $process = Start-Process -FilePath (Get-Command cargo.exe).Source -ArgumentList $arguments -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "Build failed: $Name (see $stderr and $stdout)" }
+    $messages = Get-Content -LiteralPath $stdout
+    $artifact = $messages | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.reason -eq 'compiler-artifact' -and $_.target.name -eq $Bench -and $_.executable } | Select-Object -Last 1
+    if (-not $artifact) { throw "Missing $Bench executable: $Name" }
     Copy-Item -LiteralPath $artifact.executable -Destination (Join-Path $bins "$Name.exe") -Force
 }
-Build-Bench 'deterministic' @('--features', 'bench')
-Build-Bench 'fast' @('--no-default-features', '--features', 'bench')
-Build-Bench 'profile' @('--features', 'profile')
-if ($BuildOnly) { return }
+if (-not $RunOnly) {
+    Build-Bench 'deterministic' @('--features', 'bench')
+    Build-Bench 'scale' @('--features', 'bench') 'scale'
+    Build-Bench 'fast' @('--no-default-features', '--features', 'bench')
+    Build-Bench 'profile' @('--features', 'profile')
+}
+if ($BuildOnly) { $global:LASTEXITCODE = 0; return }
 $env:ARA_PHYSICS_BENCH_THREADS = '8'
 $env:ARA_PHYSICS_BENCH_STEPS = "$Steps"
 $env:ARA_PHYSICS_BENCH_ROUNDS = "$Rounds"
@@ -26,8 +33,8 @@ $env:ARA_PHYSICS_BENCH_PRESETS = 's6,game_default,stress,deterministic_network'
 $env:ARA_PHYSICS_BENCH_COUNTS = '5000,20000'
 function Run-Bench([string]$Binary, [string]$Name) {
     $env:ARA_PHYSICS_BENCH_OUTPUT = Join-Path $results "$Name.json"
-    & (Join-Path $bins "$Binary.exe") *> (Join-Path $results "$Name.log")
-    if ($LASTEXITCODE -ne 0) { throw "Benchmark failed: $Name (see results/$Name.log)" }
+    $process = Start-Process -FilePath (Join-Path $bins "$Binary.exe") -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput (Join-Path $results "$Name.log") -RedirectStandardError (Join-Path $results "$Name.stderr.log") -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "Benchmark failed: $Name (see results/$Name.stderr.log)" }
 }
 # Reverse build-flavour order across rounds. Each binary also alternates direct
 # Jolt and Ara every tick; presets always disclose their distinct settings.
@@ -53,8 +60,15 @@ Remove-Item Env:ARA_PHYSICS_BENCH_NATIVE_SPLITTER
 $env:ARA_PHYSICS_BENCH_NATIVE_ORDERING = 'off'
 Run-Bench 'deterministic' 'ordering-on-vs-off'
 Remove-Item Env:ARA_PHYSICS_BENCH_NATIVE_ORDERING
-$env:ARA_PHYSICS_BENCH_PRESETS = 'game_default,stress'
+$env:ARA_PHYSICS_BENCH_PRESETS = 's6,game_default,stress'
+Remove-Item Env:ARA_PHYSICS_BENCH_SCRATCH_MB
 Run-Bench 'profile' 'phases'
+$env:ARA_PHYSICS_BENCH_PRESETS = 's6'
+$env:ARA_PHYSICS_BENCH_SCRATCH_MB = '256'
+$env:ARA_PHYSICS_BENCH_NATIVE_SCRATCH_MB = '64'
+Run-Bench 'profile' 'phases-arena256-vs64'
+Remove-Item Env:ARA_PHYSICS_BENCH_SCRATCH_MB
+Remove-Item Env:ARA_PHYSICS_BENCH_NATIVE_SCRATCH_MB
 $env:ARA_PHYSICS_BENCH_ROUNDS = '0'
 $env:ARA_PHYSICS_BENCH_EXTRAS = '1'
 Run-Bench 'deterministic' 'outpost-queries-ecs'

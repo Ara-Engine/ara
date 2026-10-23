@@ -16,10 +16,20 @@ class SpatialCharacters final : public JPH::CharacterVsCharacterCollision {
     JPH::CharacterVsCharacterCollisionSimple reference;
     mutable bool dirty = true;
     bool use_tree = true;
+    static JPH::AABox conservative(JPH::AABox box, JPH::Vec3Arg padding) {
+        // Narrowphase subtracts a nearby origin before computing bounds. An
+        // absolute cache must retain padding smaller than a world-coordinate ULP.
+        // Four relative epsilons cover transformed-bound and Minkowski rounding;
+        // the small absolute floor also covers coordinates close to zero. Keep
+        // this vectorized: casts test many tree nodes per character per tick.
+        auto magnitude = JPH::Vec3::sMax(box.mMin.Abs(), box.mMax.Abs()) + padding.Abs();
+        auto guard = JPH::Vec3::sMax(magnitude * (4.0f * FLT_EPSILON), JPH::Vec3::sReplicate(1.0e-6f));
+        box.ExpandBy(padding + guard);
+        return box;
+    }
     static JPH::AABox bounds(JPH::CharacterVirtual* c) {
         auto box = c->GetShape()->GetWorldSpaceBounds(c->GetCenterOfMassTransform().ToMat44(), JPH::Vec3::sOne());
-        box.ExpandBy(JPH::Vec3::sReplicate(c->GetCharacterPadding()));
-        return box;
+        return conservative(box, JPH::Vec3::sReplicate(c->GetCharacterPadding()));
     }
     void rebuild() const {
         if (!dirty) return;
@@ -83,20 +93,22 @@ public:
     void CollideCharacter(const JPH::CharacterVirtual* c, JPH::RMat44Arg transform, const JPH::CollideShapeSettings& settings, JPH::RVec3Arg offset, JPH::CollideShapeCollector& out) const override {
         if (!use_tree) { reference.CollideCharacter(c, transform, settings, offset, out); return; }
         auto box = c->GetShape()->GetWorldSpaceBounds(transform.ToMat44(), JPH::Vec3::sOne());
-        box.ExpandBy(JPH::Vec3::sReplicate(settings.mMaxSeparationDistance));
+        box = conservative(box, JPH::Vec3::sReplicate(settings.mMaxSeparationDistance));
         select([&](const JPH::AABox& other) { return box.Overlaps(other); });
         candidates.CollideCharacter(c, transform, settings, offset, out);
     }
     void CastCharacter(const JPH::CharacterVirtual* c, JPH::RMat44Arg transform, JPH::Vec3Arg direction, const JPH::ShapeCastSettings& settings, JPH::RVec3Arg offset, JPH::CastShapeCollector& out) const override {
         if (!use_tree) { reference.CastCharacter(c, transform, direction, settings, offset, out); return; }
         auto box = c->GetShape()->GetWorldSpaceBounds(transform.ToMat44(), JPH::Vec3::sOne());
+        box = conservative(box, JPH::Vec3::sZero());
         auto extent = box.GetExtent() + JPH::Vec3::sReplicate(settings.mExtraConvexRadius);
         auto origin = box.GetCenter();
         JPH::RayInvDirection inverse(direction);
         // Jolt can cast beyond fraction one to account for character padding.
         // Clip to the collector's limit, never to the unpadded displacement.
         select([&](const JPH::AABox& other) {
-            return JPH::RayAABoxHits(origin, inverse, other.mMin - extent, other.mMax + extent, out.GetEarlyOutFraction());
+            auto expanded = conservative(other, extent);
+            return JPH::RayAABoxHits(origin, inverse, expanded.mMin, expanded.mMax, out.GetEarlyOutFraction());
         });
         candidates.CastCharacter(c, transform, direction, settings, offset, out);
     }
