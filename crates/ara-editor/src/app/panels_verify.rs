@@ -5,11 +5,13 @@ use ara_platform::Event;
 pub(super) struct Verification {
     phase: u32,
     age: u32,
+    phase_started: Instant,
     job: Option<String>,
     material: String,
     vfx: String,
     animation: String,
     output: PathBuf,
+    pixels: [u32; 2],
     pub samples: Vec<f64>,
     bench_frames: u32,
     interactions: Vec<&'static str>,
@@ -87,7 +89,11 @@ fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
         .to_owned())
 }
 impl Verification {
-    pub fn new(editor: &mut Editor, output: &std::path::Path) -> ara_ui::Result<Self> {
+    pub fn new(
+        editor: &mut Editor,
+        output: &std::path::Path,
+        pixels: [u32; 2],
+    ) -> ara_ui::Result<Self> {
         editor.action("editor.preferences", json!({"reduceMotion":true}))?;
         editor.action("editor.theme", json!({"light":false}))?;
         editor.action("editor.layout.reset", json!({}))?;
@@ -106,11 +112,13 @@ impl Verification {
         Ok(Self {
             phase: 0,
             age: 0,
+            phase_started: Instant::now(),
             job,
             material,
             vfx,
             animation,
             output: output.into(),
+            pixels,
             samples: Vec::new(),
             bench_frames: 0,
             interactions: Vec::new(),
@@ -134,6 +142,7 @@ impl Verification {
         eprintln!("panel verification completed phase {}", self.phase);
         self.phase += 1;
         self.age = 0;
+        self.phase_started = Instant::now();
     }
     fn job_done(&self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let Some(job) = &self.job else {
@@ -160,8 +169,17 @@ impl Verification {
             return Ok(false);
         }
         self.age += 1;
-        if self.age > 8000 {
-            return Err(format!("panel verification timed out at phase {}", self.phase).into());
+        if self.phase_started.elapsed() > Duration::from_secs(90) {
+            let status = self
+                .job
+                .as_ref()
+                .and_then(|job| editor.action("jobs.status", json!({"job":job})).ok());
+            return Err(format!(
+                "panel verification timed out at phase {} after {:?}: {status:?}",
+                self.phase,
+                self.phase_started.elapsed()
+            )
+            .into());
         }
         let mut clipboard = OsClipboard;
         match self.phase {
@@ -465,6 +483,10 @@ impl Verification {
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
     ) -> ara_ui::Result<()> {
+        let actual = shell.ui.size.map(|v| (v * gpu.dpi()).round() as u32);
+        if actual != self.pixels {
+            return Err(format!("capture requested {:?}, actual {actual:?}", self.pixels).into());
+        }
         let capture = super::verify::Verification::new(&self.output);
         for (theme, light) in [("dark", false), ("light", true)] {
             editor.action("editor.theme", json!({"light":light}))?;

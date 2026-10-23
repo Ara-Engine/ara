@@ -2,6 +2,7 @@
 mod capture;
 mod controller;
 mod panels_verify;
+mod setup;
 mod verify;
 mod viewport;
 use crate::{
@@ -24,106 +25,18 @@ use ara_ui_render::{
 };
 use glam::Vec3;
 use serde_json::{Value, json};
+pub use setup::Options;
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-/// Editor launch settings; bounded verification runs use the same production event loop.
-pub struct Options {
-    /// Project directory containing ara.project.json.
-    pub project: PathBuf,
-    /// Stop after this many event-loop frames; None keeps the editor open.
-    pub frames: Option<u64>,
-    /// Run the scripted native/protocol verification route and write evidence.
-    pub verify: bool,
-    /// Populate an empty scene using one typed sample-content batch.
-    pub sample: bool,
-    /// Screenshots and measurement directory.
-    pub output: PathBuf,
-    /// Requested native content extent in pixels.
-    pub size: [u32; 2],
-    /// Optional explicit DPI for reproducible monitor-scale verification.
-    pub dpi: Option<f32>,
-    /// Open an authoring panel directly; --sample creates its starter asset when absent.
-    pub panel: Option<String>,
-    /// Save the final composited GPU frame before a bounded run exits.
-    pub screenshot: bool,
-    /// Run the native authoring panels, import and 500-node navigation suite.
-    pub verify_panels: bool,
-}
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            project: ".".into(),
-            frames: None,
-            verify: false,
-            sample: false,
-            output: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence"),
-            size: [1440, 900],
-            dpi: None,
-            panel: None,
-            screenshot: false,
-            verify_panels: false,
-        }
-    }
-}
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.verify_panels {
         panels_verify::fixtures(&options.project)?;
     }
     let mut editor = Editor::open(&options.project)?;
-    if options.sample {
-        sample(&mut editor)?;
-    }
-    if let Some(panel) = &options.panel {
-        if options.sample && matches!(panel.as_str(), "material" | "vfx" | "animation") {
-            let found = editor.host.store().workspace().docs().any(|(_, d)| {
-                if panel == "animation" {
-                    d.kind == "animation"
-                } else {
-                    d.record("g_meta")
-                        .and_then(|r| r.get("domain"))
-                        .and_then(Value::as_str)
-                        == Some(panel)
-                }
-            });
-            if !found {
-                let path = format!(
-                    "samples/{panel}.{}",
-                    if panel == "animation" {
-                        "animation"
-                    } else {
-                        "graph"
-                    }
-                );
-                let doc = if let Some(id) = editor
-                    .host
-                    .store()
-                    .workspace()
-                    .find(&path)
-                    .map(ToString::to_string)
-                {
-                    editor.apply_to(
-                        &id,
-                        vec![json!({"cmd":"editor.graph.initialize","args":{"domain":panel}})],
-                        "Initialize sample asset",
-                    )?;
-                    id
-                } else {
-                    editor.action(
-                        "editor.resource.create",
-                        json!({"path":path,"domain":panel}),
-                    )?["doc"]
-                        .as_str()
-                        .ok_or("resource identity missing")?
-                        .to_owned()
-                };
-                editor.action("editor.workspace", json!({"resource":doc}))?;
-            }
-        }
-        editor.action("editor.focus", json!({"panel":panel}))?;
-    }
+    setup::prepare(&mut editor, &options)?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
         "Ara editor authority listening on 127.0.0.1:{}",
@@ -140,10 +53,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     );
     let window = Window::new(&title, options.size)?;
     let mut native = Native::attach(&title)?;
+    if options.verify || options.verify_panels || options.screenshot {
+        native.verification_extent(options.size)?;
+    }
     let mut clipboard = OsClipboard;
     let dpi = options.dpi.unwrap_or_else(|| native.dpi());
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
+    if options.verify || options.verify_panels {
+        eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
+    }
     let mut shell = Shell::new(&mut editor, logical)?;
     let mut view = editor.view()?;
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
@@ -182,6 +101,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         Some(panels_verify::Verification::new(
             &mut editor,
             &options.output,
+            options.size,
         )?)
     } else {
         None
@@ -615,7 +535,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         renderer.gpu().assert_clean()?;
         if options.verify || options.verify_panels {
             std::fs::create_dir_all(&options.output)?;
-            let timings = json!({"targetHz":144,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
+            let timings = json!({"targetHz":144,"requestedPixels":options.size,"logicalSize":shell.ui.size,"dpi":last_dpi,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
             std::fs::write(
                 options.output.join("timings.json"),
                 ara_json::to_canonical_string(&timings),
@@ -672,49 +592,6 @@ fn statistics(samples: &[f64]) -> Value {
     sorted.sort_by(f64::total_cmp);
     let percentile = |p: f64| sorted[((sorted.len() - 1) as f64 * p).round() as usize];
     json!({"samples":samples.len(),"p50":percentile(0.5),"p95":percentile(0.95),"p99":percentile(0.99),"max":sorted.last()})
-}
-fn sample(editor: &mut Editor) -> ara_ui::Result<()> {
-    let empty = editor
-        .host
-        .store()
-        .workspace()
-        .doc(&editor.state.doc)
-        .is_some_and(|d| d.records().is_empty());
-    if !empty {
-        return Ok(());
-    }
-    let mut commands = Vec::new();
-    for (name, position, scale, tint) in [
-        (
-            "Outpost floor",
-            [0., -0.25, 0.],
-            [12., 0.5, 10.],
-            [0.18, 0.20, 0.23, 1.],
-        ),
-        (
-            "Salvage crate",
-            [0., 0.6, 0.],
-            [1.2, 1.2, 1.2],
-            [0.12, 0.28, 0.42, 1.],
-        ),
-        (
-            "Bulkhead",
-            [-3., 1.5, -2.],
-            [0.3, 3., 6.],
-            [0.25, 0.28, 0.32, 1.],
-        ),
-        (
-            "Signal tower",
-            [2.5, 1.5, -2.],
-            [0.8, 3., 0.8],
-            [0.4, 0.3, 0.14, 1.],
-        ),
-    ] {
-        commands.push(json!({"cmd":"entity.create","args":{"name":name,"components":{"Transform":{"position":position,"scale":scale},"MeshRenderer":{"tint":tint}}}}));
-    }
-    editor.apply(commands, "Create sample Outpost scene", None)?;
-    editor.host.flush();
-    Ok(())
 }
 
 fn recording_profiler_visible(editor: &mut Editor) -> bool {

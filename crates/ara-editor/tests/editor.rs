@@ -596,6 +596,16 @@ fn material_canvas_create_connect_and_keyboard_undo() {
             .unwrap();
     shell.click("graph-add", &mut clipboard).unwrap();
     shell.dispatch(&mut editor).unwrap();
+    assert_eq!(
+        shell.input.focused(),
+        Some(ara_ui::source::stable_id("search-nodes"))
+    );
+    let rect = shell.ui.nodes[shell.ui.find("node-palette").unwrap()].rect;
+    assert!((rect.x + rect.w * 0.5 - 720.).abs() < 0.5);
+    shell.key(&mut editor, 41, true, &mut clipboard).unwrap();
+    assert!(!editor.state.canvas_add);
+    shell.click("graph-add", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
     editor
         .action(
             "editor.search",
@@ -735,6 +745,27 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
             .unwrap(),
         graph
     );
+    editor
+        .action("editor.workspace", json!({"resource":material}))
+        .unwrap();
+    editor
+        .action("editor.canvas", json!({"selection":[node]}))
+        .unwrap();
+    let mut invalid_shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    editor.apply_to(&material,vec![json!({"cmd":"graph.param.set","args":{"node":node,"name":"value","value":"invalid numeric default"}})],"Verify node diagnostics").unwrap();
+    invalid_shell.rebuild(&mut editor).unwrap();
+    assert!(invalid_shell.ui.find("material-error-0").is_some());
+    assert!(
+        invalid_shell.layout_report()["graph"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["id"] == node && n["error"].is_string())
+    );
+    editor.action("history.undo", json!({})).unwrap();
+    invalid_shell.rebuild(&mut editor).unwrap();
+    assert!(invalid_shell.ui.find("material-error-0").is_none());
+    drop(invalid_shell);
 
     let animation = editor
         .action(

@@ -146,82 +146,91 @@ impl Canvas {
                     theme.border
                 },
             );
-            self.labels.paint(
+            fill(
                 list,
                 id,
-                &node.title,
-                [r.x + 14. * self.camera.zoom, r.y + 9. * self.camera.zoom],
-                self.camera.zoom,
-                theme.foreground,
-            );
-            self.labels.paint(
-                list,
-                id,
-                &node.subtitle,
-                [r.x + 14. * self.camera.zoom, r.y + 29. * self.camera.zoom],
-                self.camera.zoom * 0.82,
-                theme.muted,
-            );
-            if let Some(error) = self.errors.get(&node.id) {
-                self.labels.paint(
-                    list,
-                    id,
-                    error,
-                    [r.x + 8., r.y + r.h - 17. * self.camera.zoom],
-                    self.camera.zoom * 0.72,
-                    theme.error,
-                );
-            }
-            line(
-                list,
-                id,
-                [r.x, r.y + 53. * self.camera.zoom],
-                [r.x + r.w, r.y + 53. * self.camera.zoom],
-                1.,
+                Box2 {
+                    x: r.x,
+                    y: r.y + 53. * self.camera.zoom,
+                    w: r.w,
+                    h: 1.,
+                },
+                0.,
                 theme.border,
             );
-            let mut inputs = 0;
-            let mut outputs = 0;
-            for (name, direction, ty) in &node.ports {
-                let index = if *direction == Direction::Input {
-                    let i = inputs;
-                    inputs += 1;
-                    i
-                } else {
-                    let i = outputs;
-                    outputs += 1;
-                    i
-                };
-                let p = [
-                    if *direction == Direction::Input {
-                        r.x
-                    } else {
-                        r.x + r.w
-                    },
-                    r.y + (64. + index as f32 * 24.) * self.camera.zoom,
-                ];
-                {
-                    let color = port_color(ty);
-                    let radius = 4. * self.camera.zoom;
-                    fill(
+            // Shapes precede labels within each card; overlapping cards retain painter order.
+            for label_pass in [false, true] {
+                if label_pass {
+                    self.labels.paint(
                         list,
                         id,
-                        Box2 {
-                            x: p[0] - radius,
-                            y: p[1] - radius,
-                            w: 2. * radius,
-                            h: 2. * radius,
-                        },
-                        radius,
-                        color,
+                        &node.title,
+                        [r.x + 14. * self.camera.zoom, r.y + 9. * self.camera.zoom],
+                        self.camera.zoom,
+                        theme.foreground,
                     );
-                    let label = if *direction == Direction::Input {
-                        [p[0] + 12. * self.camera.zoom, p[1] - 9. * self.camera.zoom]
+                    self.labels.paint(
+                        list,
+                        id,
+                        &node.subtitle,
+                        [r.x + 14. * self.camera.zoom, r.y + 29. * self.camera.zoom],
+                        self.camera.zoom * 0.82,
+                        theme.muted,
+                    );
+                    if let Some(error) = self.errors.get(&node.id) {
+                        self.labels.paint(
+                            list,
+                            id,
+                            error,
+                            [r.x + 8., r.y + r.h - 17. * self.camera.zoom],
+                            self.camera.zoom * 0.72,
+                            theme.error,
+                        );
+                    }
+                }
+                let mut inputs = 0;
+                let mut outputs = 0;
+                for (name, direction, ty) in &node.ports {
+                    let index = if *direction == Direction::Input {
+                        let i = inputs;
+                        inputs += 1;
+                        i
                     } else {
-                        [p[0] - 64. * self.camera.zoom, p[1] - 9. * self.camera.zoom]
+                        let i = outputs;
+                        outputs += 1;
+                        i
                     };
-                    self.labels
-                        .paint(list, id, name, label, self.camera.zoom, theme.muted);
+                    let p = [
+                        if *direction == Direction::Input {
+                            r.x
+                        } else {
+                            r.x + r.w
+                        },
+                        r.y + (64. + index as f32 * 24.) * self.camera.zoom,
+                    ];
+                    if label_pass {
+                        let label = if *direction == Direction::Input {
+                            [p[0] + 12. * self.camera.zoom, p[1] - 9. * self.camera.zoom]
+                        } else {
+                            [p[0] - 64. * self.camera.zoom, p[1] - 9. * self.camera.zoom]
+                        };
+                        self.labels
+                            .paint(list, id, name, label, self.camera.zoom, theme.muted);
+                    } else {
+                        let radius = 4. * self.camera.zoom;
+                        fill(
+                            list,
+                            id,
+                            Box2 {
+                                x: p[0] - radius,
+                                y: p[1] - radius,
+                                w: radius * 2.,
+                                h: radius * 2.,
+                            },
+                            radius,
+                            port_color(ty),
+                        );
+                    }
                 }
             }
         }

@@ -68,6 +68,7 @@ pub struct Shell {
     thumbnail_next: usize,
     thumbnail_errors: BTreeMap<String, String>,
     material_previews: BTreeMap<String, String>,
+    material_sources: BTreeMap<String, String>,
     thumbnail_uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
     asset_grid_extent: f32,
     asset_grid_dirty: bool,
@@ -84,6 +85,7 @@ pub struct Shell {
     panel_opened: Option<std::time::Instant>,
     color_picker: Option<String>,
     modal_open: bool,
+    canvas_modal_open: bool,
     collapsed_components: std::collections::BTreeSet<String>,
     component_menu: Option<String>,
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
@@ -178,6 +180,7 @@ impl Shell {
             thumbnail_next: 0,
             thumbnail_errors: BTreeMap::new(),
             material_previews: BTreeMap::new(),
+            material_sources: BTreeMap::new(),
             thumbnail_uploads: Vec::new(),
             asset_grid_extent: 0.,
             asset_grid_dirty: false,
@@ -194,6 +197,7 @@ impl Shell {
             panel_opened: None,
             color_picker: None,
             modal_open: false,
+            canvas_modal_open: false,
             collapsed_components: Default::default(),
             component_menu: None,
             hierarchy_style: BTreeMap::new(),
@@ -278,6 +282,12 @@ impl Shell {
         );
         self.dock(&editor.state.layout.clone(), "root", editor, &mut markup)?;
         markup.push_str("</panel>");
+        if editor.state.canvas_add
+            && !editor.state.palette
+            && let Some(doc) = self.resource_for(editor, "material")
+        {
+            self.node_palette(editor, &mut markup, &doc)?;
+        }
         if !self.vfx_visible {
             self.vfx_stream.pause();
         }
@@ -406,6 +416,12 @@ impl Shell {
         }
 
         self.ui.frame(&mut self.text)?;
+        let canvas_modal = editor.state.canvas_add
+            && !editor.state.palette
+            && self.ui.find("node-palette").is_some();
+        if !canvas_modal && self.canvas_modal_open {
+            self.input.pop(&mut self.ui);
+        }
         if editor.state.palette && !self.modal_open {
             self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
             self.input.push(
@@ -419,12 +435,27 @@ impl Shell {
             self.input.pop(&mut self.ui);
         }
         self.modal_open = editor.state.palette;
+        if canvas_modal && !self.canvas_modal_open {
+            self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
+            self.input.push(
+                &mut self.ui,
+                ara_ui::source::stable_id("node-palette"),
+                Some(ara_ui::source::stable_id("search-nodes")),
+                true,
+            )?;
+        }
+        self.canvas_modal_open = canvas_modal;
         if let Some(id) = focus {
             let _ = self.input.focus(&mut self.ui, id);
         }
         if editor.state.palette {
             let id = ara_ui::source::stable_id("palette-search");
             let _ = self.input.focus(&mut self.ui, id);
+        }
+        if canvas_modal {
+            let _ = self
+                .input
+                .focus(&mut self.ui, ara_ui::source::stable_id("search-nodes"));
         }
         if self.rename
             && let Some(i) = self.ui.find("entity-rename-value")
@@ -491,7 +522,11 @@ impl Shell {
     pub fn settle_transitions(&mut self) {
         self.motion = Default::default();
         self.panel_opened = None;
-        if let Some(i) = self.ui.find("palette") {
+        if let Some(i) = self
+            .ui
+            .find("palette")
+            .or_else(|| self.ui.find("node-palette"))
+        {
             self.ui.nodes[i].paint_offset = [0.; 2];
         }
         for n in &mut self.ui.nodes {
@@ -509,7 +544,11 @@ impl Shell {
     pub fn frame(&mut self) -> ara_ui::Result<ara_ui::Work> {
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
-            if let Some(i) = self.ui.find("palette") {
+            if let Some(i) = self
+                .ui
+                .find("palette")
+                .or_else(|| self.ui.find("node-palette"))
+            {
                 self.ui.nodes[i].paint_offset[1] = -4. * (1. - p).powi(3);
                 self.ui.nodes[i].dirty.paint = true;
             }

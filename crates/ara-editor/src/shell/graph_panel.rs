@@ -19,9 +19,40 @@ impl Shell {
             .as_ref()
             .ok_or("material canvas missing")?
             .graph();
-        let material = ara_material::Material::from_graph(graph).map_err(|d| format!("{d:?}"))?;
-        let source = ara_material::dsl::print(&material).map_err(|d| d.to_string())?;
-        let diagnostics = ara_material::check(&material).err().unwrap_or_default();
+        let (source, mut diagnostics) = match ara_material::Material::from_graph(graph) {
+            Ok(material) => {
+                let source = ara_material::dsl::print(&material).map_err(|d| d.to_string())?;
+                self.material_sources.insert(doc.clone(), source.clone());
+                (
+                    source,
+                    ara_material::check(&material).err().unwrap_or_default(),
+                )
+            }
+            Err(diagnostics) => (
+                self.material_sources.get(&doc).cloned().unwrap_or_else(|| {
+                    "// Invalid material nodes: undo or repair their inputs.".into()
+                }),
+                diagnostics,
+            ),
+        };
+        for diagnostic in &mut diagnostics {
+            if diagnostic.location.record.is_none() {
+                let invalid = graph.nodes.iter().find(|(_, node)| {
+                    let value = node.params.get("value").cloned().unwrap_or(Value::Null);
+                    match node.kind.as_str() {
+                        "material.parameter" => {
+                            serde_json::from_value::<ara_material::ParameterValue>(value).is_err()
+                                || node.params.get("isStatic").is_some_and(|v| !v.is_boolean())
+                        }
+                        "material.literal" => serde_json::from_value::<Vec<f64>>(value).is_err(),
+                        _ => false,
+                    }
+                });
+                if let Some((id, _)) = invalid {
+                    diagnostic.location.record = Some(id.clone());
+                }
+            }
+        }
         if let Some(canvas) = &mut self.canvas {
             canvas.diagnostics(&diagnostics, &mut self.text);
         }
@@ -103,9 +134,6 @@ impl Shell {
             out.push_str(&format!("<text id='material-error-{n}' class='destructive' text='{}' style='white-space:normal;font-size:11px;padding:4px' />",escape(&d.message)));
         }
         out.push_str("</panel></panel>");
-        if editor.state.canvas_add {
-            self.node_palette(editor, out, &doc)?;
-        }
         Ok(())
     }
     pub(super) fn resource_for(&self, editor: &Editor, domain: &str) -> Option<String> {
@@ -202,7 +230,12 @@ impl Shell {
         }
         Ok(())
     }
-    fn node_palette(&mut self, editor: &Editor, out: &mut String, doc: &str) -> ara_ui::Result<()> {
+    pub(super) fn node_palette(
+        &mut self,
+        editor: &Editor,
+        out: &mut String,
+        doc: &str,
+    ) -> ara_ui::Result<()> {
         let query = editor
             .state
             .searches

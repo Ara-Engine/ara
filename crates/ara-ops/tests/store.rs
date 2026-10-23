@@ -66,7 +66,11 @@ fn get(s: &Store, id: &str, key: &str) -> Value {
 #[test]
 fn source_path_loading_preserves_transaction_and_undo_save_paths() {
     let mut s = store();
-    let doc = s.workspace().doc("sc_test0001").expect("valid fixture").clone();
+    let doc = s
+        .workspace()
+        .doc("sc_test0001")
+        .expect("valid fixture")
+        .clone();
     s.load_doc_with_asset_path("settings.json", doc, "source.glb");
     assert_eq!(s.revision(), 0);
     assert!(s.history().is_empty());
@@ -84,7 +88,11 @@ fn source_path_loading_preserves_transaction_and_undo_save_paths() {
         Some("source.glb")
     );
 
-    let doc = s.workspace().doc("sc_test0001").expect("valid fixture").clone();
+    let doc = s
+        .workspace()
+        .doc("sc_test0001")
+        .expect("valid fixture")
+        .clone();
     s.load_doc("ordinary.scene", doc);
     assert_eq!(s.workspace().path_of("sc_test0001"), Some("ordinary.scene"));
     assert_eq!(

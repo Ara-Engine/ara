@@ -24,7 +24,15 @@ impl Shell {
                 .ok_or("material missing")?,
         )
         .map_err(|d| d.to_string())?;
-        let material = ara_material::Material::from_graph(&graph).map_err(|d| format!("{d:?}"))?;
+        let material = match ara_material::Material::from_graph(&graph) {
+            Ok(material) => Some(material),
+            Err(diagnostics) => {
+                for (n, diagnostic) in diagnostics.iter().take(3).enumerate() {
+                    out.push_str(&format!("<text id='material-node-error-{n}' class='destructive' style='white-space:normal' text='{}' />",escape(&diagnostic.message)));
+                }
+                None
+            }
+        };
         if editor.state.canvas_selection.is_empty() {
             out.push_str("<text id='material-inspector-hint' class='muted' text='Select a node to inspect its typed inputs and values.' style='white-space:normal' />");
         }
@@ -38,9 +46,9 @@ impl Shell {
                 .and_then(Value::as_str)
                 .unwrap_or(&node.kind);
             out.push_str(&format!("<text id='node-title-{n}' class='heading' text='{}' /><text id='node-kind-{n}' class='muted' text='{}' /><panel id='node-divider-{n}' class='divider' />",escape(name),escape(&node.kind)));
-            let value = if let Some(p) = material.parameters.get(id) {
+            let value = if let Some(p) = material.as_ref().and_then(|m| m.parameters.get(id)) {
                 Some(ara_json::to_value(&p.default)?)
-            } else if let Some(b) = material.bindings.get(id) {
+            } else if let Some(b) = material.as_ref().and_then(|m| m.bindings.get(id)) {
                 if let ara_material::Expr::Literal { values } = &b.expr {
                     Some(json!(values))
                 } else {
