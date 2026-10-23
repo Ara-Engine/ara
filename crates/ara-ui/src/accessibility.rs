@@ -1,28 +1,39 @@
 //! Semantic AccessKit projection; platform adapters are installed by the host.
+/// Resolve the native semantic role, shared by AccessKit and offline inspection of hidden nodes.
+pub fn role_for_tag(tag: &str) -> accesskit::Role {
+    use accesskit::Role;
+    match tag {
+        "button" => Role::Button,
+        "field" | "input" => Role::TextInput,
+        "toggle" => Role::CheckBox,
+        "slider" => Role::Slider,
+        "progress" => Role::ProgressIndicator,
+        "dropdown" => Role::ComboBox,
+        "list" => Role::List,
+        "splitter" => Role::Splitter,
+        "scroll" => Role::ScrollView,
+        "tooltip" => Role::Tooltip,
+        "tabs" => Role::TabList,
+        "tab" => Role::Tab,
+        "menu" => Role::Menu,
+        "modal" => Role::Dialog,
+        "tree" => Role::Tree,
+        "table" => Role::Table,
+        "image" => Role::Image,
+        "text" => Role::Label,
+        _ => Role::GenericContainer,
+    }
+}
 /// Produce actual AccessKit nodes rather than an approximation of its wire format.
 pub fn accessibility(ui: &crate::Ui, focus: Option<u64>) -> accesskit::TreeUpdate {
     use crate::source::stable_id;
-    use accesskit::{Action, Node, NodeId, Rect, Role};
+    use accesskit::{Action, Node, NodeId, Rect};
     let nodes = ui
         .paint_order
         .iter()
         .map(|index| {
             let n = &ui.nodes[*index];
-            let role = match n.element.tag.as_str() {
-                "button" => Role::Button,
-                "field" | "input" => Role::TextInput,
-                "toggle" => Role::CheckBox,
-                "slider" => Role::Slider,
-                "tabs" => Role::TabList,
-                "tab" => Role::Tab,
-                "menu" => Role::Menu,
-                "modal" => Role::Dialog,
-                "tree" => Role::Tree,
-                "table" => Role::Table,
-                "image" => Role::Image,
-                "text" => Role::Label,
-                _ => Role::GenericContainer,
-            };
+            let role = role_for_tag(&n.element.tag);
             let mut node = Node::new(role);
             node.set_children(
                 n.element

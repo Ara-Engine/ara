@@ -1,0 +1,17 @@
+[package]
+name = "ara-ui-stories"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-doc = { path = "../ara-doc" }
+ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
+ara-ui = { path = "../ara-ui" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

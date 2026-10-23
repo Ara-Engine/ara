@@ -78,6 +78,23 @@ impl InputState {
     pub fn captured(&self) -> Option<u64> {
         self.capture
     }
+    /// Inspect navigation within the active screen/modal, using the same scope rules as input.
+    pub fn focus_graph(&self, ui: &Ui) -> serde_json::Value {
+        let order: Vec<_> = tab_order(ui)
+            .into_iter()
+            .filter(|i| self.in_scope(ui, *i))
+            .collect();
+        serde_json::json!(ui.paint_order.iter().filter(|i| is_focusable(&ui.nodes[**i]) && self.in_scope(ui, **i)).map(|i| {
+            let id = |j: Option<usize>| j.map(|j| ui.nodes[j].element.id.as_str());
+            let neighbor = |direction| id(directional_where(ui, *i, direction, |j| self.in_scope(ui, j)));
+            serde_json::json!({
+                "id": ui.nodes[*i].element.id,
+                "tab": id(order.iter().position(|j| j == i).and_then(|position| order.get((position + 1) % order.len()).copied())),
+                "left": neighbor(Direction::Left), "right": neighbor(Direction::Right),
+                "up": neighbor(Direction::Up), "down": neighbor(Direction::Down),
+            })
+        }).collect::<Vec<_>>())
+    }
     fn in_scope(&self, ui: &Ui, index: usize) -> bool {
         self.scopes.last().is_none_or(|scope| {
             let mut i = Some(index);

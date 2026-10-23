@@ -16,6 +16,8 @@ Public API:
 - `binding::{BindingKey<T>,ReadBinding<T>,Bindings<T>}` initializes subscriptions and pushes changed fields.
 - `Ui::drain_actions` yields named host actions; the host dispatches these at its simulation boundary.
 - `accessibility::accessibility` produces an actual AccessKit tree; `Ui::inspect` produces agent JSON.
+- `InputState::focus_graph` reports only controls reachable within the active input scope.
+- Style provenance preserves full selectors and declaration value spans for capture/designer inspection.
 
 Integration:
 1. Create `TextSystem` with the application's licensed fallback packs.
