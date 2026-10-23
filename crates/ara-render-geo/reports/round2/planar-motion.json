@@ -1,0 +1,23 @@
+{
+  "camera_speed_m_per_s": 1,
+  "fps": 60,
+  "max_desired_resident_lag": 0.0,
+  "max_temporal_mip_delta": 1.0,
+  "measured_frames": 60,
+  "same_uv_comparisons": 1975411,
+  "samples": 3124240,
+  "samples_over_one_mip": 0,
+  "texture_memory": {
+    "auxiliary_bytes": 3090544,
+    "max_mip_lag": 0.0,
+    "pool_bytes": 16764800,
+    "resident_pages": 35,
+    "samples": 52057,
+    "samples_over_one_mip": 0,
+    "source_bytes": 22369620,
+    "uploaded_pages": 0,
+    "virtual_pages": 348
+  },
+  "uv_bin_size": 0.00390625,
+  "warmup_frames": 30
+}

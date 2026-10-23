@@ -1,0 +1,24 @@
+{
+  "camera_speed_m_per_s": 3,
+  "fps": 60,
+  "frames": 61,
+  "max_desired_resident_lag": 1.0,
+  "max_temporal_mip_delta": 1.0,
+  "pixel_stride": 8,
+  "samples": 158716426,
+  "samples_over_one_mip": 0,
+  "source": "CC0 Coast Rocks 01, 8k albedo",
+  "stable_triangle_uv_comparisons": 896093,
+  "texture_memory": {
+    "auxiliary_bytes": 62294640,
+    "max_mip_lag": 0.0,
+    "pool_bytes": 67059200,
+    "resident_pages": 964,
+    "samples": 2603169,
+    "samples_over_one_mip": 0,
+    "source_bytes": 357913940,
+    "uploaded_pages": 1,
+    "virtual_pages": 5468
+  },
+  "uv_bin_size": 0.00390625
+}

@@ -1,0 +1,162 @@
+{
+  "background_load": "Shared workstation; two build jobs",
+  "classic": {
+    "foliage_color": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "p99_ms": 0.001024,
+      "samples": 8
+    },
+    "foliage_cull": {
+      "p50_ms": 0.002048,
+      "p95_ms": 0.002048,
+      "p99_ms": 0.002048,
+      "samples": 8
+    },
+    "foliage_depth": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 8
+    },
+    "foliage_shadow": {
+      "p50_ms": 0.003968,
+      "p95_ms": 0.004352,
+      "p99_ms": 0.004352,
+      "samples": 8
+    },
+    "hzb": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 8
+    },
+    "reset": {
+      "p50_ms": 0.004864,
+      "p95_ms": 0.005664,
+      "p99_ms": 0.005664,
+      "samples": 8
+    },
+    "select": {
+      "p50_ms": 0.002048,
+      "p95_ms": 0.002048,
+      "p99_ms": 0.002048,
+      "samples": 8
+    },
+    "sky": {
+      "p50_ms": 0.00512,
+      "p95_ms": 0.00512,
+      "p99_ms": 0.00512,
+      "samples": 8
+    },
+    "terrain_color": {
+      "p50_ms": 0.109568,
+      "p95_ms": 0.114688,
+      "p99_ms": 0.114688,
+      "samples": 8
+    },
+    "terrain_cull": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 8
+    },
+    "terrain_depth": {
+      "p50_ms": 0.017408,
+      "p95_ms": 0.017408,
+      "p99_ms": 0.017408,
+      "samples": 8
+    },
+    "terrain_shadow": {
+      "p50_ms": 0.0624,
+      "p95_ms": 0.070048,
+      "p99_ms": 0.070048,
+      "samples": 8
+    }
+  },
+  "streamed": {
+    "foliage_color": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "p99_ms": 0.001024,
+      "samples": 16
+    },
+    "foliage_cull": {
+      "p50_ms": 0.002048,
+      "p95_ms": 0.002048,
+      "p99_ms": 0.002048,
+      "samples": 16
+    },
+    "foliage_depth": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 16
+    },
+    "foliage_shadow": {
+      "p50_ms": 0.004,
+      "p95_ms": 0.004384,
+      "p99_ms": 0.004384,
+      "samples": 16
+    },
+    "hzb": {
+      "p50_ms": 0.003072,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 16
+    },
+    "reset": {
+      "p50_ms": 0.004768,
+      "p95_ms": 0.0056,
+      "p99_ms": 0.0056,
+      "samples": 16
+    },
+    "select": {
+      "p50_ms": 0.002048,
+      "p95_ms": 0.002048,
+      "p99_ms": 0.002048,
+      "samples": 16
+    },
+    "sky": {
+      "p50_ms": 0.00512,
+      "p95_ms": 0.00512,
+      "p99_ms": 0.00512,
+      "samples": 16
+    },
+    "terrain_color": {
+      "p50_ms": 0.74752,
+      "p95_ms": 1.067008,
+      "p99_ms": 1.067008,
+      "samples": 16
+    },
+    "terrain_cull": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.004096,
+      "p99_ms": 0.004096,
+      "samples": 16
+    },
+    "terrain_depth": {
+      "p50_ms": 0.017408,
+      "p95_ms": 0.018432,
+      "p99_ms": 0.018432,
+      "samples": 16
+    },
+    "terrain_shadow": {
+      "p50_ms": 0.062464,
+      "p95_ms": 0.069632,
+      "p99_ms": 0.069632,
+      "samples": 16
+    }
+  },
+  "texture_memory": {
+    "auxiliary_bytes": 5855344,
+    "max_mip_lag": 0.0,
+    "pool_bytes": 16764800,
+    "resident_pages": 12,
+    "samples": 2226432,
+    "samples_over_one_mip": 0,
+    "source_bytes": 22369620,
+    "uploaded_pages": 0,
+    "virtual_pages": 348
+  }
+}

@@ -10,6 +10,8 @@ checks the MD5 values published by https://api.polyhaven.com/files/coast_rocks_0
 and stores them under ignored `captures/assets`. MD5 here detects download drift;
 it is not a signature or security boundary. Ground geometry is original code.
 
-Comparison image: Epic's Nanite city example, viewed for comparison only:
-https://dev.epicgames.com/documentation/en-us/unreal-engine/nanite-virtualized-geometry-in-unreal-engine
-No Epic media is redistributed with the benchmark.
+Comparison image: Epic's Nanite rocky canyon from its UE5 Early Access article:
+https://www.unrealengine.com/blog/unreal-engine-5-is-now-available-in-early-access?lang=en-US
+The report reproduces a reduced image solely for visual comparison, credited to
+Epic Games. It is copyrighted Epic media, not a CC0 asset or benchmark input.
+No Unreal geometry, textures or implementation are included in the engine.
