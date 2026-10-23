@@ -29,15 +29,18 @@ try {
     # Cargo reports progress there even on success; check its exit code explicitly.
     $ErrorActionPreference = 'Continue'
     if ($Mode -eq 'Overhead') {
-        foreach ($features in @('', 'allocation', 'tracy')) {
+        foreach ($features in @('shipping', '', 'allocation', 'tracy')) {
             $arguments = @('run', '-p', 'ara-bench', '--release', '--example', 'overhead')
-            if ($features) { $arguments += @('--features', $features) }
+            if ($features -eq 'shipping') { $arguments += '--no-default-features' }
+            elseif ($features) { $arguments += @('--features', $features) }
             & cargo @arguments
             if ($LASTEXITCODE -ne 0) { throw "overhead measurement failed: $features" }
         }
     } else {
         cargo test -p ara-profile --features allocation,gpu
         if ($LASTEXITCODE -ne 0) { throw 'native profiler tests failed' }
+        cargo test -p ara-profile --features instrumentation,allocation,gpu
+        if ($LASTEXITCODE -ne 0) { throw 'static scope tests failed' }
         cargo test -p ara-profile --all-features
         if ($LASTEXITCODE -ne 0) { throw 'Tracy profiler tests failed' }
         cargo test -p ara-profile --features gpu --test gpu -- --ignored
@@ -45,7 +48,7 @@ try {
         $packages = @('ara-profile','ara-bench','ara-host','ara','ara-sim','ara-anim','ara-physics','ara-nav','ara-audio','ara-asset','ara-render','ara-script')
         $packageArgs = @()
         foreach ($package in $packages) { $packageArgs += @('-p', $package) }
-        $features = 'ara-profile/allocation,ara-profile/gpu,ara-sim/profiling,ara-anim/profiling,ara-physics/profiling,ara-nav/profiling,ara-audio/profiling,ara-asset/profiling,ara-render/profiling,ara-script/profiling'
+        $features = 'ara-profile/allocation,ara-profile/gpu,ara-bench/scenario,ara-sim/profiling,ara-anim/profiling,ara-physics/profiling,ara-nav/profiling,ara-audio/profiling,ara-asset/profiling,ara-render/profiling,ara-script/profiling'
         & cargo test @packageArgs --features $features
         if ($LASTEXITCODE -ne 0) { throw 'subsystem tests failed' }
         & cargo clippy @packageArgs --features "$features,ara-profile/tracy,ara-bench/tracy" --all-targets -- -D warnings

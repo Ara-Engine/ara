@@ -9,7 +9,7 @@ publish.workspace = true
 profiling = ["dep:ara-profile"]
 
 [dependencies]
-ara-profile = { path = "../ara-profile", optional = true }
+ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-schema = { path = "../ara-schema" }
 ara-json = { path = "../ara-json" }
 ara-diag = { path = "../ara-diag" }

@@ -310,7 +310,7 @@ impl ImportJob {
     /// Polls available progress/output; crashed workers become structured errors.
     pub fn poll(&mut self) -> Result<Option<JobEvent>> {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("jobs.asset.poll");
+        ara_profile::scope!("jobs.asset.poll");
         if self.finished {
             return Ok(None);
         }

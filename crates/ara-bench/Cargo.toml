@@ -7,7 +7,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-tracy = ["ara-profile/tracy"]
+default = ["instrumentation"]
+instrumentation = ["ara-profile/instrumentation"]
+scenario = ["instrumentation", "ara-sim/profiling"]
+tracy = ["instrumentation", "ara-profile/tracy"]
 allocation = ["ara-profile/allocation"]
 
 [dependencies]
@@ -22,7 +25,7 @@ ara-host.workspace = true
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 divan = "0.1"
-ara-sim = { path = "../ara-sim", features = ["profiling"] }
+ara-sim = { path = "../ara-sim" }
 ara-schema.workspace = true
 ara-components.workspace = true
 ara-doc.workspace = true
@@ -31,6 +34,10 @@ ara-input = { path = "../ara-input" }
 [[bench]]
 name = "scopes"
 harness = false
+
+[[example]]
+name = "scenario"
+required-features = ["scenario"]
 
 [lints]
 workspace = true

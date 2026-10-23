@@ -9,7 +9,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::Instant,
 };
 static CAPTURE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -47,6 +46,7 @@ pub struct Profiler {
     profile: Profile,
     spare: VecDeque<Frame>,
     labels: BTreeMap<&'static str, u32>,
+    #[cfg(not(feature = "tracy"))]
     dynamic_labels: BTreeMap<u32, u32>,
     external_labels: BTreeMap<String, u32>,
     next_frame: u64,
@@ -73,6 +73,17 @@ impl ThreadRegistration {
     pub fn detach() {
         PRODUCER.with_borrow_mut(|p| *p = None);
     }
+    /// Publishes this worker's completed batch. Call at a frame/job boundary,
+    /// outside hot loops; `FrameToken::in_scope`, detach and host collection do it.
+    pub fn flush() {
+        let _ = PRODUCER.try_with(|slot| {
+            if let Ok(mut slot) = slot.try_borrow_mut()
+                && let Some(p) = slot.as_mut()
+            {
+                p.publish();
+            }
+        });
+    }
 }
 
 /// Immutable originating-frame identity. Move to a registered worker or serialize
@@ -95,6 +106,7 @@ impl FrameToken {
             fn drop(&mut self) {
                 PRODUCER.with_borrow_mut(|p| {
                     if let Some(p) = p {
+                        p.publish();
                         p.frame_override = self.0;
                     }
                 });
@@ -105,6 +117,7 @@ impl FrameToken {
             if p.control.id != self.owner {
                 return Err("frame token belongs to another profiler");
             }
+            p.publish();
             Ok(p.frame_override.replace(self.frame))
         })?;
         let reset = Reset(previous);
@@ -140,10 +153,11 @@ impl Profiler {
         Ok(Self {
             control: Arc::new(Control {
                 id: CAPTURE_ID.fetch_add(1, Ordering::Relaxed),
+                #[cfg(not(feature = "tracy"))]
                 names: std::sync::Mutex::default(),
                 enabled: AtomicBool::new(false),
                 frame: AtomicU64::new(0),
-                origin: Instant::now(),
+                clock: crate::clock::Clock::new(),
             }),
             config,
             rings: Vec::new(),
@@ -155,6 +169,7 @@ impl Profiler {
             },
             spare,
             labels: BTreeMap::new(),
+            #[cfg(not(feature = "tracy"))]
             dynamic_labels: BTreeMap::new(),
             external_labels: BTreeMap::new(),
             next_frame: 0,
@@ -201,6 +216,7 @@ impl Profiler {
         if self.open.is_some() {
             return Err("profiling frame already open");
         }
+        ThreadRegistration::flush();
         self.next_frame = self.next_frame.checked_add(1).ok_or("frame ID exhausted")?;
         let mut frame = if let Some(frame) = self.spare.pop_front() {
             frame
@@ -214,7 +230,7 @@ impl Profiler {
         frame.gpu.clear();
         frame.jobs.clear();
         frame.id = self.next_frame;
-        frame.start_ns = self.control.now();
+        frame.start_ns = self.control.clock.calibrate();
         frame.duration_ns = 0;
         frame.dropped = 0;
         frame.counters = Counters::default();
@@ -260,6 +276,7 @@ impl Profiler {
     }
     /// Drains completed worker scopes into their original frames, including after stop.
     pub fn collect(&mut self) {
+        ThreadRegistration::flush();
         for (thread, ring) in self.rings.iter().enumerate() {
             while let Some(raw) = ring.pop() {
                 let base = self.profile.frames.front().map_or(0, |f| f.id);
@@ -276,6 +293,14 @@ impl Profiler {
                     continue;
                 }
                 let label = match raw.name {
+                    #[cfg(not(feature = "tracy"))]
+                    crate::ring::Name::Callsite(site) => {
+                        *self.labels.entry(site.name()).or_insert_with(|| {
+                            let id = self.profile.labels.len() as u32;
+                            self.profile.labels.push(site.name().into());
+                            id
+                        })
+                    }
                     crate::ring::Name::Static(name) => {
                         *self.labels.entry(name).or_insert_with(|| {
                             let id = self.profile.labels.len() as u32;
@@ -283,6 +308,7 @@ impl Profiler {
                             id
                         })
                     }
+                    #[cfg(not(feature = "tracy"))]
                     crate::ring::Name::Registered(index) => {
                         *self.dynamic_labels.entry(index).or_insert_with(|| {
                             let names = self
@@ -306,9 +332,13 @@ impl Profiler {
                     thread: thread as u32,
                     id: raw.id,
                     parent: raw.parent,
-                    start_ns: raw.start,
-                    duration_ns: raw.duration,
-                    self_ns: raw.self_ns,
+                    start_ns: self.control.clock.timestamp(raw.start),
+                    duration_ns: self.control.clock.duration(raw.duration),
+                    self_ns: self.control.clock.duration(raw.duration).saturating_sub(
+                        self.control
+                            .clock
+                            .duration(raw.duration.saturating_sub(raw.self_ns)),
+                    ),
                     allocated_bytes: raw.allocated,
                     self_allocated_bytes: raw.self_allocated,
                 });
@@ -317,6 +347,7 @@ impl Profiler {
                 frame.dropped += ring.dropped.swap(0, Ordering::Relaxed);
             }
         }
+        ThreadRegistration::flush();
     }
     /// Attaches a GPU result by its submission frame, rejecting invalid/evicted results.
     pub fn gpu_pass(&mut self, frame: u64, name: &str, queue: &str, nanoseconds: u64) -> bool {
@@ -409,6 +440,10 @@ impl Profiler {
     /// Editor/agent data seam; borrowed timeline, flame edges, GPU list and counters.
     pub fn profile(&self) -> &Profile {
         &self.profile
+    }
+    /// Counter used by CPU spans; nanosecond conversion happens during collection.
+    pub fn clock_source(&self) -> &'static str {
+        self.control.clock.source()
     }
     /// Records an OS load sample on a retained frame.
     pub fn set_load(&mut self, id: u64, load: BackgroundLoad) -> bool {

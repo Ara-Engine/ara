@@ -12,7 +12,7 @@ workspace = true
 profiling = ["dep:ara-profile"]
 
 [dependencies]
-ara-profile = { path = "../ara-profile" , optional = true }
+ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-gpu = { path = "../ara-gpu" }
 ara-platform = { path = "../ara-platform" }
 anyhow = "1"

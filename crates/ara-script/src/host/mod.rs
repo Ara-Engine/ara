@@ -461,7 +461,7 @@ impl ScriptHost {
     /// Runs one fixed tick: C# systems in parallel, then the behaviour phase.
     pub fn run_tick(&mut self, world: &mut World, tick: Tick) {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("script.tick");
+        ara_profile::scope!("script.tick");
         self.tick = tick;
         world.resource_mut::<ScriptTick>().0 = tick;
         if let Some(schedule) = self.schedule.as_mut() {
@@ -474,7 +474,7 @@ impl ScriptHost {
     /// Runs `OnFrame` on every behaviour (presentation; never change simulation state there).
     pub fn run_frame(&mut self, world: &mut World, frame: Frame) {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("script.frame");
+        ara_profile::scope!("script.frame");
         self.behaviour_phase(world, PHASE_FRAME, Some(&frame));
     }
 

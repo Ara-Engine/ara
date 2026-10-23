@@ -463,7 +463,7 @@ impl AudioEngine {
     /// Fixed quanta make results independent of the caller's buffer partitioning.
     pub fn render(&mut self, out: &mut [f32]) -> Result<()> {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("audio.render");
+        ara_profile::scope!("audio.render");
         if !out.len().is_multiple_of(2) {
             return Err(AudioError::Invalid("stereo buffer length"));
         }

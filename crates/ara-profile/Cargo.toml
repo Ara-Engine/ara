@@ -8,7 +8,8 @@ publish.workspace = true
 
 [features]
 default = []
-tracy = ["dep:tracy-client"]
+instrumentation = []
+tracy = ["instrumentation", "dep:tracy-client"]
 allocation = []
 gpu = ["dep:ara-gpu"]
 

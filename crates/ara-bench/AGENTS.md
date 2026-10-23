@@ -16,16 +16,19 @@ agent ergonomics and runs agent CLIs. This crate never launches an agent.
   -> versioned trace, canonical JSON summary, A/B baselines and run/load records.
 - `benches/scopes.rs`: Divan kernel convention; use `#[divan::bench]` and
   `harness = false`. No exact version pins or build-time scripting dependencies.
-- `examples/overhead.rs`: paired release measurements for disabled/enabled spans,
-  optional Tracy and allocator modes. Measurement output includes background CPU.
+- `examples/overhead.rs`: paired release measurements for compiled-out, runtime
+  disabled, native and Tracy scopes; direct Tracy zones provide a control.
+  Every run reports background CPU and validates the native record count.
 
 ## Gates
 
-Always `CARGO_BUILD_JOBS=2`. `cargo test -p ara-bench`;
+Always `CARGO_BUILD_JOBS=2`. `cargo test -p ara-bench --features scenario`;
 `cargo clippy -p ara-bench --all-targets --all-features -- -D warnings`;
 `cargo fmt -p ara-bench -- --check`.
 Explicit measurements: `cargo run -p ara-bench --release --example overhead` and
 again with `--features tracy` / `--features allocation`.
+Use `--no-default-features` for the compiled-out shipping measurement.
+The real-scene example needs `--features scenario` (plus optional `allocation`).
 `cargo bench -p ara-bench --bench scopes` runs the Divan microbenchmarks.
 
 Keep file IO, load sampling and report generation outside measured frames.
