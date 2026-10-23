@@ -18,23 +18,31 @@ Depends on ara-audio, ara-acoustics (physics, ecs), ara-audio-mix, ara-runtime.
   visibility, occluders and `Audibility::explain()` diagnostics (ARA3400–3410).
 - `pump(device, frames)` (live, windowed players), `capture(seconds)` (offline).
 - `clip(assets, reference)`: decodes a published `ara.audio` import (resident).
+- `MusicSource` entities play their `.music` score (one `MusicPlayer` each, following
+  gameplay `intensity`/`segment`, stems loaded through `clip`); `AudioGraphSource`
+  entities play a procedural audio graph (compiled once per graph document, one
+  instance per entity seeded by its identity, spatialized by its `AudioSource`,
+  parameters and trigger counts forwarded at the next control frame).
+- `stream_cells(resident, assets)`: baked `AcousticCell` probes follow the world's
+  resident cells (`Cell.acoustics`): decoded on a thread, installed at a later
+  `update`; `wait_cells` blocks for offline captures.
 
 ## Used by
 
-`ara-player`: windowed players open an SDL device and call `update` + `pump` every
-presented frame (a missing device leaves play silent); `play.captureAudio` builds a
+`ara-player`: windowed players open an SDL device; every presented frame runs
+`stream_cells` + `update` on a scoped worker while the GPU frame presents, then `pump`
+(a missing device leaves play silent); `play.captureAudio` builds a
 fresh presenter, runs one update and renders offline (WAV, `<name>.audio.json`, and how
 each source is heard). Hosts register `ara_audio_why` so `ara why` explains sounds.
 
-## Not yet
+## Gotchas
 
-- Music (`MusicPlayer::update`) and procedural `.audiograph` voices
-  (`PreparedVoice::procedural`): no scene component names which entity plays them yet.
-- Baked `AcousticCell` streaming with `ara-world` cells (no runtime streaming boundary).
-- Evaluation runs on the player's frame thread, not a dedicated audio-control worker.
+- `update` reads the simulation world only; it must not overlap a tick (the player
+  runs it between ticks, beside presentation).
 
 ## Testing
 
 `cargo test -p ara-player --test mixed -- --nocapture`: the demo campfire with an
 agent-attached crackle (mixer, room reverb, ground occlusion and its ARA3402 report)
-plus a VFX-composited image. `cargo clippy -p ara-runtime-audio --all-targets -- -D warnings`.
+plus a VFX-composited image. `--test valley`: music, the campfire and streamed probes
+in the integration level (`play.captureAudio` reports the resident acoustic cells). `cargo clippy -p ara-runtime-audio --all-targets -- -D warnings`.

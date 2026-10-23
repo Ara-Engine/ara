@@ -473,10 +473,15 @@ pub fn adopt(world: &mut World) {
     adopt_with(world, &BTreeMap::new());
 }
 
+type Obstacles<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut NavPosition, &'static WorldPose),
+    (With<NavObstacle>, Without<NavAgent>),
+>;
+
 /// Obstacles follow their entity's world pose (moved props carve where they are).
-pub fn obstacles(
-    mut query: Query<(&mut NavPosition, &WorldPose), (With<NavObstacle>, Without<NavAgent>)>,
-) {
+pub fn obstacles(mut query: Obstacles) {
     for (mut position, pose) in &mut query {
         let p = pose.0.translation.to_array();
         if position.0 != p {

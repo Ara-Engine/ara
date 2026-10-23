@@ -40,6 +40,9 @@ Never run by hand: it needs an owner and the token.
   recorded and replayable. Local and listen-host players are input owner 1; clients
   are players 2.. (their `Move` is predicted through `ara-runtime-net`).
 - Headless players create a GPU device only on their first `play.capture` with a path.
+- Replay files carry portable snapshots (native physics checkpoints stay in-process):
+  `play.replay` verifies exactly from recordings started at tick 0 (the fresh build);
+  a mid-play recording diverges at its first tick once bodies are in contact.
 - Windowed frames extract once, then present on the frame thread while a scoped worker
   runs acoustics and voice updates (they only read the simulation between ticks).
 - Streamed worlds settle in headless players (reproducible arrivals, agent tests) and

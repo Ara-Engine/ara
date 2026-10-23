@@ -76,6 +76,8 @@ fn agent_hot_reloads_csharp_gameplay_while_playing() {
     let id = world["world"].clone();
     let catalog = agent.play("commands", json!({"world": id}));
     assert!(catalog.get("game.UseMedkit").is_some(), "{catalog}");
+    // Record from tick 0 (file replays restore portably; tick 0 is the fresh build).
+    agent.play("record", json!({"world": id}));
 
     // Gravity and Movement drop the crate onto the floor; the Door behaviour swings.
     let stepped = agent.play("step", json!({"world": id, "ticks": 120}));
@@ -92,8 +94,7 @@ fn agent_hot_reloads_csharp_gameplay_while_playing() {
     assert_eq!(read(&mut agent, &id, "e_fox.Vitality.hp"), json!(30));
 
     // Commands are recorded with the next tick, and entities C# spawns get stable
-    // identities: a recording with a heal and a supply drop replays exactly.
-    agent.play("record", json!({"world": id}));
+    // identities: the recording with both heals and a supply drop replays exactly.
     let tick = stepped["tick"].as_u64().unwrap();
     agent.play(
         "command",

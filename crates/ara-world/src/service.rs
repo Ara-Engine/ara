@@ -26,7 +26,7 @@ pub fn register(host: &mut Host) -> Result<(), Diagnostic> {
 
 /// `world.cells.list` params.
 #[derive(Schema, Deserialize)]
-#[ara(params)]
+#[ara(params, name = "WorldCellsParams")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CellsParams {
     /// Session handle from `session.begin`.
@@ -40,7 +40,7 @@ struct CellsParams {
 
 /// `world.query` params.
 #[derive(Schema, Deserialize)]
-#[ara(params)]
+#[ara(params, name = "WorldQueryParams")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct QueryParams {
     /// Session handle from `session.begin`.
@@ -62,7 +62,7 @@ struct QueryParams {
 
 /// `world.entity.move_to_cell` params.
 #[derive(Schema, Deserialize)]
-#[ara(params)]
+#[ara(params, name = "WorldMoveParams")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MoveParams {
     /// Session handle from `session.begin`.
@@ -80,7 +80,7 @@ struct MoveParams {
 
 /// `world.layer.set` params.
 #[derive(Schema, Deserialize)]
-#[ara(params)]
+#[ara(params, name = "WorldLayerParams")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LayerParams {
     /// Session handle from `session.begin`.

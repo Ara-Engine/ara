@@ -612,10 +612,10 @@ fn rock_glb() -> Vec<u8> {
         ]
     });
     let mut text = serde_json::to_vec(&gltf).unwrap();
-    while text.len() % 4 != 0 {
+    while !text.len().is_multiple_of(4) {
         text.push(b' ');
     }
-    while bin.len() % 4 != 0 {
+    while !bin.len().is_multiple_of(4) {
         bin.push(0);
     }
     let mut glb = Vec::new();
@@ -1096,7 +1096,9 @@ fn guard_state(rt: &Runtime) -> (ara_ai::BrainState, ara_ai::LocomotionIntent) {
 
 #[test]
 fn valley_streams_cells_grounds_the_fox_and_the_guard_hunts_on_streamed_navigation() {
+    let built = std::time::Instant::now();
     let mut rt = valley(3);
+    let build_ms = built.elapsed().as_secs_f64() * 1000.0;
     // Tick 1: the camp cell arrives (settled streaming), the far cells do not.
     rt.step(1, &[]).unwrap();
     assert!(resident(&rt, "e_c00rock0"));
@@ -1147,7 +1149,7 @@ fn valley_streams_cells_grounds_the_fox_and_the_guard_hunts_on_streamed_navigati
     );
     let speed = (locomotion.velocity[0].powi(2) + locomotion.velocity[2].powi(2)).sqrt();
     println!(
-        "VALLEY fox {start:?} -> {end:?}, guard at {guard:?} speed {speed:.2} state {:?}, nav swaps {:?}",
+        "VALLEY build {build_ms:.0} ms (terrain, nav cell bakes, physics, AI), fox {start:?} -> {end:?},          guard at {guard:?} speed {speed:.2} state {:?}, nav swaps {:?}",
         brain.last, nav.swaps
     );
 }

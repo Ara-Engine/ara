@@ -361,19 +361,22 @@ pub fn adopt_slots(world: &mut World) {
     let _ = ensure_slots(world, hz);
 }
 
+type Animated<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut AnimatorSlot,
+        Option<&'static Velocity>,
+        Option<&'static NavAgentState>,
+        Option<&'static LocomotionIntent>,
+    ),
+>;
+
 /// Fixed-tick animation: sets `speed` from the entity's ground velocity (an NPC's
 /// `LocomotionIntent`, else navigation state, else physics velocity) and advances one
 /// tick, keeping the extracted root displacement. Motion matching steers toward the
 /// intent's desired velocity. Entities are independent, so order is irrelevant.
-pub fn animate(
-    context: Res<SimContext>,
-    mut query: Query<(
-        &mut AnimatorSlot,
-        Option<&Velocity>,
-        Option<&NavAgentState>,
-        Option<&LocomotionIntent>,
-    )>,
-) {
+pub fn animate(context: Res<SimContext>, mut query: Animated) {
     let dt = context.dt() as f32;
     for (mut slot, velocity, nav, intent) in &mut query {
         if slot.fault.is_some() {

@@ -125,8 +125,10 @@ fn scene_depth(renderer: &mut Renderer, size: [u32; 2]) -> Result<Vec<f32>> {
     gpu.resolve(p)?;
     let depth = gpu
         .read(read)?
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
         .collect();
     gpu.retire(Resource::Buffer(read))?;
     gpu.collect()?;

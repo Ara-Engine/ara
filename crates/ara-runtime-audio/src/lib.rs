@@ -19,6 +19,7 @@
 //!   renders offline (deterministic evidence).
 //!
 //! Presentation only: nothing here writes the simulation.
+use ara_acoustics::bake::{AcousticCell, CellKey};
 use ara_acoustics::{
     AcousticMaterial, AcousticPortal, AcousticSource, AcousticSurface, Acoustics,
     AcousticsSettings, Emitter, Evaluation, ReverbZone, RoomReverbHandle,
@@ -32,15 +33,14 @@ use ara_audio::{
     device::{DeviceBackend, DeviceEvent},
     diagnose::Audibility,
 };
-use ara_acoustics::bake::{AcousticCell, CellKey};
 use ara_audio_graph::{GraphHandle, Program};
 use ara_audio_mix::{BusDesc, Mixer, MixerDesc, MixerSettings};
-use ara_music::{MusicDesc, MusicPlayer, StemLoader};
-use ara_runtime::components::{AudioGraphSource, MusicSource};
 use ara_diag::Diagnostic;
 use ara_doc::Workspace;
+use ara_music::{MusicDesc, MusicPlayer, StemLoader};
 use ara_physics::{PhysicsId, PhysicsWorld, QueryFilter};
 use ara_physics_jolt::JoltBackend;
+use ara_runtime::components::{AudioGraphSource, MusicSource};
 use ara_runtime::sync::WorldPose;
 use ara_schema::AssetRef;
 use ara_sim::Identity;
@@ -154,13 +154,13 @@ fn seed(entity: &str) -> u64 {
     })
 }
 
+/// A decoded cell (or why it failed), sent from its decode thread.
+type Decoded = (String, Result<AcousticCell>);
+
 /// Baked probes of streamed cells: installed keys, decodes in flight and their results.
 struct Cells {
     installed: BTreeMap<String, Option<CellKey>>,
-    decoded: (
-        Sender<(String, Result<AcousticCell>)>,
-        Receiver<(String, Result<AcousticCell>)>,
-    ),
+    decoded: (Sender<Decoded>, Receiver<Decoded>),
 }
 
 /// Loads a cell's baked probes from its published `ara.acoustics` import.
@@ -179,7 +179,7 @@ fn acoustic_cell(
         .iter()
         .find(|a| a.name == "acoustics.bin")
         .ok_or_else(|| invalid(format!("{} has no acoustics.bin", reference.0)))?;
-    Ok(AcousticCell::decode(&bytes.bytes)?)
+    AcousticCell::decode(&bytes.bytes)
 }
 
 /// One world's audio: engine, mixer, room reverb, acoustics and live voices.
@@ -435,7 +435,12 @@ impl AudioPresenter {
     pub fn wait_cells(&mut self, timeout: std::time::Duration) {
         let start = std::time::Instant::now();
         while self.cells.installed.values().any(Option::is_none) && start.elapsed() < timeout {
-            match self.cells.decoded.1.recv_timeout(timeout.saturating_sub(start.elapsed())) {
+            match self
+                .cells
+                .decoded
+                .1
+                .recv_timeout(timeout.saturating_sub(start.elapsed()))
+            {
                 Ok(done) => {
                     // Re-queue through the normal install path.
                     let _ = self.cells.decoded.0.send(done);

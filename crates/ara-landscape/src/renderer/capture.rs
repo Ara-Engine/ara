@@ -97,7 +97,8 @@ impl Landscape {
         let color_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
         let depth_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
         // Graph import order: nine buffers, then colour (9) and depth (10).
-        let state = |i: usize, fallback: Access| self.previous.get(i).map_or(fallback, |s| s.access);
+        let state =
+            |i: usize, fallback: Access| self.previous.get(i).map_or(fallback, |s| s.access);
         let (color_state, depth_state) = (state(9, Access::Color), state(10, Access::Depth));
         let mut r = gpu.begin(Queue::Graphics);
         r.barriers([
@@ -153,8 +154,10 @@ impl Landscape {
         let color = gpu.read(color_read)?;
         let depth = gpu
             .read(depth_read)?
-            .chunks_exact(4)
-            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
             .collect();
         gpu.retire(Resource::Buffer(color_read))?;
         gpu.retire(Resource::Buffer(depth_read))?;

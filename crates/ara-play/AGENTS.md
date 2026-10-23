@@ -10,7 +10,7 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   read/patch/capture/watch/record/recording/replay/diff/assets/debug.crash`).
 - Params/results: `Hello`, `Start` (+ `SnapshotRef::{Shm, Inline}`, `Role`), `Started`,
   `Input`, `Step`, `Until` + `Compare`, `Stepped` + `Sample`, `Inputs`, `Inspect`, `Read`,
-  `Patch` + `Set`, `Patched`, `CaptureParams`, `Captured` + `Mark`, `WatchParams`,
+  `Patch` + `Set`, `Patched`, `CaptureParams` (`presented`: the windowed path), `Captured` + `Mark`, `WatchParams`,
   `SaveReplay`, `Crash`, `Status`, `CrashReport`. All camelCase JSON.
 - `PlayScene`: documents (`DocumentData`), project types, seed, tick rate, asset pins
   (`as_…` → 64-hex action digest), cache and nav-cache dirs, `imports` (imported
