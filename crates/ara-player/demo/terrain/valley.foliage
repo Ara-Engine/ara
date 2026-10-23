@@ -47,13 +47,13 @@
       "scale": [0.55, 0.9],
       "enabled": true
     },
-    "x_190c": {
-      "center": [20, 14],
-      "radius": 3
-    },
-    "x_gn7v": {
+    "x_fdxz": {
       "center": [16, 16],
       "radius": 7
+    },
+    "x_g9tz": {
+      "center": [20, 14],
+      "radius": 3
     }
   }
 }

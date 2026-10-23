@@ -107,6 +107,9 @@ plugin Late → poses.resolve.
 - Terrain: one `Terrain` per level; tiles evaluate on worker threads at load (strokes
   only; imported bases are not available in play yet). Chunk bodies are cooked Jolt
   heightfields, re-cooked after every native rebuild.
+  `TerrainData.foliage_rules` retains every rule (including disabled) with its stable
+  `fo_asset#r_rule` identity. Scatter hashes that identity and stamps the generation's
+  catalog index in `Instance.identity[3]`; inserting/enabling rules does not reseed survivors.
   The Terrain entity's complete parent-resolved translation shifts the evaluated
   grid, heights and foliage after stroke/exclusion evaluation; navigation and
   collision consume that same world data. Rotation/scale must be baked into the

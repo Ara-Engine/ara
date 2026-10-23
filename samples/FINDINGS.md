@@ -115,6 +115,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     **Fixed (`27f3523`):** music/dialogue import uses bounded decode/resample staging;
     the reflected `decodedBudget` sidecar setting controls resident PCM staging.
     A 181-second import passes with a 64 KiB budget.
+    **Play fixed (`e649345`):** music and ordinary sources keep streamed imports
+    compressed, with bounded PCM queues, producer-side loops and deterministic
+    offline refills. A 181-second score imports and plays through headless MCP.
 15. **The editor viewport cannot show real content** (`*-editor.png`). It draws imported
     models with their flat `MeshRenderer.color` only: no textures and no glTF material
     factors, so all 18 showcase material balls are the same white. Terrain documents are
