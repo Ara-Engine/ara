@@ -5,7 +5,7 @@
     "reference_convergence": 0.014554045699550473,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.06987742567840928,
+    "relative_rmse": 0.06469097546968758,
     "scene": "glossy_interior",
     "target": 0.08
   },
@@ -15,7 +15,7 @@
     "reference_convergence": 0.014855823508312391,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.09642910214576818,
+    "relative_rmse": 0.09037120733291323,
     "scene": "thin_wall",
     "target": 0.1
   },
@@ -25,7 +25,7 @@
     "reference_convergence": 0.0011963823384919731,
     "reference_precision": "RGBA32F accumulation, unfiltered",
     "reference_samples": 4096,
-    "relative_rmse": 0.006492074767161772,
+    "relative_rmse": 0.006219853336454331,
     "scene": "furnace",
     "target": 0.025
   }

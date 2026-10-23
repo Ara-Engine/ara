@@ -553,8 +553,10 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-landscape",
  "ara-render",
  "ara-render-fidelity",
+ "ara-terrain",
  "glam 0.30.9",
  "image",
  "serde",

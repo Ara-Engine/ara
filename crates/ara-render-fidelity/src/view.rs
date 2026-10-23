@@ -40,6 +40,8 @@ pub struct FidelityView {
     pub(crate) history: bool,
     pub(crate) slot: usize,
     pub(crate) samples: u32,
+    pub(crate) gather_events: u32,
+    pub(crate) transport_stride: u32,
     pub(crate) timings: Vec<PassTiming>,
 }
 impl FidelityView {
@@ -94,7 +96,7 @@ impl FidelityView {
         let exposure = buffer(
             gpu,
             bytemuck::cast_slice(&[1_f32, 0., 0., 0.]),
-            vk::BufferUsageFlags::STORAGE_BUFFER,
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC,
         )?;
         let exposure_index = gpu.storage_buffer(exposure)?.index;
         let mut lut_data = Vec::new();
@@ -115,7 +117,16 @@ impl FidelityView {
         let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
         let mut pipelines = BTreeMap::new();
         let names = if settings.tier == Tier::Rt {
-            vec!["primary", "ddgi", "hybrid", "reference"]
+            vec![
+                "primary",
+                "ddgi",
+                "hybrid",
+                "reference",
+                "primary_emissive",
+                "ddgi_emissive",
+                "hybrid_emissive",
+                "reference_emissive",
+            ]
         } else {
             vec!["primary_raster", "hybrid_raster"]
         };
@@ -166,8 +177,38 @@ impl FidelityView {
             history: false,
             slot: 0,
             samples: 0,
+            gather_events: 2,
+            transport_stride: 2,
             timings: Vec::new(),
         })
+    }
+    /// Bound traced secondary surfaces before the DDGI terminal. One event is
+    /// useful with dense large-scene fields; two is the default for small rooms.
+    /// Changing this budget invalidates accumulated transport at a frame boundary.
+    pub fn set_gather_events(&mut self, events: u32) -> Result<()> {
+        ensure!(
+            (1..=4).contains(&events),
+            "Gather events must be between one and four"
+        );
+        if self.gather_events != events {
+            self.gather_events = events;
+            self.history = false;
+        }
+        Ok(())
+    }
+    /// Trace one incident sample per two or four pixels each frame. Rotating phases
+    /// cover every pixel; invalid history always receives a fresh repair sample.
+    /// Direct lighting and primary visibility remain full rate. Changing the rate resets history.
+    pub fn set_transport_stride(&mut self, stride: u32) -> Result<()> {
+        ensure!(
+            matches!(stride, 2 | 4),
+            "Transport stride must be two or four"
+        );
+        if self.transport_stride != stride {
+            self.transport_stride = stride;
+            self.history = false;
+        }
+        Ok(())
     }
     /// Apply an extracted scene update between completed frames. Changed geometry
     /// retains previous positions for one frame; changed lighting should set the

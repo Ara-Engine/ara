@@ -9,79 +9,74 @@
     ],
     "passes": {
       "Bloom.Horizontal": {
-        "maximum": 0.228864,
-        "p50": 0.207744,
-        "p95": 0.228672
+        "maximum": 0.229024,
+        "p50": 0.207584,
+        "p95": 0.228512
       },
       "Bloom.Vertical": {
-        "maximum": 0.383136,
-        "p50": 0.107552,
-        "p95": 0.119264
+        "maximum": 0.410368,
+        "p50": 0.10768,
+        "p95": 0.1192
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "maximum": 0.06272,
-        "p50": 0.050144,
-        "p95": 0.054848
+        "maximum": 0.057344,
+        "p50": 0.049504,
+        "p95": 0.055072
       },
       "Exposure.EV100.Meter.Adapt": {
-        "maximum": 0.018688,
-        "p50": 0.016256,
-        "p95": 0.017952
+        "maximum": 0.030144,
+        "p50": 0.023424,
+        "p95": 0.025376
       },
       "Output.SDR": {
-        "maximum": 0.039424,
-        "p50": 0.036224,
-        "p95": 0.039136
+        "maximum": 0.039968,
+        "p50": 0.035616,
+        "p95": 0.039264
       },
-      "Post.Atmosphere.Lens.ACES.LUT": {
-        "maximum": 0.289664,
-        "p50": 0.2552,
-        "p95": 0.277792
-      },
-      "RT.Disocclusion.Repair": {
-        "maximum": 1.181696,
-        "p50": 0.565344,
-        "p95": 0.580704
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "maximum": 0.298208,
+        "p50": 0.265056,
+        "p95": 0.285728
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "maximum": 2.254208,
-        "p50": 1.628096,
-        "p95": 1.78768
+        "maximum": 2.144384,
+        "p50": 1.665472,
+        "p95": 1.828128
       },
       "SVGF.Atrous.1": {
-        "maximum": 0.776224,
-        "p50": 0.47408,
-        "p95": 0.496128
+        "maximum": 0.783904,
+        "p50": 0.458464,
+        "p95": 0.496
       },
       "SVGF.Atrous.2": {
-        "maximum": 0.546176,
-        "p50": 0.514848,
-        "p95": 0.542208
+        "maximum": 0.893152,
+        "p50": 0.511392,
+        "p95": 0.536768
       },
       "SVGF.Atrous.4": {
-        "maximum": 0.636736,
-        "p50": 0.597024,
-        "p95": 0.632832
+        "maximum": 0.953024,
+        "p50": 0.639776,
+        "p95": 0.66512
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "maximum": 1.128544,
-        "p50": 0.842464,
-        "p95": 0.898496
+        "maximum": 0.978176,
+        "p50": 0.885344,
+        "p95": 0.934592
       },
       "Upscale.TAAU.Resolve": {
-        "maximum": 1.22224,
-        "p50": 0.951488,
-        "p95": 1.035424
+        "maximum": 0.724128,
+        "p50": 0.448224,
+        "p95": 0.478304
       },
       "Viewport.Ready": {
-        "maximum": 0.000128,
+        "maximum": 0.00016,
         "p50": 0.000096,
-        "p95": 0.000096
+        "p95": 0.000128
       },
       "Visibility.Motion": {
-        "maximum": 0.834016,
-        "p50": 0.757536,
-        "p95": 0.82016
+        "maximum": 0.911296,
+        "p50": 0.776384,
+        "p95": 0.840672
       }
     },
     "probe_ray_budget": 16384,
@@ -91,9 +86,9 @@
     ],
     "samples": 60,
     "total": {
-      "maximum": 7.878112000000002,
-      "p50": 7.023808,
-      "p95": 7.570752000000001
+      "maximum": 7.0608,
+      "p50": 6.111744,
+      "p95": 6.437856000000002
     },
     "upscaler": "Native TAA",
     "validation": true
@@ -108,69 +103,64 @@
     ],
     "passes": {
       "Bloom.Horizontal": {
-        "maximum": 0.096704,
-        "p50": 0.095648,
-        "p95": 0.096288
+        "maximum": 0.095904,
+        "p50": 0.095136,
+        "p95": 0.095776
       },
       "Bloom.Vertical": {
-        "maximum": 0.0512,
-        "p50": 0.050368,
-        "p95": 0.050912
+        "maximum": 0.054368,
+        "p50": 0.050208,
+        "p95": 0.050848
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "maximum": 0.052448,
-        "p50": 0.048992,
-        "p95": 0.051968
+        "maximum": 0.052512,
+        "p50": 0.048352,
+        "p95": 0.051328
       },
       "Exposure.EV100.Meter.Adapt": {
-        "maximum": 0.012352,
-        "p50": 0.011744,
-        "p95": 0.012192
+        "maximum": 0.029024,
+        "p50": 0.024192,
+        "p95": 0.024768
       },
-      "Post.Atmosphere.Lens.ACES.LUT": {
-        "maximum": 0.081728,
-        "p50": 0.075456,
-        "p95": 0.077856
-      },
-      "RT.Disocclusion.Repair": {
-        "maximum": 0.310496,
-        "p50": 0.2832,
-        "p95": 0.29136
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "maximum": 0.082528,
+        "p50": 0.075296,
+        "p95": 0.080384
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "maximum": 0.751008,
-        "p50": 0.745248,
-        "p95": 0.749504
+        "maximum": 0.766592,
+        "p50": 0.7608,
+        "p95": 0.763936
       },
       "SVGF.Atrous.1": {
-        "maximum": 0.216768,
-        "p50": 0.212064,
-        "p95": 0.214528
+        "maximum": 0.233184,
+        "p50": 0.20272,
+        "p95": 0.224864
       },
       "SVGF.Atrous.2": {
-        "maximum": 0.2664,
-        "p50": 0.243072,
-        "p95": 0.263328
+        "maximum": 0.27424,
+        "p50": 0.240768,
+        "p95": 0.26512
       },
       "SVGF.Atrous.4": {
-        "maximum": 0.270144,
-        "p50": 0.265472,
-        "p95": 0.26848
+        "maximum": 0.288416,
+        "p50": 0.282144,
+        "p95": 0.286688
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "maximum": 0.420448,
-        "p50": 0.367008,
-        "p95": 0.399008
+        "maximum": 0.57728,
+        "p50": 0.39104,
+        "p95": 0.44464
       },
       "Upscale.FSR1.EASU": {
-        "maximum": 0.2848,
-        "p50": 0.280704,
-        "p95": 0.282272
+        "maximum": 0.159776,
+        "p50": 0.156416,
+        "p95": 0.157888
       },
       "Upscale.FSR1.RCAS": {
-        "maximum": 0.05232,
-        "p50": 0.051328,
-        "p95": 0.051904
+        "maximum": 0.05072,
+        "p50": 0.048928,
+        "p95": 0.050016
       },
       "Viewport.Ready": {
         "maximum": 0.000128,
@@ -178,9 +168,9 @@
         "p95": 0.000096
       },
       "Visibility.Motion": {
-        "maximum": 0.418848,
-        "p50": 0.352448,
-        "p95": 0.389248
+        "maximum": 0.458176,
+        "p50": 0.34192,
+        "p95": 0.397216
       }
     },
     "probe_ray_budget": 16384,
@@ -190,9 +180,9 @@
     ],
     "samples": 60,
     "total": {
-      "maximum": 3.169696,
-      "p50": 3.0904960000000004,
-      "p95": 3.146368
+      "maximum": 2.9125120000000004,
+      "p50": 2.7256000000000005,
+      "p95": 2.813312
     },
     "upscaler": "FSR1 EASU/RCAS + engine TAA",
     "validation": true

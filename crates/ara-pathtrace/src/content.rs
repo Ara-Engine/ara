@@ -6,7 +6,8 @@ use ara_render::scene::{CameraSpec, Material, Mesh, Scene, Texture, Vertex};
 use glam::Vec3;
 use std::collections::BTreeMap;
 
-fn load(path: &Path) -> Result<Scene> {
+/// Load the pinned OBJ/MTL benchmark into the shared scene contract.
+pub(crate) fn load(path: &Path) -> Result<Scene> {
     let mut scene = scenes::scene("glossy_interior", 0);
     scene.meshes.clear();
     scene.materials.clear();
@@ -148,31 +149,41 @@ fn load(path: &Path) -> Result<Scene> {
     Ok(scene)
 }
 
+/// Pinned same-view comparison camera, in metres.
+pub(crate) fn camera() -> CameraSpec {
+    CameraSpec::LookAt {
+        position: Vec3::new(-11., 1.7, 0.),
+        target: Vec3::new(5., 3., 0.),
+        vertical_fov: 1.05,
+    }
+}
+
 /// Measure locally fetched Sponza content with the complete RT-tier frame.
 pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let path = root.join(".sn/assets/sponza");
     let scene =
         load(&path).context("Fetch the local Sponza benchmark with fetch-sponza.ps1 first")?;
-    let camera = CameraSpec::LookAt {
-        position: Vec3::new(-11., 1.7, 0.),
-        target: Vec3::new(5., 3., 0.),
-        vertical_fov: 1.05,
-    };
+    let camera = camera();
     let mut report = Vec::new();
     for render in [[2560, 1440], [1707, 960]] {
         let mut s = settings(render, [2560, 1440]);
         s.post = PostSettings {
-            ev100: Some(10.),
+            ev100: None,
+            compensation: -1.5,
+            tone_mapper: ara_render_fidelity::ToneMapper::PbrNeutral,
             ..PostSettings::default()
         };
         let mut view = FidelityView::new(gpu, &scene, s, None)?;
+        view.set_gather_events(1)?;
+        view.set_transport_stride(4)?;
         let mut passes = BTreeMap::<String, Vec<f64>>::new();
         let mut totals = Vec::new();
-        for tick in 0..108 {
+        let background_before = background_load();
+        for tick in 0..336 {
             let mut request = input(&camera, tick, false);
             request.deterministic = false;
             view.render(gpu, &request)?;
-            if tick >= 48 {
+            if tick >= 96 {
                 let mut total = 0.;
                 for timing in view.timings() {
                     passes
@@ -187,20 +198,25 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         view.capture(gpu)?
             .save(root.join(format!("captures/sponza-{}p.png", render[1])))?;
         totals.sort_by(f64::total_cmp);
-        let p50 = totals[30];
-        let p95 = totals[56];
+        let p50 = totals[120];
+        let p95 = totals[227];
         println!("Sponza {}p: p50 {p50:.3} ms, p95 {p95:.3} ms", render[1]);
         let passes = passes
             .into_iter()
             .map(|(name, mut times)| {
                 times.sort_by(f64::total_cmp);
-                (name, serde_json::json!({"p50":times[30],"p95":times[56]}))
+                (name, serde_json::json!({"p50":times[120],"p95":times[227]}))
             })
             .collect::<BTreeMap<_, _>>();
-        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported","render_size":render,"display_size":[2560,1440],"frames":60,"warmup":48,"p50":p50,"p95":p95,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"async_overlap":false}));
+        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks"}));
         view.destroy(gpu)?;
     }
     write_json(&root.join("measurements/sponza-timings.json"), &report)?;
     gpu.assert_clean()?;
     Ok(())
+}
+
+/// Benchmark-only telemetry; no machine query enters the renderer's frame loop.
+pub(crate) fn background_load() -> String {
+    std::process::Command::new("nvidia-smi").args(["--query-gpu=utilization.gpu,utilization.memory,memory.used,power.draw,clocks.gr,clocks.mem","--format=csv,noheader"]).output().map(|o|String::from_utf8_lossy(&o.stdout).trim().to_owned()).unwrap_or_else(|e|format!("unavailable: {e}"))
 }

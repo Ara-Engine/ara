@@ -128,6 +128,12 @@ pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut view = FidelityView::new(gpu, &scenes::scene(name, 0), settings(size, size), None)?;
         let mut fresh_view =
             FidelityView::new(gpu, &scenes::scene(name, 0), settings(size, size), None)?;
+        if name == "disocclusion" {
+            view.set_transport_stride(4)?;
+            view.set_gather_events(1)?;
+            fresh_view.set_transport_stride(4)?;
+            fresh_view.set_gather_events(1)?;
+        }
         for tick in 0..48 {
             view.render(gpu, &input(&camera, tick, false))?;
             fresh_view.render(gpu, &input(&camera, tick, false))?;

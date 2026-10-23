@@ -1,0 +1,334 @@
+[
+  {
+    "async_overlap": false,
+    "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "display_size": [
+      2560,
+      1440
+    ],
+    "exposure": {
+      "metered_luminance": 878.7060546875,
+      "multiplier": 0.00010280424612574279,
+      "previous_multiplier": 0.00010282377479597926,
+      "target_ev100": 11.990133285522461
+    },
+    "frames": 60,
+    "p50": 4.453119999999999,
+    "p95": 4.607872000000001,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.206048,
+        "p95": 0.206592
+      },
+      "Bloom.Vertical": {
+        "p50": 0.106592,
+        "p95": 0.107136
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.239552,
+        "p95": 0.257248
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.023392,
+        "p95": 0.024128
+      },
+      "Output.SDR": {
+        "p50": 0.035744,
+        "p95": 0.036512
+      },
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "p50": 0.212256,
+        "p95": 0.241792
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 0.626432,
+        "p95": 0.632352
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.38656,
+        "p95": 0.392
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.415104,
+        "p95": 0.423104
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.564576,
+        "p95": 0.568672
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.667136,
+        "p95": 0.707264
+      },
+      "Upscale.TAAU.Resolve": {
+        "p50": 0.334976,
+        "p95": 0.36208
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000096
+      },
+      "Visibility.Motion": {
+        "p50": 0.633312,
+        "p95": 0.713664
+      }
+    },
+    "render_size": [
+      2560,
+      1440
+    ],
+    "scene": "outdoor_day",
+    "scene_hash": "78a4090ea2d175b9bfdfbcabd12836b9c0356fbfc1b427470f8fa09b2405abe6",
+    "triangles": 2120,
+    "warmup": 96
+  },
+  {
+    "async_overlap": false,
+    "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "display_size": [
+      2560,
+      1440
+    ],
+    "exposure": {
+      "metered_luminance": 878.5317993164062,
+      "multiplier": 0.0001028211263474077,
+      "previous_multiplier": 0.00010284048039466143,
+      "target_ev100": 11.989847183227539
+    },
+    "frames": 60,
+    "p50": 2.1878080000000004,
+    "p95": 2.258528,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.094368,
+        "p95": 0.095136
+      },
+      "Bloom.Vertical": {
+        "p50": 0.049984,
+        "p95": 0.0504
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.241248,
+        "p95": 0.26624
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.024096,
+        "p95": 0.02448
+      },
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "p50": 0.057664,
+        "p95": 0.058208
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 0.304576,
+        "p95": 0.309056
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.173856,
+        "p95": 0.17872
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.200096,
+        "p95": 0.214528
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.248032,
+        "p95": 0.251168
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.299424,
+        "p95": 0.347456
+      },
+      "Upscale.FSR1.EASU": {
+        "p50": 0.161664,
+        "p95": 0.164704
+      },
+      "Upscale.FSR1.RCAS": {
+        "p50": 0.049888,
+        "p95": 0.050848
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000096
+      },
+      "Visibility.Motion": {
+        "p50": 0.27744,
+        "p95": 0.320192
+      }
+    },
+    "render_size": [
+      1707,
+      960
+    ],
+    "scene": "outdoor_day",
+    "scene_hash": "78a4090ea2d175b9bfdfbcabd12836b9c0356fbfc1b427470f8fa09b2405abe6",
+    "triangles": 2120,
+    "warmup": 96
+  },
+  {
+    "async_overlap": false,
+    "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "display_size": [
+      2560,
+      1440
+    ],
+    "exposure": {
+      "metered_luminance": 3.7143163681030273,
+      "multiplier": 0.024207191541790962,
+      "previous_multiplier": 0.024205993860960007,
+      "target_ev100": 4.1039934158325195
+    },
+    "frames": 60,
+    "p50": 6.168416000000001,
+    "p95": 6.906048000000002,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.208128,
+        "p95": 0.209696
+      },
+      "Bloom.Vertical": {
+        "p50": 0.108416,
+        "p95": 0.109152
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.04928,
+        "p95": 0.051872
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.024608,
+        "p95": 0.025312
+      },
+      "Output.SDR": {
+        "p50": 0.042048,
+        "p95": 0.043168
+      },
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "p50": 0.274848,
+        "p95": 0.293408
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 1.652896,
+        "p95": 1.985728
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.454624,
+        "p95": 0.491904
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.512544,
+        "p95": 0.532
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.640576,
+        "p95": 0.651456
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.90768,
+        "p95": 0.964832
+      },
+      "Upscale.TAAU.Resolve": {
+        "p50": 0.494432,
+        "p95": 0.520608
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000128
+      },
+      "Visibility.Motion": {
+        "p50": 0.776352,
+        "p95": 0.838624
+      }
+    },
+    "render_size": [
+      2560,
+      1440
+    ],
+    "scene": "night_interior",
+    "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
+    "triangles": 4628,
+    "warmup": 96
+  },
+  {
+    "async_overlap": false,
+    "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "display_size": [
+      2560,
+      1440
+    ],
+    "exposure": {
+      "metered_luminance": 3.717188596725464,
+      "multiplier": 0.02419063076376915,
+      "previous_multiplier": 0.024189542979002,
+      "target_ev100": 4.105108261108398
+    },
+    "frames": 60,
+    "p50": 2.7441600000000004,
+    "p95": 2.8016319999999992,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.09632,
+        "p95": 0.096896
+      },
+      "Bloom.Vertical": {
+        "p50": 0.051456,
+        "p95": 0.054784
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.048576,
+        "p95": 0.0504
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.025536,
+        "p95": 0.026144
+      },
+      "Post.Atmosphere.Lens.ToneMap.LUT": {
+        "p50": 0.074784,
+        "p95": 0.077568
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 0.761536,
+        "p95": 0.76528
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.204416,
+        "p95": 0.206048
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.242016,
+        "p95": 0.263744
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.28288,
+        "p95": 0.287424
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.400096,
+        "p95": 0.454016
+      },
+      "Upscale.FSR1.EASU": {
+        "p50": 0.158976,
+        "p95": 0.160128
+      },
+      "Upscale.FSR1.RCAS": {
+        "p50": 0.04944,
+        "p95": 0.050336
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000128
+      },
+      "Visibility.Motion": {
+        "p50": 0.34672,
+        "p95": 0.357984
+      }
+    },
+    "render_size": [
+      1707,
+      960
+    ],
+    "scene": "night_interior",
+    "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
+    "triangles": 4628,
+    "warmup": 96
+  }
+]

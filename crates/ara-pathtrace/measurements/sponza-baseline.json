@@ -1,0 +1,35 @@
+{
+  "baseline_settle_frames": 96,
+  "bounces": 12,
+  "camera": {
+    "kind": "look_at",
+    "position": [
+      -11.0,
+      1.7000000476837158,
+      0.0
+    ],
+    "target": [
+      5.0,
+      3.0,
+      0.0
+    ],
+    "vertical_fov": 1.0499999523162842
+  },
+  "convergence": {
+    "mae": 0.4906783756965338,
+    "relative_rmse": 0.010021191750205058,
+    "rmse": 1.119921115592049
+  },
+  "error": {
+    "mae": 5.383609815730641,
+    "relative_rmse": 0.27120787464396645,
+    "rmse": 30.30891266224942
+  },
+  "ev100": 10,
+  "reference_samples": 4096,
+  "scene_hash": "2b9b176b7d424e3b6c92a79d316ed0e936364eeadf5903e77924a8a0bb6831c0",
+  "size": [
+    640,
+    360
+  ]
+}

@@ -193,7 +193,8 @@ pub fn camera() -> CameraSpec {
         vertical_fov: 0.9,
     }
 }
-fn mat(colour: [f32; 3], roughness: f32, metal: f32) -> Material {
+/// Fixture surface with linear albedo, GGX roughness and metalness.
+pub(super) fn mat(colour: [f32; 3], roughness: f32, metal: f32) -> Material {
     Material {
         base_color: [colour[0], colour[1], colour[2], 1.],
         emissive_roughness: [0., 0., 0., roughness],
@@ -201,7 +202,15 @@ fn mat(colour: [f32; 3], roughness: f32, metal: f32) -> Material {
         ..Material::default()
     }
 }
-fn quad(entity: u64, name: &str, origin: Vec3, u: Vec3, v: Vec3, material: usize) -> Mesh {
+/// Fixture quad with winding and vertex normals along u cross v.
+pub(super) fn quad(
+    entity: u64,
+    name: &str,
+    origin: Vec3,
+    u: Vec3,
+    v: Vec3,
+    material: usize,
+) -> Mesh {
     let normal = u.cross(v).normalize();
     let tangent = u.normalize();
     let vertices = [

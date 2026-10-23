@@ -12,6 +12,8 @@ workspace = true
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-render = { path = "../ara-render" }
 ara-gpu = { path = "../ara-gpu" }
+ara-terrain = { path = "../ara-terrain" }
+ara-landscape = { path = "../ara-landscape" }
 anyhow = "1"
 glam = "0.30"
 image = { version = "0.25", default-features = false, features = ["png"] }

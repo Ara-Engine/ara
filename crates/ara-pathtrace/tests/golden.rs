@@ -23,6 +23,55 @@ fn settings() -> Settings {
         },
     }
 }
+
+#[test]
+fn landscape_and_emissive_only_room_match_fixed_exposure_goldens() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut gpu = VulkanDevice::new(&[], root.join(".sn/robust-test-cache"))?;
+    for outdoor in [true, false] {
+        let name = if outdoor {
+            "outdoor_day"
+        } else {
+            "night_interior"
+        };
+        let scene = if outdoor {
+            ara_pathtrace::robust_scenes::outdoor()?
+        } else {
+            ara_pathtrace::robust_scenes::night()
+        };
+        let camera = ara_pathtrace::robust_scenes::camera(outdoor);
+        let mut s = settings();
+        s.render_size = [480, 270];
+        s.display_size = s.render_size;
+        s.post.ev100 = Some(if outdoor { 12. } else { 5. });
+        s.post.tone_mapper = ara_render_fidelity::ToneMapper::PbrNeutral;
+        let mut view = FidelityView::new(&mut gpu, &scene, s, None)?;
+        for tick in 0..256 {
+            view.render(
+                &mut gpu,
+                &FrameInput {
+                    camera: &camera,
+                    tick,
+                    delta_seconds: 1. / 60.,
+                    reset: false,
+                    lighting_changed: false,
+                    deterministic: false,
+                },
+            )?;
+        }
+        let image = view.capture(&mut gpu)?;
+        let golden = image::open(root.join(format!("tests/goldens/{name}.png")))?.to_rgba8();
+        let comparison = compare(&image, &golden, 0.005)?;
+        ensure!(
+            comparison.passed,
+            "{name}: golden 1-SSIM {}",
+            comparison.score
+        );
+        view.destroy(&mut gpu)?;
+    }
+    gpu.assert_clean()?;
+    Ok(())
+}
 #[test]
 fn goldens_reproduce_and_scene_updates_preserve_identity_and_lifetimes() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
