@@ -24,6 +24,9 @@ Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
 Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
 history. Light edits reset lighting history and reduce probe hysteresis.
+Direct radiance has separate temporal history; incident radiance uses a wavelet
+filter with fresh-history variance bootstrapping. Checkerboard transport must
+repair invalid history before temporal resolve. Reference targets stay RGBA32F.
 Exposure is applied once after reconstruction. Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.

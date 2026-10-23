@@ -15,7 +15,7 @@ BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
 BIND(4) RaytracingAccelerationStructure acceleration[16]:register(t0,space4);
 #endif
 static const float PI=3.141592653589793;
-static const uint WORLD=0,NORMAL=2,BASE=4,MOTION=5,DEPTH=6,RAW=7,HISTORY=8,MOMENTS=10,FILTER0=12,FILTER1=13,BLOOM0=14,BLOOM1=15,POST=16,UPSCALED=17,OUTPUT=18;
+static const uint WORLD=0,NORMAL=2,BASE=4,MOTION=5,DEPTH=6,RAW=7,HISTORY=8,MOMENTS=10,FILTER0=12,FILTER1=13,BLOOM0=14,BLOOM1=15,POST=16,UPSCALED=17,OUTPUT=18,DIRECT=21,DIRECT_HISTORY=22;
 struct Frame {
     float4x4 inverseVp;float4x4 vp;float4x4 previousVp;
     float4 camera;float4 previousCamera;uint4 sizes;uint4 scene;
@@ -71,7 +71,10 @@ bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,o
     hit=(Hit)0;hit.distance=maximum;
 #ifndef RASTER
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
-    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> q;q.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],0,255,ray);
+    // Fully opaque extractions bypass candidate material loads. Masked/blended
+    // scenes retain candidate evaluation, including stochastic alpha transmission.
+    uint flags=buffers[NonUniformResourceIndex(f.scene.x)].Load(16)!=0?RAY_FLAG_FORCE_OPAQUE:RAY_FLAG_FORCE_NON_OPAQUE;
+    RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],flags,255,ray);
     while(q.Proceed()){if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),rng))q.CommitNonOpaqueTriangleHit();}
     if(q.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)return false;
     hit.distance=q.CommittedRayT();hit.id=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();hit.bary=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();return true;
@@ -84,23 +87,35 @@ bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,o
     }}return found;
 #endif
 }
+// Offset on the geometric side used by the outgoing ray, never along a perturbed normal.
+float3 rayOrigin(Surface s,float3 outgoing){return s.position+s.geometricNormal*(dot(outgoing,s.geometricNormal)>=0?0.001:-0.001);}
+float smith(float cosine,float a2){return 2*cosine/max(cosine+sqrt(a2+(1-a2)*cosine*cosine),1e-6);}
+// Heitz 2018 visible-normal sampling: bounded weights at grazing angles.
+float3 visibleGgx(Surface s,float3 v,inout uint rng){
+    float3 t=normalize(cross(abs(s.normal.y)<0.99?float3(0,1,0):float3(1,0,0),s.normal)),b=cross(s.normal,t);
+    float a=s.roughness*s.roughness;float3 vh=normalize(float3(a*dot(v,t),a*dot(v,b),max(dot(v,s.normal),1e-5)));
+    float lensq=dot(vh.xy,vh.xy);float3 t1=lensq>0?float3(-vh.y,vh.x,0)/sqrt(lensq):float3(1,0,0);float3 t2=cross(vh,t1);
+    float r=sqrt(random(rng)),phi=2*PI*random(rng),x=r*cos(phi),y=r*sin(phi),blend=0.5*(1+vh.z);
+    y=lerp(sqrt(max(0,1-x*x)),y,blend);float3 nh=x*t1+y*t2+sqrt(max(0,1-x*x-y*y))*vh;
+    float3 h=normalize(float3(a*nh.xy,max(nh.z,0)));return t*h.x+b*h.y+s.normal*h.z;
+}
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
 float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
     float nv=max(dot(s.normal,v),1e-5),nl=max(dot(s.normal,l),0.);float3 h=normalize(v+l);float nh=max(dot(s.normal,h),0.),vh=max(dot(v,h),1e-5);
     float a=s.roughness*s.roughness,a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
     float g=2*nv/(nv+sqrt(a2+(1-a2)*nv*nv))*2*nl/max(nl+sqrt(a2+(1-a2)*nl*nl),1e-6);
     float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
-    pdf=lerp(nl/PI,d*nh/(4*vh),mixture);
+    pdf=lerp(nl/PI,d*smith(nv,a2)/(4*nv),mixture);
     return ((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6))*nl;
 }
 float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
     float3 l;float choice=random(rng);if(choice<lerp(0.5,1.,s.metal)){
-        float u=random(rng),phi=random(rng)*2*PI;float a=s.roughness*s.roughness;float ct=sqrt((1-u)/(1+(a*a-1)*u));float3 h=basis(s.normal,float3(sqrt(1-ct*ct)*cos(phi),sqrt(1-ct*ct)*sin(phi),ct));l=reflect(-v,h);
+        l=reflect(-v,visibleGgx(s,v,rng));
     }else l=cosineDirection(s.normal,rng);
     float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }
 float3 direct(Frame f,Surface s,float3 v,inout uint rng){
-    float3 origin=s.position+s.normal*0.003;Hit hit;float pdf;float3 sum=0;
+    float3 origin=rayOrigin(s,s.normal);Hit hit;float pdf;float3 sum=0;
     float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng);
     if(dot(s.normal,l)>0 && !trace(f,origin,l,10000,rng,hit))sum+=evaluate(s,v,l,pdf)*f.sunLux.rgb;
     uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
@@ -118,18 +133,43 @@ float3 direct(Frame f,Surface s,float3 v,inout uint rng){
 float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
 float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
 float4 probeLoad(uint buffer,uint probe,uint texel){return buffers[NonUniformResourceIndex(buffer)].Load<float4>((probe*102+texel)*16);}
+// Fold bilinear taps across octahedral edges, including the shared corner.
+uint octIndex(int2 p,int size){
+    if(p.x<0){p.x=-p.x-1;p.y=size-1-p.y;}else if(p.x>=size){p.x=2*size-1-p.x;p.y=size-1-p.y;}
+    if(p.y<0){p.y=-p.y-1;p.x=size-1-p.x;}else if(p.y>=size){p.y=2*size-1-p.y;p.x=size-1-p.x;}
+    return uint(p.y*size+p.x);
+}
+float4 probeSample(uint buffer,uint probe,float3 direction,int size,uint offset){
+    float2 uv=octEncode(direction)*size-0.5;int2 p=int2(floor(uv));float2 a=frac(uv);
+    return lerp(lerp(probeLoad(buffer,probe,offset+octIndex(p,size)),probeLoad(buffer,probe,offset+octIndex(p+int2(1,0),size)),a.x),
+                lerp(probeLoad(buffer,probe,offset+octIndex(p+int2(0,1),size)),probeLoad(buffer,probe,offset+octIndex(p+1,size)),a.x),a.y);
+}
 float3 probePosition(Frame f,uint index){uint x=index%f.counts.x,y=(index/f.counts.x)%f.counts.y,z=index/(f.counts.x*f.counts.y);return f.origin.xyz+float3(x,y,z)*f.spacing.xyz;}
-float3 irradiance(Frame f,float3 position,float3 normal,uint probeBuffer){
-    float3 biased=position+normal*0.02;float3 grid=(biased-f.origin.xyz)/f.spacing.xyz;int3 base=clamp(int3(floor(grid)),int3(0),int3(f.counts.xyz)-2);float3 alpha=saturate(grid-base);float3 sum=0;float total=0;
+float3 irradianceBiased(Frame f,float3 position,float3 normal,uint probeBuffer,float3 bias){
+    float3 biased=position+bias;float3 grid=(biased-f.origin.xyz)/f.spacing.xyz;int3 base=clamp(int3(floor(grid)),int3(0),int3(f.counts.xyz)-2);float3 alpha=saturate(grid-base);float3 sum=0;float total=0;
     for(uint k=0;k<8;k++){
         uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*f.counts.y+p.y)*f.counts.x+p.x;
         float4 meta=probeLoad(probeBuffer,id,100);if(meta.w<0.5)continue;
         float3 delta=biased-probePosition(f,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
-        uint2 at=min(uint2(octEncode(dir)*8),uint2(7));float2 moments=probeLoad(probeBuffer,id,36+at.y*8+at.x).xy;
+        float2 moments=probeSample(probeBuffer,id,dir,8,36).xy;
         float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
         float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
-        uint2 ir=min(uint2(octEncode(normal)*6),uint2(5));sum+=probeLoad(probeBuffer,id,ir.y*6+ir.x).rgb*weight;total+=weight;
+        sum+=probeSample(probeBuffer,id,normal,6,0).rgb*weight;total+=weight;
     }return total>1e-6?sum/total:float3(0);
 }
-float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 F=fresnel(max(dot(s.normal,v),0),lerp(float3(0.04),s.albedo,s.metal));return irradiance(f,s.position,s.normal,probes)*s.albedo*(1-s.metal)*(1-F)/PI;}
+float3 irradiance(Frame f,float3 position,float3 normal,uint probeBuffer){return irradianceBiased(f,position,normal,probeBuffer,normal*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2));}
+float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 gn=dot(s.geometricNormal,v)>0?s.geometricNormal:-s.geometricNormal;float3 bias=gn*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2)+v*0.05;float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04),s.albedo,s.metal));return irradianceBiased(f,s.position,s.normal,probes,bias)*s.albedo*(1-s.metal)*(1-F)/PI;}
 float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.sizes.xy);float4 p=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,1,1));return normalize(p.xyz/p.w-f.camera.xyz);}
+
+// Shared validity is also used by checkerboard transport, so uncovered pixels
+// always receive a fresh ray rather than an uninitialized reconstruction sample.
+bool reproject(Frame f,uint2 p,out float2 uv,out int2 at){
+    uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p),normal=pixel(f,NORMAL+slot,p),motion=pixel(f,MOTION,p);
+    uv=(float2(p)+0.5)/float2(f.sizes.xy)+motion.xy+(f.jitter.zw-f.jitter.xy)/float2(f.sizes.xy);at=int2(uv*f.sizes.xy);
+    if(f.temporal.x>0 || f.temporal.y>0 || world.w==0 || any(uv<=0) || any(uv>=1))return false;
+    float4 oldWorld=pixel(f,WORLD+1-slot,at),oldNormal=pixel(f,NORMAL+1-slot,at);
+    float3 currentDirect=pixel(f,DIRECT,p).rgb,oldDirect=pixel(f,DIRECT_HISTORY+1-slot,at).rgb;
+    bool illumination=length(currentDirect-oldDirect)<=max(0.2,length(oldDirect)*0.25);
+    return illumination && oldWorld.w==world.w && abs(length(oldWorld.xyz-f.previousCamera.xyz)-motion.z)<max(0.015,motion.z*0.01)
+        && dot(normal.xyz,oldNormal.xyz)>0.92 && abs(normal.w-oldNormal.w)<0.1;
+}
