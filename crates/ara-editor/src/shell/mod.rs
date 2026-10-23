@@ -136,7 +136,22 @@ impl Shell {
         let mut markup = String::from("<ui id='editor'>");
         markup.push_str("<panel id='topbar' class='topbar'>");
         markup.push_str(&format!("<text id='brand' class='brand' text='ara' /><text id='project-name' text='{}' /><text id='project-divider' class='muted' text='/' /><text id='scene-name' class='muted' text='{}' /><panel id='top-spacer' style='flex-grow:1' />",escape(&project_name(editor)),escape(editor.host.store().workspace().path_of(&editor.state.doc).unwrap_or("Scene"))));
-        markup.push_str("<button id='play' class='quiet' text='Play' disabled='true' description='Play requires ara-sim. The editor will launch a disposable player process when it is available.' /><button id='pause' class='quiet' text='Pause' disabled='true' description='No active play session' /><button id='step' class='quiet' text='Step' disabled='true' description='No active play session' /><panel id='top-spacer2' style='flex-grow:1' />");
+        // Play opens the scene in a pooled ara-player window; controls act on the latest world.
+        for (id, text, method, params) in [
+            ("play", "Play", "play.start", json!({"window": true})),
+            ("pause", "Pause", "play.pause", json!({})),
+            ("resume", "Resume", "play.resume", json!({})),
+            ("step", "Step", "play.step", json!({"ticks": 1})),
+            ("stop", "Stop", "play.stop", json!({})),
+        ] {
+            markup.push_str(&self.bind_button(
+                id,
+                text,
+                Binding::Protocol(method, params),
+                "quiet",
+            ));
+        }
+        markup.push_str("<panel id='top-spacer2' style='flex-grow:1' />");
         markup.push_str(&self.bind_button(
             "palette-open",
             "Commands  Ctrl K",

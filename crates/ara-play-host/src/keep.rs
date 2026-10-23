@@ -16,8 +16,14 @@ impl PlayService {
         cx: &mut Cx<'_>,
         p: PlayKeepParams,
     ) -> Result<Value, Vec<Diagnostic>> {
-        let diff = self.call(&p.world, method::DIFF, json!({}), false)?;
-        let scene = self.world(&p.world)?.scene.clone();
+        let world = match p.world.clone() {
+            Some(world) => world,
+            None => self
+                .latest()
+                .ok_or_else(|| fail(codes::UNKNOWN_WORLD, "no play world is running"))?,
+        };
+        let diff = self.call(&world, method::DIFF, json!({}), false)?;
+        let scene = self.world(&world)?.scene.clone();
         let changes: Vec<ara_runtime::live::Change> =
             serde_json::from_value(diff["changes"].clone())
                 .map_err(|e| fail(codes::PLAY, e.to_string()))?;
@@ -86,7 +92,7 @@ impl PlayService {
             session,
             why: Some(
                 p.why
-                    .unwrap_or_else(|| format!("Keep changes from {}", p.world)),
+                    .unwrap_or_else(|| format!("Keep changes from {world}")),
             ),
             dry_run: None,
             base: None,

@@ -2,7 +2,7 @@
 
 The owner side of Play: a `ara_host::Service` serving `play.*` (MCP `ara_play`) and
 `test.run` (MCP `ara_test`). Registered by the `ara` daemon (`ara serve`, `ara mcp`
-when it becomes the daemon). Depends on ara-host, ara-play, ara-asset, ara-runtime
+when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-host, ara-play, ara-asset, ara-runtime
 (component schemas only at runtime; no simulation runs here).
 
 ## Public API
@@ -25,7 +25,8 @@ tickHz, hotReload}` → `{world: "play:N", players[], bootMs, prepareMs, transpo
 `stop`, `pause`, `resume`, `step`, `until`, `input`, `timescale`, `inspect`, `read`,
 `patch` (acked after the applying tick), `capture` (hash, optional labelled PNG),
 `watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`,
-`debug.crash`, `pool`, `status`. Pause/resume/step/input/patch/timescale broadcast to
+`debug.crash`, `pool`, `status`. `world` defaults to the most recent world (editor
+toolbar bindings rely on it). Pause/resume/step/input/patch/timescale broadcast to
 every player of a world; reads go to the authority.
 
 - `play.keep`: diff → drop `driven` values unless `includeDriven` → `prev` check

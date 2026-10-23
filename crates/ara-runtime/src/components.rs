@@ -34,8 +34,12 @@ pub struct MeshRenderer {
     pub size: [f32; 3],
     /// Imported model (`@path#id` of a glTF/FBX source). Its meshes are drawn instead
     /// of the shape; skinned meshes follow this entity's Animator.
+    #[ara(alias = "mesh")]
+    #[serde(alias = "mesh")]
     pub model: Option<AssetRef>,
     /// Linear base color multiplier and opacity.
+    #[ara(alias = "tint")]
+    #[serde(alias = "tint")]
     pub color: Color,
     /// Perceptual roughness.
     #[ara(default = 0.6, range(min = 0, max = 1))]

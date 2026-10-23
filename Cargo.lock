@@ -558,6 +558,7 @@ dependencies = [
  "ara-mcp",
  "ara-ops",
  "ara-platform",
+ "ara-play-host",
  "ara-proto",
  "ara-render",
  "ara-rpc",

@@ -178,6 +178,14 @@ impl PlayService {
             .ok_or_else(|| fail(codes::ASSETS, "asset pipeline unavailable"))
     }
 
+    /// The most recently started world.
+    pub(crate) fn latest(&self) -> Option<String> {
+        self.worlds
+            .keys()
+            .max_by_key(|id| id.trim_start_matches("play:").parse::<u32>().unwrap_or(0))
+            .cloned()
+    }
+
     fn world(&mut self, id: &str) -> Result<&mut World, Vec<Diagnostic>> {
         let world = self.worlds.get_mut(id).ok_or_else(|| {
             fail(
@@ -683,7 +691,12 @@ impl Service for PlayService {
         method: &str,
         params: Value,
     ) -> Result<Value, Vec<Diagnostic>> {
-        let world_of = |params: &Value| params["world"].as_str().unwrap_or_default().to_owned();
+        let latest = self.latest().unwrap_or_default();
+        let world_of = |params: &Value| {
+            params["world"]
+                .as_str()
+                .map_or_else(|| latest.clone(), str::to_owned)
+        };
         match method {
             "play.start" => {
                 let p: PlayStartParams = parse(params)?;

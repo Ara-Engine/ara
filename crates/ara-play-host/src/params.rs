@@ -35,8 +35,8 @@ pub struct PlayStartParams {
 pub struct WorldParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID from `play.start` (`play:1`).
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
 }
 
 /// Params of `play.step`.
@@ -46,8 +46,8 @@ pub struct WorldParams {
 pub struct PlayStepParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Fixed ticks to run as fast as possible.
     pub ticks: u32,
     /// Action injections `{action, value, holdTicks, afterTicks, player}` relative to the first tick.
@@ -61,8 +61,8 @@ pub struct PlayStepParams {
 pub struct PlayInputParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Action injections `{action, value, holdTicks, afterTicks, player}` for the next tick.
     pub inputs: Vec<Value>,
 }
@@ -74,8 +74,8 @@ pub struct PlayInputParams {
 pub struct PlayInspectParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Entity address (`e_fox`).
     pub entity: String,
     /// Components to read; all present when absent.
@@ -89,8 +89,8 @@ pub struct PlayInspectParams {
 pub struct PlayReadParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// `entity.Component.field` paths (`e_fox.Transform.position.z`).
     pub paths: Vec<String>,
 }
@@ -102,8 +102,8 @@ pub struct PlayReadParams {
 pub struct PlayPatchParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Edits `{entity, path, value}` (`{"entity":"e_lamp1","path":"Light.color","value":[1,0,0,1]}`).
     pub sets: Vec<Value>,
 }
@@ -115,8 +115,8 @@ pub struct PlayPatchParams {
 pub struct PlayCaptureParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// PNG to write (also `.marks.png` and `.legend.json`); state hash only when absent.
     pub path: Option<String>,
     /// Width in pixels (default 1280).
@@ -134,8 +134,8 @@ pub struct PlayCaptureParams {
 pub struct PlayWatchParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// `entity.Component.field` paths sampled by step/until.
     pub paths: Vec<String>,
     /// Sampling interval in ticks (default 1).
@@ -149,8 +149,8 @@ pub struct PlayWatchParams {
 pub struct PlayUntilParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// `entity.Component.field` path.
     pub path: String,
     /// `eq`, `ne`, `gt`, `ge`, `lt` or `le`.
@@ -170,8 +170,8 @@ pub struct PlayUntilParams {
 pub struct PlayTimescaleParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Host-time multiplier in [0, 1000]; the fixed dt never changes.
     pub value: f64,
 }
@@ -183,8 +183,8 @@ pub struct PlayTimescaleParams {
 pub struct PlayFileParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Replay file path.
     pub path: String,
 }
@@ -196,8 +196,8 @@ pub struct PlayFileParams {
 pub struct PlayKeepParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// Only these entities.
     pub entities: Option<Vec<String>>,
     /// Only paths starting with one of these (`Light.color`).
@@ -215,8 +215,8 @@ pub struct PlayKeepParams {
 pub struct PlayCrashParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// World ID.
-    pub world: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
     /// `panic`, `access` or `hang`.
     pub kind: String,
 }

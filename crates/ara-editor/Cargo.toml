@@ -20,6 +20,7 @@ ara-json = { path = "../ara-json" }
 ara-mcp = { path = "../ara-mcp" }
 ara-ops = { path = "../ara-ops" }
 ara-platform = { path = "../ara-platform" }
+ara-play-host = { path = "../ara-play-host" }
 ara-proto = { path = "../ara-proto" }
 ara-render = { path = "../ara-render" }
 ara-rpc = { path = "../ara-rpc" }
