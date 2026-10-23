@@ -332,6 +332,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-nav"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-json",
+ "ara-nav-sys",
+ "ara-schema",
+ "bevy_ecs",
+ "blake3",
+ "postcard",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-nav-sys"
+version = "0.0.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "ara-ops"
 version = "0.0.0"
 dependencies = [
