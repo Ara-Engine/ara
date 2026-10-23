@@ -1,0 +1,60 @@
+{
+  "verified": true,
+  "steps": [
+    {
+      "step": 0,
+      "cpuMs": 0.0118
+    },
+    {
+      "step": 1,
+      "cpuMs": 2.5049
+    },
+    {
+      "step": 2,
+      "cpuMs": 4.0108
+    },
+    {
+      "step": 3,
+      "cpuMs": 2.1018
+    },
+    {
+      "step": 4,
+      "cpuMs": 2.0097
+    },
+    {
+      "step": 5,
+      "cpuMs": 4.4185
+    },
+    {
+      "step": 6,
+      "cpuMs": 71.2906
+    },
+    {
+      "step": 7,
+      "cpuMs": 3.4098
+    },
+    {
+      "step": 8,
+      "cpuMs": 73.5702
+    },
+    {
+      "step": 9,
+      "cpuMs": 68.73020000000001
+    },
+    {
+      "step": 10,
+      "cpuMs": 87.95100000000001
+    }
+  ],
+  "totalMs": 444.82919999999996,
+  "flow": [
+    "hierarchy selection",
+    "unit-aware inspector position",
+    "coalesced simulated gizmo",
+    "keyboard undo",
+    "agent batch via generated MCP",
+    "Agents panel turn",
+    "Revert via UI button",
+    "Escape cancels gesture"
+  ]
+}

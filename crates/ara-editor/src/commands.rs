@@ -1,0 +1,322 @@
+//! Editor-owned content commands; all changes go through EditCtx and the host journal.
+use ara_cmd::{Command, EditCtx, Registry};
+use ara_diag::Diagnostic;
+use ara_schema::{AssetRef, EntityRef, Schema, SchemaDb};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
+
+/// Fallback renderer authoring schema, replaced by the renderer/asset schema at integration.
+#[derive(Schema)]
+#[ara(component, module = "editor")]
+#[allow(dead_code)]
+struct MeshRenderer {
+    /// Optional source glTF; absent uses the editor's unit cube.
+    mesh: Option<AssetRef>,
+    /// Linear surface colour.
+    #[ara(default=[0.32,0.42,0.53,1.])]
+    tint: ara_schema::Color,
+}
+/// Fallback local-light authoring schema.
+#[derive(Schema)]
+#[allow(dead_code)] // Reflected authoring enum; values are stored in documents.
+enum LightKind {
+    /// Omnidirectional local light.
+    Point,
+    /// Local cone light.
+    Spot,
+    /// Sun with illuminance rather than luminous flux.
+    Directional,
+}
+/// Fallback local-light authoring schema.
+#[derive(Schema)]
+#[ara(component, module = "editor")]
+#[allow(dead_code)]
+struct Light {
+    /// Point, spot or directional light.
+    kind: LightKind,
+    /// Luminous flux, or illuminance for a directional light.
+    #[ara(default = 1000., range(min = 0.))]
+    intensity: f32,
+    /// Influence radius in metres.
+    #[ara(default=10.,unit=Meters,range(min=0.01))]
+    range: f32,
+    /// Linear RGB light colour.
+    #[ara(default=[1,1,1])]
+    color: [f32; 3],
+}
+pub(crate) fn register(registry: &mut Registry, db: &mut SchemaDb) {
+    crate::fixes::register(registry, db);
+    if db.get("MeshRenderer").is_none() {
+        db.register::<MeshRenderer>();
+    }
+    if db.get("Light").is_none() {
+        db.register::<Light>();
+    }
+    registry
+        .command::<Duplicate>(db)
+        .command::<Unpack>(db)
+        .command::<InstantiateMesh>(db);
+}
+/// Duplicate a resolved subtree, assigning new stable IDs and preserving its hierarchy.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DuplicateParams {
+    /// Root entity address.
+    entity: EntityRef,
+}
+struct Duplicate;
+impl Command for Duplicate {
+    type Params = DuplicateParams;
+    type Output = Value;
+    const NAME: &'static str = "editor.entity.duplicate";
+    const SUMMARY: &'static str = "Duplicate an entity subtree as an independent copy.";
+    fn examples() -> Vec<Value> {
+        vec![json!({"entity":"e_crate001"})]
+    }
+    fn run(cx: &mut EditCtx<'_, '_>, p: DuplicateParams) -> Result<Value, Diagnostic> {
+        cx.read().target(&p.entity.0)?;
+        let resolved = cx.read().resolved();
+        let source = descendants(&resolved, &p.entity.0);
+        let mut ids = BTreeMap::new();
+        for old in &source {
+            ids.insert(old.clone(), cx.new_id(None, "e")?);
+        }
+        for old in &source {
+            let entity = &resolved[old];
+            let mut record = entity.record.clone();
+            let parent = entity.parent.as_ref().map(|p| {
+                ids.get(p)
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| p.clone())
+            });
+            if let Some(parent) = parent {
+                record.insert("parent".into(), parent.into());
+            }
+            if let Some(order) = &entity.order {
+                record.insert("order".into(), order.clone().into());
+            }
+            // References inside the copied subtree follow the new IDs.
+            remap(cx.read().schema(), &mut record, &ids);
+            if old == &p.entity.0 {
+                let name = record
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Entity");
+                record.insert("name".into(), format!("{name} copy").into());
+            }
+            cx.create(ids[old].clone(), record)?;
+        }
+        Ok(json!({"id":ids.get(&p.entity.0),"count":ids.len()}))
+    }
+}
+fn descendants(resolved: &ara_doc::prefab::Resolved, root: &str) -> Vec<String> {
+    let mut out = vec![root.to_owned()];
+    let mut i = 0;
+    while i < out.len() {
+        let id = out[i].as_str();
+        let children: Vec<_> = resolved
+            .iter()
+            .filter(|(_, e)| e.parent.as_deref() == Some(id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        out.extend(children);
+        i += 1;
+    }
+    out
+}
+fn remap(db: &SchemaDb, record: &mut ara_doc::Record, ids: &BTreeMap<String, ara_doc::RecordId>) {
+    fn visit(
+        db: &SchemaDb,
+        ty: &ara_schema::ValueType,
+        value: &mut Value,
+        ids: &BTreeMap<String, ara_doc::RecordId>,
+    ) {
+        use ara_schema::ValueType;
+        match (ty, value) {
+            (ValueType::Entity, Value::String(id)) => {
+                if let Some(mapped) = ids.get(id) {
+                    *id = mapped.to_string();
+                }
+            }
+            (ValueType::Option(inner), value) if !value.is_null() => visit(db, inner, value, ids),
+            (ValueType::Named(name), Value::Object(object)) => {
+                if let Some(desc) = db.get(name) {
+                    for field in desc.fields() {
+                        if let Some(value) = object.get_mut(&field.name) {
+                            visit(db, &field.ty, value, ids);
+                        }
+                    }
+                }
+            }
+            (ValueType::List(inner) | ValueType::Keyed(inner), Value::Array(values)) => {
+                for value in values {
+                    visit(db, inner, value, ids);
+                }
+            }
+            (ValueType::Map(inner), Value::Object(values)) => {
+                for value in values.values_mut() {
+                    visit(db, inner, value, ids);
+                }
+            }
+            _ => {}
+        }
+    }
+    for (component, value) in record
+        .iter_mut()
+        .filter(|(name, _)| ara_doc::is_component_key(name))
+    {
+        visit(
+            db,
+            &ara_schema::ValueType::Named(component.clone()),
+            value,
+            ids,
+        );
+    }
+}
+/// Convert a prefab instance into ordinary records while preserving its resolved values.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UnpackParams {
+    /// Root prefab instance address.
+    entity: EntityRef,
+}
+struct Unpack;
+impl Command for Unpack {
+    type Params = UnpackParams;
+    type Output = Value;
+    const NAME: &'static str = "editor.prefab.unpack";
+    const SUMMARY: &'static str =
+        "Unpack a prefab instance, preserving stable root identity and undo.";
+    fn examples() -> Vec<Value> {
+        vec![json!({"entity":"e_crate001"})]
+    }
+    fn run(cx: &mut EditCtx<'_, '_>, p: UnpackParams) -> Result<Value, Diagnostic> {
+        let id = ara_doc::RecordId::parse(&p.entity.0).map_err(crate::invalid)?;
+        let original = cx
+            .read()
+            .doc()
+            .record(id.as_str())
+            .ok_or_else(|| crate::invalid("instance not found"))?;
+        if ara_doc::prefab_of(original).is_none() {
+            return Err(crate::invalid("select a prefab instance to unpack"));
+        }
+        let resolved = cx.read().resolved();
+        let root = resolved
+            .get(&p.entity.0)
+            .ok_or_else(|| crate::invalid("prefab root not resolved"))?;
+        let mut record = root.record.clone();
+        if let Some(parent) = &root.parent {
+            record.insert("parent".into(), parent.clone().into());
+        }
+        if let Some(order) = &root.order {
+            record.insert("order".into(), order.clone().into());
+        }
+        let source: Vec<_> = resolved
+            .keys()
+            .filter(|addr| addr.starts_with(&format!("{}/", p.entity.0)))
+            .cloned()
+            .collect();
+        let mut ids = BTreeMap::from([(p.entity.0.clone(), id.clone())]);
+        for old in &source {
+            ids.insert(old.clone(), cx.new_id(None, "e")?);
+        }
+        remap(cx.read().schema(), &mut record, &ids);
+        cx.delete(&id)?;
+        cx.create(id, record)?;
+        for old in &source {
+            let entity = &resolved[old];
+            let mut record = entity.record.clone();
+            if let Some(parent) = &entity.parent {
+                record.insert(
+                    "parent".into(),
+                    ids.get(parent)
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| parent.clone())
+                        .into(),
+                );
+            }
+            if let Some(order) = &entity.order {
+                record.insert("order".into(), order.clone().into());
+            }
+            remap(cx.read().schema(), &mut record, &ids);
+            cx.create(ids[old].clone(), record)?;
+        }
+        // Authored children attached inside an instance must follow the unpacked address.
+        let attached: Vec<_> = cx
+            .read()
+            .doc()
+            .records()
+            .iter()
+            .filter_map(|(id, r)| {
+                let p = ara_doc::parent_of(r)?;
+                ids.get(p).map(|new| (id.clone(), new.to_string()))
+            })
+            .collect();
+        for (id, parent) in attached {
+            let order = cx
+                .read()
+                .doc()
+                .record(id.as_str())
+                .and_then(ara_doc::order_key);
+            cx.move_to(&id, Some(parent), order)?;
+        }
+        Ok(json!({"entity":p.entity.0,"unpacked":ids.len()}))
+    }
+}
+/// Instantiate a source mesh as one Transform + MeshRenderer entity.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InstantiateMeshParams {
+    /// Stable mesh reference.
+    mesh: AssetRef,
+    /// Optional display name.
+    name: Option<String>,
+    /// Optional parent.
+    parent: Option<EntityRef>,
+    /// Placement in parent-local metres.
+    #[ara(unit=Meters)]
+    position: Option<[f32; 3]>,
+}
+struct InstantiateMesh;
+impl Command for InstantiateMesh {
+    type Params = InstantiateMeshParams;
+    type Output = Value;
+    const NAME: &'static str = "editor.mesh.instantiate";
+    const SUMMARY: &'static str = "Place a mesh asset into the scene as one undoable command.";
+    fn examples() -> Vec<Value> {
+        vec![json!({"mesh":"@meshes/crate.glb#me_crate001"})]
+    }
+    fn run(cx: &mut EditCtx<'_, '_>, p: InstantiateMeshParams) -> Result<Value, Diagnostic> {
+        let mut record = ara_doc::Record::new();
+        record.insert(
+            "name".into(),
+            p.name.unwrap_or_else(|| "Mesh".into()).into(),
+        );
+        if let Some(parent) = p.parent {
+            cx.read().target(&parent.0)?;
+            record.insert("parent".into(), parent.0.into());
+        }
+        record.insert(
+            "Transform".into(),
+            json!({"position":p.position.unwrap_or([0.;3])}),
+        );
+        record.insert("MeshRenderer".into(), json!({"mesh":p.mesh.0}));
+        let id = cx.new_id(None, "e")?;
+        cx.create(id.clone(), record)?;
+        Ok(json!({"id":id}))
+    }
+}
+/// Resolve a source path under the project; traversal and symlinks may not escape it.
+pub(crate) fn project_path(root: &Path, relative: &str) -> anyhow::Result<PathBuf> {
+    let path = std::fs::canonicalize(root.join(relative))?;
+    let root = std::fs::canonicalize(root)?;
+    anyhow::ensure!(path.starts_with(root), "asset source escapes the project");
+    Ok(path)
+}

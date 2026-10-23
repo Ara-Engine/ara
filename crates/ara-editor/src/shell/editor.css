@@ -1,0 +1,46 @@
+ui { width:100%; height:100%; background:var(--background); color:var(--foreground); font-size:13px; gap:1px; }
+panel { gap:0px; min-width:0px; min-height:0px; }
+text { flex-shrink:0; white-space:nowrap; }
+.topbar { height:44px; flex-shrink:0; flex-direction:row; align-items:center; padding:6px; gap:12px; background:var(--background); }
+.brand { font-size:22px; color:var(--foreground); width:40px; }
+.muted { color:var(--muted-foreground); }
+.success { color:var(--success-foreground); }
+.warning { color:var(--warning-foreground); }
+.destructive { color:var(--destructive-foreground); }
+.accent { color:var(--accent); }
+.dock { flex-grow:1; background:var(--card); overflow:hidden; }
+.tabbar { height:34px; flex-shrink:0; flex-direction:row; padding:3px; gap:3px; background:var(--background); }
+.tab { height:28px; font-size:12px; padding:4px; background:var(--background); border-width:0px; border-radius:4px; }
+.tab-selected { background:var(--card); color:var(--foreground); }
+.toolbar { height:34px; flex-shrink:0; flex-direction:row; align-items:center; padding:4px; gap:5px; }
+.body { flex-grow:1; padding:8px; gap:7px; overflow:hidden; }
+.row { flex-direction:row; align-items:center; gap:6px; min-height:28px; }
+.field-row { gap:3px;  }
+.field-label { font-size:12px; color:var(--muted-foreground); }
+.badge { font-size:10px; color:var(--muted-foreground); }
+.component { height:30px; flex-shrink:0; flex-direction:row; align-items:center; gap:6px; }
+.heading { font-size:13px; }
+.section { padding:8px; gap:7px; background:var(--muted); border-radius:6px; }
+.statusbar { height:25px; flex-shrink:0; padding:3px; flex-direction:row; gap:16px; background:var(--background); font-size:11px; }
+button { height:28px; flex-shrink:0; padding:4px; background:var(--secondary); color:var(--foreground); font-size:12px; border-radius:4px; border-width:1px; border-color:var(--border); white-space:nowrap; }
+button:hover { background:var(--accent-surface); }
+button:active { background:var(--primary); color:var(--primary-foreground); }
+button:focus { border-color:var(--ring); }
+button:disabled { color:var(--muted-foreground); }
+.quiet { background:var(--background); border-width:0px; }
+.small { height:24px; font-size:11px; padding:3px; }
+.selected { background:var(--accent-surface); border-color:var(--accent); }
+field { min-width:0px; height:28px; flex-shrink:0; padding:4px; background:var(--background); color:var(--foreground); font-size:12px; border-radius:4px; border-width:1px; border-color:var(--input); overflow:hidden; }
+field:focus { border-color:var(--ring); }
+toggle { height:28px; padding:4px; background:var(--secondary); color:var(--foreground); }
+slider { height:24px; background:var(--secondary); color:var(--accent); }
+dropdown { height:28px; padding:4px; background:var(--secondary); color:var(--foreground); }
+scroll { overflow:hidden; }
+.virtual-row { height:26px; padding:3px; background:var(--card); border-width:0px; border-radius:0px; }
+.virtual-row:hover { background:var(--accent-surface); }
+.virtual-row:focus { background:var(--accent-surface); }
+.overlay { position:absolute; left:0px; top:0px; width:100%; height:100%; background:var(--background); }
+.palette { position:absolute; left:0px; top:0px; width:52%; height:70%; padding:14px; gap:8px; background:var(--card); border-color:var(--border); border-width:1px; border-radius:10px; overflow:hidden; }
+.context { position:absolute; left:0px; top:0px; width:220px; padding:6px; gap:4px; background:var(--card); border-width:1px; border-color:var(--border); border-radius:6px; }
+.tooltip { position:absolute; left:0px; top:0px; width:320px; padding:8px; background:var(--card); border-width:1px; border-color:var(--border); border-radius:6px; }
+.tooltip-copy { white-space:normal; }

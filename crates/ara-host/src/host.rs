@@ -274,6 +274,11 @@ impl Host {
     pub fn store(&self) -> &Store {
         &self.st.store
     }
+    /// Per-entity review state for one transaction, keyed by `doc/entity`.
+    /// Editor overlays read the same state that `review.list/accept/revert` use.
+    pub fn review_entities(&self, txn: &TxnId) -> Option<&BTreeMap<String, ReviewStatus>> {
+        self.st.review.entities(txn)
+    }
 
     /// The project root.
     pub fn root(&self) -> &Path {
