@@ -119,6 +119,23 @@ factor for the named/indexed `emissiveMaterials` (empty targets all), then
 Procedural shapes retain emitted-radiance semantics. Invalid node/primitive or
 material selectors report `ARA7310`; invalid geometry selections show a placeholder.
 
+`materialOverrides` replaces individual primitive materials with native surface
+graphs or `.materialinstance` assets. Slot numbers are relative to the selected
+subtree before `primitive` filtering; procedural shapes have slot zero.
+
+```powershell
+ara do property.set --doc levels/yard.scene --args '{"entity":"e_lamp","path":"MeshRenderer.materialOverrides","value":[{"primitive":0,"material":"@materials/paint.graph#gr_paint"}]}' --why 'Use the native paint material'
+```
+
+The same MCP call is `ara_apply` with `doc: "levels/yard.scene"` and a
+`property.set` command containing those arguments. Graph defaults and typed
+instance values compile at content boundaries; failed reloads retain the last
+good material. Unsupported reachable expressions report their graph/node identity.
+PBR constants, affine UVs, normal strength, RGB samples, shared ORM channels,
+base-color alpha masks and transmission lower without baking a new glTF.
+Graph color samples filter raw UNORM before sRGB decoding; data/alpha stay raw.
+The Basic renderer shares one UV stream; fidelity consumes per-slot coordinates.
+
 `terrain.raise`, `terrain.paint` and `foliage.exclude` accept an optional `id`.
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.
 MCP's `as` binds a batch symbol in the same way as `entity.create`. Newly touched

@@ -55,6 +55,8 @@ pub struct Draw {
     pub emissive: [f32; 3],
     /// Replaces an imported material's emissive factor before multiplying `emissive`.
     pub emissive_factor: Option<[f32; 3]>,
+    /// Optional immutable native graph/instance material replacing the source slot.
+    pub material: Option<Arc<crate::material::MaterialAsset>>,
     /// Skin-order palette range in [`RenderFrame::palettes`] for skinned primitives.
     pub skin: Option<Range<usize>>,
 }
@@ -236,6 +238,11 @@ impl RenderFrame {
                 } else {
                     0.
                 };
+                let material = if renderer.model.is_none() {
+                    material_override(renderer, 0, library)
+                } else {
+                    None
+                };
                 let mut base = Draw {
                     entity: stable_id(address),
                     address: address.to_owned(),
@@ -253,8 +260,13 @@ impl RenderFrame {
                         .unwrap_or(renderer.emissive)
                         .map(|v| v * strength),
                     emissive_factor: None,
+                    material,
                     skin: None,
                 };
+                if base.material.is_some() {
+                    base.emissive = emission_multiplier(renderer, strength);
+                    base.emissive_factor = renderer.emissive_factor;
+                }
                 let model = renderer
                     .model
                     .as_ref()
@@ -294,12 +306,7 @@ impl RenderFrame {
                             base.world *=
                                 Mat4::from_translation(Vec3::from_array(selection.offset));
                         }
-                        let multiplier = if renderer.emissive == [0.; 3] {
-                            [1.; 3]
-                        } else {
-                            renderer.emissive
-                        };
-                        base.emissive = multiplier.map(|v| v * strength);
+                        base.emissive = emission_multiplier(renderer, strength);
                         let palette = match entity.get::<AnimatorSlot>() {
                             Some(slot) if slot.program.model.digest == model.digest => slot
                                 .palette(&mut self.scratch, &mut self.palette)
@@ -313,6 +320,7 @@ impl RenderFrame {
                         };
                         for i in selection.primitives {
                             let primitive = &model.primitives[i];
+                            let material = material_override(renderer, i - selection.base, library);
                             self.draws.push(Draw {
                                 entity: base.entity.wrapping_add(i as u64),
                                 geometry: Geometry::Model {
@@ -325,6 +333,7 @@ impl RenderFrame {
                                     &model,
                                     primitive.material,
                                 ),
+                                material,
                                 ..base.clone()
                             });
                         }
@@ -363,6 +372,31 @@ impl RenderFrame {
             }),
         }
     }
+}
+
+#[inline]
+fn emission_multiplier(renderer: &MeshRenderer, strength: f32) -> [f32; 3] {
+    let multiplier = if renderer.emissive == [0.; 3] {
+        [1.; 3]
+    } else {
+        renderer.emissive
+    };
+    multiplier.map(|v| v * strength)
+}
+
+#[inline]
+fn material_override(
+    renderer: &MeshRenderer,
+    slot: usize,
+    library: Option<&Library>,
+) -> Option<Arc<crate::material::MaterialAsset>> {
+    renderer
+        .material_overrides
+        .iter()
+        .find(|entry| entry.primitive as usize == slot)
+        .and_then(|entry| asset_id(&entry.material).ok())
+        .and_then(|id| library?.materials.get(id))
+        .cloned()
 }
 
 #[inline]

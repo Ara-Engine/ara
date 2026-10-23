@@ -79,6 +79,15 @@ impl Models {
                         return Err(RuntimeError(
                             "node/primitive selectors require a model".into(),
                         ));
+                    } else if renderer.material_overrides.len() > 1
+                        || renderer
+                            .material_overrides
+                            .iter()
+                            .any(|entry| entry.primitive != 0)
+                    {
+                        return Err(RuntimeError(
+                            "procedural shapes have one material slot, numbered zero".into(),
+                        ));
                     }
                     Ok(())
                 })();

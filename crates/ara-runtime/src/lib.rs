@@ -46,6 +46,7 @@ pub mod controller;
 pub mod engine;
 pub mod extract;
 pub mod live;
+pub mod material;
 pub mod math;
 pub mod model;
 pub mod navigation;
@@ -359,6 +360,14 @@ impl Runtime {
             }
         }
         asset_errors.extend(library.models.validate_renderers(&baseline));
+        for material in material::references(&baseline)? {
+            if let Err(error) = library
+                .materials
+                .load(&baseline, assets.as_ref(), &material)
+            {
+                asset_errors.push(format!("ARA7310: {error}; retaining the source material"));
+            }
+        }
         library.documents = controller::Documents::load(&baseline)?;
         world.insert_resource(library);
         let mut players = Vec::new();
@@ -638,6 +647,20 @@ impl Runtime {
     /// Queues committed authoring ops for the next tick boundary (live patch). The
     /// ops must match the projection baseline (`prev` values), like any transaction.
     pub fn patch(&mut self, ops: Vec<Op>) -> Result<()> {
+        // Resolve newly referenced material assets on this control boundary, never
+        // from frame extraction. Existing entries survive a failed preparation.
+        for asset in material::patch_references(&ops) {
+            let result = self
+                .play
+                .session_mut()
+                .world_mut()
+                .resource_mut::<Library>()
+                .materials
+                .load(&self.baseline, self.assets.as_ref(), &asset);
+            if let Err(error) = result {
+                self.asset_errors.push(format!("ARA7310: {asset}: {error}"));
+            }
+        }
         let next = self.tick() + 1;
         let transaction = ara_ops::Transaction {
             id: ara_ops::TxnId("tx_livepatch".into()),
@@ -820,6 +843,20 @@ impl Runtime {
                 world.entity_mut(entity).remove::<AnimatorSlot>();
             }
             animation::ensure_slots(world, self.hz)?;
+        }
+        let material_ids: Vec<_> = world
+            .resource::<Library>()
+            .materials
+            .ids()
+            .map(str::to_owned)
+            .collect();
+        for id in material_ids {
+            let result = world
+                .resource_mut::<Library>()
+                .materials
+                .load(&self.baseline, self.assets.as_ref(), &id)
+                .map_err(|error| error.0);
+            results.push((id, result));
         }
         Ok(results)
     }
