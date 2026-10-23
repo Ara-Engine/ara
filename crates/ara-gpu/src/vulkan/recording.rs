@@ -384,9 +384,7 @@ impl VulkanDevice {
                     if rendering
                         || pipeline != Some(true)
                         || offset % 4 != 0
-                        || offset
-                            .checked_add(12)
-                            .is_none_or(|end| end > buffer.size)
+                        || offset.checked_add(12).is_none_or(|end| end > buffer.size)
                         || !buffer.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
                     {
                         return Err(GpuError::Contract(

@@ -16,12 +16,12 @@
     {
       "pass": "Vfx.Acquire",
       "queue": "Graphics",
-      "milliseconds": 0.000096
+      "milliseconds": 0.000064
     },
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.020128
+      "milliseconds": 0.021056
     },
     {
       "pass": "Vfx.Prepare",
@@ -31,7 +31,7 @@
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.00144
+      "milliseconds": 0.002304
     },
     {
       "pass": "Vfx.Update",
@@ -61,7 +61,7 @@
     {
       "pass": "Vfx.Sort",
       "queue": "Graphics",
-      "milliseconds": 0.001024
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.IndirectArgs",
@@ -71,7 +71,7 @@
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.036672
+      "milliseconds": 0.036512
     },
     {
       "pass": "Vfx.Tonemap",
@@ -81,7 +81,7 @@
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.164032
+      "milliseconds": 0.16672
     },
     {
       "pass": "Vfx.Host",
