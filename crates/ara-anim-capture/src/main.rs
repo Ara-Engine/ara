@@ -81,8 +81,10 @@ fn add_pose(
             let b = model[j].w_axis.truncate();
             bone(
                 &mut mesh,
-                Vec3::from_array(a.to_array()) + Vec3::new(x, y, 0.0),
-                Vec3::from_array(b.to_array()) + Vec3::new(x, y, 0.0),
+                ::glam::Quat::from_rotation_y(0.65) * Vec3::from_array(a.to_array())
+                    + Vec3::new(x, y, 0.0),
+                ::glam::Quat::from_rotation_y(0.65) * Vec3::from_array(b.to_array())
+                    + Vec3::new(x, y, 0.0),
                 0.016,
             );
         }
@@ -121,6 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [0.95, 0.45, 0.08, 1.0],
         [0.3, 0.9, 0.4, 1.0],
         [0.8, 0.3, 0.85, 1.0],
+        [1.0, 0.25, 0.25, 1.0],
     ] {
         scene.materials.push(Material {
             base_color: color,
@@ -215,6 +218,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .into_iter()
     .enumerate()
     {
+        let tick = frame as u32 * 5600;
+        let mut before = Pose::new(source.len());
+        sampler.sample(
+            &clips[0],
+            &source,
+            tick.saturating_sub(800),
+            &mut before,
+            &mut [],
+        )?;
+        sampler.sample(&clips[0], &source, tick, &mut input, &mut [])?;
         let trajectory: Vec<_> = config
             .horizons
             .iter()
@@ -225,8 +238,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect();
         features.write(
             &source,
-            source.bind_pose(),
-            source.bind_pose(),
+            &input,
+            &before,
             1.0 / 60.0,
             velocity,
             &trajectory,
@@ -334,7 +347,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 column as f32 * 1.8 - 4.5,
                 -6.0,
                 &format!("Jolt {:?} tick {tick}", state.mode),
-                3,
+                4,
             )?;
             column += 1;
         }

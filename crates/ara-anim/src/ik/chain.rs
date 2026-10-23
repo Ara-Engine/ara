@@ -158,6 +158,7 @@ pub struct Chain {
     model: Vec<Mat4>,
     positions: Vec<Vec3>,
     lengths: Vec<f32>,
+    descendants: Vec<Vec<usize>>,
 }
 impl Chain {
     /// Validates stable IDs, consecutive topology and angular bounds.
@@ -187,6 +188,25 @@ impl Chain {
             "IK chain must follow consecutive parents",
         )?;
         let n = joints.len();
+        let descendants = joints[..n - 1]
+            .iter()
+            .map(|root| {
+                (*root..skeleton.len())
+                    .filter(|candidate| {
+                        let mut at = *candidate;
+                        loop {
+                            if at == *root {
+                                return true;
+                            }
+                            match skeleton.parents[at] {
+                                Some(p) => at = p as usize,
+                                None => return false,
+                            }
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
         let mut out = Self {
             skeleton: skeleton.signature(),
             joints,
@@ -198,6 +218,7 @@ impl Chain {
             model: vec![Mat4::IDENTITY; skeleton.len()],
             positions: vec![Vec3::ZERO; n],
             lengths: vec![0.0; n - 1],
+            descendants,
         };
         model_matrices(skeleton, skeleton.bind_pose(), &mut out.model)?;
         ensure(
@@ -382,7 +403,17 @@ impl Chain {
         pose.rotations[j] = (rest
             * self.limits[index].clamp(rest.conjugate() * parent.conjugate() * rotation))
         .normalize();
-        model_matrices(skeleton, pose, &mut self.model)
+        // Only this joint and its precomputed descendants changed. Keep untouched
+        // torso/helper transforms instead of rebuilding the whole skeleton per rotation.
+        for &bone in &self.descendants[index] {
+            let local = pose
+                .joint(bone)
+                .expect("cooked descendant belongs to the checked pose")
+                .matrix();
+            self.model[bone] =
+                skeleton.parents[bone].map_or(local, |p| self.model[p as usize] * local);
+        }
+        Ok(())
     }
 }
 fn direction(v: Vec3) -> Vec3 {
