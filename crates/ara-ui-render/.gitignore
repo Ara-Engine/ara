@@ -1,0 +1,5 @@
+/*.log
+/evidence/*.png
+/evidence/*.spv
+/evidence/*.dxil
+/goldens/*.actual.png

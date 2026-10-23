@@ -1,0 +1,3843 @@
+{
+  "ui": {
+    "viewport": [480, 560],
+    "nodes": [
+      {
+        "id": "inspector",
+        "stable_id": 921305221685350606,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "ui",
+            "property": "width",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "height",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 1
+          }
+        ]
+      },
+      {
+        "id": "header",
+        "stable_id": 4201977977006070112,
+        "box": {
+          "x": 12,
+          "y": 12,
+          "w": 456,
+          "h": 46
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "local": "gap:2px"
+          }
+        ]
+      },
+      {
+        "id": "title",
+        "stable_id": 15722393318163439657,
+        "box": {
+          "x": 12,
+          "y": 12,
+          "w": 456,
+          "h": 24
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Inspector",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 9,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [44]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [85]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "heading",
+            "property": "font-size",
+            "authored": "16px",
+            "resolved": "16px",
+            "byte": 447
+          }
+        ]
+      },
+      {
+        "id": "entity",
+        "stable_id": 10409922166629367034,
+        "box": {
+          "x": 12,
+          "y": 38,
+          "w": 456,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Navigation core · #core-07",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 26,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [49]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [121]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [6]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [16]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [26]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "identity",
+        "stable_id": 16793668251973582779,
+        "box": {
+          "x": 12,
+          "y": 66,
+          "w": 456,
+          "h": 187
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "card",
+            "property": "background",
+            "authored": "var(--card)",
+            "resolved": "#111111",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-radius",
+            "authored": "var(--radius-base)",
+            "resolved": "10px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 277
+          }
+        ]
+      },
+      {
+        "id": "type",
+        "stable_id": 12075340201627130925,
+        "box": {
+          "x": 25,
+          "y": 79,
+          "w": 430,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Transform",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 9,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [55]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [73]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [80]
+            }
+          ]
+        },
+        "provenance": []
+      },
+      {
+        "id": "hint",
+        "stable_id": 8305197143553842040,
+        "box": {
+          "x": 25,
+          "y": 106,
+          "w": 430,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Local values relative to the parent",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 35,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [47]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [75]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 34,
+                "end": 35
+              },
+              "rtl": false,
+              "glyphs": [87]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "r1",
+        "stable_id": 638529316312573804,
+        "box": {
+          "x": 25,
+          "y": 134,
+          "w": 430,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "row",
+            "property": "display",
+            "authored": "grid",
+            "resolved": "grid",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "grid-template-columns",
+            "authored": "1fr 1fr",
+            "resolved": "1fr 1fr",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 476
+          }
+        ]
+      },
+      {
+        "id": "l1",
+        "stable_id": 625172449055715726,
+        "box": {
+          "x": 25,
+          "y": 134,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Position / m",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 12,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [51]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [80]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "position",
+        "stable_id": 5530202806555891530,
+        "box": {
+          "x": 244,
+          "y": 134,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "12.0, 0.0, −3.5",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [21]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [3755]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [22]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [24]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          }
+        ]
+      },
+      {
+        "id": "r2",
+        "stable_id": 638532614847458437,
+        "box": {
+          "x": 25,
+          "y": 172,
+          "w": 430,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "row",
+            "property": "display",
+            "authored": "grid",
+            "resolved": "grid",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "grid-template-columns",
+            "authored": "1fr 1fr",
+            "resolved": "1fr 1fr",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 476
+          }
+        ]
+      },
+      {
+        "id": "l2",
+        "stable_id": 625171349544087515,
+        "box": {
+          "x": 25,
+          "y": 172,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Rotation / deg",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 14,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [53]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [74]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "rotation",
+        "stable_id": 13050018872595607711,
+        "box": {
+          "x": 244,
+          "y": 172,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "0.0, 90.0, 0.0",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 14,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [28]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          }
+        ]
+      },
+      {
+        "id": "r3",
+        "stable_id": 638531515335830226,
+        "box": {
+          "x": 25,
+          "y": 210,
+          "w": 430,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "row",
+            "property": "display",
+            "authored": "grid",
+            "resolved": "grid",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "grid-template-columns",
+            "authored": "1fr 1fr",
+            "resolved": "1fr 1fr",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 476
+          }
+        ]
+      },
+      {
+        "id": "l3",
+        "stable_id": 625170250032459304,
+        "box": {
+          "x": 25,
+          "y": 210,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Scale",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 5,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [72]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "scale",
+        "stable_id": 7686723154774465937,
+        "box": {
+          "x": 244,
+          "y": 210,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "1.0, 1.0, 1.0",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 13,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          }
+        ]
+      },
+      {
+        "id": "gameplay",
+        "stable_id": 8716504975616154037,
+        "box": {
+          "x": 12,
+          "y": 261,
+          "w": 456,
+          "h": 183
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "card",
+            "property": "background",
+            "authored": "var(--card)",
+            "resolved": "#111111",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-radius",
+            "authored": "var(--radius-base)",
+            "resolved": "10px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 277
+          }
+        ]
+      },
+      {
+        "id": "state-title",
+        "stable_id": 2136084134799469645,
+        "box": {
+          "x": 25,
+          "y": 274,
+          "w": 430,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Salvage component",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 17,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [80]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [87]
+            }
+          ]
+        },
+        "provenance": []
+      },
+      {
+        "id": "r4",
+        "stable_id": 638526017777689171,
+        "box": {
+          "x": 25,
+          "y": 301,
+          "w": 430,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "row",
+            "property": "display",
+            "authored": "grid",
+            "resolved": "grid",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "grid-template-columns",
+            "authored": "1fr 1fr",
+            "resolved": "1fr 1fr",
+            "byte": 476
+          },
+          {
+            "selector": "row",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 476
+          }
+        ]
+      },
+      {
+        "id": "l4",
+        "stable_id": 625177946613856781,
+        "box": {
+          "x": 25,
+          "y": 301,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Mass / kg",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 9,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [48]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [78]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [74]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "mass",
+        "stable_id": 2249362895655340721,
+        "box": {
+          "x": 244,
+          "y": 301,
+          "w": 211,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "4.25",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 4,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [23]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [17]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [21]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [24]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          }
+        ]
+      },
+      {
+        "id": "enabled",
+        "stable_id": 8131395913820547230,
+        "box": {
+          "x": 25,
+          "y": 339,
+          "w": 430,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Enabled",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 7,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [71]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "toggle",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 1190
+          },
+          {
+            "selector": "toggle",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 1190
+          },
+          {
+            "selector": "toggle",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 1190
+          },
+          {
+            "selector": "toggle",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 1190
+          },
+          {
+            "selector": "toggle",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 1190
+          }
+        ]
+      },
+      {
+        "id": "health-title",
+        "stable_id": 9959132062140859088,
+        "box": {
+          "x": 25,
+          "y": 377,
+          "w": 430,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Integrity",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 9,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [44]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [92]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "health",
+        "stable_id": 9181103189905877455,
+        "box": {
+          "x": 25,
+          "y": 405,
+          "w": 430,
+          "h": 26
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "slider",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1297
+          },
+          {
+            "selector": "slider",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 1297
+          },
+          {
+            "selector": "slider",
+            "property": "color",
+            "authored": "var(--accent)",
+            "resolved": "#346bf1",
+            "byte": 1297
+          }
+        ]
+      },
+      {
+        "id": "reset",
+        "stable_id": 1086335023529244512,
+        "box": {
+          "x": 12,
+          "y": 452,
+          "w": 456,
+          "h": 32
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Reset selected overrides",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 24,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [53]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [86]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          }
+        ]
+      },
+      {
+        "id": "provenance",
+        "stable_id": 4327823757486278914,
+        "box": {
+          "x": 12,
+          "y": 492,
+          "w": 456,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Values: local override / prefab / default",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 41,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [57]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [29]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [73]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 34,
+                "end": 35
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 35,
+                "end": 36
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 36,
+                "end": 37
+              },
+              "rtl": false,
+              "glyphs": [73]
+            },
+            {
+              "bytes": {
+                "start": 37,
+                "end": 38
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 38,
+                "end": 39
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 39,
+                "end": 40
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 40,
+                "end": 41
+              },
+              "rtl": false,
+              "glyphs": [87]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      }
+    ],
+    "focus_graph": [
+      {
+        "id": "position",
+        "tab": "rotation",
+        "left": "enabled",
+        "right": null,
+        "up": null,
+        "down": "rotation"
+      },
+      {
+        "id": "rotation",
+        "tab": "scale",
+        "left": "enabled",
+        "right": null,
+        "up": "position",
+        "down": "scale"
+      },
+      {
+        "id": "scale",
+        "tab": "mass",
+        "left": "enabled",
+        "right": null,
+        "up": "rotation",
+        "down": "mass"
+      },
+      {
+        "id": "mass",
+        "tab": "enabled",
+        "left": "enabled",
+        "right": null,
+        "up": "scale",
+        "down": "enabled"
+      },
+      {
+        "id": "enabled",
+        "tab": "health",
+        "left": null,
+        "right": "mass",
+        "up": "mass",
+        "down": "health"
+      },
+      {
+        "id": "health",
+        "tab": "reset",
+        "left": null,
+        "right": "mass",
+        "up": "enabled",
+        "down": "reset"
+      },
+      {
+        "id": "reset",
+        "tab": "position",
+        "left": null,
+        "right": "mass",
+        "up": "health",
+        "down": null
+      }
+    ],
+    "batch_breaks": [
+      {
+        "command": 1,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 3,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 5,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 8,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 10,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 12,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 14,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 16,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 18,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 20,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 22,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 24,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 27,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 29,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 31,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 33,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 35,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 36,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 37,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 38,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 42,
+        "cause": "pipeline change"
+      }
+    ],
+    "commands": 44,
+    "glyphs": 263
+  },
+  "batches": [
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 0,
+        "end": 1
+      },
+      "break_cause": "first draw"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 1,
+        "end": 33
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 33,
+        "end": 35
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 35,
+        "end": 84
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 84,
+        "end": 86
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 1,
+      "instances": {
+        "start": 86,
+        "end": 99
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 99,
+        "end": 111
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 111,
+        "end": 113
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 2,
+      "instances": {
+        "start": 113,
+        "end": 125
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 125,
+        "end": 130
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 130,
+        "end": 132
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 3,
+      "instances": {
+        "start": 132,
+        "end": 143
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 143,
+        "end": 145
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 145,
+        "end": 168
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 168,
+        "end": 170
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 4,
+      "instances": {
+        "start": 170,
+        "end": 174
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 174,
+        "end": 175
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 175,
+        "end": 182
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 182,
+        "end": 183
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 183,
+        "end": 192
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 192,
+        "end": 196
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 196,
+        "end": 253
+      },
+      "break_cause": "pipeline change"
+    }
+  ],
+  "atlas_bytes": 4194304
+}

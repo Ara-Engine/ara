@@ -1,0 +1,2364 @@
+{
+  "ui": {
+    "viewport": [640, 330],
+    "nodes": [
+      {
+        "id": "editing",
+        "stable_id": 16159055796291381071,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "ui",
+            "property": "width",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "height",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 1
+          }
+        ]
+      },
+      {
+        "id": "title",
+        "stable_id": 15722393318163439657,
+        "box": {
+          "x": 12,
+          "y": 12,
+          "w": 616,
+          "h": 24
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": {
+          "text": "Text input / editing session",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 28,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [55]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [91]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [81]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "heading",
+            "property": "font-size",
+            "authored": "16px",
+            "resolved": "16px",
+            "byte": 447
+          }
+        ]
+      },
+      {
+        "id": "fields",
+        "stable_id": 5264243339741658844,
+        "box": {
+          "x": 12,
+          "y": 44,
+          "w": 616,
+          "h": 177
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "card",
+            "property": "background",
+            "authored": "var(--card)",
+            "resolved": "#111111",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-radius",
+            "authored": "var(--radius-base)",
+            "resolved": "10px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 277
+          }
+        ]
+      },
+      {
+        "id": "label",
+        "stable_id": 4177085272364376637,
+        "box": {
+          "x": 25,
+          "y": 57,
+          "w": 590,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": {
+          "text": "Display name · Arabic and English",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 33,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [39]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [80]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [121]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [36]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [75]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "name",
+        "stable_id": 14176396743819860870,
+        "box": {
+          "x": 25,
+          "y": 85,
+          "w": 590,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "المهمة Outpost 42",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 18,
+          "rtl_runs": 2,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [50]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [23]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [21]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": true,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 0,
+                "end": 2
+              },
+              "rtl": true,
+              "glyphs": [8]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 4
+              },
+              "rtl": true,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 6
+              },
+              "rtl": true,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 8
+              },
+              "rtl": true,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 10
+              },
+              "rtl": true,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 12
+              },
+              "rtl": true,
+              "glyphs": [294, 81]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--ring)",
+            "resolved": "#346bf1",
+            "byte": 1148
+          }
+        ]
+      },
+      {
+        "id": "composition-label",
+        "stable_id": 17801860502313345194,
+        "box": {
+          "x": 25,
+          "y": 123,
+          "w": 590,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": {
+          "text": "Japanese IME · uncommitted preedit",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 34,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [45]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [44]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [48]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [121]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [80]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [80]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 34,
+                "end": 35
+              },
+              "rtl": false,
+              "glyphs": [87]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "composition",
+        "stable_id": 6849946072548113945,
+        "box": {
+          "x": 25,
+          "y": 150,
+          "w": 590,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Mission: にほんご",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 13,
+          "rtl_runs": 0,
+          "ltr_runs": 2,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [48]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [29]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [98]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [100]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [104]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [94]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "field",
+            "property": "height",
+            "authored": "30px",
+            "resolved": "30px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "padding",
+            "authored": "5px",
+            "resolved": "5px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-radius",
+            "authored": "var(--radius-xs)",
+            "resolved": "4px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--input)",
+            "resolved": "#1e1e1e",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 947
+          },
+          {
+            "selector": "field",
+            "property": "border-color",
+            "authored": "var(--ring)",
+            "resolved": "#346bf1",
+            "byte": 1148
+          }
+        ]
+      },
+      {
+        "id": "hint",
+        "stable_id": 8305197143553842040,
+        "box": {
+          "x": 25,
+          "y": 188,
+          "w": 590,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [],
+        "text": {
+          "text": "Selection, clipboard, caret and undo share one edit state.",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 58,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 34,
+                "end": 35
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 35,
+                "end": 36
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 36,
+                "end": 37
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 37,
+                "end": 38
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 38,
+                "end": 39
+              },
+              "rtl": false,
+              "glyphs": [75]
+            },
+            {
+              "bytes": {
+                "start": 39,
+                "end": 40
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 40,
+                "end": 41
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 41,
+                "end": 42
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 42,
+                "end": 43
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 43,
+                "end": 44
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 44,
+                "end": 45
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 45,
+                "end": 46
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 46,
+                "end": 47
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 47,
+                "end": 48
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 48,
+                "end": 49
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 49,
+                "end": 50
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 50,
+                "end": 51
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 51,
+                "end": 52
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 52,
+                "end": 53
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 53,
+                "end": 54
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 54,
+                "end": 55
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 55,
+                "end": 56
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 56,
+                "end": 57
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 57,
+                "end": 58
+              },
+              "rtl": false,
+              "glyphs": [17]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "save",
+        "stable_id": 678458154258103336,
+        "box": {
+          "x": 12,
+          "y": 229,
+          "w": 616,
+          "h": 32
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 640,
+          "h": 330
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Save changes",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 12,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [75]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [86]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          }
+        ]
+      }
+    ],
+    "focus_graph": [
+      {
+        "id": "name",
+        "tab": "composition",
+        "left": null,
+        "right": null,
+        "up": null,
+        "down": "composition"
+      },
+      {
+        "id": "composition",
+        "tab": "save",
+        "left": null,
+        "right": null,
+        "up": "name",
+        "down": "save"
+      },
+      {
+        "id": "save",
+        "tab": "name",
+        "left": null,
+        "right": null,
+        "up": "composition",
+        "down": null
+      }
+    ],
+    "batch_breaks": [
+      {
+        "command": 1,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 2,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 4,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 5,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 7,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 10,
+        "cause": "texture/font atlas change"
+      },
+      {
+        "command": 11,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 13,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 15,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 17,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 19,
+        "cause": "texture/font atlas change"
+      },
+      {
+        "command": 20,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 22,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 24,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 26,
+        "cause": "pipeline change"
+      }
+    ],
+    "commands": 27,
+    "glyphs": 196
+  },
+  "batches": [
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 0,
+        "end": 1
+      },
+      "break_cause": "first draw"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 1,
+        "end": 25
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 25,
+        "end": 27
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 27,
+        "end": 55
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 55,
+        "end": 57
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 1,
+      "instances": {
+        "start": 57,
+        "end": 73
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 73,
+        "end": 75
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 75,
+        "end": 105
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 105,
+        "end": 107
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 2,
+      "instances": {
+        "start": 107,
+        "end": 119
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 2,
+      "instances": {
+        "start": 119,
+        "end": 121
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 121,
+        "end": 171
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 171,
+        "end": 173
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 173,
+        "end": 184
+      },
+      "break_cause": "pipeline change"
+    }
+  ],
+  "atlas_bytes": 4194304
+}

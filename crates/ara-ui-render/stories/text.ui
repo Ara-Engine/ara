@@ -1,0 +1,13 @@
+<panel id="text-lab" class="screen">
+  <text id="text-title" class="title" text="Ara / text coverage" />
+  <text id="arabic-label" class="eyebrow" text="ARABIC / JOINING, MARKS, RTL, WRAPPING" />
+  <text id="arabic" class="text-sample" text="اللُّغَةُ العَرَبِيَّةُ جَمِيلَةٌ. أهلاً وسهلاً بكم في آرا، محرك الألعاب. هذا نص طويل لاختبار التفاف السطور واتجاه الكتابة بشكل صحيح." />
+  <text id="mixed-label" class="eyebrow" text="MIXED RTL / LTR / NUMERALS / PUNCTUATION" />
+  <text id="mixed" class="text-sample" text="المهمة Outpost 07: اجمع 42 قطعة — HP 86/100 (جاهز)." />
+  <text id="cjk-label" class="eyebrow" text="CJK / NO SPACES / LINE BREAKING" />
+  <text id="cjk" class="text-sample" text="日本語の文字組みと改行を確認します。中文排版与自动换行测试：探索空间站，收集物资，然后安全返回。한글 테스트" />
+  <text id="combining-label" class="eyebrow" text="COMBINING MARKS / COLOR EMOJI / ZWJ / SKIN TONE" />
+  <text id="combining" class="text-sample" text="Cafe&#x301; · a&#x308; · n&#x303; · 👩🏽‍🚀  👨‍👩‍👧‍👦  🏳️‍🌈  😀" />
+  <text id="ime-label" class="eyebrow" text="IME / SIMULATED PREEDIT (UNDERLINED, UNCOMMITTED)" />
+  <field id="ime-field" class="preedit" text="にほんご" />
+</panel>
