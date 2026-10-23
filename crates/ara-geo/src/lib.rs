@@ -4,7 +4,7 @@ mod cook;
 mod diagnostics;
 mod format;
 mod importer;
-pub use diagnostics::Diagnostic;
+pub use diagnostics::{Diagnostic, source_warnings};
 pub mod sample;
 
 use bytemuck::{Pod, Zeroable};

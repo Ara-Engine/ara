@@ -56,6 +56,23 @@ impl Landscape {
         let geometry = self
             .geometry
             .map(|b| import(Resource::Buffer(b), Access::ShaderRead));
+        let virtual_uses: Vec<_> = self
+            .virtual_textures
+            .into_iter()
+            .flat_map(|(b, _)| b.resources())
+            .map(|(resource, access)| {
+                (
+                    g.import(
+                        resource,
+                        State {
+                            access,
+                            queue: Queue::Graphics,
+                        },
+                    ),
+                    access,
+                )
+            })
+            .collect();
         let [
             frame,
             samples,
@@ -68,6 +85,9 @@ impl Landscape {
             parameters,
         ] = resources;
         let add = |g: &mut Graph, name: &str, mut uses: Vec<(ResourceId, Access)>| {
+            if name == "terrain_color" {
+                uses.extend(virtual_uses.iter().copied());
+            }
             if let Some(geometry) = geometry {
                 uses.push((geometry, Access::ShaderRead));
                 if matches!(name, "foliage_shadow" | "foliage_depth" | "foliage_color") {

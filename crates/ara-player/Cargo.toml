@@ -35,6 +35,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 [dev-dependencies]
 ara-host.workspace = true
 ara-import2d = { path = "../ara-import2d" }
+ara-importers = { path = "../ara-importers" }
 ara-json.workspace = true
 ara-mcp.workspace = true
 ara-ops.workspace = true

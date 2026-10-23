@@ -14,19 +14,21 @@ struct Frame {
     float4 cameraError;uint4 extent;uint4 counts;
     uint4 slots0;uint4 slots1;uint4 slots2;uint4 slots3;
     uint4 outputs;float4 minimum;float4 scale;uint4 policy;
-    float4 forward;uint4 shadow;
+    float4 forward;uint4 shadow;uint4 textureSlots;uint4 textureTracking;
 };
+#include "virtual_texture.slang"
 struct Cluster {float4 bounds;uint group;uint parent;uint vertices;uint triangles;uint page;uint vb;uint ib;uint level;};
 struct Group {float4 bounds;float error;uint first;uint count;uint level;};
-struct Instance {float4 positionScale;float4 colorRoughness;uint4 identity;};
+struct Instance {float4 positionScale;float4 colorRoughness;uint4 identity;float4 rotation;};
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint word(uint slot,uint index){return buffers[NonUniformResourceIndex(slot)].Load(index*4);}
 void store(uint slot,uint index,uint value){buffers[NonUniformResourceIndex(slot)].Store(index*4,value);}
 void add(uint slot,uint index,uint value){uint ignored;buffers[NonUniformResourceIndex(slot)].InterlockedAdd(index*4,value,ignored);}
 void mark(uint slot,uint index){uint ignored;buffers[NonUniformResourceIndex(slot)].InterlockedOr(index*4,1,ignored);}
 Cluster cluster(Frame f,uint id){return buffers[NonUniformResourceIndex(f.slots0.y)].Load<Cluster>(id*48);}
-Instance instance(Frame f,uint id){return buffers[NonUniformResourceIndex(f.slots0.x)].Load<Instance>(id*48);}
-float4 sphere(float4 local,Instance i){return float4(local.xyz*i.positionScale.w+i.positionScale.xyz,local.w*i.positionScale.w);}
+Instance instance(Frame f,uint id){return buffers[NonUniformResourceIndex(f.slots0.x)].Load<Instance>(id*64);}
+float3 instanceRotate(float3 p,Instance i){return float3(i.rotation.x*p.x+i.rotation.y*p.z,p.y,-i.rotation.y*p.x+i.rotation.x*p.z);}
+float4 sphere(float4 local,Instance i){return float4(instanceRotate(local.xyz,i)*i.positionScale.w+i.positionScale.xyz,local.w*i.positionScale.w);}
 uint linear(uint3 group,uint lane){return (group.y*65535+group.x)*64+lane;}
 uint queueIndex(uint3 group){return group.y*65535+group.x;}
 
@@ -135,7 +137,9 @@ float3 vertexNormal(Frame f,Cluster c,uint vertex){
     uint3 p=buffers[NonUniformResourceIndex(f.slots0.w)].Load3(pageBase(f,c)+vertex*16);
     int3 n=int3(int(p.y)>>16,int(p.z<<16)>>16,int(p.z)>>16);return normalize(float3(n)/32767.0);
 }
-float3 worldPosition(Frame f,Cluster c,Instance i,uint vertex){return localPosition(f,c,vertex)*i.positionScale.w+i.positionScale.xyz;}
+float halfValue(uint v){uint exponent=(v>>10)&31,mantissa=v&1023;float sign=(v&32768)!=0?-1.:1.;return sign*(exponent==0?float(mantissa)/16777216.:exp2(float(int(exponent)-15))*(1.+float(mantissa)/1024.));}
+float2 vertexUv(Frame f,Cluster c,uint vertex){uint p=word(f.slots0.w,(pageBase(f,c)+vertex*16+12)/4);return float2(halfValue(p&65535),halfValue(p>>16));}
+float3 worldPosition(Frame f,Cluster c,Instance i,uint vertex){return instanceRotate(localPosition(f,c,vertex),i)*i.positionScale.w+i.positionScale.xyz;}
 float2 screen(Frame f,float4 p){return float2(p.x/p.w*.5+.5,.5-p.y/p.w*.5)*f.extent.xy;}
 bool smallTriangle(Frame f,float4 a,float4 b,float4 c){
     if(f.policy.z!=0 || min(a.w,min(b.w,c.w))<=0.001 || min(a.z,min(b.z,c.z))<0 || max(a.z-a.w,max(b.z-b.w,c.z-c.w))>0)return false;
@@ -203,8 +207,7 @@ void hzbMain(uint3 gid:SV_GroupID,uint3 tid:SV_DispatchThreadID,uint lane:SV_Gro
 }
 float3 colour(uint id){id=id*747796405u+2891336453u;id=((id>>((id>>28)+4))^id)*277803737u;id=(id>>22)^id;return .15+.85*float3(id&255,(id>>8)&255,(id>>16)&255)/255.0;}
 float3 barycentric(float2 p,float2 a,float2 b,float2 c){float2 u=b-a,v=c-a,w=p-a;float det=u.x*v.y-u.y*v.x;if(abs(det)<1e-12)return float3(1,0,0);float y=(w.x*v.y-w.y*v.x)/det,z=(u.x*w.y-u.y*w.x)/det;return float3(1-y-z,y,z);}
-[shader("compute")][numthreads(8,8,1)]
-void resolveMain(uint3 id:SV_DispatchThreadID){
+void resolveImpl(uint3 id,bool textured){
     Frame f=frame();if(any(id.xy>=f.extent.xy))return;uint pixel=id.y*f.extent.x+id.x;
     uint64_t value=buffers[NonUniformResourceIndex(f.slots1.w)].Load<uint64_t>(pixel*8);
     float4 base=0,normal=0,world=0;float3 color=float3(.035,.055,.085);uint2 identity=0;
@@ -214,15 +217,29 @@ void resolveMain(uint3 id:SV_DispatchThreadID){
         float4 ca=mul(f.vp,float4(a,1)),cb=mul(f.vp,float4(b,1)),cd=mul(f.vp,float4(d,1));
         float3 weights=barycentric(float2(id.xy)+.5,screen(f,ca),screen(f,cb),screen(f,cd))/float3(ca.w,cb.w,cd.w);weights/=dot(weights,1);
         float3 position=a*weights.x+b*weights.y+d*weights.z;
-        float3 n=normalize(vertexNormal(f,c,ids.x)*weights.x+vertexNormal(f,c,ids.y)*weights.y+vertexNormal(f,c,ids.z)*weights.z);
+        float3 n=instanceRotate(normalize(vertexNormal(f,c,ids.x)*weights.x+vertexNormal(f,c,ids.y)*weights.y+vertexNormal(f,c,ids.z)*weights.z),i);
         float error=c.group==0xffffffff?length(f.scale.xyz)*.5:buffers[NonUniformResourceIndex(f.slots0.z)].Load<Group>(c.group*32).error;
         base=i.colorRoughness;normal=float4(n,dot(position-f.cameraError.xyz,f.forward.xyz));world=float4(position,error*i.positionScale.w);
+        float textureDesired=0,textureActual=0;
+        if(textured && f.textureTracking.x!=0 && i.identity.z!=0xffffffff){
+            float2 ua=vertexUv(f,c,ids.x),ub=vertexUv(f,c,ids.y),uc=vertexUv(f,c,ids.z);
+            float2 uv=ua+(ub-ua)*weights.y+(uc-ua)*weights.z;
+            float3 wx=barycentric(float2(id.xy)+float2(1.5,.5),screen(f,ca),screen(f,cb),screen(f,cd))/float3(ca.w,cb.w,cd.w);wx/=dot(wx,1);
+            float3 wy=barycentric(float2(id.xy)+float2(.5,1.5),screen(f,ca),screen(f,cb),screen(f,cd))/float3(ca.w,cb.w,cd.w);wy/=dot(wy,1);
+            float2 dx=(ub-ua)*(wx.y-weights.y)+(uc-ua)*(wx.z-weights.z),dy=(ub-ua)*(wy.y-weights.y)+(uc-ua)*(wy.z-weights.z);
+            base.rgb*=vtSample(f.textureSlots,f.textureTracking,i.identity.z,uv,dx,dy,id.xy,textureDesired,textureActual).rgb;
+        }
         identity=uint2(item.y+1,item.x*128+t);color=base.rgb*(.15+.85*saturate(dot(n,normalize(float3(-.6,1,.3)))));
         if(f.policy.y==1)color=colour(item.x);if(f.policy.y==2)color=colour(c.level+1);
         if(f.policy.y==4)color=smallTriangle(f,ca,cb,cd)?float3(.95,.95,.95):float3(.1,.3,.9);
+        if(f.policy.y==6)color=lerp(colour(uint(textureActual)+1),float3(1,0,0),saturate(textureActual-textureDesired-1));
     }
     if(f.policy.y==3){float over=word(f.slots2.z,pixel)/8.0;color=float3(saturate(over),saturate(over-1),0);}
     buffers[NonUniformResourceIndex(f.slots2.w)].Store2(pixel*8,identity);
     images[NonUniformResourceIndex(f.outputs.x)][id.xy]=base;images[NonUniformResourceIndex(f.outputs.y)][id.xy]=normal;images[NonUniformResourceIndex(f.outputs.z)][id.xy]=world;
     images[NonUniformResourceIndex(f.outputs.w)][id.xy]=float4(pow(saturate(color),float3(1.0/2.2)),1);
 }
+[shader("compute")][numthreads(8,8,1)]
+void resolveMain(uint3 id:SV_DispatchThreadID){resolveImpl(id,false);}
+[shader("compute")][numthreads(8,8,1)]
+void resolveTexturedMain(uint3 id:SV_DispatchThreadID){resolveImpl(id,true);}

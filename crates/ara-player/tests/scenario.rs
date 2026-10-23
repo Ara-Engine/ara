@@ -26,12 +26,19 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     // An importer upgrade must not fail Play: record an older glTF importer version.
     let sidecar = dir.join("assets/fox/Fox.glb.import.json");
     let current = std::fs::read_to_string(&sidecar).unwrap();
-    let installed =
+    let recorded =
         serde_json::from_str::<Value>(&current).unwrap()["records"]["i_settings"]["version"]
             .as_str()
             .unwrap()
             .to_owned();
-    std::fs::write(&sidecar, current.replace(&installed, "2-gltf14-legacy")).unwrap();
+    // The upgrade target is the installed importer, not whatever the demo sidecar recorded.
+    let installed = ara_importers::registry()
+        .unwrap()
+        .get("ara.gltf")
+        .unwrap()
+        .version()
+        .to_owned();
+    std::fs::write(&sidecar, current.replace(&recorded, "2-gltf14-legacy")).unwrap();
     let mut agent = Agent::open(&dir, 7, |_| {});
 
     // Warm the pool; a first Play also cooks the Fox (out of process) into the cache.

@@ -1143,3 +1143,294 @@ Causes:
 Fixes:
 - Read the specific message; for adb failures run `adb devices -l` and use the intended authorized serial.
 - Use an absolute device path for pulls and a loopback endpoint for clients; match protocol version 1 and request IDs, and return base64-encoded PNG bytes for screenshots.
+
+## ARA8093 export::APPIMAGE_001: AppImage runtime pin missing or unavailable
+owner: ara-export
+shown as: ARA-EXP-APPIMAGE-001
+
+The `linux-appimage` package requires a separately prepared, hash-pinned AppImage runtime. The preset or doctor check could not find the required pin or its local source.
+
+Causes:
+- `appimageRuntime` is absent from the preset, or its source is unavailable.
+
+Fixes:
+- Obtain an x86_64 type-2 AppImage runtime as an explicit setup step and run `ara-export artifact-pin --file <runtime>`.
+- Put the resulting hash and source in `appimageRuntime`, then run doctor with the preset. The runtime is not a Cargo build prerequisite.
+
+## ARA8094 export::APPIMAGE_002: AppImage runtime has the wrong format
+owner: ara-export
+shown as: ARA-EXP-APPIMAGE-002
+
+The pinned runtime is not an x86_64 ELF image with the type-2 AppImage marker. Packaging stops before appending the SquashFS payload.
+
+Causes:
+- The downloaded runtime targets another architecture, uses another AppImage format, or is not a runtime executable.
+
+Fixes:
+- Replace it with an x86_64 type-2 runtime and regenerate its artifact pin.
+
+## ARA8095 export::APPIMAGE_003: AppImage payload verification failed
+owner: ara-export
+shown as: ARA-EXP-APPIMAGE-003
+
+Inspection of the embedded SquashFS found a payload hash mismatch, missing files or a nonexecutable `AppRun`. The exporter rejects the incomplete package.
+
+Causes:
+- A payload file was omitted or changed during packaging, or the launcher lost its executable mode.
+
+Fixes:
+- Re-export to a new output directory from the complete build folder and inspect the packaging error's file path.
+- Ensure the AppImage writer includes every distribution file and marks `AppRun` executable before retrying.
+
+## ARA8096 crash::CRASH_001: Invalid crash configuration
+owner: ara-crash, ara-export-player
+shown as: ARA-EXP-CRASH-001
+
+Crash settings or the player's build-scoped crash configuration are invalid. Configuring an upload receiver requires HTTPS and nonempty consent text; player configuration must use `ara.crash.config/1` and a 64-digit hexadecimal build ID.
+
+Causes:
+- An upload endpoint is insecure, contains a line break or has no disclosure text.
+- The deployed crash configuration has the wrong format or an invalid build ID.
+
+Fixes:
+- Omit `uploadEndpoint` to keep uploads disabled, or configure an HTTPS receiver and text explaining the proposed upload.
+- Regenerate the build's crash configuration through export rather than editing its format or build identity by hand.
+
+## ARA8097 crash::CRASH_002: Crash upload not authorized
+owner: ara-crash
+shown as: ARA-EXP-CRASH-002
+
+An upload request was declined or uploads are disabled because no endpoint is configured. No network process is started by this rejection; local crash artifacts remain available.
+
+Causes:
+- The player declined consent for this upload attempt.
+- The crash settings have no `uploadEndpoint`, which is the default.
+
+Fixes:
+- Respect the player's decision and retain the report locally.
+- For an optional upload flow, configure the receiver and disclosure text, then request explicit consent for the report before calling upload.
+
+## ARA8098 crash::CRASH_003: Crash upload unavailable or failed
+owner: ara-crash, ara-export
+shown as: ARA-EXP-CRASH-003
+
+A consented upload has an invalid artifact or the HTTPS transfer failed. Doctor also uses this code when checking the optional `curl` tool for a configured endpoint; export-host availability does not establish availability on a player's machine.
+
+Causes:
+- The artifact is not a regular file or exceeds the 128 MiB upload limit.
+- `curl` is unavailable, or the receiver, TLS connection or 30-second transfer failed.
+
+Fixes:
+- Select the complete local crash artifact within the upload limit and inspect the transfer error.
+- Provide `curl` on hosts offering the optional upload action and check the HTTPS receiver; retry only with the player's consent.
+
+## ARA8099 crash::CRASH_004: Native crash monitor unavailable
+owner: ara-crash, ara-export
+shown as: ARA-EXP-CRASH-004
+
+Native capture could not install its handler or start the out-of-process monitor. Doctor also uses this code to describe Windows/Linux capture support and the disabled-by-default upload policy.
+
+Causes:
+- A crash handler is already installed in the process.
+- The executable could not launch its monitor, or the monitor did not become ready within five seconds.
+- Native capture was requested on an unsupported platform.
+
+Fixes:
+- Install capture once and retain its guard for the player lifetime; release the previous guard before reinstalling.
+- Keep monitor argument dispatch in the shipped executable and inspect process-launch permissions and the reported startup error.
+- Use the native capture implementation on Windows or Linux.
+
+## ARA8100 crash::CRASH_005: Matching debug symbols unavailable
+owner: ara-crash, ara-export
+shown as: ARA-EXP-CRASH-005
+
+Export could not archive or convert matching native debug information. Windows templates require a hash-pinned PDB whose GUID and age match the PE image; ELF images must retain DWARF until symbols have been archived.
+
+Causes:
+- A Windows template lacks its PDB pin, has no PDB identity, or was paired with a PDB from another build.
+- The ELF template was built without DWARF or stripped before export.
+- Debug-symbol conversion failed on the supplied image or symbol file.
+
+Fixes:
+- Pin the matching executable and PDB together with `ara-export pin --platform windows --arch x64 --file <player.exe> --symbols <player.pdb>`.
+- Build ELF templates with `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only` and `CARGO_PROFILE_RELEASE_STRIP=none`; let export archive symbols before stripping deployed images.
+- Keep the original image and its symbols from the same build and inspect the converter's underlying error.
+
+## ARA8101 crash::CRASH_006: Invalid crash artifact
+owner: ara-crash
+shown as: ARA-EXP-CRASH-006
+
+The local symbolizer could not read the supplied minidump or rejected an unsupported report or malformed managed crash record. Symbolization cannot produce reliable evidence from an invalid artifact.
+
+Causes:
+- A minidump is truncated, corrupt or is not a minidump.
+- A JSON report uses an unknown format, or a managed record has invalid magic, oversized fields or trailing bytes.
+
+Fixes:
+- Use the original complete `.dmp`, `.crash.json` or `.managed` file produced by capture, retaining any paired dump and sidecar together.
+- Retry symbolization with the local symbol store from the same build; if capture was interrupted, reproduce the crash to obtain a complete artifact.
+
+## ARA8102 export::CRASH_007: DWARF stripping tool unavailable
+owner: ara-export
+shown as: ARA-EXP-CRASH-007
+
+Export needs LLVM objcopy to strip deployed ELF images after archiving their DWARF. Doctor warns when the tool cannot be found; this is an export setup step, not a Cargo prerequisite.
+
+Causes:
+- `ARA_OBJCOPY` is unset or points to an unavailable tool, and no LLVM or Android NDK objcopy was discovered.
+
+Fixes:
+- Set `ARA_OBJCOPY` to an installed `llvm-objcopy` executable, or make LLVM/NDK tools discoverable in the export environment.
+- Run doctor for the Linux or Android preset again before retrying export.
+
+## ARA8103 export::DIST_001: Package format conflicts with the preset
+owner: ara-export
+shown as: ARA-EXP-DIST-001
+
+The selected package format does not match the target platform, or `android-play` lacks release configuration and explicit signing. Preset validation stops before packaging.
+
+Causes:
+- A Windows package targets Linux or Android, or a Linux package targets another platform.
+- `android-play` targets another platform, uses a nonrelease configuration or has no signing configuration.
+
+Fixes:
+- Select `windows-portable` or `windows-installer` for Windows, `linux-appimage` or `linux-tar` for Linux, or a plain folder for the target platform.
+- For `android-play`, select Android, release configuration and explicit Android release signing settings.
+
+## ARA8104 export::DIST_002: Distribution contains unsupported file paths
+owner: ara-export
+shown as: ARA-EXP-DIST-002
+
+The build folder contains a symlink, nonregular file or paths that collide when compared without case. The exporter rejects these inputs rather than producing an ambiguous distribution.
+
+Causes:
+- The source folder contains linked or special files.
+- Two payload paths differ only by letter case.
+
+Fixes:
+- Copy regular files into the distribution and remove links or special files.
+- Rename colliding files and update their references so every payload path is unique without regard to case.
+
+## ARA8105 installer::INSTALL_001: Invalid installer image or payload
+owner: ara-export-installer
+shown as: ARA-EXP-INSTALL-001
+
+The installer stub is not an unsigned Windows PE image, or the assembled installer has an invalid trailer, archive range or payload hash. Assembly or extraction stops before installation is published.
+
+Causes:
+- A different executable or an already signed stub was supplied for assembly.
+- The installer was truncated or its appended archive or trailer was modified.
+
+Fixes:
+- Rebuild and pin an unsigned `ara-export-installer` stub, then regenerate the installer from a complete payload.
+- Apply Authenticode signing only after the payload is appended; obtain a fresh complete package if an assembled installer is corrupt.
+
+## ARA8106 installer::INSTALL_002: Unsafe installer archive entry
+owner: ara-export-installer
+shown as: ARA-EXP-INSTALL-002
+
+The archive contains an unsafe path, symlink, directory entry or duplicate path, including case collisions. Extraction is rejected before publishing the destination.
+
+Causes:
+- An entry uses traversal, an absolute path, backslashes, an alternate stream, a reserved Windows name or a trailing dot or space.
+- Two entries resolve to the same path, or an entry is a symlink or directory rather than a payload file.
+
+Fixes:
+- Repackage regular files with relative forward-slash paths that use portable Windows filenames.
+- Remove duplicate or case-colliding entries and regenerate the installer.
+
+## ARA8107 installer::INSTALL_003: Installer archive exceeds its expansion limits
+owner: ara-export-installer
+shown as: ARA-EXP-INSTALL-003
+
+The archive exceeds the 64 GiB expanded-size or 100,000-entry limit, or an extracted file's size does not match its declaration. Installation fails without publishing the staged folder.
+
+Causes:
+- The package contains too many files or too much expanded data.
+- An archive is malformed or its declared and actual file sizes differ.
+
+Fixes:
+- Reduce the package to fit the supported limits and regenerate it from the original build folder.
+- Replace a malformed installer with a complete regenerated package.
+
+## ARA8108 installer::INSTALL_004: Installation destination already exists
+owner: ara-export-installer
+shown as: ARA-EXP-INSTALL-004
+
+The requested destination exists, including an empty directory, or appeared while extraction was staged. The installer only publishes a new directory and does not overwrite an existing installation.
+
+Causes:
+- A previous installation or another process already created the destination.
+
+Fixes:
+- Choose a new destination with `--destination <new-directory>`.
+- Check for another installer using that path before retrying.
+
+## ARA8109 export::INSTALL_005: Installer stub pin missing or unavailable
+owner: ara-export
+shown as: ARA-EXP-INSTALL-005
+
+The `windows-installer` preset lacks a pinned installer stub, or doctor cannot find its source. Packaging needs a separately built generic stub.
+
+Causes:
+- `installerStub` is absent, or its pinned local artifact is missing.
+
+Fixes:
+- Build `ara-export-installer` for Windows and run `ara-export artifact-pin --file <ara-export-installer.exe>` on its unsigned executable.
+- Add the resulting hash and source as `installerStub` in the preset, then run doctor again.
+
+## ARA8110 export::SIGN_001: Invalid Windows signing configuration
+owner: ara-export
+shown as: ARA-EXP-SIGN-001
+
+The preset's optional Windows signing settings are invalid. Authenticode configuration must target Windows, name a certificate environment variable and use HTTPS for an optional timestamp receiver.
+
+Causes:
+- `windowsSigning` is configured for another platform or has an empty `certificateEnv`.
+- `timestampUrl` is not HTTPS or contains a line break.
+
+Fixes:
+- Configure signing only on a Windows preset, name the environment variable holding the certificate-store thumbprint and use an HTTPS timestamp URL if needed.
+- Omit `windowsSigning` when producing unsigned packages.
+
+## ARA8111 export::SIGN_002: Authenticode signing tool unavailable
+owner: ara-export
+shown as: ARA-EXP-SIGN-002
+
+Doctor could not find the optional `signtool` executable, or a requested signing operation cannot proceed without it. Unsigned portable builds and installers remain supported.
+
+Causes:
+- Windows SDK signing tools are not installed or discoverable.
+- `ARA_SIGNTOOL` points to an unavailable executable.
+
+Fixes:
+- Install the optional Windows SDK signing tools and set `ARA_SIGNTOOL` to `bin/<version>/x64/signtool.exe`, or expose the tool on `PATH`.
+- Run doctor again; omit signing configuration if an unsigned package is intended.
+
+## ARA8112 export::SIGN_003: Signing certificate reference unavailable
+owner: ara-export
+shown as: ARA-EXP-SIGN-003
+
+The environment variable selected by `windowsSigning.certificateEnv` is unset or is not a 40-digit hexadecimal SHA1 certificate thumbprint. The certificate reference is checked without logging its value.
+
+Causes:
+- The export environment does not define the configured variable.
+- Its value is a certificate path, another identifier or an invalid thumbprint.
+
+Fixes:
+- Set the named variable to the SHA1 thumbprint of the intended signing certificate in the Windows certificate store.
+- Ensure the signing account can access that certificate and its private key, then retry signing.
+
+## ARA8113 export::TPL_005: Player template contract mismatch
+owner: ara-export, ara-export-player
+shown as: ARA-EXP-TPL-005
+
+The conformance executable received a runtime launch contract, or verification received a result that does not match the selected template contract. Conformance evidence cannot establish that an integrated runtime player executed the project.
+
+Causes:
+- The preset selects `playerTemplate: runtime` but pins a conformance executable.
+- The player's result reports another contract or omits the contract identity.
+
+Fixes:
+- Use `playerTemplate: conformance` with S7 conformance template pins when validating packaging and crash reporting.
+- For a runtime export, pin an integrated player implementing `ara.player.runtime/1` and require its headless result to match that contract and report verification.

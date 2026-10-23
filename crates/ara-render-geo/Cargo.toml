@@ -11,11 +11,22 @@ ara-geo = { path = "../ara-geo" }
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
 ara-vsm = { path = "../ara-vsm" }
+ara-color = { path = "../ara-color" }
+ara-schema = { path = "../ara-schema" }
+ara-texture-stream = { path = "../ara-texture-stream" }
 bytemuck = { version = "1.24", features = ["derive"] }
 glam = { version = "0.30", features = ["bytemuck"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
+half = "2.7"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+ara-platform = { path = "../ara-platform" }
+gltf = { version = "1.4", default-features = false, features = ["utils", "names"] }
+ara-importers = { path = "../ara-importers" }
+ara-asset = { path = "../ara-asset" }
+ara-asset-format = { path = "../ara-asset-format" }
 
 [lints]
 workspace = true

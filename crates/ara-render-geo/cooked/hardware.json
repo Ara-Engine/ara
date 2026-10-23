@@ -1,24 +1,24 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "ef6c050bb99294ee58899a4a6ba2c52005a5f50e081f5ec12a9ae46f69c84a2e",
+  "key": "5357170f29e29b83ec077b887ccc2507cc3f19510566d93b9b0bc479499faf13",
   "stages": [
     {
-      "dxil": "ef6c050bb99294ee58899a4a6ba2c52005a5f50e081f5ec12a9ae46f69c84a2e/hardwareFragment.dxil",
+      "dxil": "5357170f29e29b83ec077b887ccc2507cc3f19510566d93b9b0bc479499faf13/hardwareFragment.dxil",
       "dxil_hash": "59dd21d2c4dcf57b2f7b0ead1bfe5d5bdb76cfd8d92b2e33eb049e82f773b5c0",
       "source_entry": "hardwareFragment",
-      "spirv": "ef6c050bb99294ee58899a4a6ba2c52005a5f50e081f5ec12a9ae46f69c84a2e/hardwareFragment.spv",
+      "spirv": "5357170f29e29b83ec077b887ccc2507cc3f19510566d93b9b0bc479499faf13/hardwareFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "7fcda6595f70ba12877831bc0edd48d542762f08df55778057002a7087528f67",
       "stage": "fragment"
     },
     {
-      "dxil": "ef6c050bb99294ee58899a4a6ba2c52005a5f50e081f5ec12a9ae46f69c84a2e/hardwareVertex.dxil",
-      "dxil_hash": "295272403d8e39477c477ca8a78f920c0ac76d5d3757b45eb4a71c73e699de3a",
+      "dxil": "5357170f29e29b83ec077b887ccc2507cc3f19510566d93b9b0bc479499faf13/hardwareVertex.dxil",
+      "dxil_hash": "1519b36de0bbabd6932ef4216d2bfa3f5abec0540244840e68a613c3c7c77ff2",
       "source_entry": "hardwareVertex",
-      "spirv": "ef6c050bb99294ee58899a4a6ba2c52005a5f50e081f5ec12a9ae46f69c84a2e/hardwareVertex.spv",
+      "spirv": "5357170f29e29b83ec077b887ccc2507cc3f19510566d93b9b0bc479499faf13/hardwareVertex.spv",
       "spirv_entry": "main",
-      "spirv_hash": "909d400a420e2add525d7f4dc0da08c582f8550ebf4ba7d70947b2beb92549a7",
+      "spirv_hash": "f400ffe6ebbc8a3b05d09a5d099497c9a603457eddb7d803bd23f59b5ab682cf",
       "stage": "vertex"
     }
   ],

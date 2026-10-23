@@ -1,8 +1,8 @@
-# Assets, world streaming, networking and render visibility (ARA2100–ARA2499, ARA3300–ARA3399)
+# Assets, world streaming, networking, crashes and render visibility (ARA2100–ARA2799, ARA3300–ARA3399)
 
 Runtime problems reported through the bus by `ara-asset`, `ara-world` and
-`ara-net`, and the render-visibility causes `ara why` reports (the renderer can
-report the same codes at runtime).
+`ara-net`, local crash reports from `ara-crash`, and the render-visibility causes
+`ara why` reports (the renderer can report the same codes at runtime).
 
 ## ARA2101 ASSET_IMPORT_FAILED: Asset import failed
 owner: ara-asset
@@ -115,6 +115,19 @@ Causes:
 Fixes:
 - Read the message for the rejected field; correct the configuration or the intent.
 - For replayed or late intents, check the client's clock and tick alignment.
+
+## ARA2701 crash::CRASH: Player crash recorded
+owner: ara-crash
+
+A native exception, fatal signal, Rust panic or unhandled C# exception has a local crash report. The diagnostic's `crash` data contains its build ID, kind, message and stack; symbolizing a native dump adds the recovered stack. This records evidence of the failure rather than establishing its root cause.
+
+Causes:
+- Native code raised an exception or fatal signal, Rust code panicked, or a managed exception escaped its handler.
+
+Fixes:
+- Keep the original dump and sidecar together, and locate the symbol archive for the report's build ID.
+- Run `ara-export crash symbolize <dump> --symbols <symbols-dir>` and inspect the exception and first relevant application frames; use the registered `ara why` crash explainer for the diagnostic evidence.
+- Fix the failing code and reproduce the original scenario with a new build; uploading a report requires separate, explicit player consent.
 
 ## ARA3301 RENDER_NO_RENDERER: Nothing to draw
 owner: ara-render

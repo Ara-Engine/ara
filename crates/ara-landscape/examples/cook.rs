@@ -6,6 +6,10 @@ use std::{collections::BTreeMap, path::Path};
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     std::fs::write(
+        root.join("shaders/virtual_texture.slang"),
+        ara_texture_stream::shader_source(),
+    )?;
+    std::fs::write(
         root.join("shaders/terrain_material.slang"),
         ara_landscape::material::evaluator()?,
     )?;

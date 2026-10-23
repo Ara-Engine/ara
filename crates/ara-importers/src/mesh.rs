@@ -42,12 +42,17 @@ pub struct MeshSettings {
     /// Relative simplification error ceiling.
     #[ara(default = 0.01, range(min = 0))]
     pub lod_error: f32,
+    /// Cook a versioned virtual-geometry DAG for each static material primitive.
+    /// Skinned and morph-deformed meshes retain the classic path.
+    #[ara(default = true)]
+    pub virtual_geometry: bool,
 }
 impl Default for MeshSettings {
     fn default() -> Self {
         Self {
             lod_count: 4,
             lod_error: 0.01,
+            virtual_geometry: true,
         }
     }
 }

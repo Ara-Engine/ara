@@ -13,6 +13,7 @@ ara-terrain = { path = "../ara-terrain" }
 ara-foliage = { path = "../ara-foliage" }
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
+ara-texture-stream = { path = "../ara-texture-stream" }
 ara-material = { path = "../ara-material" }
 ara-doc = { path = "../ara-doc" }
 ara-json = { path = "../ara-json" }

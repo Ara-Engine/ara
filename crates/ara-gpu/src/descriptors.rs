@@ -9,6 +9,10 @@ pub enum Format {
     Rgba8Srgb,
     /// Linear HDR RGBA32.
     Rgba32Float,
+    /// Linear scRGB/HDR intermediate.
+    Rgba16Float,
+    /// Packed HDR10 PQ output, least-significant R channel.
+    Rgb10A2,
     /// Single floating channel (IDs and diagnostics).
     R32Float,
     /// Reversed-Z floating depth.

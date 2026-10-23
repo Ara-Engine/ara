@@ -1,5 +1,24 @@
 use super::*;
 impl Landscape {
+    /// Replaces any of grass/rock/soil/snow sampling with a shared virtual
+    /// texture ID. u32::MAX retains that layer's classic texture. Submit the
+    /// cache's begin_frame before this view and end_frame after all consumers.
+    pub fn bind_virtual_textures(
+        &mut self,
+        binding: Option<(ara_texture_stream::Binding, [u32; 4])>,
+    ) -> Result<()> {
+        if let Some((b, layers)) = binding {
+            ensure!(
+                layers
+                    .iter()
+                    .all(|id| *id == u32::MAX || *id < b.texture_count())
+                    && b.tracking[2..] == self.size,
+                "virtual landscape texture ID or viewport dimensions out of range"
+            );
+        }
+        self.virtual_textures = binding;
+        Ok(())
+    }
     /// Export images for host composition and fidelity/lighting integration.
     pub fn outputs(&self) -> Outputs {
         Outputs {
@@ -108,6 +127,11 @@ impl Landscape {
                 self.image_slots[3] as f32,
             ],
             geometry: [u32::from(self.geometry.is_some()), self.geometry_slot, 0, 0],
+            virtual_slots: self.virtual_textures.map_or([0; 4], |(b, _)| b.slots),
+            virtual_tracking: self.virtual_textures.map_or([0; 4], |(b, _)| b.tracking),
+            virtual_layers: self
+                .virtual_textures
+                .map_or([u32::MAX; 4], |(_, layers)| layers),
         };
         gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         Ok(())

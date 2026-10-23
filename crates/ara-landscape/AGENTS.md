@@ -5,6 +5,10 @@ foliage authoring live in their own crates. No gameplay state or simulation cloc
 
 Public API: Landscape::{new,install_geometry,queue_tile,update,record,capture,
 outputs,retire}, View, FoliageGeometry/FoliageMesh, material::evaluator, sample.
+bind_virtual_textures accepts the shared ara-texture-stream Binding and four
+virtual IDs for grass/rock/soil/snow (u32::MAX keeps a classic layer). Hosts submit
+cache begin_frame before landscape sampling, end_frame after all consumers.
+Sampling uses triplanar derivatives, shared min-mip feedback and bounded pages.
 The new indirect draw command in ara-gpu is the only shared runtime hook.
 
 Creation, mesh extraction, texture uploads and pipeline warming are synchronous

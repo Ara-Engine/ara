@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521",
+  "key": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326",
   "stages": [
     {
-      "dxil": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/foliageColor.dxil",
+      "dxil": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/foliageColor.dxil",
       "dxil_hash": "1a154978c1a1d0e64bd0be47c6f9bed7a0688b1682a39d36ffcfdd2ebe56cbe0",
       "source_entry": "foliageColor",
-      "spirv": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/foliageColor.spv",
+      "spirv": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/foliageColor.spv",
       "spirv_entry": "main",
       "spirv_hash": "05a4dd6752f73e5588cf1142f0a1cb62861bc9d823d89c10d6c9c8a7d36ac39e",
       "stage": "fragment"
     },
     {
-      "dxil": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/foliageVertex.dxil",
+      "dxil": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/foliageVertex.dxil",
       "dxil_hash": "3ae4b4ce6b8a367aab7117de5ad54366b06b6aa68dd051663de37e09b3d8e42d",
       "source_entry": "foliageVertex",
-      "spirv": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/foliageVertex.spv",
+      "spirv": "c640c970dcc25f9365436c24b4b5bdaff2242fd3fe3f52c0688967fc25fd1326/foliageVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "7803d153d9b232949f710f709c05094d192eec4d82d87cc1d1eaffc89ed9538c",
       "stage": "vertex"

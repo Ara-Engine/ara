@@ -1,0 +1,304 @@
+{
+  "background_load": "Shared workstation, CARGO_BUILD_JOBS=2; no claim of exclusive GPU access",
+  "cold_passes_ms": {
+    "Geo.Arguments.Main": 0.00512,
+    "Geo.Arguments.Post": 0.00512,
+    "Geo.DagCut.Main": 2.957312,
+    "Geo.DagCut.Post": 1.41312,
+    "Geo.FeedbackCopy": 0.013568,
+    "Geo.Hardware.Main": 9.034752,
+    "Geo.Hardware.Post": 0.009152,
+    "Geo.Hzb.Main": 0.233472,
+    "Geo.Hzb.Post": 0.0768,
+    "Geo.InstanceCull.Current": 0.006144,
+    "Geo.InstanceCull.Previous": 0.017408,
+    "Geo.MaterialResolve": 4.79744,
+    "Geo.Requeue": 0.00512,
+    "Geo.Reset": 0.098048,
+    "Geo.Software.Main": 6.463712,
+    "Geo.Software.Post": 0.0,
+    "Geo.Upscale.Bilinear": 1.373248,
+    "Texture.FeedbackCopy": 0.005312,
+    "Texture.Reset": 0.016832,
+    "VSM.shadow_allocate": 0.013312,
+    "VSM.shadow_arguments": 0.007168,
+    "VSM.shadow_clear": 5.962336,
+    "VSM.shadow_finalize": 0.00512,
+    "VSM.shadow_mark": 1.773568,
+    "VSM.shadow_raster": 54.939968,
+    "VSM.shadow_reset": 0.041696,
+    "VSM.shadow_resolve": 4.888576,
+    "VSM.shadow_select": 20.038656
+  },
+  "cold_total_ms": 114.20208,
+  "device": {
+    "api_version": "1.4.351",
+    "buffer_int64_atomics": true,
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "geometry_shader": true,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "hdr_metadata": false,
+    "max_image_dimension": 32768,
+    "mesh_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "mesh_shading": true,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "task_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "display_size": [
+    2560,
+    1440
+  ],
+  "geometry_warnings": [],
+  "hardware_only": false,
+  "instance_count": 1600,
+  "license": "Poly Haven Coast Rocks 01 CC0; ASSET-LICENSES.md",
+  "limitations": [
+    "Preview lighting is not fidelity integration",
+    "Frozen camera and static casters for warm numbers",
+    "Whole-level geometry fallback when a cluster page budget is insufficient",
+    "All cluster pages resident; texture pool limited to 64 MiB",
+    "679936 photographic triangles and two ground triangles per instance"
+  ],
+  "mesh_shaders": true,
+  "passes": {
+    "Geo.Arguments.Main": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "samples": 32
+    },
+    "Geo.Arguments.Post": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "samples": 32
+    },
+    "Geo.DagCut.Main": {
+      "p50_ms": 0.382976,
+      "p95_ms": 0.384,
+      "samples": 32
+    },
+    "Geo.DagCut.Post": {
+      "p50_ms": 0.214016,
+      "p95_ms": 0.567296,
+      "samples": 32
+    },
+    "Geo.FeedbackCopy": {
+      "p50_ms": 0.003616,
+      "p95_ms": 0.004608,
+      "samples": 32
+    },
+    "Geo.Hardware.Main": {
+      "p50_ms": 0.70656,
+      "p95_ms": 0.923648,
+      "samples": 32
+    },
+    "Geo.Hardware.Post": {
+      "p50_ms": 0.002688,
+      "p95_ms": 0.003072,
+      "samples": 32
+    },
+    "Geo.Hzb.Main": {
+      "p50_ms": 0.011264,
+      "p95_ms": 0.012288,
+      "samples": 32
+    },
+    "Geo.Hzb.Post": {
+      "p50_ms": 0.011264,
+      "p95_ms": 0.023552,
+      "samples": 32
+    },
+    "Geo.InstanceCull.Current": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.002048,
+      "samples": 32
+    },
+    "Geo.InstanceCull.Previous": {
+      "p50_ms": 0.004096,
+      "p95_ms": 0.00512,
+      "samples": 32
+    },
+    "Geo.MaterialResolve": {
+      "p50_ms": 0.429056,
+      "p95_ms": 0.65536,
+      "samples": 32
+    },
+    "Geo.Requeue": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "samples": 32
+    },
+    "Geo.Reset": {
+      "p50_ms": 0.016224,
+      "p95_ms": 0.01744,
+      "samples": 32
+    },
+    "Geo.Software.Main": {
+      "p50_ms": 0.7712,
+      "p95_ms": 0.77456,
+      "samples": 32
+    },
+    "Geo.Software.Post": {
+      "p50_ms": 0.0,
+      "p95_ms": 0.00048,
+      "samples": 32
+    },
+    "Geo.Upscale.Bilinear": {
+      "p50_ms": 0.059136,
+      "p95_ms": 0.059552,
+      "samples": 32
+    },
+    "Texture.FeedbackCopy": {
+      "p50_ms": 0.001312,
+      "p95_ms": 0.002016,
+      "samples": 32
+    },
+    "Texture.Reset": {
+      "p50_ms": 0.002784,
+      "p95_ms": 0.0032,
+      "samples": 32
+    },
+    "VSM.shadow_allocate": {
+      "p50_ms": 0.003072,
+      "p95_ms": 0.003072,
+      "samples": 32
+    },
+    "VSM.shadow_arguments": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.001024,
+      "samples": 32
+    },
+    "VSM.shadow_clear": {
+      "p50_ms": 0.000096,
+      "p95_ms": 0.00048,
+      "samples": 32
+    },
+    "VSM.shadow_finalize": {
+      "p50_ms": 0.001024,
+      "p95_ms": 0.002048,
+      "samples": 32
+    },
+    "VSM.shadow_mark": {
+      "p50_ms": 0.236544,
+      "p95_ms": 0.238592,
+      "samples": 32
+    },
+    "VSM.shadow_raster": {
+      "p50_ms": 0.00128,
+      "p95_ms": 0.001888,
+      "samples": 32
+    },
+    "VSM.shadow_reset": {
+      "p50_ms": 0.004672,
+      "p95_ms": 0.005568,
+      "samples": 32
+    },
+    "VSM.shadow_resolve": {
+      "p50_ms": 0.244736,
+      "p95_ms": 0.26624,
+      "samples": 32
+    },
+    "VSM.shadow_select": {
+      "p50_ms": 0.0,
+      "p95_ms": 0.000704,
+      "samples": 32
+    }
+  },
+  "reconstruction": "linear-light bilinear",
+  "requested_resource_bytes": 589942568,
+  "settings": {
+    "debugView": "lit",
+    "geometryErrorPixels": 1.0,
+    "output": {
+      "mode": "sdr",
+      "paperWhite": 203.0,
+      "peakNits": 1000.0
+    },
+    "textureBudgetMib": 64
+  },
+  "size": [
+    1707,
+    960
+  ],
+  "stats": {
+    "clusters_culled": 30838,
+    "clusters_drawn": 173600,
+    "hardware_triangles": 34642,
+    "instances_frustum_culled": 997,
+    "instances_occluded_current": 0,
+    "instances_occluded_previous": 0,
+    "overflow": 0,
+    "page_pool_bytes": 33329152,
+    "pages_resident": 16274,
+    "resident_floor": 0,
+    "software_triangles": 10269427,
+    "source_triangles": 1087900800
+  },
+  "system_vram_mib_after_allocation": 2933,
+  "texture_memory": {
+    "auxiliary_bytes": 29531760,
+    "max_mip_lag": 0.0,
+    "pool_bytes": 67059200,
+    "resident_pages": 372,
+    "samples": 1156012,
+    "samples_over_one_mip": 0,
+    "source_bytes": 357913940,
+    "uploaded_pages": 0,
+    "virtual_pages": 5468
+  },
+  "total_p50_ms": 3.116,
+  "vsm_cold": {
+    "cache_hits": 0,
+    "cluster_overflow": 0,
+    "clusters_drawn": 409771,
+    "dirty_pages": 2107,
+    "missing_pages": 0,
+    "page_pool_bytes": 268435456
+  },
+  "vsm_warm": {
+    "cache_hits": 2107,
+    "cluster_overflow": 0,
+    "clusters_drawn": 0,
+    "dirty_pages": 0,
+    "missing_pages": 0,
+    "page_pool_bytes": 268435456
+  }
+}

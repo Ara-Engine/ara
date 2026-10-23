@@ -492,6 +492,8 @@ impl VulkanDevice {
 fn copy_bytes(image: ImageAllocation) -> Result<u64> {
     let bytes = match image.format {
         vk::Format::R32G32B32A32_SFLOAT => 16,
+        vk::Format::R16G16B16A16_SFLOAT => 8,
+        vk::Format::A2B10G10R10_UNORM_PACK32 => 4,
         vk::Format::R8G8B8A8_UNORM
         | vk::Format::R8G8B8A8_SRGB
         | vk::Format::D32_SFLOAT

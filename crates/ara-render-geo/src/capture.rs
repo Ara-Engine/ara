@@ -37,7 +37,7 @@ impl GeometryView {
         let c = u64::from(self.cluster_count);
         let i = u64::from(self.instance_count);
         size_of::<Frame>() as u64
-            + i * 52
+            + i * 68
             + c * 52
             + u64::from(self.group_count.max(1)) * 32
             + u64::from(self.residency.capacity) * 2048

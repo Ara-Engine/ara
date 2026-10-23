@@ -24,6 +24,18 @@ impl Gpu {
                 extensions.push(ash::ext::validation_features::NAME.as_ptr());
             }
             extensions.extend(window_extensions.iter().map(|s| s.as_ptr()));
+            // Defer optional WSI discovery until a surface is requested.
+            if !window_extensions.is_empty()
+                && entry
+                    .enumerate_instance_extension_properties(None)?
+                    .iter()
+                    .any(|extension| {
+                        CStr::from_ptr(extension.extension_name.as_ptr())
+                            == ash::ext::swapchain_colorspace::NAME
+                    })
+            {
+                extensions.push(ash::ext::swapchain_colorspace::NAME.as_ptr());
+            }
             let layer_names = [c"VK_LAYER_KHRONOS_validation".as_ptr()];
             let enabled = [vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION];
             let mut features =
@@ -103,6 +115,11 @@ impl Gpu {
             let mut device_extensions = Vec::new();
             if !window_extensions.is_empty() {
                 device_extensions.push(ash::khr::swapchain::NAME.as_ptr());
+            }
+            let hdr_metadata =
+                !window_extensions.is_empty() && has_extension(ash::ext::hdr_metadata::NAME);
+            if hdr_metadata {
+                device_extensions.push(ash::ext::hdr_metadata::NAME.as_ptr());
             }
             for &extension in &device_extensions {
                 ensure!(
@@ -288,6 +305,7 @@ impl Gpu {
                     mesh_properties.max_task_work_group_total_count,
                 ],
                 geometry_shader: core_supported.geometry_shader != 0,
+                hdr_metadata,
                 buffer_int64_atomics,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,

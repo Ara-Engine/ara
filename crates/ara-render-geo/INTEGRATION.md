@@ -3,7 +3,8 @@
 This is a working standalone Vulkan rendering slice. It is **not yet the full
 requested engine integration**: `ara-render-fidelity` and the editor are untouched.
 The benchmark preview uses simple directional shading. It does not establish UE5
-visual parity, production material coverage, or performance under camera motion.
+visual parity or production material coverage. Texture motion is measured
+separately from the frozen-camera geometry/VSM warm timings.
 
 ## Assets and preparation
 
@@ -12,14 +13,20 @@ border-locked grouped simplification, cumulative errors, bounds and independentl
 meshopt-compressed pages. `Geometry::{encode,decode,identity,cluster}` own ARAG v1.
 `ara.geo` is installed in the builtin `ara-importers` worker registry. Its
 `VirtualGeometrySettings` are reflected; importer version is
-`2-settings1-meshopt0.7-dag1`. glTF/FBX extraction can call cook for each opaque
-material domain. Automatic glTF/FBX virtual-geometry side outputs remain unwired.
+`2-settings1-meshopt0.7-dag1`. glTF/FBX v4 automatically emit one versioned ARAG
+Custom artifact per static material primitive. MeshSettings.virtualGeometry
+defaults true and opts out explicitly. Skin/morph meshes stay classic with a
+manifest note. virtualGeometry in each mesh manifest links artifact/cacheVersion
+and quality diagnostics (occupancy/reduction, slivers, degenerates, broad triangles,
+material fragmentation). Import action versions invalidate prior cache entries.
 The current plugin input is an extracted JSON SourceMesh, not a new source reader.
 
 `GeometryView::new` prepares a fully resident snapshot. `new_with_pool` takes
 `GeometryConfig` with an explicit physical page budget. Instance transforms are
-positive uniform scale and translation. Rotations/nonuniform scale, masked or
-deformed materials, textures and material-AST evaluation remain integration work.
+positive uniform scale, yaw and translation. identity.w encodes yaw radians as
+f32 bits; identity.z is a virtual albedo ID (u32::MAX skips texturing). Nonuniform
+scale, arbitrary rotation, masked/deformed materials and material-AST evaluation
+remain integration work. UVs use stable perspective interpolation/derivatives.
 Geometry/instance replacement requires a new extraction; no authoring document
 or gameplay state is mutated here. Publish extractions at the host's D20 boundary.
 
@@ -54,6 +61,23 @@ dependency-aware streaming; replacing it is remaining scalability work.
 
 Entity IDs and material indices come from the instance table. Benchmark JSON
 maps compact render indices to stable U64 IDs.
+
+The fidelity owner's current contract is README.md#geometry--shadow-integration-contract
+in ara-render-fidelity. WORLD/NORMAL/BASE/MOTION/DEPTH/DIRECT and FILTER0 indices
+and Frame.read [[u32;4];7] remain untouched. This producer's channels above are
+**not that schema**: integration needs the owner's additive graph adapter, stable
+ray-primitive correspondence and shared material evaluation. No fidelity code is
+edited in this round. VirtualShadows::output remains RGBA32F RGB PCF visibility,
+A all-taps-resident validity, same render size, Graphics/ShaderRead. It may replace
+direct-light visibility; do not multiply indirect lighting by the mask.
+
+Fidelity round 3 adds `SunShadowSource::VirtualShadowMap { visibility: ImageInput,
+render_size }` without an ara-vsm dependency. A>=0.5 is valid/resident; invalid
+pixels trace the scene. Only the primary-surface sun uses this mask; local and
+secondary rays retain RT. Borrow images through completed render and preserve
+Graphics/ShaderRead at input/output. Query the upcoming `render_jitter(&FrameInput)`
+and use matching render size, camera and jitter in the producer. The standalone
+benchmark remains unjittered; the host adapter must apply the exposed jitter.
 For static instances, motion can be reconstructed from world position and the
 current/previous view projections. Animated motion is not implemented.
 
@@ -99,5 +123,40 @@ pages, and VSM versus full-source RT visibility. This is not a measured global
 Hausdorff-error proof for the billion-triangle scene or a temporal quality test.
 
 Editor work remaining: extraction/publication, material lookup, picking translation,
-debug-view capture routing and stats panels. All authoring changes must still use
+viewport-menu wiring and stats panels. All authoring changes must still use
 typed commands/ops; these renderer objects are derived snapshots only.
+
+## Texture pages, typed debug settings and HDR
+
+`ara-texture-stream::Source::{rgba8,from_cooked}` prepares complete mip chains;
+the latter consumes validated BC7/BC4/BC5 KTX2. `Catalog` assigns mip-major tile
+addresses. `Residency::new` allocates a byte-budgeted software virtual texture
+pool: 128-square interiors, one wrapping texel of gutter, resident RGBA8 pages.
+This is atlas virtualization, not Vulkan sparse memory. Compressed source media
+is decoded off the frame thread. HDR/ASTC source textures need a format adapter.
+
+At a completed slot boundary call prepare, submit begin_frame, pass binding to
+GeometryView::bind_textures and/or Landscape::bind_virtual_textures, render all
+consumers, submit end_frame and call submitted. Pool ownership stays with the
+host. All consumers declare Binding.resources; they sample with the same shader
+helper, using analytic mesh derivatives or triplanar fragment derivatives.
+Timestamped page requests and min-mip feedback are combined within subgroups.
+Compute/fragment basic/vote/ballot/arithmetic support is checked before pipelines.
+Pinned coarse mips guarantee fallback; priority/LRU only evicts leaves, and child
+publication requires a parent resident in an earlier frame. Cold starts/camera
+cuts still need prefetch time. Stats exposes pool, staging/feedback and CPU source
+bytes, resident/uploaded pages, sample lag and misses. Diagnostics capture UV,
+desired and sampled mip. Motion reports state camera speed and correspondence;
+stable triangle/UV matches avoid conflating distant surfaces sharing one atlas UV.
+
+`settings::{RenderSettings,register_schema}` reflects debug_view (lit, clusters,
+LOD, overdraw, raster, VSM pages, texture residency), pixel error, texture budget
+and ara-color::OutputSettings. This is the editor extraction seam; it performs no
+side-channel document edits. The VSM debug preview shows cached page coordinates,
+red dirty pages and magenta missing pages. Texture debug red means >1-mip lag.
+
+DisplayOutput consumes exposed linear BT.709, applies a highlight shoulder then
+SDR sRGB, HDR10 BT.2020/PQ or linear scRGB. Present::new_with_output selects an
+advertised matching swapchain, and display_encoded rejects mismatched modes.
+Paper white defaults 203 nits; SDR remains default. See HDR.md for the manual
+display gate and actual queried format/encoded-value evidence in captures/hdr.
