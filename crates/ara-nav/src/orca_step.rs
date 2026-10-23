@@ -277,23 +277,75 @@ fn plan(nav: &mut NavWorld, views: &mut [View<'_>]) {
             nav.filters.push(filter);
             nav.requests.push(PathRequest {
                 start: positions[w.row as usize].0,
-                end: state.target.unwrap_or(positions[w.row as usize].0),
+                end: leg_goal(state).unwrap_or(state.target.unwrap_or(positions[w.row as usize].0)),
                 filter,
             });
         }
         let results = mesh.paths_blocked(&nav.requests, &blocked);
         let hash = mesh.content_hash();
-        for ((w, result), filter) in nav.wants[start..end].iter().zip(results).zip(&nav.filters) {
-            let state = &mut views[w.table as usize].1[w.row as usize];
+        let graph = nav.graphs.get(&key.0).cloned();
+        let mut probe = None;
+        for (((w, result), filter), request) in nav.wants[start..end]
+            .iter()
+            .zip(results)
+            .zip(&nav.filters)
+            .zip(&nav.requests)
+        {
+            let (_, states, positions) = &mut views[w.table as usize];
+            let state = &mut states[w.row as usize];
+            let position = positions[w.row as usize].0;
             state.mesh = Some(hash);
             state.planned_filter = Some(*filter);
             state.corner = 1;
+            let on_leg = leg_goal(state).is_some();
+            // Detour fails outright when the end has no polygon; with the start on the
+            // mesh that is an empty partial corridor (goal outside the resident mesh).
+            let result = match result {
+                Err(_) if !outside(mesh, &mut probe, position, filter) => Ok(crate::NavPath {
+                    corners: Vec::new(),
+                    complete: false,
+                    reachable: position,
+                    truncated: false,
+                }),
+                other => other,
+            };
             match result {
                 Ok(path) if path.complete => {
+                    if !on_leg {
+                        state.route = None; // The goal itself is resident and reachable.
+                    }
                     state.path = Some(path);
                     state.status = NavStatus::Moving;
                     if !matches!(state.issue, Some(NavIssue::LinkTimeout { .. })) {
                         state.issue = None;
+                    }
+                }
+                Ok(path) if on_leg => {
+                    // Next portal not resident yet: walk toward the boundary and wait.
+                    state.path = Some(path);
+                    state.status = NavStatus::Moving;
+                    state.issue = Some(NavIssue::OutsideResident);
+                }
+                Ok(path) if graph.is_some() && outside(mesh, &mut probe, request.end, filter) => {
+                    let Some(graph) = graph.as_ref() else {
+                        continue;
+                    };
+                    match graph.route(position, request.end, &mut nav.route_scratch) {
+                        Ok((Some(route), _)) => {
+                            state.route = Some(route);
+                            state.path = Some(path);
+                            state.planned_filter = None; // Replan toward the first leg.
+                            state.status = NavStatus::Moving;
+                            state.issue = Some(NavIssue::OutsideResident);
+                        }
+                        _ => {
+                            state.issue = Some(NavIssue::NoPath {
+                                reachable: path.reachable,
+                            });
+                            state.path = Some(path);
+                            state.status = NavStatus::Unreachable;
+                            state.velocity = [0.0; 3];
+                        }
                     }
                 }
                 Ok(path) => {
@@ -371,4 +423,26 @@ fn validate_idle(nav: &mut NavWorld, views: &mut [View<'_>]) {
             state.velocity = [0.0; 3];
         }
     }
+}
+
+/// Intermediate route waypoint the agent is heading for, if it follows a route
+/// and has not reached its final leg.
+pub(crate) fn leg_goal(state: &NavAgentState) -> Option<[f32; 3]> {
+    let route = state.route.as_ref()?;
+    (route.next + 1 < route.waypoints.len()).then(|| route.waypoints[route.next])
+}
+
+/// Whether `point` has no permitted polygon nearby on the resident `mesh`.
+fn outside<'m>(
+    mesh: &'m crate::NavMesh,
+    probe: &mut Option<crate::NavQuery<'m>>,
+    point: [f32; 3],
+    filter: &QueryFilter,
+) -> bool {
+    if probe.is_none() {
+        *probe = mesh.query().ok();
+    }
+    probe
+        .as_mut()
+        .is_some_and(|q| q.nearest(point, filter).is_ok_and(|p| p.is_none()))
 }

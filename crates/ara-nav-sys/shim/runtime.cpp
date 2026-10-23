@@ -264,3 +264,22 @@ extern "C" int an_borders(const void* nav, AnBorder* out, int cap) {
     }
     return count;
 }
+// Dijkstra over polygons from the polygon nearest `start`, within `radius`.
+// Writes reached polygon refs and entry costs (metres along edge midpoints).
+// Returns the count, or -1 when the start has no permitted polygon. Sets
+// *truncated when the node pool or output capacity was exhausted.
+extern "C" int an_dijkstra(void* query, const float* start, const float* ext, const AnFilter* f,
+                           float radius, unsigned int* refs, float* costs, int cap, int* truncated) {
+    try {
+        *truncated = 0;
+        auto* q = static_cast<Query*>(query)->query; auto ft = filter(*f);
+        dtPolyRef ref = 0; float p[3];
+        q->findNearestPoly(start, ext, &ft, &ref, p);
+        if (!ref) return -1;
+        int n = 0;
+        const auto status = q->findPolysAroundCircle(ref, p, radius, &ft, refs, nullptr, costs, &n, cap);
+        if (dtStatusFailed(status)) return -1;
+        if (dtStatusDetail(status, DT_BUFFER_TOO_SMALL) || dtStatusDetail(status, DT_OUT_OF_NODES)) *truncated = 1;
+        return n;
+    } catch (...) { return -1; }
+}

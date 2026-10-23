@@ -125,6 +125,15 @@ pub(crate) fn steer(
     if state.status == NavStatus::Unreachable || state.path.is_none() {
         return [0.0; 3];
     }
+    // Route legs: reaching the current portal moves on to the next one. The old
+    // corridor is kept until the budgeted replan replaces it.
+    if let Some(portal) = crate::orca_step::leg_goal(state)
+        && horizontal(position, portal) <= (agent.radius * 2.0).max(1.0)
+        && let Some(route) = state.route.as_mut()
+    {
+        route.next += 1;
+        state.planned_filter = None;
+    }
     let reach = agent
         .stopping_distance
         .max(agent.radius)
@@ -133,6 +142,9 @@ pub(crate) fn steer(
         return [0.0; 3];
     };
     let corners = &path.corners;
+    if corners.is_empty() {
+        return [0.0; 3]; // Waiting for the next portal's cell to stream in.
+    }
     let mut corner = state.corner.min(corners.len().saturating_sub(1));
     while corner + 1 < corners.len() && !corners[corner].off_mesh {
         let previous = corners[corner.saturating_sub(1)].position;
@@ -193,7 +205,15 @@ pub(crate) fn steer(
         return [0.0; 3];
     }
     let terminal = corner + 1 == corners.len();
-    let aim = if terminal { target } else { current.position };
+    let complete = path.complete;
+    let leg = crate::orca_step::leg_goal(state);
+    // Final aim: the goal, the current route portal, or the end of a partial corridor.
+    let end = match leg {
+        Some(portal) if complete => portal,
+        _ if complete => target,
+        _ => current.position,
+    };
+    let aim = if terminal { end } else { current.position };
     let mut d = [
         aim[0] - position[0],
         aim[1] - position[1],
@@ -216,7 +236,7 @@ pub(crate) fn steer(
         return [0.0; 3];
     }
     let mut speed = agent.max_speed;
-    if terminal {
+    if terminal && leg.is_none() {
         // Slow down within two radii of the goal, never overshooting in one tick.
         let remaining = horizontal(position, target);
         let slow = (agent.radius * 2.0).max(0.25);
@@ -251,7 +271,7 @@ pub(crate) fn steer(
 /// Funnel test: has the agent rounded `corner` so `next` is directly ahead?
 /// The obstacle a funnel corner wraps lies on the incoming side of the line
 /// through `corner` and `next`; once the agent is on (or across) that line the
-/// straight move to `next` stays clear. Straight corners pass by projection.
+/// straight move to `next` stays clear. Straight corners are skipped at once.
 fn rounded(p: [f32; 3], previous: [f32; 3], corner: [f32; 3], next: [f32; 3], step: f32) -> bool {
     let (ox, oz) = (next[0] - corner[0], next[2] - corner[2]);
     let (px, pz) = (p[0] - corner[0], p[2] - corner[2]);
@@ -264,7 +284,9 @@ fn rounded(p: [f32; 3], previous: [f32; 3], corner: [f32; 3], next: [f32; 3], st
     let side_previous = ox * iz - oz * ix;
     let side_agent = ox * pz - oz * px;
     if side_previous.abs() <= 1e-3 * out_len * in_len {
-        return px * ox + pz * oz > 0.0; // No turn: passed the perpendicular.
+        // No turn (tile or area crossing): aiming further along the same line is
+        // equivalent, and the crossing may sit inside a dynamic obstacle.
+        return in_len > 1e-4 || px * ox + pz * oz > 0.0;
     }
     side_agent * side_previous <= 0.0
 }

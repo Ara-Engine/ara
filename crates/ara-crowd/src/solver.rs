@@ -367,6 +367,37 @@ impl Context<'_> {
                 range_sq
             }
         });
+        // Fixed discs are local minima for pure ORCA when the goal lies behind
+        // them: sidestep along the tangent nearer the preferred direction.
+        for &(d, _, j) in &neighbors[..count] {
+            let other = &self.bodies[j as usize];
+            if !other.obstacle {
+                continue;
+            }
+            let to = V2::new(other.x - me.x, other.z - me.z);
+            let r = me.radius + other.radius + self.params.wall_margin;
+            let speed = preferred.len_sq().sqrt();
+            let dist = d.sqrt();
+            if speed <= 1e-6 || dist <= r {
+                continue;
+            }
+            let dir = preferred.scale(1.0 / speed);
+            let ahead = dir.dot(to);
+            let lateral = crate::orca::det(dir, to);
+            let reach = speed * self.params.time_horizon * 2.0 + r;
+            if ahead <= 0.0 || ahead > reach || lateral.abs() >= r {
+                continue; // Not on a collision course within the look-ahead.
+            }
+            let half = (r / dist).asin();
+            let base = to.scale(1.0 / dist);
+            // Rotate toward the side the preferred direction already leans to;
+            // exact head-on picks the left (counter-clockwise) side.
+            let sign = if lateral > 0.0 { -1.0 } else { 1.0 };
+            let (s, c) = (half * sign).sin_cos();
+            let tangent = V2::new(base.x * c - base.z * s, base.x * s + base.z * c);
+            preferred = tangent.scale(speed);
+            break;
+        }
         let inv_horizon = 1.0 / self.params.time_horizon;
         let inv_dt = 1.0 / dt;
         for &(_, _, j) in &neighbors[..count] {

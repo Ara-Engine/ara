@@ -309,6 +309,44 @@ impl Query<'_> {
         }
         Ok((t.min(1.0), normal))
     }
+    /// Dijkstra over polygons; `None` when the start has no permitted polygon.
+    /// Returns (ref, cost) pairs in pop order and whether the search was truncated.
+    pub(crate) fn dijkstra(
+        &mut self,
+        start: [f32; 3],
+        ext: [f32; 3],
+        filter: &sys::Filter,
+        radius: f32,
+        cap: usize,
+    ) -> Option<(Vec<(u32, f32)>, bool)> {
+        let mut refs = vec![0u32; cap];
+        let mut costs = vec![0f32; cap];
+        let mut truncated = 0;
+        // SAFETY: exclusive live query; buffers hold `cap` entries; inputs are
+        // validated 3-element arrays and a validated filter for this call.
+        let count = unsafe {
+            sys::an_dijkstra(
+                self.pointer.as_ptr(),
+                start.as_ptr(),
+                ext.as_ptr(),
+                filter,
+                radius,
+                refs.as_mut_ptr(),
+                costs.as_mut_ptr(),
+                cap.min(i32::MAX as usize) as i32,
+                &mut truncated,
+            )
+        };
+        let count = usize::try_from(count).ok()?.min(cap);
+        Some((
+            refs[..count]
+                .iter()
+                .copied()
+                .zip(costs[..count].iter().copied())
+                .collect(),
+            truncated != 0,
+        ))
+    }
     pub(crate) fn area(&mut self, polygon: u32) -> Option<u8> {
         // SAFETY: native getPolyArea validates arbitrary/stale polygon references.
         let area = unsafe { sys::an_polygon_area(self.pointer.as_ptr(), polygon) };

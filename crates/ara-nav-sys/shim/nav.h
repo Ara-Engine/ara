@@ -55,4 +55,5 @@ int an_debug(const void*, AnDebug*, int);
 int an_crowd_step(const void*, AnAgent*, int, float);
 int an_walls(const void*, AnWall*, int);
 int an_borders(const void*, AnBorder*, int);
+int an_dijkstra(void*, const float*, const float*, const AnFilter*, float, unsigned int*, float*, int, int*);
 }

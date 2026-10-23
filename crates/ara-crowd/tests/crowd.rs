@@ -295,3 +295,34 @@ fn obstacle_discs_stay_put_and_are_avoided() {
     assert_eq!(agents[1].position, [0.0, 0.0, 0.0]);
     assert!(agents[0].position[0] > 4.0, "{:?}", agents[0].position);
 }
+
+#[test]
+fn agents_sidestep_a_disc_exactly_on_their_line() {
+    let mut agents = vec![
+        Agent {
+            id: 1,
+            position: [-8.0, 0.0, 0.0],
+            walls: NO_WALLS,
+            ..Agent::default()
+        },
+        Agent {
+            id: 2,
+            position: [0.0, 0.0, 0.0],
+            radius: 2.0,
+            obstacle: true,
+            ..Agent::default()
+        },
+    ];
+    let goals = [[8.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+    let mut crowd = Crowd::new(Params::default()).unwrap();
+    for _ in 0..600 {
+        steer(&mut agents, &goals);
+        agents[1].preferred = [0.0; 3];
+        crowd.step(&mut agents, &[], 1.0 / 60.0).unwrap();
+    }
+    assert!(
+        agents[0].position[0] > 7.5,
+        "stuck at {:?}",
+        agents[0].position
+    );
+}

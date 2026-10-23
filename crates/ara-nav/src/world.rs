@@ -96,6 +96,8 @@ pub struct NavWorld {
     pub(crate) waiting: BTreeMap<u32, u32>,
     pub(crate) agent_query: Option<AgentQuery>,
     pub(crate) rebakes: crate::obstacles::Rebakes,
+    pub(crate) graphs: BTreeMap<u32, std::sync::Arc<crate::ClusterGraph>>,
+    pub(crate) route_scratch: crate::RouteScratch,
 }
 impl NavWorld {
     /// Creates a world with a valid fixed tick; no workers are started here.
@@ -129,6 +131,8 @@ impl NavWorld {
             waiting: BTreeMap::new(),
             agent_query: None,
             rebakes: Default::default(),
+            graphs: BTreeMap::new(),
+            route_scratch: Default::default(),
         })
     }
     /// Stages an already-assembled background result; latest result wins per profile.
@@ -146,6 +150,11 @@ impl NavWorld {
     /// Current configuration.
     pub fn config(&self) -> &NavConfig {
         &self.config
+    }
+    /// Installs the always-resident cluster graph of a streamed profile. Agents whose
+    /// goal lies outside the resident mesh then follow a long [`crate::Route`].
+    pub fn set_cluster_graph(&mut self, profile: u32, graph: std::sync::Arc<crate::ClusterGraph>) {
+        self.graphs.insert(profile, graph);
     }
     /// Current immutable mesh for a profile, if published.
     pub fn mesh(&self, profile: u32) -> Option<&NavMesh> {

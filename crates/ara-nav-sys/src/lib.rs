@@ -236,4 +236,17 @@ unsafe extern "C" {
     pub fn an_walls(mesh: *const c_void, out: *mut Wall, cap: i32) -> i32;
     /// Writes at most cap tile-border edges; returns the total count.
     pub fn an_borders(mesh: *const c_void, out: *mut Border, cap: i32) -> i32;
+    /// Dijkstra from the polygon nearest `start` within `radius`; writes refs and
+    /// entry costs, returns the count or -1 when the start is off the mesh.
+    pub fn an_dijkstra(
+        q: *mut c_void,
+        start: *const f32,
+        ext: *const f32,
+        f: *const Filter,
+        radius: f32,
+        refs: *mut u32,
+        costs: *mut f32,
+        cap: i32,
+        truncated: *mut i32,
+    ) -> i32;
 }

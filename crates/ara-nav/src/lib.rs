@@ -13,6 +13,7 @@ mod detour_step;
 mod diagnostic;
 mod dynamic;
 mod follow;
+mod hier;
 mod input;
 mod job;
 mod native;
@@ -22,6 +23,7 @@ mod obstacles;
 mod orca_step;
 mod query;
 mod route;
+mod stream;
 mod world;
 
 pub use ara_crowd;
@@ -34,6 +36,10 @@ pub use components::{
 pub use debug::DebugPrimitive;
 pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable};
 pub use dynamic::{LinkKind, NavAgentType, NavLinkState, NavObstacle, ObstacleMode};
+pub use hier::{
+    CellCoord, CellGrid, ClusterGraph, ClusterSummary, MAX_PORTAL, Portal, RouteScratch,
+    RouteStats, Side, UNREACHABLE,
+};
 pub use input::{
     AgentProfile, BakeInput, BakeSettings, Bounds, Geometry, Obstacle, OffMeshLink, TileCoord,
 };
@@ -43,6 +49,7 @@ pub use query::{
     NavMesh, NavPath, NavQuery, NearestPoint, PathCorner, PathRequest, QueryFilter, RaycastHit,
 };
 pub use route::Route;
+pub use stream::{CellBake, CellSource, NavStreamer, bake_cell, merge_cells};
 pub use world::{
     Authority, CrowdSolver, GotoTarget, NavConfig, NavWorld, NavigationTick, goto, register_sim,
     tick,

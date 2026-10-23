@@ -102,6 +102,10 @@ impl NavMesh {
             }),
         })
     }
+    /// Tile-border polygon edges (Detour portal edges) of this mesh.
+    pub(crate) fn borders(&self) -> Vec<ara_nav_sys::Border> {
+        self.inner.native.borders()
+    }
     /// Walkable-surface boundary for crowd avoidance (built with the mesh).
     pub fn walls(&self) -> &ara_crowd::Walls {
         &self.inner.walls
@@ -162,6 +166,9 @@ impl NavMesh {
         &self.inner.native
     }
 }
+
+/// Polygons reached by a Dijkstra search with their entry costs in metres.
+pub(crate) type DijkstraField = Vec<(u32, f32)>;
 
 /// Thread-local mutable scratch borrowing an immutable mesh.
 pub struct NavQuery<'a> {
@@ -262,6 +269,19 @@ impl NavQuery<'_> {
             normal,
             position: std::array::from_fn(|i| start[i] + (end[i] - start[i]) * fraction),
         })
+    }
+    /// Dijkstra from the polygon nearest `start` (within the search extent) over
+    /// polygons within `radius`: (polygon, entry cost in metres) pairs and whether
+    /// the node pool truncated it. `None` when the start is off the mesh.
+    pub(crate) fn dijkstra(
+        &mut self,
+        start: [f32; 3],
+        filter: &QueryFilter,
+        radius: f32,
+    ) -> Result<Option<(DijkstraField, bool)>, NavError> {
+        check_points(start, start)?;
+        let f = filter.native(&self.blocked)?;
+        Ok(self.native.dijkstra(start, self.extent, &f, radius, 65536))
     }
     /// Looks up a polygon's area; stale or zero references return None.
     pub fn polygon_area(&mut self, polygon: u32) -> Option<u8> {
