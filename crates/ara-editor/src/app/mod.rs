@@ -291,6 +291,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     render_samples.last().copied().unwrap_or(0.),
                 )?;
             }
+            shell.orient_axis(editor.state.camera);
             let work = shell.frame()?;
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
             if scene_view.needs_frame(editor.state.quality) {

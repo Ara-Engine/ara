@@ -1,5 +1,6 @@
 //! Retained native panel composition and semantic interaction helpers.
 mod assets;
+mod axis;
 mod drag;
 pub(crate) mod icons;
 mod input;
@@ -74,6 +75,7 @@ pub struct Shell {
     pub(crate) version: u64,
     tooltip_text: Option<String>,
     field_request: Option<String>,
+    axis_camera: crate::state::Camera,
 }
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
@@ -150,6 +152,7 @@ impl Shell {
             version: 0,
             tooltip_text: None,
             field_request: None,
+            axis_camera: Default::default(),
         };
         shell.rebuild(editor)?;
         Ok(shell)
@@ -293,7 +296,7 @@ impl Shell {
         self.decorate_hierarchy();
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
-            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 96. - r.x, rect.y + 12. - r.y];
+            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 108. - r.x, rect.y + 12. - r.y];
             self.ui.nodes[cube].dirty.paint = true;
         }
         if let Some(view) = &self.asset_view {
@@ -348,6 +351,7 @@ impl Shell {
         }
         self.paint_swatches();
         self.paint_polish();
+        self.paint_axis();
         if self.field_request != editor.state.focus_field {
             if let Some(path) = editor.state.focus_field.as_deref() {
                 self.reveal_field(path)?;
@@ -421,6 +425,7 @@ impl Shell {
         if work.paint_nodes > 0 {
             self.paint_swatches();
             self.paint_polish();
+            self.paint_axis();
         }
         if self.motion.apply(
             &mut self.ui.display,
