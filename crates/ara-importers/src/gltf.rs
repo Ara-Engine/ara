@@ -1,4 +1,4 @@
-use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, invalid, json_bytes};
+use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, invalid, json_bytes};
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, Result,
 };
@@ -7,6 +7,8 @@ use base64::Engine;
 use rayon::prelude::*;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
+mod opacity;
+mod tangents;
 
 /// glTF 2.0/GLB importer: geometry, skins, clips, PBR textures and scene hierarchy.
 pub struct GltfImporter;
@@ -15,7 +17,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "4-gltf14-meshopt070-ispc050-tiled-f32text-arag1"
+        "5-gltf14-meshopt070-ispc050-tiled-f32text-arag1-khr-opacity"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -39,6 +41,20 @@ impl Importer for GltfImporter {
         }
         Ok(deps.into_iter().collect())
     }
+    fn dependencies_with_settings(
+        &self,
+        source: &[u8],
+        settings: &serde_json::Value,
+    ) -> Result<Vec<String>> {
+        let settings: MeshSettings = if settings.is_null() {
+            MeshSettings::default()
+        } else {
+            serde_json::from_value(settings.clone())?
+        };
+        let mut dependencies: BTreeSet<_> = self.dependencies(source)?.into_iter().collect();
+        dependencies.extend(opacity::dependencies(&settings.opacity_maps)?);
+        Ok(dependencies.into_iter().collect())
+    }
     fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
         let mesh_settings = if input.settings.is_null() {
             MeshSettings::default()
@@ -46,6 +62,7 @@ impl Importer for GltfImporter {
             serde_json::from_value(input.settings.clone())?
         };
         let gltf = gltf::Gltf::from_slice(&input.source).map_err(invalid)?;
+        let opacity_maps = opacity::resolve(&gltf, input, &mesh_settings.opacity_maps)?;
         let mut buffers = Vec::new();
         for b in gltf.buffers() {
             let data = match b.source() {
@@ -157,15 +174,16 @@ impl Importer for GltfImporter {
                     }
                 }
                 let name = format!("meshes/{}-{}.mesh", mesh_index, primitive.index());
+                let normal_uv = tangents::NormalUv::for_material(&primitive.material())?;
                 let artifact = Artifact {
                     name: name.clone(), kind: ArtifactKind::Mesh,
-                    bytes: cook_mesh(&vertices, &indices, mesh_settings)?,
+                    bytes: crate::mesh::cook_mesh_with_tangent_uv(&vertices, &indices, &mesh_settings, |v| normal_uv.apply(v))?,
                 };
                 let deformed = skinned.contains(&mesh_index)
                     || primitive.get(&gltf::Semantic::Joints(0)).is_some()
                     || primitive.morph_targets().next().is_some();
                 let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
-                    &name, &vertices, &indices, mesh_settings, deformed,
+                    &name, &vertices, &indices, &mesh_settings, deformed,
                     material_counts[&mesh_index])?;
                 // Preserve all morph target deltas independently of quantized base geometry.
                 let mut targets = Vec::new();
@@ -200,11 +218,18 @@ impl Importer for GltfImporter {
                 ),
                 (
                     material.occlusion_texture().map(|t| t.texture()),
-                    TextureUsage::Mask,
+                    TextureUsage::Linear,
                 ),
                 (
                     material.emissive_texture().map(|t| t.texture()),
                     TextureUsage::Color,
+                ),
+                (
+                    material
+                        .transmission()
+                        .and_then(|t| t.transmission_texture())
+                        .map(|t| t.texture()),
+                    TextureUsage::Linear,
                 ),
             ] {
                 if let Some(texture) = texture {
@@ -213,7 +238,7 @@ impl Importer for GltfImporter {
                     if let std::collections::btree_map::Entry::Vacant(entry) =
                         texture_usages.entry(key)
                     {
-                        let bytes = match image.source() {
+                        let mut bytes = match image.source() {
                             gltf::image::Source::Uri { uri, .. } => resource(uri, input)?,
                             gltf::image::Source::View { view, .. } => {
                                 let data = &buffers[view.buffer().index()];
@@ -226,6 +251,11 @@ impl Importer for GltfImporter {
                                     .to_vec()
                             }
                         };
+                        if usage == TextureUsage::Color
+                            && let Some(mask) = opacity_maps.get(&image.index())
+                        {
+                            bytes = opacity::merge(&bytes, mask)?;
+                        }
                         entry.insert((usage, bytes));
                     }
                 }
@@ -379,7 +409,9 @@ impl Importer for GltfImporter {
             });
             clip_map.push(json!({"animation":animation.index(),"artifact":name}));
         }
-        let manifest = json!({"schema":"ara://cooked/scene/1","sourceFormat":"gltf2","document":gltf.document.as_json(),"meshes":mesh_map,"textures":texture_map,"skeletons":skeleton_map,"clips":clip_map});
+        let mut document = serde_json::to_value(gltf.document.as_json())?;
+        opacity::alpha_modes(&mut document, &gltf, &opacity_maps);
+        let manifest = json!({"schema":"ara://cooked/scene/1","sourceFormat":"gltf2","document":document,"meshes":mesh_map,"textures":texture_map,"skeletons":skeleton_map,"clips":clip_map});
         output.artifacts.push(Artifact {
             name: "scene.json".into(),
             kind: ArtifactKind::Scene,

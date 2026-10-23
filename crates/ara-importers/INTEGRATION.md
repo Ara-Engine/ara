@@ -121,7 +121,7 @@ skins and clips to stable artifact names. glTF's source document retains
 scene hierarchy, PBR factors, samplers, texture transforms, extensions, cameras and
 lights; it is metadata, not a request to reopen source media at runtime. Match a
 material texture's source image index plus usage to the cooked texture mapping:
-base color/emissive → color, metallic-roughness → linear, normal → normal, AO → mask.
+base color/emissive → color, metallic-roughness/transmission/AO → linear, normal → normal.
 An image used in several color spaces receives distinct cooked artifacts. FBX has
 an equivalent explicit node/material/primitive mapping with ufbx typed IDs.
 
@@ -137,6 +137,23 @@ whenever algorithms or encoder behavior change. Settings are declarative: meshes
 accept lodCount/lodError; textures accept usage, mipmaps, flipNormalY, maskChannel
 and maxDimension. Desktop targets emit BCn. Mobile encoding is a plugin seam;
 the shared format reader already supports ASTC 4×4/6×6/8×8.
+
+glTF generation 5 also accepts `opacityMaps`: image URI (or `#0` for an embedded
+image index) to a companion opacity URI relative to the model. The red channel
+multiplies existing base-color alpha; mismatched dimensions use triangle filtering.
+Only formerly opaque materials switch to alpha mask. Source/dependency bytes stay
+immutable. `dependencies_with_settings` transports these companion files through
+the process worker into the frozen snapshot and its action digest. FBX rejects
+nonempty opacity maps; its generation also advances for the shared settings ABI.
+
+Runtime `ModelMaterial` exposes independent UV transforms/selectors for color,
+normal, metallic/roughness, occlusion, emissive and transmission. Coordinates follow
+`offset + rotation * scale * UV`; both original UV sets survive cooking. Missing
+tangents use the selected, transformed normal coordinates, while supplied tangents
+remain authored. Emissive strength folds into the emissive factor exactly once.
+Transmission retains a factor and linear red-channel texture independently of
+alpha coverage. These follow the [Khronos texture-transform specification](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_texture_transform)
+and [core tangent guidance](https://github.com/KhronosGroup/glTF/blob/main/specification/2.0/Specification.adoc#using-primitive-data).
 
 ## Encoder choice
 

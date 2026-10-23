@@ -47,6 +47,16 @@ fn validate_settings(importer: &str, settings: &Value, db: &SchemaDb) -> Result<
     if importer == "ara.audio" {
         crate::audio::settings(&Value::Object(settings.clone())).map_err(invalid)?;
     }
+    if importer == "ara.fbx"
+        && settings
+            .get("opacityMaps")
+            .and_then(Value::as_object)
+            .is_some_and(|maps| !maps.is_empty())
+    {
+        return Err(invalid(
+            "opacityMaps currently names glTF images; FBX does not support this setting",
+        ));
+    }
     Ok(())
 }
 

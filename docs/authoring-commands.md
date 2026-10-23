@@ -44,6 +44,17 @@ omitted fields are retained. Settings are reflected and validated before commit.
 Sidecars save alongside the source while asset references continue to name the
 source file. Undo removes a newly initialized sidecar, preserving the source.
 
+Merge a model's companion opacity image during its cook:
+
+```powershell
+ara do import.configure --args '{"source":"models/bush.gltf","settings":{"opacityMaps":{"textures/bush_diff.jpg":"textures/bush_alpha.png"}}}' --why 'Use the supplied foliage cutout'
+```
+
+Map keys name glTF image URIs, or `#0` for an embedded image index. Values are
+companion paths relative to the model. The mask's red channel multiplies existing
+alpha; its bytes participate in cache invalidation. The importer preserves each
+texture's transform/UV selector, emissive strength and transmission data.
+
 Audio `decodedBudget` counts resident PCM staging bytes (64 MiB default; 64 KiB
 minimum). Music and dialogue decode and resample in bounded blocks before Opus
 encoding, independent of track duration. Effects decode into a resident clip and

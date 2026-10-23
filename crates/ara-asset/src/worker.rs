@@ -67,6 +67,8 @@ enum Request {
         version: String,
         #[serde(with = "serde_bytes")]
         source: Vec<u8>,
+        #[serde(default)]
+        settings: serde_json::Value,
     },
     Versions,
 }
@@ -119,12 +121,13 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
             importer,
             version,
             source,
+            settings,
         } => {
             let result = registry.get(&importer).and_then(|i| {
                 if i.version() != version {
                     return Err(Error::Invalid("importer version mismatch".into()));
                 }
-                i.dependencies(&source)
+                i.dependencies_with_settings(&source, &settings)
             });
             return write_frame(
                 &mut std::io::stdout().lock(),
@@ -219,10 +222,29 @@ impl ProcessWorker {
         source: Vec<u8>,
         cancellation: &Cancellation,
     ) -> Result<Vec<String>> {
+        self.discover_with_settings(
+            importer,
+            version,
+            source,
+            serde_json::Value::Null,
+            cancellation,
+        )
+    }
+    /// Discovers source and settings-selected companion files out of process.
+    /// Use this for source snapshots so companion changes invalidate the cook.
+    pub fn discover_with_settings(
+        &self,
+        importer: &str,
+        version: &str,
+        source: Vec<u8>,
+        settings: serde_json::Value,
+        cancellation: &Cancellation,
+    ) -> Result<Vec<String>> {
         let mut job = self.start_request(Request::Discover {
             importer: importer.into(),
             version: version.into(),
             source,
+            settings,
         })?;
         loop {
             cancellation.check()?;
