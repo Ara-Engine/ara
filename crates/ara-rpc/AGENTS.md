@@ -32,6 +32,8 @@ Depends on ara-proto, ara-diag, tungstenite (blocking, no async runtime).
   notifications; tungstenite resumes partial frames after a timeout.
 - HTTP is one request per connection (`Connection: close`), `Content-Length`
   bodies only (16 MiB cap). Enough for MCP Streamable HTTP with JSON responses.
+- Shutdown flushes queued WebSocket replies through bounded writer acknowledgments
+  before returning, so daemon process exit cannot discard its shutdown response.
 - Handler calls are serialized on the serve thread: a slow method blocks every
   connection. Long work belongs in jobs.
 

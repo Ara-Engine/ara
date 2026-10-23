@@ -1,14 +1,12 @@
 //! Branch sessions (D20): an agent works on an isolated copy of the live documents
-//! (an overlay transaction stack) and submits the turn; the human's live view does
-//! not change until it merges per the apply policy.
+//! (an overlay transaction stack) and submits the turn; the human's live view changes only when the optional branch is submitted.
 //!
 //! A merge is a field-level three-way merge per touched document (`ara_merge`):
 //! base = the documents when the branch was forked, ours = live now, theirs = the
 //! branch. Fields only the branch changed apply; fields both changed keep the live
 //! value (or the branch's, with `prefer: branch`) and are reported. The result
 //! lands as one ordinary transaction by the branch's author, so it is reviewable and
-//! undoable like any agent turn. Submitted branches wait while anyone else claims
-//! what they touch.
+//! undoable like any agent turn. Submitted branches merge immediately.
 
 use std::collections::BTreeSet;
 
@@ -20,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::codes;
-use crate::hub::{ApplyPolicy, Audience, Hub, Origin};
+use crate::hub::{Audience, Hub, Origin};
 use crate::participant::{Kind, ParticipantId};
 use crate::sync::{Conflict, ConflictKind, Side, methods};
 
@@ -30,7 +28,7 @@ use crate::sync::{Conflict, ConflictKind, Side, methods};
 pub enum BranchStatus {
     /// The owner is working in it.
     Open,
-    /// Submitted; merges per the apply policy once nobody claims what it touches.
+    /// Submitted; merges immediately.
     Submitted,
     /// Merged into the live documents.
     Merged,
@@ -85,7 +83,7 @@ pub struct MergeReport {
     pub edits: usize,
     /// Fields both sides changed.
     pub conflicts: Vec<MergeConflict>,
-    /// Who approved it (`None`: the apply policy).
+    /// Who explicitly merged it (`None`: the owner submitted it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approved_by: Option<ParticipantId>,
 }
@@ -125,7 +123,7 @@ pub struct BranchInfo {
     pub status: BranchStatus,
     /// Changes per document.
     pub changes: Vec<DocChanges>,
-    /// Claims (labels and holders) a submitted branch is waiting on.
+    /// Validation errors that prevented an optional branch merge.
     pub blocked_by: Vec<String>,
     /// The merge result, once merged.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,7 +149,7 @@ pub struct Branch {
     pub status: BranchStatus,
     /// The merge result, once merged.
     pub report: Option<MergeReport>,
-    /// Claims it last waited on.
+    /// Validation errors from the latest merge attempt.
     pub blocked_by: Vec<String>,
     store: Store,
 }
@@ -506,8 +504,7 @@ impl Hub {
         Ok(b.store_mut())
     }
 
-    /// Submits `id`'s branch for merging; with the `immediately` policy it merges now
-    /// unless claims block it.
+    /// Submit an optional branch and merge it immediately.
     pub fn branch_submit(
         &mut self,
         live: &mut Store,
@@ -565,15 +562,14 @@ impl Hub {
         self.branch(branch).map(Branch::info)
     }
 
-    /// A human approves a branch (open or submitted) and merges it now. Claims by
-    /// others than the owner and the approver block it (`ARA2512`) unless `force`.
+    /// Explicitly merge an optional branch (human session); `force` is a legacy no-op.
     pub fn branch_merge(
         &mut self,
         live: &mut Store,
         approver: &ParticipantId,
         branch: &str,
         prefer: Prefer,
-        force: bool,
+        _force: bool,
     ) -> Result<MergeReport, Vec<Diagnostic>> {
         if self.participant(approver)?.kind != Kind::Human {
             return Err(vec![Diagnostic::error(
@@ -585,68 +581,27 @@ impl Hub {
         if matches!(b.status, BranchStatus::Merged | BranchStatus::Discarded) {
             return Err(wrong_state(b, "open or submitted"));
         }
-        if !force {
-            let blockers = self.blockers(branch, Some(approver));
-            if !blockers.is_empty() {
-                return Err(vec![blocked(branch, &blockers)]);
-            }
-        }
         self.merge_now(live, branch, prefer, Some(approver.clone()))
     }
 
-    /// Labels of claims (other than the owner's and `also`'s) the branch's ops touch.
-    fn blockers(&self, branch: &str, also: Option<&ParticipantId>) -> Vec<String> {
-        let Some(b) = self.branches.get(branch) else {
-            return Vec::new();
-        };
-        let mut out: Vec<String> = Vec::new();
-        for t in b.store.history() {
-            for op in &t.ops {
-                for c in self.claims.blocking(&b.owner, op) {
-                    let label = format!("{} ({})", c.label, c.name);
-                    if Some(&c.holder) != also && !out.contains(&label) {
-                        out.push(label);
-                    }
-                }
-            }
-        }
-        out
-    }
-
-    /// Merges submitted branches whose time has come per the policy.
+    /// Merges submitted optional branches immediately.
     pub(crate) fn merge_due(&mut self, live: &mut Store, now: u64) {
-        let due = match self.policy {
-            ApplyPolicy::Immediately => true,
-            ApplyPolicy::WhenIdle => now.saturating_sub(self.last_human) >= self.idle_ms,
-            ApplyPolicy::OnApproval => false,
-        };
-        if !due {
-            return;
-        }
         let submitted: Vec<String> = self
             .branches
             .values()
             .filter(|b| b.status == BranchStatus::Submitted)
+            .filter(|b| {
+                self.gesture_branches
+                    .get(&b.id)
+                    .is_none_or(|deadline| now >= *deadline)
+            })
             .map(|b| b.id.clone())
             .collect();
         for id in submitted {
-            let blockers = self.blockers(&id, None);
-            let changed = self
-                .branches
-                .get(&id)
-                .is_some_and(|b| b.blocked_by != blockers);
-            if let Some(b) = self.branches.get_mut(&id) {
-                b.blocked_by = blockers.clone();
-            }
-            if blockers.is_empty() {
-                if let Err(diags) = self.merge_now(live, &id, Prefer::Live, None) {
-                    // Leave it submitted and tell everyone why.
-                    if let Some(b) = self.branches.get_mut(&id) {
-                        b.blocked_by = diags.iter().map(|d| d.message.clone()).collect();
-                    }
-                    self.branch_changed(&id);
+            if let Err(diags) = self.merge_now(live, &id, Prefer::Live, None) {
+                if let Some(b) = self.branches.get_mut(&id) {
+                    b.blocked_by = diags.iter().map(|d| d.message.clone()).collect();
                 }
-            } else if changed {
                 self.branch_changed(&id);
             }
         }
@@ -766,25 +721,14 @@ impl Hub {
     }
 }
 
-/// `ARA2512`: claims block a merge.
-fn blocked(branch: &str, blockers: &[String]) -> Diagnostic {
-    Diagnostic::error(
-        codes::MERGE_BLOCKED,
-        format!(
-            "branch `{branch}` touches what others claim: {}; it merges once they release it (or approve with `force`)",
-            blockers.join(", ")
-        ),
-    )
-}
-
 impl BranchStatus {
     /// The wire name (`submitted`).
     pub fn name(self) -> &'static str {
         match self {
-            BranchStatus::Open => "open",
-            BranchStatus::Submitted => "submitted",
-            BranchStatus::Merged => "merged",
-            BranchStatus::Discarded => "discarded",
+            Self::Open => "open",
+            Self::Submitted => "submitted",
+            Self::Merged => "merged",
+            Self::Discarded => "discarded",
         }
     }
 }

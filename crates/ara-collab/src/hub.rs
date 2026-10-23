@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use ara_diag::{Diagnostic, codes as kernel};
 use ara_doc::IdGen;
 use ara_ops::{Author, Store, Transaction, TxnId, TxnMeta};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::branch::Branch;
@@ -44,20 +44,6 @@ pub struct Event {
     pub params: Value,
 }
 
-/// When submitted branch sessions merge into the live documents (D20). Mirrors the
-/// editor's agent apply policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ApplyPolicy {
-    /// As soon as nobody claims what the branch touches.
-    #[default]
-    Immediately,
-    /// Once no human has edited or moved for `idle_ms`.
-    WhenIdle,
-    /// Only when a human approves (`branch.merge`).
-    OnApproval,
-}
-
 /// Causal metadata of one transaction.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Origin {
@@ -86,6 +72,14 @@ pub struct Ack {
     pub overwrote: usize,
 }
 
+#[derive(Debug)]
+struct RecentWrite {
+    side: Side,
+    author: Author,
+    op: ara_doc::Op,
+    at: u64,
+}
+
 /// The authority's collaboration state.
 #[derive(Debug)]
 pub struct Hub {
@@ -101,13 +95,12 @@ pub struct Hub {
     pub(crate) published: u64,
     pub(crate) events: Vec<Event>,
     pub(crate) ids: IdGen,
-    pub(crate) policy: ApplyPolicy,
-    pub(crate) idle_ms: u64,
     pub(crate) last_human: u64,
     /// Bumped when claims are taken, released or expire.
     pub(crate) claims_version: u64,
-    /// When the claim guard was last installed (ms).
-    pub(crate) guard_at: u64,
+    recent: BTreeMap<(String, String, String), RecentWrite>,
+    overwrite_window_ms: u64,
+    pub(crate) gesture_branches: BTreeMap<String, u64>,
 }
 
 /// Presence broadcasts per participant are at most one per this interval (20 Hz).
@@ -128,11 +121,11 @@ impl Hub {
             published: revision,
             events: Vec::new(),
             ids,
-            policy: ApplyPolicy::default(),
-            idle_ms: 2_000,
             last_human: 0,
             claims_version: 0,
-            guard_at: 0,
+            recent: BTreeMap::new(),
+            overwrite_window_ms: 600_000,
+            gesture_branches: BTreeMap::new(),
         }
     }
 
@@ -171,16 +164,19 @@ impl Hub {
         &self.conflicts
     }
 
-    /// The branch apply policy and its idle threshold.
-    pub fn policy(&self) -> (ApplyPolicy, u64) {
-        (self.policy, self.idle_ms)
+    /// How long a field write remains eligible for a non-blocking overwrite notice.
+    pub fn set_overwrite_window(&mut self, milliseconds: u64) {
+        self.overwrite_window_ms = milliseconds;
     }
 
-    /// Sets the branch apply policy (humans decide; the host checks).
-    pub fn set_policy(&mut self, policy: ApplyPolicy, idle_ms: Option<u64>) {
-        self.policy = policy;
-        if let Some(ms) = idle_ms {
-            self.idle_ms = ms;
+    /// Delay an optional atomic branch merge during an overlapping human gesture, at most two seconds.
+    pub fn branch_gesture(&mut self, branch: &str, active: bool, now: u64) {
+        if active {
+            self.gesture_branches
+                .entry(branch.to_owned())
+                .or_insert(now.saturating_add(2000));
+        } else {
+            self.gesture_branches.remove(branch);
         }
     }
 
@@ -195,14 +191,8 @@ impl Hub {
         self.emit(Audience::All, methods::ROSTER, params);
     }
 
-    /// Installs the claim guard as of `now`.
-    fn install(&mut self, store: &mut Store, now: u64) {
-        store.set_guard(Some(Box::new(self.claims.guard(now))));
-        self.guard_at = now;
-    }
-
     fn claims_changed(&mut self, store: &mut Store, now: u64) {
-        self.install(store, now);
+        let _ = (store, now);
         self.claims_version += 1;
         let params = json!({ "claims": self.claims.all() });
         self.emit(Audience::All, methods::CLAIMS, params);
@@ -310,29 +300,25 @@ impl Hub {
 
     /// Extends `id`'s claims.
     pub fn heartbeat(&mut self, store: &mut Store, id: &ParticipantId, now: u64) {
-        if self.claims.heartbeat(id, now) > 0 {
-            self.install(store, now);
-        }
+        let _ = store;
+        self.claims.heartbeat(id, now);
     }
 
     /// Drops ended claims.
     pub fn expire(&mut self, store: &mut Store, now: u64) {
         if !self.claims.expire(now).is_empty() {
             self.claims_changed(store, now);
-        } else if now.saturating_sub(self.guard_at) >= 1000 {
-            // Keeps the "time left" in ARA2500 messages within a second.
-            self.install(store, now);
         }
     }
 
-    /// Restores persisted claims (dropping ended ones) and installs their guard.
+    /// Restores legacy advisory claims, dropping expired entries.
     pub fn restore_claims(&mut self, store: &mut Store, claims: Vec<Claim>, now: u64) {
         self.claims.restore(claims);
         self.claims.expire(now);
-        self.install(store, now);
+        let _ = (store, now);
     }
 
-    /// Periodic work: claim expiry, coalesced presence, branch merges per policy.
+    /// Periodic work: claim expiry, coalesced presence, immediate submitted branch merges.
     pub fn tick(&mut self, store: &mut Store, now: u64) {
         self.expire(store, now);
         for (id, p) in self.presence.flush(now) {
@@ -353,6 +339,24 @@ impl Hub {
     /// The participant behind a transaction, if known.
     pub fn owner(&self, txn: &TxnId) -> Option<&ParticipantId> {
         self.origins.get(txn).and_then(|o| o.participant.as_ref())
+    }
+
+    /// Record causal metadata when the host releases gesture-protected replica ops.
+    pub fn attribute(
+        &mut self,
+        txn: TxnId,
+        participant: ParticipantId,
+        seq: Option<u64>,
+        base: u64,
+    ) {
+        self.origins.insert(
+            txn,
+            Origin {
+                participant: Some(participant),
+                seq,
+                base,
+            },
+        );
     }
 
     fn name_of(&self, who: Option<&ParticipantId>, t: &Transaction) -> String {
@@ -573,6 +577,85 @@ impl Hub {
             let params = serde_json::to_value(&c).unwrap_or(Value::Null);
             self.emit(Audience::Only(loser), methods::CONFLICT, params);
         }
+        if let Some(winner) = c.winner.as_ref().and_then(|s| s.participant.clone()) {
+            self.emit(Audience::Only(winner), methods::CONFLICT, json!(c));
+        }
+        if c.kind == ConflictKind::Overwritten {
+            self.emit(Audience::All, "editor.overwrite", json!(c));
+        }
+    }
+
+    fn notice_recent(&mut self, store: &Store, t: &Transaction, now: u64) {
+        self.recent
+            .retain(|_, write| now.saturating_sub(write.at) <= self.overwrite_window_ms);
+        let winner = self.owner(&t.id).cloned();
+        let winner_name = self.name_of(winner.as_ref(), t);
+        let side = Side {
+            participant: winner.clone(),
+            name: winner_name.clone(),
+            txn: Some(t.id.clone()),
+            seq: self.origins.get(&t.id).and_then(|o| o.seq),
+            value: None,
+        };
+        for op in &t.ops {
+            let ara_doc::Op::Set { doc, id, path, .. } = op else {
+                continue;
+            };
+            let key = (doc.to_string(), id.to_string(), path.to_string());
+            if let Some(previous) = self.recent.get(&key) {
+                let same = match (&previous.side.participant, &winner) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => previous.author == t.author,
+                };
+                let already = self.conflicts.all().any(|c| {
+                    c.loser.txn == previous.side.txn
+                        && c.winner.as_ref().and_then(|s| s.txn.as_ref()) == Some(&t.id)
+                        && c.path.as_ref() == Some(path)
+                });
+                if previous.side.txn.as_ref() != Some(&t.id)
+                    && !same
+                    && !agree(&previous.op, op)
+                    && !already
+                {
+                    let name = store
+                        .workspace()
+                        .doc(doc.as_str())
+                        .and_then(|d| d.record(id.as_str()))
+                        .and_then(|r| r.get("name"))
+                        .and_then(Value::as_str)
+                        .unwrap_or(id.as_str());
+                    let mut loser = previous.side.clone();
+                    loser.value = written(&previous.op);
+                    let mut won = side.clone();
+                    won.value = written(op);
+                    let conflict = Conflict {
+                        id: 0,
+                        kind: ConflictKind::Overwritten,
+                        revision: t.result,
+                        doc: doc.clone(),
+                        record: Some(id.clone()),
+                        path: Some(path.clone()),
+                        message: format!(
+                            "{winner_name} changed {name}.{path} after {} ({} s ago)",
+                            loser.name,
+                            now.saturating_sub(previous.at) / 1000
+                        ),
+                        loser,
+                        winner: Some(won),
+                    };
+                    self.log_conflict(conflict);
+                }
+            }
+            self.recent.insert(
+                key,
+                RecentWrite {
+                    side: side.clone(),
+                    author: t.author.clone(),
+                    op: op.clone(),
+                    at: now,
+                },
+            );
+        }
     }
 
     /// Broadcasts every transaction committed since the last call, in order, as
@@ -592,6 +675,7 @@ impl Hub {
                 base: t.base,
             });
             self.origins.insert(t.id.clone(), origin.clone());
+            self.notice_recent(store, t, now);
             if let Some(p) = &origin.participant
                 && t.reverts.is_none()
             {

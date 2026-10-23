@@ -6,9 +6,7 @@ mod common;
 
 use ara_collab::claims::Wanted;
 use ara_collab::codes;
-use ara_collab::{
-    ApplyPolicy, BranchStatus, ConflictKind, Hub, Kind, Prefer, Replica, Snapshot, Subject,
-};
+use ara_collab::{BranchStatus, ConflictKind, Hub, Prefer, Replica, Snapshot, Subject};
 use ara_doc::{Edit, IdGen};
 use ara_ops::{Author, TxnMeta};
 use common::*;
@@ -29,95 +27,25 @@ fn entity(id: &str) -> Wanted {
 }
 
 #[test]
-fn claims_are_advisory_for_humans_and_enforced_for_agents() {
+fn claims_are_advisory_for_everyone() {
     let mut store = store();
     let mut hub = Hub::new(0, IdGen::seeded(1));
-    let (mia, bot, bot2) = (pid("ses_mia"), pid("ses_bot"), pid("ses_bot2"));
+    let (mia, bot) = (pid("ses_mia"), pid("ses_bot"));
     hub.join(mia.clone(), Author::Human, Some("Mia".into()), None, 0);
     hub.join(bot.clone(), agent("bot"), None, None, 0);
-    hub.join(bot2.clone(), agent("bot"), Some("bot-2".into()), None, 0);
-    let granted = hub
-        .claim(
-            &mut store,
-            &mia,
-            vec![entity("e_door")],
-            60_000,
-            Some("tuning the gate".into()),
-            0,
-        )
+    hub.claim(&mut store, &mia, vec![entity("e_door")], 60_000, None, 0)
         .expect("claim");
-    assert_eq!(granted.claims.len(), 1);
-
-    // An agent's edit there is rejected, naming the claimant and the ways forward.
-    store.set_origin(Some("ses_bot".into()));
-    let err = store
-        .transact(
-            TxnMeta::by(agent("bot")),
-            [set("e_door", "Transform.position.x", json!(3))],
-        )
-        .expect_err("claimed");
-    assert_eq!(err[0].code, codes::CLAIMED);
-    assert!(err[0].message.contains("Mia (human)"), "{}", err[0].message);
-    assert!(err[0].message.contains("tuning the gate"));
-    assert!(err[0].message.contains("branch session"));
-    assert_eq!(err[0].fixes.len(), 2);
-    // Other entities are fine; a human is never blocked.
     store
         .transact(
             TxnMeta::by(agent("bot")),
-            [set("e_lamp", "name", json!("L"))],
-        )
-        .expect("unclaimed");
-    store.set_origin(Some("ses_other_human".into()));
-    store
-        .transact(
-            TxnMeta::by(Author::Human),
             [set("e_door", "name", json!("Gate"))],
         )
-        .expect("humans are never blocked");
-
-    // An agent cannot claim over it; a human can (and sees the overlap).
-    let err = hub
+        .expect("edits just apply");
+    let overlap = hub
         .claim(&mut store, &bot, vec![entity("e_door")], 60_000, None, 1)
-        .expect_err("held");
-    assert_eq!(err[0].code, codes::CLAIM_HELD);
-    let bot_claim = hub
-        .claim(&mut store, &bot, vec![entity("e_crate")], 60_000, None, 1)
-        .expect("free subject");
-    assert_eq!(bot_claim.claims[0].kind, Kind::Agent);
-    // Claims are per participant even when two agents share an author name.
-    store.set_origin(Some("ses_bot2".into()));
-    let err = store
-        .transact(
-            TxnMeta::by(agent("bot")),
-            [set("e_crate", "name", json!("X"))],
-        )
-        .expect_err("bot's claim binds bot-2");
-    assert_eq!(err[0].code, codes::CLAIMED);
-    store.set_origin(Some("ses_bot".into()));
-    store
-        .transact(
-            TxnMeta::by(agent("bot")),
-            [set("e_crate", "name", json!("Mine"))],
-        )
-        .expect("own claim");
-
-    // Heartbeats extend; expiry and release free the subject.
-    hub.heartbeat(&mut store, &mia, 50_000);
-    hub.tick(&mut store, 70_000);
-    assert_eq!(
-        hub.claims().len(),
-        1,
-        "mia's claim was extended, bot's expired"
-    );
-    hub.release(&mut store, &mia, None, 70_001);
-    assert!(hub.claims().is_empty());
-    store
-        .transact(
-            TxnMeta::by(agent("bot")),
-            [set("e_door", "name", json!("Bot"))],
-        )
-        .expect("released");
+        .expect("advisory");
+    assert_eq!(overlap.overlaps.len(), 1);
+    assert_eq!(get(store.workspace(), "e_door", "name"), json!("Gate"));
 }
 
 #[test]
@@ -157,7 +85,12 @@ fn concurrent_fields_merge_and_same_field_is_last_writer_wins_with_a_log() {
         .iter()
         .filter(|e| e.method == "collab.conflict")
         .collect();
-    assert_eq!(surfaced.len(), 1);
+    assert_eq!(surfaced.len(), 2);
+    assert!(
+        surfaced
+            .iter()
+            .any(|e| e.to == ara_collab::Audience::Only(pid("ses_r1")))
+    );
     assert_eq!(surfaced[0].to, ara_collab::Audience::Only(pid("ses_r0")));
 }
 
@@ -270,7 +203,6 @@ fn branch_sessions_stay_isolated_until_merged_with_a_conflict_report() {
     let (mia, bot) = (pid("ses_mia"), pid("ses_bot"));
     hub.join(mia.clone(), Author::Human, Some("Mia".into()), None, 0);
     hub.join(bot.clone(), agent("bot"), None, None, 0);
-    hub.set_policy(ApplyPolicy::Immediately, None);
     hub.claim(
         &mut store,
         &mia,
@@ -317,12 +249,10 @@ fn branch_sessions_stay_isolated_until_merged_with_a_conflict_report() {
     let submitted = hub
         .branch_submit(&mut store, &bot, &info.id, None, 1)
         .expect("submit");
-    assert_eq!(submitted.status, BranchStatus::Submitted);
-    assert_eq!(submitted.blocked_by.len(), 1);
-    assert!(submitted.blocked_by[0].contains("Mia"));
-    assert!(!text(store.workspace(), store.schema()).contains("Yard lamp"));
+    assert_eq!(submitted.status, BranchStatus::Merged);
+    assert!(submitted.blocked_by.is_empty());
 
-    // Releasing the claim lets the next tick merge it: the crate keeps Mia's name.
+    // Releasing the advisory claim lets the next tick merge it: the crate keeps Mia's name.
     hub.release(&mut store, &mia, None, 2);
     hub.tick(&mut store, 3);
     let b = hub.branch(&info.id).expect("branch");
@@ -357,13 +287,12 @@ fn branch_sessions_stay_isolated_until_merged_with_a_conflict_report() {
 }
 
 #[test]
-fn humans_approve_merges_and_agents_cannot() {
+fn optional_manual_branch_merges_are_human_owned() {
     let mut store = store();
     let mut hub = Hub::new(0, IdGen::seeded(5));
     let (mia, bot) = (pid("ses_mia"), pid("ses_bot"));
     hub.join(mia.clone(), Author::Human, Some("Mia".into()), None, 0);
     hub.join(bot.clone(), agent("bot"), None, None, 0);
-    hub.set_policy(ApplyPolicy::OnApproval, None);
     let info = hub.branch_open(&store, &bot, None).expect("open");
     hub.branch_store(&info.id, &bot)
         .expect("store")
@@ -372,13 +301,6 @@ fn humans_approve_merges_and_agents_cannot() {
             [set("e_lamp", "name", json!("X"))],
         )
         .expect("edit");
-    hub.branch_submit(&mut store, &bot, &info.id, None, 1)
-        .expect("submit");
-    hub.tick(&mut store, 10_000);
-    assert_eq!(
-        hub.branch(&info.id).expect("b").status,
-        BranchStatus::Submitted
-    );
     let err = hub
         .branch_merge(&mut store, &bot, &info.id, Prefer::Live, false)
         .expect_err("agents cannot approve");

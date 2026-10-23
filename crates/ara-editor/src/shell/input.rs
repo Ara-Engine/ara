@@ -369,6 +369,30 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::Field(path, axis) => {
+                        if !action.value.is_boolean() {
+                            let gesture_path = axis.map_or_else(
+                                || path.clone(),
+                                |axis| {
+                                    let color = self.fields.get(path).is_some_and(|f| {
+                                        matches!(
+                                            f.widget,
+                                            crate::inspector::Widget::Vector { color: true, .. }
+                                        )
+                                    });
+                                    format!(
+                                        "{path}.{}",
+                                        if color {
+                                            ["r", "g", "b", "a"][axis]
+                                        } else {
+                                            ["x", "y", "z", "w"][axis]
+                                        }
+                                    )
+                                },
+                            );
+                            for entity in editor.state.selection.clone() {
+                                editor.field_gesture(&entity, &gesture_path, true)?;
+                            }
+                        }
                         if let Some(value) = action.value.as_bool() {
                             editor.apply(
                                 crate::inspector::edit_commands(
@@ -457,14 +481,6 @@ impl Shell {
                         apply_fix(editor, diagnostic, *index)?;
                         rebuild = true;
                     }
-                    Binding::Approve(ticket) => {
-                        editor.approve(ticket)?;
-                        rebuild = true;
-                    }
-                    Binding::Reject(ticket) => {
-                        editor.reject(ticket)?;
-                        rebuild = true;
-                    }
                     Binding::PickField(path) => {
                         self.pick_field = Some(path.clone());
                         if self.fields.get(path).is_some_and(|f| {
@@ -475,6 +491,9 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::RenameValue => {
+                        for entity in editor.state.selection.clone() {
+                            editor.field_gesture(&entity, "name", true)?;
+                        }
                         self.drafts
                             .insert("@name".into(), action.value.as_str().unwrap_or("").into());
                     }
@@ -674,7 +693,9 @@ impl Shell {
                 &value,
             ));
         }
-        editor.apply(commands, "Edit inspector values", None)?;
+        let result = editor.apply(commands, "Edit inspector values", None);
+        editor.end_field_gestures()?;
+        result?;
         self.drafts.clear();
         self.rename = false;
         self.rebuild(editor)?;

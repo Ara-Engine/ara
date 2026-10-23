@@ -1,18 +1,17 @@
-//! In-process authority and the frame-boundary policy shared by native input and network clients.
+//! In-process authority shared by native input and network clients.
 use crate::{
     actions::{Control, EditorService},
     capture::{CaptureCompletion, CaptureService, CaptureTask},
-    state::{ApplyPolicy, EditorState, Navigation},
+    state::{EditorState, Navigation},
     world::{DocumentView, gesture::Gesture},
 };
 use ara_host::{Host, HostConfig};
 use ara_proto::{ConnId, Endpoint, RpcError};
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::mpsc::{self, Receiver},
-    time::{Duration, Instant},
 };
 
 /// A structured protocol failure displayed by the native editor.
@@ -30,7 +29,7 @@ impl From<RpcError> for EditorError {
     }
 }
 
-/// One editor process owns the project lock, authority, navigation and review policy.
+/// One editor process owns the project lock, authority, navigation and agent activity.
 pub struct Editor {
     asset_updates: Receiver<()>,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
@@ -41,6 +40,7 @@ pub struct Editor {
     pub session: String,
     /// Active provisional spatial edit.
     pub gesture: Option<Gesture>,
+    active_fields: BTreeSet<(String, String, String)>,
     /// Frozen trace selected for frame inspection; immutable and shared only with IO workers.
     pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
     /// Independent baseline trace for the compare view.
@@ -51,9 +51,6 @@ pub struct Editor {
     pub(crate) completed: mpsc::Sender<CaptureCompletion>,
     updates: Receiver<EditorState>,
     controls: Receiver<Control>,
-    pending: VecDeque<Pending>,
-    last_input: Instant,
-    pending_sequence: u64,
     pub(crate) command_schemas: BTreeMap<String, Value>,
     pub(crate) view_revision: u64,
     pub(crate) panels_revision: u64,
@@ -61,13 +58,6 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
-}
-struct Pending {
-    id: String,
-    conn: ConnId,
-    params: Value,
-    approved: bool,
-    method: String,
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -169,6 +159,12 @@ impl Editor {
             .to_owned();
         host.call(
             ConnId::LOCAL,
+            "collab.join",
+            json!({"session":session,"name":"Editor"}),
+        )
+        .map_err(EditorError::from)?;
+        host.call(
+            ConnId::LOCAL,
             "subscribe",
             json!({"session":session,"topics":["diagnostics","history","jobs"]}),
         )
@@ -179,15 +175,13 @@ impl Editor {
             state,
             session,
             gesture: None,
+            active_fields: BTreeSet::new(),
             profile_current: None,
             profile_baseline: None,
             captures,
             completed,
             updates,
             controls,
-            pending: VecDeque::new(),
-            last_input: Instant::now(),
-            pending_sequence: 0,
             command_schemas,
             view_revision: 0,
             panels_revision: 0,
@@ -197,9 +191,7 @@ impl Editor {
         })
     }
     /// Push native human activity into the non-disruption boundary.
-    pub fn input_active(&mut self) {
-        self.last_input = Instant::now();
-    }
+    pub fn input_active(&mut self) {}
     /// A reflected editor action, using the same validation as an external client.
     pub fn action(&mut self, method: &str, mut params: Value) -> Result<Value, EditorError> {
         params["session"] = self.session.clone().into();
@@ -286,41 +278,16 @@ impl Editor {
                         let _ = completed.send(CaptureCompletion { job, result });
                     });
                 }
-                Control::Approve(ticket) => {
-                    if let Some(p) = self.pending.iter_mut().find(|p| p.id == ticket) {
-                        p.approved = true;
-                    }
-                }
-                Control::Reject(ticket) => self.pending.retain(|p| p.id != ticket),
                 Control::Command(id, target) => self.queued_commands.push((id, target)),
             }
             self.panels_revision += 1;
         }
         changed
     }
-    /// Advance file watching, job completion and deferred agent batches at a frame boundary.
+    /// Advance file watching and job completion at a frame boundary.
     pub fn tick(&mut self) {
         self.host.tick();
         self.sync();
-        let idle =
-            self.gesture.is_none() && self.last_input.elapsed() >= Duration::from_millis(350);
-        let policy = self.state.policy;
-        let count = self.pending.len();
-        for _ in 0..count.min(8) {
-            let Some(p) = self.pending.pop_front() else {
-                break;
-            };
-            if p.approved
-                || policy == ApplyPolicy::Immediately
-                || (policy == ApplyPolicy::WhenIdle && idle)
-            {
-                if let Err(e) = self.host.call(p.conn, &p.method, p.params) {
-                    eprintln!("deferred batch {}: {e}", p.id);
-                }
-            } else {
-                self.pending.push_back(p);
-            }
-        }
     }
     /// Read-only current edit-world adapter.
     pub fn view(&self) -> anyhow::Result<DocumentView> {
@@ -374,6 +341,49 @@ impl Editor {
             &self.state,
             self.host.store().revision(),
         )?);
+        let field = match self.state.tool {
+            crate::state::Tool::Translate => "Transform.position",
+            crate::state::Tool::Rotate => "Transform.rotation",
+            crate::state::Tool::Scale => "Transform.scale",
+        };
+        let entities: Vec<_> = self
+            .gesture
+            .as_ref()
+            .into_iter()
+            .flat_map(|g| g.initial.keys().cloned())
+            .collect();
+        for entity in entities {
+            self.field_gesture(&entity, field, true)?;
+        }
+        Ok(())
+    }
+    /// Mark a human field edit for host-side gesture protection.
+    pub fn field_gesture(
+        &mut self,
+        entity: &str,
+        path: &str,
+        active: bool,
+    ) -> Result<(), EditorError> {
+        self.action(
+            "editor.gesture",
+            json!({"doc":self.state.doc,"entity":entity,"path":path,"active":active}),
+        )?;
+        let key = (self.state.doc.clone(), entity.to_owned(), path.to_owned());
+        if active {
+            self.active_fields.insert(key);
+        } else {
+            self.active_fields.remove(&key);
+        }
+        Ok(())
+    }
+    /// Release field edits after their human commit, or on cancellation.
+    pub fn end_field_gestures(&mut self) -> Result<(), EditorError> {
+        for (doc, entity, path) in std::mem::take(&mut self.active_fields) {
+            self.action(
+                "editor.gesture",
+                json!({"doc":doc,"entity":entity,"path":path,"active":false}),
+            )?;
+        }
         Ok(())
     }
     /// Finish the preview as one content transaction, or discard it with no document change.
@@ -381,116 +391,26 @@ impl Editor {
         let Some(gesture) = self.gesture.take() else {
             return Ok(None);
         };
-        if cancel {
-            return Ok(None);
-        }
         let commands = gesture.commands();
-        if commands.is_empty() {
-            return Ok(None);
-        }
-        self.apply(commands, "Transform gesture", Some(gesture.base))
-            .map(Some)
+        let result = if cancel || commands.is_empty() {
+            Ok(None)
+        } else {
+            self.apply(commands, "Transform gesture", Some(gesture.base))
+                .map(Some)
+        };
+        self.end_field_gestures()?;
+        result
     }
-    /// Incoming calls pass through D20 before reaching the authority.
+    /// Incoming calls apply through the shared host authority.
     pub fn call_for(
         &mut self,
         conn: ConnId,
         method: &str,
         params: Value,
     ) -> Result<Value, RpcError> {
-        if matches!(
-            method,
-            "cmd.apply"
-                | "editor.resource.create"
-                | "editor.asset.import"
-                | "editor.animation.layout"
-                | "history.undo"
-                | "history.redo"
-                | "review.revert"
-                | "session.rollback"
-                | "doc.sync"
-                | "jobs.start"
-                // Agent changes to a running game: live patches, C# commands, kept
-                // changes and C# source writes (hot reloads) follow the same policy.
-                | "play.patch"
-                | "play.command"
-                | "play.keep"
-                | "script.write"
-        ) && !params["dryRun"].as_bool().unwrap_or(false)
-            && self.state.policy != ApplyPolicy::Immediately
-        {
-            let session = params["session"]
-                .as_str()
-                .ok_or_else(|| RpcError::from(crate::invalid("session required")))?;
-            let status = self
-                .host
-                .call(conn, "session.status", json!({"session":session}))?;
-            if status["session"]["author"]
-                .as_str()
-                .is_some_and(|a| a.starts_with("agent:"))
-                && (self.state.policy == ApplyPolicy::OnApproval
-                    || self.last_input.elapsed() < Duration::from_millis(350)
-                    || self.gesture.is_some())
-            {
-                // Validate the entire batch now. Approval still uses its original base and attribution.
-                if method == "cmd.apply" {
-                    let mut dry = params.clone();
-                    dry["dryRun"] = true.into();
-                    self.host.call(conn, "cmd.apply", dry)?;
-                }
-                if let Some(key) = params["idempotencyKey"].as_str()
-                    && let Some(p) = self.pending.iter().find(|p| {
-                        p.method == method
-                            && p.params["session"] == params["session"]
-                            && p.params["idempotencyKey"].as_str() == Some(key)
-                    })
-                {
-                    return Ok(json!({"queued":true,"ticket":p.id}));
-                }
-                self.pending_sequence += 1;
-                let id = format!("pending-{}", self.pending_sequence);
-                self.pending.push_back(Pending {
-                    id: id.clone(),
-                    conn,
-                    params,
-                    approved: false,
-                    method: method.into(),
-                });
-                return Ok(json!({"queued":true,"ticket":id,"policy":self.state.policy}));
-            }
-        }
-        if method.starts_with("editor.pending.")
-            && !self
-                .pending
-                .iter()
-                .any(|p| Some(p.id.as_str()) == params["ticket"].as_str())
-        {
-            return Err(RpcError::from(crate::invalid("pending batch not found")));
-        }
         let result = self.host.call(conn, method, params);
         self.sync();
         result
-    }
-    /// Queued agent changes shown in the Agents panel, including their command list and reason.
-    pub fn pending(&self) -> Value {
-        json!(
-            self.pending
-                .iter()
-                .map(
-                    |p| json!({"ticket":p.id,"commands":p.params["commands"],"why":p.params["why"]})
-                )
-                .collect::<Vec<_>>()
-        )
-    }
-    /// Human approval releases the original attributed batch at the next frame boundary.
-    pub fn approve(&mut self, ticket: &str) -> Result<(), EditorError> {
-        self.action("editor.pending.apply", json!({"ticket":ticket}))?;
-        Ok(())
-    }
-    /// Reject a pending batch before it touches any document.
-    pub fn reject(&mut self, ticket: &str) -> Result<(), EditorError> {
-        self.action("editor.pending.reject", json!({"ticket":ticket}))?;
-        Ok(())
     }
     pub(crate) fn report_error(&mut self, message: &str) {
         let _ = self.action("editor.report", json!({"message":message}));

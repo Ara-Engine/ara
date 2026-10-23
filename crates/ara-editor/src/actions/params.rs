@@ -67,17 +67,6 @@ pub(super) struct EditorFollow {
     /// Agent session to follow; absent restores independent human navigation.
     pub agent: Option<String>,
 }
-/// Parameters for a human review decision on a deferred agent mutation.
-#[derive(Schema, Deserialize)]
-#[ara(params)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct EditorPending {
-    /// Live protocol session.
-    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
-    pub session: String,
-    /// Ticket returned by a queued mutation.
-    pub ticket: String,
-}
 /// Native host diagnostics use the same diagnostic bus as engine services.
 #[derive(Schema, Deserialize)]
 #[ara(params)]
@@ -268,20 +257,6 @@ pub(super) struct EditorSearch {
     pub panel: String,
     /// Search substring or filter expression.
     pub query: String,
-}
-/// Parameters for the agent application boundary.
-#[derive(Schema, Deserialize)]
-#[ara(params)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct EditorPolicy {
-    /// Live protocol session.
-    #[expect(
-        dead_code,
-        reason = "Host validates the session before service dispatch"
-    )]
-    pub session: String,
-    /// Desired D20 policy.
-    pub policy: ApplyPolicy,
 }
 /// Parameters for opening or closing the command palette.
 #[derive(Schema, Deserialize)]

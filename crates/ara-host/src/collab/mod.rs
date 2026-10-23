@@ -4,7 +4,7 @@
 //! | Methods | MCP |
 //! |---|---|
 //! | `collab.who`, `collab.claim`, `collab.release`, `branch.open`, `branch.submit` | `ara_session` actions `who`, `claim`, `release`, `branch`, `submit` |
-//! | `collab.join/leave/presence/heartbeat/claims/submit/sync/undo/redo/conflicts/policy`, `branch.list/status/merge/discard` | none (editors, replicas) |
+//! | `collab.join/leave/presence/heartbeat/claims/submit/sync/undo/redo/conflicts`, `branch.list/status/merge/discard` | none (editors, replicas) |
 //!
 //! - Participants are sessions. `collab.join` subscribes the connection to the
 //!   `collab.*` notifications; every other collab method joins the session on first
@@ -13,9 +13,6 @@
 //!   causal metadata, routes the hub's events to joined connections and persists
 //!   claims (`.ara/claims.json`) and branch sessions (`.ara/branches/`). Presence
 //!   is never persisted.
-//! - The hub installs the claim guard on the store; the host sets the store's
-//!   origin to the calling session, so agents are blocked by everyone's claims but
-//!   their own.
 //! - `cmd.apply` with `branch` runs in a branch session ([`branch_apply`]).
 
 mod params;
@@ -28,10 +25,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ara_collab::claims::{Claim, DEFAULT_TTL_MS};
 use ara_collab::codes;
-use ara_collab::{
-    ApplyPolicy, Audience, Hub, Kind, ParticipantId, Prefer, Presence, SavedBranch, Snapshot,
-    Submit,
-};
+use ara_collab::{Audience, Hub, ParticipantId, Prefer, Presence, SavedBranch, Snapshot, Submit};
 use ara_diag::{Diagnostic, codes as kernel};
 use ara_doc::{Edit, IdGen};
 use ara_ops::Author;
@@ -60,6 +54,7 @@ pub(crate) struct Collab {
     pub(crate) hub: Hub,
     /// Connections that joined, per participant (notification routing).
     conns: BTreeMap<ParticipantId, ConnId>,
+    filters: BTreeMap<ParticipantId, Vec<String>>,
     /// `.ara`.
     dir: PathBuf,
     /// The claims version last written to `.ara/claims.json`, and when (ms).
@@ -72,6 +67,7 @@ impl Collab {
         Collab {
             hub: Hub::new(0, IdGen::seeded(0)),
             conns: BTreeMap::new(),
+            filters: BTreeMap::new(),
             dir,
             saved_claims: (0, 0),
         }
@@ -141,6 +137,7 @@ impl State {
         for id in ended {
             self.collab.hub.leave(&mut self.store, &id, now);
             self.collab.conns.remove(&id);
+            self.collab.filters.remove(&id);
         }
         // Whoever commits is present: sessions that edited join on their first commit.
         let committers: BTreeSet<String> = self
@@ -165,10 +162,46 @@ impl State {
     /// Routes hub events to joined connections and persists what changed.
     fn collab_flush(&mut self) {
         for e in self.collab.hub.drain_events() {
+            if e.method == "editor.overwrite" {
+                self.log(
+                    Diagnostic::info(
+                        codes::OVERWRITTEN,
+                        e.params["message"].as_str().unwrap_or("Field overwritten"),
+                    )
+                    .data(e.params.clone()),
+                );
+                for conn in self.subs.keys() {
+                    self.outbox
+                        .push((*conn, jsonrpc::notification(e.method, e.params.clone())));
+                }
+            }
             let msg = jsonrpc::notification(e.method, e.params);
             let to: BTreeSet<ConnId> = match &e.to {
-                Audience::All => self.collab.conns.values().copied().collect(),
-                Audience::Only(p) => self.collab.conns.get(p).copied().into_iter().collect(),
+                Audience::All => self
+                    .collab
+                    .conns
+                    .iter()
+                    .filter(|(p, _)| {
+                        self.collab
+                            .filters
+                            .get(*p)
+                            .is_none_or(|methods| methods.iter().any(|m| m == e.method))
+                    })
+                    .map(|(_, conn)| *conn)
+                    .collect(),
+                Audience::Only(p) => self
+                    .collab
+                    .conns
+                    .get(p)
+                    .filter(|_| {
+                        self.collab
+                            .filters
+                            .get(p)
+                            .is_none_or(|methods| methods.iter().any(|m| m == e.method))
+                    })
+                    .copied()
+                    .into_iter()
+                    .collect(),
             };
             for conn in to {
                 self.outbox.push((conn, msg.clone()));
@@ -219,6 +252,7 @@ impl State {
             .collect();
         for p in gone {
             self.collab.conns.remove(&p);
+            self.collab.filters.remove(&p);
             self.collab.hub.disconnect(&p);
         }
         self.collab_flush();
@@ -267,13 +301,14 @@ pub(crate) struct CollabService;
 pub(crate) fn methods(db: &mut SchemaDb) -> Vec<Method> {
     let s = "ara_session";
     vec![
+        Method::new::<crate::params::DiscoverParams>(db, "collab.activity", "Connected participants and their current presence for Ara Hub.").sessionless().read_only(),
         Method::new::<JoinParams>(db, "collab.join", "Join collaboration: this connection gets presence, claims, op and conflict notifications; returns everyone's state (and a snapshot on request)."),
         Method::new::<crate::params::SessionParams>(db, "collab.leave", "Leave collaboration: releases your claims and clears your presence."),
         Method::new::<PresenceParams>(db, "collab.presence", "Set your presence (open document, camera, selection, pointer, activity, following); broadcast rate-limited. Also a heartbeat for your claims."),
-        Method::new::<crate::params::SessionParams>(db, "collab.who", "Who is here and doing what: participants, what they look at and do, their claims (which agents must avoid) and branch sessions, as short text.")
+        Method::new::<crate::params::SessionParams>(db, "collab.who", "Who is here and doing what: participants, what they look at and do, their advisory presence and branch sessions, as short text.")
             .read_only()
             .action(s, "who"),
-        Method::new::<ClaimParams>(db, "collab.claim", "Claim entities, components, documents or files for your turn, with an expiry. Others' agents cannot edit what you claim; humans are only warned.")
+        Method::new::<ClaimParams>(db, "collab.claim", "Claim entities, components, documents or files for your turn, with an expiry. Advisory only; never blocks edits.")
             .scope(Scope::EditScene)
             .action(s, "claim"),
         Method::new::<ReleaseParams>(db, "collab.release", "Release your claims (all, or by ID).")
@@ -292,8 +327,6 @@ pub(crate) fn methods(db: &mut SchemaDb) -> Vec<Method> {
             .scope(Scope::EditScene),
         Method::new::<ConflictsParams>(db, "collab.conflicts", "The conflict log: changes that lost (overwritten, dropped, kept-live in a merge), with both values.")
             .read_only(),
-        Method::new::<PolicyParams>(db, "collab.policy", "When submitted agent branches merge: immediately, when the humans are idle, or on approval. Humans set it.")
-            .scope(Scope::EditScene),
         Method::new::<BranchOpenParams>(db, "branch.open", "Open a branch session: a private copy of the live documents to apply your turn in (`ara_apply` with `branch`); nothing is live until it is submitted and merged.")
             .scope(Scope::EditScene)
             .action(s, "branch"),
@@ -301,7 +334,7 @@ pub(crate) fn methods(db: &mut SchemaDb) -> Vec<Method> {
             .read_only(),
         Method::new::<BranchParams>(db, "branch.status", "One branch session: status, what it changed (was → now), what it waits on, the merge report.")
             .read_only(),
-        Method::new::<BranchSubmitParams>(db, "branch.submit", "Submit your branch session for merging; it merges per the human's apply policy once nobody claims what it touches.")
+        Method::new::<BranchSubmitParams>(db, "branch.submit", "Submit your optional branch session and merge it immediately.")
             .scope(Scope::EditScene)
             .action(s, "submit"),
         Method::new::<BranchMergeParams>(db, "branch.merge", "Approve and merge a branch session now (humans only): field-level three-way merge with a conflict report.")
@@ -328,14 +361,18 @@ impl Service for CollabService {
         let me = pid(&sid);
         let now = now_ms();
         st.collab.hub.expire(&mut st.store, now);
-        if method != "collab.leave" && method != "collab.join" {
+        if method != "collab.leave" && method != "collab.join" && method != "collab.activity" {
             st.ensure_joined(&sid, None, None)?;
         }
         let result = match method {
+            "collab.activity" => Ok(
+                json!({"participants":st.collab.hub.roster().all().collect::<Vec<_>>(),"presence":st.collab.hub.presence().all().collect::<BTreeMap<_,_>>()}),
+            ),
             "collab.join" => join(st, conn, &sid, parse(params)?, now),
             "collab.leave" => {
                 st.collab.hub.leave(&mut st.store, &me, now);
                 st.collab.conns.remove(&me);
+                st.collab.filters.remove(&me);
                 Ok(json!({ "left": true }))
             }
             "collab.presence" => {
@@ -428,12 +465,11 @@ impl Service for CollabService {
                 };
                 Ok(json!({ "conflicts": list }))
             }
-            "collab.policy" => policy(st, &me, parse(params)?),
             "branch.open" => {
                 let p: BranchOpenParams = parse(params)?;
                 let info = st.collab.hub.branch_open(&st.store, &me, p.why)?;
                 let text = format!(
-                    "opened branch {} from revision {}. Apply your turn there with ara_apply {{\"branch\": \"{}\", ...}} (claims do not block you inside it); nothing is live until ara_session {{\"action\": \"submit\", \"branch\": \"{}\"}}, which merges it per the human's apply policy once nobody claims what it touches.\n",
+                    "opened branch {} from revision {}. Apply your turn there with ara_apply {{\"branch\": \"{}\", ...}}; nothing is live until ara_session {{\"action\": \"submit\", \"branch\": \"{}\"}}, which merges it immediately.\n",
                     info.id, info.base_revision, info.id, info.id
                 );
                 Ok(with_text(json!(info), text))
@@ -450,6 +486,7 @@ impl Service for CollabService {
             }
             "branch.submit" => {
                 let p: BranchSubmitParams = parse(params)?;
+                st.refresh_branch_gestures(now, true);
                 let info =
                     st.collab
                         .hub
@@ -492,6 +529,7 @@ impl Service for CollabService {
 
     fn tick(&mut self, cx: &mut Cx<'_>) {
         let st = &mut *cx.st;
+        st.refresh_branch_gestures(now_ms(), false);
         st.collab.hub.tick(&mut st.store, now_ms());
         st.collab_after();
     }
@@ -531,7 +569,7 @@ fn branch_text(info: &ara_collab::BranchInfo) -> String {
     }
     if !info.blocked_by.is_empty() {
         out.push_str(&format!(
-            "\n  waiting on: {} (it merges by itself once they release it)",
+            "\n  merge validation: {}",
             info.blocked_by.join(", ")
         ));
     }
@@ -559,12 +597,16 @@ fn join(st: &mut State, conn: ConnId, sid: &str, p: JoinParams, now: u64) -> R {
         participant
     };
     st.collab.conns.insert(pid(sid), conn);
+    if let Some(events) = p.events {
+        st.collab.filters.insert(pid(sid), events);
+    } else {
+        st.collab.filters.remove(&pid(sid));
+    }
     let me = pid(sid);
     let presence: BTreeMap<&ParticipantId, &Presence> = st.collab.hub.presence().all().collect();
     let branches: Vec<_> = st.collab.hub.branches().map(|b| b.info()).collect();
     let conflicts: Vec<_> = st.collab.hub.conflicts().lost_by(&me).collect();
     let participants: Vec<_> = st.collab.hub.roster().all().collect();
-    let (policy, idle) = st.collab.hub.policy();
     let mut out = json!({
         "participant": participant,
         "revision": st.store.revision(),
@@ -573,7 +615,6 @@ fn join(st: &mut State, conn: ConnId, sid: &str, p: JoinParams, now: u64) -> R {
         "claims": st.collab.hub.claims(),
         "conflicts": conflicts,
         "branches": branches,
-        "policy": { "policy": policy, "idleMs": idle },
         "text": st.collab.hub.who(&st.store, Some(&me), now),
     });
     if p.snapshot.unwrap_or(false) {
@@ -632,37 +673,13 @@ fn submit(st: &mut State, me: &ParticipantId, p: SubmitParams, now: u64) -> R {
         why: p.why,
         label: p.label,
     };
+    if let Some(result) = st.gesture_submit(&me.0, &s)? {
+        return Ok(result);
+    }
     st.collab
         .hub
         .submit(&mut st.store, me, s, now)
         .map(|ack| json!(ack))
-}
-
-fn policy(st: &mut State, me: &ParticipantId, p: PolicyParams) -> R {
-    if p.policy.is_some() || p.idle_ms.is_some() {
-        let human = st
-            .collab
-            .hub
-            .roster()
-            .get(me)
-            .is_some_and(|x| x.kind == Kind::Human);
-        if !human {
-            return Err(vec![Diagnostic::error(
-                codes::HUMAN_ONLY,
-                "only human sessions set when agent branches merge (D20)",
-            )]);
-        }
-        let current = st.collab.hub.policy().0;
-        let policy = match p.policy {
-            Some(PolicyName::Immediately) => ApplyPolicy::Immediately,
-            Some(PolicyName::WhenIdle) => ApplyPolicy::WhenIdle,
-            Some(PolicyName::OnApproval) => ApplyPolicy::OnApproval,
-            None => current,
-        };
-        st.collab.hub.set_policy(policy, p.idle_ms);
-    }
-    let (policy, idle) = st.collab.hub.policy();
-    Ok(json!({ "policy": policy, "idleMs": idle }))
 }
 
 /// `cmd.apply` with `branch`: runs the batch in the caller's branch session. No

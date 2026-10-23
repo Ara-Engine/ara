@@ -46,8 +46,8 @@ the other when it goes stale.
 - **Edit with commands**, not raw file surgery, for hierarchy, prefabs and graphs: \
 `ara_apply` / `ara do`. Batches are atomic; mint symbolic IDs with `\"as\": \"$crate\"` \
 and use them in later calls. `dryRun` previews the diff.
-- **Review:** every change is a transaction with a `why`. Agent changes apply live but \
-stay unreviewed until a human accepts or reverts them (per transaction or entity).
+- **Agent turns:** every change is a transaction with a `why`. Agent changes apply immediately. \
+History, per-turn undo, overwrite notices and active-field gesture safety keep collaboration visible.
 - **Sessions:** begin one (`session.begin`) and pass its handle to every call. Scopes \
 limit what a session may do.
 - **Find things:** `schema.search` for components and commands, `docs.search` for these \

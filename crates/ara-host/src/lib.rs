@@ -17,6 +17,7 @@ mod core;
 pub mod diag;
 pub mod docs;
 mod files;
+pub mod gesture;
 mod host;
 pub mod jobs;
 pub mod journal;
@@ -40,8 +41,9 @@ pub use session::{Approval, ApprovalRequest, Decision, DefaultPolicy};
 /// why, collab), without opening a host (offline docs generation, MCP tests).
 pub fn core_methods() -> Vec<ara_proto::MethodInfo> {
     let mut db = ara_schema::SchemaDb::new();
-    let services: [Box<dyn Service>; 5] = [
+    let services: [Box<dyn Service>; 6] = [
         Box::new(core::Core),
+        Box::new(gesture::GestureService),
         Box::new(profile::ProfileService),
         Box::new(diag::DiagService),
         Box::new(why::WhyService),

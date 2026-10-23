@@ -130,7 +130,13 @@ impl AgentSpec {
                     .args(["-m", &self.model_id()])
                     .args(["-c", &format!("model_reasoning_effort=\"{effort}\"")])
                     .args(["-c", "mcp_servers.ara.command=\"ara\""])
-                    .args(["-c", "mcp_servers.ara.args=[\"mcp\"]"])
+                    .args([
+                        "-c",
+                        &format!(
+                            "mcp_servers.ara.args={}",
+                            serde_json::json!(["mcp", "--root", project])
+                        ),
+                    ])
                     .arg("-C")
                     .arg(project)
                     .arg("-");

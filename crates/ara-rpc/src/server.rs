@@ -59,11 +59,16 @@ pub struct ServeOptions {
 }
 
 enum Event {
-    Opened(ConnId, Sender<String>),
+    Opened(ConnId, Sender<Outgoing>),
     Message(ConnId, String),
     Closed(ConnId),
     Http(HttpRequest, Sender<HttpResponse>),
     StdinClosed,
+}
+
+enum Outgoing {
+    Text(String),
+    Flushed(Sender<()>),
 }
 
 /// Runs until the handler stops, stdin closes (with `stdio`) or every event
@@ -84,15 +89,15 @@ pub fn serve(handler: &mut dyn Handler, opts: ServeOptions) -> io::Result<()> {
 }
 
 fn run(handler: &mut dyn Handler, rx: Receiver<Event>, tick: Duration) -> io::Result<()> {
-    let mut conns: BTreeMap<ConnId, Sender<String>> = BTreeMap::new();
+    let mut conns: BTreeMap<ConnId, Sender<Outgoing>> = BTreeMap::new();
     let mut stdout = io::stdout();
     let mut last_tick = Instant::now();
     loop {
-        let mut send = |conn: ConnId, text: String, conns: &BTreeMap<ConnId, Sender<String>>| {
+        let mut send = |conn: ConnId, text: String, conns: &BTreeMap<ConnId, Sender<Outgoing>>| {
             if conn == STDIO {
                 let _ = writeln!(stdout, "{text}").and_then(|()| stdout.flush());
             } else if let Some(c) = conns.get(&conn) {
-                let _ = c.send(text);
+                let _ = c.send(Outgoing::Text(text));
             }
         };
         match rx.recv_timeout(tick) {
@@ -125,6 +130,24 @@ fn run(handler: &mut dyn Handler, rx: Receiver<Event>, tick: Duration) -> io::Re
             send(conn, text, &conns);
         }
         if handler.stopping() {
+            // A daemon must deliver its shutdown reply before its process exits.
+            // FIFO barriers acknowledge the socket writers, with one bounded deadline.
+            let (ack, received) = channel();
+            let mut waiting = 0;
+            for connection in conns.values() {
+                if connection.send(Outgoing::Flushed(ack.clone())).is_ok() {
+                    waiting += 1;
+                }
+            }
+            let deadline = Instant::now() + Duration::from_secs(1);
+            for _ in 0..waiting {
+                if received
+                    .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                    .is_err()
+                {
+                    break;
+                }
+            }
             return Ok(());
         }
     }
@@ -235,7 +258,7 @@ fn pump(
     ws: &mut WebSocket<TcpStream>,
     id: ConnId,
     tx: &Sender<Event>,
-    out: &Receiver<String>,
+    out: &Receiver<Outgoing>,
 ) -> io::Result<()> {
     loop {
         match ws.read() {
@@ -256,8 +279,14 @@ fn pump(
             }
             Err(e) => return Err(io::Error::other(e)),
         }
-        while let Ok(text) = out.try_recv() {
-            ws.send(Message::text(text)).map_err(io::Error::other)?;
+        while let Ok(message) = out.try_recv() {
+            match message {
+                Outgoing::Text(text) => ws.send(Message::text(text)).map_err(io::Error::other)?,
+                Outgoing::Flushed(ack) => {
+                    ws.flush().map_err(io::Error::other)?;
+                    let _ = ack.send(());
+                }
+            }
         }
     }
 }

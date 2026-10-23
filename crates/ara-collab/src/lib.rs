@@ -4,16 +4,15 @@
 //! - **Presence** ([`presence`]): who is here, what they look at (document, camera,
 //!   selection, pointer) and what they do (command or turn and its why). Ephemeral,
 //!   rate-limited broadcast.
-//! - **Claims** ([`claims`]): soft locks on documents, entities, components/fields
-//!   and asset paths, with expiry and heartbeats. Advisory for humans, enforced for
-//!   agents through an `ara_ops::Guard` (`ARA2500` names the claimant).
+//! - **Claims** ([`claims`]): legacy advisory markers on documents, entities, components/fields
+//!   and asset paths, with expiry and heartbeats. Never enforced; retained for compatibility.
 //! - **Live op sync** ([`sync`], [`Hub`], [`Replica`]): the authority orders every
 //!   transaction and broadcasts it with causal metadata; replicas edit
 //!   optimistically and rebase. Different fields merge; the same field is
 //!   last-writer-wins by authority order, and the loser goes to the conflict log.
 //! - **Per-participant undo** ([`undo`]): undoing mine never undoes yours.
 //! - **Branch sessions** ([`branch`]): agents work on an overlay and submit; merges
-//!   are field-level three-way with a conflict report, per the apply policy.
+//!   are field-level three-way with a conflict report, immediately on submit.
 //! - **Late join** ([`Snapshot`]) and the **editor seam** ([`view::CollabView`]).
 //!
 //! No IO and no clock: callers pass `now` (ms). The project host (`ara-host`'s
@@ -34,8 +33,8 @@ pub mod view;
 pub mod who;
 
 pub use branch::{Branch, BranchInfo, BranchStatus, MergeReport, Prefer, SavedBranch};
-pub use claims::{Claim, ClaimGuard, Wanted};
-pub use hub::{Ack, ApplyPolicy, Audience, Event, Hub, PRESENCE_INTERVAL_MS, not_joined};
+pub use claims::{Claim, Wanted};
+pub use hub::{Ack, Audience, Event, Hub, PRESENCE_INTERVAL_MS, not_joined};
 pub use participant::{Kind, Participant, ParticipantId};
 pub use presence::{Activity, Camera, Presence};
 pub use replica::Replica;

@@ -73,10 +73,7 @@ pub fn summary(hub: &Hub, store: &Store, me: Option<&ParticipantId>, now: u64) -
     }
     let claims = hub.claims();
     if !claims.is_empty() {
-        let _ = writeln!(
-            out,
-            "Claims (agents' edits there are rejected; humans are never blocked):"
-        );
+        let _ = writeln!(out, "Advisory presence markers (never block edits):");
         for c in claims {
             let mine = if Some(&c.holder) == me {
                 " (yours)"
