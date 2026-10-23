@@ -49,7 +49,7 @@ impl JoltBackend {
         // SAFETY: exclusively owned world; no workers exist outside run_jobs scopes.
         unsafe { ara_bench_reset(self.ptr()) };
     }
-    /// Exclusive CPU ns for broadphase, narrowphase, setup, velocity, position,
+    /// Exclusive summed worker-elapsed ns for broadphase, narrowphase, setup, velocity, position,
     /// integration, islands, bookkeeping; then native wall ns, arena peak, fallbacks.
     /// Phase counters require `profile`; ordinary `bench` builds return zero phases.
     pub fn benchmark_stats(&self) -> [u64; 11] {

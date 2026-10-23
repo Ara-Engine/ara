@@ -33,5 +33,10 @@ name = "performance"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "ecs_bowl"
+harness = false
+required-features = ["bench"]
+
 [lints]
 workspace = true
