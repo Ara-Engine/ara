@@ -92,9 +92,27 @@ fn corrected_creation_batch_can_be_retried_without_losing_valid_entities() {
     use bevy_ecs::prelude::*;
     let mut w = World::new();
     let mut schedule = Schedule::default();
-    register::<JoltBackend>(&mut w, &mut schedule, PhysicsConfig { max_bodies: 1, ..PhysicsConfig::game_default() }).expect("register");
-    w.spawn((PhysicsId { value: 1 }, RigidBody::default(), Collider::default()));
-    let overflow = w.spawn((PhysicsId { value: 2 }, RigidBody::default(), Collider::default())).id();
+    register::<JoltBackend>(
+        &mut w,
+        &mut schedule,
+        PhysicsConfig {
+            max_bodies: 1,
+            ..PhysicsConfig::game_default()
+        },
+    )
+    .expect("register");
+    w.spawn((
+        PhysicsId { value: 1 },
+        RigidBody::default(),
+        Collider::default(),
+    ));
+    let overflow = w
+        .spawn((
+            PhysicsId { value: 2 },
+            RigidBody::default(),
+            Collider::default(),
+        ))
+        .id();
     assert!(prepare_ecs::<JoltBackend>(&mut w).is_err());
     w.despawn(overflow);
     prepare_ecs::<JoltBackend>(&mut w).expect("retry after capacity correction");
@@ -107,38 +125,85 @@ fn spatial_character_candidates_match_reference_through_crowds_and_restore() {
     fn scene(tree: bool) -> (JoltWorld, Vec<CharacterHandle>) {
         let mut w = world(4, 64);
         ground(&mut w, 50.0);
-        let actors = (0..40).map(|i| character(&mut w,
-            Vec3::new((i % 8) as f32 * 0.9, 0.0, (i / 8) as f32 * 0.9))).collect();
+        let actors = (0..40)
+            .map(|i| {
+                character(
+                    &mut w,
+                    Vec3::new((i % 8) as f32 * 0.9, 0.0, (i / 8) as f32 * 0.9),
+                )
+            })
+            .collect();
         w.backend_mut().benchmark_character_tree(tree);
         (w, actors)
     }
-    let (mut spatial, mut actors) = scene(std::env::var_os("ARA_PHYSICS_TEST_REFERENCE_ONLY").is_none());
+    let (mut spatial, mut actors) = scene(true);
     let (mut reference, mut other) = scene(false);
     for tick in 0..120 {
         for (w, ids) in [(&mut spatial, &actors), (&mut reference, &other)] {
             for (i, &id) in ids.iter().enumerate() {
                 let phase = tick as f32 * 0.07 + i as f32;
-                w.step_character(id, CharacterInput {
-                    desired_velocity: [phase.sin() * 8.0, 0.0, phase.cos() * 8.0],
-                    crouch: (30..45).contains(&tick),
-                    jump_speed: if tick == 20 { 5.0 } else { 0.0 },
-                }).expect("crowd movement");
+                w.step_character(
+                    id,
+                    CharacterInput {
+                        desired_velocity: [phase.sin() * 8.0, 0.0, phase.cos() * 8.0],
+                        crouch: (30..45).contains(&tick),
+                        jump_speed: if tick == 20 { 5.0 } else { 0.0 },
+                    },
+                )
+                .expect("crowd movement");
             }
             w.step().expect("crowd tick");
         }
         for (i, (&a, &b)) in actors.iter().zip(&other).enumerate() {
-            assert_eq!(spatial.backend().character_state(a).expect("spatial state"),
-                reference.backend().character_state(b).expect("reference state"), "tick {tick}, character {i}");
+            assert_eq!(
+                spatial.backend().character_state(a).expect("spatial state"),
+                reference
+                    .backend()
+                    .character_state(b)
+                    .expect("reference state"),
+                "tick {tick}, character {i}"
+            );
         }
+        assert_eq!(
+            hash(&spatial, &[], &actors, &[]),
+            hash(&reference, &[], &other, &[]),
+            "bit-exact crowd tick {tick}"
+        );
         if tick == 60 {
             let snapshot = spatial.snapshot().expect("spatial checkpoint");
-            spatial.restore(&snapshot).expect("invalidate tree after restore");
+            spatial
+                .restore(&snapshot)
+                .expect("invalidate tree after restore");
             let a = actors.pop().expect("last actor");
             let b = other.pop().expect("last reference actor");
             spatial.backend_mut().destroy_character(a).expect("remove");
-            reference.backend_mut().destroy_character(b).expect("remove reference");
+            reference
+                .backend_mut()
+                .destroy_character(b)
+                .expect("remove reference");
             actors.push(character(&mut spatial, Vec3::new(12.0, 0.0, 0.0)));
             other.push(character(&mut reference, Vec3::new(12.0, 0.0, 0.0)));
         }
     }
+}
+
+#[cfg(feature = "bench")]
+#[test]
+fn host_job_queue_reuses_slots_without_losing_jobs() {
+    let mut w = JoltWorld::new(PhysicsConfig {
+        threads: 8,
+        shared_job_pool: true,
+        max_bodies: 64,
+        max_pairs: 1024,
+        max_contacts: 1024,
+        scratch_mb: 8,
+        ..PhysicsConfig::game_default()
+    })
+    .expect("host worker fixture");
+    w.backend_mut()
+        .benchmark_job_probe(65536)
+        .expect("queue wraparound within one boundary");
+    w.backend_mut()
+        .benchmark_job_probe(65536)
+        .expect("queue reuse at the next boundary");
 }

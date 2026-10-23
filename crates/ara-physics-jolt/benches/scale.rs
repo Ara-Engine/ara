@@ -2,9 +2,9 @@
 #[path = "../tests/support/mod.rs"]
 mod support;
 use ara_physics::*;
+use ara_physics_jolt::JoltWorld;
 use std::time::Instant;
 use support::*;
-use ara_physics_jolt::JoltWorld;
 
 fn percentile(values: &mut [f64], p: f64) -> f64 {
     values.sort_by(f64::total_cmp);
@@ -26,8 +26,15 @@ fn run(
         "deterministic_network" => PhysicsConfig::deterministic_network(),
         _ => return Err(format!("unknown preset {preset}").into()),
     };
-    let max_bodies=count as u32+16;
-    let mut w=JoltWorld::new(PhysicsConfig{threads,max_bodies,max_pairs:(max_bodies*16).max(4096),max_contacts:(max_bodies*16).max(4096),event_capacity:0,..settings})?;
+    let max_bodies = count as u32 + 16;
+    let mut w = JoltWorld::new(PhysicsConfig {
+        threads,
+        max_bodies,
+        max_pairs: (max_bodies * 16).max(4096),
+        max_contacts: (max_bodies * 16).max(4096),
+        event_capacity: 0,
+        ..settings
+    })?;
     bowl(&mut w, Vec3::ZERO, 25.0, 12.0);
     let ids = grid(&mut w, count, Vec3::Y * 13.0, 50, 7);
     w.backend_mut().optimize()?;

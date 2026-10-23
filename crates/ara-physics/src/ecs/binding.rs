@@ -47,7 +47,9 @@ pub(super) fn validate(world: &World, e: Entity) -> Result<()> {
 }
 
 impl Binding {
-    pub fn incomplete(&self) -> bool { self.rigid.is_some() && self.body.is_none() }
+    pub fn incomplete(&self) -> bool {
+        self.rigid.is_some() && self.body.is_none()
+    }
     pub fn body(&self) -> Option<BodyHandle> {
         self.body
     }

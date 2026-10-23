@@ -9,6 +9,14 @@ use std::time::Instant;
 use support::*;
 
 type BenchResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+fn persist(records: &[serde_json::Value], complete: bool) -> BenchResult<String> {
+    let result = serde_json::json!({"schemaVersion":1,"complete":complete,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"instrumented":cfg!(feature="profile"),"records":records});
+    let text = ara_json::to_canonical_string(&ara_json::sort_keys(&result));
+    if let Some(path) = std::env::var_os("ARA_PHYSICS_BENCH_OUTPUT") {
+        std::fs::write(path, &text)?;
+    }
+    Ok(text)
+}
 fn load() -> serde_json::Value {
     #[cfg(windows)]
     {
@@ -101,6 +109,8 @@ fn bowl_pair(
     let mut phases = [0u64; 8];
     let mut scratch_peak = 0;
     let mut fallbacks = 0;
+    let mut ara_scratch_peak = 0;
+    let mut ara_fallbacks = 0;
     let mut states = Vec::with_capacity(count);
     for tick in 0..steps {
         // AB/BA alternates every tick and round, so both see the same contention.
@@ -118,6 +128,8 @@ fn bowl_pair(
             let stats = world.backend().benchmark_stats();
             if is_ara {
                 ara_ms.push(elapsed);
+                ara_scratch_peak = ara_scratch_peak.max(stats[9]);
+                ara_fallbacks += stats[10];
             } else {
                 native_ms.push(elapsed);
                 inner_ms.push(stats[8] as f64 / 1e6);
@@ -150,7 +162,8 @@ fn bowl_pair(
     native
         .backend_mut()
         .read_bodies(&native_ids, &mut native_states)?;
-    let identical_final_state = states == native_states;
+    let identical_final_state = states == native_states
+        && hash(&ara, &ids, &[], &[]) == hash(&native, &native_ids, &[], &[]);
     if same_settings && !identical_final_state {
         return Err("direct Jolt and Ara final states differ".into());
     }
@@ -168,7 +181,8 @@ fn bowl_pair(
         "scratchMiB":c.scratch_mb,"nativeScratchMiB":native_config.scratch_mb,"nativeSharedPool":native_config.shared_job_pool,"nativeSplitter":native_config.large_island_splitter,"nativeDeterministicOrdering":native_config.deterministic_simulation,
         "columnExtractionMs":distribution(&mut column_ms),"loadBefore":load_before,"loadAfter":load(),
         "phaseOrder":["broadphase","narrowphase","constraint_setup","velocity_solver","position_solver","integration_ccd","islands","bookkeeping"],
-        "scratchPeakBytes":scratch_peak,"scratchFallbackAllocations":fallbacks,"escaped":escaped,"identicalFinalState":identical_final_state,"activeAtEnd":ara.backend().active_count()}),
+        "scratchPeakBytes":scratch_peak,"scratchFallbackAllocations":fallbacks,"araScratchPeakBytes":ara_scratch_peak,"araScratchFallbackAllocations":ara_fallbacks,
+        "escaped":escaped,"identicalFinalState":identical_final_state,"activeAtEnd":ara.backend().active_count()}),
     )
 }
 fn env_parse<T: std::str::FromStr>(key: &str, default: &str) -> BenchResult<T>
@@ -224,17 +238,14 @@ fn main() -> BenchResult<()> {
                     ara_json::to_canonical_string(&ara_json::sort_keys(&record))
                 );
                 records.push(record);
+                persist(&records, false)?;
             }
         }
     }
     if std::env::var("ARA_PHYSICS_BENCH_EXTRAS").is_ok_and(|s| s == "1") {
         records.extend(workloads::run(threads, steps)?);
     }
-    let result = serde_json::json!({"schemaVersion":1,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"instrumented":cfg!(feature="profile"),"records":records});
-    let text = ara_json::to_canonical_string(&ara_json::sort_keys(&result));
-    if let Some(path) = std::env::var_os("ARA_PHYSICS_BENCH_OUTPUT") {
-        std::fs::write(path, &text)?;
-    }
+    let text = persist(&records, true)?;
     print!("{text}");
     Ok(())
 }

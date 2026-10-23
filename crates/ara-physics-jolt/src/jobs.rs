@@ -1,14 +1,24 @@
 use crate::JoltBackend;
 use ara_jolt_sys as sys;
-use bevy_tasks::{ComputeTaskPool, TaskPoolBuilder};
 use ara_physics::{PhysicsConfig, PhysicsError, Result};
+use bevy_tasks::{ComputeTaskPool, TaskPoolBuilder};
 
 pub(crate) fn validate_pool(config: &PhysicsConfig) -> Result<()> {
-    if config.threads > 64 { return Err(PhysicsError("Jolt supports at most 64 simulation threads".into())); }
+    if config.threads > 64 {
+        return Err(PhysicsError(
+            "Jolt supports at most 64 simulation threads".into(),
+        ));
+    }
     if config.shared_job_pool && config.threads > 1 {
-        let pool = ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(config.threads as usize - 1).build());
+        let pool = ComputeTaskPool::get_or_init(|| {
+            TaskPoolBuilder::new()
+                .num_threads(config.threads as usize - 1)
+                .build()
+        });
         if pool.thread_num() == 0 {
-            return Err(PhysicsError("shared Jolt jobs require at least one compute worker".into()));
+            return Err(PhysicsError(
+                "shared Jolt jobs require at least one compute worker".into(),
+            ));
         }
     }
     Ok(())

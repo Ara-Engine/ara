@@ -7,7 +7,7 @@
 class HostJobs final : public JPH::JobSystemWithBarrier {
     using Job = JPH::JobSystem::Job;
     JPH::FixedSizeFreeList<Job> available;
-    // More slots than live jobs: a producer cannot lap an outstanding consumer.
+    // Per-slot generations protect reuse even if a claimed consumer is descheduled.
     static constexpr uint32_t capacity = 8192;
     struct Slot { std::atomic<uint64_t> sequence{0}; Job* job = nullptr; };
     Slot queue[capacity];

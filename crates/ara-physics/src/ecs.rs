@@ -380,7 +380,11 @@ fn synchronize<B: PhysicsBackend>(
     result
 }
 
-fn synchronize_inner<B: PhysicsBackend>(world: &mut World, physics: &mut PhysicsWorld<B>, r: &mut Runtime) -> Result<()> {
+fn synchronize_inner<B: PhysicsBackend>(
+    world: &mut World,
+    physics: &mut PhysicsWorld<B>,
+    r: &mut Runtime,
+) -> Result<()> {
     r.rows.clear();
     r.rows
         .extend(r.query.iter(world).map(|(entity, id)| (id.value, entity)));
@@ -440,8 +444,8 @@ fn synchronize_inner<B: PhysicsBackend>(world: &mut World, physics: &mut Physics
     physics.backend_mut().destroy_bodies(&r.despawned)?;
     r.pending.clear();
     r.spawned.clear();
-    let optimize = !r.removed.is_empty()
-        || r.rows.iter().any(|(id, _)| !r.bindings.contains_key(id));
+    let optimize =
+        !r.removed.is_empty() || r.rows.iter().any(|(id, _)| !r.bindings.contains_key(id));
     // Flush before a different actor kind so native construction still follows
     // PhysicsId across rigid bodies, vehicles and characters, not just within a batch.
     for index in 0..r.rows.len() {
@@ -450,13 +454,7 @@ fn synchronize_inner<B: PhysicsBackend>(world: &mut World, physics: &mut Physics
             if world.get::<CharacterController>(e).is_some() || world.get::<Vehicle>(e).is_some() {
                 flush_bodies(physics.backend_mut(), r)?;
             }
-            let binding = Binding::create(
-                world,
-                e,
-                id,
-                physics.backend_mut(),
-                &mut r.pending,
-            )?;
+            let binding = Binding::create(world, e, id, physics.backend_mut(), &mut r.pending)?;
             r.bindings.insert(id, binding);
         }
     }
@@ -500,14 +498,20 @@ fn synchronize_inner<B: PhysicsBackend>(world: &mut World, physics: &mut Physics
 }
 
 fn flush_bodies<B: PhysicsBackend>(backend: &mut B, r: &mut Runtime) -> Result<()> {
-    if r.pending.is_empty() { return Ok(()); }
+    if r.pending.is_empty() {
+        return Ok(());
+    }
     r.spawned.clear();
     backend.create_bodies(&r.pending, &mut r.spawned)?;
     if r.pending.len() != r.spawned.len() {
-        return Err(PhysicsError("backend returned an incomplete create batch".into()));
+        return Err(PhysicsError(
+            "backend returned an incomplete create batch".into(),
+        ));
     }
     for (desc, &body) in r.pending.iter().zip(&r.spawned) {
-        let binding = r.bindings.get_mut(&desc.user_data)
+        let binding = r
+            .bindings
+            .get_mut(&desc.user_data)
             .ok_or_else(|| PhysicsError("missing create binding".into()))?;
         binding.body = Some(body);
     }

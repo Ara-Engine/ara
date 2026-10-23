@@ -3,6 +3,7 @@
 #include "internal.h"
 #include <chrono>
 #include <Jolt/Core/Profiler.h>
+#include <array>
 
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -45,13 +46,37 @@ ExternalProfileMeasurement::~ExternalProfileMeasurement() {
 #endif
 
 extern "C" {
+uint32_t ara_bench_job_probe(AraWorld* w, uint32_t count) {
+    try {
+        require(w && w->host_jobs && count > 0, "job probe requires host jobs");
+        std::atomic<uint32_t> executed{0};
+        for (uint32_t first = 0; first < count;) {
+            uint32_t batch = std::min(uint32_t(256), count - first);
+            auto* barrier = w->jobs->CreateBarrier();
+            {
+                std::array<JobHandle, 256> handles;
+                for (uint32_t i = 0; i < batch; ++i)
+                    handles[i] = w->jobs->CreateJob("QueueProbe", Color::sWhite, [&executed] { executed.fetch_add(1, std::memory_order_relaxed); });
+                barrier->AddJobs(handles.data(), batch);
+                w->jobs->WaitForJobs(barrier);
+            }
+            w->jobs->DestroyBarrier(barrier);
+            first += batch;
+        }
+        require(executed.load() == count, "host queue lost a job");
+        return 0;
+    } ARA_CATCH(0x80000000u)
+}
 void ara_bench_character_tree(AraWorld* w, uint32_t enabled) { w->character_collision.SetUseTree(enabled != 0); }
 uint32_t ara_bench_native_step(AraWorld* w, float dt) {
     try {
-        require(w && dt > 0 && finite(dt) && w->contacts.events.empty() && w->characters.empty(), "native comparison requires a contact-free rigid scene");
+        require(w && dt > 0 && finite(dt) && w->characters.empty(), "native comparison requires a rigid scene");
         auto start = Clock::now();
         auto status = uint32_t(w->system.Update(dt, 1, w->temp.get(), w->jobs.get()));
         update_ns = nanos(Clock::now() - start);
+        bool overflow = w->contacts.count.load() > w->contacts.events.size();
+        w->contacts.count.store(0);
+        require(!overflow, "native benchmark contact capacity exhausted");
         return status;
     } ARA_CATCH(0x80000000u)
 }

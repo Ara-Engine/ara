@@ -95,8 +95,14 @@ fn main() {
             .expect("vendored contact manager")
             .replace("\r\n", "\n");
         let marker = "void ContactConstraintManager::TemplatedGetContactsFromCache(ContactAllocator &ioContactAllocator, Body &inBody1, Body &inBody2, const CachedBodyPair &inCachedBodyPair, CachedBodyPair &outCachedBodyPair)\n{";
-        assert!(text.contains(marker), "cached contact profile marker changed upstream");
-        let text = text.replace(marker, &format!("{marker}\n JPH_PROFILE(\"AraContactSetup\");"));
+        assert!(
+            text.contains(marker),
+            "cached contact profile marker changed upstream"
+        );
+        let text = text.replace(
+            marker,
+            &format!("{marker}\n JPH_PROFILE(\"AraContactSetup\");"),
+        );
         let instrumented = PathBuf::from(env::var_os("OUT_DIR").expect("cargo OUT_DIR"))
             .join("ContactConstraintManager.cpp");
         std::fs::write(&instrumented, text).expect("write instrumented contact manager");

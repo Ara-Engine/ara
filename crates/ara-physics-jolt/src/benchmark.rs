@@ -4,6 +4,7 @@ use ara_jolt_sys as sys;
 use ara_physics::{PhysicsError, Result};
 
 unsafe extern "C" {
+    fn ara_bench_job_probe(world: *mut sys::AraWorld, count: u32) -> u32;
     fn ara_bench_character_tree(world: *mut sys::AraWorld, enabled: u32);
     fn ara_bench_native_step(world: *mut sys::AraWorld, dt: f32) -> u32;
     fn ara_bench_reset(world: *mut sys::AraWorld);
@@ -11,13 +12,24 @@ unsafe extern "C" {
 }
 
 impl JoltBackend {
+    /// Exercises queue reuse within one worker boundary, beyond the ring capacity.
+    pub fn benchmark_job_probe(&mut self, count: u32) -> Result<()> {
+        // SAFETY: exclusive owner, with workers borrowed only for this scope.
+        let status = self.run_jobs(|world| unsafe { ara_bench_job_probe(world, count) });
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(Self::error())
+        }
+    }
     /// Selects the original all-character scan for an identical-state A/B test.
     pub fn benchmark_character_tree(&mut self, enabled: bool) {
         // SAFETY: exclusive live world, all character checks are synchronous.
         unsafe { ara_bench_character_tree(self.ptr(), u32::from(enabled)) };
     }
     /// Direct C++ PhysicsSystem::Update, with identical world/allocator/job settings.
-    /// Requires contact collection and virtual characters to be absent. This does
+    /// Requires virtual characters to be absent. Collected contacts are discarded
+    /// so listener-only cost can be separated from Rust decoding. This does
     /// not advance PhysicsWorld's tick and is only for a standalone benchmark world.
     pub fn benchmark_native_step(&mut self, dt: f32) -> Result<()> {
         // SAFETY: exclusive world access, scoped host workers, and native validation

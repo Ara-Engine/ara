@@ -105,7 +105,45 @@ pub(super) fn run(threads: u32, steps: usize) -> BenchResult<Vec<serde_json::Val
     }
     query_records.insert(0, outpost);
     query_records.push(ecs(threads, steps)?);
+    query_records.push(contacts(threads, steps)?);
     Ok(query_records)
+}
+
+fn contacts(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
+    let load_before = load();
+    let count = 5000;
+    let c = config("game_default", count, threads)?;
+    let (mut off, ids) = fixture(c.clone(), count)?;
+    let mut subscribed = c;
+    subscribed.event_capacity = count as u32 * 64;
+    let (mut listener, listener_ids) = fixture(subscribed.clone(), count)?;
+    let (mut decoded, decoded_ids) = fixture(subscribed, count)?;
+    let mut times: [Vec<f64>; 3] = std::array::from_fn(|_| Vec::with_capacity(steps));
+    let mut effects = 0;
+    for tick in 0..steps {
+        for side in 0..3 {
+            let mode = (side + tick) % 3;
+            let start = Instant::now();
+            match mode {
+                0 => off.step()?,
+                1 => listener.backend_mut().benchmark_native_step(DT)?,
+                _ => decoded.step()?,
+            }
+            times[mode].push(start.elapsed().as_secs_f64() * 1000.0);
+        }
+        effects += decoded.events().contacts.len() + decoded.events().triggers.len();
+    }
+    let expected = hash(&off, &ids, &[], &[]);
+    if hash(&listener, &listener_ids, &[], &[]) != expected
+        || hash(&decoded, &decoded_ids, &[], &[]) != expected
+    {
+        return Err("contact subscription changed rigid-body state".into());
+    }
+    Ok(
+        serde_json::json!({"scenario":"contact_subscription","bodies":count,"steps":steps,"threads":threads,
+        "preset":"game_default","offMs":distribution(&mut times[0]),"listenerOnlyMs":distribution(&mut times[1]),
+        "decodedMs":distribution(&mut times[2]),"effects":effects,"identicalFinalState":true,"loadBefore":load_before,"loadAfter":load()}),
+    )
 }
 
 fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
