@@ -24,12 +24,15 @@ impl Gpu {
                 extensions.push(ash::ext::validation_features::NAME.as_ptr());
             }
             extensions.extend(window_extensions.iter().map(|s| s.as_ptr()));
-            let instance_extensions = entry.enumerate_instance_extension_properties(None)?;
+            // Defer optional WSI discovery until a surface is requested.
             if !window_extensions.is_empty()
-                && instance_extensions.iter().any(|extension| {
-                    CStr::from_ptr(extension.extension_name.as_ptr())
-                        == ash::ext::swapchain_colorspace::NAME
-                })
+                && entry
+                    .enumerate_instance_extension_properties(None)?
+                    .iter()
+                    .any(|extension| {
+                        CStr::from_ptr(extension.extension_name.as_ptr())
+                            == ash::ext::swapchain_colorspace::NAME
+                    })
             {
                 extensions.push(ash::ext::swapchain_colorspace::NAME.as_ptr());
             }
