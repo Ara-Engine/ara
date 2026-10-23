@@ -429,52 +429,6 @@ impl Shell {
         }
         Ok(work)
     }
-    fn paint_swatches(&mut self) {
-        for field in self.fields.values() {
-            if !matches!(
-                field.widget,
-                crate::inspector::Widget::Vector { color: true, .. }
-            ) || field.mixed
-            {
-                continue;
-            }
-            if let Some(i) = self
-                .ui
-                .find(&format!("swatch-{}", field.path.replace('.', "-")))
-            {
-                let r = self.ui.nodes[i].rect;
-                let clip = self.ui.nodes[i].clip.intersection(r);
-                if !r.intersects(clip) || clip.w <= 0. || clip.h <= 0. {
-                    continue;
-                }
-                self.ui
-                    .display
-                    .commands
-                    .push(ara_ui::paint::Draw::PushClip { rect: clip });
-                let channel = |n: usize| field.value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
-                self.ui
-                    .display
-                    .commands
-                    .push(ara_ui::paint::Draw::RoundedRect {
-                        node: ara_ui::source::stable_id(&self.ui.nodes[i].element.id),
-                        rect: Box2 {
-                            x: r.x + 3.,
-                            y: r.y + 3.,
-                            w: (r.w - 6.).max(0.),
-                            h: (r.h - 6.).max(0.),
-                        },
-                        radius: 3.,
-                        color: ara_ui::style::Color(
-                            (channel(0).powf(1. / 2.2) * 255.) as u8,
-                            (channel(1).powf(1. / 2.2) * 255.) as u8,
-                            (channel(2).powf(1. / 2.2) * 255.) as u8,
-                            (channel(3) * 255.) as u8,
-                        ),
-                    });
-                self.ui.display.commands.push(ara_ui::paint::Draw::PopClip);
-            }
-        }
-    }
     pub(crate) fn poll_assets(&mut self) -> bool {
         self.browser.poll()
     }

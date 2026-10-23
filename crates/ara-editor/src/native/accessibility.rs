@@ -94,16 +94,20 @@ impl Accessibility {
             requests,
         })
     }
-    pub fn update(&mut self, ui: &Ui, focus: Option<u64>) {
+    pub fn update(&mut self, ui: &Ui, focus: Option<u64>, dpi: f32) {
+        let build = || {
+            let mut update = ara_ui::accessibility::accessibility(ui, focus);
+            let root = ara_ui::source::stable_id(&ui.nodes[0].element.id);
+            if let Some((_, node)) = update.nodes.iter_mut().find(|(id, _)| id.0 == root) {
+                node.set_transform(accesskit::Affine::scale(f64::from(dpi)));
+            }
+            update
+        };
         let mut initial = None;
-        if let Some(events) = self
-            .state
-            .adapter
-            .update_if_active(|| ara_ui::accessibility::accessibility(ui, focus))
-        {
+        if let Some(events) = self.state.adapter.update_if_active(build) {
             events.raise();
         } else {
-            initial = Some(ara_ui::accessibility::accessibility(ui, focus));
+            initial = Some(build());
         }
         self.state.initial.0 = initial;
     }

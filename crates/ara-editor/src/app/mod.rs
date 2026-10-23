@@ -149,7 +149,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut quit = false;
             for event in events {
                 match controller.event(
-                    event,
+                    native.logical_event(event, options.dpi.unwrap_or_else(|| native.dpi())),
                     &mut editor,
                     &mut shell,
                     &renderer,
@@ -366,7 +366,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     present.display(renderer.gpu().context(), image, size)?;
                 }
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
-                    native.update(&shell.ui, &shell.input)?;
+                    native.update(&shell.ui, &shell.input, dpi)?;
                     last_ui = shell.version;
                 }
                 render_samples.push(render_start.elapsed().as_secs_f64() * 1000.);
