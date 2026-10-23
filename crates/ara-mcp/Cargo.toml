@@ -1,0 +1,19 @@
+[package]
+name = "ara-mcp"
+description = "The MCP adapter: twelve tools generated from the Engine Protocol catalog, over stdio and Streamable HTTP."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-proto.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-host.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true

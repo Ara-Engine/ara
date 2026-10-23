@@ -257,7 +257,6 @@ impl Host {
             });
             self.routes.insert(m.name.clone(), (index, m));
         }
-        self.st.catalog.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(())
     }
 
@@ -266,7 +265,7 @@ impl Host {
         self.st.approval = approval;
     }
 
-    /// The method catalog, sorted by name.
+    /// The method catalog, in registration order (deterministic).
     pub fn catalog(&self) -> &[MethodInfo] {
         &self.st.catalog
     }

@@ -37,7 +37,7 @@ pub use session::{Approval, ApprovalRequest, Decision, DefaultPolicy};
 pub fn core_methods() -> Vec<ara_proto::MethodInfo> {
     let mut db = ara_schema::SchemaDb::new();
     let methods = core::methods(&mut db);
-    let mut out: Vec<ara_proto::MethodInfo> = methods
+    methods
         .into_iter()
         .map(|m| ara_proto::MethodInfo {
             params: db
@@ -51,7 +51,5 @@ pub fn core_methods() -> Vec<ara_proto::MethodInfo> {
             tool: m.tool,
             service: "core".into(),
         })
-        .collect();
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    out
+        .collect()
 }
