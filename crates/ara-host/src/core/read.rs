@@ -1,7 +1,7 @@
 //! Read methods: `rpc.discover`, `schema.*`, `query`, `inspect`, `logs`,
 //! `docs.search`.
 
-use ara_diag::{Diagnostic, Severity, codes, did_you_mean};
+use ara_diag::{Diagnostic, codes, did_you_mean};
 use ara_doc::AssetId;
 use ara_proto::{PROTOCOL, Scope};
 use ara_schema::TypeDesc;
@@ -9,7 +9,6 @@ use serde_json::{Value, json};
 
 use crate::docs;
 use crate::host::State;
-use crate::logs::LogFilter;
 use crate::params::*;
 use crate::query;
 use crate::text;
@@ -498,34 +497,6 @@ pub(super) fn inspect(st: &mut State, p: InspectParams) -> R {
             json!({ "doc": id, "revision": st.store.revision(), "entities": entities, "next": next })
         }
     })
-}
-
-pub(super) fn logs(st: &mut State, p: LogsParams) -> R {
-    let filter = LogFilter {
-        since: p.since.unwrap_or(0),
-        codes: p.codes.unwrap_or_default(),
-        severity: p.severity.map(|s| match s {
-            SeverityParam::Error => Severity::Error,
-            SeverityParam::Warning => Severity::Warning,
-            SeverityParam::Info => Severity::Info,
-        }),
-        entity: p.entity,
-        limit: p.limit.unwrap_or(50).clamp(1, 1000) as usize,
-    };
-    let entries = st.logs.query(&filter);
-    let mut text = String::new();
-    for e in &entries {
-        let count = if e.count > 1 {
-            format!(" ×{}", e.count)
-        } else {
-            String::new()
-        };
-        text.push_str(&format!("#{}{count} {}\n", e.seq, e.diagnostic));
-    }
-    if entries.is_empty() {
-        text.push_str("no new entries\n");
-    }
-    Ok(json!({ "entries": entries, "cursor": st.logs.cursor(), "text": text }))
 }
 
 pub(super) fn docs_search(st: &mut State, p: DocsSearchParams) -> R {

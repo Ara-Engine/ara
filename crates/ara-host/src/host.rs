@@ -12,6 +12,8 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use ara_cmd::Registry;
+use ara_diag::bus::{self, Meta, Origin};
+use ara_diag::store::{Retention, Store as DiagStore};
 use ara_diag::{Diagnostic, FixAction, codes, did_you_mean};
 use ara_doc::{AssetId, IdGen};
 use ara_ops::{Author, Store, Transaction, TxnId};
@@ -23,7 +25,6 @@ use serde_json::{Value, json};
 use crate::files::{Files, Synced};
 use crate::jobs::Jobs;
 use crate::journal::{self, Entry, Journal};
-use crate::logs::Logs;
 use crate::params::{ReviewStatus, Topic};
 use crate::project::{Project, STATE_DIR};
 use crate::review::Review;
@@ -51,6 +52,8 @@ pub struct HostConfig {
     pub seed: Option<u64>,
     /// Decides which scopes new sessions get.
     pub approval: Box<dyn Approval>,
+    /// How many diagnostics the bus store keeps per severity, and for how long.
+    pub diagnostics: Retention,
 }
 
 impl Default for HostConfig {
@@ -61,6 +64,7 @@ impl Default for HostConfig {
             scan_every: Duration::from_secs(2),
             seed: None,
             approval: Box::new(DefaultPolicy),
+            diagnostics: Retention::default(),
         }
     }
 }
@@ -82,7 +86,12 @@ pub(crate) struct State {
     pub(crate) review: Review,
     pub(crate) journal: Journal,
     pub(crate) files: Files,
-    pub(crate) logs: Logs,
+    /// The diagnostics bus store: everything logged here or drained from the bus.
+    pub(crate) diag: DiagStore,
+    /// This process's bus consumer (drained every tick).
+    pub(crate) bus: bus::Consumer,
+    /// Live `diag.subscribe` streams.
+    pub(crate) diag_subs: crate::diag::Subscriptions,
     pub(crate) jobs: Jobs,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -150,9 +159,10 @@ impl Host {
             type_files,
             ..
         } = project;
-        let mut logs = Logs::default();
+        let consumer = bus::attach();
+        let mut diag = DiagStore::new(config.diagnostics);
         for d in diags.into_iter().chain(per_file.into_values().flatten()) {
-            logs.push(d);
+            diag.push(d, Meta::default());
         }
         let mut files = Files::default();
         for (path, doc) in ws.docs() {
@@ -172,7 +182,7 @@ impl Host {
         let (journal, entries, journal_diags) =
             Journal::open(&state_dir).map_err(|e| io_error("open", &state_dir, e))?;
         for d in journal_diags {
-            logs.push(d);
+            diag.push(d, Meta::default());
         }
         let ops = store.subscribe();
         let type_files = type_files
@@ -198,7 +208,9 @@ impl Host {
             review: Review::default(),
             journal,
             files,
-            logs,
+            diag,
+            bus: consumer,
+            diag_subs: BTreeMap::new(),
             jobs: Jobs::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -225,6 +237,7 @@ impl Host {
         };
         host.register(Box::new(crate::core::Core))?;
         host.register(Box::new(crate::profile::ProfileService))?;
+        host.register(Box::new(crate::diag::DiagService))?;
         Ok(host)
     }
 
@@ -308,13 +321,13 @@ impl Host {
     pub fn call(&mut self, conn: ConnId, method: &str, params: Value) -> Result<Value, RpcError> {
         let result = self.dispatch(conn, method, params);
         self.st.drain();
-        self.st.calling = None;
-        result.map_err(|diags| {
+        if let Err(diags) = &result {
             for d in diags.iter().filter(|d| d.is_error()) {
                 self.st.log(d.clone());
             }
-            RpcError::from_diagnostics(diags)
-        })
+        }
+        self.st.calling = None;
+        result.map_err(RpcError::from_diagnostics)
     }
 
     fn dispatch(
@@ -349,6 +362,9 @@ impl Host {
             return Err(problems);
         }
         self.st.calling = session.clone();
+        // Subsystems that emit onto the bus while serving the call are attributed to
+        // the caller.
+        let _origin = self.st.calling_origin().map(bus::scope);
         let mut cx = Cx {
             st: &mut self.st,
             conn,
@@ -378,6 +394,7 @@ impl Host {
     pub fn tick(&mut self) {
         let profiling = self.st.profiler.is_recording() && self.st.profiler.begin_frame().is_ok();
         let span = profiling.then(|| ara_profile::scope("host.tick"));
+        self.st.pump_bus();
         self.st.watch();
         self.st.drain();
         self.st.flush(false);
@@ -415,6 +432,7 @@ impl Host {
     /// Forgets a closed connection's subscriptions.
     pub fn closed(&mut self, conn: ConnId) {
         self.st.subs.remove(&conn);
+        self.st.diag_subs.retain(|_, s| s.conn != conn);
     }
 
     /// Notifications waiting for their connections.
@@ -509,10 +527,51 @@ impl State {
         Ok(id.to_owned())
     }
 
-    /// Records a diagnostic and notifies `diagnostics` subscribers.
+    /// The origin of the call in progress (its session's author).
+    pub(crate) fn calling_origin(&self) -> Option<Origin> {
+        let session = self.sessions.get(self.calling.as_deref()?)?;
+        Some(Origin::of_author(&session.author.to_string()))
+    }
+
+    /// Records a diagnostic, attributed to the calling session's author, and
+    /// notifies subscribers.
     pub(crate) fn log(&mut self, d: Diagnostic) {
-        let entry = serde_json::to_value(self.logs.push(d)).unwrap_or(Value::Null);
-        self.notify(Topic::Diagnostics, entry);
+        let meta = Meta {
+            origin: self.calling_origin(),
+            ..Meta::default()
+        };
+        let seq = self.diag.push(d, meta).seq;
+        self.published(&[seq]);
+    }
+
+    /// Moves everything other threads emitted onto the bus into the store.
+    pub(crate) fn pump_bus(&mut self) {
+        let mut events = Vec::new();
+        let lost = self.bus.drain(&mut events);
+        let mut touched = self.diag.ingest(events);
+        touched.extend(self.diag.absorb(&lost));
+        self.diag.expire();
+        self.published(&touched);
+    }
+
+    /// Notifies `diagnostics` topic subscribers and matching `diag.subscribe`
+    /// streams of new or updated records.
+    pub(crate) fn published(&mut self, seqs: &[u64]) {
+        let mut out = Vec::new();
+        for seq in seqs {
+            let Some(record) = self.diag.get(*seq) else {
+                continue;
+            };
+            let entry = serde_json::to_value(record).unwrap_or(Value::Null);
+            for (id, sub) in &self.diag_subs {
+                if sub.filter.accepts(record) {
+                    let params = json!({ "subscription": id, "record": entry });
+                    out.push((sub.conn, jsonrpc::notification("diag.event", params)));
+                }
+            }
+            self.notify(Topic::Diagnostics, entry);
+        }
+        self.outbox.extend(out);
     }
 
     /// Queues a notification for every connection subscribed to `topic`.
@@ -673,10 +732,10 @@ impl State {
                         Err(diags) => {
                             stopped = true;
                             let why = diags.first().map(|d| d.message.clone()).unwrap_or_default();
-                            self.logs.push(Diagnostic::error(
+                            self.diag.push(Diagnostic::error(
                                 codes::JOURNAL_CORRUPT,
                                 format!("cannot replay `{}` from the journal ({why}); later entries were ignored", txn.id),
-                            ).file(".ara/journal"));
+                            ).file(".ara/journal"), Meta::default());
                         }
                     }
                 }
@@ -705,12 +764,13 @@ impl State {
             }
         }
         if replayed > 0 {
-            self.logs.push(
+            self.diag.push(
                 Diagnostic::info(
                     codes::JOURNAL_REPLAYED,
                     format!("recovered {replayed} transactions from the journal that had not reached disk"),
                 )
                 .file(".ara/journal"),
+                Meta::default(),
             );
         }
         for (doc, rev) in &on_disk {
@@ -736,7 +796,7 @@ impl State {
                     format!("`{path}` changed on disk while no host was running; loaded as is"),
                 )
             };
-            self.logs.push(d.file(path));
+            self.diag.push(d.file(path), Meta::default());
         }
     }
 

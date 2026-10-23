@@ -13,12 +13,12 @@
 //! - [`docs`] generates `llms.txt` and per-type pages from the registries.
 
 mod core;
+pub mod diag;
 pub mod docs;
 mod files;
 mod host;
 pub mod jobs;
 pub mod journal;
-pub mod logs;
 pub mod params;
 mod profile;
 pub mod project;
