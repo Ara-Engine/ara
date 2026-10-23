@@ -1,13 +1,13 @@
 [
   {
     "async_overlap": false,
-    "background_after": "94 %, 57 %, 3158 MiB, 125.95 W, 2805 MHz, 10501 MHz",
-    "background_before": "0 %, 1 %, 3168 MiB, 20.29 W, 2535 MHz, 10501 MHz",
+    "background_after": "92 %, 55 %, 3184 MiB, 176.83 W, 2820 MHz, 10501 MHz",
+    "background_before": "0 %, 1 %, 3172 MiB, 38.01 W, 2535 MHz, 10501 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 10.0,
     "budget_passed": true,
-    "cpu_after": "cpu_percent=37; free_ram_kib=6249792",
-    "cpu_before": "cpu_percent=57; free_ram_kib=6255940",
+    "cpu_after": "cpu_percent=97; free_ram_kib=3236508",
+    "cpu_before": "cpu_percent=97; free_ram_kib=3359196",
     "display_size": [
       2560,
       1440
@@ -19,72 +19,72 @@
       "target_ev100": 10.894477844238281
     },
     "frames": 60,
-    "p50": 5.87408,
-    "p95": 5.937248,
+    "p50": 5.8609599999999995,
+    "p95": 6.10048,
     "passes": {
       "Atmosphere.Froxels.AerialPerspective": {
-        "p50": 0.079008,
-        "p95": 0.080736
+        "p50": 0.078528,
+        "p95": 0.079968
       },
       "Atmosphere.SkyView": {
         "p50": 0.014624,
-        "p95": 0.015136
+        "p95": 0.016
       },
       "Bloom.Horizontal": {
-        "p50": 0.206816,
-        "p95": 0.207456
+        "p50": 0.206432,
+        "p95": 0.207072
       },
       "Bloom.Vertical": {
-        "p50": 0.10688,
-        "p95": 0.107488
+        "p50": 0.106784,
+        "p95": 0.107296
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.116864,
-        "p95": 0.134336
+        "p50": 0.116672,
+        "p95": 0.14048
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.023328,
-        "p95": 0.024
+        "p50": 0.023296,
+        "p95": 0.02384
       },
       "Output.SDR": {
-        "p50": 0.041056,
-        "p95": 0.04176
+        "p50": 0.041024,
+        "p95": 0.042272
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.369888,
-        "p95": 0.380704
+        "p50": 0.369568,
+        "p95": 0.380736
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 1.258688,
-        "p95": 1.273728
+        "p50": 1.257216,
+        "p95": 1.272352
       },
       "SVGF.Atrous.1": {
-        "p50": 0.466368,
-        "p95": 0.501952
+        "p50": 0.466432,
+        "p95": 0.50096
       },
       "SVGF.Atrous.2": {
-        "p50": 0.491328,
-        "p95": 0.498912
+        "p50": 0.490656,
+        "p95": 0.498848
       },
       "SVGF.Atrous.4": {
-        "p50": 0.612288,
-        "p95": 0.615968
+        "p50": 0.612128,
+        "p95": 0.6152
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.68256,
-        "p95": 0.726272
+        "p50": 0.680864,
+        "p95": 0.72368
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.206272,
-        "p95": 0.214976
+        "p50": 0.206144,
+        "p95": 0.220064
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000128
       },
       "Visibility.Motion": {
-        "p50": 1.188448,
-        "p95": 1.191712
+        "p50": 1.183712,
+        "p95": 1.189312
       }
     },
     "render_size": [
@@ -99,13 +99,13 @@
   },
   {
     "async_overlap": false,
-    "background_after": "83 %, 43 %, 2692 MiB, 98.70 W, 2820 MHz, 10501 MHz",
-    "background_before": "1 %, 1 %, 2692 MiB, 46.81 W, 2820 MHz, 10501 MHz",
+    "background_after": "1 %, 1 %, 2707 MiB, 107.99 W, 2835 MHz, 10501 MHz",
+    "background_before": "11 %, 5 %, 2715 MiB, 26.79 W, 405 MHz, 5001 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 5.0,
     "budget_passed": true,
-    "cpu_after": "cpu_percent=66; free_ram_kib=6179276",
-    "cpu_before": "cpu_percent=76; free_ram_kib=6145240",
+    "cpu_after": "cpu_percent=88; free_ram_kib=2821972",
+    "cpu_before": "cpu_percent=94; free_ram_kib=2896408",
     "display_size": [
       2560,
       1440
@@ -117,72 +117,72 @@
       "target_ev100": 10.893136978149414
     },
     "frames": 60,
-    "p50": 3.030816,
-    "p95": 3.230176,
+    "p50": 3.0390080000000004,
+    "p95": 3.3601919999999996,
     "passes": {
       "Atmosphere.Froxels.AerialPerspective": {
-        "p50": 0.078976,
-        "p95": 0.080608
+        "p50": 0.079232,
+        "p95": 0.081248
       },
       "Atmosphere.SkyView": {
-        "p50": 0.015456,
-        "p95": 0.015968
+        "p50": 0.01552,
+        "p95": 0.015904
       },
       "Bloom.Horizontal": {
-        "p50": 0.096544,
-        "p95": 0.097312
+        "p50": 0.09664,
+        "p95": 0.097184
       },
       "Bloom.Vertical": {
-        "p50": 0.051232,
-        "p95": 0.05168
+        "p50": 0.051328,
+        "p95": 0.052416
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.115712,
-        "p95": 0.13632
+        "p50": 0.116736,
+        "p95": 0.139168
       },
       "Exposure.EV100.Meter.Adapt": {
         "p50": 0.025504,
-        "p95": 0.026048
+        "p95": 0.025984
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.171232,
-        "p95": 0.18496
+        "p50": 0.171584,
+        "p95": 0.185184
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.621984,
-        "p95": 0.632768
+        "p50": 0.622208,
+        "p95": 0.634528
       },
       "SVGF.Atrous.1": {
-        "p50": 0.213824,
-        "p95": 0.21968
+        "p50": 0.214432,
+        "p95": 0.220992
       },
       "SVGF.Atrous.2": {
-        "p50": 0.23264,
-        "p95": 0.238688
+        "p50": 0.232352,
+        "p95": 0.234976
       },
       "SVGF.Atrous.4": {
-        "p50": 0.276704,
-        "p95": 0.278656
+        "p50": 0.277312,
+        "p95": 0.28032
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.308512,
-        "p95": 0.346816
+        "p50": 0.308224,
+        "p95": 0.332576
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.216512,
-        "p95": 0.21744
+        "p50": 0.216704,
+        "p95": 0.217856
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.055264,
-        "p95": 0.056064
+        "p50": 0.055552,
+        "p95": 0.05648
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000128
+        "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.547296,
-        "p95": 0.549664
+        "p50": 0.54736,
+        "p95": 0.552576
       }
     },
     "render_size": [
@@ -197,82 +197,82 @@
   },
   {
     "async_overlap": false,
-    "background_after": "95 %, 80 %, 3115 MiB, 164.33 W, 2775 MHz, 10501 MHz",
-    "background_before": "1 %, 1 %, 3115 MiB, 46.38 W, 2820 MHz, 10501 MHz",
+    "background_after": "7 %, 2 %, 3153 MiB, 184.47 W, 2820 MHz, 10501 MHz",
+    "background_before": "1 %, 2 %, 3131 MiB, 26.36 W, 300 MHz, 5001 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 10.0,
     "budget_passed": true,
-    "cpu_after": "cpu_percent=45; free_ram_kib=6298592",
-    "cpu_before": "cpu_percent=61; free_ram_kib=6235760",
+    "cpu_after": "cpu_percent=99; free_ram_kib=3397184",
+    "cpu_before": "cpu_percent=99; free_ram_kib=2832708",
     "display_size": [
       2560,
       1440
     ],
     "exposure": {
-      "metered_luminance": 4.799955368041992,
-      "multiplier": 0.018721994012594223,
-      "previous_multiplier": 0.01872054859995842,
-      "target_ev100": 4.473917484283447
+      "metered_luminance": 4.434780120849609,
+      "multiplier": 0.020244233310222626,
+      "previous_multiplier": 0.020241674035787582,
+      "target_ev100": 4.3597588539123535
     },
     "frames": 60,
-    "p50": 5.510847999999999,
-    "p95": 5.748288,
+    "p50": 6.761696,
+    "p95": 7.538143999999999,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.20992,
-        "p95": 0.210528
+        "p50": 0.209696,
+        "p95": 0.211296
       },
       "Bloom.Vertical": {
-        "p50": 0.109344,
+        "p50": 0.109184,
         "p95": 0.110112
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.054624,
-        "p95": 0.0568
+        "p50": 0.05472,
+        "p95": 0.057024
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.024928,
-        "p95": 0.025536
+        "p50": 0.024864,
+        "p95": 0.0256
       },
       "Output.SDR": {
-        "p50": 0.04096,
-        "p95": 0.041568
+        "p50": 0.041408,
+        "p95": 0.042368
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.274656,
-        "p95": 0.304928
+        "p50": 0.274368,
+        "p95": 0.298176
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.912864,
-        "p95": 0.916064
+        "p50": 2.13008,
+        "p95": 2.50672
       },
       "SVGF.Atrous.1": {
-        "p50": 0.49376,
-        "p95": 0.506336
+        "p50": 0.489696,
+        "p95": 0.499456
       },
       "SVGF.Atrous.2": {
-        "p50": 0.529408,
-        "p95": 0.545728
+        "p50": 0.526496,
+        "p95": 0.53936
       },
       "SVGF.Atrous.4": {
-        "p50": 0.630496,
-        "p95": 0.63664
+        "p50": 0.627072,
+        "p95": 0.633504
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.867008,
-        "p95": 0.909024
+        "p50": 0.902176,
+        "p95": 0.941088
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.261376,
-        "p95": 0.282752
+        "p50": 0.263456,
+        "p95": 0.289088
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 1.08352,
-        "p95": 1.139776
+        "p50": 1.09136,
+        "p95": 1.386368
       }
     },
     "render_size": [
@@ -287,82 +287,82 @@
   },
   {
     "async_overlap": false,
-    "background_after": "90 %, 68 %, 2649 MiB, 96.50 W, 2805 MHz, 10501 MHz",
-    "background_before": "0 %, 1 %, 2649 MiB, 47.13 W, 2820 MHz, 10501 MHz",
+    "background_after": "87 %, 57 %, 2674 MiB, 72.67 W, 2790 MHz, 10501 MHz",
+    "background_before": "0 %, 3 %, 2703 MiB, 34.93 W, 480 MHz, 5001 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 5.0,
     "budget_passed": true,
-    "cpu_after": "cpu_percent=63; free_ram_kib=6230124",
-    "cpu_before": "cpu_percent=48; free_ram_kib=6283060",
+    "cpu_after": "cpu_percent=93; free_ram_kib=3563812",
+    "cpu_before": "cpu_percent=90; free_ram_kib=3639372",
     "display_size": [
       2560,
       1440
     ],
     "exposure": {
-      "metered_luminance": 4.804068565368652,
-      "multiplier": 0.01871514320373535,
-      "previous_multiplier": 0.018714170902967453,
-      "target_ev100": 4.47515344619751
+      "metered_luminance": 4.440296649932861,
+      "multiplier": 0.020224351435899734,
+      "previous_multiplier": 0.020222065970301628,
+      "target_ev100": 4.361552715301514
     },
     "frames": 60,
-    "p50": 2.662944,
-    "p95": 2.8091839999999997,
+    "p50": 3.232672,
+    "p95": 3.5336640000000004,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.096384,
-        "p95": 0.097344
+        "p50": 0.096256,
+        "p95": 0.096896
       },
       "Bloom.Vertical": {
-        "p50": 0.051424,
-        "p95": 0.052512
+        "p50": 0.051552,
+        "p95": 0.054496
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.05408,
-        "p95": 0.057792
+        "p50": 0.054016,
+        "p95": 0.05536
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.025568,
-        "p95": 0.026112
+        "p50": 0.025408,
+        "p95": 0.025984
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.0816,
-        "p95": 0.084768
+        "p50": 0.082016,
+        "p95": 0.084672
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.442272,
-        "p95": 0.477792
+        "p50": 0.970464,
+        "p95": 0.9768
       },
       "SVGF.Atrous.1": {
-        "p50": 0.221856,
-        "p95": 0.224544
+        "p50": 0.222272,
+        "p95": 0.224992
       },
       "SVGF.Atrous.2": {
-        "p50": 0.250528,
-        "p95": 0.270912
+        "p50": 0.250432,
+        "p95": 0.262208
       },
       "SVGF.Atrous.4": {
-        "p50": 0.279072,
-        "p95": 0.2824
+        "p50": 0.279776,
+        "p95": 0.28208
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.37872,
-        "p95": 0.401472
+        "p50": 0.42112,
+        "p95": 0.441216
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.212384,
-        "p95": 0.214592
+        "p50": 0.212896,
+        "p95": 0.213952
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.049312,
-        "p95": 0.050112
+        "p50": 0.049664,
+        "p95": 0.050656
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.513792,
-        "p95": 0.574592
+        "p50": 0.522752,
+        "p95": 0.592544
       }
     },
     "render_size": [

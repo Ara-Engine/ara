@@ -11,8 +11,10 @@ pub fn configure_view(
     view: &mut ara_render_fidelity::FidelityView,
     outdoor: bool,
 ) -> Result<()> {
-    view.set_gather_events(1)?;
-    view.set_transport_stride(4)?;
+    // Sparse emitters need more short-range paths than the smooth daylight sky.
+    // Spend the small-room budget on two events and half-rate rather than quarter-rate rays.
+    view.set_gather_events(if outdoor { 1 } else { 2 })?;
+    view.set_transport_stride(if outdoor { 4 } else { 2 })?;
     if outdoor {
         view.set_atmosphere(Some(Default::default()))?;
         view.set_probe_volume(

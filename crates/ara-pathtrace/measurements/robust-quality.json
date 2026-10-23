@@ -66,9 +66,9 @@
       "rmse": 2.3100665868435066
     },
     "error": {
-      "mae": 2.3248955746875706,
-      "relative_rmse": 0.05039323644419442,
-      "rmse": 7.950518633332679
+      "mae": 1.7424891244786977,
+      "relative_rmse": 0.04901054704172162,
+      "rmse": 7.732372337635927
     },
     "ev100": 5.0,
     "reference_model": "independent surface path transport",
@@ -83,9 +83,9 @@
     ],
     "surface_roi": "lower half: floor and sphere bases",
     "surface_roi_error": {
-      "mae": 1.5658199258596965,
-      "relative_rmse": 0.18637304980673122,
-      "rmse": 2.5365966735381487
+      "mae": 1.2997833552488802,
+      "relative_rmse": 0.158254567138314,
+      "rmse": 2.153895152714127
     },
     "tone_mapper": "PBR Neutral"
   }
