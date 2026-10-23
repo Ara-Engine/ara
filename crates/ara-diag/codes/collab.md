@@ -3,28 +3,24 @@
 ## ARA2500 collab::CLAIMED: Subject claimed by someone else
 owner: ara-collab
 
-An agent's transaction touched a document, entity, component or field that another participant has claimed. Claims are enforced for agents (and advisory for humans), so the whole transaction was rejected and nothing changed. The message names the claimant, why they claimed it and how long the claim lasts.
+Retired by D24. Agent changes apply immediately; advisory claims never reject edits or branch merges. This code is no longer emitted.
 
 Causes:
-- A human is working on that entity or document in the editor and claimed it for their turn.
-- Another agent claimed it before planning its own turn.
+- An older engine build enforced claims.
 
 Fixes:
-- Drop the claimed subject from the batch and apply the rest now; `ara_session {"action": "who"}` lists every claim.
-- Queue only the claimed part in a branch session (`branch.open`, then `ara_apply` with `branch`, then `branch.submit`); it merges once nobody claims what it touches.
-- Wait for the claim to end, or ask the claimant to release it.
+- Update the engine; edits need no approval or claim release.
 
 ## ARA2501 collab::CLAIM_HELD: Claim already held
 owner: ara-collab
 
-An agent asked to claim a subject that overlaps another participant's live claim. Agents cannot claim over someone else; humans can (their claims are advisory and the overlap is reported). Nothing was claimed.
+Retired by D24. Agent changes apply immediately; advisory claims never reject edits or branch merges. This code is no longer emitted.
 
 Causes:
-- The subject, its document, or one of its components is already claimed by someone else.
+- An older engine build enforced claims.
 
 Fixes:
-- Claim a different subject, or wait until `ara_session {"action": "who"}` no longer lists the claim.
-- Use a branch session for the work instead of a claim.
+- Update the engine; edits need no approval or claim release.
 
 ## ARA2502 collab::NOT_JOINED: Not joined
 owner: ara-collab
@@ -40,14 +36,14 @@ Fixes:
 ## ARA2503 collab::OVERWRITTEN: Change overwritten by a concurrent edit
 owner: ara-collab
 
-Two participants changed the same field without seeing each other's change. The authority applies changes in arrival order and the later one wins (last writer wins). The earlier change is kept in the conflict log (`collab.conflicts`) with both values and surfaced to its author.
+A transaction overwrote a field another participant changed recently (default ten minutes, configurable in HostConfig). The authority applies changes in arrival order and the later one wins (last writer wins). The earlier change is kept in the conflict log (`collab.conflicts`) with both values and surfaced to both participants through diagnostics and editor.overwrite.
 
 Causes:
 - Two people (or a person and an agent) edited the same field at the same time.
 
 Fixes:
 - Look at the conflict log entry and set the field again if your value should win.
-- Claim what you are working on so agents keep away from it.
+- Undo the agent turn if the previous value should be restored.
 
 ## ARA2504 collab::DROPPED: Change dropped
 owner: ara-collab
@@ -141,10 +137,10 @@ Fixes:
 ## ARA2512 collab::MERGE_BLOCKED: Branch merge waits for claims
 owner: ara-collab
 
-A submitted branch session touches subjects that other participants claim. It stays submitted and merges once the claims end; a human may approve it anyway with `force`.
+Retired by D24. Agent changes apply immediately; advisory claims never reject edits or branch merges. This code is no longer emitted.
 
 Causes:
-- A human claimed an entity the branch changed while the agent worked.
+- An older engine build enforced claims.
 
 Fixes:
-- Wait for the claim to be released, or have the claimant merge it with `force: true`.
+- Update the engine; edits need no approval or claim release.

@@ -1,14 +1,11 @@
 # ara-host
-
 One project's engine host behind the Engine Protocol: sessions and scopes, the
 method registry (`Service`) and the core methods, review state, checkpoints, the
 journal, always-saved persistence and external-edit reconciliation. The daemon
 (`ara serve`) serves it; the offline CLI and tests call it in-process.
 Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag,
 ara-why, ara-profile, ara-collab.
-
 ## Public API
-
 - `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
   marker, else `levels/main.scene`), `project::discover(start)`,
   `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`).
@@ -41,9 +38,7 @@ ara-why, ara-profile, ara-collab.
 - Modules: `params` (all core params types), `query` (compact syntax), `text`
   (scene-to-text), `docs` (llms.txt, a page per code), `journal`, `review`, `jobs`,
   `tree`, `diag` (the bus service, `.ara/diagnostics.jsonl`), `why` (`HostFacts`).
-
 ## Diagnostics bus (`diag.rs`, `why.rs`)
-
 - `Host::open` attaches the process's bus consumer; every tick drains other threads'
   emits into the store (`ara_diag::store`), and `Cx::log` / failed calls push
   directly, attributed to the calling session's author. Subsystems on the host's
@@ -65,22 +60,27 @@ ara-why, ara-profile, ara-collab.
   (runnable fixes with their cause code); `full: true` returns the whole `Report`.
   `docs.search` answers a code
   query with its `errors/<code>` page.
-
-## Collaboration (`collab/`, D21)
-
-- `collab.join/leave/presence/who/claim/release/heartbeat/claims/submit/sync/
-  undo/redo/conflicts/policy`, `branch.open/list/status/submit/merge/discard`
-  over an `ara_collab::Hub` in `State`. MCP: `ara_session` `who`, `claim`,
-  `release`, `branch`, `submit`. Any collab call joins the session; `collab.join`
-  also routes `collab.*` notifications to the connection.
-- `dispatch` sets the store origin to the calling session (claims bind per
-  session); `drain` ends with `collab_after` (publish `collab.op`, leave ended
-  sessions, route events, persist `.ara/claims.json` and `.ara/branches/*.json`).
-  `closed(conn)` disconnects its participants (claims stay until they expire).
-- `cmd.apply {branch}` runs in the caller's branch session (no checkpoint, not live).
-
+## Collaboration (D24)
+- `collab.join/leave/presence/who/submit/sync/undo/redo/conflicts/activity`;
+  optional `branch.open/list/status/submit/merge/discard`. Branch submit merges
+  immediately. Legacy claim/release/heartbeat/claims methods are advisory only;
+  no ops guard, idle policy, approval gate or claim rejection remains.
+- `HostConfig::overwrite_window` defaults to ten minutes. Ordinary command writes
+  and replica conflicts share the conflict log. Both participants receive
+  `collab.conflict`; `editor.overwrite` also goes to editor subscribers and logs
+  ARA2503, visible through `logs`/`diag`.
+- `editor.gesture {session,doc,entity,path,active}` is human-only. The host stages
+  agent command ops touching those fields, applies other fields immediately, and
+  releases held ops in order after end or two seconds. Replica agent submits
+  and optional atomic branch submission use the same gesture boundary. No sleeping on the host
+  thread. `cmd.apply` reports `gestureHeld` and preserves turn checkpoints.
+  Split commits share a turn ID for Undo turn; rollback cancels held operations.
+  Editor gizmos, scrubs, text commits and Escape call begin/end automatically.
+- Hub reads `collab.activity` without opening an artificial editor session;
+  presence remains attributed to actual participants.
+- Origins and txn/session maps preserve author attribution. Every call drains
+  committed ops, publishes notifications and persists optional branches.
 ## Core methods (`core/`)
-
 `rpc.discover`; `session.begin/status/diff/checkpoint/rollback/end`;
 `history.list/undo/redo`; `review.list/accept/revert`; `schema.list/describe/search`;
 `query`; `inspect`; `cmd.apply`; `logs`; `docs.search`;

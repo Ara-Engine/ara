@@ -13,6 +13,12 @@ link Lightyear, Replicon, App, sockets, histories or network services.
 - `Client<F>` uses native Lightyear input histories, selective owner rollback and
   remote interpolation. Inject device/bot actions or attach an immutable input
   source. Sources run only when sampling new inputs, never during native replay.
+- `ActionCodec<F::Input>` optionally samples multiple declared actions into one
+  history entry and validates/expands that entry on the authority. Install matching
+  codecs through `Client::action_codec` / `Server::action_codec` before polling;
+  bump the feature version when changing the wire input contract.
+- `Authoritative::component_at` defaults to Session reads; embedded runtimes override
+  it for externally owned C# columns before policy projection.
 - `PolicyRegistry` compiles field IDs/codecs from SchemaDb. Mixed public, owner and
   authority-only fields split before encoding; component visibility is enforced by
   Replicon. Quantization/interpolation are independent of rollback metadata.

@@ -1,6 +1,6 @@
 //! Windowed players: an SDL3 window, keyboard/mouse → action injections (the same
 //! replayable path agents use), and per-frame presentation through `ara-platform`.
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_platform::{Event, Present, Window};
 use ara_runtime::{
@@ -8,7 +8,7 @@ use ara_runtime::{
     control::{JUMP, LOOK, MOVE, SPRINT},
     extract::{Draw, Geometry, RenderFrame},
 };
-use ara_runtime_render::Presenter;
+use ara_runtime_render::{Presenter, two_d::Presenter2d};
 use std::{
     collections::BTreeSet,
     path::Path,
@@ -34,6 +34,7 @@ const HELD: u32 = 1 << 30;
 pub struct Windowed {
     window: Window,
     present: Option<Present>,
+    present2d: Option<Present>,
     keys: BTreeSet<i32>,
     sent_move: [f32; 2],
     sent_sprint: bool,
@@ -72,6 +73,7 @@ impl Windowed {
             Self {
                 window,
                 present: None,
+                present2d: None,
                 keys: BTreeSet::new(),
                 sent_move: [0.0; 2],
                 sent_sprint: false,
@@ -187,7 +189,9 @@ impl Windowed {
             // after device idle in `recreate`/`Drop` ordering below.
             self.present = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
         }
-        let image = renderer.gpu().native_image(renderer.output())?;
+        let image = renderer
+            .gpu()
+            .native_image(presenter.output().context("presented image missing")?)?;
         let result = match &mut self.present {
             // SAFETY: the renderer completed this CopySource image; both owners are live.
             Some(present) => unsafe {
@@ -207,6 +211,75 @@ impl Windowed {
         self.frames += 1;
         self.frame_times
             .push((cpu + presenter.stats().render).as_secs_f32() * 1000.0);
+        Ok(())
+    }
+
+    /// Prepares a 2D extraction before the frame's read-only audio worker starts.
+    pub fn prepare_2d(
+        &mut self,
+        presenter: &mut Presenter2d,
+        world: &mut ara_sim::bevy_ecs::world::World,
+        tick: u64,
+    ) -> Result<()> {
+        let size = self.window.size()?;
+        if size.contains(&0) {
+            return Ok(());
+        }
+        if presenter.renderer().is_some_and(|r| r.size() != size) {
+            self.recreate_2d(presenter)?;
+        }
+        presenter.prepare(world, tick, size, &self.window.extensions()?)
+    }
+
+    /// Renders and blits the native 2D target; no pixel data crosses the CPU.
+    pub fn present_2d(&mut self, presenter: &mut Presenter2d) -> Result<()> {
+        if self.window.size()?.contains(&0) {
+            std::thread::sleep(Duration::from_millis(5));
+            return Ok(());
+        }
+        let started = Instant::now();
+        presenter.present()?;
+        let renderer = presenter.renderer().context("2D renderer missing")?;
+        if self.present2d.is_none() {
+            // SAFETY: the window and 2D device outlive this native presentation object.
+            self.present2d = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
+        }
+        let image = renderer.gpu().native_image(renderer.output())?;
+        let result = match &mut self.present2d {
+            // SAFETY: this completed image is CopySource and both owners are live.
+            Some(present) => unsafe {
+                present.display(renderer.gpu().context(), image, renderer.size())
+            },
+            None => Ok(()),
+        };
+        if let Err(error) = result {
+            if error.downcast_ref::<ara_gpu::vk::Result>()
+                == Some(&ara_gpu::vk::Result::ERROR_OUT_OF_DATE_KHR)
+            {
+                self.recreate_2d(presenter)?;
+            } else {
+                return Err(error);
+            }
+        }
+        self.frames += 1;
+        self.frame_times
+            .push(started.elapsed().as_secs_f32() * 1000.0);
+        Ok(())
+    }
+
+    /// Releases the 2D swapchain while its device is still live.
+    pub fn shutdown_2d(&mut self, presenter: &Presenter2d) -> Result<()> {
+        self.recreate_2d(presenter)
+    }
+
+    fn recreate_2d(&mut self, presenter: &Presenter2d) -> Result<()> {
+        if let (Some(mut present), Some(renderer)) = (self.present2d.take(), presenter.renderer()) {
+            // SAFETY: the native device is idle before its presentation objects retire.
+            unsafe {
+                renderer.gpu().context().device.device_wait_idle()?;
+                present.destroy(renderer.gpu().context());
+            }
+        }
         Ok(())
     }
 

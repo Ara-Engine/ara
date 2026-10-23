@@ -44,7 +44,7 @@ use std::{
 };
 
 /// Where the C# host and the game's modules are.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptSettings {
     /// `Ara.Host` build output for the reloadable JIT host
     /// (`dotnet/artifacts/bin/Ara.Host/release`).
@@ -79,6 +79,7 @@ pub struct ScriptPlugin {
     /// (`Mutex::get_mut`, never locked): `ScriptHost` is `Send` but not `Sync`.
     host: std::sync::Mutex<Option<ScriptHost>>,
     components: Vec<String>,
+    prepared_world: Option<World>,
 }
 
 impl ScriptPlugin {
@@ -91,9 +92,27 @@ impl ScriptPlugin {
                 events,
                 host: std::sync::Mutex::new(None),
                 components: Vec::new(),
+                prepared_world: None,
             },
             receiver,
         )
+    }
+
+    /// Starts CoreCLR, Roslyn and the module generations before a pooled player is
+    /// offered for Play. The entire empty world moves with its host: component IDs
+    /// and the host's ECS bindings never cross worlds.
+    pub fn prewarm(settings: ScriptSettings) -> Result<(Self, Receiver<ScriptEvent>)> {
+        let (mut plugin, events) = Self::new(settings);
+        let mut world = World::new();
+        let mut schema = ara_runtime::schema(&[])?;
+        plugin.prepare(&mut world, &mut schema)?;
+        plugin.prepared_world = Some(world);
+        Ok((plugin, events))
+    }
+
+    /// Whether this prepared host belongs to the requested module configuration.
+    pub fn matches(&self, settings: &ScriptSettings) -> bool {
+        &self.settings == settings
     }
 }
 
@@ -127,6 +146,21 @@ impl RuntimePlugin for ScriptPlugin {
     }
 
     fn prepare(&mut self, world: &mut World, schema: &mut SchemaDb) -> Result<()> {
+        if let Some(prepared) = self.prepared_world.take() {
+            *world = prepared;
+            let host = self
+                .host
+                .get_mut()
+                .ok()
+                .and_then(|host| host.as_ref())
+                .ok_or_else(|| RuntimeError("prewarmed script host missing".into()))?;
+            for ty in host.schema().types() {
+                if schema.get(&ty.name).is_none() {
+                    schema.add(ty.clone()).map_err(|d| failed(vec![d]))?;
+                }
+            }
+            return Ok(());
+        }
         let engine = bind_component!(
             EngineBindings::new(),
             ara_components::Transform as "Transform" { position, rotation, scale }
@@ -499,6 +533,53 @@ pub fn read(world: &World, entity: Entity, name: &str) -> Option<Value> {
         .get_resource::<Scripts>()?
         .host
         .read_component(world, entity, name)
+}
+
+/// Script component names for policy-filtered network presentation.
+pub fn component_names(world: &World) -> Vec<String> {
+    world
+        .get_resource::<Scripts>()
+        .map(|s| {
+            s.host
+                .module_components()
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Applies a received partial component projection in a never-stepped client
+/// mirror. Fields absent from the projection retain their local values.
+pub fn apply_replica(
+    world: &mut World,
+    entity: Entity,
+    name: &str,
+    projection: &Value,
+) -> Result<()> {
+    fn merge(current: &mut Value, incoming: &Value) {
+        if let (Some(current), Some(incoming)) = (current.as_object_mut(), incoming.as_object()) {
+            for (key, value) in incoming {
+                merge(current.entry(key.clone()).or_insert(Value::Null), value);
+            }
+        } else {
+            *current = incoming.clone();
+        }
+    }
+    if !world.contains_resource::<Scripts>() {
+        return Ok(());
+    }
+    world.resource_scope::<Scripts, _>(|world, scripts| {
+        let mut value = scripts
+            .host
+            .read_component(world, entity, name)
+            .unwrap_or_else(|| json!({}));
+        merge(&mut value, projection);
+        scripts
+            .host
+            .insert_component(world, entity, name, &value)
+            .map_err(|d| failed(vec![d]))
+    })
 }
 
 /// The C# command catalog (ara-cmd `Info` shape, `scope: "play"`), or `null`.

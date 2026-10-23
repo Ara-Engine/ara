@@ -19,10 +19,43 @@ fn percentile(samples: &mut [f64], p: f64) -> f64 {
     samples[((samples.len() as f64 * p).ceil() as usize).clamp(1, samples.len()) - 1]
 }
 
+#[cfg(windows)]
+#[test]
+#[ignore = "opens a player window and posts its native close event"]
+fn closing_the_player_window_stops_the_world_cleanly() {
+    let dir = demo_copy("close-window");
+    let mut agent = Agent::open(&dir, 9, |config| {
+        config.pool.headless = 0;
+        config.pool.windowed = 1;
+    });
+    agent.until("a warm window", |a| {
+        a.play("status", json!({}))["pool"]["windowed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 1
+    });
+    let world = agent.play("start", json!({"window":true}));
+    let pid = world["players"][0]["pid"].as_u64().unwrap() as u32;
+    agent.until("player frames", |a| {
+        a.play("status", json!({}))["worlds"][0]["players"][0]["status"]["fps"]
+            .as_f64()
+            .unwrap_or(0.0)
+            > 0.0
+    });
+    assert!(support::close_window(pid), "post WM_CLOSE to player {pid}");
+    agent.until("a clean stopped world", |a| {
+        a.play("status", json!({}))["worlds"]
+            .as_array()
+            .is_some_and(Vec::is_empty)
+    });
+    println!("PLAYER-CLOSE clean pid={pid}");
+}
+
 #[test]
 fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let dir = demo_copy("scenario");
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     // An importer upgrade must not fail Play: record an older glTF importer version.
     let sidecar = dir.join("assets/fox/Fox.glb.import.json");
     let current = std::fs::read_to_string(&sidecar).unwrap();
@@ -189,6 +222,13 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     // Crash isolation: each fault is reported structurally and the world restarts.
     let mut crashes = Vec::new();
     for kind in ["panic", "access", "hang"] {
+        let dump_dir = dir.join(".ara/play/crashes");
+        let old_dumps: std::collections::BTreeSet<_> = std::fs::read_dir(&dump_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
         agent.pool_ready();
         let w = agent.play("start", json!({"startPaused": true}))["world"].clone();
         let t = Instant::now();
@@ -212,6 +252,40 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
             _ => "player_unresponsive",
         };
         assert_eq!(fault["code"], json!(expected), "{fault}");
+        if kind != "hang" {
+            let dumps: Vec<_> = std::fs::read_dir(&dump_dir)
+                .unwrap()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "dmp") && !old_dumps.contains(p))
+                .collect();
+            assert!(
+                !dumps.is_empty(),
+                "{kind} must produce a minidump in {}",
+                dump_dir.display()
+            );
+            let output = support::repo().join("target/runtime-polish/crashes");
+            std::fs::create_dir_all(&output).unwrap();
+            for dump in dumps {
+                use std::io::Read;
+                let mut signature = [0; 4];
+                std::fs::File::open(&dump)
+                    .unwrap()
+                    .read_exact(&mut signature)
+                    .unwrap();
+                assert_eq!(&signature, b"MDMP");
+                let target = output.join(format!(
+                    "{kind}-{}",
+                    dump.file_name().unwrap().to_string_lossy()
+                ));
+                std::fs::copy(&dump, &target).unwrap();
+                let report = dump.with_extension("crash.json");
+                if report.exists() {
+                    std::fs::copy(report, target.with_extension("crash.json")).unwrap();
+                }
+                println!("PLAYER-DUMP {}", target.display());
+            }
+        }
         agent.pool_ready();
         let t = Instant::now();
         agent.play("restart", json!({"world": w}));
@@ -254,7 +328,8 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
 #[ignore = "opens a window; run explicitly with --ignored"]
 fn agent_plays_the_demo_in_a_window() {
     let dir = demo_copy("window");
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     let mut agent = Agent::open(&dir, 9, |config| {
         config.pool.windowed = 1;
         config.pool.headless = 0;

@@ -7,7 +7,8 @@
 //! Generations published during Play reach players only when allowed or approved.
 //! A sidecar recorded by an older importer is upgraded (one typed
 //! `SidecarCommand::Version` transaction, an info diagnostic) and reimported; only an
-//! importer older than the sidecar's, or a failed import, is an error.
+//! importer older than the sidecar's, or a failed import, produces a diagnostic and
+//! keeps the last good generation (a placeholder when none exists).
 use ara_asset::{
     AssetChanged, AssetPipeline, FileCache, ProcessWorker, ReloadEvent, Sidecar, SidecarCommand,
     SourceAsset, TargetPlatform, VersionCheck,
@@ -136,7 +137,9 @@ impl Assets {
                     asset_dependencies: BTreeMap::new(),
                 })
                 .map_err(|e| e.to_string())?;
-            pipeline.request(&id).map_err(|e| e.to_string())?;
+            if let Err(error) = pipeline.request(&id) {
+                failures.insert(id.clone(), error.to_string());
+            }
             sources.insert(id);
         }
         Ok(Self {
@@ -148,7 +151,7 @@ impl Assets {
         })
     }
 
-    /// Info diagnostics (importer upgrades) not yet reported.
+    /// Importer upgrades and failed-import placeholder diagnostics not yet reported.
     pub fn take_notes(&mut self) -> Vec<Diagnostic> {
         std::mem::take(&mut self.notes)
     }
@@ -174,8 +177,8 @@ impl Assets {
             .unwrap_or_default()
     }
 
-    /// The published generation of every source (hex digest), when all of `wanted` are
-    /// published; waits up to `timeout` (first cooks of a fresh clone take seconds).
+    /// Published source generations (hex digests), waiting up to `timeout` for
+    /// `wanted`. Failed imports keep a last-good generation or a diagnosed placeholder.
     pub fn pins(
         &mut self,
         wanted: &BTreeSet<String>,
@@ -186,13 +189,14 @@ impl Assets {
             self.poll(false, true);
             let missing: Vec<&String> = wanted
                 .iter()
-                .filter(|id| self.sources.contains(*id) && self.digest(id).is_none())
+                .filter(|id| {
+                    self.sources.contains(*id)
+                        && !self.failures.contains_key(*id)
+                        && self.digest(id).is_none()
+                })
                 .collect();
             if missing.is_empty() {
                 break;
-            }
-            if let Some((asset, error)) = self.failures.iter().find(|(a, _)| wanted.contains(*a)) {
-                return Err(format!("import of {asset} failed: {error}"));
             }
             if start.elapsed() > timeout {
                 return Err(format!(
@@ -200,6 +204,18 @@ impl Assets {
                 ));
             }
             std::thread::sleep(Duration::from_millis(5));
+        }
+        for (asset, error) in self
+            .failures
+            .iter()
+            .filter(|(asset, _)| wanted.contains(*asset))
+        {
+            self.notes.push(Diagnostic::warning(
+                crate::codes::ASSETS,
+                format!(
+                    "import of {asset} failed: {error}; Play will use a placeholder where no previous generation exists"
+                ),
+            ));
         }
         Ok(self
             .sources

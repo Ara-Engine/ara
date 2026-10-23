@@ -93,8 +93,7 @@ impl Shell {
                 _ => {}
             }
         }
-        let agent_changes =
-            editor.unreviewed_ops().count() + editor.pending().as_array().map_or(0, Vec::len);
+        let agent_changes = editor.unreviewed_ops().count();
         out.push_str("<panel id='chips' style='flex-direction:row;align-items:center;gap:2px;padding-left:6px'>");
         if errors + warnings > 0 {
             self.bind_command("chip-problems", "window.console", Target::None);

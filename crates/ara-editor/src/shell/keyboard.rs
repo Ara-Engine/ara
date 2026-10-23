@@ -160,6 +160,7 @@ impl Shell {
             self.show_readout(None);
             self.pick_field = None;
             self.drafts.clear();
+            editor.end_field_gestures()?;
             self.rename = false;
             let had_overlay =
                 self.menu.take().is_some() || self.dialog.take().is_some() || self.mnemonics;

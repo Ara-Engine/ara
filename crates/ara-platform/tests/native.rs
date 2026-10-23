@@ -11,6 +11,7 @@ use sdl3_sys::{
 #[ignore = "requires a Vulkan desktop and an output audio device"]
 fn shared_sdl_input_audio_and_subsystem_lifetimes() -> Result<()> {
     let window = Window::new("Ara SDL integration", [320, 240])?;
+    window.set_icon(&[255; 16 * 16 * 4], [16, 16])?;
     let mut audio = SdlBackend::open(48000)?;
     let second_audio = SdlBackend::open(48000)?;
     ensure!(!audio.driver()?.is_empty() && !audio.name()?.is_empty());

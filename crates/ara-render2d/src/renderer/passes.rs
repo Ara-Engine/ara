@@ -6,6 +6,16 @@ impl Renderer2d {
         exposure: f32,
         mode: ViewMode,
     ) -> Result<()> {
+        self.render_frame(camera, exposure, mode, true)
+    }
+
+    pub(super) fn render_frame(
+        &mut self,
+        camera: &Camera2d,
+        exposure: f32,
+        mode: ViewMode,
+        readback: bool,
+    ) -> Result<()> {
         ensure!(
             matches!(
                 mode,
@@ -80,26 +90,34 @@ impl Renderer2d {
                 (post_frame, Access::ShaderRead),
             ],
         );
-        let readbacks: Vec<_> = self
-            .readbacks
-            .iter()
-            .map(|&b| graph.import(Resource::Buffer(b), state(Access::Undefined)))
-            .collect();
-        graph.pass(
-            "CaptureReadback",
-            Queue::Graphics,
-            [
-                (targets[2], Access::CopySource),
-                (targets[1], Access::CopySource),
-                (readbacks[0], Access::CopyDestination),
-                (readbacks[1], Access::CopyDestination),
-            ],
-        );
-        graph.pass(
-            "HostReadback",
-            Queue::Graphics,
-            readbacks.iter().map(|id| (*id, Access::HostRead)),
-        );
+        if readback {
+            let readbacks: Vec<_> = self
+                .readbacks
+                .iter()
+                .map(|&b| graph.import(Resource::Buffer(b), state(Access::Undefined)))
+                .collect();
+            graph.pass(
+                "CaptureReadback",
+                Queue::Graphics,
+                [
+                    (targets[2], Access::CopySource),
+                    (targets[1], Access::CopySource),
+                    (readbacks[0], Access::CopyDestination),
+                    (readbacks[1], Access::CopyDestination),
+                ],
+            );
+            graph.pass(
+                "HostReadback",
+                Queue::Graphics,
+                readbacks.iter().map(|id| (*id, Access::HostRead)),
+            );
+        } else {
+            graph.pass(
+                "Present",
+                Queue::Graphics,
+                [(targets[2], Access::CopySource)],
+            );
+        }
         let compiled = graph.compile()?;
         let mut recorder = self.gpu.begin(Queue::Graphics);
         for pass in &compiled.passes {
@@ -157,7 +175,7 @@ impl Renderer2d {
                     recorder.push(Command::EndRendering);
                 }
                 1 => self.post.record(&mut recorder, self.hdr_index, self.size),
-                2 => {
+                2 if readback => {
                     recorder.push(Command::ReadImage {
                         source: self.targets[2],
                         destination: self.readbacks[0],

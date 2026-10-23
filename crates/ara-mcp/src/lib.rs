@@ -17,7 +17,9 @@
 //! client's session, so `session` becomes optional: calls without one use the
 //! session the client began, or one begun for it on first use.
 
+mod global;
 pub mod tools;
+pub use global::{GlobalAdapter, serve_global_stdio};
 
 use std::io::{self, BufRead, Write};
 
@@ -35,7 +37,7 @@ pub const UNSUPPORTED_VERSION: i64 = -32022;
 pub const HEADER_MISMATCH: i64 = -32020;
 const VERSION_KEY: &str = "io.modelcontextprotocol/protocolVersion";
 
-const INSTRUCTIONS: &str = "Ara game engine tools. ara_session {\"action\": \"begin\", \"client\": \"<your name>\"} returns a `session` handle and the project's documents; over `ara mcp` the session is optional (one begins on first use). Read scenes with ara_inspect and ara_query; edit only through ara_apply (atomic batches with a `why`; `doc` defaults to the document holding the entities you name). Name entities by ID (`e_8b21`), `$symbol` from an earlier call, or `name:Crate` / `name:Floor/Crate`. Find components and fields with ara_schema {\"action\": \"search\"}. Conventions: Y-up, meters, degrees, linear colors, references @path#id. Diagnostics carry stable ARA codes and machine-applicable fixes; when something looks wrong (an entity does not show up, a code you do not know, a slow frame), ask ara_why first: it returns ranked causes with fixes. Other humans and agents may be working in the project at the same time: ara_session {\"action\": \"who\"} shows who is doing what and what they claimed; agents cannot edit claimed subjects (ARA2500), so apply the rest of your change without them and queue only the claimed part in a branch session.";
+const INSTRUCTIONS: &str = "Ara game engine tools. ara_session {\"action\": \"begin\", \"client\": \"<your name>\"} returns a `session` handle and the project's documents; over `ara mcp` the session is optional (one begins on first use). Read scenes with ara_inspect and ara_query; edit only through ara_apply (atomic batches with a `why`; `doc` defaults to the document holding the entities you name). Name entities by ID (`e_8b21`), `$symbol` from an earlier call, or `name:Crate` / `name:Floor/Crate`. Find components and fields with ara_schema {\"action\": \"search\"}. Conventions: Y-up, meters, degrees, linear colors, references @path#id. Diagnostics carry stable ARA codes and machine-applicable fixes; when something looks wrong (an entity does not show up, a code you do not know, a slow frame), ask ara_why first: it returns ranked causes with fixes. Other humans and agents may be working in the project at the same time: ara_session {\"action\": \"who\"} shows who is doing what and their activity. Changes apply immediately, with overwrite notices and undo per turn. Active human field gestures delay only that field, for at most two seconds.";
 
 fn server_info() -> Value {
     json!({ "name": "ara", "title": "Ara engine", "version": env!("CARGO_PKG_VERSION") })

@@ -57,6 +57,15 @@ pub trait Authoritative: std::any::Any + Send + Sync {
     fn session(&self) -> &Session;
     /// The simulation, mutably (listen-host input, hash sampling).
     fn session_mut(&mut self) -> &mut Session;
+    /// Reads a reflected column, including externally owned script columns when
+    /// the embedding runtime supplies them. Field policies are applied afterward.
+    fn component_at(
+        &self,
+        entity: Entity,
+        name: &str,
+    ) -> std::result::Result<Option<serde_json::Value>, ara_sim::SimError> {
+        self.session().component_at(entity, name)
+    }
     /// Runs exactly one boundary: `adapter` delivers network input before it and
     /// observes the completed tick after it.
     fn step(
@@ -172,6 +181,10 @@ pub struct Server<F: SimulationFeature> {
     poll_interval: Duration,
 }
 impl<F: SimulationFeature> Server<F> {
+    /// Installs the same multi-action codec as predicting clients before polling.
+    pub fn action_codec(&mut self, codec: crate::ActionCodec<F::Input>) {
+        self.app.insert_resource(codec);
+    }
     /// Starts a Listen/Dedicated server from the same world/systems used offline:
     /// a [`Session`], or any [`Authoritative`] wrapping one.
     pub fn new(
@@ -431,11 +444,22 @@ impl<F: SimulationFeature> Server<F> {
     }
     /// Direct listen-host input. This is injected once, with no network round trip.
     pub fn inject_host(&mut self, tick: u64, input: Injection) -> Result<()> {
+        if let Some(codec) = self
+            .app
+            .world()
+            .get_resource::<crate::ActionCodec<F::Input>>()
+        {
+            if !codec.names.contains(&input.action.as_str()) {
+                return Err(NetError("undeclared host action".into()));
+            }
+            (codec.sample)(&BTreeMap::from([(input.action.clone(), input.value)]))?;
+        } else {
+            F::input(Some(input.value))?;
+        }
         let mut state = self.app.world_mut().resource_mut::<Authority>();
         if state.config.mode != SessionMode::Listen || input.player != state.config.local_owner {
             return Err(NetError("host input requires Listen mode".into()));
         }
-        F::input(Some(input.value))?;
         state.session.session_mut().inject(tick, vec![input])?;
         Ok(())
     }

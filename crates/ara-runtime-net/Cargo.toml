@@ -13,6 +13,7 @@ ara-input = { path = "../ara-input" }
 ara-net = { path = "../ara-net" }
 ara-physics = { path = "../ara-physics" }
 ara-runtime = { path = "../ara-runtime" }
+ara-runtime-script = { path = "../ara-runtime-script" }
 ara-schema.workspace = true
 ara-sim = { path = "../ara-sim" }
 bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }

@@ -51,7 +51,34 @@ struct Args {
 }
 
 fn main() {
+    match ara_crash::monitor_from_args() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("ara-player crash monitor: {error:#}");
+            std::process::exit(2);
+        }
+    }
     crash::install();
+    let directory = std::env::var_os("ARA_CRASH_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".ara/crashes"));
+    let build_id = std::env::var("ARA_BUILD_ID")
+        .ok()
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|path| std::fs::read(path).ok())
+                .map(|bytes| format!("ara-player-{}", ara_sim::StateHash::of_bytes(&bytes)))
+        })
+        .unwrap_or_else(|| concat!("ara-player-", env!("CARGO_PKG_VERSION")).into());
+    let _capture = match ara_crash::Capture::start(&directory, &build_id) {
+        Ok(capture) => Some(capture),
+        Err(error) => {
+            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            None
+        }
+    };
     if let Err(error) = run(Args::parse()) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
@@ -79,6 +106,7 @@ struct Player {
     window: Option<device::Windowed>,
     presenter: Option<Presenter>,
     presenter2d: Option<Presenter2d>,
+    window2d: Option<Presenter2d>,
     /// Live audio of windowed players: the world's presenter and the SDL device.
     audio: Option<(
         ara_runtime_audio::AudioPresenter,
@@ -92,15 +120,33 @@ struct Player {
     last_advance: Instant,
     max_late: Duration,
     stop: bool,
+    /// Scene-dependent landscape/VFX pipelines warm on the first window frame.
+    window_ready: bool,
+    prewarmed: Option<(
+        ara_runtime_script::ScriptPlugin,
+        std::sync::mpsc::Receiver<ara_runtime_script::ScriptEvent>,
+    )>,
 }
 
 fn run(args: Args) -> Result<()> {
     let init = Instant::now();
     let size = parse_size(&args.size)?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
+    let prewarmed = match std::env::var("ARA_PLAY_SCRIPTS") {
+        Ok(text) => {
+            let scripts: ara_play::ScriptScene = serde_json::from_str(&text)?;
+            Some(ara_runtime_script::ScriptPlugin::prewarm(ara_runtime_script::ScriptSettings {
+                host_dir: scripts.host_dir.into(),
+                compile_server: scripts.compile_server.map(Into::into),
+                modules: scripts.modules.into_iter().map(Into::into).collect(),
+            }).context("ARA0922: C# pre-warm failed; run `ara doctor` to check the .NET 10 installation")?)
+        }
+        Err(_) => None,
+    };
     // Windowed pool players create the window, device and pipelines before Play.
     let (window, presenter) = if args.window {
-        let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache)?;
+        let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache)
+            .context("ARA_GPU_BACKEND: cannot open the player renderer; run `ara doctor` and check the Vulkan loader, Vulkan 1.3 GPU/driver, and validation layers")?;
         (Some(window), Some(presenter))
     } else {
         (None, None)
@@ -125,6 +171,7 @@ fn run(args: Args) -> Result<()> {
         window,
         presenter,
         presenter2d: None,
+        window2d: None,
         audio: None,
         frame: RenderFrame::default(),
         world: None,
@@ -133,6 +180,8 @@ fn run(args: Args) -> Result<()> {
         last_advance: Instant::now(),
         max_late: Duration::ZERO,
         stop: false,
+        window_ready: false,
+        prewarmed,
     };
     player.run()
 }
@@ -162,6 +211,9 @@ impl Player {
         if let (Some(window), Some(presenter)) = (&mut self.window, &self.presenter) {
             window.shutdown(presenter)?;
         }
+        if let (Some(window), Some(presenter)) = (&mut self.window, &self.window2d) {
+            window.shutdown_2d(presenter)?;
+        }
         self.link.flush()?;
         Ok(())
     }
@@ -169,6 +221,10 @@ impl Player {
     /// One loop iteration with a world: tick by host time, ack patches, heartbeat,
     /// present (windowed) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
+        let warming_window = self.window.is_some() && !self.window_ready;
+        if warming_window {
+            busy(&mut self.link, "first window frame")?;
+        }
         let now = Instant::now();
         let elapsed = now - self.last_advance;
         self.last_advance = now;
@@ -212,6 +268,14 @@ impl Player {
             if self.window.is_some() {
                 world.runtime.extract(&mut self.frame);
             }
+            if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.window2d) {
+                let tick = world.runtime.tick();
+                window.prepare_2d(
+                    presenter,
+                    world.runtime.play_mut().session_mut().world_mut(),
+                    tick,
+                )?;
+            }
             let inputs = match &self.audio {
                 Some(_) => Some(world.audio_inputs()?),
                 None => None,
@@ -227,8 +291,9 @@ impl Player {
                     ),
                     _ => None,
                 };
-                let presented = match (&mut self.window, &mut self.presenter) {
-                    (Some(window), Some(presenter)) => window.present(presenter, &self.frame),
+                let presented = match (&mut self.window, &mut self.window2d, &mut self.presenter) {
+                    (Some(window), Some(presenter), _) => window.present_2d(presenter),
+                    (Some(window), _, Some(presenter)) => window.present(presenter, &self.frame),
                     _ => Ok(()),
                 };
                 let audio = job.map(|job| {
@@ -249,6 +314,17 @@ impl Player {
                 eprintln!("ara-player: audio off: {error:#}");
                 self.audio = None;
             }
+        }
+        if warming_window {
+            self.window_ready = true;
+            self.link.notify(
+                ara_play::BUSY,
+                &ara_play::Busy {
+                    what: "first window frame complete".into(),
+                    max_ms: 0,
+                },
+            )?;
+            self.link.flush()?;
         }
         self.events()?;
         if self.last_status.elapsed() >= Duration::from_millis(250) {
@@ -557,6 +633,7 @@ impl Player {
             start.role,
             start.net.as_ref(),
             self.window.is_some(),
+            self.prewarmed.take(),
         )?;
         let mut handshake = None;
         if start.role == ara_play::Role::Client {
@@ -568,6 +645,20 @@ impl Player {
             world.resume(resume)?;
         }
         if self.window.is_some() {
+            let source = world.asset_source()?;
+            let tick = world.runtime.tick();
+            let simulation = world.runtime.play_mut().session_mut().world_mut();
+            if ara_runtime_render::two_d::camera(simulation).is_some() {
+                let mut presenter = Presenter2d::new(&self.args.gpu_cache);
+                presenter.set_atlases(ara_runtime_render::two_d::atlases(
+                    simulation,
+                    source.as_ref(),
+                )?);
+                if let Some(window) = &mut self.window {
+                    window.prepare_2d(&mut presenter, simulation, tick)?;
+                }
+                self.window2d = Some(presenter);
+            }
             // Live sound for windowed play; a missing device leaves play silent.
             let device = ara_audio::device::SdlBackend::open(48_000)
                 .map_err(anyhow::Error::from)
@@ -578,6 +669,14 @@ impl Player {
             }
         }
         let mut started = world.start(start.start_paused, decode_ms + build_ms)?;
+        for diagnostic in world.runtime.asset_diagnostics() {
+            self.link.notify(
+                ara_play::EVENT,
+                &ara_play::Event::Diagnostic {
+                    diagnostic: serde_json::to_value(diagnostic)?,
+                },
+            )?;
+        }
         started.net_handshake_ms = handshake;
         self.last_advance = Instant::now();
         self.world = Some(world);

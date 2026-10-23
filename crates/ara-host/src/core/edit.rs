@@ -305,16 +305,26 @@ impl State {
             return Err(errors);
         }
         let before = self.store.revision();
-        let result = self
-            .registry
-            .apply(&mut self.store, &batch, &session.cmd_session())
-            .map_err(relocate)?;
+        let result = match self
+            .gesture_apply(sid, &batch, &session.cmd_session())
+            .map_err(relocate)?
+        {
+            Some(result) => result,
+            None => self
+                .registry
+                .apply(&mut self.store, &batch, &session.cmd_session())
+                .map_err(relocate)?,
+        };
         let turn = matches!(session.author, Author::Agent(_))
             && !dry_run
             && !result.replayed
-            && result.txn.is_some();
+            && (result.txn.is_some() || self.held_count(sid) > 0);
         let checkpoint = turn.then(|| checkpoint_at(self, sid, before, p.why.clone(), true).id);
-        let text = apply_text(self, &doc, &result, checkpoint.as_deref());
+        let mut text = apply_text(self, &doc, &result, checkpoint.as_deref());
+        let held = self.held_count(sid);
+        if held > 0 {
+            text.push_str(&format!("{held} field operation(s) wait for the active human gesture (at most two seconds).\n"));
+        }
         Ok(json!({
             "ok": true,
             "doc": path_of(self, &doc),
@@ -328,6 +338,7 @@ impl State {
             "outputs": result.outputs,
             "ops": result.ops,
             "checkpoint": checkpoint,
+            "gestureHeld": held,
         }))
     }
 

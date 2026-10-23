@@ -225,19 +225,6 @@ pub const DEFS: &[Def] = &[
         Lit::Empty,
     ),
     def(
-        "agents.applyPolicy",
-        User,
-        "Agents",
-        "Apply agent changes",
-        "When incoming agent batches change documents. On approval queues them in Agents.",
-        Kind::Choice(&[
-            ("immediately", "Immediately"),
-            ("whenIdle", "When idle"),
-            ("onApproval", "On approval"),
-        ]),
-        Lit::S("immediately"),
-    ),
-    def(
         "performance.frameCap",
         User,
         "Performance",

@@ -67,29 +67,7 @@ impl Shell {
     }
     pub(super) fn agents_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let compact = self.ui.size[1] < 800.;
-        out.push_str("<panel id='agents-toolbar' class='toolbar'><text id='policy-label' class='caption' text='Apply' style='padding-left:4px' /><panel id='policy-segment' class='segment'>");
-        for (policy, label, command) in [
-            (
-                crate::state::ApplyPolicy::Immediately,
-                "Now",
-                "agents.policy.immediately",
-            ),
-            (
-                crate::state::ApplyPolicy::WhenIdle,
-                "When idle",
-                "agents.policy.idle",
-            ),
-            (
-                crate::state::ApplyPolicy::OnApproval,
-                "On approval",
-                "agents.policy.approval",
-            ),
-        ] {
-            let id = format!("policy-{policy:?}");
-            self.bind_command(&id, command, commands::Target::None);
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='Apply {label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.policy == policy {" selected"} else {""}));
-        }
-        out.push_str("</panel>");
+        out.push_str("<panel id='agents-toolbar' class='toolbar'>");
         out.push_str(if compact {
             "</panel><scroll id='agents-scroll' class='body' style='padding:4px;gap:8px'>"
         } else {
@@ -112,40 +90,34 @@ impl Shell {
             ));
             out.push_str("</panel>");
         }
-        if let Some(pending) = editor.pending().as_array() {
-            for item in pending {
-                let ticket = item["ticket"].as_str().unwrap_or("");
-                out.push_str(&format!("<panel id='pending-{ticket}' class='row'><text id='pending-label-{ticket}' class='warning' text='Waiting: {}' />",escape(item["why"].as_str().unwrap_or("Agent batch"))));
-                out.push_str(&self.bind_button(
-                    &format!("approve-{ticket}"),
-                    "Apply",
-                    Binding::Approve(ticket.into()),
-                    "small",
-                ));
-                out.push_str(&self.bind_button(
-                    &format!("reject-{ticket}"),
-                    "Reject",
-                    Binding::Reject(ticket.into()),
-                    "small quiet",
-                ));
-                out.push_str("</panel>");
-            }
-        }
-        let review = editor
-            .action("review.list", json!({"limit":100}))
+        let mut review = editor
+            .action("history.list", json!({"limit":100}))
             .unwrap_or(Value::Null);
+        if let Some(items) = review["items"].as_array_mut() {
+            items.retain(|item| {
+                item["author"]
+                    .as_str()
+                    .is_some_and(|a| a.starts_with("agent:"))
+                    && item["reverts"].is_null()
+            });
+        }
         let nothing = editor.state.presence.is_empty()
-            && editor.pending().as_array().is_none_or(Vec::is_empty)
             && review["items"].as_array().is_none_or(Vec::is_empty);
         if nothing {
             out.push_str("</scroll>");
-            self.empty(out, "agents-empty", "bot", "No agent changes to review", "Agents connected over MCP edit through the same commands as you. Their changes appear here with a reason and a diff.", &[("agents-empty-connect", "Connect an agent", "agents.connect")]);
+            self.empty(out, "agents-empty", "bot", "No agent activity yet", "Agents connected over MCP edit through the same commands as you. Their changes appear here with a reason and a diff.", &[("agents-empty-connect", "Connect an agent", "agents.connect")]);
             return;
         }
         let names =
             crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap_or_default();
         if let Some(items) = review["items"].as_array() {
+            let mut shown_turns = std::collections::BTreeSet::new();
             for item in items {
+                if let Some(turn) = item["turn"].as_str()
+                    && !shown_turns.insert(turn)
+                {
+                    continue;
+                }
                 let Some(id) = item["txn"].as_str() else {
                     continue;
                 };
@@ -160,21 +132,32 @@ impl Shell {
                 out.push_str(&format!(
                     "<panel id='turn-actions-{id}' class='row' style='gap:4px'>"
                 ));
-                out.push_str(&self.bind_button(
-                    &format!("accept-{id}"),
-                    "Accept",
-                    Binding::Protocol("review.accept", json!({"txn":id})),
-                    "primary",
-                ));
-                out.push_str(&self.bind_button(
-                    &format!("revert-{id}"),
-                    "Revert",
-                    Binding::Protocol("review.revert", json!({"txn":id})),
-                    "",
-                ));
+
+                if item["status"] == "reverted" {
+                    out.push_str(&format!(
+                        "<text id='undone-{id}' class='caption' text='Undone' />"
+                    ));
+                } else {
+                    out.push_str(&self.bind_button(
+                        &format!("revert-{id}"),
+                        "Undo turn",
+                        Binding::Protocol("review.revert", json!({"txn":id})),
+                        "",
+                    ));
+                }
                 out.push_str("</panel>");
-                if let Some(tx) = editor.host.store().txn(&ara_ops::TxnId(id.into())) {
-                    for (index, op) in tx.ops.iter().enumerate() {
+                let transactions: Vec<_> = items
+                    .iter()
+                    .filter(|other| {
+                        other["txn"] == item["txn"]
+                            || (item["turn"].is_string() && other["turn"] == item["turn"])
+                    })
+                    .filter_map(|other| other["txn"].as_str())
+                    .filter_map(|id| editor.host.store().txn(&ara_ops::TxnId(id.into())))
+                    .collect();
+                {
+                    for (index, op) in transactions.iter().flat_map(|tx| tx.ops.iter()).enumerate()
+                    {
                         let text = match op {
                             ara_doc::Op::Set {
                                 id,

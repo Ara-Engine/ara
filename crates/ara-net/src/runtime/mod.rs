@@ -50,7 +50,10 @@ impl MapEntities for Input {
     fn map_entities<M: EntityMapper>(&mut self, _: &mut M) {}
 }
 impl Input {
-    fn typed<F: SimulationFeature>(&self) -> Result<F::Input> {
+    fn typed_with<F: SimulationFeature>(
+        &self,
+        codec: Option<&crate::ActionCodec<F::Input>>,
+    ) -> Result<F::Input> {
         if self.data.len() > 256 {
             return Err(NetError("feature input exceeds 256 bytes".into()));
         }
@@ -59,7 +62,14 @@ impl Input {
         } else {
             postcard::from_bytes(&self.data)?
         };
-        F::input(Some(F::action(&input)?))?;
+        match codec {
+            Some(codec) => {
+                (codec.expand)(&input)?;
+            }
+            None => {
+                F::input(Some(F::action(&input)?))?;
+            }
+        }
         Ok(input)
     }
 }

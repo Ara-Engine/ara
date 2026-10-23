@@ -14,6 +14,9 @@ Owned Vulkan 2D render path on ara-gpu, reusing ara-render's graph, ToneMap and 
   `capture(camera, request)` returns the shared capture contract (PNG, entity IDs,
   picking, marks, provenance hashed lazily from resident content). Views: lit,
   albedo, normals, entity_ids, shadow_cascades (2D shadow visibility).
+- `with_extensions(scene, size, cache, extensions)` adds window support without
+  changing `new`. `present(camera, exposure)` skips capture readbacks and leaves
+  `output()` in CopySource state; `size()` lets window owners stage resized targets.
 
 ## Rules
 

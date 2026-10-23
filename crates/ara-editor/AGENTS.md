@@ -5,13 +5,15 @@ The UI is ara-ui; its display list goes to the Vulkan adapter in `ara-editor-gpu
 The viewport samples ara-render's offscreen image on that same device.
 
 Public boundaries:
-- `Editor`: host, navigation commands, content batches, review, deferred agent policy.
+- `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
 - `world::EditWorldView`: replace the document extraction with ara-sim later.
 - `inspector`: schema-driven fields, mixed values, units and provenance.
 - `shell`: retained panel tree and semantic interaction helpers.
 - `gpu`: 64-byte instance ABI, raster/MSDF atlases, ordered draws and clip masks.
 - `transport`: authenticated localhost EP and MCP; no project state on IO threads.
+- `build.rs`: embeds `assets/brand/ara.ico` as the Windows exe icon (embed-resource;
+  `rc.exe` ships with the Windows SDK MSVC already needs). The window icon comes from ara-platform.
 
 Every content change uses cmd.apply, including gizmo commits and diagnostic fixes.
 Gizmo preview is transient extraction data, never a side-channel document write.
@@ -97,3 +99,8 @@ Density: compact by default (`editor-comfortable.css` adds the other density),
 `verify-ux.ps1` runs `--verify-ux`: menus, context menus, palette, settings,
 float, tool tabs and empty states in both themes, plus `ux-report.json`
 (viewport share, uncommanded buttons) and `commands.json`.
+
+D24: agent changes apply immediately. No apply-policy setting, approval tickets
+or pending agent queue. Agents is an activity feed with Undo turn (review.revert).
+Human gizmos, inspector scrubs and typing call host editor.gesture on begin/end.
+The host holds only overlapping fields for at most two seconds; other edits apply.

@@ -250,7 +250,14 @@ impl RenderFrame {
                     .and_then(|m| asset_id(m).ok())
                     .and_then(|id| library?.models.get(id).cloned());
                 match model {
-                    None => self.draws.push(base),
+                    None => self.draws.push(if renderer.model.is_some() {
+                        Draw {
+                            color: [1.0, 0.0, 1.0, 1.0],
+                            ..base
+                        }
+                    } else {
+                        base
+                    }),
                     Some(model) => {
                         let palette = match entity.get::<AnimatorSlot>() {
                             Some(slot) if slot.program.model.digest == model.digest => slot

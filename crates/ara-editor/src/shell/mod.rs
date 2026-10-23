@@ -190,8 +190,6 @@ pub(crate) enum Binding {
     MaterialValue(String, String),
     GraphLabel(String, String),
     Fix(ara_diag::Diagnostic, usize),
-    Approve(String),
-    Reject(String),
     PickField(String),
     RenameValue,
     ColorPicker(String),

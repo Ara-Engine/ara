@@ -186,53 +186,28 @@ fn mcp_actions_agent_review_provenance_and_revert_are_live() {
 }
 
 #[test]
-fn deferred_agent_batches_preserve_attribution_and_do_not_change_documents_before_approval() {
+fn agent_batches_apply_immediately_with_attribution_and_undo() {
     let project = Project::new();
     let mut editor = project.open();
-    editor
-        .action("editor.policy", json!({"policy":"onApproval"}))
-        .unwrap();
     let session = Endpoint::call(
         &mut editor,
         "session.begin",
-        json!({"client":"policy-test","author":"agent:policy"}),
+        json!({"client":"immediate","author":"agent:immediate"}),
     )
     .unwrap()["session"]
         .as_str()
         .unwrap()
         .to_owned();
-    let params = json!({"session":session,"doc":"sc_test0001","why":"Queued move","idempotencyKey":"policy-test-1","commands":[{"cmd":"transform.set","args":{"entities":["e_crate001"],"position":[7,0.6,0]}}]});
-    let queued = Endpoint::call(&mut editor, "cmd.apply", params.clone()).unwrap();
-    assert_eq!(queued["queued"], true);
-    assert_eq!(x(&editor), 0.);
-    assert_eq!(
-        Endpoint::call(&mut editor, "cmd.apply", params).unwrap()["ticket"],
-        queued["ticket"]
-    );
-    let second = Endpoint::call(
-        &mut editor,
-        "session.begin",
-        json!({"client":"other-policy-test","author":"agent:other-policy"}),
-    )
-    .unwrap()["session"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let other = Endpoint::call(&mut editor,"cmd.apply",json!({"session":second,"doc":"sc_test0001","why":"Independent request","idempotencyKey":"policy-test-1","commands":[{"cmd":"transform.set","args":{"entities":["e_child001"],"position":[8,0,0]}}]})).unwrap();
-    assert_ne!(
-        queued["ticket"], other["ticket"],
-        "idempotency keys belong to their session"
-    );
-    editor.reject(other["ticket"].as_str().unwrap()).unwrap();
-    editor.tick();
-    assert_eq!(x(&editor), 0.);
-    editor.approve(queued["ticket"].as_str().unwrap()).unwrap();
-    editor.tick();
+    let result = Endpoint::call(&mut editor,"cmd.apply",json!({"session":session,"doc":"sc_test0001","why":"Move now","commands":[{"cmd":"transform.set","args":{"entities":["e_crate001"],"position":[7,0.6,0]}}]})).unwrap();
     assert_eq!(x(&editor), 7.);
     assert_eq!(
         editor.host.store().history().last().unwrap().author,
-        ara_ops::Author::Agent("policy".into())
+        ara_ops::Author::Agent("immediate".into())
     );
+    editor
+        .action("review.revert", json!({"txn":result["txn"]}))
+        .unwrap();
+    assert_eq!(x(&editor), 0.);
 }
 
 #[test]

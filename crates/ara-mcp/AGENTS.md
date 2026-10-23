@@ -23,10 +23,14 @@ Depends on ara-proto, ara-diag.
 `ara_query`, `ara_inspect`, `ara_schema`, `ara_apply`, `ara_run`, `ara_capture`,
 `ara_play`, `ara_test`, `ara_logs`, `ara_why`, `ara_session`, `ara_docs`, `ara_jobs`.
 
-- `ara_session` also carries collaboration (`collab` service): `who` (who is here,
-  doing what, which claims to avoid), `claim`, `release`, `branch` (open a branch
-  session; `ara_apply` takes `branch`) and `submit`. Claim rejections (ARA2500)
-  come back as ordinary tool errors naming the claimant, with fixes.
+- `ara_session` carries `who`, optional `branch` and immediate `submit`.
+  Edits apply immediately. Legacy claim methods are advisory, never gates.
+- `GlobalAdapter::new()` / `serve_global_stdio(hub, input, output)` provide the
+  global MCP: `ara_projects` list/create/open/close/status, optional `project` on
+  every existing tool, and `ara_session {action:"open",project}` to bind one.
+  One per-project Adapter keeps each session/catalog separate; explicit sessions
+  are checked against their bound project. Hub registration is the visibility
+  boundary. `ara mcp --root` still uses the original per-project adapter.
 - `ara_logs` returns the bus grouped by code within a character `budget`;
   `ara_why` (the `why` method) returns ranked causes with runnable fixes. The
   server instructions tell agents to ask `ara_why` first when something is wrong.

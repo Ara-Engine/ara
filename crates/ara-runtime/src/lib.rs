@@ -298,12 +298,13 @@ pub struct Runtime {
     mirror: Option<Schedule>,
     /// The authoritative tick a mirror world presents (its own session never steps).
     presented: Option<u64>,
+    asset_errors: Vec<String>,
 }
 
 impl Runtime {
     /// Projects `scene` from `workspace`, loads every referenced model generation and
-    /// builds the complete world at tick 0, paused. Fails with a structured message
-    /// on schema, projection, asset, bake or physics errors.
+    /// builds the complete world at tick 0, paused. Missing models use diagnosed
+    /// placeholders; schema, projection, bake and physics errors fail the build.
     pub fn new(
         schema: SchemaDb,
         workspace: Workspace,
@@ -350,8 +351,13 @@ impl Runtime {
                 }
             }
         }
+        let mut asset_errors = Vec::new();
         for model in &models {
-            library.models.load(assets.as_ref(), model)?;
+            if let Err(error) = library.models.load(assets.as_ref(), model) {
+                asset_errors.push(format!(
+                    "ARA7303: {error}; showing placeholder geometry; re-import the asset"
+                ));
+            }
         }
         library.documents = controller::Documents::load(&baseline)?;
         world.insert_resource(library);
@@ -473,12 +479,26 @@ impl Runtime {
             pending: None,
             mirror: None,
             presented: None,
+            asset_errors,
         })
     }
 
     /// The authoring schema this world was projected with.
     pub fn schema(&self) -> &SchemaDb {
         &self.schema
+    }
+
+    /// Asset-load diagnostics; missing models render as placeholders and can recover
+    /// on a later asset reload without restarting the simulation.
+    pub fn asset_errors(&self) -> &[String] {
+        &self.asset_errors
+    }
+
+    /// Asset-load warnings for the player's owner and diagnostics console.
+    pub fn asset_diagnostics(&self) -> impl Iterator<Item = ara_diag::Diagnostic> + '_ {
+        self.asset_errors
+            .iter()
+            .map(|message| ara_diag::Diagnostic::warning(ara_diag::Code(7303), message))
     }
 
     /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).

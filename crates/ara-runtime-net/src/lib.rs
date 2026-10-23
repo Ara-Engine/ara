@@ -19,7 +19,9 @@
 //! Every peer builds its world from the same snapshot after [`avatars`], so record
 //! identities match across processes.
 mod host;
+mod locomotion;
 mod mirror;
+pub use locomotion::{Locomotion, MotorInput, NetMotor};
 
 pub use ara_net::{Conditions, JoinToken};
 pub use host::{HostConfig, HostStats, NetHost};
@@ -29,11 +31,11 @@ use ara_components::Transform;
 use ara_doc::{RecordId, Workspace};
 use ara_input::{ActionValue, PlayerId};
 use ara_net::NetError;
-use ara_physics::CharacterInput;
+use ara_physics::{CharacterInput, CharacterMotion, Velocity};
 use ara_runtime::{
     Runtime,
-    components::PlayerControl,
-    control::MOVE,
+    components::{FollowCamera, PlayerControl},
+    control::{JUMP, LOOK, MOVE, SPRINT},
     plugin::{RuntimePlugin, Stage},
 };
 use ara_schema::{Schema, SchemaDb};
@@ -47,146 +49,6 @@ pub type Result<T> = std::result::Result<T, NetError>;
 
 /// The listen host's (and a local scene's) player.
 pub const HOST_PLAYER: u64 = 1;
-
-/// Networked player locomotion: ground-plane position and facing in fixed point, the
-/// complete state a client predicts for its own player. Runtime-only: inserted when a
-/// networked world starts, from the entity's `Transform` and `PlayerControl`.
-#[derive(Component, Schema, Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[ara(component, module = "net")]
-#[serde(default, rename_all = "camelCase")]
-pub struct NetMotor {
-    /// World X in millimetres.
-    #[ara(replicate(audience = Relevant, interpolate = Linear, rollback))]
-    pub x: i32,
-    /// World Z in millimetres.
-    #[ara(replicate(audience = Relevant, interpolate = Linear, rollback))]
-    pub z: i32,
-    /// Facing in millidegrees; 0 faces +Z.
-    #[ara(replicate(audience = Relevant, interpolate = Linear, rollback))]
-    pub heading: i32,
-    /// Ground speed in millimetres per tick.
-    #[ara(replicate(audience = Relevant, rollback))]
-    pub speed: i32,
-}
-
-/// Largest facing change per tick, in millidegrees (540 degrees/s at 60 Hz).
-const TURN: i32 = 9_000;
-
-/// Facing for each `[x, z]` direction, in millidegrees (`atan2(x, z)`).
-fn heading_of(x: i8, z: i8) -> i32 {
-    match (x.signum(), z.signum()) {
-        (0, 1) => 0,
-        (1, 1) => 45_000,
-        (1, 0) => 90_000,
-        (1, -1) => 135_000,
-        (0, -1) => 180_000,
-        (-1, -1) => -135_000,
-        (-1, 0) => -90_000,
-        _ => -45_000,
-    }
-}
-
-/// The signed shortest turn from `from` to `to`, in millidegrees (-180°, 180°].
-fn turn(from: i32, to: i32) -> i32 {
-    let delta = (to - from).rem_euclid(360_000);
-    if delta > 180_000 {
-        delta - 360_000
-    } else {
-        delta
-    }
-}
-
-/// Predicted player locomotion: `Move` sampled to eight world-space directions.
-pub struct Locomotion;
-
-impl SimulationFeature for Locomotion {
-    type State = NetMotor;
-    type Input = [i8; 2];
-    const ACTION: &'static str = MOVE;
-
-    fn input(action: Option<ActionValue>) -> std::result::Result<[i8; 2], SimError> {
-        match action {
-            None => Ok([0; 2]),
-            Some(ActionValue::Axis2([x, z])) if x.is_finite() && z.is_finite() => Ok([
-                x.clamp(-1.0, 1.0).round() as i8,
-                z.clamp(-1.0, 1.0).round() as i8,
-            ]),
-            _ => Err(SimError("Move must be a finite Axis2".into())),
-        }
-    }
-
-    fn action(input: &[i8; 2]) -> std::result::Result<ActionValue, SimError> {
-        if input.iter().any(|v| !(-1..=1).contains(v)) {
-            return Err(SimError("movement input outside [-1, 1]".into()));
-        }
-        Ok(ActionValue::Axis2([
-            f32::from(input[0]),
-            f32::from(input[1]),
-        ]))
-    }
-
-    fn step(state: &mut NetMotor, input: &[i8; 2]) {
-        let [x, z] = *input;
-        if x == 0 && z == 0 {
-            return;
-        }
-        // Diagonals keep ground speed: 707/1000 per axis, exact integer math.
-        let axis = if x != 0 && z != 0 {
-            state.speed * 707 / 1000
-        } else {
-            state.speed
-        };
-        state.x += i32::from(x) * axis;
-        state.z += i32::from(z) * axis;
-        let delta = turn(state.heading, heading_of(x, z));
-        state.heading = turn(0, state.heading + delta.clamp(-TURN, TURN));
-    }
-
-    fn interpolate(a: NetMotor, b: NetMotor, alpha: f32) -> NetMotor {
-        let lerp = |a: i32, b: i32| a + ((b - a) as f32 * alpha).round() as i32;
-        NetMotor {
-            x: lerp(a.x, b.x),
-            z: lerp(a.z, b.z),
-            heading: turn(
-                0,
-                a.heading + (turn(a.heading, b.heading) as f32 * alpha).round() as i32,
-            ),
-            speed: b.speed,
-        }
-    }
-
-    /// Ground-plane position error in millimetres.
-    fn correction(a: &NetMotor, b: &NetMotor) -> f64 {
-        f64::from(a.x - b.x).hypot(f64::from(a.z - b.z))
-    }
-
-    fn position(state: &NetMotor) -> Option<[f32; 2]> {
-        Some([state.x as f32 / 1000.0, state.z as f32 / 1000.0])
-    }
-}
-
-impl NetMotor {
-    /// The motor at an entity's pose, walking at `control.walk_speed` on an `hz` tick.
-    pub fn at(transform: &Transform, control: &PlayerControl, hz: u32) -> Self {
-        let mm = |m: f32| (m * 1000.0).round() as i32;
-        Self {
-            x: mm(transform.position[0]),
-            z: mm(transform.position[2]),
-            heading: turn(0, (control.yaw * 1000.0).round() as i32),
-            speed: mm(control.walk_speed / hz.max(1) as f32),
-        }
-    }
-
-    /// World position (metres) on the ground plane.
-    pub fn ground(&self) -> [f32; 2] {
-        [self.x as f32 / 1000.0, self.z as f32 / 1000.0]
-    }
-
-    /// Facing in degrees.
-    pub fn yaw(&self) -> f32 {
-        self.heading as f32 / 1000.0
-    }
-}
 
 /// Registers [`NetMotor`] and installs the motor systems. Every peer of a networked
 /// world installs it (the schema hash covers the motor); only authorities step it.
@@ -216,30 +78,72 @@ impl RuntimePlugin for NetPlugin {
     }
 }
 
-/// Steps each player's motor from its `Move` action; the physics character is asked
-/// for the same ground velocity (it supplies height and contacts, never position).
+/// Steps each player's complete predicted controls and sends ground velocity/jump
+/// to the physics character, which supplies authoritative height and contacts.
 fn motors(
     ctx: Res<SimContext>,
-    mut players: Query<(&PlayerControl, &mut NetMotor, Option<&mut CharacterInput>)>,
+    mut players: Query<(
+        &PlayerControl,
+        &mut NetMotor,
+        Option<&mut CharacterInput>,
+        Option<&CharacterMotion>,
+    )>,
+    mut rigs: Query<&mut FollowCamera>,
 ) {
     let hz = (1.0 / ctx.dt()) as f32;
-    for (control, mut motor, input) in &mut players {
-        let typed =
-            Locomotion::input(ctx.action(PlayerId(control.player), MOVE)).unwrap_or_default();
+    for (control, mut motor, input, motion) in &mut players {
+        let actions = [MOVE, LOOK, SPRINT, JUMP]
+            .into_iter()
+            .filter_map(|name| {
+                ctx.action(PlayerId(control.player), name)
+                    .map(|v| (name.into(), v))
+            })
+            .collect();
+        let typed = locomotion::sample(&actions).unwrap_or_default();
         let before = *motor;
         Locomotion::step(&mut motor, &typed);
+        for mut rig in &mut rigs {
+            if rig.player == control.player {
+                rig.yaw = motor.camera_yaw as f32 / 1000.0;
+                rig.pitch = motor.camera_pitch as f32 / 1000.0;
+            }
+        }
         if let Some(mut input) = input {
             let metres = |mm: i32| mm as f32 / 1000.0 * hz;
             input.desired_velocity = [metres(motor.x - before.x), 0.0, metres(motor.z - before.z)];
-            input.jump_speed = 0.0;
+            input.jump_speed =
+                if typed.jump && !before.jump_held && motion.is_none_or(|m| m.grounded) {
+                    control.jump_speed
+                } else {
+                    0.0
+                };
         }
     }
 }
 
+type PinnedPlayer = (
+    &'static mut NetMotor,
+    &'static mut PlayerControl,
+    &'static mut Transform,
+    Option<&'static CharacterMotion>,
+    Option<&'static Velocity>,
+);
+
 /// Pins players to their motors after physics: ground X/Z and facing come from the
 /// motor, height from the character. The next push teleports the body to match.
-fn pin(mut players: Query<(&NetMotor, &mut PlayerControl, &mut Transform)>) {
-    for (motor, mut control, mut transform) in &mut players {
+fn pin(ctx: Res<SimContext>, mut players: Query<PinnedPlayer>) {
+    for (mut motor, mut control, mut transform, motion, velocity) in &mut players {
+        motor.y = (transform.position[1] * 1000.0).round() as i32;
+        if let Some(motion) = motion {
+            motor.grounded = motion.grounded;
+            if motion.grounded {
+                motor.floor = motor.y;
+                motor.vertical_speed = 0;
+            } else if let Some(velocity) = velocity {
+                motor.vertical_speed =
+                    (velocity.linear[1] * 1_000_000.0 * ctx.dt() as f32).round() as i32;
+            }
+        }
         let [x, z] = motor.ground();
         let yaw = motor.yaw();
         if transform.position[0] != x || transform.position[2] != z {
@@ -258,6 +162,11 @@ fn pin(mut players: Query<(&NetMotor, &mut PlayerControl, &mut Transform)>) {
 pub fn attach_motors(runtime: &mut Runtime) -> Vec<(String, u64)> {
     let hz = runtime.hz();
     let world = runtime.play_mut().session_mut().world_mut();
+    let rigs: std::collections::BTreeMap<String, FollowCamera> = world
+        .query::<(&ara_sim::Identity, &FollowCamera)>()
+        .iter(world)
+        .map(|(id, rig)| (id.0.clone(), rig.clone()))
+        .collect();
     let mut found = Vec::new();
     let mut query = world.query_filtered::<(
         Entity,
@@ -266,12 +175,19 @@ pub fn attach_motors(runtime: &mut Runtime) -> Vec<(String, u64)> {
         &Transform,
     ), Without<NetMotor>>();
     for (entity, identity, control, transform) in query.iter(world) {
-        found.push((
-            entity,
-            identity.0.clone(),
-            control.player,
-            NetMotor::at(transform, control, hz),
-        ));
+        let mut motor = NetMotor::at(transform, control, hz);
+        if let Some(rig) = control
+            .camera
+            .as_ref()
+            .and_then(|id| rigs.get(&id.0))
+            .or_else(|| rigs.values().find(|rig| rig.player == control.player))
+            .or_else(|| rigs.values().next())
+        {
+            motor.camera_yaw = (rig.yaw * 1000.0).round() as i32;
+            motor.camera_pitch = (rig.pitch * 1000.0).round() as i32;
+            motor.sensitivity = (rig.sensitivity * 1000.0).round() as i32;
+        }
+        found.push((entity, identity.0.clone(), control.player, motor));
     }
     let mut players = Vec::new();
     for (entity, identity, player, motor) in found {
@@ -338,42 +254,4 @@ pub fn avatars(
         doc.insert_unchecked(rid, copy);
     }
     Ok(ids)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn motor_steps_are_integer_and_keep_diagonal_speed() {
-        let mut motor = NetMotor {
-            speed: 50,
-            ..Default::default()
-        };
-        Locomotion::step(&mut motor, &[0, 1]);
-        assert_eq!((motor.x, motor.z, motor.heading), (0, 50, 0));
-        Locomotion::step(&mut motor, &[1, 1]);
-        assert_eq!((motor.x, motor.z, motor.heading), (35, 85, 9_000));
-        let mut turned = NetMotor::default();
-        for _ in 0..40 {
-            Locomotion::step(&mut turned, &[0, -1]);
-        }
-        assert_eq!(turned.heading, 180_000);
-        assert_eq!(turn(170_000, -170_000), 20_000);
-    }
-
-    #[test]
-    fn interpolation_takes_the_short_arc() {
-        let a = NetMotor {
-            heading: 170_000,
-            ..Default::default()
-        };
-        let b = NetMotor {
-            heading: -170_000,
-            x: 100,
-            ..Default::default()
-        };
-        let mid = Locomotion::interpolate(a, b, 0.5);
-        assert_eq!((mid.x, mid.heading), (50, 180_000));
-    }
 }

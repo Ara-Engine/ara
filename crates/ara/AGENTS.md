@@ -16,7 +16,7 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara resolve <file> [--ours\|--theirs] [--pick r:path=side]..` | settles `$conflicts` by side (`ours`, `theirs`, `base`) | conflicts left |
 | `ara docs --llms [--out dir]` | `llms.txt`, `llms-full.txt`, per-type/command/method pages (default `.ara/docs`) | never |
 | `ara serve [--port n] [--stdio]` | the daemon: EP over WebSocket (+stdio), MCP at `POST /mcp`; `--json` prints `{pid, port, url, mcp}` once listening | it cannot start |
-| `ara mcp` | MCP on stdio; a client of the daemon, or the daemon itself if none runs | it cannot start |
+| `ara mcp` | Global MCP through the user Hub; `--root` retains per-project mode | it cannot start |
 | `ara do [cmd] [--doc d] [--args json\|@file\|-] [-p k=v].. [--as $s] [--why w] [--dry-run]` | one-call `cmd.apply`; without `cmd`, `--args` is a batch `{commands: [{cmd, args, as}], why, doc}` | the batch fails |
 | `ara query [q] [--doc] [--fields a,b] [--limit] [--cursor]` | `query` | bad query |
 | `ara inspect [--doc d] [entities..] [--depth n]` | `inspect` (scene-to-text; IDs or names) | unknown doc/entity |
@@ -64,8 +64,8 @@ with ARA1901 and a `Cli ["init", dir]` fix. Scans skip hidden dirs (`.git`,
 
 - Protocol commands each begin and end a session; offline they replay the
   journal, so history, review and undo persist between runs.
-- `ara mcp` without a daemon *becomes* the daemon (writes `.ara/daemon.json`), so
-  stdout carries only MCP; logs go to stderr.
+- `ara mcp --root` without a daemon becomes the project daemon. Global `ara mcp`
+  auto-starts the user Hub and only routes registered projects; stdout is MCP only.
 - `merge` reads without the asset index (git passes temp files), so it never
   rewrites references; run `ara fmt` afterwards. `init` sets the driver with
   `--root <project dir relative to the work tree>`.
@@ -87,3 +87,7 @@ over Streamable HTTP too), and the end-to-end test: `ara serve` → `ara mcp`
 client → session, batch with `why`, query, revert, file checked on disk (the CLI
 sees the same daemon); agent shells (attribution, required `why`, quote-stripped
 `--args`, no `--doc`).
+
+`ara hub serve/add/remove/rename/projects/templates/create/open/close/status/engines/
+activity/install-mcp` manage the user service. Install output is one-time global
+Claude JSON or Codex TOML. Wire API and UI contract: ../ara-hub-service/AGENTS.md.

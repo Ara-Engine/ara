@@ -14,6 +14,7 @@ ara-color = { path = "../ara-color" }
 sdl3-sys = { package = "ara-sdl3-src", path = "../ara-sdl3-src" }
 anyhow = { workspace = true }
 ash = { workspace = true }
+png = "0.18"
 
 [dev-dependencies]
 ara-audio = { path = "../ara-audio" }

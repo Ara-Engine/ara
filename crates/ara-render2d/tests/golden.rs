@@ -6,6 +6,37 @@ use ara_render2d::Renderer2d;
 use std::path::Path;
 
 #[test]
+fn window_output_skips_readback_and_still_supports_capture() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (scene, camera) = common::scene(
+        root,
+        Some(Path::new(env!("CARGO_BIN_EXE_ara-2d-import-worker"))),
+    )?;
+    let mut renderer = Renderer2d::with_extensions(
+        &scene,
+        [320, 180],
+        root.join("../../target/runtime-polish/2d-gpu"),
+        &[],
+    )?;
+    renderer.present(&camera, 1.0)?;
+    ensure!(renderer.size() == [320, 180]);
+    ensure!(renderer.timings().iter().any(|p| p.pass == "Present"));
+    ensure!(
+        renderer
+            .timings()
+            .iter()
+            .all(|p| !p.pass.contains("Readback"))
+    );
+    let capture = renderer.capture(&camera, common::request([320, 180]))?;
+    ensure!(
+        !capture.legend.is_empty(),
+        "capture remains valid after a window frame"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn sample_scene_is_exactly_its_command_script() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let authored = common::fixtures::author(&root.join("sample/platformer.commands.json"))?;
@@ -25,6 +56,14 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
         Some(Path::new(env!("CARGO_BIN_EXE_ara-2d-import-worker"))),
     )?;
     let mut renderer = Renderer2d::new(&scene, [640, 360], root.join("../../.sn/test2d"))?;
+    renderer.present(&camera, 1.0)?;
+    ensure!(
+        renderer
+            .timings()
+            .iter()
+            .all(|p| !p.pass.contains("Readback")),
+        "window frames must not read back pixels"
+    );
     let update = std::env::var("ARA_UPDATE_2D_GOLDENS").as_deref() == Ok("1");
     let dir = root.join("tests/goldens");
     let mut lit = None;

@@ -10,6 +10,7 @@ pub(super) fn inputs<F: SimulationFeature>(
     sync: Res<LocalTimelineSync>,
     mut owner: ResMut<Owner>,
     mut actions: Query<&mut ActionState<Input>, With<InputMarker<Input>>>,
+    codec: Option<Res<crate::ActionCodec<F::Input>>>,
 ) {
     let Some(origin) = owner.origin else {
         return;
@@ -18,12 +19,31 @@ pub(super) fn inputs<F: SimulationFeature>(
     let tick = u64::from(target.saturating_sub(origin));
     owner.status.predicted_tick = tick;
     let input = if target > origin && !owner.limit.is_some_and(|l| tick > l) {
-        let injected = owner
-            .inputs
-            .range(..=tick)
-            .next_back()
-            .and_then(|(start, i)| (tick < start + u64::from(i.hold_ticks)).then_some(i.value));
-        F::input(injected.or_else(|| owner.source.and_then(|f| f(tick, owner.player))))
+        let latest = |name: &str| {
+            owner
+                .inputs
+                .iter()
+                .rev()
+                .find(|((start, action), _)| *start <= tick && action == name)
+                .and_then(|((start, _), i)| {
+                    (tick < start + u64::from(i.hold_ticks)).then_some(i.value)
+                })
+        };
+        if let Some(codec) = &codec {
+            let mut values: BTreeMap<String, ActionValue> = codec
+                .names
+                .iter()
+                .filter_map(|name| latest(name).map(|v| ((*name).into(), v)))
+                .collect();
+            if !values.contains_key(F::ACTION)
+                && let Some(value) = owner.source.and_then(|f| f(tick, owner.player))
+            {
+                values.insert(F::ACTION.into(), value);
+            }
+            (codec.sample)(&values)
+        } else {
+            F::input(latest(F::ACTION).or_else(|| owner.source.and_then(|f| f(tick, owner.player))))
+        }
     } else {
         Ok(F::Input::default())
     };
@@ -40,13 +60,14 @@ pub(super) fn inputs<F: SimulationFeature>(
     }
     owner
         .inputs
-        .retain(|start, i| tick < start.saturating_add(u64::from(i.hold_ticks)));
+        .retain(|(start, _), i| tick < start.saturating_add(u64::from(i.hold_ticks)));
 }
 pub(super) fn movement<F: SimulationFeature>(
     timeline: SyncedLocalTimeline,
     owner: Res<Owner>,
     mut motors: Query<(&mut F::State, &ActionState<Input>), With<Predicted>>,
     perturb: Option<ResMut<Perturb<F>>>,
+    codec: Option<Res<crate::ActionCodec<F::Input>>>,
 ) {
     let Some(origin) = owner.origin else {
         return;
@@ -57,7 +78,7 @@ pub(super) fn movement<F: SimulationFeature>(
     }
     let mut perturb = perturb;
     for (mut state, input) in &mut motors {
-        if let Ok(input) = input.0.typed::<F>() {
+        if let Ok(input) = input.0.typed_with::<F>(codec.as_deref()) {
             F::step(&mut state, &input);
         }
         if let Some(p) = &mut perturb

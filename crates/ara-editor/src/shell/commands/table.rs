@@ -980,10 +980,7 @@ fn build() -> Vec<Spec> {
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
         later("tools.cs.solution", "Open Solution in IDE", "file-code", "", "Generate the solution with `ara script` and open it in your IDE."),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
-        cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Review agent changes and the apply policy.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
-        cmd("agents.policy.immediately", "Apply Immediately", "", "", "Agent changes apply at the next frame.", |_, e, _| set(e, "agents.applyPolicy", json!("immediately"))).when(|c| is(c, "agents.applyPolicy", "immediately")),
-        cmd("agents.policy.idle", "Apply When Idle", "", "", "Agent changes wait while you are typing or dragging.", |_, e, _| set(e, "agents.applyPolicy", json!("whenIdle"))).when(|c| is(c, "agents.applyPolicy", "whenIdle")),
-        cmd("agents.policy.approval", "Apply On Approval", "", "", "Agent changes wait in Agents for your approval.", |_, e, _| set(e, "agents.applyPolicy", json!("onApproval"))).when(|c| is(c, "agents.applyPolicy", "onApproval")),
+        cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.connect", "Connect an Agent (MCP)…", "bot", "", "Show how to connect Claude Code, Codex or another MCP client.", |s, e, _| {
             s.dialog = Some(super::super::Dialog::connect(e));
             Ok(())

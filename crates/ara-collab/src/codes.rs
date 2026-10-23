@@ -3,9 +3,9 @@
 
 use ara_diag::Code;
 
-/// An agent's edit touched a subject another participant claimed.
+/// Retired by D24: claim enforcement was removed.
 pub const CLAIMED: Code = Code(2500);
-/// An agent asked to claim a subject someone else already claims.
+/// Retired by D24: overlapping advisory claims are allowed.
 pub const CLAIM_HELD: Code = Code(2501);
 /// The session has not joined collaboration (`collab.join`).
 pub const NOT_JOINED: Code = Code(2502);
@@ -25,7 +25,7 @@ pub const REPLICA_GAP: Code = Code(2508);
 pub const UNDO_PARTIAL: Code = Code(2509);
 /// A claim subject does not parse or names nothing.
 pub const INVALID_SUBJECT: Code = Code(2510);
-/// Only human sessions may do this (apply policy, forced merges).
+/// Only human sessions may explicitly merge another participant's branch.
 pub const HUMAN_ONLY: Code = Code(2511);
-/// A branch merge waits: its changes touch subjects someone else claims.
+/// Retired by D24: claims no longer delay branch merges.
 pub const MERGE_BLOCKED: Code = Code(2512);

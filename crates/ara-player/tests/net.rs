@@ -40,7 +40,8 @@ fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
 #[test]
 fn host_and_dedicated_replicate_predict_and_capture() {
     let dir = demo_copy("net");
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     std::fs::create_dir_all(&captures).unwrap();
     let mut agent = Agent::open(&dir, 21, |_| {});
     agent.pool_ready();
@@ -101,7 +102,10 @@ fn host_and_dedicated_replicate_predict_and_capture() {
         position(&client, "e_player02.Transform.position"),
     ];
     assert!(fox[1][2] - fox[0][2] > 2.0, "host walked +Z: {fox:?}");
-    assert!(p2[1][0] - p2[0][0] > 2.0, "client walked +X: {p2:?}");
+    assert!(
+        p2[0][0] - p2[1][0] > 2.0,
+        "client walked camera-right (-X): {p2:?}"
+    );
     assert!(
         distance(fox[1], fox[2]) < 0.02,
         "host avatar replicated: {fox:?}"
@@ -111,7 +115,7 @@ fn host_and_dedicated_replicate_predict_and_capture() {
         "predicted avatar converged: {p2:?}"
     );
     let mid = position(&client_mid, "e_player02.Transform.position");
-    assert!(mid[0] > p2[0][0], "client predicted its own walk: {mid:?}");
+    assert!(mid[0] < p2[0][0], "client predicted its own walk: {mid:?}");
 
     // Facing replicates with the motor; each process's follow camera tracks its own
     // player (the client's camera sits behind player 2).
@@ -123,12 +127,59 @@ fn host_and_dedicated_replicate_predict_and_capture() {
     let client_probe = agent.play("read", json!({"world": w, "player": 1, "paths": probe}));
     for probe in [&host_probe, &client_probe] {
         let yaw = position(probe, "e_player02.Transform.rotation")[1];
-        assert!((yaw - 90.0).abs() < 0.5, "player 2 faces +X: {probe}");
+        assert!(
+            (yaw + 90.0).abs() < 0.5,
+            "player 2 faces camera-right (-X): {probe}"
+        );
     }
     let camera = position(&client_probe, "e_camera.Transform.position");
     assert!(
         (camera[0] - p2[2][0]).abs() < 0.05,
         "client camera follows player 2: {client_probe}"
+    );
+    let movement_begin = status(&mut agent, 0)["tick"].as_u64().unwrap();
+    agent.play(
+        "input",
+        json!({"world":w,"inputs":[
+        {"action":"Look","value":[36,0],"holdTicks":1,"player":2},
+            {"action":"Move","value":[0,1],"holdTicks":60,"player":2},
+            {"action":"Sprint","value":true,"holdTicks":60,"player":2},
+            {"action":"Jump","value":true,"holdTicks":1,"player":2}
+        ]}),
+    );
+    until_tick(&mut agent, movement_begin + 20);
+    let airborne = agent.play("read",json!({"world":w,"player":1,"paths":["e_player02.Transform.position","e_camera.FollowCamera.yaw"]}));
+    let jumped = position(&airborne, "e_player02.Transform.position");
+    assert!(
+        jumped[1] > p2[2][1] + 0.1,
+        "client predicts jump height: {airborne}"
+    );
+    assert_eq!(
+        airborne["values"]["e_camera.FollowCamera.yaw"].as_f64(),
+        Some(90.0)
+    );
+    until_tick(&mut agent, movement_begin + 140);
+    let moved_host=agent.play("read",json!({"world":w,"paths":["e_player02.Transform.position","e_player02.CharacterMotion.grounded"]}));
+    let moved_client=agent.play("read",json!({"world":w,"player":1,"paths":["e_player02.Transform.position","e_player02.CharacterMotion.grounded"]}));
+    let sprinted = position(&moved_host, "e_player02.Transform.position");
+    assert!(
+        sprinted[0] - p2[1][0] > 4.0,
+        "camera-relative sprint turns forward to +X: {moved_host}"
+    );
+    assert!(
+        distance(
+            sprinted,
+            position(&moved_client, "e_player02.Transform.position")
+        ) < 0.02,
+        "predicted movement converges: {moved_host} / {moved_client}"
+    );
+    assert_eq!(
+        moved_client["values"]["e_player02.CharacterMotion.grounded"],
+        json!(true)
+    );
+    println!(
+        "PREDICTED-CONTROLS {}",
+        json!({"airborne":airborne,"authority":moved_host,"client":moved_client})
     );
     let host_png = captures.join("net-host.png");
     let client_png = captures.join("net-client.png");

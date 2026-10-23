@@ -54,6 +54,8 @@ pub struct HostConfig {
     pub approval: Box<dyn Approval>,
     /// How many diagnostics the bus store keeps per severity, and for how long.
     pub diagnostics: Retention,
+    /// Recent-field overwrite notice window; defaults to ten minutes.
+    pub overwrite_window: Duration,
 }
 
 impl Default for HostConfig {
@@ -65,6 +67,7 @@ impl Default for HostConfig {
             seed: None,
             approval: Box::new(DefaultPolicy),
             diagnostics: Retention::default(),
+            overwrite_window: Duration::from_secs(600),
         }
     }
 }
@@ -103,6 +106,7 @@ pub(crate) struct State {
     /// Collaboration: participants, presence, claims, branch sessions (D21).
     pub(crate) collab: crate::collab::Collab,
     pub(crate) jobs: Jobs,
+    pub(crate) gestures: crate::gesture::Gestures,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
     pub(crate) txn_session: HashMap<TxnId, String>,
@@ -237,6 +241,7 @@ impl Host {
             diag_file,
             collab: crate::collab::Collab::new(state_dir.clone()),
             jobs: Jobs::default(),
+            gestures: crate::gesture::Gestures::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
             txn_session: HashMap::new(),
@@ -254,6 +259,13 @@ impl Host {
         };
         st.recover(&entries);
         st.collab_open(config.seed);
+        st.collab.hub.set_overwrite_window(
+            config
+                .overwrite_window
+                .as_millis()
+                .try_into()
+                .unwrap_or(u64::MAX),
+        );
         drop(entries);
         st.flush(true);
         let mut host = Host {
@@ -262,6 +274,7 @@ impl Host {
             routes: BTreeMap::new(),
         };
         host.register(Box::new(crate::core::Core))?;
+        host.register(Box::new(crate::gesture::GestureService))?;
         host.register(Box::new(crate::profile::ProfileService))?;
         host.register(Box::new(crate::diag::DiagService))?;
         host.register(Box::new(crate::why::WhyService))?;
@@ -355,6 +368,7 @@ impl Host {
     pub fn call(&mut self, conn: ConnId, method: &str, params: Value) -> Result<Value, RpcError> {
         let result = self.dispatch(conn, method, params);
         self.st.drain();
+        self.st.release_gestures();
         if let Err(diags) = &result {
             for d in diags.iter().filter(|d| d.is_error()) {
                 self.st.log(d.clone());
@@ -397,7 +411,7 @@ impl Host {
             return Err(problems);
         }
         self.st.calling = session.clone();
-        // The claim guard tells the caller's own claims from everyone else's.
+        // Origins preserve the participant identity of attributed transactions.
         self.st.store.set_origin(session.clone());
         // Subsystems that emit onto the bus while serving the call are attributed to
         // the caller.
@@ -434,6 +448,7 @@ impl Host {
             ara_profile::scope!("host.tick");
             self.st.pump_bus();
             self.st.persist_diag(false);
+            self.st.release_gestures();
             self.st.watch();
             self.st.drain();
             self.st.flush(false);
@@ -480,6 +495,7 @@ impl Host {
         self.st.subs.remove(&conn);
         self.st.diag_subs.retain(|_, s| s.conn != conn);
         self.st.collab_closed(conn);
+        self.st.close_gestures(conn);
     }
 
     /// Notifications waiting for their connections.
@@ -672,7 +688,12 @@ impl State {
     /// and op-stream notifications.
     pub(crate) fn drain(&mut self) {
         while let Ok(txn) = self.ops.try_recv() {
-            let session = self.calling.clone();
+            let session = self
+                .collab
+                .hub
+                .owner(&txn.id)
+                .map(|p| p.0.clone())
+                .or_else(|| self.calling.clone());
             self.journal(&Entry::Txn {
                 session: session.clone(),
                 txn: txn.clone(),
@@ -724,7 +745,8 @@ impl State {
             "txn": t.id,
             "author": t.author,
             "why": t.why,
-            "label": t.label,
+            "label": crate::gesture::turn(t.label.as_deref()).map(|(_,label)|label).or(t.label.as_deref()),
+            "turn": crate::gesture::turn(t.label.as_deref()).map(|(group,_)|group),
             "revision": t.result,
             "base": t.base,
             "reverts": t.reverts,

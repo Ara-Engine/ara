@@ -42,8 +42,7 @@ edit.
   `"as": "$crate"` and use them in later calls. Preview with `dryRun`. Small
   value edits straight in the JSON are fine: the engine validates them.
 - **Review:** every change is a transaction with a `why` (agents must give one).
-  Agent changes apply live but stay unreviewed until a human runs `ara accept` or
-  `ara revert`.
+  Agent changes apply immediately. Use per-turn undo or `ara revert` to reverse them.
 - **When something is wrong, ask the engine first:** `ara why name:Crate not
   visible`, `ara why ARA1302`, `ara why "is the frame slow"` (MCP: `ara_why`). It
   answers with ranked causes, their evidence and fixes you can run as is.
@@ -53,7 +52,7 @@ edit.
 - MCP: `.mcp.json` starts `ara mcp` (13 tools). Over `ara mcp` the session is
   optional (one begins on first use); `ara_session {"action": "begin", "client":
   "<you>"}` names yours. Codex: add `[mcp_servers.ara]` with `command = "ara"`,
-  `args = ["mcp"]` to its config.
+  `args = ["mcp", "--root", "<project path>"]` to its config.
 - CLI: `ara check` (validate), `ara query "Light"` / `ara query Crate`,
   `ara inspect` (main scene) or `ara inspect --doc outpost name:Crate`,
   `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500
@@ -82,7 +81,7 @@ const MCP: &str = r#"{
   "mcpServers": {
     "ara": {
       "command": "ara",
-      "args": ["mcp"]
+      "args": ["mcp", "--root", "."]
     }
   }
 }
@@ -190,8 +189,9 @@ pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bo
         created: Vec::new(),
         kept: Vec::new(),
     };
-    let marker =
-        ara_json::to_canonical_string(&json!({ "name": name, "main": "levels/main.scene" }));
+    let marker = ara_json::to_canonical_string(
+        &json!({ "name": name, "main": "levels/main.scene", "engineVersion": ara_hub_service::ALPHA_VERSION }),
+    );
     r.write(&root, MARKER, &marker)?;
     r.write(&root, "AGENTS.md", &AGENTS.replace("{name}", &name))?;
     r.lines(&root, ".gitattributes", GITATTRIBUTES)?;
@@ -227,7 +227,9 @@ pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bo
             println!("  kept    {f}");
         }
         println!("  {git}");
-        println!("next: `ara check`, then `ara serve` (or let `ara mcp` start the engine)");
+        println!(
+            "next: `ara check`, then `ara serve` (or let `ara mcp --root .` start the engine)"
+        );
     }
     Ok(true)
 }

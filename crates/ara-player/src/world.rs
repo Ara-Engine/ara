@@ -81,6 +81,7 @@ impl World {
         role: ara_play::Role,
         net: Option<&ara_play::NetStart>,
         windowed: bool,
+        prewarmed: Option<(ScriptPlugin, std::sync::mpsc::Receiver<ScriptEvent>)>,
     ) -> Result<(Self, f64)> {
         let started = Instant::now();
         let schema = ara_runtime::schema(&scene.types)?;
@@ -106,7 +107,13 @@ impl World {
                 compile_server: s.compile_server.as_ref().map(PathBuf::from),
                 modules: s.modules.iter().map(PathBuf::from).collect(),
             };
-            let (plugin, events) = ScriptPlugin::new(settings.clone());
+            let (plugin, events) = match prewarmed {
+                Some((plugin, events)) if plugin.matches(&settings) => (plugin, events),
+                other => {
+                    drop(other);
+                    ScriptPlugin::new(settings.clone())
+                }
+            };
             plugins.push(Box::new(plugin));
             scripts = Some((settings, events));
         }
@@ -149,6 +156,9 @@ impl World {
             plugins,
         )?;
         let runtime = Play::new(runtime, role, net)?;
+        for error in runtime.asset_errors() {
+            eprintln!("{error}");
+        }
         Ok((
             Self {
                 runtime,

@@ -36,9 +36,9 @@ Agents are `<cli>:<model>[@effort]`; Claude model names map `sonnet-5.5` →
   camera does not draw, a NaN reported by the play process in
   `.ara/diagnostics.jsonl`). Each adds the game camera first. Measure with the
   current `ara` vs a frozen pre-`ara why` one (`--ara`).
-- `suite/collab.rs`: suite `collab`, 2 tasks where a human (Mia) holds claims set
+- `suite/collab.rs`: suite `collab`, 2 tasks where a human (Mia) has legacy advisory markers set
   up in-process (`collab.claim`, session left open so the claim persists in
-  `.ara/claims.json`); verifiers read `World::branches()` (`.ara/branches/`).
+  `.ara/claims.json`); edits apply immediately; optional-branch verifiers read `World::branches()` (`.ara/branches/`).
 - `suite/`: suite v0, 22 tasks by area (`assembly`, `components`, `prefabs`,
   `hierarchy`, `repair`, `workflow`) plus shared verifier helpers in `mod.rs`
   (`one`, `at`, `vec_is`, `num_is`, `parent_is`, `with_why`, `clean`,
