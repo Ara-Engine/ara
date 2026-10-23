@@ -114,7 +114,8 @@ per scope above the paired empty loop. Collection is measured separately.
 | [Tracy](measurements/tracy.json) | 7.52 ns | 103.04 ns | 7.79 ns | 15.51% |
 
 Tracy had no viewer attached; its zone emission was enabled, without on-demand,
-sampling or system tracing. Its Windows symbol resolver reported
-`SymInitialize` error 87; this run measures explicit zones, without call stacks.
+sampling or system tracing. Its Windows helper reported `SymInitialize` error 87:
+`tracy-client-sys` 0.29.0 documents this harmless duplicate DbgHelp initialization
+in `src/dbghelp.rs`. This run measures explicit zones, without call stacks.
 The machine is shared, so retain the raw round samples and load alongside results
 instead of treating these medians as isolated-machine limits.
