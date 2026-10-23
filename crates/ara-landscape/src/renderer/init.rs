@@ -170,7 +170,9 @@ impl Landscape {
             size[0],
             size[1],
             vk::Format::R8G8B8A8_UNORM,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::SAMPLED,
         )?;
         let depth = gpu.create_image(
             size[0],

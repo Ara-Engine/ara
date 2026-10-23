@@ -8,11 +8,22 @@ impl Renderer2d {
     /// Uploads atlases and an extraction, and prewarms the offline-cooked pipeline.
     /// Stage this off the human's frame (D20); later frames only `update` or `render`.
     pub fn new(scene: &Scene2d, size: [u32; 2], cache: impl Into<PathBuf>) -> Result<Self> {
+        Self::with_extensions(scene, size, cache, &[])
+    }
+
+    /// Creates the same renderer with the instance extensions required by an SDL
+    /// window. Existing headless and capture callers continue to use `new`.
+    pub fn with_extensions(
+        scene: &Scene2d,
+        size: [u32; 2],
+        cache: impl Into<PathBuf>,
+        extensions: &[std::ffi::CString],
+    ) -> Result<Self> {
         ensure!(
             !size.contains(&0) && size.iter().all(|v| *v <= 8192),
             "invalid 2D target extent"
         );
-        let mut gpu = VulkanDevice::new(&[], cache)?;
+        let mut gpu = VulkanDevice::new(extensions, cache)?;
         let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
         let cooked: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(artifacts.join("sprites.json"))?)?;
