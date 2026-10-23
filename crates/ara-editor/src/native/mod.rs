@@ -2,6 +2,7 @@
 #[cfg(windows)]
 mod accessibility;
 mod coordinates;
+pub(crate) mod frame;
 #[cfg(windows)]
 mod pacing;
 use ara_ui::{
@@ -24,19 +25,14 @@ unsafe extern "C" fn text_watch(user: *mut c_void, event: *mut SDL_Event) -> boo
     unsafe {
         let state = &*user.cast::<Watch>();
         let event = &*event;
-        if event.r#type == SDL_EVENT_TEXT_INPUT.0
-            && event.text.windowID == state.window
-            && !event.text.text.is_null()
-        {
+        let _ = state.window;
+        if event.r#type == SDL_EVENT_TEXT_INPUT.0 && !event.text.text.is_null() {
             let text = CStr::from_ptr(event.text.text)
                 .to_string_lossy()
                 .into_owned();
             let _ = state.send.send(EditEvent::ImeCommit(text));
         }
-        if event.r#type == SDL_EVENT_TEXT_EDITING.0
-            && event.edit.windowID == state.window
-            && !event.edit.text.is_null()
-        {
+        if event.r#type == SDL_EVENT_TEXT_EDITING.0 && !event.edit.text.is_null() {
             let text = CStr::from_ptr(event.edit.text)
                 .to_string_lossy()
                 .into_owned();
@@ -55,6 +51,8 @@ pub(crate) struct Native {
     edits: Receiver<EditEvent>,
     composing: bool,
     text_active: bool,
+    /// Window currently receiving OS text input (main or a floating window).
+    text_window: *mut SDL_Window,
     #[cfg(windows)]
     accessibility: accessibility::Accessibility,
     #[cfg(windows)]
@@ -171,6 +169,7 @@ impl Native {
             edits,
             composing: false,
             text_active: false,
+            text_window: window,
             #[cfg(windows)]
             accessibility,
             #[cfg(windows)]
@@ -181,43 +180,53 @@ impl Native {
         // SAFETY: Live main-thread SDL window. SDL updates scale as it crosses monitor boundaries.
         unsafe { SDL_GetWindowDisplayScale(self.window).max(0.25) }
     }
-    /// Convert SDL window coordinates to the same logical units used by UI layout.
-    pub fn logical_event(&self, event: ara_platform::Event, dpi: f32) -> ara_platform::Event {
-        // SAFETY: Live main-thread window; SDL defines density as pixels per window unit.
-        let density = unsafe { SDL_GetWindowPixelDensity(self.window).max(0.25) };
-        coordinates::logical_event(event, density, dpi)
-    }
     /// Refresh native IME and accessibility geometry at the current display scale.
     pub fn update(&mut self, ui: &Ui, input: &InputState, dpi: f32) -> anyhow::Result<()> {
+        self.text_input(self.window, ui, input, dpi)?;
+        #[cfg(windows)]
+        self.accessibility.update(ui, input.focused(), dpi);
+        Ok(())
+    }
+    /// Start or stop OS text input (IME) for the window whose surface has focus.
+    pub fn text_input(
+        &mut self,
+        window: *mut SDL_Window,
+        ui: &Ui,
+        input: &InputState,
+        dpi: f32,
+    ) -> anyhow::Result<()> {
         let field = input
             .focused()
             .and_then(|id| ui.by_id(id))
             .filter(|i| matches!(ui.nodes[*i].element.tag.as_str(), "field" | "input"));
-        // SAFETY: OS text input belongs to this main-thread window; IME geometry uses logical window units.
+        // SAFETY: Both windows are live on this main thread; IME geometry uses logical window units.
         unsafe {
+            if window != self.text_window && self.text_active {
+                SDL_StopTextInput(self.text_window);
+                self.text_active = false;
+            }
+            self.text_window = window;
             if field.is_some() != self.text_active {
                 let ok = if field.is_some() {
-                    SDL_StartTextInput(self.window)
+                    SDL_StartTextInput(window)
                 } else {
-                    SDL_StopTextInput(self.window)
+                    SDL_StopTextInput(window)
                 };
                 anyhow::ensure!(ok, "SDL text input state failed");
                 self.text_active = field.is_some();
             }
             if let Some(i) = field {
                 let r = ui.nodes[i].rect;
-                let scale = dpi / SDL_GetWindowPixelDensity(self.window).max(0.25);
+                let scale = dpi / SDL_GetWindowPixelDensity(window).max(0.25);
                 let area = sdl3_sys::rect::SDL_Rect {
                     x: (r.x * scale) as i32,
                     y: (r.y * scale) as i32,
                     w: (r.w * scale) as i32,
                     h: (r.h * scale) as i32,
                 };
-                SDL_SetTextInputArea(self.window, &area, 0);
+                SDL_SetTextInputArea(window, &area, 0);
             }
         }
-        #[cfg(windows)]
-        self.accessibility.update(ui, input.focused(), dpi);
         Ok(())
     }
     pub fn input(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<bool> {
@@ -255,7 +264,7 @@ impl Drop for Native {
         unsafe {
             SDL_RemoveEventWatch(Some(text_watch), (&mut *self.watch as *mut Watch).cast());
             if self.text_active {
-                SDL_StopTextInput(self.window);
+                SDL_StopTextInput(self.text_window);
             }
         }
     }
@@ -281,6 +290,33 @@ impl Clipboard for OsClipboard {
             Ok(())
         } else {
             Err("SDL clipboard write failed".into())
+        }
+    }
+}
+/// Convert an event from any editor window into that window's logical pixels.
+pub(crate) fn logical_event_for(
+    window: *mut SDL_Window,
+    event: ara_platform::Event,
+    dpi: f32,
+) -> ara_platform::Event {
+    // SAFETY: The caller passes a live main-thread SDL window.
+    let density = unsafe { SDL_GetWindowPixelDensity(window).max(0.25) };
+    coordinates::logical_event(event, density, dpi)
+}
+/// Window points to editor logical pixels for a window (desktop drag tracking).
+pub(crate) fn points_to_logical(window: *mut SDL_Window, dpi: f32) -> f32 {
+    // SAFETY: The caller passes a live main-thread SDL window.
+    unsafe { SDL_GetWindowPixelDensity(window).max(0.25) / dpi }
+}
+/// SDL id of the window with keyboard focus, or 0.
+pub(crate) fn keyboard_focus() -> u32 {
+    // SAFETY: Main-thread keyboard state query; a null result means no focus.
+    unsafe {
+        let window = SDL_GetKeyboardFocus();
+        if window.is_null() {
+            0
+        } else {
+            SDL_GetWindowID(window).0
         }
     }
 }

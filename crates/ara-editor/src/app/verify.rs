@@ -253,7 +253,14 @@ impl Verification {
             gpu.overlays(
                 rect,
                 overlay::ENTITY_IMAGE,
-                overlay::build(&view, &editor.state, rect, renderer, &changed)?,
+                overlay::build(
+                    &view,
+                    &editor.state,
+                    rect,
+                    renderer,
+                    &changed,
+                    Default::default(),
+                )?,
             );
         }
         crate::shell::icons::install(ui_renderer, editor.state.light, gpu.dpi())?;

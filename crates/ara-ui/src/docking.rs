@@ -34,6 +34,23 @@ pub enum DockNode {
         second: Box<DockNode>,
     },
 }
+/// A dock tree in its own OS window, owned by the main window (D23).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Floating {
+    /// Stable window identity, persisted with the layout.
+    pub id: String,
+    /// Outer position and size in desktop logical pixels: x, y, width, height.
+    pub rect: [i32; 4],
+    /// The window's dock tree.
+    pub root: DockNode,
+}
+/// Persisted form: the main tree plus floating windows. A bare `DockNode` is
+/// still accepted (and written when nothing floats) for older layout files.
+#[derive(Serialize, Deserialize)]
+struct Saved {
+    main: DockNode,
+    floating: Vec<Floating>,
+}
 /// Drop target resolved from the dock overlay's pointer hit.
 #[derive(Clone, Debug)]
 pub enum DockDrop {
@@ -56,23 +73,87 @@ pub enum DockDrop {
         before: bool,
     },
 }
-/// Complete persisted layout with a validated reset baseline.
+/// Complete persisted layout with a validated reset baseline. Panel and area
+/// IDs are unique across the main tree and every floating window.
 pub struct DockLayout {
     root: DockNode,
     default: DockNode,
+    floating: Vec<Floating>,
 }
 impl DockLayout {
     /// Validate initial IDs/tabs/ratios before accepting a layout.
     pub fn new(root: DockNode) -> Result<Self> {
-        validate(&root)?;
+        Self::with_floating(root, Vec::new())
+    }
+    /// A layout whose panels may also live in floating windows.
+    pub fn with_floating(root: DockNode, floating: Vec<Floating>) -> Result<Self> {
+        validate_all(&root, &floating)?;
         Ok(Self {
             default: root.clone(),
             root,
+            floating,
         })
     }
     /// Current serializable layout.
     pub fn root(&self) -> &DockNode {
         &self.root
+    }
+    /// Floating windows, in creation order.
+    pub fn floating(&self) -> &[Floating] {
+        &self.floating
+    }
+    /// Tear `panel` off into a new floating window `id` at `rect`.
+    pub fn float(&mut self, panel: &str, id: &str, rect: [i32; 4]) -> Result<()> {
+        let (mut root, mut floating) = (self.root.clone(), self.floating.clone());
+        if !remove_everywhere(&mut root, &mut floating, panel) {
+            return Err("ARA7042: dragged panel not found".into());
+        }
+        floating.push(Floating {
+            id: id.into(),
+            rect,
+            root: DockNode::Area {
+                id: format!("{id}-area"),
+                tabs: vec![panel.into()],
+                active: 0,
+            },
+        });
+        prune_all(&mut root, &mut floating);
+        validate_all(&root, &floating)?;
+        (self.root, self.floating) = (root, floating);
+        Ok(())
+    }
+    /// Remove a panel from every window; empty areas collapse and empty windows close.
+    pub fn close(&mut self, panel: &str) -> Result<()> {
+        let (mut root, mut floating) = (self.root.clone(), self.floating.clone());
+        if !remove_everywhere(&mut root, &mut floating, panel) {
+            return Err("ARA7042: panel is not open".into());
+        }
+        prune_all(&mut root, &mut floating);
+        (self.root, self.floating) = (root, floating);
+        Ok(())
+    }
+    /// Record a floating window's new position or size.
+    pub fn set_rect(&mut self, id: &str, rect: [i32; 4]) -> Result<()> {
+        if rect[2] <= 0 || rect[3] <= 0 {
+            return Err("ARA7042: floating windows need a positive size".into());
+        }
+        let window = self
+            .floating
+            .iter_mut()
+            .find(|f| f.id == id)
+            .ok_or("ARA7042: floating window not found")?;
+        window.rect = rect;
+        Ok(())
+    }
+    /// Whether a panel is open in any window.
+    pub fn contains(&self, panel: &str) -> bool {
+        fn visit(n: &DockNode, p: &str) -> bool {
+            match n {
+                DockNode::Area { tabs, .. } => tabs.iter().any(|t| t == p),
+                DockNode::Split { first, second, .. } => visit(first, p) || visit(second, p),
+            }
+        }
+        visit(&self.root, panel) || self.floating.iter().any(|f| visit(&f.root, panel))
     }
     /// Update a persisted split after dragging its runtime splitter; path entries choose first/second.
     pub fn resize_split(&mut self, path: &[bool], ratio: f32) -> Result<()> {
@@ -97,21 +178,35 @@ impl DockLayout {
         *value = ratio.clamp(0.1, 0.9);
         Ok(())
     }
-    /// Restore the registered default layout.
+    /// Restore the registered default layout; floating windows close.
     pub fn reset(&mut self) {
         self.root = self.default.clone();
+        self.floating.clear();
     }
     /// Stable JSON serialization; field order follows the typed enum schema.
     pub fn serialize(&self) -> Result<String> {
-        Ok(ara_json::to_canonical_string(&ara_json::to_value(
-            &&self.root,
-        )?))
+        let value = if self.floating.is_empty() {
+            ara_json::to_value(&&self.root)?
+        } else {
+            ara_json::to_value(&Saved {
+                main: self.root.clone(),
+                floating: self.floating.clone(),
+            })?
+        };
+        Ok(ara_json::to_canonical_string(&value))
     }
     /// Atomically load a saved layout, retaining the original reset baseline.
     pub fn restore(&mut self, json: &str) -> Result<()> {
-        let root = serde_json::from_value(ara_json::parse(json)?)?;
-        validate(&root)?;
+        let value: serde_json::Value = serde_json::from_value(ara_json::parse(json)?)?;
+        let (root, floating) = if value.get("main").is_some() {
+            let saved: Saved = serde_json::from_value(value)?;
+            (saved.main, saved.floating)
+        } else {
+            (serde_json::from_value(value)?, Vec::new())
+        };
+        validate_all(&root, &floating)?;
         self.root = root;
+        self.floating = floating;
         Ok(())
     }
     /// Select a panel by stable identity.
@@ -129,29 +224,18 @@ impl DockLayout {
                 DockNode::Split { first, second, .. } => visit(first, p) || visit(second, p),
             }
         }
-        if !visit(&mut self.root, panel) {
+        if !visit(&mut self.root, panel)
+            && !self.floating.iter_mut().any(|f| visit(&mut f.root, panel))
+        {
             return Err("ARA7042: unknown dock panel".into());
         }
         Ok(())
     }
-    /// Drop a tab into another area or onto a split edge; failures leave the layout intact.
+    /// Drop a tab into another area or onto a split edge, in any window; failures
+    /// leave the layout intact. Emptied areas collapse and emptied windows close.
     pub fn drop_tab(&mut self, panel: &str, target: DockDrop) -> Result<()> {
-        let mut candidate = self.root.clone();
-        fn remove(n: &mut DockNode, p: &str) -> bool {
-            match n {
-                DockNode::Area { tabs, active, .. } => {
-                    if let Some(i) = tabs.iter().position(|t| t == p) {
-                        tabs.remove(i);
-                        *active = (*active).min(tabs.len().saturating_sub(1));
-                        true
-                    } else {
-                        false
-                    }
-                }
-                DockNode::Split { first, second, .. } => remove(first, p) || remove(second, p),
-            }
-        }
-        if !remove(&mut candidate, panel) {
+        let (mut candidate, mut floating) = (self.root.clone(), self.floating.clone());
+        if !remove_everywhere(&mut candidate, &mut floating, panel) {
             return Err("ARA7042: dragged panel not found".into());
         }
         let area = match &target {
@@ -166,7 +250,13 @@ impl DockLayout {
                 _ => None,
             }
         }
-        let destination = find(&mut candidate, area).ok_or("ARA7042: dock destination missing")?;
+        let destination = match find(&mut candidate, area) {
+            Some(d) => d,
+            None => floating
+                .iter_mut()
+                .find_map(|f| find(&mut f.root, area))
+                .ok_or("ARA7042: dock destination missing")?,
+        };
         match target {
             DockDrop::Tab { index, .. } => {
                 if let DockNode::Area { tabs, active, .. } = destination {
@@ -196,8 +286,10 @@ impl DockLayout {
                 };
             }
         }
-        validate(&candidate)?;
+        prune_all(&mut candidate, &mut floating);
+        validate_all(&candidate, &floating)?;
         self.root = candidate;
+        self.floating = floating;
         Ok(())
     }
     /// Compile dock primitives into ordinary runtime markup; contents mount by panel ID.
@@ -234,7 +326,78 @@ impl DockLayout {
         out
     }
 }
-fn validate(root: &DockNode) -> Result<()> {
+/// Remove a panel from whichever tree holds it.
+fn remove_everywhere(root: &mut DockNode, floating: &mut [Floating], panel: &str) -> bool {
+    fn remove(n: &mut DockNode, p: &str) -> bool {
+        match n {
+            DockNode::Area { tabs, active, .. } => {
+                if let Some(i) = tabs.iter().position(|t| t == p) {
+                    tabs.remove(i);
+                    *active = (*active).min(tabs.len().saturating_sub(1));
+                    true
+                } else {
+                    false
+                }
+            }
+            DockNode::Split { first, second, .. } => remove(first, p) || remove(second, p),
+        }
+    }
+    remove(root, panel) || floating.iter_mut().any(|f| remove(&mut f.root, panel))
+}
+/// Collapse splits around empty areas; the main root itself always survives.
+fn prune_all(root: &mut DockNode, floating: &mut Vec<Floating>) {
+    fn prune(n: DockNode) -> Option<DockNode> {
+        match n {
+            DockNode::Area { ref tabs, .. } if tabs.is_empty() => None,
+            DockNode::Area { .. } => Some(n),
+            DockNode::Split {
+                axis,
+                ratio,
+                first,
+                second,
+            } => match (prune(*first), prune(*second)) {
+                (Some(a), Some(b)) => Some(DockNode::Split {
+                    axis,
+                    ratio,
+                    first: Box::new(a),
+                    second: Box::new(b),
+                }),
+                (Some(only), None) | (None, Some(only)) => Some(only),
+                (None, None) => None,
+            },
+        }
+    }
+    if let Some(pruned) = prune(root.clone()) {
+        *root = pruned;
+    }
+    floating.retain_mut(|f| match prune(f.root.clone()) {
+        Some(pruned) => {
+            f.root = pruned;
+            true
+        }
+        None => false,
+    });
+}
+fn validate_all(root: &DockNode, floating: &[Floating]) -> Result<()> {
+    let mut areas = BTreeSet::new();
+    let mut panels = BTreeSet::new();
+    for node in std::iter::once(root).chain(floating.iter().map(|f| &f.root)) {
+        validate_into(node, &mut areas, &mut panels)?;
+    }
+    let mut windows = BTreeSet::new();
+    if !floating
+        .iter()
+        .all(|f| !f.id.is_empty() && windows.insert(&f.id) && f.rect[2] > 0 && f.rect[3] > 0)
+    {
+        return Err("ARA7042: invalid or duplicate floating window".into());
+    }
+    Ok(())
+}
+fn validate_into(
+    root: &DockNode,
+    areas: &mut BTreeSet<String>,
+    panels: &mut BTreeSet<String>,
+) -> Result<()> {
     fn visit(
         n: &DockNode,
         areas: &mut BTreeSet<String>,
@@ -266,8 +429,53 @@ fn validate(root: &DockNode) -> Result<()> {
             }
         }
     }
-    if !visit(root, &mut BTreeSet::new(), &mut BTreeSet::new(), 0) {
+    if !visit(root, areas, panels, 0) {
         return Err("ARA7042: invalid dock IDs, active tab, split ratio or depth".into());
     }
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn area(id: &str, tabs: &[&str]) -> DockNode {
+        DockNode::Area {
+            id: id.into(),
+            tabs: tabs.iter().map(|t| t.to_string()).collect(),
+            active: 0,
+        }
+    }
+    #[test]
+    fn panels_float_redock_and_round_trip() -> Result<()> {
+        let root = DockNode::Split {
+            axis: Axis::Horizontal,
+            ratio: 0.3,
+            first: Box::new(area("left", &["hierarchy"])),
+            second: Box::new(area("view", &["scene", "inspector"])),
+        };
+        let mut dock = DockLayout::new(root)?;
+        dock.float("hierarchy", "w1", [100, 100, 320, 480])?;
+        // The emptied left area collapsed; the panel now lives in the window.
+        assert!(matches!(dock.root(), DockNode::Area { id, .. } if id == "view"));
+        assert_eq!(dock.floating().len(), 1);
+        let saved = dock.serialize()?;
+        let mut copy = DockLayout::new(area("x", &[]))?;
+        copy.restore(&saved)?;
+        assert_eq!(copy.floating(), dock.floating());
+        // Docking back closes the empty floating window.
+        dock.drop_tab(
+            "hierarchy",
+            DockDrop::Tab {
+                area: "view".into(),
+                index: 0,
+            },
+        )?;
+        assert!(dock.floating().is_empty());
+        assert!(dock.contains("hierarchy"));
+        // A panel cannot be in two windows at once.
+        dock.float("inspector", "w2", [0, 0, 300, 300])?;
+        assert!(
+            DockLayout::with_floating(area("v", &["inspector"]), dock.floating().to_vec()).is_err()
+        );
+        Ok(())
+    }
 }

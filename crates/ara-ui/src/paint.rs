@@ -140,6 +140,8 @@ pub enum Draw {
         rect: Box2,
         /// Registered image resource handle.
         image: u32,
+        /// Straight multiplier; white keeps the image, a text color tints a white icon.
+        tint: Color,
     },
     /// Intersect a rectangular clip with the current clip stack.
     PushClip {

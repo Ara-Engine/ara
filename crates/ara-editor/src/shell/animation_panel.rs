@@ -8,44 +8,52 @@ impl Shell {
         out: &mut String,
     ) -> ara_ui::Result<()> {
         let resource = self.resource_for(editor, "animation");
-        out.push_str("<panel id='animation-toolbar' class='toolbar'>");
+        out.push_str("<panel id='animation-toolbar' class='toolbar'><panel id='animation-view' class='segment'>");
         for (id, label, blends) in [
             ("animation-states", "States", false),
             ("animation-blends", "Blend spaces", true),
         ] {
-            out.push_str(&self.bind_button(
-                id,
-                label,
+            self.bindings.insert(
+                ara_ui::source::stable_id(id),
                 Binding::Protocol("editor.workspace", json!({"blends":blends})),
-                if editor.state.animation_blends == blends {
-                    "small selected"
-                } else {
-                    "small quiet"
-                },
-            ));
+            );
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' action='Dispatch' text='{label}' />",if editor.state.animation_blends == blends {" selected"} else {""}));
         }
+        out.push_str("</panel><panel id='animation-sep' class='toolbar-sep' />");
         for (id, label, kind) in [
-            ("animation-add-state", "+ State", "state"),
-            ("animation-add-blend", "+ Blend", "blend"),
-            ("animation-add-transition", "+ Transition", "transition"),
+            ("animation-add-state", "State", "state"),
+            ("animation-add-blend", "Blend", "blend"),
+            ("animation-add-transition", "Transition", "transition"),
         ] {
-            out.push_str(&self.bind_button(
-                id,
-                label,
+            self.bindings.insert(
+                ara_ui::source::stable_id(id),
                 Binding::AnimationEdit(kind.into()),
-                "small quiet",
-            ));
+            );
+            out.push_str(&format!("<button id='{id}' class='ghost' label='Add {label}' description='Add a {}' action='Dispatch'>{}<text id='{id}-label' text='{label}' /></button>",label.to_lowercase(),icons::icon(id,"plus")));
         }
-        out.push_str("<panel id='animation-toolbar-fill' style='flex-grow:1' />");
-        out.push_str(&self.bind_button(
+        out.push_str("<panel id='animation-toolbar-fill' class='fill' />");
+        self.tool_text(
+            out,
             "resource-create-animation",
+            "assets.create.animation",
+            "plus",
             "New",
-            Binding::ResourceCreate("animation".into()),
-            "small quiet",
-        ));
+            "ghost",
+        );
         out.push_str("</panel>");
         let Some(doc) = resource else {
-            out.push_str("<panel id='animation-empty' class='body'><text id='animation-empty-title' text='Create or open an animation controller.' /></panel>");
+            self.empty(
+                out,
+                "animation-empty",
+                "person-standing",
+                "No controller open",
+                "Open an animation controller from Assets, or create one.",
+                &[(
+                    "animation-empty-new",
+                    "New controller",
+                    "assets.create.animation",
+                )],
+            );
             return Ok(());
         };
         let document = editor

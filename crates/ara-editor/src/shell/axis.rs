@@ -1,57 +1,62 @@
-//! Camera-oriented sphere gizmo. Caps remain real accessible UI buttons.
+//! The one orientation aid (Appendix C): a 56 px transparent widget, top-right
+//! with a 12 px inset. Positive axes are 14 px filled, lettered caps with stems;
+//! negative axes are 10 px hollow rings. Caps are real accessible buttons.
 use super::*;
 use ara_ui::{paint::Draw, source::stable_id, style::Color};
 use glam::Vec3;
 
+const SIZE: f32 = 56.;
+const RADIUS: f32 = 20.;
 impl Shell {
     pub(super) fn axis_markup(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:96px;height:96px;background:var(--background);border-radius:48px'>");
+        out.push_str(&format!("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:{SIZE}px;height:{SIZE}px'>"));
         let camera = editor.state.camera;
         self.axis_camera = camera;
         let mut caps = caps(&camera);
         caps.sort_by(|a, b| a.2.total_cmp(&b.2));
-        for front in [false, true] {
-            if front {
-                self.bindings.insert(stable_id("view-iso"), Binding::Protocol("editor.camera", json!({"target":camera.target.to_array(),"yaw":0.6,"pitch":0.4,"distance":camera.distance})));
-                out.push_str("<button id='view-iso' class='view-sphere' style='position:absolute;left:36px;top:36px;width:24px;height:24px' label='Perspective view' description='Return to perspective view' action='Dispatch' />");
-            }
-            for (axis, sign, depth, p) in &caps {
-                if (*depth >= 0.) != front {
-                    continue;
-                }
-                let id = cap_id(*axis, *sign);
-                let (yaw, pitch) = match (*axis, *sign) {
-                    (0, true) => (std::f32::consts::FRAC_PI_2, 0.),
-                    (0, false) => (-std::f32::consts::FRAC_PI_2, 0.),
-                    (1, true) => (0., 1.54),
-                    (1, false) => (0., -1.54),
-                    (2, true) => (0., 0.),
-                    _ => (std::f32::consts::PI, 0.),
-                };
-                self.bindings.insert(stable_id(&id), Binding::Protocol("editor.camera",json!({"target":camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":camera.distance})));
-                let label = ["X", "Y", "Z"][*axis];
-                out.push_str(&format!("<button id='{id}' class='view-cap cap-{} {}' style='position:absolute;left:{}px;top:{}px;width:20px;height:20px' text='{}' label='{}{} view' description='Snap camera to {}{} axis' action='Dispatch' />", ["x","y","z"][*axis], if *sign {"cap-positive"} else {"cap-negative"},p[0]-10.,p[1]-10.,if *sign {label} else {""},if *sign {"+"}else{"−"},label,if *sign {"+"}else{"−"},label));
-            }
+        let c = SIZE * 0.5;
+        self.bindings.insert(stable_id("view-iso"), Binding::Protocol("editor.camera", json!({"target":camera.target.to_array(),"yaw":0.6,"pitch":0.4,"distance":camera.distance})));
+        out.push_str(&format!("<button id='view-iso' class='view-sphere' style='position:absolute;left:{}px;top:{}px;width:10px;height:10px' label='Perspective view' description='Return to the default perspective' action='Dispatch' />",c-5.,c-5.));
+        for (axis, sign, _, p) in &caps {
+            let id = cap_id(*axis, *sign);
+            let (yaw, pitch) = match (*axis, *sign) {
+                (0, true) => (std::f32::consts::FRAC_PI_2, 0.),
+                (0, false) => (-std::f32::consts::FRAC_PI_2, 0.),
+                (1, true) => (0., 1.54),
+                (1, false) => (0., -1.54),
+                (2, true) => (0., 0.),
+                _ => (std::f32::consts::PI, 0.),
+            };
+            self.bindings.insert(stable_id(&id), Binding::Protocol("editor.camera",json!({"target":camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":camera.distance})));
+            let label = ["X", "Y", "Z"][*axis];
+            let size = if *sign { 14. } else { 10. };
+            let class = if *sign {
+                format!("view-cap cap-{}", ["x", "y", "z"][*axis])
+            } else {
+                format!("view-cap cap-negative cap-neg-{}", ["x", "y", "z"][*axis])
+            };
+            out.push_str(&format!("<button id='{id}' class='{class}' style='position:absolute;left:{}px;top:{}px;width:{size}px;height:{size}px' text='{}' label='{}{label} view' description='Look along {}{label}' action='Dispatch' />",p[0]-size*0.5,p[1]-size*0.5,if *sign {label} else {""},if *sign {"+"} else {"−"},if *sign {"−"} else {"+"}));
         }
         out.push_str("</panel>");
     }
 
-    /// Update the view gizmo without rebuilding or reshaping the surrounding panels.
+    /// Update the widget without rebuilding or reshaping the surrounding panels.
     pub fn orient_axis(&mut self, camera: crate::state::Camera) {
-        if self.axis_camera == camera {
+        if self.axis_camera == camera || self.current.is_some() {
             return;
         }
         self.axis_camera = camera;
+        let Some(root) = self.ui.find("view-cube") else {
+            return;
+        };
+        let origin = self.ui.nodes[root].rect;
         for (axis, sign, _, p) in caps(&camera) {
             if let Some(i) = self.ui.find(&cap_id(axis, sign)) {
-                let Some(root) = self.ui.find("view-cube") else {
-                    continue;
-                };
-                let origin = self.ui.nodes[root].rect;
+                let size = if sign { 14. } else { 10. };
                 let rect = self.ui.nodes[i].rect;
                 self.ui.nodes[i].paint_offset = [
-                    self.ui.nodes[i].paint_offset[0] + origin.x + p[0] - 10. - rect.x,
-                    self.ui.nodes[i].paint_offset[1] + origin.y + p[1] - 10. - rect.y,
+                    self.ui.nodes[i].paint_offset[0] + origin.x + p[0] - size * 0.5 - rect.x,
+                    self.ui.nodes[i].paint_offset[1] + origin.y + p[1] - size * 0.5 - rect.y,
                 ];
                 self.ui.nodes[i].dirty.paint = true;
             }
@@ -63,40 +68,51 @@ impl Shell {
             return;
         };
         let root = &self.ui.nodes[i];
-        let x = root.rect.x - root.paint_offset[0];
-        let y = root.rect.y - root.paint_offset[1];
+        let x = root.rect.x;
+        let y = root.rect.y;
         let mut stems = Vec::new();
         for (axis, sign, _, p) in caps(&self.axis_camera) {
+            if !sign {
+                continue;
+            }
             let name = [
                 "--destructive-foreground",
                 "--success-foreground",
                 "--info-foreground",
             ][axis];
-            let mut color = self
+            let color = self
                 .ui
                 .sheet
                 .color_token(name)
                 .unwrap_or(Color(160, 160, 160, 255));
-            if !sign {
-                color.3 = 90;
-            }
-            // Overlapping analytic circles form a smooth two-pixel stem at every DPI.
-            for step in 0..24 {
-                let t = step as f32 / 24.;
-                stems.push(Draw::RoundedRect {
-                    node: stable_id("axis-stem") + axis as u64 * 48 + u64::from(sign) * 24 + step,
-                    rect: Box2 {
-                        x: x + 48. + (p[0] - 48.) * t - 1.,
-                        y: y + 48. + (p[1] - 48.) * t - 1.,
-                        w: 2.,
-                        h: 2.,
-                    },
-                    radius: 1.,
-                    color,
-                });
-            }
+            stems.push(Draw::Line {
+                node: stable_id("axis-stem") + axis as u64,
+                from: [x + SIZE * 0.5, y + SIZE * 0.5],
+                to: [x + p[0], y + p[1]],
+                width: 1.5,
+                color,
+            });
         }
-        let at = self.ui.display.commands.iter().position(|d|matches!(d,Draw::Rect{node,..}|Draw::RoundedRect{node,..} if *node==stable_id("view-cube"))).map(|i|i+1).unwrap_or(self.ui.display.commands.len());
+        // Stems sit under the caps: insert before the first cap draw.
+        let first_cap = [
+            "view-x",
+            "view-y",
+            "view-z",
+            "view-x-negative",
+            "view-y-negative",
+            "view-z-negative",
+            "view-iso",
+        ]
+        .iter()
+        .map(|id| stable_id(id))
+        .collect::<Vec<_>>();
+        let at = self
+            .ui
+            .display
+            .commands
+            .iter()
+            .position(|d| matches!(d, Draw::Rect { node, .. } | Draw::RoundedRect { node, .. } | Draw::Border { node, .. } if first_cap.contains(node)))
+            .unwrap_or(self.ui.display.commands.len());
         self.ui.display.commands.splice(at..at, stems);
     }
 }
@@ -107,6 +123,7 @@ fn cap_id(axis: usize, positive: bool) -> String {
         if positive { "" } else { "-negative" }
     )
 }
+/// (axis, positive, depth toward the camera, widget-local position).
 fn caps(camera: &crate::state::Camera) -> Vec<(usize, bool, f32, [f32; 2])> {
     let right = Vec3::new(camera.yaw.cos(), 0., -camera.yaw.sin());
     let forward = (camera.target - camera.position()).normalize();
@@ -119,7 +136,10 @@ fn caps(camera: &crate::state::Camera) -> Vec<(usize, bool, f32, [f32; 2])> {
                     axis,
                     sign,
                     -v.dot(forward),
-                    [48. + v.dot(right) * 32., 48. - v.dot(up) * 32.],
+                    [
+                        SIZE * 0.5 + v.dot(right) * RADIUS,
+                        SIZE * 0.5 - v.dot(up) * RADIUS,
+                    ],
                 )
             })
         })

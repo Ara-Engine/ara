@@ -8,45 +8,31 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let recording = editor.host.profiler().is_recording();
         out.push_str("<panel id='profiler-toolbar' class='toolbar'>");
-        out.push_str(&self.bind_button(
-            "profile-record",
-            if recording {
-                "Stop recording"
-            } else {
-                "Record"
-            },
-            Binding::Protocol(
-                if recording {
-                    "profile.stop"
-                } else {
-                    "profile.start"
-                },
-                json!({}),
-            ),
-            if recording { "small selected" } else { "small" },
-        ));
-        out.push_str(&self.bind_button(
+        self.bind_command("profile-record", "profiler.record", commands::Target::None);
+        out.push_str(&format!("<button id='profile-record' class='{}' label='{}' description='Record editor frames' action='Dispatch'>{}<text id='profile-record-label' text='{}' /></button>",if recording{"selected"}else{"ghost"},if recording{"Stop"}else{"Record"},if recording{icons::icon_in("profile-record","square","on-selection")}else{icons::icon_in("profile-record","circle-dot","destructive")},if recording{"Stop"}else{"Record"}));
+        self.tool_text(
+            out,
             "profile-freeze",
-            "Freeze capture",
-            Binding::Protocol("editor.profile.freeze", json!({})),
-            "small quiet",
-        ));
-        out.push_str(&self.bind_button(
+            "profiler.freeze",
+            "pause",
+            "Freeze",
+            "ghost",
+        );
+        self.tool_text(
+            out,
             "profile-baseline",
-            "Set baseline",
-            Binding::Protocol("editor.profile.freeze", json!({"baseline":true})),
-            "small quiet",
-        ));
-        out.push_str(&self.bind_button(
+            "profiler.baseline",
+            "flag",
+            "Baseline",
+            "ghost",
+        );
+        self.bind_command(
             "profile-compare",
-            "Compare",
-            Binding::Protocol(
-                "editor.workspace",
-                json!({"compare":!editor.state.profiler_compare}),
-            ),
-            "small quiet",
-        ));
-        out.push_str("<panel id='profile-toolbar-fill' style='flex-grow:1' /><text id='profiler-recording' class='badge' text='CPU active frame / GPU queue durations' /></panel>");
+            "profiler.compare",
+            commands::Target::None,
+        );
+        out.push_str(&format!("<button id='profile-compare' class='{}' label='Compare' description='Compare the frozen capture with the baseline' action='Dispatch'>{}<text id='profile-compare-label' text='Compare' /></button>",if editor.state.profiler_compare{"selected"}else{"ghost"},icons::icon("profile-compare","git-compare")));
+        out.push_str("<panel id='profile-toolbar-fill' class='fill' /><text id='profiler-recording' class='caption' text='CPU frame · GPU queues' /></panel>");
         let current = if let Some(profile) = &editor.profile_current {
             profile.as_ref()
         } else {
@@ -64,7 +50,7 @@ impl Shell {
                 let after = current.summary(budget).map_err(String::from)?;
                 let comparison =
                     ara_profile::compare(&before, &after, 0.05, 1000).map_err(String::from)?;
-                out.push_str(&format!("<panel id='profile-compare-heading' class='section'><text id='profile-compare-title' style='font-size:17px' text='Capture comparison' /><text id='profile-compare-meta' class='muted' text='Baseline: {} frames / Current: {} frames / p95' /><text id='profile-compare-verdict' class='{}' text='{}' /></panel>",before.frames,after.frames,if comparison.passed{"success"}else{"warning"},if comparison.passed{"Within regression budget"}else{"Review changed metrics"}));
+                out.push_str(&format!("<panel id='profile-compare-heading' class='section'><text id='profile-compare-title' class='title' text='Capture comparison' /><text id='profile-compare-meta' class='muted' text='Baseline: {} frames / Current: {} frames / p95' /><text id='profile-compare-verdict' class='{}' text='{}' /></panel>",before.frames,after.frames,if comparison.passed{"success"}else{"warning"},if comparison.passed{"Within regression budget"}else{"Review changed metrics"}));
                 out.push_str("<panel id='profile-compare-columns' class='row'><text id='profile-metric-heading' class='field-label' text='Metric' style='flex-grow:1' /><text id='profile-baseline-heading' class='field-label' text='Baseline' style='width:100px' /><text id='profile-current-heading' class='field-label' text='Current' style='width:100px' /><text id='profile-delta-heading' class='field-label' text='Change' style='width:80px' /></panel>");
                 for (n, delta) in comparison.deltas.iter().take(64).enumerate() {
                     out.push_str(&format!("<panel id='profile-delta-{n}' class='profile-delta'><text id='profile-delta-key-{n}' text='{}' style='flex-grow:1;flex-basis:0px;overflow:hidden' /><text id='profile-delta-before-{n}' class='number' text='{}' style='width:100px' /><text id='profile-delta-after-{n}' class='number' text='{}' style='width:100px' /><text id='profile-delta-change-{n}' class='{} number' text='{}' style='width:80px' /></panel>",escape(&delta.key),ms(delta.baseline_ns),ms(delta.current_ns),if delta.regression{"warning"}else{"success"},delta.change.map(|v|format!("{:+.1}%",v*100.)).unwrap_or_else(||"New".into())));
@@ -76,7 +62,15 @@ impl Shell {
             return Ok(());
         }
         if current.frames.is_empty() {
-            out.push_str("<panel id='profile-empty' class='section'><text id='profile-empty-title' style='font-size:18px' text='Inspect a frame' /><text id='profile-empty-help' class='muted' text='Record while you work, then freeze a capture to inspect CPU scopes, GPU passes and hitches.' style='white-space:normal' /></panel></scroll>");
+            out.push_str("</scroll>");
+            self.empty(
+                out,
+                "profile-empty",
+                "gauge",
+                "No frames recorded",
+                "Record while you work, then Freeze to inspect CPU scopes, GPU passes and hitches.",
+                &[("profile-empty-record", "Record", "profiler.record")],
+            );
             return Ok(());
         }
         let selected = editor
@@ -115,7 +109,7 @@ impl Shell {
             out.push_str(&format!("<button id='{id}' style='position:absolute;left:{}px;top:{}px;width:{}px;height:{height}px;padding:0px;border-width:0px;border-radius:2px;background:var(--{})' label='Frame {}: {:.3} ms' description='Select frame {}' action='Dispatch' />",n as f32*step,72.-height,(step-2.).max(1.),if frame.id==selected.id{"primary"}else if frame.duration_ns>current.budget_ns{"destructive-foreground"}else{"muted-foreground"},frame.id,frame.duration_ns as f64/1e6,frame.id));
         }
         out.push_str("</panel></panel>");
-        out.push_str(&format!("<panel id='profile-frame-heading' class='row'><text id='profile-frame-title' style='font-size:16px' text='Frame {}' /><text id='profile-frame-duration' class='number' text='{:.3} ms' /><panel id='profile-frame-fill' style='flex-grow:1' /><text id='profile-frame-hitch' class='{}' text='{}' /></panel>",selected.id,selected.duration_ns as f64/1e6,if selected.duration_ns>current.budget_ns{"warning"}else{"success"},if selected.duration_ns>current.budget_ns{"Hitch"}else{"Within budget"}));
+        out.push_str(&format!("<panel id='profile-frame-heading' class='row'><text id='profile-frame-title' class='title' text='Frame {}' /><text id='profile-frame-duration' class='number' text='{:.3} ms' /><panel id='profile-frame-fill' style='flex-grow:1' /><text id='profile-frame-hitch' class='{}' text='{}' /></panel>",selected.id,selected.duration_ns as f64/1e6,if selected.duration_ns>current.budget_ns{"warning"}else{"success"},if selected.duration_ns>current.budget_ns{"Hitch"}else{"Within budget"}));
         out.push_str("<panel id='profile-flame-card' class='section' style='padding:8px;gap:8px'><text id='profile-flame-title' class='heading' text='CPU flame graph' /><panel id='profile-flame' style='height:160px;flex-shrink:0;overflow:hidden;background:var(--background)'>");
         let width = (width - 16.).max(100.);
         let spans = &selected.spans;

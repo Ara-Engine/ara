@@ -8,6 +8,8 @@ pub(super) struct SceneView {
     tick: u32,
     remaining: u32,
     camera: Option<crate::state::Camera>,
+    /// The fidelity view applies to the Lit mode only; debug views show the raster output.
+    lit: bool,
 }
 impl SceneView {
     pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
@@ -23,8 +25,10 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
-        renderer.render(&editor.state.camera.spec(), 0.0015)?;
-        if !editor.state.quality || !renderer.gpu().context().info.ray_tracing {
+        let mode = view_mode(&editor.state.view_mode);
+        self.lit = matches!(mode, ViewMode::Lit);
+        renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
+        if !lit_fidelity(editor) || !renderer.gpu().context().info.ray_tracing {
             return Ok(());
         }
         let size = renderer.size();
@@ -96,7 +100,7 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
-        quality && self.fidelity.is_some() && self.remaining > 0
+        quality && self.lit && self.fidelity.is_some() && self.remaining > 0
     }
     pub fn attach(
         &self,
@@ -105,7 +109,10 @@ impl SceneView {
         quality: bool,
     ) -> ara_ui::Result<()> {
         super::attach(gpu, renderer)?;
-        if quality && let Some(f) = &self.fidelity {
+        if quality
+            && self.lit
+            && let Some(f) = &self.fidelity
+        {
             // SAFETY: This view and renderer share the live device; all submissions complete and restore CopySource.
             unsafe {
                 gpu.external_image(
@@ -123,4 +130,20 @@ impl SceneView {
         }
         Ok(())
     }
+}
+
+/// Viewport View Mode names (the `editor.view` protocol) to renderer debug views.
+fn view_mode(name: &str) -> ViewMode {
+    match name {
+        "baseColor" => ViewMode::Albedo,
+        "normals" => ViewMode::Normals,
+        "depth" => ViewMode::Depth,
+        "roughnessMetal" => ViewMode::RoughnessMetal,
+        "entityIds" => ViewMode::EntityIds,
+        "shadowCascades" => ViewMode::ShadowCascades,
+        _ => ViewMode::Lit,
+    }
+}
+fn lit_fidelity(editor: &Editor) -> bool {
+    editor.state.quality && matches!(view_mode(&editor.state.view_mode), ViewMode::Lit)
 }

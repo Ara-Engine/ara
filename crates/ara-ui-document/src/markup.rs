@@ -38,6 +38,7 @@ pub const ATTRIBUTES: &[&str] = &[
     "action",
     "disabled",
     "src",
+    "tint",
     "label",
     "description",
     "test-id",

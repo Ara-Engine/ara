@@ -156,6 +156,24 @@ impl Store {
         self.by_id.get(id).map(|&i| &self.history[i])
     }
 
+    /// The transaction `author`'s next [`undo_last`](Self::undo_last) would revert.
+    /// Menus use it to label "Undo ‹command›" without changing the stacks.
+    pub fn next_undo(&self, author: &Author) -> Option<&Transaction> {
+        self.stacks
+            .get(author)
+            .and_then(|s| s.undo.last())
+            .and_then(|id| self.txn(id))
+    }
+
+    /// The undo transaction `author`'s next [`redo_last`](Self::redo_last) would revert;
+    /// its `reverts` names the original transaction.
+    pub fn next_redo(&self, author: &Author) -> Option<&Transaction> {
+        self.stacks
+            .get(author)
+            .and_then(|s| s.redo.last())
+            .and_then(|id| self.txn(id))
+    }
+
     /// The transaction that reverted `id`, if any.
     pub fn reverted_by(&self, id: &TxnId) -> Option<&TxnId> {
         self.reverted_by.get(id)

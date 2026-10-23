@@ -38,7 +38,7 @@ impl NativeUi {
                 vk::DescriptorSetLayoutBinding::default()
                     .binding(1)
                     .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(128)
+                    .descriptor_count(256)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBinding::default()
                     .binding(2)
@@ -72,7 +72,7 @@ impl NativeUi {
                     .descriptor_count(2),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(128),
+                    .descriptor_count(256),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLER)
                     .descriptor_count(1),

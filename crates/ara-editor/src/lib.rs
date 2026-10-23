@@ -14,6 +14,7 @@ pub mod graph;
 pub use ara_editor_gpu as gpu;
 pub mod inspector;
 mod native;
+pub mod settings;
 pub mod shell;
 pub mod state;
 mod transport;

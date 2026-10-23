@@ -59,6 +59,8 @@ pub struct Editor {
     pub(crate) panels_revision: u64,
     pub(crate) review_revision: u64,
     pub(crate) extraction_revision: u64,
+    /// Registry commands requested over MCP, run by the shell at the next frame boundary.
+    pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
 }
 struct Pending {
     id: String,
@@ -68,8 +70,16 @@ struct Pending {
     method: String,
 }
 impl Editor {
-    /// Open the project, register editor commands/services and create the window's human session.
+    /// Open the project with in-memory preferences (nothing is written outside it).
     pub fn open(root: &Path) -> anyhow::Result<Self> {
+        Self::open_with(root, None)
+    }
+    /// Open the project, register editor commands/services and create the window's human
+    /// session. `user_settings` is the preferences file; `None` keeps them in memory.
+    pub fn open_with(
+        root: &Path,
+        user_settings: Option<std::path::PathBuf>,
+    ) -> anyhow::Result<Self> {
         // One schema world: the editor validates exactly what the player runs.
         let mut project =
             ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -119,16 +129,19 @@ impl Editor {
             })
             .map(|d| d.id.to_string())
             .ok_or_else(|| anyhow::anyhow!("project has no scene; run ara init first"))?;
-        let state = EditorState {
+        let settings = crate::settings::Settings::open(root, user_settings)?;
+        let mut state = EditorState {
             doc,
             ..Default::default()
         };
+        crate::actions::sync_settings(&mut state, &settings);
         let navigation = Navigation::new(root, state)?;
         let state = navigation.state.clone();
         let (changes, updates) = mpsc::channel();
         let (control_send, controls) = mpsc::channel();
         host.register(Box::new(EditorService {
             navigation,
+            settings,
             changes,
             controls: control_send,
         }))
@@ -178,6 +191,7 @@ impl Editor {
             panels_revision: 0,
             review_revision: 0,
             extraction_revision: 0,
+            queued_commands: Vec::new(),
         })
     }
     /// Push native human activity into the non-disruption boundary.
@@ -272,6 +286,7 @@ impl Editor {
                     }
                 }
                 Control::Reject(ticket) => self.pending.retain(|p| p.id != ticket),
+                Control::Command(id, target) => self.queued_commands.push((id, target)),
             }
             self.panels_revision += 1;
         }

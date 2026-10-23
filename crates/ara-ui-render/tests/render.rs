@@ -43,6 +43,7 @@ fn image_resources_nested_rounded_clips_batches_and_alpha() -> Result<()> {
                     h: 8.0,
                 },
                 image: 7,
+                tint: Color(255, 255, 255, 255),
             },
             Draw::PopClip,
             Draw::PopTransform,

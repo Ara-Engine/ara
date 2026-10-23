@@ -46,6 +46,20 @@ pub fn ground_point(camera: &Camera, rect: Box2, point: [f32; 2]) -> Option<Vec3
     let t = -c.position.y / direction.y;
     (t > 0.).then_some(c.position + direction * t)
 }
+/// One grabbable part of the transform gizmo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Handle {
+    /// An axis arrow (or rotation ring, or scale cube) by index: X, Y, Z.
+    Axis(usize),
+    /// The plane square whose normal is this axis (moves in the other two).
+    Plane(usize),
+    /// The centre: free move in the view plane, or uniform scale.
+    Centre,
+}
+/// Half the minimum hit target: every handle is grabbable within 16 px or more.
+pub const HIT: f32 = 9.;
+/// Gizmo arm length on screen at 100% gizmo size (Appendix C).
+pub const ARM: f32 = 88.;
 /// Projected axis handles and pivot, shared by drawing and pointer hit testing.
 pub struct Handles {
     /// World pivot.
@@ -54,10 +68,12 @@ pub struct Handles {
     pub origin: [f32; 2],
     /// Image-space endpoints for the X, Y and Z handles.
     pub ends: [[f32; 2]; 3],
-    /// Handle extent in world metres.
+    /// Handle extent in world metres (constant on screen).
     pub length: f32,
     /// World-space axes, including the active entity's local orientation.
     pub axes: [Vec3; 3],
+    /// World metres per logical pixel at the pivot.
+    pub per_pixel: f32,
     tool: Tool,
     camera: Camera,
     rect: Box2,
@@ -74,6 +90,17 @@ impl Handles {
             project(&self.camera, self.rect, point(a))?,
             project(&self.camera, self.rect, point(b))?,
         ])
+    }
+    /// Screen corner of a plane square (normal `axis`), 30% along the other two arms.
+    pub fn plane_corner(&self, axis: usize) -> [f32; 2] {
+        let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
+        let o = Vec2::from(self.origin);
+        let p = o + (Vec2::from(self.ends[a]) - o) * 0.3 + (Vec2::from(self.ends[b]) - o) * 0.3;
+        p.into()
+    }
+    /// Unit screen direction of an axis, or zero when it points at the camera.
+    fn screen_dir(&self, axis: usize) -> Vec2 {
+        (Vec2::from(self.ends[axis]) - Vec2::from(self.origin)).normalize_or_zero()
     }
 }
 /// Intersect a logical pointer ray with the chosen gizmo plane.
@@ -106,6 +133,9 @@ pub fn plane_point(
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
+    if state.hide_gizmos || state.game_view {
+        return None;
+    }
     let worlds = crate::world::world_transforms(view.entities());
     let id = state.selection.first()?;
     let matrix = worlds.get(id)?;
@@ -120,7 +150,11 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
     } else {
         matrix.transform_point3(Vec3::ZERO)
     };
-    let length = state.camera.distance * 0.12;
+    // Constant screen size: convert the arm's pixels to metres at the pivot's depth.
+    let depth = (pivot - state.camera.position()).length().max(0.01);
+    let per_pixel = 2. * depth * (50f32.to_radians() * 0.5).tan() / rect.h.max(1.);
+    let size = state.number("viewport.gizmoSize", 100.) as f32 / 100.;
+    let length = ARM * size * per_pixel;
     let origin = project(&state.camera, rect, pivot)?;
     let (_, rotation, _) = matrix.to_scale_rotation_translation();
     let axes =
@@ -133,14 +167,16 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
         ends,
         length,
         axes,
+        per_pixel,
         tool: state.tool,
         camera: state.camera,
         rect,
     })
 }
-/// Return the nearest transform handle within a ten-pixel interaction target.
-pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<usize> {
+/// The handle under the pointer within the hit target, nearest first.
+pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
     let p = Vec2::from(pointer);
+    let o = Vec2::from(handles.origin);
     if handles.tool == Tool::Rotate {
         return (0..3)
             .flat_map(|axis| {
@@ -150,26 +186,44 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<usize> {
                     let ab = b - a;
                     let t = ((p - a).dot(ab) / ab.length_squared().max(0.001)).clamp(0., 1.);
                     let d = p.distance(a + ab * t);
-                    (d < 10.).then_some((axis, d))
+                    (d < HIT).then_some((Handle::Axis(axis), d))
                 })
             })
             .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(axis, _)| axis);
+            .map(|(handle, _)| handle);
     }
-    let a = Vec2::from(handles.origin);
-    handles
-        .ends
-        .iter()
-        .enumerate()
-        .filter_map(|(axis, end)| {
-            let b = Vec2::from(*end);
-            let ab = b - a;
-            let t = ((p - a).dot(ab) / ab.length_squared().max(0.001)).clamp(0.2, 1.);
-            let d = p.distance(a + ab * t);
-            (d < 10.).then_some((axis, d))
+    if p.distance(o) < HIT {
+        return Some(Handle::Centre);
+    }
+    if handles.tool == Tool::Translate {
+        for axis in 0..3 {
+            if p.distance(Vec2::from(handles.plane_corner(axis))) < HIT {
+                return Some(Handle::Plane(axis));
+            }
+        }
+    }
+    (0..3)
+        .filter_map(|axis| {
+            let b = Vec2::from(handles.ends[axis]);
+            let ab = b - o;
+            if ab.length() < 4. {
+                return None;
+            }
+            // Extend past the tip to cover the arrowhead.
+            let t = ((p - o).dot(ab) / ab.length_squared()).clamp(0.15, 1.15);
+            let d = p.distance(o + ab * t);
+            (d < HIT).then_some((Handle::Axis(axis), d))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(axis, _)| axis)
+        .map(|(handle, _)| handle)
+}
+/// Gizmo interaction state for drawing: hovered and dragged handles.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GizmoState {
+    /// Handle under the pointer.
+    pub hover: Option<Handle>,
+    /// Handle being dragged; others fade and a constraint line appears.
+    pub active: Option<Handle>,
 }
 /// Create semantic-token grid, silhouette review tints and transform handles.
 pub fn build(
@@ -178,6 +232,7 @@ pub fn build(
     rect: Box2,
     renderer: &ara_render::Renderer,
     changed: &std::collections::BTreeMap<u64, &str>,
+    gizmo: GizmoState,
 ) -> ara_ui::Result<Vec<Overlay>> {
     let tokens = if state.light {
         EditorTheme::Light
@@ -199,28 +254,40 @@ pub fn build(
         ])
     };
     let mut overlays = Vec::new();
+    if state.game_view {
+        return Ok(overlays);
+    }
+    let show = |key: &str| {
+        state
+            .settings
+            .get(key)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true)
+    };
     let p = state.camera.position();
-    let spacing = 10f32.powf((state.camera.distance / 20.).max(0.01).log10().floor());
-    overlays.push(Overlay::Grid {
-        camera: [p.x, p.y, p.z, state.camera.yaw],
-        parameters: [
-            state.camera.pitch,
-            25f32.to_radians().tan(),
-            spacing,
-            state.camera.distance * 6.,
-        ],
-        color: color("muted-foreground", 0.5)?,
-        axes: [
-            color("destructive-foreground", 0.7)?,
-            color("info-foreground", 0.7)?,
-        ],
-    });
+    if show("viewport.grid") {
+        let spacing = 10f32.powf((state.camera.distance / 20.).max(0.01).log10().floor());
+        overlays.push(Overlay::Grid {
+            camera: [p.x, p.y, p.z, state.camera.yaw],
+            parameters: [
+                state.camera.pitch,
+                25f32.to_radians().tan(),
+                spacing,
+                state.camera.distance * 6.,
+            ],
+            color: color("muted-foreground", 0.32)?,
+            axes: [
+                color("destructive-foreground", 0.42)?,
+                color("info-foreground", 0.42)?,
+            ],
+        });
+    }
     for (index, (id, _)) in renderer.entities().iter().enumerate() {
         let selected = state
             .selection
             .iter()
             .any(|s| crate::world::render_id(s) == *id);
-        if selected || changed.contains_key(id) {
+        if (selected && show("viewport.outline")) || changed.contains_key(id) {
             let token = changed.get(id).copied().unwrap_or("accent");
             overlays.push(Overlay::Outline {
                 index: index as u32 + 1,
@@ -228,45 +295,131 @@ pub fn build(
             });
         }
     }
-    if let Some(handles) = handles(view, state, rect) {
-        for (axis, token) in [
-            "destructive-foreground",
-            "success-foreground",
-            "info-foreground",
-        ]
-        .iter()
-        .enumerate()
-        {
-            let tint = color(token, 1.)?;
-            if state.tool == Tool::Rotate {
-                for n in 0..48 {
-                    if let Some([from, to]) = handles.ring_segment(axis, n) {
-                        overlays.push(Overlay::Line {
-                            from,
-                            to,
-                            width: 1.,
-                            color: tint,
-                        });
-                    }
-                }
+    let Some(handles) = handles(view, state, rect) else {
+        return Ok(overlays);
+    };
+    let halo = [0., 0., 0., 0.6];
+    let hover = color("warning-foreground", 1.)?;
+    let tints = [
+        color("destructive-foreground", 1.)?,
+        color("success-foreground", 1.)?,
+        color("info-foreground", 1.)?,
+    ];
+    let faded = |c: [f32; 4], handle: Handle| -> [f32; 4] {
+        match gizmo.active {
+            Some(active) if active != handle => [c[0], c[1], c[2], c[3] * 0.15],
+            _ if gizmo.hover == Some(handle) || gizmo.active == Some(handle) => hover,
+            _ => c,
+        }
+    };
+    let stroke =
+        |overlays: &mut Vec<Overlay>, from: [f32; 2], to: [f32; 2], width: f32, c: [f32; 4]| {
+            overlays.push(Overlay::Line {
+                from,
+                to,
+                width: width + 1.,
+                color: [halo[0], halo[1], halo[2], halo[3] * c[3]],
+            });
+            overlays.push(Overlay::Line {
+                from,
+                to,
+                width,
+                color: c,
+            });
+        };
+    // A thin constraint line through the pivot along the dragged axis.
+    if let Some(Handle::Axis(axis)) = gizmo.active
+        && state.tool != Tool::Rotate
+    {
+        let d = handles.screen_dir(axis) * 2000.;
+        let o = Vec2::from(handles.origin);
+        let mut line = tints[axis];
+        line[3] = 0.5;
+        overlays.push(Overlay::Line {
+            from: (o - d).into(),
+            to: (o + d).into(),
+            width: 0.5,
+            color: line,
+        });
+    }
+    if state.tool == Tool::Rotate {
+        for axis in 0..3 {
+            let c = faded(tints[axis], Handle::Axis(axis));
+            let width = if gizmo.hover == Some(Handle::Axis(axis)) {
+                1.5
             } else {
-                overlays.push(Overlay::Line {
-                    from: handles.origin,
-                    to: handles.ends[axis],
-                    width: 1.5,
-                    color: tint,
-                });
-                let end = handles.ends[axis];
-                for offset in [-3., 3.] {
-                    overlays.push(Overlay::Line {
-                        from: [end[0] - 3., end[1] + offset],
-                        to: [end[0] + 3., end[1] + offset],
-                        width: 1.,
-                        color: tint,
-                    });
+                1.
+            };
+            for n in 0..48 {
+                if let Some([from, to]) = handles.ring_segment(axis, n) {
+                    stroke(&mut overlays, from, to, width, c);
                 }
             }
         }
+        return Ok(overlays);
     }
+    for axis in 0..3 {
+        let handle = Handle::Axis(axis);
+        let c = faded(tints[axis], handle);
+        let width = if gizmo.hover == Some(handle) { 1.5 } else { 1. };
+        let end = handles.ends[axis];
+        let o = Vec2::from(handles.origin);
+        let dir = handles.screen_dir(axis);
+        if dir == Vec2::ZERO || o.distance(Vec2::from(end)) < 8. {
+            continue; // Axes nearly parallel to the view fade out entirely.
+        }
+        let shaft_end: [f32; 2] = (Vec2::from(end) - dir * 10.).into();
+        stroke(&mut overlays, handles.origin, shaft_end, width, c);
+        if state.tool == Tool::Scale {
+            // 8 px end cube.
+            stroke(&mut overlays, end, end, 4., c);
+        } else {
+            // 12 px arrowhead: a tapered pair of thick strokes.
+            let tip: [f32; 2] = (Vec2::from(end) + dir * 2.).into();
+            stroke(&mut overlays, shaft_end, tip, 3.5, c);
+            stroke(
+                &mut overlays,
+                (Vec2::from(shaft_end) - dir * 2.).into(),
+                shaft_end,
+                4.5,
+                c,
+            );
+        }
+    }
+    if state.tool == Tool::Translate {
+        for axis in 0..3 {
+            let handle = Handle::Plane(axis);
+            let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
+            let o = Vec2::from(handles.origin);
+            let corner = Vec2::from(handles.plane_corner(axis));
+            let pa = o + (Vec2::from(handles.ends[a]) - o) * 0.3;
+            let pb = o + (Vec2::from(handles.ends[b]) - o) * 0.3;
+            if (pa - o).length() < 6. || (pb - o).length() < 6. {
+                continue;
+            }
+            let c = faded(tints[axis], handle);
+            let mut fill = c;
+            fill[3] *= if gizmo.hover == Some(handle) {
+                0.45
+            } else {
+                0.22
+            };
+            overlays.push(Overlay::Line {
+                from: ((pa + corner) * 0.5).into(),
+                to: ((pb + corner) * 0.5).into(),
+                width: (corner - pa).length().min((corner - pb).length()) * 0.9,
+                color: fill,
+            });
+            stroke(&mut overlays, pa.into(), corner.into(), 0.75, c);
+            stroke(&mut overlays, pb.into(), corner.into(), 0.75, c);
+        }
+    }
+    // 10 px screen-space centre handle.
+    let centre = if gizmo.hover == Some(Handle::Centre) || gizmo.active == Some(Handle::Centre) {
+        hover
+    } else {
+        color("foreground", 0.75)?
+    };
+    stroke(&mut overlays, handles.origin, handles.origin, 5., centre);
     Ok(overlays)
 }

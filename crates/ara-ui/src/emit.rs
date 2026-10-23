@@ -99,6 +99,12 @@ impl Ui {
                         .get("src")
                         .map(|s| stable_id(s) as u32 & 0x7fff_ffff)
                         .unwrap_or(0),
+                    // `tint` images (white icons) take their element's text color.
+                    tint: if node.element.attrs.contains_key("tint") {
+                        node.computed.color
+                    } else {
+                        crate::style::Color(255, 255, 255, 255)
+                    },
                 });
             }
             if let Some(text) = &node.text {

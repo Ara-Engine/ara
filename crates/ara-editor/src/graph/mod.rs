@@ -273,6 +273,18 @@ impl Canvas {
             ],
         }
     }
+    /// The topmost node under a screen point, for context menus.
+    pub fn node_at(&self, p: [f32; 2], rect: Box2) -> Option<String> {
+        self.nodes
+            .iter()
+            .rev()
+            .find(|n| self.node_rect(n, rect).contains(p[0], p[1]))
+            .map(|n| n.id.clone())
+    }
+    /// Every node id, for Select All.
+    pub fn node_ids(&self) -> Vec<String> {
+        self.nodes.iter().map(|n| n.id.clone()).collect()
+    }
     fn node_rect(&self, node: &NodeView, rect: Box2) -> Box2 {
         let position = if let Some(interaction::Drag::Nodes {
             positions, start, ..
