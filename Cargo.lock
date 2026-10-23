@@ -341,6 +341,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-jolt-sys"
+version = "0.0.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "ara-json"
 version = "0.0.0"
 dependencies = [
@@ -441,6 +448,30 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "ara-physics"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-schema",
+ "bevy_ecs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-physics-jolt"
+version = "0.0.0"
+dependencies = [
+ "ara-jolt-sys",
+ "ara-json",
+ "ara-physics",
+ "ara-schema",
+ "bevy_ecs",
+ "glam 0.33.12",
+ "serde_json",
 ]
 
 [[package]]
