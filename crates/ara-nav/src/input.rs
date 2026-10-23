@@ -153,7 +153,7 @@ pub struct TileCoord {
 }
 
 /// An authored connection bridging a gap, ladder, jump or door transition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct OffMeshLink {
     /// Stable nonzero ID used in diagnostics.
     pub id: u32,
@@ -169,15 +169,42 @@ pub struct OffMeshLink {
     pub bidirectional: bool,
     /// Disabled connections remain available to diagnostics but do not bake.
     pub enabled: bool,
+    /// Traversal style (runtime only; excluded from tile cache keys).
+    #[serde(default)]
+    pub kind: crate::LinkKind,
+    /// Traversal seconds; 0 derives it from length and speed (runtime only).
+    #[serde(default)]
+    pub duration: f32,
+    /// Jump apex height in metres (runtime only).
+    #[serde(default)]
+    pub arc_height: f32,
 }
 
-/// A temporary cut-out; removing it restores the cached original tile.
+/// A temporary obstacle box; removing it restores the cached original tile.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Obstacle {
     /// Stable ID; changes are canonically sorted by this ID.
     pub id: u64,
     /// Solid world-space box. The baker expands it by the profile radius/height.
     pub bounds: Bounds,
+    /// [`Obstacle::CARVE`] cuts the box out; 0..15 relabels it with that area.
+    #[serde(default = "carve")]
+    pub area: u8,
+}
+fn carve() -> u8 {
+    Obstacle::CARVE
+}
+impl Obstacle {
+    /// Area code meaning "cut out of the navmesh".
+    pub const CARVE: u8 = 255;
+    /// A cut-out box.
+    pub fn carve(id: u64, bounds: Bounds) -> Self {
+        Self {
+            id,
+            bounds,
+            area: Self::CARVE,
+        }
+    }
 }
 
 /// Complete geometry state plus the set of tiles to keep loaded.
@@ -300,10 +327,11 @@ impl BakeInput {
         }
         let mut ids = BTreeSet::new();
         for b in &self.obstacles {
-            if !ids.insert(b.id) || !b.bounds.valid() {
+            if !ids.insert(b.id) || !b.bounds.valid() || (b.area > 15 && b.area != Obstacle::CARVE)
+            {
                 return Err(NavError::new(
                     "invalidObstacle",
-                    "obstacles require unique IDs and finite nonempty bounds",
+                    "obstacles require unique IDs, finite nonempty bounds and area 0..15 or 255",
                 ));
             }
         }

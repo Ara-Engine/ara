@@ -8,7 +8,7 @@ pub(crate) fn bake(
     coord: TileCoord,
     geometry: &Geometry,
     links: &[OffMeshLink],
-    boxes: &[Bounds],
+    boxes: &[(Bounds, u8)],
 ) -> Result<Vec<u8>, NavError> {
     if geometry.triangles.is_empty() {
         return Ok(Vec::new());
@@ -48,9 +48,10 @@ pub(crate) fn bake(
         .collect();
     let boxes: Vec<_> = boxes
         .iter()
-        .map(|b| sys::Box3 {
+        .map(|(b, area)| sys::Box3 {
             min: b.min,
             max: b.max,
+            area: *area,
         })
         .collect();
     let mut output = std::ptr::null_mut();
@@ -158,6 +159,23 @@ impl Mesh {
         // SAFETY: buffer is initialized and has capacity for exactly count results.
         unsafe { sys::an_debug(self.0.as_ptr(), triangles.as_mut_ptr(), count) };
         triangles
+    }
+    pub(crate) fn walls(&self) -> Vec<sys::Wall> {
+        // SAFETY: read-only traversal of a valid live mesh; cap 0 only counts.
+        let count = unsafe { sys::an_walls(self.0.as_ptr(), std::ptr::null_mut(), 0) };
+        let mut walls = vec![sys::Wall::default(); count.max(0) as usize];
+        // SAFETY: buffer is initialized with exactly `count` entries; the mesh is
+        // immutable, so the second traversal yields the same count.
+        unsafe { sys::an_walls(self.0.as_ptr(), walls.as_mut_ptr(), count) };
+        walls
+    }
+    pub(crate) fn borders(&self) -> Vec<sys::Border> {
+        // SAFETY: read-only traversal of a valid live mesh; cap 0 only counts.
+        let count = unsafe { sys::an_borders(self.0.as_ptr(), std::ptr::null_mut(), 0) };
+        let mut borders = vec![sys::Border::default(); count.max(0) as usize];
+        // SAFETY: buffer has capacity for exactly `count` entries of an immutable mesh.
+        unsafe { sys::an_borders(self.0.as_ptr(), borders.as_mut_ptr(), count) };
+        borders
     }
     pub(crate) fn crowd_step(&self, agents: &mut [sys::Agent], dt: f32) -> Result<(), NavError> {
         if agents.is_empty() {
@@ -290,6 +308,44 @@ impl Query<'_> {
             ));
         }
         Ok((t.min(1.0), normal))
+    }
+    /// Dijkstra over polygons; `None` when the start has no permitted polygon.
+    /// Returns (ref, cost) pairs in pop order and whether the search was truncated.
+    pub(crate) fn dijkstra(
+        &mut self,
+        start: [f32; 3],
+        ext: [f32; 3],
+        filter: &sys::Filter,
+        radius: f32,
+        cap: usize,
+    ) -> Option<(Vec<(u32, f32)>, bool)> {
+        let mut refs = vec![0u32; cap];
+        let mut costs = vec![0f32; cap];
+        let mut truncated = 0;
+        // SAFETY: exclusive live query; buffers hold `cap` entries; inputs are
+        // validated 3-element arrays and a validated filter for this call.
+        let count = unsafe {
+            sys::an_dijkstra(
+                self.pointer.as_ptr(),
+                start.as_ptr(),
+                ext.as_ptr(),
+                filter,
+                radius,
+                refs.as_mut_ptr(),
+                costs.as_mut_ptr(),
+                cap.min(i32::MAX as usize) as i32,
+                &mut truncated,
+            )
+        };
+        let count = usize::try_from(count).ok()?.min(cap);
+        Some((
+            refs[..count]
+                .iter()
+                .copied()
+                .zip(costs[..count].iter().copied())
+                .collect(),
+            truncated != 0,
+        ))
     }
     pub(crate) fn area(&mut self, polygon: u32) -> Option<u8> {
         // SAFETY: native getPolyArea validates arbitrary/stale polygon references.

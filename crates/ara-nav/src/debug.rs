@@ -75,3 +75,25 @@ impl NavPath {
         }
     }
 }
+
+impl NavMesh {
+    /// Rasterises this mesh's walkable (radius-eroded) triangles into a grid over
+    /// `min`..`max` (XZ) for [`ara_crowd::FlowField::build`]. WORKER/LOAD TIME.
+    pub fn walk_grid(
+        &self,
+        min: [f32; 2],
+        max: [f32; 2],
+        cell: f32,
+    ) -> Result<ara_crowd::WalkGrid, crate::NavError> {
+        let mut grid = ara_crowd::WalkGrid::new(min, max, cell)
+            .map_err(|e| crate::NavError::new("invalidGrid", e.0))?;
+        let triangles: Vec<[[f32; 3]; 3]> = self
+            .native()
+            .debug()
+            .iter()
+            .map(|t| [t.a, t.b, t.c])
+            .collect();
+        grid.rasterize(&triangles, 1);
+        Ok(grid)
+    }
+}

@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             min: [30.0, -1.0, 30.0],
             max: [32.0, 2.0, 32.0],
         },
+        area: Obstacle::CARVE,
     });
     let start = Instant::now();
     let changed = baker.bake(&input, Some(&artifact))?;

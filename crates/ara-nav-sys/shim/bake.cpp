@@ -57,7 +57,9 @@ extern "C" int an_bake(const AnConfig* input, const float* verts, int nv,
             std::memcpy(lo, boxes[i].min, sizeof(lo)); std::memcpy(hi, boxes[i].max, sizeof(hi));
             for (int axis : {0, 2}) { lo[axis] -= input->radius; hi[axis] += input->radius; }
             lo[1] -= input->height;
-            rcMarkBoxArea(&ctx, lo, hi, RC_NULL_AREA, *chf);
+            // Walkable spans store area + 1 until the final decrement below.
+            const unsigned char area = boxes[i].area == 255 ? RC_NULL_AREA : static_cast<unsigned char>(boxes[i].area + 1);
+            rcMarkBoxArea(&ctx, lo, hi, area, *chf);
         }
         if (!rcBuildDistanceField(&ctx, *chf) || !rcBuildRegions(&ctx, *chf, c.borderSize, 0, 0)) return 6;
         if (!rcBuildContours(&ctx, *chf, c.maxSimplificationError, c.maxEdgeLen, *contours)) return 7;

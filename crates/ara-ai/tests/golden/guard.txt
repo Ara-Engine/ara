@@ -1,0 +1,7 @@
+00001 #1 - -> Patrol (start)
+00195 #1 Patrol -> GoTo (select)
+00586 #1 GoTo -> LookAround (done)
+00707 #1 LookAround -> Patrol (done)
+02717 #1 Patrol -> Chase (select)
+02912 #1 Chase -> Search (select)
+03212 #1 Search -> Patrol (select)
