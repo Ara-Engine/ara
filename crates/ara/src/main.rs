@@ -140,8 +140,13 @@ enum Command {
         #[arg(long)]
         stdio: bool,
     },
-    /// Serve MCP on stdio (uses the daemon, or becomes it).
+    /// Serve global MCP through Ara Hub; --root retains per-project mode.
     Mcp,
+    /// Manage the user-level Ara Hub and global MCP installation.
+    Hub {
+        #[command(subcommand)]
+        command: commands::hub::HubCommand,
+    },
     /// Run one command as a transaction: `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500 --why "Dimmer crate light"`.
     Do {
         /// Command name (`entity.create`; list them with `ara schema`). Without one,
@@ -459,7 +464,11 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
         Command::Serve { port, stdio } => {
             commands::serve(&project::root(root_flag, &[])?, port, stdio, json).map_err(io)
         }
-        Command::Mcp => commands::mcp(&project::root(root_flag, &[])?).map_err(io),
+        Command::Mcp => match root_flag {
+            Some(root) => commands::mcp(&project::root(Some(root), &[])?).map_err(io),
+            None => commands::hub::global_mcp().map_err(io),
+        },
+        Command::Hub { command } => commands::hub::hub(command).map_err(io),
         other => {
             let root = project::root(root_flag, &[])?;
             match protocol_call(other) {
