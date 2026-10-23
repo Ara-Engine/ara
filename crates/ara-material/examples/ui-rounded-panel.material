@@ -1,0 +1,9 @@
+material gr_panel RoundedPanel : ui budget 1 {
+  param n_color panelColor : ColorLinear = [0.025, 0.04, 0.07];
+  param n_radius radius : float = [12];
+  param n_size size : vec2 = [320, 160];
+  let n_mask coverage : float = roundedPanel(uv0, size, radius);
+  let n_uv uv0 : vec2 = uv();
+  output color = panelColor;
+  output opacity = coverage;
+}

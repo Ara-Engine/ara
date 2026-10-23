@@ -1,0 +1,181 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_screen",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "unlit",
+        "functions": {},
+        "name": "EmissiveScreen",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_gain": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [3],
+        "variants": []
+      },
+      "payload": {
+        "name": "intensity",
+        "ty": "float"
+      }
+    },
+    "n_glow": {
+      "kind": "material.mul",
+      "ports": {
+        "in0": {
+          "ty": "ColorLinear",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "float",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "glow",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "color": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "opacity": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "n_sample": {
+      "kind": "material.sampleColor",
+      "ports": {
+        "in0": {
+          "ty": "TextureColor",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "image",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_screen": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureColor",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [4],
+        "variants": []
+      },
+      "payload": {
+        "name": "screen",
+        "ty": "TextureColor"
+      }
+    },
+    "n_uv": {
+      "kind": "material.uv",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "uv0",
+        "ty": "vec2"
+      }
+    },
+    "w_1b028719d78fa7ce3b15": {
+      "from": {
+        "node": "n_glow",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "color"
+      }
+    },
+    "w_491a8795bb4e7bbfee99": {
+      "from": {
+        "node": "n_gain",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_glow",
+        "port": "in1"
+      }
+    },
+    "w_561da71cb233827eb116": {
+      "from": {
+        "node": "n_uv",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_sample",
+        "port": "in1"
+      }
+    },
+    "w_8760c6f11419b3c0d5c2": {
+      "from": {
+        "node": "n_screen",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_sample",
+        "port": "in0"
+      }
+    },
+    "w_ea48b0aaaed5433705a5": {
+      "from": {
+        "node": "n_sample",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_glow",
+        "port": "in0"
+      }
+    }
+  }
+}

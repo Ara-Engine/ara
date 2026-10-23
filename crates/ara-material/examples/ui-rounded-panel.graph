@@ -1,0 +1,180 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_panel",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "ui",
+        "functions": {},
+        "name": "RoundedPanel",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_color": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.025, 0.04, 0.07],
+        "variants": []
+      },
+      "payload": {
+        "name": "panelColor",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_mask": {
+      "kind": "material.roundedPanel",
+      "ports": {
+        "in0": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in2": {
+          "ty": "float",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "coverage",
+        "ty": "float"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "clip": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "color": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "opacity": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "n_radius": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [12],
+        "variants": []
+      },
+      "payload": {
+        "name": "radius",
+        "ty": "float"
+      }
+    },
+    "n_size": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [320, 160],
+        "variants": []
+      },
+      "payload": {
+        "name": "size",
+        "ty": "vec2"
+      }
+    },
+    "n_uv": {
+      "kind": "material.uv",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "uv0",
+        "ty": "vec2"
+      }
+    },
+    "w_1b028719d78fa7ce3b15": {
+      "from": {
+        "node": "n_color",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "color"
+      }
+    },
+    "w_aa93eff7ff9947dda76e": {
+      "from": {
+        "node": "n_uv",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_mask",
+        "port": "in0"
+      }
+    },
+    "w_e22553c63e388c62fbca": {
+      "from": {
+        "node": "n_size",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_mask",
+        "port": "in1"
+      }
+    },
+    "w_ea89190a634e172aded7": {
+      "from": {
+        "node": "n_mask",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "opacity"
+      }
+    },
+    "w_f9b1b0fed26b1cb7a9b6": {
+      "from": {
+        "node": "n_radius",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_mask",
+        "port": "in2"
+      }
+    }
+  }
+}

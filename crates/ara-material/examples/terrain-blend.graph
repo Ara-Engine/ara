@@ -1,0 +1,426 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_terrain",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "surface",
+        "functions": {},
+        "name": "TerrainBlend",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_a": {
+      "kind": "material.triplanar",
+      "ports": {
+        "in0": {
+          "ty": "TextureColor",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec3",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in2": {
+          "ty": "vec3",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in3": {
+          "ty": "float",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "grassColor",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_b": {
+      "kind": "material.triplanar",
+      "ports": {
+        "in0": {
+          "ty": "TextureColor",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec3",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in2": {
+          "ty": "vec3",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in3": {
+          "ty": "float",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "rockColor",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_color": {
+      "kind": "material.lerp",
+      "ports": {
+        "in0": {
+          "ty": "ColorLinear",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "ColorLinear",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in2": {
+          "ty": "float",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "terrainColor",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_grass": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureColor",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [5],
+        "variants": []
+      },
+      "payload": {
+        "name": "grass",
+        "ty": "TextureColor"
+      }
+    },
+    "n_mix": {
+      "kind": "material.noise",
+      "ports": {
+        "in0": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "blend",
+        "ty": "float"
+      }
+    },
+    "n_normal": {
+      "kind": "material.worldNormal",
+      "ports": {
+        "out": {
+          "ty": "vec3",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "normal",
+        "ty": "vec3"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "baseColor": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "clearCoat": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "clearCoatRoughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "emissive": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "metallic": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "normal": {
+          "ty": "vec3",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "roughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "transmission": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "n_rock": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureColor",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [6],
+        "variants": []
+      },
+      "payload": {
+        "name": "rock",
+        "ty": "TextureColor"
+      }
+    },
+    "n_rough": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.85]
+      },
+      "payload": {
+        "name": "roughness",
+        "ty": "float"
+      }
+    },
+    "n_scale": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.25],
+        "variants": []
+      },
+      "payload": {
+        "name": "scale",
+        "ty": "float"
+      }
+    },
+    "n_uv": {
+      "kind": "material.uv",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "uv0",
+        "ty": "vec2"
+      }
+    },
+    "n_world": {
+      "kind": "material.worldPosition",
+      "ports": {
+        "out": {
+          "ty": "vec3",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "world",
+        "ty": "vec3"
+      }
+    },
+    "w_056c22e051a089386693": {
+      "from": {
+        "node": "n_mix",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_color",
+        "port": "in2"
+      }
+    },
+    "w_069e167c4b17182a2897": {
+      "from": {
+        "node": "n_a",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_color",
+        "port": "in0"
+      }
+    },
+    "w_0b0e1a0eb147a703349d": {
+      "from": {
+        "node": "n_normal",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a",
+        "port": "in2"
+      }
+    },
+    "w_203765ef86ad3e2f2441": {
+      "from": {
+        "node": "n_world",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a",
+        "port": "in1"
+      }
+    },
+    "w_4dcd086bde51acb50e0d": {
+      "from": {
+        "node": "n_normal",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_b",
+        "port": "in2"
+      }
+    },
+    "w_5c0f859f1ac0b132b75d": {
+      "from": {
+        "node": "n_scale",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_b",
+        "port": "in3"
+      }
+    },
+    "w_5e62ad6ead084ca2dacf": {
+      "from": {
+        "node": "n_world",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_b",
+        "port": "in1"
+      }
+    },
+    "w_9671402b226db595804b": {
+      "from": {
+        "node": "n_rough",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "roughness"
+      }
+    },
+    "w_99c58bacfebda199e51d": {
+      "from": {
+        "node": "n_rock",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_b",
+        "port": "in0"
+      }
+    },
+    "w_9eb4d3f459919fa5ca98": {
+      "from": {
+        "node": "n_scale",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a",
+        "port": "in3"
+      }
+    },
+    "w_b7ab1c23f4603bb6e959": {
+      "from": {
+        "node": "n_color",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "baseColor"
+      }
+    },
+    "w_db77c01479138b31aa2d": {
+      "from": {
+        "node": "n_grass",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a",
+        "port": "in0"
+      }
+    },
+    "w_edace3f8a68b7d7c901f": {
+      "from": {
+        "node": "n_b",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_color",
+        "port": "in1"
+      }
+    },
+    "w_f429a55a44568d2394b2": {
+      "from": {
+        "node": "n_uv",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_mix",
+        "port": "in0"
+      }
+    }
+  }
+}

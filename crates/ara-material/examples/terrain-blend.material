@@ -1,0 +1,15 @@
+material gr_terrain TerrainBlend : surface budget 1 {
+  param n_grass grass : TextureColor = [5];
+  param n_rock rock : TextureColor = [6];
+  param n_scale scale : float = [0.25];
+  let n_a grassColor : ColorLinear = triplanar(grass, world, normal, scale);
+  let n_b rockColor : ColorLinear = triplanar(rock, world, normal, scale);
+  let n_color terrainColor : ColorLinear = lerp(grassColor, rockColor, blend);
+  let n_mix blend : float = noise(uv0);
+  let n_normal normal : vec3 = worldNormal();
+  let n_rough roughness : float = [0.85];
+  let n_uv uv0 : vec2 = uv();
+  let n_world world : vec3 = worldPosition();
+  output baseColor = terrainColor;
+  output roughness = roughness;
+}

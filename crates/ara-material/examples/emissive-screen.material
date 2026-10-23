@@ -1,0 +1,8 @@
+material gr_screen EmissiveScreen : unlit budget 1 {
+  param n_gain intensity : float = [3];
+  param n_screen screen : TextureColor = [4];
+  let n_glow glow : ColorLinear = mul(image, intensity);
+  let n_sample image : ColorLinear = sampleColor(screen, uv0);
+  let n_uv uv0 : vec2 = uv();
+  output color = glow;
+}

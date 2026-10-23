@@ -1,0 +1,14 @@
+material gr_carpaint CarPaint : surface budget 2 {
+  custom coat(value: float) -> float cost [0, 2, 0] doc "Bound clear-coat coverage without exposing lighting internals." slang "return saturate(value);";
+  param n_coat coatEnabled : float = [1] variants [[0], [1]];
+  param n_color paint : ColorLinear = [0.02, 0.06, 0.4];
+  param n_rough roughness : float = [0.22];
+  let n_clear clear : float = custom.coat(coatEnabled);
+  let n_coatr coatRoughness : float = [0.08];
+  let n_metal metal : float = [0.9];
+  output baseColor = paint;
+  output clearCoat = clear;
+  output clearCoatRoughness = coatRoughness;
+  output metallic = metal;
+  output roughness = roughness;
+}

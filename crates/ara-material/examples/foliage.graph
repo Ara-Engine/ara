@@ -1,0 +1,299 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_foliage",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "surface",
+        "functions": {},
+        "name": "Foliage",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_albedo": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureColor",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [2],
+        "variants": []
+      },
+      "payload": {
+        "name": "albedo",
+        "ty": "TextureColor"
+      }
+    },
+    "n_alpha": {
+      "kind": "material.alpha",
+      "ports": {
+        "in0": {
+          "ty": "vec4",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "leafMask",
+        "ty": "float"
+      }
+    },
+    "n_color": {
+      "kind": "material.sampleColor",
+      "ports": {
+        "in0": {
+          "ty": "TextureColor",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "leafColor",
+        "ty": "ColorLinear"
+      }
+    },
+    "n_data": {
+      "kind": "material.sampleData",
+      "ports": {
+        "in0": {
+          "ty": "TextureData",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "vec4",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "leafData",
+        "ty": "vec4"
+      }
+    },
+    "n_mask": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureData",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [3],
+        "variants": []
+      },
+      "payload": {
+        "name": "mask",
+        "ty": "TextureData"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "baseColor": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "clearCoat": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "clearCoatRoughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "emissive": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "metallic": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "normal": {
+          "ty": "vec3",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "roughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "transmission": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "n_rough": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.7]
+      },
+      "payload": {
+        "name": "roughness",
+        "ty": "float"
+      }
+    },
+    "n_trans": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.65],
+        "variants": []
+      },
+      "payload": {
+        "name": "transmission",
+        "ty": "float"
+      }
+    },
+    "n_uv": {
+      "kind": "material.uv",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "uv0",
+        "ty": "vec2"
+      }
+    },
+    "w_069e167c4b17182a2897": {
+      "from": {
+        "node": "n_albedo",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_color",
+        "port": "in0"
+      }
+    },
+    "w_3019f8a267a58bf9f1ea": {
+      "from": {
+        "node": "n_trans",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "transmission"
+      }
+    },
+    "w_89cfab03b12f2c4aa089": {
+      "from": {
+        "node": "n_data",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_alpha",
+        "port": "in0"
+      }
+    },
+    "w_9671402b226db595804b": {
+      "from": {
+        "node": "n_rough",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "roughness"
+      }
+    },
+    "w_9d2d74f1cfe64081bd1e": {
+      "from": {
+        "node": "n_alpha",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "opacityMask"
+      }
+    },
+    "w_b7ab1c23f4603bb6e959": {
+      "from": {
+        "node": "n_color",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "baseColor"
+      }
+    },
+    "w_bb3ff7c60647503584a0": {
+      "from": {
+        "node": "n_mask",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_data",
+        "port": "in0"
+      }
+    },
+    "w_e22d3eae26d03b5dcefb": {
+      "from": {
+        "node": "n_uv",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_data",
+        "port": "in1"
+      }
+    },
+    "w_edace3f8a68b7d7c901f": {
+      "from": {
+        "node": "n_uv",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_color",
+        "port": "in1"
+      }
+    }
+  }
+}
