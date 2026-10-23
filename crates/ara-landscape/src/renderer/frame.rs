@@ -1,0 +1,112 @@
+use super::*;
+impl Landscape {
+    /// Export images for host composition and fidelity/lighting integration.
+    pub fn outputs(&self) -> Outputs {
+        Outputs {
+            color: self.color,
+            depth: self.depth,
+            shadow: self.shadow,
+            hzb: self.hzb,
+        }
+    }
+    /// Number of persistent input instances; visible counts stay on the GPU.
+    pub fn instance_count(&self) -> u32 {
+        self.count
+    }
+    /// Detailed page count stays fixed at 256, with an always-resident coarse fallback.
+    pub fn detail_page_capacity(&self) -> u32 {
+        PAGE_CAPACITY
+    }
+    /// Stage one completed tile at a user-permitted boundary; at most 13 KiB of
+    /// sample data per frame. This performs no file I/O.
+    /// Caller must first reject stale revisions and finish this frame slot's GPU use.
+    pub fn queue_tile(
+        &mut self,
+        gpu: &VulkanDevice,
+        coord: ara_terrain::TileCoord,
+        tile: &ara_terrain::Tile,
+        allowed: bool,
+    ) -> Result<bool> {
+        if !allowed || self.pending_uploads as usize >= UPLOAD_BUDGET {
+            return Ok(false);
+        }
+        // Publish one tile per frame to keep page-table replacement and payload
+        // writes disjoint even when the cache reuses an evicted slot immediately.
+        if self.pending_uploads != 0 {
+            return Ok(false);
+        }
+        self.upload_words.clear();
+        let old_next = self.pages.next;
+        let slot = self
+            .pages
+            .owners
+            .iter()
+            .position(|c| *c == Some(coord))
+            .unwrap_or(old_next);
+        let old_owner = self.pages.owners[slot];
+        self.pages.upload(coord, tile, &mut self.upload_words)?;
+        if let Err(e) = gpu.upload(self.upload, bytemuck::cast_slice(&self.upload_words)) {
+            self.pages.owners[slot] = old_owner;
+            self.pages.next = old_next;
+            return Err(e.into());
+        }
+        self.pending_uploads = 1;
+        Ok(true)
+    }
+    /// Upload explicit frame state after this frame slot's previous submission completes.
+    pub fn update(&self, gpu: &VulkanDevice, view: &View) -> Result<()> {
+        ensure!(
+            view.eye.is_finite()
+                && view.target.is_finite()
+                && view.sun.is_finite()
+                && view.sun_color.is_finite()
+                && view.dt.is_finite()
+                && view.dt > 0.
+                && view.dt <= 1.
+                && view.sun.length_squared() > 0.01
+                && view.eye.distance_squared(view.target) > 0.01,
+            "invalid landscape view"
+        );
+        let forward = (view.target - view.eye).normalize();
+        let camera_up = if forward.dot(Vec3::Y).abs() > 0.99 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+        let sun = view.sun.normalize();
+        let sun_up = if sun.dot(Vec3::Y).abs() > 0.99 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+        let vp = Mat4::perspective_infinite_reverse_rh(
+            60f32.to_radians(),
+            self.size[0] as f32 / self.size[1] as f32,
+            0.5,
+        ) * Mat4::look_at_rh(view.eye, view.target, camera_up);
+        let center = view.eye + (view.target - view.eye).normalize() * 350.;
+        let light_vp = Mat4::orthographic_rh(-650., 650., -650., 650., 1800., 0.1)
+            * Mat4::look_at_rh(center + sun * 1200., center, sun_up);
+        let frame = Frame {
+            vp,
+            light_vp,
+            inverse_vp: vp.inverse(),
+            camera: view.eye.extend(0.).to_array(),
+            sun: sun.extend(0.).to_array(),
+            sun_color: view.sun_color.extend(0.).to_array(),
+            grid: [self.side, self.cells, self.tiles, self.count],
+            extent: [self.size[0], self.size[1], view.tick, self.pending_uploads],
+            indices: [self.slots[1], self.slots[2], self.slots[3], self.slots[4]],
+            more: [self.slots[5], self.slots[6], self.slots[7], self.slots[8]],
+            params: [
+                self.spacing,
+                view.dt * view.tick as f32,
+                self.image_slots[2] as f32,
+                self.image_slots[3] as f32,
+            ],
+            geometry: [u32::from(self.geometry.is_some()), self.geometry_slot, 0, 0],
+        };
+        gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        Ok(())
+    }
+}

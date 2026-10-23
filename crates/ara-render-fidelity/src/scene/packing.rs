@@ -132,7 +132,11 @@ pub(super) fn pack(
         material_offset,
         light_offset,
         s.lights.len() as u32,
-        0,
+        u32::from(
+            s.meshes
+                .iter()
+                .all(|mesh| materials[mesh.material].flags[0] == 0),
+        ),
         0,
         0,
         0,

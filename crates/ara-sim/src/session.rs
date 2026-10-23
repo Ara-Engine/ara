@@ -51,6 +51,9 @@ pub struct TickRecord {
     pub commands: Vec<BoundaryCommand>,
     /// Committed authoring ops applied before gameplay systems.
     pub ops: Vec<Op>,
+    /// Host streaming arrivals actually applied before this tick's systems.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub streaming: Vec<crate::StreamChange>,
     /// Hash after this tick; absent when history/hash sampling is disabled.
     pub hash: Option<StateHash>,
 }
@@ -237,6 +240,17 @@ impl Session {
     pub fn projection(&self) -> &EditWorld {
         &self.edit
     }
+    /// Complete startup schema shared by runtime codecs and optional adapters.
+    pub fn schema(&self) -> &ara_schema::SchemaDb {
+        self.edit.registry.schema()
+    }
+    /// Reads one registered component through a tick-stable entity handle.
+    /// Adapters resolve identities once per boundary instead of rescanning per field.
+    pub fn component_at(&self, entity: Entity, name: &str) -> Result<Option<Value>> {
+        self.edit
+            .registry
+            .read(self.world(), &self.edit.ids, entity, name)
+    }
     /// Resolves a stable authored or runtime identity, including spawned test entities.
     pub fn entity(&self, identity: &str) -> Option<Entity> {
         self.world()
@@ -254,9 +268,7 @@ impl Session {
         let entity = self
             .entity(identity)
             .ok_or_else(|| SimError(format!("unknown entity {identity}")))?;
-        self.edit
-            .registry
-            .read(self.world(), &self.edit.ids, entity, name)
+        self.component_at(entity, name)
     }
 
     /// Writes registered gameplay data during setup or a controlled simulation boundary.
@@ -358,19 +370,32 @@ impl Session {
     /// Executes exactly one fixed boundary, independently of a host clock.
     /// A handler/patch failure faults the session; restore a checkpoint before continuing.
     pub fn step(&mut self) -> Result<TickRecord> {
+        self.step_with_streaming(|_| Ok(()))
+    }
+
+    /// Runs bounded host activation at a fixed boundary, before gameplay systems.
+    /// The host owns timing decisions; recorded changes make replay independent of
+    /// worker completion and frame timing. Errors fault the session like any command.
+    pub fn step_with_streaming(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<TickRecord> {
         if let Some(error) = &self.fault {
             return Err(SimError(format!(
                 "session is faulted; restore a checkpoint: {error}"
             )));
         }
-        let result = self.step_inner();
+        let result = self.step_inner(activate);
         if let Err(error) = &result {
             self.fault = Some(error.clone());
         }
         result
     }
 
-    fn step_inner(&mut self) -> Result<TickRecord> {
+    fn step_inner(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<TickRecord> {
         let tick = self
             .tick()
             .checked_add(1)
@@ -406,6 +431,12 @@ impl Session {
             true
         });
         self.edit.apply_ops(&ops)?;
+        let mut streaming = Vec::new();
+        activate(&mut crate::StreamingBoundary {
+            edit: &mut self.edit,
+            changes: &mut streaming,
+            recording: self.record_hashes,
+        })?;
         {
             let mut context = self.edit.world.resource_mut::<SimContext>();
             context.inputs.apply(&self.actions, tick, &inputs)?;
@@ -443,6 +474,7 @@ impl Session {
             inputs,
             commands,
             ops,
+            streaming,
             hash,
         })
     }

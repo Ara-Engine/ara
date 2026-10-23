@@ -1,0 +1,36 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521",
+  "stages": [
+    {
+      "dxil": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/terrainColor.dxil",
+      "dxil_hash": "08b64c9db29c7eb0dfb0020d56fd384ad0dac23ccf081b5807fe3cf34b2c427c",
+      "source_entry": "terrainColor",
+      "spirv": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/terrainColor.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "73dd7f8f684c1ecf0385cd8911aaa43c398c771672c0606e8bd7b166f467aa9b",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/terrainVertex.dxil",
+      "dxil_hash": "d0587812f31f87cd1b625d05d967fadb9f830906c0b8cf119b8e89dba2788f3f",
+      "source_entry": "terrainVertex",
+      "spirv": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/terrainVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "689622c0c9a8795bcaaf29f0d8d3da22747f3600cee2c48540b6b7975cb62d2d",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      37
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

@@ -8,6 +8,7 @@
 mod command;
 mod context;
 mod dynamic;
+mod feature;
 mod fixed;
 mod persistent;
 mod play;
@@ -17,6 +18,7 @@ mod registry;
 mod session;
 mod snapshot;
 mod source;
+mod streaming;
 
 pub use ara_input as input;
 pub use bevy_ecs;
@@ -34,6 +36,7 @@ pub fn initialize_compute_pool(workers: std::num::NonZeroUsize) -> usize {
 pub use command::{CommandContext, SimCommand};
 pub use context::{SimContext, StreamRng};
 pub use dynamic::{DynamicLayout, LayoutField};
+pub use feature::{PredictionKey, SimulationFeature};
 pub use fixed::{Clock, FixedTick, FrameAdvance, TickConfig};
 pub use persistent::{PersistenceSelection, PersistentCursor, PersistentEntity, PersistentState};
 pub use play::{PlayControl, PlayState, Sample, StepInput, StepReport, Watch};
@@ -42,6 +45,7 @@ pub use provider::{StateProvider, TrustedState};
 pub use registry::SimRegistry;
 pub use session::{BoundaryCommand, Session, SessionAdapter, SessionMode, TickRecord};
 pub use snapshot::{Replay, Snapshot, StateHash};
+pub use streaming::{PreparedStreamEntity, StreamChange, StreamingBoundary};
 
 /// A rejected simulation operation, with a stable readable description.
 #[derive(Debug, Clone, PartialEq, Eq)]

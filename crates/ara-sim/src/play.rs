@@ -340,7 +340,12 @@ impl PlayControl {
                 self.session
                     .pending_ops
                     .insert(expected.tick, expected.ops.clone());
-                let actual = self.session.step()?;
+                let actual = self.session.step_with_streaming(|boundary| {
+                    for change in &expected.streaming {
+                        boundary.replay(change.clone())?;
+                    }
+                    Ok(())
+                })?;
                 if actual.hash != expected.hash {
                     return Err(SimError(format!(
                         "replay state mismatch at tick {}: expected {:?}, got {:?}",
