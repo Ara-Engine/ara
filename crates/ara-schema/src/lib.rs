@@ -10,6 +10,8 @@
 //! - [`Validator`] checks values; [`SchemaDb::canonical_value`] gives the canonical
 //!   (default-free, reflection-ordered) form; [`FieldPath`] addresses data inside
 //!   records.
+//! - [`SchemaDb::struct_layout`] gives the canonical C layout of blittable structs,
+//!   which ECS columns and generated C# bindings share.
 //!
 //! Type identity is the stable PascalCase name plus aliases for renames; `version` and
 //! an upgrade hook carry stored data forward.
@@ -19,6 +21,7 @@ mod db;
 mod desc;
 pub mod grammar;
 mod jsonschema;
+mod layout;
 pub mod path;
 mod reflect;
 mod traits;
@@ -32,6 +35,7 @@ pub use desc::{
     Shape, StructRole, TypeDesc, Unit, UpgradeFn, VariantDesc,
 };
 pub use jsonschema::DIALECT;
+pub use layout::{FieldLayout, StructLayout, ValueLayout};
 pub use path::{FieldPath, Resolved, Segment, Step};
 pub use reflect::{REFLECTION_SCHEMA, TYPES_SCHEMA, type_from_json};
 pub use traits::{AssetRef, Color, EntityRef, FieldType, Quat, Schema};

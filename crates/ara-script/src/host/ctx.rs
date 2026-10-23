@@ -1,0 +1,280 @@
+//! The host side of `HostApi`: the context C# reaches through `HostInit::ctx`, and the
+//! `extern "C"` functions it calls.
+//!
+//! World access from C# (`World.Get<T>()`, registration) is only possible inside an
+//! exclusive [`Scope`], which the host publishes for the duration of a behaviour phase,
+//! a command or a tick boundary, on the thread that runs it.
+
+use core::ffi::c_void;
+use std::collections::BTreeSet;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::thread::ThreadId;
+use std::time::Instant;
+
+use ara_diag::Diagnostic;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
+
+use crate::abi::{HostApi, ReloadReport};
+use crate::codes;
+use crate::ecs::cmdbuf::{CmdBuf, Op};
+use crate::host::registry::Registry;
+
+/// Receives C# log lines: level (0 info, 1 warning, 2 error) and text.
+pub type LogSink = Box<dyn Fn(u32, &str) + Send + Sync>;
+
+/// Component writes a command made, for undo and rejection: first-seen bytes per
+/// `(entity, script component)`.
+#[derive(Default)]
+pub(crate) struct Journal {
+    pub seen: BTreeSet<(u64, u32)>,
+    pub before: Vec<(u64, u32, Vec<u8>)>,
+}
+
+/// Exclusive access published to C# callbacks.
+pub(crate) struct Scope<'w> {
+    pub world: UnsafeWorldCell<'w>,
+    pub registry: *mut Registry,
+    pub journal: Option<*mut Journal>,
+    pub thread: ThreadId,
+    /// `register_module` is allowed (load and tick boundary only).
+    pub register: bool,
+}
+
+/// State C# reaches through `HostInit::ctx`. Lives in a `Box` owned by the
+/// `ScriptHost`, so its address is stable for the runtime's lifetime.
+pub(crate) struct HostCtx {
+    pub start: Instant,
+    pub diagnostics: Mutex<Vec<Diagnostic>>,
+    pub reloads: Mutex<Vec<ReloadReport>>,
+    pub log: LogSink,
+    pub scope: AtomicPtr<Scope<'static>>,
+    pub boost: crate::boost::Boost,
+}
+
+impl HostCtx {
+    pub fn new(log: LogSink) -> Self {
+        HostCtx {
+            start: Instant::now(),
+            diagnostics: Mutex::new(Vec::new()),
+            reloads: Mutex::new(Vec::new()),
+            log,
+            scope: AtomicPtr::new(std::ptr::null_mut()),
+            boost: crate::boost::Boost::default(),
+        }
+    }
+
+    /// Records a diagnostic (any thread).
+    pub fn report(&self, d: Diagnostic) {
+        if let Ok(mut v) = self.diagnostics.lock() {
+            v.push(d);
+        }
+    }
+
+    /// Runs `f` with `scope` published to C# callbacks on this thread.
+    pub fn with_scope<R>(&self, scope: &mut Scope<'_>, f: impl FnOnce() -> R) -> R {
+        struct Reset<'a>(&'a AtomicPtr<Scope<'static>>);
+        impl Drop for Reset<'_> {
+            fn drop(&mut self) {
+                self.0.store(std::ptr::null_mut(), Ordering::Release);
+            }
+        }
+        self.scope.store(std::ptr::from_mut(scope).cast::<Scope<'static>>(), Ordering::Release);
+        let _reset = Reset(&self.scope);
+        f()
+    }
+
+    /// The published scope, if this thread owns it.
+    fn current(&self) -> Option<&mut Scope<'static>> {
+        let p = self.scope.load(Ordering::Acquire);
+        // SAFETY: a non-null pointer is a live `Scope` published by `with_scope`, which
+        // outlives the callback; only its owning thread (checked below) dereferences it,
+        // and C# callbacks on that thread are never re-entrant with each other.
+        let scope = unsafe { p.as_mut() }?;
+        (scope.thread == std::thread::current().id()).then_some(scope)
+    }
+
+    /// The `HostApi` table pointing at this module's functions.
+    pub fn api() -> HostApi {
+        HostApi {
+            log: host_log,
+            now_ns: host_now_ns,
+            diagnostic: host_diagnostic,
+            report_reload: host_report_reload,
+            register_module: host_register_module,
+            component_ptr: host_component_ptr,
+            resource_ptr: host_resource_ptr,
+            entity_alive: host_entity_alive,
+            reserve_entity: host_reserve_entity,
+            cmd_push: host_cmd_push,
+            compile_state: host_compile_state,
+        }
+    }
+}
+
+/// # Safety
+/// `ctx` must be the `HostCtx` pointer from `HostInit`, which outlives the runtime.
+unsafe fn ctx<'a>(ctx: *mut c_void) -> &'a HostCtx {
+    // SAFETY: guaranteed by the caller.
+    unsafe { &*ctx.cast::<HostCtx>() }
+}
+
+/// # Safety
+/// `ptr`/`len` must describe readable bytes (or `len == 0`).
+unsafe fn bytes<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
+    if len == 0 || ptr.is_null() {
+        return &[];
+    }
+    // SAFETY: guaranteed by the caller.
+    unsafe { std::slice::from_raw_parts(ptr, len as usize) }
+}
+
+unsafe extern "C" fn host_log(c: *mut c_void, level: u32, msg: *const u8, len: u32) {
+    // SAFETY: C# passes back the ctx it was given and a valid UTF-8 span.
+    let (c, msg) = unsafe { (ctx(c), bytes(msg, len)) };
+    (c.log)(level, &String::from_utf8_lossy(msg));
+}
+
+unsafe extern "C" fn host_now_ns(c: *mut c_void) -> u64 {
+    // SAFETY: C# passes back the ctx it was given.
+    let c = unsafe { ctx(c) };
+    u64::try_from(c.start.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+unsafe extern "C" fn host_diagnostic(c: *mut c_void, json: *const u8, len: u32) {
+    // SAFETY: C# passes back the ctx it was given and a valid UTF-8 span.
+    let (c, json) = unsafe { (ctx(c), bytes(json, len)) };
+    let d = serde_json::from_slice::<Diagnostic>(json).unwrap_or_else(|_| {
+        Diagnostic::error(codes::RUNTIME_START, String::from_utf8_lossy(json).into_owned())
+    });
+    c.report(d);
+}
+
+unsafe extern "C" fn host_report_reload(c: *mut c_void, report: *const ReloadReport) {
+    // SAFETY: C# passes back the ctx it was given and a pointer to a live report.
+    let (c, r) = unsafe { (ctx(c), *report) };
+    if let Ok(mut v) = c.reloads.lock() {
+        v.push(r);
+    }
+}
+
+unsafe extern "C" fn host_register_module(c: *mut c_void, json: *const u8, len: u32, out: *mut u8, cap: u32) -> i32 {
+    // SAFETY: C# passes back the ctx it was given and valid spans.
+    let (c, json) = unsafe { (ctx(c), bytes(json, len)) };
+    let Some(scope) = c.current().filter(|s| s.register) else {
+        c.report(Diagnostic::error(codes::LOAD_FAILED, "register_module called outside load or a tick boundary"));
+        return write_response(br#"{"ok":false}"#, out, cap);
+    };
+    // SAFETY: the scope's world cell has exclusive access (made from `&mut World`) and
+    // its registry pointer is live for the scope; nothing else uses either meanwhile.
+    let (world, registry) = unsafe { (scope.world.world_mut(), &mut *scope.registry) };
+    let response = match registry.register_module(world, json) {
+        Ok(v) => serde_json::to_vec(&v).unwrap_or_default(),
+        Err(problems) => {
+            for p in problems {
+                c.report(p);
+            }
+            br#"{"ok":false}"#.to_vec()
+        }
+    };
+    write_response(&response, out, cap)
+}
+
+fn write_response(bytes: &[u8], out: *mut u8, cap: u32) -> i32 {
+    let len = i32::try_from(bytes.len()).unwrap_or(i32::MAX);
+    if bytes.len() > cap as usize {
+        return -len;
+    }
+    // SAFETY: C# passed a writable buffer of `cap` bytes, and `bytes.len() <= cap`.
+    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
+    len
+}
+
+unsafe extern "C" fn host_component_ptr(c: *mut c_void, entity: u64, component: u32, write: u32) -> *mut u8 {
+    // SAFETY: C# passes back the ctx it was given.
+    let c = unsafe { ctx(c) };
+    let Some(scope) = c.current() else { return std::ptr::null_mut() };
+    // SAFETY: the registry is live for the scope.
+    let registry = unsafe { &*scope.registry };
+    let (Some(e), Some(comp)) = (Entity::try_from_bits(entity), registry.components.get(component as usize)) else {
+        return std::ptr::null_mut();
+    };
+    let Ok(cell) = scope.world.get_entity(e) else { return std::ptr::null_mut() };
+    if write == 0 {
+        // SAFETY: exclusive phase; the pointer is used only until the callback returns.
+        return unsafe { cell.get_by_id(comp.id) }.map_or(std::ptr::null_mut(), |p| p.as_ptr().cast_mut());
+    }
+    // SAFETY: exclusive phase: no Rust reference to this component exists while C# runs.
+    let Ok(m) = (unsafe { cell.get_mut_by_id(comp.id) }) else { return std::ptr::null_mut() };
+    let ptr = m.into_inner().as_ptr();
+    if let Some(journal) = scope.journal {
+        // SAFETY: the journal is live for the scope and only touched on this thread.
+        let journal = unsafe { &mut *journal };
+        if journal.seen.insert((entity, component)) {
+            // SAFETY: `ptr` points at `layout.size` initialized bytes of the component.
+            let before = unsafe { std::slice::from_raw_parts(ptr, comp.layout.size) }.to_vec();
+            journal.before.push((entity, component, before));
+        }
+    }
+    ptr
+}
+
+unsafe extern "C" fn host_resource_ptr(c: *mut c_void, resource: u32, write: u32) -> *mut u8 {
+    // SAFETY: C# passes back the ctx it was given.
+    let c = unsafe { ctx(c) };
+    let Some(scope) = c.current() else { return std::ptr::null_mut() };
+    // SAFETY: the registry is live for the scope.
+    let registry = unsafe { &*scope.registry };
+    let Some(id) = registry.resources.get(resource as usize).and_then(|r| r.id) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: exclusive phase; the pointer is used only until the callback returns.
+    unsafe {
+        if write == 0 {
+            scope.world.get_resource_by_id(id).map_or(std::ptr::null_mut(), |p| p.as_ptr().cast_mut())
+        } else {
+            scope
+                .world
+                .get_resource_mut_by_id(id)
+                .map_or(std::ptr::null_mut(), |m| m.into_inner().as_ptr())
+        }
+    }
+}
+
+unsafe extern "C" fn host_entity_alive(c: *mut c_void, entity: u64) -> u32 {
+    // SAFETY: C# passes back the ctx it was given.
+    let c = unsafe { ctx(c) };
+    let alive = c.current().is_some_and(|s| Entity::try_from_bits(entity).is_some_and(|e| s.world.get_entity(e).is_ok()));
+    u32::from(alive)
+}
+
+unsafe extern "C" fn host_reserve_entity(_c: *mut c_void, buf: *mut c_void) -> u64 {
+    // SAFETY: C# passes a buffer pointer the host gave it for the current call.
+    match unsafe { buf.cast::<CmdBuf>().as_ref() } {
+        Some(b) => b.reserve(),
+        None => crate::value::NULL_ENTITY,
+    }
+}
+
+unsafe extern "C" fn host_cmd_push(
+    _c: *mut c_void,
+    buf: *mut c_void,
+    op: u32,
+    type_index: u32,
+    entity: u64,
+    data: *const u8,
+    len: u32,
+) {
+    // SAFETY: C# passes a buffer pointer the host gave it for the current call, used by
+    // one thread at a time, and a readable data span.
+    let (buf, data) = unsafe { (buf.cast::<CmdBuf>().as_mut(), bytes(data, len)) };
+    if let Some(buf) = buf {
+        buf.ops.push(Op { op, type_index, entity, data: data.to_vec() });
+    }
+}
+
+unsafe extern "C" fn host_compile_state(c: *mut c_void, active: u32) {
+    // SAFETY: C# passes back the ctx it was given.
+    unsafe { ctx(c) }.boost.set(active != 0);
+}

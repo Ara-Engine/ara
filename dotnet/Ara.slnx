@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ara.Runtime/Ara.Runtime.csproj" />
+    <Project Path="src/Ara.Generators/Ara.Generators.csproj" />
+    <Project Path="src/Ara.Host/Ara.Host.csproj" />
+    <Project Path="src/Ara.Analyzers/Ara.Analyzers.csproj" />
+    <Project Path="src/Ara.Analyzers.CodeFixes/Ara.Analyzers.CodeFixes.csproj" />
+    <Project Path="src/Ara.CompileServer/Ara.CompileServer.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Outpost.Sample/Outpost.Sample.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ara.TestModule/Ara.TestModule.csproj" />
+  </Folder>
+</Solution>

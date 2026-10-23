@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A gameplay module used by crates/ara-script/tests: counters, faults, structural commands. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Ara.TestModule</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The same global usings the compile server adds. -->
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Numerics" />
+    <Using Include="Ara" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Ara.Runtime/Ara.Runtime.csproj" />
+    <ProjectReference Include="../../src/Ara.Generators/Ara.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>
