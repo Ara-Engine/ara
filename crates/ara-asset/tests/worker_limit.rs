@@ -4,6 +4,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions, TryLockError},
     path::Path,
+    process::Command,
     thread,
     time::{Duration, Instant},
 };
@@ -43,6 +44,75 @@ fn active(root: &Path) -> std::io::Result<usize> {
     Ok(count)
 }
 
+// Keep the completed import completely unpolled while synchronous discovery
+// needs the same admission slot. The parent watchdog bounds a deadlock failure.
+fn unpolled_admission() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let output = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-asset/worker-limit");
+    fs::create_dir_all(&output)?;
+    let temporary = tempfile::tempdir_in(output)?;
+    let worker = ProcessWorker::new(std::env::current_exe()?).with_arguments([
+        std::ffi::OsStr::new("--worker-fixture"),
+        temporary.path().as_os_str(),
+    ]);
+    let job = worker.start(ImportInput {
+        preset: CookPreset::Fast,
+        thread_budget: 1,
+        source_path: "unpolled.bin".into(),
+        source: vec![31, 41, 59],
+        importer: "fixture".into(),
+        version: "1".into(),
+        settings: serde_json::json!({}),
+        target: TargetPlatform::Windows,
+        dependencies: BTreeMap::new(),
+        asset_dependencies: BTreeMap::new(),
+    })?;
+    let marker = loop {
+        if let Some(entry) = fs::read_dir(temporary.path())?.next() {
+            break entry?;
+        }
+        thread::sleep(Duration::from_millis(2));
+    };
+    while marker.metadata()?.len() == 0 || active(temporary.path())? != 0 {
+        thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(worker.versions()?.get("fixture"), Some(&"1".to_owned()));
+    assert!(
+        worker
+            .discover("fixture", "1", vec![], &Cancellation::default())?
+            .is_empty()
+    );
+    let result = job.wait(&Cancellation::default(), |_| {})?;
+    assert_eq!(result.artifacts[0].bytes, [31, 41, 59]);
+    println!("unpolled completed import permits versions/discovery and retains its result");
+    Ok(())
+}
+
+fn check_unpolled_admission() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut command = Command::new(std::env::current_exe()?);
+    command
+        .arg("--unpolled-admission")
+        .env("ARA_IMPORT_WORKERS", "1");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+    }
+    let mut child = command.spawn()?;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            assert!(status.success(), "unpolled result admission regression");
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            child.kill()?;
+            child.wait()?;
+            panic!("completed unpolled import blocked synchronous worker admission");
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--worker-fixture")) {
         let root = std::env::args_os()
@@ -51,12 +121,18 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         // An OS lock counts live child processes and is released even on kill.
         let marker = File::create(Path::new(&root).join(format!("{}.lock", std::process::id())))?;
         marker.lock()?;
+        // Publish readiness after acquiring the lock, so exit checks cannot race startup.
+        marker.set_len(1)?;
         thread::sleep(Duration::from_millis(200));
         let mut registry = ImporterRegistry::default();
         registry.register(Fixture)?;
         serve_worker(&registry)?;
         return Ok(());
     }
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--unpolled-admission")) {
+        return unpolled_admission();
+    }
+    check_unpolled_admission()?;
     let output = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-asset/worker-limit");
     fs::create_dir_all(&output)?;
     let temporary = tempfile::tempdir_in(output)?;
