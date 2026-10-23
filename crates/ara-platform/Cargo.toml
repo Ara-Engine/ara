@@ -1,0 +1,15 @@
+[package]
+name = "ara-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-gpu = { path = "../ara-gpu" }
+sdl3-sys = { version = "=0.7.2", default-features = false }
+anyhow = "1"
+ash = { git = "https://github.com/ash-rs/ash.git", rev = "f4c2ca3e4f6b998d5254ad101a32f024d87cdec2" }

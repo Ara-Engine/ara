@@ -1,0 +1,23 @@
+[package]
+name = "ara-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-gpu = { path = "../ara-gpu" }
+ara-platform = { path = "../ara-platform" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytemuck = { version = "1.24", features = ["derive"] }
+glam = { version = "0.30", features = ["bytemuck", "serde"] }
+image = { version = "0.25", default-features = false, features = ["png", "hdr", "jpeg"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+gltf = "1.4"
