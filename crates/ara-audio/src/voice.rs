@@ -534,8 +534,9 @@ impl Smooth {
     }
     pub fn set(&mut self, target: f32, frames: u32) {
         self.target = target;
-        self.remaining = frames;
-        if frames == 0 {
+        // A ramp to the current value is a no-op; skipping it keeps fast paths eligible.
+        self.remaining = if target == self.value { 0 } else { frames };
+        if self.remaining == 0 {
             self.value = target;
         } else {
             self.step = (target - self.value) / frames as f32;

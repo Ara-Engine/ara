@@ -4,29 +4,29 @@
       "kind": "bus",
       "name": "master",
       "overloads": 0,
-      "peakDbfs": -17.99624252393627,
-      "rmsDbfs": -32.24518522239907
+      "peakDbfs": -17.994405274476662,
+      "rmsDbfs": -32.24632401233973
     },
     {
       "kind": "bus",
       "name": "sfx",
       "overloads": 0,
-      "peakDbfs": -17.99624252393627,
-      "rmsDbfs": -32.24518522239907
+      "peakDbfs": -17.994405274476662,
+      "rmsDbfs": -32.24632401233973
     },
     {
       "kind": "aux",
       "name": "room",
       "overloads": 0,
-      "peakDbfs": -6.202698050966649,
-      "rmsDbfs": -22.380406202642963
+      "peakDbfs": -6.22134478172593,
+      "rmsDbfs": -22.395012739266548
     }
   ],
-  "channelRms": [0.08126641981796642, 0.07805962109158106],
+  "channelRms": [0.08113591122857133, 0.07794514996224908],
   "clippedSamples": 0,
   "clipping": false,
   "frames": 96000,
-  "integratedLufs": -16.232289201207198,
+  "integratedLufs": -16.239919100095747,
   "occlusion": [
     {
       "air": [0.9979984, 0.98311365, 0.83332855],
@@ -68,8 +68,8 @@
     }
   ],
   "preLimiterOverloads": 0,
-  "rmsDbfs": -21.97310562176761,
-  "samplePeak": 0.48735949397087097,
+  "rmsDbfs": -21.98648350345106,
+  "samplePeak": 0.4870619475841522,
   "sampleRate": 48000,
   "seconds": 2,
   "silenceFraction": 0,
@@ -78,29 +78,29 @@
     {
       "highHz": 125,
       "lowHz": 0,
-      "rmsDbfs": -44.728772839332024
+      "rmsDbfs": -44.7113155448374
     },
     {
       "highHz": 500,
       "lowHz": 125,
-      "rmsDbfs": -38.342338027998785
+      "rmsDbfs": -38.45521271472038
     },
     {
       "highHz": 2000,
       "lowHz": 500,
-      "rmsDbfs": -32.28868076669216
+      "rmsDbfs": -32.40937519571448
     },
     {
       "highHz": 8000,
       "lowHz": 2000,
-      "rmsDbfs": -27.05547553755234
+      "rmsDbfs": -27.057613423723666
     },
     {
       "highHz": 24000,
       "lowHz": 8000,
-      "rmsDbfs": -24.457251053808427
+      "rmsDbfs": -24.455971816919522
     }
   ],
-  "truePeak": 0.4962867200374603,
-  "wavBlake3": "cd48c269b2c0a1fdd3981a8f51196980a42663d4a7056c5d8a8048bdf34ee81f"
+  "truePeak": 0.4959878623485565,
+  "wavBlake3": "8616cb1aac33b26334dabe623a40b195367a88208d075cce448846281f462f9e"
 }

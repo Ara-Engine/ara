@@ -286,19 +286,36 @@ impl Spatializer for StereoPanner {
             }
             return;
         }
+        // With band gains g: out = (g0-g1)·LP(800) + (g1-g2)·LP(8k) + g2·x.
+        let mix = |g: [f32; 3]| [g[0] - g[1], g[1] - g[2], g[2]];
+        if self.left == target_l && self.right == target_r && self.bands == target_bands {
+            // Steady filtered path: no ramps, two independent low-pass chains per sample.
+            let [c0, c1, c2] = mix(target_bands);
+            let (l, r) = (target_l * c2, target_r * c2);
+            let (l0, l1, r0, r1) = (target_l * c0, target_l * c1, target_r * c0, target_r * c1);
+            for (input, frame) in mono.iter().zip(out) {
+                let [low, upper] = self.split.lows(*input);
+                *frame = Frame::new(
+                    l0 * low + l1 * upper + l * input,
+                    r0 * low + r1 * upper + r * input,
+                );
+            }
+            return;
+        }
         let n = mono.len().max(1) as f32;
         let step = |from: f32, to: f32| (to - from) / n;
         let (dl, dr) = (step(self.left, target_l), step(self.right, target_r));
-        let db: [f32; 3] = std::array::from_fn(|b| step(self.bands[b], target_bands[b]));
-        let (mut l, mut r, mut g) = (self.left, self.right, self.bands);
+        let (from, to) = (mix(self.bands), mix(target_bands));
+        let dc: [f32; 3] = std::array::from_fn(|b| step(from[b], to[b]));
+        let (mut l, mut r, mut c) = (self.left, self.right, from);
         for (input, frame) in mono.iter().zip(out) {
             l += dl;
             r += dr;
-            for (gain, delta) in g.iter_mut().zip(db) {
+            for (gain, delta) in c.iter_mut().zip(dc) {
                 *gain += delta;
             }
-            let [low, mid, high] = self.split.split(*input);
-            let sample = g[0] * low + g[1] * mid + g[2] * high;
+            let [low, upper] = self.split.lows(*input);
+            let sample = c[0] * low + c[1] * upper + c[2] * input;
             *frame = Frame::new(sample * l, sample * r);
         }
         self.left = target_l;

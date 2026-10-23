@@ -89,14 +89,62 @@ impl Svf {
     }
 }
 
+/// Bilinear (topology-preserving) one-pole low-pass. The state recursion is one
+/// multiply and one add per sample, so several run in parallel at full throughput.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct OnePole {
+    state: f32,
+    /// G = g / (1 + g), g = tan(π·cutoff / rate).
+    gain: f32,
+}
+
+impl OnePole {
+    /// A filter at rest for `cutoff` Hz (clamped below Nyquist).
+    pub fn new(cutoff: f32, sample_rate: u32) -> Self {
+        let rate = sample_rate.max(1) as f32;
+        let g = (std::f32::consts::PI * cutoff.clamp(1.0, rate * 0.49) / rate).tan();
+        Self {
+            state: 0.0,
+            gain: g / (1.0 + g),
+        }
+    }
+    /// Processes one sample.
+    #[inline]
+    pub fn tick(&mut self, input: f32) -> f32 {
+        let g = self.gain;
+        let y = self.state * (1.0 - g) + input * g;
+        self.state = self.state * (1.0 - 2.0 * g) + input * (2.0 * g);
+        y
+    }
+}
+
+/// A critically damped (Q = 0.5) second-order low-pass: two cascaded bilinear one-poles,
+/// the same response as a Q = 0.5 TPT state-variable filter at a third of its latency.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Lowpass2([OnePole; 2]);
+
+impl Lowpass2 {
+    /// A filter at rest for `cutoff` Hz.
+    pub fn new(cutoff: f32, sample_rate: u32) -> Self {
+        Self([OnePole::new(cutoff, sample_rate); 2])
+    }
+    /// Processes one sample.
+    #[inline]
+    pub fn tick(&mut self, input: f32) -> f32 {
+        let first = self.0[0].tick(input);
+        self.0[1].tick(first)
+    }
+}
+
 /// Three-band splitter with exact reconstruction: `low + mid + high == input`.
 ///
-/// Critically damped (Q = 0.5) low-passes at `low_hz` and `high_hz`, so bands never
-/// overshoot. Band centers follow Steam Audio's 400 Hz / 2.5 kHz / 15 kHz convention.
+/// Two critically damped low-passes at `low_hz` and `high_hz` run in parallel on the
+/// input: `low = LP(low_hz)`, `mid = LP(high_hz) − low`, `high = input − LP(high_hz)`,
+/// so bands never overshoot. Band centers follow Steam Audio's 400 Hz / 2.5 kHz / 15 kHz.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct BandSplit {
-    low: Svf,
-    high: Svf,
+    low: Lowpass2,
+    high: Lowpass2,
 }
 
 impl BandSplit {
@@ -107,16 +155,20 @@ impl BandSplit {
     /// Custom crossover frequencies in Hz.
     pub fn with_crossovers(low_hz: f32, high_hz: f32, sample_rate: u32) -> Self {
         Self {
-            low: Svf::new(SvfCoefficients::new(low_hz, 0.5, sample_rate)),
-            high: Svf::new(SvfCoefficients::new(high_hz, 0.5, sample_rate)),
+            low: Lowpass2::new(low_hz, sample_rate),
+            high: Lowpass2::new(high_hz, sample_rate),
         }
+    }
+    /// The two crossover low-passes `[LP(low_hz), LP(high_hz)]` of one sample. With band
+    /// gains `g`, the output is `(g0−g1)·lp0 + (g1−g2)·lp1 + g2·input`.
+    #[inline]
+    pub fn lows(&mut self, input: f32) -> [f32; 2] {
+        [self.low.tick(input), self.high.tick(input)]
     }
     /// Splits one sample into `[low, mid, high]`.
     #[inline]
     pub fn split(&mut self, input: f32) -> [f32; 3] {
-        let low = self.low.low(input);
-        let rest = input - low;
-        let mid = self.high.low(rest);
-        [low, mid, rest - mid]
+        let [low, upper] = self.lows(input);
+        [low, upper - low, input - upper]
     }
 }

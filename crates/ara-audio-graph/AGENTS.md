@@ -65,7 +65,7 @@ projection round trip through canonical graph JSON, commands with undo.
 `tests/render.rs`: sample-accurate triggers, seeds, zero allocations while rendering,
 RPM/tail behaviour, every op compiles and renders, voices end on `done`, golden
 captures (`tests/golden/*.json`, refresh with `ARA_UPDATE_GOLDENS=1`).
-Per-voice cost: `cargo run -p ara-audio-graph --release --example bench`.
+Per-voice cost: `cargo run -p ara-audio-graph --release --example graph_cost`.
 
 ## Gotchas
 

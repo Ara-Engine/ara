@@ -21,7 +21,6 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 ara-ops = { path = "../ara-ops" }
-ara-json = { path = "../ara-json" }
 
 [lints]
 workspace = true
