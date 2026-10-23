@@ -10,6 +10,8 @@ publish.workspace = true
 anyhow = "1"
 ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-foliage = { path = "../ara-foliage" }
+ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-gpu = { path = "../ara-gpu" }
 ara-landscape = { path = "../ara-landscape" }
 ara-render = { path = "../ara-render" }
@@ -20,6 +22,7 @@ ara-terrain = { path = "../ara-terrain" }
 ara-vfx = { path = "../ara-vfx" }
 ara-vfx-gpu = { path = "../ara-vfx-gpu" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+serde.workspace = true
 serde_json.workspace = true
 glam = "0.34"
 image = { version = "0.25", default-features = false, features = ["png"] }

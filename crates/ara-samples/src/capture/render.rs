@@ -189,7 +189,7 @@ pub fn run(
             None,
         )?;
         configure(gpu, &mut view, look)?;
-        let mut effects = super::vfx::Effects::new(
+        let mut effects = ara_runtime_render::fidelity::vfx::Effects::new(
             gpu,
             options.effects,
             render,
@@ -332,7 +332,7 @@ pub fn run(
 fn strip(
     gpu: &mut VulkanDevice,
     view: &mut FidelityView,
-    effects: &mut super::vfx::Effects,
+    effects: &mut ara_runtime_render::fidelity::vfx::Effects,
     look: &Look,
     sequence: &super::look::Sequence,
     tick: &mut u32,

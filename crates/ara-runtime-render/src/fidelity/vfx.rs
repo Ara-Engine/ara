@@ -1,9 +1,9 @@
-//! The scene's `VisualEffect`s composited into fidelity captures: each cooked library
+//! The scene's `VisualEffect`s composited into fidelity views: each cooked library
 //! effect (ara-vfx-gpu) is stepped to a steady state, drawn over the view's completed
 //! HDR radiance and linear depth with the DDGI probe field as lighting (camera shifted
 //! into the effect's local space), and the view's post stack then runs on the result.
-//! This is the `feature_inputs`/`post_process` seam the fidelity view exposes; the
-//! engine's own captures composite VFX over the raster renderer only.
+//! Uses the view's `feature_inputs`/`post_process` seam so particles share its
+//! exposure, tone mapper and temporal reconstruction.
 use anyhow::{Context, Result};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::scene::CameraSpec;
@@ -16,10 +16,10 @@ use std::{collections::BTreeMap, path::PathBuf};
 const WARM_TICKS: u32 = 150;
 
 fn cooked_root() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../ara-vfx-gpu/cooked"
-    ))
+    ara_gpu::cooked::resource_dir(
+        "ara-vfx-gpu",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-vfx-gpu/cooked"),
+    )
 }
 
 /// Effect systems for one view size.
@@ -27,7 +27,7 @@ pub struct Effects {
     effects: Vec<EffectView>,
     systems: BTreeMap<String, GpuSystem>,
     size: [u32; 2],
-    sun: (glam::Vec3, glam::Vec3),
+    sun: (glam30::Vec3, glam30::Vec3),
 }
 
 impl Effects {
@@ -36,7 +36,7 @@ impl Effects {
         gpu: &mut VulkanDevice,
         effects: &[EffectView],
         size: [u32; 2],
-        sun: (glam::Vec3, glam::Vec3),
+        sun: (glam30::Vec3, glam30::Vec3),
     ) -> Result<Self> {
         let mut systems = BTreeMap::new();
         for effect in effects {
@@ -89,7 +89,7 @@ impl Effects {
             state: inputs.depth.state,
         };
         let lighting = || Lighting {
-            ambient: glam::Vec3::new(0.1, 0.1, 0.12),
+            ambient: glam30::Vec3::new(0.1, 0.1, 0.12),
             sun_direction: self.sun.0,
             sun_color: self.sun.1,
             probes: Some(ProbeLighting {
@@ -106,7 +106,7 @@ impl Effects {
                 .systems
                 .get_mut(&effect.effect)
                 .context("effect system")?;
-            let offset = glam::Vec3::from_array(effect.position);
+            let offset = glam30::Vec3::from_array(effect.position);
             let local = match camera {
                 CameraSpec::LookAt {
                     position,

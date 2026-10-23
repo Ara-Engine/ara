@@ -1634,11 +1634,13 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-doc",
+ "ara-foliage",
  "ara-gpu",
  "ara-importers",
  "ara-input",
  "ara-landscape",
  "ara-render",
+ "ara-render-fidelity",
  "ara-render2d",
  "ara-runtime",
  "ara-schema",
@@ -1650,6 +1652,7 @@ dependencies = [
  "glam 0.30.9",
  "glam 0.34.1",
  "image",
+ "serde",
  "serde_json",
  "texture2ddecoder",
 ]
@@ -1698,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "ara-samples"
-version = "0.0.0"
+version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "ara-anim",

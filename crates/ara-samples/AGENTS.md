@@ -16,7 +16,7 @@ pins them, `fetch` restores them.
 | `fetch [projects]` / `verify [projects]` | resumable, verified download into `<project>/assets/third_party/` (hard links from `samples/.cache/blobs`) / check only |
 | `credits` | regenerate `samples/THIRD_PARTY_ASSETS.md` from the lock |
 | `build outpost\|showcase` | author the project through `ara` (typed command batches via `ara do`), then `ara check` |
-| `capture <project> <look> [--quick]` | fidelity captures + per-pass GPU timings → `<project>/evidence/` |
+| `capture <project> <look> [--quick]` | fidelity captures + per-pass GPU timings → `target/ara-samples/captures/<project>/<look>/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
 | `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `evidence/<name>-editor.png` |
 
@@ -37,20 +37,22 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   `place` (props + separate collider entities, ground sampling, layout shift),
   `kits` (containers, hut, hangar shell, mast, fence, embers, panels…), `anim`
   (locomotion controllers via `AnimationCommand`), `outpost`, `hangar`, `showcase`.
-- `capture/`: `world` (play-host asset pipeline → `Runtime`), `convert` (frame →
-  fidelity snapshot), `atlas` (UV-square materials packed into 4096² pages),
-  `vfx` (cooked effects composited through `feature_inputs`/`post_process`),
+- `capture/`: `world` (play-host asset pipeline → `Runtime`), `convert` (resolves
+  lock/look assets, then calls ara-runtime-render's engine-owned fidelity adapter),
   `render` (shots, upscaled pass, strip, timings), `look` (the per-scene look file).
 - `play`: MCP client over `ara mcp`.
 - `editor`: switches the project's `main` scene for the run (the editor opens only
   `main`), then frames the view from a navigation-only `human` session, because an
   agent session's `editor.camera` moves only its presence marker.
 
+Set `ARA_CAPTURE_OUTPUT_DIR` to opt into another capture destination. Ordinary
+captures leave tracked sample evidence unchanged.
+
 ## Gotchas
 
 - The fidelity view accepts at most 96 textures and 4096 meshes and has no
-  instancing; `convert` merges by material, picks cooked LODs by world-space error
-  and atlases. Dropped maps (only past the atlas) fold into factors.
+  instancing; the engine adapter currently merges by material, picks cooked LODs
+  by world-space error and atlases. Dropped maps fold into factors.
 - Looks hold what scenes cannot (sky/atmosphere, fog, exposure, shots). Keep them
   small; anything a scene can express belongs in the scene.
 - Outpost layout code works in layout coordinates; `outpost::SHIFT` moves the

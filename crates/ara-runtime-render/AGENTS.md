@@ -20,6 +20,12 @@ renderer and per-draw upload state; no simulation, window or process code.
 - Window presentation merges landscape and scene depth on the GPU before particles,
   then runs the shared HDR post pass. `output()` is the final CopySource image.
 - `stats()`: rebuilt flag, meshes updated, CPU prepare time, render time.
+- `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
+  `Content` holds already-resolved terrain layers, foliage rule models, material
+  detail and HDR environment overrides; it never reads sample locks or project paths.
+  `fidelity::vfx::Effects` composites cooked particles into FidelityView HDR before post.
+  The current upload ABI still needs world-space/material merging and atlas packing;
+  these are transitional until the descriptor and instancing migration lands.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2
@@ -31,8 +37,8 @@ renderer and per-draw upload state; no simulation, window or process code.
   effect's space; `Presenter::capture` composites before resizing back.
 - `landscape::Landscapes`: ara-landscape (CDLOD terrain + scattered foliage) rendered
   from the capture camera with the scene projection and merged by depth, after VFX
-  (whose delta carries onto terrain). Square terrain extents; atlas tiles are relative
-  to Header.min. Nonzero world origins require ara-landscape's CPU rebase support.
+  (whose delta carries onto terrain). Square terrain extents; atlas tiles are relative to Header.min. Nonzero world
+  origins require ara-landscape's CPU rebase support.
 - `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d. `atlases(world,
   assets)` loads every referenced atlas generation (normal atlases linear);
   `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
