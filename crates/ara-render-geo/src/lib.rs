@@ -1,8 +1,10 @@
 #![warn(missing_docs)]
 //! GPU-driven visibility and streamed virtual geometry over Ara's native RHI.
 mod capture;
+pub mod display;
 mod init;
 mod record;
+pub mod settings;
 pub mod shadows;
 pub mod streaming;
 pub mod upscale;
@@ -30,12 +32,25 @@ pub struct Instance {
     pub position_scale: [f32; 4],
     /// Linear base color and perceptual roughness.
     pub color_roughness: [f32; 4],
-    /// Stable entity ID low/high words, reserved material ID, reserved.
+    /// Stable entity ID low/high words, texture ID (u32::MAX = none), and
+    /// yaw radians encoded with f32::to_bits. Zero yaw retains the original ABI.
     pub identity: [u32; 4],
 }
 /// Diagnostic views produced by the same visibility/resolve pipeline.
 #[repr(u32)]
-#[derive(Clone, Copy, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    ara_schema::Schema,
+)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase")]
 pub enum DebugView {
     /// Simple directional preview lighting from the resolved surface.
     #[default]
@@ -48,6 +63,10 @@ pub enum DebugView {
     Overdraw,
     /// White software triangles and blue hardware triangles.
     Raster,
+    /// Virtual shadow page coordinates, residency and dirty-page state.
+    VsmPages,
+    /// Actual resident texture mip (red = desired/resident lag).
+    TextureMipResidency,
 }
 /// Camera and selection policy for one extracted view.
 pub struct View<'a> {
@@ -99,6 +118,8 @@ struct Frame {
     policy: [u32; 4],
     forward: [f32; 4],
     shadow: [u32; 4],
+    texture_slots: [u32; 4],
+    texture_tracking: [u32; 4],
 }
 /// Per-view resources. Hosts own the device, frame completion and scene swaps.
 pub struct GeometryView {
@@ -122,6 +143,9 @@ pub struct GeometryView {
     last: Option<ara_gpu::TimelinePoint>,
     source_triangles: u64,
     residency: streaming::Residency,
+    textures: Option<ara_texture_stream::Binding>,
+    debug: DebugView,
+    texture_limit: u32,
 }
 /// Preparation budgets for a GPU visibility view.
 pub struct GeometryConfig {
@@ -193,14 +217,29 @@ impl GeometryView {
             ],
             forward: camera.forward.extend(0.0).to_array(),
             shadow: [self.residency.pending, 0, 0, 0],
+            texture_slots: self.textures.map_or([0; 4], |b| b.slots),
+            texture_tracking: self.textures.map_or([0; 4], |b| b.tracking),
         };
         gpu.upload(self.frame, bytemuck::bytes_of(&f))?;
         self.previous_vp = vp;
+        self.debug = view.debug;
         Ok(())
     }
     /// Record submission completion so update cannot overwrite an in-flight slot.
     pub fn submitted(&mut self, point: ara_gpu::TimelinePoint) {
         self.last = Some(point);
+    }
+    /// Binds the current texture epoch before update/record. Caller owns the
+    /// cache, submits its begin_frame first and end_frame after sampling.
+    pub fn bind_textures(&mut self, binding: Option<ara_texture_stream::Binding>) -> Result<()> {
+        if let Some(b) = binding {
+            ensure!(
+                self.texture_limit <= b.texture_count() && b.tracking[2..] == self.size,
+                "virtual texture IDs or viewport dimensions out of range"
+            );
+        }
+        self.textures = binding;
+        Ok(())
     }
     /// Read-only surface outputs; valid after the recorded work has completed.
     pub fn outputs(&self) -> Outputs {

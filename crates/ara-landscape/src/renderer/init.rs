@@ -7,6 +7,7 @@ impl Landscape {
         size: [u32; 2],
         cooked: &Path,
     ) -> Result<Self> {
+        ara_texture_stream::validate_device(gpu)?;
         data.header
             .validate()
             .map_err(|d| anyhow::anyhow!(d.message))?;
@@ -315,6 +316,7 @@ impl Landscape {
             upload_words: Vec::with_capacity((4 + 33 * 33 * 3) * UPLOAD_BUDGET),
             geometry: None,
             geometry_slot: 0,
+            virtual_textures: None,
         })
     }
     /// Installs authored mesh LODs and baked alpha impostors off the frame path.

@@ -14,12 +14,13 @@ struct Projection{float4x4 vp;float4 cameraFocal;uint4 control;};
 struct Frame{Projection projections[6];uint4 counts;uint4 extent;uint4 slots0;uint4 slots1;uint4 slots2;uint4 geometry;float4 minimum;float4 scale;uint4 inputs;};
 struct Cluster{float4 bounds;uint group;uint parent;uint vertices;uint triangles;uint page;uint vb;uint ib;uint level;};
 struct Group{float4 bounds;float error;uint first;uint count;uint level;};
-struct Instance{float4 positionScale;float4 colorRoughness;uint4 identity;};
+struct Instance{float4 positionScale;float4 colorRoughness;uint4 identity;float4 rotation;};
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint word(uint slot,uint at){return buffers[NonUniformResourceIndex(slot)].Load(at*4);}
 void store(uint slot,uint at,uint value){buffers[NonUniformResourceIndex(slot)].Store(at*4,value);}
 void add(uint slot,uint at,uint value){uint ignored;buffers[NonUniformResourceIndex(slot)].InterlockedAdd(at*4,value,ignored);}
-float4 sphere(float4 b,Instance i){return float4(b.xyz*i.positionScale.w+i.positionScale.xyz,b.w*i.positionScale.w);}
+float3 instanceRotate(float3 p,Instance i){return float3(i.rotation.x*p.x+i.rotation.y*p.z,p.y,-i.rotation.y*p.x+i.rotation.x*p.z);}
+float4 sphere(float4 b,Instance i){return float4(instanceRotate(b.xyz,i)*i.positionScale.w+i.positionScale.xyz,b.w*i.positionScale.w);}
 [shader("compute")][numthreads(64,1,1)]
 void shadowReset(uint id:SV_DispatchThreadID){Frame f=frame();
     if(f.extent.z!=0){if(id<98304){store(f.slots0.x,id,0);store(f.slots0.y,id,0);}if(id<f.counts.y)buffers[NonUniformResourceIndex(f.slots0.z)].Store4(id*16,0);}
@@ -97,7 +98,7 @@ bool acceptable(Frame f,uint group,Instance i,uint projection){if(group==0xfffff
 void shadowSelect(uint3 gid:SV_GroupID,uint lane:SV_GroupIndex){Frame f=frame();uint id=(gid.y*65535+gid.x)*64+lane;
     uint clusters=uint(f.scale.w),instances=uint(f.minimum.w),count=clusters*instances;if(id>=count*f.counts.x)return;
     uint projection=id/count,local=id%count,cid=local%clusters,iid=local/clusters;
-    Cluster c=buffers[NonUniformResourceIndex(f.geometry.y)].Load<Cluster>(cid*48);Instance i=buffers[NonUniformResourceIndex(f.geometry.x)].Load<Instance>(iid*48);
+    Cluster c=buffers[NonUniformResourceIndex(f.geometry.y)].Load<Cluster>(cid*48);Instance i=buffers[NonUniformResourceIndex(f.geometry.x)].Load<Instance>(iid*64);
     if(!acceptable(f,c.group,i,projection)||(c.parent!=0xffffffff&&acceptable(f,c.parent,i,projection)))return;
     if(!dirtyBounds(f,projection,sphere(c.bounds,i)))return;
     uint index;buffers[NonUniformResourceIndex(f.slots1.w)].InterlockedAdd(4,1,index);
@@ -109,11 +110,11 @@ void shadowArguments(){Frame f=frame();store(f.slots1.w,1,min(f.counts.z,word(f.
 uint byteAt(uint slot,uint at){return (buffers[NonUniformResourceIndex(slot)].Load(at&~3u)>>((at&3)*8))&255;}
 uint pageBase(Frame f,Cluster c){return word(f.inputs.x,c.page/2048)*2048;}
 float3 position(Frame f,Cluster c,Instance i,uint vertex){uint2 p=buffers[NonUniformResourceIndex(f.geometry.w)].Load2(pageBase(f,c)+vertex*16);
-    return (f.minimum.xyz+float3(p.x&65535,p.x>>16,p.y&65535)*f.scale.xyz)*i.positionScale.w+i.positionScale.xyz;}
+    return instanceRotate(f.minimum.xyz+float3(p.x&65535,p.x>>16,p.y&65535)*f.scale.xyz,i)*i.positionScale.w+i.positionScale.xyz;}
 struct ShadowVertex{float4 position:SV_Position;nointerpolation uint projection:TEXCOORD0;};
 [shader("vertex")]
 ShadowVertex shadowVertex(uint vertex:SV_VertexID,uint iid:SV_InstanceID){Frame f=frame();uint4 item=buffers[NonUniformResourceIndex(f.slots1.z)].Load4(iid*16);
-    Cluster c=buffers[NonUniformResourceIndex(f.geometry.y)].Load<Cluster>(item.x*48);Instance i=buffers[NonUniformResourceIndex(f.geometry.x)].Load<Instance>(item.y*48);
+    Cluster c=buffers[NonUniformResourceIndex(f.geometry.y)].Load<Cluster>(item.x*48);Instance i=buffers[NonUniformResourceIndex(f.geometry.x)].Load<Instance>(item.y*64);
     ShadowVertex o;o.position=float4(2,2,0,1);o.projection=item.z;uint tri=vertex/3;if(tri>=c.triangles)return o;
     uint at=pageBase(f,c)+1024+tri*3+vertex%3;uint v=byteAt(f.geometry.w,at);o.position=mul(f.projections[item.z].vp,float4(position(f,c,i,v),1));return o;
 }
@@ -138,6 +139,12 @@ void shadowResolve(uint3 id:SV_DispatchThreadID){Frame f=frame();if(any(id.xy>=f
                 result+=(uvz.z+bias>=depth?1.0:0.0)/9;
             }}
         float4 color=images[NonUniformResourceIndex(f.slots2.w)][id.xy];color.rgb=pow(pow(color.rgb,float3(2.2))*(.2+.8*result),float3(1.0/2.2));images[NonUniformResourceIndex(f.slots2.w)][id.xy]=color;
+        if(f.inputs.z!=0 && projectionFor(f,world,projection,uvz)) {
+            uint2 page=uint2(uvz.xy*128);uint mapped=word(f.slots0.x,projection*16384+page.y*128+page.x);
+            bool dirty=mapped!=0 && word(f.slots0.z,(mapped-1)*4+2)==f.counts.w;
+            float3 debug=mapped==0?float3(1,0,1):dirty?float3(1,.1,.05):float3(.1+.7*frac(page.x*.618),.2+.7*frac(page.y*.618),.3+.15*projection);
+            if(any(frac(uvz.xy*128)<.025))debug=0;images[NonUniformResourceIndex(f.slots2.w)][id.xy]=float4(debug,1);
+        }
     }
     images[NonUniformResourceIndex(f.slots2.x)][id.xy]=float4(result,result,result,resident);
 }

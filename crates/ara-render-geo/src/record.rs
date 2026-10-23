@@ -38,6 +38,23 @@ impl GeometryView {
             })
             .collect();
         let shared = [0, 1, 2, 3, 12, 13, 19];
+        let texture_uses: Vec<_> = self
+            .textures
+            .into_iter()
+            .flat_map(|b| b.resources())
+            .map(|(resource, access)| {
+                (
+                    g.import(
+                        resource,
+                        State {
+                            access,
+                            queue: Queue::Graphics,
+                        },
+                    ),
+                    access,
+                )
+            })
+            .collect();
         let mut recipes = Vec::new();
         let mut add =
             |g: &mut Graph, name: &str, pipeline: &str, phase: u32, uses: &[(usize, Access)]| {
@@ -47,6 +64,9 @@ impl GeometryView {
                     .map(|&i| (ids[i], Access::ShaderRead))
                     .collect();
                 access.extend(uses.iter().map(|&(i, a)| (ids[i], a)));
+                if pipeline == "resolve_textured" {
+                    access.extend(texture_uses.iter().copied());
+                }
                 let id = g.pass(name, Queue::Graphics, access);
                 recipes.push((id, pipeline.to_owned(), phase));
             };
@@ -170,7 +190,11 @@ impl GeometryView {
         add(
             &mut g,
             "Geo.MaterialResolve",
-            "resolve",
+            if self.textures.is_some() {
+                "resolve_textured"
+            } else {
+                "resolve"
+            },
             0,
             &[
                 (5, Access::ShaderRead),
@@ -272,7 +296,7 @@ impl GeometryView {
                     self.size[1].div_ceil(16),
                     1,
                 ])),
-                "resolve" => r.push(Command::Dispatch([
+                "resolve" | "resolve_textured" => r.push(Command::Dispatch([
                     self.size[0].div_ceil(8),
                     self.size[1].div_ceil(8),
                     1,

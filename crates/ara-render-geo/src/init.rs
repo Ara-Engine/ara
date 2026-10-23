@@ -1,4 +1,10 @@
 use super::*;
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct GpuInstance {
+    source: Instance,
+    rotation: [f32; 4],
+}
 impl GeometryView {
     /// Prepares immutable device-local geometry and warms offline pipelines.
     /// Preparation is synchronous and belongs on an extraction worker.
@@ -40,6 +46,7 @@ impl GeometryView {
             resident_pages,
         } = config;
         geometry.validate()?;
+        ara_texture_stream::validate_device(gpu)?;
         ensure!(
             geometry.clusters.len() <= u32::MAX as usize / 2048
                 && geometry.clusters.len() as u64 * instances.len() as u64 <= u64::from(u32::MAX),
@@ -63,7 +70,8 @@ impl GeometryView {
                 .iter()
                 .chain(&i.color_roughness)
                 .all(|v| v.is_finite())
-                && i.position_scale[3] > 0.0),
+                && i.position_scale[3] > 0.0
+                && f32::from_bits(i.identity[3]).is_finite()),
             "invalid instance transform/material"
         );
         let mesh =
@@ -104,9 +112,19 @@ impl GeometryView {
         let bounds = [center[0], center[1], center[2], radius];
         let pixels = size[0] as usize * size[1] as usize;
         let hzb = size[0].div_ceil(16) as usize * size[1].div_ceil(16) as usize;
+        let prepared: Vec<_> = instances
+            .iter()
+            .map(|&source| {
+                let (sin, cos) = f32::from_bits(source.identity[3]).sin_cos();
+                GpuInstance {
+                    source,
+                    rotation: [cos, sin, 0., 0.],
+                }
+            })
+            .collect();
         let mut buffers = Vec::new();
         for (index, bytes) in [
-            bytemuck::cast_slice(instances).to_vec(),
+            bytemuck::cast_slice(&prepared).to_vec(),
             bytemuck::cast_slice(&clusters).to_vec(),
             if geometry.groups.is_empty() {
                 vec![0; 32]
@@ -185,6 +203,7 @@ impl GeometryView {
             "hardware",
             "hzb",
             "resolve",
+            "resolve_textured",
             "stream_upload",
         ] {
             let filename = if name == "hardware" && mesh {
@@ -219,6 +238,14 @@ impl GeometryView {
             last: None,
             source_triangles: geometry.diagnostics.source_triangles * instances.len() as u64,
             residency,
+            textures: None,
+            debug: DebugView::Lit,
+            texture_limit: instances
+                .iter()
+                .filter(|i| i.identity[2] != u32::MAX)
+                .map(|i| i.identity[2] + 1)
+                .max()
+                .unwrap_or(0),
         };
         result.slots.push(gpu.storage_buffer(frame)?.index);
         Ok(result)

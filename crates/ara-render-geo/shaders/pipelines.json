@@ -13,6 +13,20 @@
       "vertex_stride": 0
     }
   },
+  "display": {
+    "entries": {
+      "displayMain": "compute"
+    },
+    "source": "display.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "hardware": {
     "entries": {
       "hardwareFragment": "fragment",
@@ -88,6 +102,20 @@
   "resolve": {
     "entries": {
       "resolveMain": "compute"
+    },
+    "source": "geometry.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "resolve_textured": {
+    "entries": {
+      "resolveTexturedMain": "compute"
     },
     "source": "geometry.slang",
     "state": {

@@ -1,9 +1,12 @@
 # ara-render-geo
 
 Virtual geometry GPU extraction over ara-gpu and ara-render::Graph.
-API: GeometryView, Instance, View, Outputs, DebugView, PagePool.
+API: GeometryView, Instance, View, Outputs, DebugView, PagePool, RenderSettings,
+DisplayOutput. RenderSettings/register_schema is the typed viewport-menu seam.
 All geometry is static opaque single-material; transforms are uniform scale plus
-translation. Reject unsupported input explicitly. These are render snapshots,
+translation and yaw. identity.w stores yaw radians as f32 bits; identity.z is
+the virtual albedo texture ID (u32::MAX means none). Reject unsupported input.
+These are render snapshots,
 never authoritative ECS state. Scene preparation/cooking is off the frame thread.
 
 GPU passes: reset, previous-HZB instance cull, projected group-error DAG cut,
@@ -18,6 +21,14 @@ record updates graph states: submit before recording again. Host owns completion
 and calls update only after its frame slot completes. GPU counts drive draws;
 diagnostic capture alone reads counters/images synchronously. Explicit history
 reset is required on resize, camera cuts or geometry replacement.
+
+bind_textures takes the shared ara-texture-stream Binding. Submit its begin_frame
+before geometry, end_frame after all mesh/landscape sampling, then submitted.
+Uploads/feedback preparation belong on an extraction worker. DisplayOutput takes
+exposed linear BT.709, never the SDR preview; HDR.md defines native verification.
+run.ps1 Native/Upscaled use the CC0 scan fetched by fetch-scene.ps1. The original
+procedural benchmark example remains for before/after comparisons. Never count
+diagnostic UV readbacks in steady-frame GPU numbers.
 
 Gates with CARGO_BUILD_JOBS=2 and Vulkan SDK: cargo test -p ara-render-geo,
 cargo clippy -p ara-render-geo --all-targets -- -D warnings,
