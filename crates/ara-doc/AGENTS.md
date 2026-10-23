@@ -41,7 +41,8 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
 - `refs::{AssetIndex, resolve, repair_record}`; `prefab::{resolve, DocLookup,
   ResolvedEntity}`; `validate::{check_record, check_structure, check_entity_refs,
   record_type}` (dangling `entity` fields are warnings, `ARA1212`).
-- `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`.
+- `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`,
+  `remove` (a deleted file). `AssetIndex::remove`.
 - `IdGen` (seedable SplitMix64): `record_id`, `asset_id`, `token`.
 - `OrderKey`, `key_between(a, b)`.
 - `register(&mut SchemaDb)`: the `Entity` record type and `scene`/`prefab` kinds.

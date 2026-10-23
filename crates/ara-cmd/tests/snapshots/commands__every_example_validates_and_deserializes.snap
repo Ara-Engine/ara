@@ -11,7 +11,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_8b21",
@@ -30,7 +30,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": true
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_8b21",
@@ -46,7 +46,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "id": "$crate",
@@ -72,7 +72,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": true
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entities": [
@@ -104,7 +104,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": true,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_8b21",
@@ -124,7 +124,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "prefab": "@prefabs/crate.prefab",
@@ -141,7 +141,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": true,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_4f9a/e_m4tz",
@@ -160,7 +160,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": true,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_4f9a/e_m4tz",
@@ -177,7 +177,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": true,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entity": "e_8b21",
@@ -199,7 +199,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": false,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "count": 2
@@ -214,7 +214,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       "idempotent": true,
       "destructive": false
     },
-    "scope": "edit",
+    "scope": "edit:scene",
     "examples": [
       {
         "entities": [

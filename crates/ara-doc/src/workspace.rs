@@ -36,6 +36,13 @@ impl Workspace {
         self.docs.insert(doc.id.clone(), (path, doc));
     }
 
+    /// Unloads a document and drops it from the index (its file was deleted). Returns
+    /// its path and contents.
+    pub fn remove(&mut self, id: &str) -> Option<(String, Document)> {
+        self.index.remove(id);
+        self.docs.remove(id)
+    }
+
     /// A document by asset ID.
     pub fn doc(&self, id: &str) -> Option<&Document> {
         self.docs.get(id).map(|(_, d)| d)

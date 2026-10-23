@@ -8,8 +8,9 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 ## Public API
 
 - Traits: `Command`, `Query`, `Job`. Each has `Params: Schema + DeserializeOwned`,
-  `Output: Serialize`, `NAME`, `SUMMARY`, `SCOPE` (default `edit`, queries `read`),
+  `Output: Serialize`, `NAME`, `SUMMARY`, `SCOPE`,
   `HINTS` (`idempotent`, `destructive`), `examples()` and `run(ctx, params)`.
+  `SCOPE` defaults to `edit:scene` (commands, jobs) and `read` (queries).
 - `Registry::builtin(&mut db)`; `reg.command::<C>(&mut db)`, `.query::<Q>()`,
   `.job::<J>()` (registers the params type too); `info(name)`, `infos()`,
   `catalog()` (the `commands` section of reflection.json), `check_examples(&db)`.
@@ -17,8 +18,8 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
   `reg.run(..., progress)` also reports job progress.
 - `Batch { doc, calls: Vec<Call { command, params }>, why, idempotencyKey, base,
   dryRun }`; `Batch::new(doc, calls)`.
-- `Session { author, scopes }`, `Session::human()`; scopes are exact (`edit`),
-  prefixed (`edit*`) or `*`.
+- `Session { author, scopes }`, `Session::human()`; scopes are exact (`edit:scene`),
+  prefixed (`edit*`) or `*`. The vocabulary lives in `ara-proto` (`Scope`).
 - `BatchResult { dryRun, txn, replayed, revision, outputs, symbols, ops }`.
 - Contexts: `ReadCtx` (`schema`, `workspace`, `doc`, `target`, `resolved`, `entity`,
   `has_component`, `order_at`, `check_value`), `EditCtx` (`read`, `new_id`,
