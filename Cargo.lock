@@ -159,6 +159,7 @@ dependencies = [
  "ara-json",
  "ara-opus-sys",
  "ara-schema",
+ "ara-sdl3-src",
  "bevy_ecs",
  "blake3",
  "ebur128",
@@ -167,7 +168,6 @@ dependencies = [
  "ogg",
  "rtrb",
  "rustfft",
- "sdl3-sys",
  "serde",
  "serde_json",
  "symphonia",
@@ -523,9 +523,10 @@ name = "ara-platform"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-audio",
  "ara-gpu",
+ "ara-sdl3-src",
  "ash",
- "sdl3-sys",
 ]
 
 [[package]]
@@ -599,6 +600,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "ara-sdl3-src"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "sdl3-sys",
 ]
 
 [[package]]

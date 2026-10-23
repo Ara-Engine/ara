@@ -30,7 +30,9 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
 
 Always set `CARGO_BUILD_JOBS=2`. `ara-opus-sys` builds committed libopus 1.5.2
 with `cc`; only Rust and the C compiler are required for this track's build.
-SDL uses no-link bindings; Steam Audio loads only at explicit runtime setup.
+SDL is statically built and linked once through `ara-sdl3-src`, shared with
+`ara-platform`. `SdlBackend::open(sample_rate)` takes no library path. Only
+Steam Audio uses explicit runtime loading; `libloading` remains for that API.
 The clean-environment gate strips CMake/Python from PATH:
 
 ```powershell
@@ -61,6 +63,7 @@ Python is an optional measurement tool, never a Cargo build dependency.
 The verifier selects WASAPI on Windows; `ARA_AUDIO_BACKEND=sdl` selects SDL.
 `ARA_AUDIO_LATENCY_TRIALS=32` requests a longer QPC/MLS loopback measurement.
 See README for actual measured latency versus the much smaller queue estimate.
+The fetch helper is only for optional Steam Audio; SDL requires no setup.
 
 ## Gotchas
 
