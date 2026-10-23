@@ -34,7 +34,7 @@ pub use components::{
     Traversal, register,
 };
 pub use debug::DebugPrimitive;
-pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable};
+pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable, why_unreachable_blocked};
 pub use dynamic::{LinkKind, NavAgentType, NavLinkState, NavObstacle, ObstacleMode};
 pub use hier::{
     CellCoord, CellGrid, ClusterGraph, ClusterSummary, LANDMARKS, MIN_PORTAL, Portal, RouteScratch,

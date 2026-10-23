@@ -26,3 +26,7 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "ai"
+harness = false

@@ -126,3 +126,16 @@ Local gates: `cargo check`, `cargo test`, `cargo clippy --all-targets -- -D warn
 and `cargo fmt --check`, all scoped to `-p ara-nav -p ara-nav-sys`. The native crate
 is also rebuilt and tested with a minimal Windows PATH containing only Rust and
 Windows system directories, with `cmake` confirmed unresolvable.
+
+## Navigation v2 (large worlds, dynamic world, crowds)
+
+The default crowd solver is now `CrowdSolver::Orca` (`ara-crowd`): deterministic
+parallel ORCA against navmesh boundary walls, one solve for every profile, with
+budgeted replans and pure-Rust path following over ECS table slices. DetourCrowd
+remains available as `CrowdSolver::Detour`. Typed links (walk, jump, ladder,
+door, elevator, teleport) have runtime gates (`NavLinkState`) enforced by a
+virtual Detour filter; `NavObstacle` carves or relabels tiles with a fixed
+publication latency, or acts as an avoidance disc. Worlds stream per cell
+(`bake_cell`, `NavStreamer`) and long routes run on an always-resident cluster
+graph (`ClusterGraph`, ALT landmarks). Measurements, methods and caveats are in
+[RESULTS.md](RESULTS.md); the gameplay AI built on top lives in `ara-ai`.

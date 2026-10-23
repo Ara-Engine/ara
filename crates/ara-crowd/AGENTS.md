@@ -13,6 +13,8 @@ Pure maths: no ECS, navmesh, native code or clock. Depends only on Rayon.
 - `Walls::new(&[Wall], cell)`: immutable navmesh boundary segments with a hashed
   cell index. Build once per navmesh revision off the tick thread. One set per
   agent profile; agents pick theirs by index, so all profiles share one solve.
+  `first_hit(a, b, vertical)` is an allocation-free 2.5D ray (navmesh line of
+  sight); `within(center, radius, out)` lists nearby walls (EQS cover points).
 - `WalkGrid::{new, rasterize}` + `FlowField::build(&grid, goal)`: Dijkstra over an
   8-connected walkable grid (no corner cutting); `direction`/`distance`/`height`
   are O(1) lookups. One field per shared goal; single walkable layer only.
@@ -31,7 +33,9 @@ Pure maths: no ECS, navmesh, native code or clock. Depends only on Rayon.
 
 - ORCA after van den Berg et al. 2011, written for Ara (no third-party code).
   Agent-agent half-planes share responsibility 0.5; `obstacle` agents never move
-  and others take full responsibility.
+  and others take full responsibility. When the preferred velocity points into
+  a nearby obstacle disc, agents sidestep along its nearer tangent (pure ORCA
+  stalls in front of a static disc on the goal line).
 - Walls are hard half-planes ("never approach faster than clearance / horizon"),
   plus crossing clipping after integration. Navmeshes are already radius-eroded,
   so `wall_margin` is small. Walls do not know area filters: avoidance pushes can

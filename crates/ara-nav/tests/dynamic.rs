@@ -159,6 +159,10 @@ fn door_timeout_replans_around_and_locked_links_are_never_planned() {
     let state = world.get::<NavAgentState>(actor).unwrap();
     assert_eq!(state.status, NavStatus::Unreachable);
     assert!(matches!(state.issue, Some(NavIssue::NoPath { .. })));
+    // The explanation names the locked link instead of "missing link".
+    let mesh = world.resource::<NavWorld>().mesh(0).unwrap().clone();
+    let why = why_unreachable_blocked(&mesh, [10.0, 0.1, 6.0], [30.0, 0.1, 6.0], &QueryFilter::default(), &[7]).unwrap();
+    assert_eq!(why.reason, ReachabilityReason::ClosedLink { id: 7 });
     // Unlocked: a jump follows a ballistic arc above the straight line.
     world.get_mut::<NavLinkState>(lock).unwrap().locked = false;
     goto(&mut world, actor, GotoTarget::Point([30.0, 0.1, 6.0])).unwrap();

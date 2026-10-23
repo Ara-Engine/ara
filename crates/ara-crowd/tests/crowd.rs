@@ -326,3 +326,48 @@ fn agents_sidestep_a_disc_exactly_on_their_line() {
         agents[0].position
     );
 }
+
+#[test]
+fn wall_rays_respect_height_and_radius_queries_dedupe() {
+    let walls = Walls::new(
+        &[
+            Wall {
+                a: [5.0, 0.0, -5.0],
+                b: [5.0, 0.0, 5.0],
+            },
+            Wall {
+                a: [20.0, 0.0, -5.0],
+                b: [20.0, 0.0, 5.0],
+            },
+            Wall {
+                a: [12.0, 6.0, -5.0],
+                b: [12.0, 6.0, 5.0],
+            },
+        ],
+        4.0,
+    )
+    .unwrap();
+    let t = walls
+        .first_hit([0.0, 1.5, 0.0], [10.0, 1.5, 0.0], 2.5)
+        .unwrap();
+    assert!((t - 0.5).abs() < 1e-4, "{t}");
+    assert!(
+        walls
+            .first_hit([0.0, 1.5, 0.0], [4.0, 1.5, 0.0], 2.5)
+            .is_none()
+    );
+    // An upper floor's edge does not block a ground-level sight line, and vice versa.
+    assert!(
+        walls
+            .first_hit([6.0, 1.5, 0.0], [18.0, 1.5, 0.0], 2.5)
+            .is_none()
+    );
+    let upper = walls
+        .first_hit([6.0, 7.5, 0.0], [18.0, 7.5, 0.0], 2.5)
+        .unwrap();
+    assert!((upper - 0.5).abs() < 1e-4, "{upper}");
+    let mut near = Vec::new();
+    walls.within([18.0, 0.0, 0.0], 3.0, &mut near);
+    assert_eq!(near.len(), 1);
+    assert_eq!(near[0].a[0], 20.0);
+}
