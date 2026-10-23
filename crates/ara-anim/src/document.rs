@@ -54,6 +54,8 @@ pub struct IkSetup {
 pub fn register(db: &mut SchemaDb) -> Result<(), Error> {
     db.register::<AnimAsset>();
     db.register::<crate::physical::PhysicalState>();
+    // Clips and controllers are referenced per record: `@anim/fox.animation#an_walk`.
+    db.address_records("animation");
     db.add_kind(DocKindDesc {
         name: "animation".into(),
         version: 1,

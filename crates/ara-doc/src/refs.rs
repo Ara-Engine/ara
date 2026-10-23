@@ -147,8 +147,25 @@ pub fn resolve(
     Ok((format_ref(path, id), note))
 }
 
+/// Whether `text` is `@path#record`: a record of the `kind` document at `path`, for
+/// kinds whose records are addressable (`SchemaDb::address_records`). The record's
+/// existence is the consumer's check; the index only knows documents.
+pub fn record_ref(text: &str, kind: &str, index: &AssetIndex) -> bool {
+    let Ok(parts) = parse_ref(text) else {
+        return false;
+    };
+    let (Some(path), Some(id)) = (parts.path, parts.id) else {
+        return false;
+    };
+    index
+        .id_of(path)
+        .is_some_and(|doc| doc != id && index.kind_of(doc) == Some(kind))
+        && index.path_of(id).is_none()
+}
+
 /// Repairs every reference in a record in place (fields, components and override
-/// values), reporting repairs and failures at `base`.
+/// values), reporting repairs and failures at `base`. References to records of
+/// addressable kinds (`@anim/fox.animation#an_walk`) are kept as written.
 pub fn repair_record(
     db: &SchemaDb,
     record_type: &TypeDesc,
@@ -201,6 +218,8 @@ struct Walker<'a> {
 impl Walker<'_> {
     fn value(&mut self, ty: &ValueType, v: &mut Value, path: &str) {
         match (ty, v) {
+            (ValueType::Asset(Some(kind)), Value::String(s))
+                if self.db.records_addressable(kind) && record_ref(s, kind, self.index) => {}
             (ValueType::Asset(kind), Value::String(s)) => {
                 match resolve(s, kind.as_deref(), self.index) {
                     Ok((canonical, note)) => {
@@ -315,6 +334,18 @@ mod tests {
         let (text, note) = ok("@meshes/crate.glb#ms_gone0000");
         assert_eq!(text, "@meshes/crate.glb#ms_crate001");
         assert_eq!(note.expect("repaired").code, codes::REF_PATH_REPAIRED);
+    }
+
+    #[test]
+    fn record_references_name_records_of_their_document_kind() {
+        let mut ix = index();
+        ix.insert("ac_foxanim1", "anim/fox.animation", Some("animation".into()));
+        assert!(record_ref("@anim/fox.animation#an_walk", "animation", &ix));
+        // The document itself, another kind, a known asset ID or no path: not records.
+        assert!(!record_ref("@anim/fox.animation#ac_foxanim1", "animation", &ix));
+        assert!(!record_ref("@anim/fox.animation#an_walk", "prefab", &ix));
+        assert!(!record_ref("@anim/fox.animation#pf_rifle001", "animation", &ix));
+        assert!(!record_ref("@#an_walk", "animation", &ix));
     }
 
     #[test]

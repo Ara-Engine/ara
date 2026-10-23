@@ -41,7 +41,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   mirror's presentation (animation, cameras, world poses); `tick()` then reports the
   presented authoritative tick.
 - `controller`: `.animation` controllers (`Animator.controller`): `Documents` (every
-  `AnimAsset` record by ID), `compile` (clip records bind model animations by `name`
+  `AnimAsset` record by `@path#record`; several clips/controllers per file), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
   `MatchState` (trajectory predictor + feature query, predictor snapshotted).
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model

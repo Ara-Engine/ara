@@ -20,7 +20,8 @@ Independent of bevy_ecs; depends on ara-diag and ara-json.
 ## Public API
 
 - Registration: `db.register::<T>()` (derive), `db.add(TypeDesc)`,
-  `db.add_json_types(&value)` (`*.types.json`), `db.add_kind(..)`, then
+  `db.add_json_types(&value)` (`*.types.json`), `db.add_kind(..)`,
+  `db.address_records(kind)` (`@path#record` names records of that kind), then
   `db.verify() -> Vec<Diagnostic>` (names, docs, field types, defaults, examples,
   prefixes; also reports registration clashes).
 - Lookup: `get`, `lookup` (follows aliases), `types`, `components`, `kind`,

@@ -465,7 +465,7 @@
         "roughness": 0.58
       },
       "Animator": {
-        "controller": "@anim/fox.animation#ac_foxanim1"
+        "controller": "@anim/fox.animation#an_fox"
       },
       "CharacterController": {
         "radius": 0.3,
