@@ -6,6 +6,7 @@
 #![warn(missing_docs)]
 
 pub mod assets;
+pub mod embed;
 mod keep;
 pub mod params;
 pub mod pool;
@@ -47,6 +48,8 @@ pub mod codes {
     pub const REQUEST: Code = Code(7305);
     /// Info: a sidecar recorded an older importer version; it was upgraded and reimported.
     pub const ASSET_UPGRADED: Code = Code(7306);
+    /// An embedded player's shared surface could not be created, shared or resized.
+    pub const SURFACE: Code = Code(7307);
 }
 
 fn fail(code: Code, message: impl Into<String>) -> Vec<Diagnostic> {
@@ -102,8 +105,13 @@ impl PlayConfig {
     }
 }
 
-/// Players taken and started for a world, with their `play.start` results.
-type Launched = (Vec<(Role, Player)>, Vec<Value>);
+/// Players taken and started for a world, their `play.start` results and (embedded
+/// worlds) their shared surfaces, index-aligned with the players.
+type Launched = (
+    Vec<(Role, Player)>,
+    Vec<Value>,
+    Vec<Option<ara_gpu::shared::SharedSurface>>,
+);
 
 /// A running world: its players (authority first), snapshot section and fault.
 struct World {
@@ -112,6 +120,10 @@ struct World {
     snapshot: Vec<u8>,
     section: Option<Section>,
     window: bool,
+    /// Embedded worlds: the surface size every rendering player started with.
+    embed: Option<embed::EmbedParams>,
+    /// Embedded players' current surfaces (handles owned by this process), by player.
+    surfaces: Vec<Option<ara_gpu::shared::SharedSurface>>,
     start_paused: bool,
     fault: Option<Value>,
     hot_reload: bool,
@@ -131,6 +143,8 @@ pub struct PlayService {
     assets: Option<assets::Assets>,
     worlds: BTreeMap<String, World>,
     next: u32,
+    /// The in-process editor's [`embed::Surfaces`] handle, once taken.
+    channel: Option<embed::Channel>,
 }
 
 impl PlayService {
@@ -153,6 +167,7 @@ impl PlayService {
             assets: None,
             worlds: BTreeMap::new(),
             next: 0,
+            channel: None,
         }
     }
 
@@ -397,10 +412,13 @@ impl PlayService {
     /// Assigns players and starts them. Networked worlds start the authority first;
     /// each client then receives its join (issued by the authority over the trusted
     /// player link, never returned to callers) and connects through its own proxy.
+    /// Embedded worlds give every rendering player its shared surface first.
+    #[allow(clippy::too_many_arguments)]
     fn launch(
         &mut self,
         roles: &[Role],
         window: bool,
+        embed: Option<&embed::EmbedParams>,
         snapshot: &SnapshotRef,
         start_paused: bool,
         resume: Option<&str>,
@@ -428,6 +446,7 @@ impl PlayService {
             .map_err(|e| fail(codes::PLAY, e))?;
         let mut players: Vec<(Role, Player)> = Vec::new();
         let mut started = Vec::new();
+        let mut surfaces = Vec::new();
         for &role in roles {
             let mut player = if window && role != Role::Dedicated {
                 windows.pop()
@@ -435,6 +454,12 @@ impl PlayService {
                 heads.pop()
             }
             .ok_or_else(|| fail(codes::PLAY, "pool returned too few players"))?;
+            let surface = match embed {
+                Some(params) if role != Role::Dedicated => {
+                    Some(embed::embed_player(&mut player, params)?)
+                }
+                _ => None,
+            };
             let net = match role {
                 Role::Local => None,
                 Role::Host | Role::Dedicated => Some(net.clone()),
@@ -485,9 +510,12 @@ impl PlayService {
                 &serde_json::to_value(&start).unwrap_or_default(),
                 Duration::from_secs(120),
             ) {
-                Ok(Ok(result)) => {
-                    started.push(json!({"role": role, "pid": player.hello.pid, "started": result}))
-                }
+                Ok(Ok(result)) => started.push(json!({
+                    "role": role,
+                    "pid": player.hello.pid,
+                    "started": result,
+                    "surface": surface.as_ref().map(ara_gpu::shared::SharedSurface::desc),
+                })),
                 Ok(Err(error)) => {
                     return Err(fail(
                         codes::PLAY,
@@ -505,8 +533,9 @@ impl PlayService {
                 }
             }
             players.push((role, player));
+            surfaces.push(surface);
         }
-        Ok((players, started))
+        Ok((players, started, surfaces))
     }
 
     fn start(&mut self, cx: &Cx<'_>, p: PlayStartParams) -> Result<Value, Vec<Diagnostic>> {
@@ -530,6 +559,12 @@ impl PlayService {
         };
         if roles.len() > 17 {
             return Err(fail(codes::REQUEST, "at most 16 clients"));
+        }
+        if p.embed.is_some() && p.window == Some(true) {
+            return Err(fail(
+                codes::REQUEST,
+                "`embed` shows players inside the editor; leave `window` unset",
+            ));
         }
         let conditions = p
             .conditions
@@ -571,8 +606,15 @@ impl PlayService {
         let window = p.window.unwrap_or(false);
         let start_paused = p.start_paused.unwrap_or(false);
         let launch = Instant::now();
-        let (players, started) =
-            self.launch(&roles, window, &snapshot, start_paused, None, &conditions)?;
+        let (players, started, surfaces) = self.launch(
+            &roles,
+            window,
+            p.embed.as_ref(),
+            &snapshot,
+            start_paused,
+            None,
+            &conditions,
+        )?;
         let boot_ms = launch.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.clone(),
@@ -582,6 +624,8 @@ impl PlayService {
                 snapshot: bytes.clone(),
                 section,
                 window,
+                embed: p.embed,
+                surfaces,
                 start_paused,
                 fault: None,
                 hot_reload: p.hot_reload.unwrap_or(false),
@@ -589,6 +633,7 @@ impl PlayService {
                 conditions,
             },
         );
+        self.announce(&id);
         Ok(json!({
             "world": id,
             "scene": scene,
@@ -628,14 +673,23 @@ impl PlayService {
             snapshot: bytes,
             section,
             window,
+            embed,
             start_paused,
             hot_reload,
             conditions,
             ..
         } = world;
         drop(players);
-        let (players, started) =
-            self.launch(&roles, window, &snapshot, start_paused, resume, &conditions)?;
+        self.close(id);
+        let (players, started, surfaces) = self.launch(
+            &roles,
+            window,
+            embed.as_ref(),
+            &snapshot,
+            start_paused,
+            resume,
+            &conditions,
+        )?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.to_owned(),
@@ -645,6 +699,8 @@ impl PlayService {
                 snapshot: bytes,
                 section,
                 window,
+                embed,
+                surfaces,
                 start_paused,
                 fault: None,
                 hot_reload,
@@ -652,6 +708,7 @@ impl PlayService {
                 conditions,
             },
         );
+        self.announce(id);
         Ok(json!({"world": id, "bootMs": boot_ms, "players": started}))
     }
 
@@ -672,6 +729,9 @@ impl PlayService {
                 std::thread::sleep(Duration::from_millis(2));
             }
         }
+        // Dropping the world closes this process's surface handles.
+        drop(world);
+        self.close(id);
         Ok(json!({"world": id, "tick": tick}))
     }
 
@@ -692,7 +752,15 @@ impl PlayService {
                 "window": w.window,
                 "hotReload": w.hot_reload,
                 "fault": w.fault,
-                "players": w.players.iter().map(|(role, p)| json!({"role": role, "pid": p.hello.pid, "status": p.status})).collect::<Vec<_>>(),
+                "players": w.players.iter().zip(&w.surfaces).map(|((role, p), surface)| json!({
+                    "role": role,
+                    "pid": p.hello.pid,
+                    "status": p.status,
+                    "surface": surface.as_ref().map(|s| {
+                        let d = s.desc();
+                        json!({"generation": d.generation, "width": d.width, "height": d.height})
+                    }),
+                })).collect::<Vec<_>>(),
             }))
             .collect();
         json!({"pool": pool, "worlds": worlds})
@@ -711,6 +779,7 @@ impl PlayService {
                     mode: None,
                     clients: None,
                     window: Some(false),
+                    embed: None,
                     start_paused: Some(true),
                     seed: p.seed,
                     tick_hz: p.tick_hz,
@@ -797,6 +866,8 @@ impl Service for PlayService {
             play(Method::new::<PlayStepParams>(db, "play.step", "Run exact fixed ticks with action injections; returns the state hash and watch samples."), "step"),
             play(Method::new::<PlayUntilParams>(db, "play.until", "Tick until a watched value satisfies a comparison, within a tick budget."), "until"),
             play(Method::new::<PlayInputParams>(db, "play.input", "Inject input actions (Move, Look, Jump, Sprint) at the next tick."), "input"),
+            play(Method::new::<PlayDeviceParams>(db, "play.device", "Send raw keyboard/mouse events to one embedded player (the focused Game view); mapped to actions exactly like a windowed player's input."), "device"),
+            play(Method::new::<PlayResizeParams>(db, "play.resize", "Resize one embedded player's shared surface; returns the new surface generation (new handles)."), "resize"),
             play(Method::new::<PlayTimescaleParams>(db, "play.timescale", "Set host-time speed; the fixed dt never changes."), "timescale"),
             play(Method::new::<PlayInspectParams>(db, "play.inspect", "Read an entity's runtime components.").read_only(), "inspect"),
             play(Method::new::<PlayReadParams>(db, "play.read", "Read entity.Component.field values at the current tick.").read_only(), "read"),
@@ -887,6 +958,16 @@ impl Service for PlayService {
                 let world = self.world(&world_of(&params))?;
                 Ok(json!({"events": std::mem::take(&mut world.events)}))
             }
+            "play.device" => {
+                let p: PlayDeviceParams = parse(params)?;
+                let id = p.world.unwrap_or_else(|| latest.clone());
+                self.device(&id, p.player as usize, p.events)
+            }
+            "play.resize" => {
+                let p: PlayResizeParams = parse(params)?;
+                let id = p.world.unwrap_or_else(|| latest.clone());
+                self.resize(&id, p.player as usize, [p.width, p.height])
+            }
             "test.run" => {
                 let p: TestRunParams = parse(params)?;
                 let result = self.test(cx, p);
@@ -970,6 +1051,9 @@ impl Service for PlayService {
             if self.worlds.is_empty() {
                 cx.publish_commands("play", &Value::Null);
             }
+        }
+        for problem in self.pump_embed() {
+            cx.log(problem);
         }
         for (id, fault) in faults {
             cx.log(

@@ -3,12 +3,14 @@
 mod overlay;
 mod pipeline;
 mod resources;
+mod shared;
 mod submit;
 use anyhow::{Result, ensure};
 use ara_gpu::{vk, vulkan::Context as Gpu};
 use ara_ui::paint::Box2;
 use ara_ui_render::gpu::{Batch, Clip, Instance, TextureUpload, UiGpu};
 use resources::{Buffer, Image, Memory};
+pub use shared::PlaySurface;
 use std::collections::BTreeMap;
 
 struct Texture {

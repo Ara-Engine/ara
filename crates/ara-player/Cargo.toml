@@ -44,6 +44,7 @@ ara-json.workspace = true
 ara-mcp.workspace = true
 ara-ops.workspace = true
 ara-play-host = { path = "../ara-play-host" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

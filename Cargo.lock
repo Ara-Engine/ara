@@ -926,6 +926,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1363,6 +1364,7 @@ dependencies = [
  "ara-asset",
  "ara-diag",
  "ara-doc",
+ "ara-gpu",
  "ara-host",
  "ara-json",
  "ara-ops",
@@ -1406,6 +1408,7 @@ dependencies = [
  "clap",
  "embed-resource",
  "glam 0.34.1",
+ "image",
  "serde",
  "serde_json",
  "windows-sys 0.61.2",

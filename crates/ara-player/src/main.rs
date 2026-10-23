@@ -2,9 +2,12 @@
 //! daemon or the editor) into a pre-spawned, single-use pool. It initializes, connects
 //! back over localhost WebSocket with the session token and idles at zero CPU until
 //! `play.start` assigns a role and a shared-memory snapshot; then it runs that world
-//! (windowed through SDL3, or headless) and exits on `play.stop`.
+//! (windowed through SDL3, embedded in the owner through a shared GPU surface after
+//! `play.embed`, or headless) and exits on `play.stop`.
 mod crash;
 mod device;
+mod embed;
+mod input;
 mod net;
 mod world;
 
@@ -103,6 +106,9 @@ struct Player {
     args: Args,
     size: [u32; 2],
     window: Option<device::Windowed>,
+    /// Embedded players: the shared ring lives on the presenter's device, so this
+    /// field is declared (and dropped) before `presenter`.
+    embed: Option<embed::Embedded>,
     presenter: Option<Presenter>,
     presenter2d: Option<Presenter2d>,
     window2d: Option<Presenter2d>,
@@ -170,6 +176,7 @@ fn run(args: Args) -> Result<()> {
         args,
         size,
         window,
+        embed: None,
         presenter,
         presenter2d: None,
         window2d: None,
@@ -216,12 +223,15 @@ impl Player {
         if let (Some(window), Some(presenter)) = (&mut self.window, &self.window2d) {
             window.shutdown_2d(presenter)?;
         }
+        // The shared ring goes before its device.
+        self.embed = None;
         self.link.flush()?;
         Ok(())
     }
 
     /// One loop iteration with a world: tick by host time, ack patches, heartbeat,
-    /// present (windowed) or sleep until the next tick is due (headless).
+    /// present (windowed), publish a shared frame (embedded, when due and a slot is
+    /// free) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
@@ -230,15 +240,26 @@ impl Player {
         let now = Instant::now();
         let elapsed = now - self.last_advance;
         self.last_advance = now;
+        if let (Some(embed), Some(presenter)) = (&mut self.embed, &mut self.presenter)
+            && let Some(desc) = embed.apply_pending(presenter)?
+        {
+            self.link.notify(embed::method::SURFACE, &desc)?;
+            self.link.flush()?;
+        }
         if let Some(world) = &mut self.world {
-            if let Some(window) = &mut self.window {
-                let (quit, inputs) = window.events(world.runtime.player())?;
-                self.stop |= quit;
-                if !inputs.is_empty()
-                    && let Err(e) = world.runtime.input(0, inputs)
-                {
-                    eprintln!("ara-player: input: {e:#}");
+            let inputs = match (&mut self.window, &mut self.embed) {
+                (Some(window), _) => {
+                    let (quit, inputs) = window.events(world.runtime.player())?;
+                    self.stop |= quit;
+                    inputs
                 }
+                (None, Some(embed)) => embed.input.injections(world.runtime.player()),
+                (None, None) => Vec::new(),
+            };
+            if !inputs.is_empty()
+                && let Err(e) = world.runtime.input(0, inputs)
+            {
+                eprintln!("ara-player: input: {e:#}");
             }
             let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
             match world.runtime.advance(elapsed) {
@@ -267,9 +288,13 @@ impl Player {
                 let result = serde_json::to_value(world.patched(patch.tick, &patch.sets))?;
                 self.link.respond(patch.id, Ok(result))?;
             }
-            if self.window.is_some() {
-                world.runtime.extract(&mut self.frame);
+            // Windowed players present every iteration (vsync paces them), embedded
+            // ones when a frame is due (their frame cap), headless ones never.
+            let present = self.window.is_some() || self.embed.as_ref().is_some_and(|e| e.due(now));
+            if !present {
+                return self.after_frame(warming_window);
             }
+            world.runtime.extract(&mut self.frame);
             if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.window2d) {
                 let tick = world.runtime.tick();
                 window.prepare_2d(
@@ -299,10 +324,22 @@ impl Player {
                     ),
                     _ => None,
                 };
-                let presented = match (&mut self.window, &mut self.window2d, &mut self.presenter) {
-                    (Some(window), Some(presenter), _) => window.present_2d(presenter),
-                    (Some(window), _, Some(presenter)) => window.present(presenter, &self.frame),
-                    _ => Ok(()),
+                let presented = match (
+                    &mut self.window,
+                    &mut self.window2d,
+                    &mut self.embed,
+                    &mut self.presenter,
+                ) {
+                    (Some(window), Some(presenter), _, _) => {
+                        window.present_2d(presenter).map(|()| None)
+                    }
+                    (Some(window), None, _, Some(presenter)) => {
+                        window.present(presenter, &self.frame).map(|()| None)
+                    }
+                    (None, _, Some(embed), Some(presenter)) => {
+                        embed.render(presenter, &self.frame)
+                    }
+                    _ => Ok(None),
                 };
                 let audio = job.map(|job| {
                     job.join()
@@ -310,7 +347,10 @@ impl Player {
                 });
                 (presented, audio)
             });
-            presented?;
+            if let Some(ready) = presented? {
+                self.link.notify(embed::method::FRAME, ready)?;
+                self.link.flush()?;
+            }
             let mut audio_failed = audio.and_then(Result::err);
             if audio_failed.is_none()
                 && let Some((audio, device)) = &mut self.audio
@@ -323,6 +363,12 @@ impl Player {
                 self.audio = None;
             }
         }
+        self.after_frame(warming_window)
+    }
+
+    /// The end of every loop iteration with a world: the first-window-frame notice,
+    /// C# events, the heartbeat and, without a vsync-paced window, a short sleep.
+    fn after_frame(&mut self, warming_window: bool) -> Result<()> {
         if warming_window {
             self.window_ready = true;
             self.link.notify(
@@ -355,10 +401,11 @@ impl Player {
     }
 
     fn status(&mut self) -> Result<()> {
-        let (fps, frame_ms_p95) = self
-            .window
-            .as_mut()
-            .map_or((0.0, 0.0), device::Windowed::take_stats);
+        let (fps, frame_ms_p95) = match (&mut self.window, &mut self.embed) {
+            (Some(window), _) => window.take_stats(),
+            (None, Some(embed)) => embed.take_stats(),
+            (None, None) => (0.0, 0.0),
+        };
         let status = match &mut self.world {
             Some(world) => Status {
                 tick: world.runtime.tick(),
@@ -390,8 +437,10 @@ impl Player {
     }
 
     fn handle(&mut self, message: Message) -> Result<()> {
-        let Message::Request { id, method, params } = message else {
-            return Ok(());
+        let (id, method, params) = match message {
+            Message::Request { id, method, params } => (id, method, params),
+            Message::Notification { method, params } => return self.notification(&method, params),
+            Message::Response { .. } => return Ok(()),
         };
         if method == method::PATCH {
             return self.patch(id, params);
@@ -467,8 +516,72 @@ impl Player {
                 let crash: ara_play::Crash = parse(params)?;
                 crash::trigger(&crash.kind)
             }
+            embed::method::EMBED => {
+                let params: embed::EmbedParams = parse(params)?;
+                Ok(serde_json::to_value(self.open_surface(&params)?)?)
+            }
+            embed::method::RESIZE => {
+                let params: embed::ResizeParams = parse(params)?;
+                let (Some(embed), Some(presenter)) = (&mut self.embed, &mut self.presenter) else {
+                    return Err(not_embedded());
+                };
+                let desc = embed.resize(presenter, [params.width, params.height])?;
+                Ok(serde_json::to_value(desc)?)
+            }
+            embed::method::DEVICE => {
+                let params: embed::DeviceParams = parse(params)?;
+                let embed = self.embed.as_mut().ok_or_else(not_embedded)?;
+                for event in &params.events {
+                    embed.input.apply(*event);
+                }
+                Ok(json!({"accepted": params.events.len()}))
+            }
             _ => self.world_method(method, params),
         }
+    }
+
+    /// Owner notifications: slot releases, raw input and asynchronous resizes of
+    /// embedded players. Bad params are logged; there is no one to answer.
+    fn notification(&mut self, method: &str, params: Value) -> Result<()> {
+        let Some(embed) = &mut self.embed else {
+            return Ok(());
+        };
+        let applied = match method {
+            embed::method::RELEASE => serde_json::from_value(params)
+                .map(|frame| embed.release(frame))
+                .map_err(anyhow::Error::from),
+            embed::method::DEVICE => serde_json::from_value::<embed::DeviceParams>(params)
+                .map(|p| p.events.into_iter().for_each(|e| embed.input.apply(e)))
+                .map_err(anyhow::Error::from),
+            embed::method::RESIZE => serde_json::from_value::<embed::ResizeParams>(params)
+                .map_err(anyhow::Error::from)
+                .and_then(|p| embed.request_resize([p.width, p.height])),
+            _ => Ok(()),
+        };
+        if let Err(error) = applied {
+            eprintln!("ara-player: {method}: {error:#}");
+        }
+        Ok(())
+    }
+
+    /// `play.embed`: no window; render at the owner's size into a shared ring.
+    /// Creates the GPU device (announced to the watchdog) before `play.start`.
+    fn open_surface(
+        &mut self,
+        params: &embed::EmbedParams,
+    ) -> Result<ara_gpu::shared::SurfaceDesc> {
+        anyhow::ensure!(
+            self.window.is_none(),
+            "windowed players present to their own window and cannot embed"
+        );
+        anyhow::ensure!(self.embed.is_none(), "this player is already embedded");
+        busy(&mut self.link, "gpu")?;
+        let (embedded, presenter) = embed::Embedded::open(params, &self.args.gpu_cache)?;
+        let desc = embedded.desc();
+        self.size = [params.width, params.height];
+        self.presenter = Some(presenter);
+        self.embed = Some(embedded);
+        Ok(desc)
     }
 
     fn world_method(&mut self, method: &str, params: Value) -> std::result::Result<Value, Failure> {
@@ -636,11 +749,13 @@ impl Player {
             }
         };
         let decode_ms = decode.elapsed().as_secs_f64() * 1000.0;
+        // Windowed and embedded players present live frames (and stream live).
+        let presenting = self.window.is_some() || self.embed.is_some();
         let (mut world, build_ms) = World::build(
             &scene,
             start.role,
             start.net.as_ref(),
-            self.window.is_some(),
+            presenting,
             self.prewarmed.take(),
         )?;
         let mut handshake = None;
@@ -667,7 +782,10 @@ impl Player {
                 }
                 self.window2d = Some(presenter);
             }
-            // Live sound for windowed play; a missing device leaves play silent.
+        }
+        if presenting {
+            // Live sound for windowed and embedded play; a missing device leaves play
+            // silent.
             let device = ara_audio::device::SdlBackend::open(48_000)
                 .map_err(anyhow::Error::from)
                 .and_then(|device| Ok((world.audio_presenter()?, device)));
@@ -721,6 +839,12 @@ impl<E: Into<anyhow::Error>> From<E> for Failure {
 
 fn no_world() -> Failure {
     Failure::Engine(anyhow!("no world: send play.start first"))
+}
+
+fn not_embedded() -> Failure {
+    Failure::Engine(anyhow!(
+        "this player is not embedded: send play.embed first"
+    ))
 }
 
 fn parse<T: serde::de::DeserializeOwned>(params: Value) -> std::result::Result<T, Failure> {
