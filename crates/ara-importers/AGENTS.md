@@ -4,7 +4,11 @@ Production pure glTF/GLB, FBX and image importers for ara-import-worker.
 Public API: registry, the three Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
 The builtin registry also installs ara-geo::GeoImporter (`ara.geo`) for extracted
-single-material SourceMesh snapshots. Its versioned ARAG Custom artifact is
+single-material SourceMesh snapshots. glTF/FBX also emit one ARAG v1 Custom
+artifact per static material primitive automatically; MeshSettings.virtualGeometry
+opts out. Scene mesh entries link virtualGeometry artifact/cacheVersion/diagnostics.
+Skin and morph deformation retain the classic path with a manifest note.
+ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 
 Run cargo check/test/clippy -p ara-importers (clippy --all-targets).

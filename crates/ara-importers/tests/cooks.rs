@@ -273,6 +273,7 @@ fn generated_gltf_cooks_mesh_skin_clip_materials_and_hierarchy_byte_identically(
     input.thread_budget = 1;
     assert_eq!(first, cook(&input));
     assert_eq!(first.artifacts.len(), 6);
+    assert!(first.artifacts.iter().all(|a| !a.name.ends_with(".arag")));
     let mesh = first
         .artifacts
         .iter()
@@ -326,6 +327,47 @@ fn generated_gltf_cooks_mesh_skin_clip_materials_and_hierarchy_byte_identically(
             .filter(|a| a.kind == ArtifactKind::Mesh)
             .count(),
         8
+    );
+}
+
+#[test]
+fn static_gltf_automatically_cooks_a_versioned_dag_and_supports_opt_out() {
+    let mut fixture: Value = serde_json::from_slice(&gltf_fixture()).unwrap();
+    fixture["nodes"][0].as_object_mut().unwrap().remove("skin");
+    fixture.as_object_mut().unwrap().remove("skins");
+    let attributes = fixture["meshes"][0]["primitives"][0]["attributes"]
+        .as_object_mut()
+        .unwrap();
+    attributes.remove("JOINTS_0");
+    attributes.remove("WEIGHTS_0");
+    let mut request = input(
+        serde_json::to_vec(&fixture).unwrap(),
+        &GltfImporter,
+        Value::Null,
+    );
+    let first = cook(&request);
+    request.thread_budget = 1;
+    assert_eq!(first, cook(&request));
+    let artifact = first
+        .artifacts
+        .iter()
+        .find(|a| a.name.ends_with(".arag"))
+        .unwrap();
+    assert_eq!(
+        ara_geo::Geometry::decode(&artifact.bytes)
+            .unwrap()
+            .diagnostics
+            .source_triangles,
+        1
+    );
+    let automatic_key = request.key().unwrap();
+    request.settings = json!({"virtualGeometry":false});
+    assert_ne!(automatic_key, request.key().unwrap());
+    assert!(
+        cook(&request)
+            .artifacts
+            .iter()
+            .all(|a| !a.name.ends_with(".arag"))
     );
 }
 #[test]
