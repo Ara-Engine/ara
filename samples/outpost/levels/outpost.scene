@@ -1,0 +1,3631 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_outpost1",
+  "records": {
+    "e_aircon": {
+      "name": "Air conditioner",
+      "order": "b1Z",
+      "MeshRenderer": {
+        "model": "@assets/kit/aircon.gltf#as_kitaircon"
+      },
+      "Transform": {
+        "position": [106.3, 2.4, 110],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_barrier0": {
+      "name": "Road barrier",
+      "order": "b1F",
+      "MeshRenderer": {
+        "model": "@assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf#as_concreteroadbarrier"
+      },
+      "Transform": {
+        "position": [90.998, 0.008, 70.975],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_barrier0c": {
+      "name": "Road barrier collider",
+      "order": "b1G",
+      "Collider": {
+        "halfExtents": [0.7726784944534302, 0.41552430391311646, 0.3193703293800354]
+      },
+      "PhysicsId": {
+        "value": 9
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [91, 0.416, 71],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_barrier1": {
+      "name": "Road barrier",
+      "order": "b1H",
+      "MeshRenderer": {
+        "model": "@assets/third_party/concrete_road_barrier/concrete_road_barrier_1k.gltf#as_concreteroadbarrier"
+      },
+      "Transform": {
+        "position": [101.205, 0.008, 70.976],
+        "rotation": [0, -6, 0]
+      }
+    },
+    "e_barrier1c": {
+      "name": "Road barrier collider",
+      "order": "b1I",
+      "Collider": {
+        "halfExtents": [0.7726784944534302, 0.41552430391311646, 0.3193703293800354]
+      },
+      "PhysicsId": {
+        "value": 10
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [101.2, 0.416, 71],
+        "rotation": [0, -6, 0]
+      }
+    },
+    "e_barrier2": {
+      "name": "Road barrier",
+      "order": "b1J",
+      "MeshRenderer": {
+        "model": "@assets/third_party/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf#as_concreteroadbarrier02"
+      },
+      "Transform": {
+        "position": [103.43, 0.003, 72.615],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_barrier2c": {
+      "name": "Road barrier collider",
+      "order": "b1K",
+      "Collider": {
+        "halfExtents": [0.7827047109603882, 0.5559764504432678, 0.22107098996639252]
+      },
+      "PhysicsId": {
+        "value": 11
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [103.4, 0.556, 72.6],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_beacon": {
+      "name": "Mast beacon",
+      "order": "b2j",
+      "Light": {
+        "color": [1, 0.1, 0.05, 1],
+        "intensity": 400,
+        "range": 12
+      },
+      "Transform": {
+        "position": [121, 24.3, 124]
+      }
+    },
+    "e_boulder0": {
+      "name": "Boulder",
+      "order": "b34",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf#as_namaqualandboulder04"
+      },
+      "Transform": {
+        "position": [57.944, -0.071, 83.681],
+        "rotation": [0, 30, 0],
+        "scale": [1.4, 1.4, 1.4]
+      }
+    },
+    "e_boulder0c": {
+      "name": "Boulder collider",
+      "order": "b35",
+      "Collider": {
+        "halfExtents": [1.7655072212219238, 1.3303234577178955, 1.7474955320358276]
+      },
+      "PhysicsId": {
+        "value": 56
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [58, 1.218, 84],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_boulder1": {
+      "name": "Boulder",
+      "order": "b36",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf#as_namaqualandboulder03"
+      },
+      "Transform": {
+        "position": [53.916, -0.065, 80.189],
+        "rotation": [0, 110, 0]
+      }
+    },
+    "e_boulder10": {
+      "name": "Boulder",
+      "order": "b3O",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf#as_namaqualandboulder03"
+      },
+      "Transform": {
+        "position": [69.599, -0.131, 145.901],
+        "rotation": [0, 30, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_boulder10c": {
+      "name": "Boulder collider",
+      "order": "b3P",
+      "Collider": {
+        "halfExtents": [2.407097101211548, 1.4731931686401367, 3.065406084060669]
+      },
+      "PhysicsId": {
+        "value": 66
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [70, 1.313, 146],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_boulder11": {
+      "name": "Boulder",
+      "order": "b3Q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf#as_namaqualandboulder04"
+      },
+      "Transform": {
+        "position": [150.501, -0.111, 69.912],
+        "rotation": [0, 300, 0],
+        "scale": [2.2, 2.2, 2.2]
+      }
+    },
+    "e_boulder11c": {
+      "name": "Boulder collider",
+      "order": "b3R",
+      "Collider": {
+        "halfExtents": [2.7743685245513916, 2.090508460998535, 2.7460646629333496]
+      },
+      "PhysicsId": {
+        "value": 67
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [150, 1.915, 70],
+        "rotation": [0, 300, 0]
+      }
+    },
+    "e_boulder1c": {
+      "name": "Boulder collider",
+      "order": "b37",
+      "Collider": {
+        "halfExtents": [1.203548550605774, 0.7365965843200684, 1.5327030420303345]
+      },
+      "PhysicsId": {
+        "value": 57
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [54, 0.657, 80],
+        "rotation": [0, 110, 0]
+      }
+    },
+    "e_boulder2": {
+      "name": "Boulder",
+      "order": "b38",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf#as_namaqualandboulder02"
+      },
+      "Transform": {
+        "position": [61.096, -0.025, 76.976],
+        "rotation": [0, 200, 0],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_boulder2c": {
+      "name": "Boulder collider",
+      "order": "b39",
+      "Collider": {
+        "halfExtents": [1.5192853212356567, 0.529582679271698, 0.7405577898025513]
+      },
+      "PhysicsId": {
+        "value": 58
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [61, 0.434, 77],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_boulder3": {
+      "name": "Boulder",
+      "order": "b3A",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf#as_namaqualandboulder04"
+      },
+      "Transform": {
+        "position": [137.733, -0.091, 111.681],
+        "rotation": [0, 60, 0],
+        "scale": [1.8, 1.8, 1.8]
+      }
+    },
+    "e_boulder3c": {
+      "name": "Boulder collider",
+      "order": "b3B",
+      "Collider": {
+        "halfExtents": [2.269937753677368, 1.7104158401489258, 2.2467799186706543]
+      },
+      "PhysicsId": {
+        "value": 59
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [138, 1.566, 112],
+        "rotation": [0, 60, 0]
+      }
+    },
+    "e_boulder4": {
+      "name": "Boulder",
+      "order": "b3C",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf#as_namaqualandboulder03"
+      },
+      "Transform": {
+        "position": [140.794, -0.078, 105.862],
+        "rotation": [0, 10, 0],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_boulder4c": {
+      "name": "Boulder collider",
+      "order": "b3D",
+      "Collider": {
+        "halfExtents": [1.4442583322525024, 0.8839159607887268, 1.839243769645691]
+      },
+      "PhysicsId": {
+        "value": 60
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [141, 0.788, 106],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_boulder5": {
+      "name": "Boulder",
+      "order": "b3E",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf#as_namaqualandboulder05"
+      },
+      "Transform": {
+        "position": [136.02, -0.091, 104.566],
+        "rotation": [0, 80, 0],
+        "scale": [1.3, 1.3, 1.3]
+      }
+    },
+    "e_boulder5c": {
+      "name": "Boulder collider",
+      "order": "b3F",
+      "Collider": {
+        "halfExtents": [0.8866199254989624, 0.34990912675857544, 0.48618656396865845]
+      },
+      "PhysicsId": {
+        "value": 61
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [136, 0.246, 104.5],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_boulder6": {
+      "name": "Boulder",
+      "order": "b3G",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_03/namaqualand_boulder_03_1k.gltf#as_namaqualandboulder03"
+      },
+      "Transform": {
+        "position": [84.278, -0.098, 53.864],
+        "rotation": [0, 250, 0],
+        "scale": [1.5, 1.5, 1.5]
+      }
+    },
+    "e_boulder6c": {
+      "name": "Boulder collider",
+      "order": "b3H",
+      "Collider": {
+        "halfExtents": [1.8053228855133057, 1.1048948764801025, 2.2990546226501465]
+      },
+      "PhysicsId": {
+        "value": 62
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [84, 0.985, 54],
+        "rotation": [0, 250, 0]
+      }
+    },
+    "e_boulder7": {
+      "name": "Boulder",
+      "order": "b3I",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_02/namaqualand_boulder_02_1k.gltf#as_namaqualandboulder02"
+      },
+      "Transform": {
+        "position": [87.966, -0.021, 49.925],
+        "rotation": [0, 300, 0]
+      }
+    },
+    "e_boulder7c": {
+      "name": "Boulder collider",
+      "order": "b3J",
+      "Collider": {
+        "halfExtents": [1.266071081161499, 0.44131889939308167, 0.6171314716339111]
+      },
+      "PhysicsId": {
+        "value": 63
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [88, 0.361, 50],
+        "rotation": [0, 300, 0]
+      }
+    },
+    "e_boulder8": {
+      "name": "Boulder",
+      "order": "b3K",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_04/namaqualand_boulder_04_1k.gltf#as_namaqualandboulder04"
+      },
+      "Transform": {
+        "position": [119.74, -0.066, 56.15],
+        "rotation": [0, 140, 0],
+        "scale": [1.3, 1.3, 1.3]
+      }
+    },
+    "e_boulder8c": {
+      "name": "Boulder collider",
+      "order": "b3L",
+      "Collider": {
+        "halfExtents": [1.639399528503418, 1.2353003025054932, 1.6226744651794434]
+      },
+      "PhysicsId": {
+        "value": 64
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [120, 1.131, 56],
+        "rotation": [0, 140, 0]
+      }
+    },
+    "e_boulder9": {
+      "name": "Boulder",
+      "order": "b3M",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_boulder_05/namaqualand_boulder_05_1k.gltf#as_namaqualandboulder05"
+      },
+      "Transform": {
+        "position": [111.943, -0.112, 58.062],
+        "rotation": [0, 20, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_boulder9c": {
+      "name": "Boulder collider",
+      "order": "b3N",
+      "Collider": {
+        "halfExtents": [1.0912245512008667, 0.43065738677978516, 0.5983834862709045]
+      },
+      "PhysicsId": {
+        "value": 65
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112, 0.303, 58],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_camera": {
+      "name": "Follow camera",
+      "order": "a5",
+      "Camera": {},
+      "FollowCamera": {
+        "target": "e_player",
+        "distance": 4.2,
+        "height": 1.55,
+        "yaw": 140,
+        "pitch": 12
+      },
+      "Transform": {
+        "position": [84, 2.2, 86]
+      }
+    },
+    "e_car": {
+      "name": "Covered car",
+      "order": "b1O",
+      "MeshRenderer": {
+        "model": "@assets/third_party/covered_car/covered_car_1k.gltf#as_coveredcar"
+      },
+      "Transform": {
+        "position": [104.553, 0.05, 96.51],
+        "rotation": [0, 196, 0]
+      }
+    },
+    "e_carc": {
+      "name": "Covered car collider",
+      "order": "b1P",
+      "Collider": {
+        "halfExtents": [0.8944814801216125, 0.7055565118789673, 2.19012713432312]
+      },
+      "PhysicsId": {
+        "value": 13
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [104.5, 0.756, 96.5],
+        "rotation": [0, 196, 0]
+      }
+    },
+    "e_compressor": {
+      "name": "Compressor",
+      "order": "b1s",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_military_compressor/old_military_compressor_1k.gltf#as_oldmilitarycompressor"
+      },
+      "Transform": {
+        "position": [111.578, 0.052, 89.381],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_compressorc": {
+      "name": "Compressor collider",
+      "order": "b1t",
+      "Collider": {
+        "halfExtents": [0.2991413176059723, 0.5895431637763977, 0.8377721309661865]
+      },
+      "PhysicsId": {
+        "value": 25
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112, 0.64, 93.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_container0": {
+      "name": "Shipping container",
+      "order": "b1g",
+      "MeshRenderer": {
+        "model": "@assets/kit/container_green.gltf#as_kitcontainergreen"
+      },
+      "Transform": {
+        "position": [116, 0.05, 84],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_container0c": {
+      "name": "Shipping container collider",
+      "order": "b1h",
+      "Collider": {
+        "halfExtents": [3.0510001182556152, 1.2949999570846558, 1.2200000286102295]
+      },
+      "PhysicsId": {
+        "value": 19
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [116, 1.345, 83.979],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_container1": {
+      "name": "Shipping container",
+      "order": "b1i",
+      "MeshRenderer": {
+        "model": "@assets/kit/container_rust.gltf#as_kitcontainerrust"
+      },
+      "Transform": {
+        "position": [118.8, 0.05, 84.6],
+        "rotation": [0, 92, 0]
+      }
+    },
+    "e_container1c": {
+      "name": "Shipping container collider",
+      "order": "b1j",
+      "Collider": {
+        "halfExtents": [3.0510001182556152, 1.2949999570846558, 1.2200000286102295]
+      },
+      "PhysicsId": {
+        "value": 20
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [118.799, 1.345, 84.579],
+        "rotation": [0, 92, 0]
+      }
+    },
+    "e_container2": {
+      "name": "Shipping container",
+      "order": "b1k",
+      "MeshRenderer": {
+        "model": "@assets/kit/container_blue.gltf#as_kitcontainerblue"
+      },
+      "Transform": {
+        "position": [117.4, 2.65, 84.2],
+        "rotation": [0, 89, 0]
+      }
+    },
+    "e_container2c": {
+      "name": "Shipping container collider",
+      "order": "b1l",
+      "Collider": {
+        "halfExtents": [3.0510001182556152, 1.2949999570846558, 1.2200000286102295]
+      },
+      "PhysicsId": {
+        "value": 21
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [117.4, 3.945, 84.179],
+        "rotation": [0, 89, 0]
+      }
+    },
+    "e_container3": {
+      "name": "Shipping container",
+      "order": "b1m",
+      "MeshRenderer": {
+        "model": "@assets/kit/container_rust.gltf#as_kitcontainerrust"
+      },
+      "Transform": {
+        "position": [115.5, 0.05, 96],
+        "rotation": [0, 4, 0]
+      }
+    },
+    "e_container3c": {
+      "name": "Shipping container collider",
+      "order": "b1n",
+      "Collider": {
+        "halfExtents": [3.0510001182556152, 1.2949999570846558, 1.2200000286102295]
+      },
+      "PhysicsId": {
+        "value": 22
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [115.521, 1.345, 95.999],
+        "rotation": [0, 4, 0]
+      }
+    },
+    "e_container4": {
+      "name": "Shipping container",
+      "order": "b1o",
+      "MeshRenderer": {
+        "model": "@assets/kit/container_green.gltf#as_kitcontainergreen"
+      },
+      "Transform": {
+        "position": [76, 0.05, 120],
+        "rotation": [0, 18, 0]
+      }
+    },
+    "e_container4c": {
+      "name": "Shipping container collider",
+      "order": "b1p",
+      "Collider": {
+        "halfExtents": [3.0510001182556152, 1.2949999570846558, 1.2200000286102295]
+      },
+      "PhysicsId": {
+        "value": 23
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [76.02, 1.345, 119.994],
+        "rotation": [0, 18, 0]
+      }
+    },
+    "e_env": {
+      "name": "Dusk sky",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.16, 0.22, 0.42, 1],
+        "horizon": [1, 0.56, 0.32, 1],
+        "ground": [0.16, 0.12, 0.09, 1],
+        "intensity": 420,
+        "exposure": 0.0028
+      }
+    },
+    "e_fence0": {
+      "name": "Fence",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 72]
+      }
+    },
+    "e_fence1": {
+      "name": "Fence",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [66, -0.05, 72]
+      }
+    },
+    "e_fence10": {
+      "name": "Fence",
+      "order": "aV",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [84, -0.05, 72]
+      }
+    },
+    "e_fence100": {
+      "name": "Fence",
+      "order": "b0x",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 110],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence101": {
+      "name": "Fence",
+      "order": "b0y",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 108],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence102": {
+      "name": "Fence",
+      "order": "b0z",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 100],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence103": {
+      "name": "Fence",
+      "order": "b10",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 98],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence104": {
+      "name": "Fence",
+      "order": "b11",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 96],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence105": {
+      "name": "Fence",
+      "order": "b12",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 94],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence106": {
+      "name": "Fence",
+      "order": "b13",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 92],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence107": {
+      "name": "Fence",
+      "order": "b14",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 90],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence108": {
+      "name": "Fence",
+      "order": "b15",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 88],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence109": {
+      "name": "Fence",
+      "order": "b16",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 86],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence11": {
+      "name": "Fence",
+      "order": "aW",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [86, -0.05, 72]
+      }
+    },
+    "e_fence110": {
+      "name": "Fence",
+      "order": "b17",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 84],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence111": {
+      "name": "Fence",
+      "order": "b18",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 82],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence112": {
+      "name": "Fence",
+      "order": "b19",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 80],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence113": {
+      "name": "Fence",
+      "order": "b1A",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 78],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence114": {
+      "name": "Fence",
+      "order": "b1B",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 76],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence115": {
+      "name": "Fence",
+      "order": "b1C",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 74],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence12": {
+      "name": "Fence",
+      "order": "aX",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [88, -0.05, 72]
+      }
+    },
+    "e_fence13": {
+      "name": "Fence",
+      "order": "aY",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [90, -0.05, 72]
+      }
+    },
+    "e_fence14": {
+      "name": "Fence",
+      "order": "aZ",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [100, -0.05, 72]
+      }
+    },
+    "e_fence15": {
+      "name": "Fence",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [102, -0.05, 72]
+      }
+    },
+    "e_fence16": {
+      "name": "Fence",
+      "order": "ab",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [104, -0.05, 72]
+      }
+    },
+    "e_fence17": {
+      "name": "Fence",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [106, -0.05, 72]
+      }
+    },
+    "e_fence18": {
+      "name": "Fence",
+      "order": "ad",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [108, -0.05, 72]
+      }
+    },
+    "e_fence19": {
+      "name": "Fence",
+      "order": "ae",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [110, -0.05, 72]
+      }
+    },
+    "e_fence2": {
+      "name": "Fence",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [68, -0.05, 72]
+      }
+    },
+    "e_fence20": {
+      "name": "Fence",
+      "order": "af",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [112, -0.05, 72]
+      }
+    },
+    "e_fence21": {
+      "name": "Fence",
+      "order": "ag",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [114, -0.05, 72]
+      }
+    },
+    "e_fence22": {
+      "name": "Fence",
+      "order": "ah",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [116, -0.05, 72]
+      }
+    },
+    "e_fence23": {
+      "name": "Fence",
+      "order": "ai",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [118, -0.05, 72]
+      }
+    },
+    "e_fence24": {
+      "name": "Fence",
+      "order": "aj",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [120, -0.05, 72]
+      }
+    },
+    "e_fence25": {
+      "name": "Fence",
+      "order": "ak",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [122, -0.05, 72]
+      }
+    },
+    "e_fence26": {
+      "name": "Fence",
+      "order": "al",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [124, -0.05, 72]
+      }
+    },
+    "e_fence27": {
+      "name": "Fence",
+      "order": "am",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [126, -0.05, 72]
+      }
+    },
+    "e_fence28": {
+      "name": "Fence",
+      "order": "an",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 72],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence29": {
+      "name": "Fence",
+      "order": "ao",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 74],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence3": {
+      "name": "Fence",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [70, -0.05, 72]
+      }
+    },
+    "e_fence30": {
+      "name": "Fence",
+      "order": "ap",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 76],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence31": {
+      "name": "Fence",
+      "order": "aq",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 78],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence32": {
+      "name": "Fence",
+      "order": "ar",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 80],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence33": {
+      "name": "Fence",
+      "order": "as",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 82],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence34": {
+      "name": "Fence",
+      "order": "at",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 84],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence35": {
+      "name": "Fence",
+      "order": "au",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 86],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence36": {
+      "name": "Fence",
+      "order": "av",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 88],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence37": {
+      "name": "Fence",
+      "order": "aw",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 94],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence38": {
+      "name": "Fence",
+      "order": "ax",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 96],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence39": {
+      "name": "Fence",
+      "order": "ay",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 98],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence4": {
+      "name": "Fence",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [72, -0.05, 72]
+      }
+    },
+    "e_fence40": {
+      "name": "Fence",
+      "order": "az",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 100],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence41": {
+      "name": "Fence",
+      "order": "b00",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 102],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence42": {
+      "name": "Fence",
+      "order": "b01",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 104],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence43": {
+      "name": "Fence",
+      "order": "b02",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 106],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence44": {
+      "name": "Fence",
+      "order": "b03",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 108],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence45": {
+      "name": "Fence",
+      "order": "b04",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 110],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence46": {
+      "name": "Fence",
+      "order": "b05",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 112],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence47": {
+      "name": "Fence",
+      "order": "b06",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 114],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence48": {
+      "name": "Fence",
+      "order": "b07",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 116],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence49": {
+      "name": "Fence",
+      "order": "b08",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 118],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence5": {
+      "name": "Fence",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [74, -0.05, 72]
+      }
+    },
+    "e_fence50": {
+      "name": "Fence",
+      "order": "b09",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 120],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence51": {
+      "name": "Fence",
+      "order": "b0A",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 122],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence52": {
+      "name": "Fence",
+      "order": "b0B",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 124],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence53": {
+      "name": "Fence",
+      "order": "b0C",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 126],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence54": {
+      "name": "Fence",
+      "order": "b0D",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 128],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence55": {
+      "name": "Fence",
+      "order": "b0E",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 130],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence56": {
+      "name": "Fence",
+      "order": "b0F",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 132],
+        "rotation": [0, -90, 0]
+      }
+    },
+    "e_fence57": {
+      "name": "Fence",
+      "order": "b0G",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [128, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence58": {
+      "name": "Fence",
+      "order": "b0H",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [126, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence59": {
+      "name": "Fence",
+      "order": "b0I",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [124, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence6": {
+      "name": "Fence",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [76, -0.05, 72]
+      }
+    },
+    "e_fence60": {
+      "name": "Fence",
+      "order": "b0J",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [122, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence61": {
+      "name": "Fence",
+      "order": "b0K",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [120, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence62": {
+      "name": "Fence",
+      "order": "b0L",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [118, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence63": {
+      "name": "Fence",
+      "order": "b0M",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [116, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence64": {
+      "name": "Fence",
+      "order": "b0N",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [114, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence65": {
+      "name": "Fence",
+      "order": "b0O",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [112, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence66": {
+      "name": "Fence",
+      "order": "b0P",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [110, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence67": {
+      "name": "Fence",
+      "order": "b0Q",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [108, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence68": {
+      "name": "Fence",
+      "order": "b0R",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [106, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence69": {
+      "name": "Fence",
+      "order": "b0S",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [104, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence7": {
+      "name": "Fence",
+      "order": "aS",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [78, -0.05, 72]
+      }
+    },
+    "e_fence70": {
+      "name": "Fence",
+      "order": "b0T",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [102, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence71": {
+      "name": "Fence",
+      "order": "b0U",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [100, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence72": {
+      "name": "Fence",
+      "order": "b0V",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [98, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence73": {
+      "name": "Fence",
+      "order": "b0W",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [96, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence74": {
+      "name": "Fence",
+      "order": "b0X",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [94, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence75": {
+      "name": "Fence",
+      "order": "b0Y",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [92, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence76": {
+      "name": "Fence",
+      "order": "b0Z",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [90, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence77": {
+      "name": "Fence",
+      "order": "b0a",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [88, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence78": {
+      "name": "Fence",
+      "order": "b0b",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [86, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence79": {
+      "name": "Fence",
+      "order": "b0c",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [82, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence8": {
+      "name": "Fence",
+      "order": "aT",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [80, -0.05, 72]
+      }
+    },
+    "e_fence80": {
+      "name": "Fence",
+      "order": "b0d",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [80, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence81": {
+      "name": "Fence",
+      "order": "b0e",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [78, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence82": {
+      "name": "Fence",
+      "order": "b0f",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [76, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence83": {
+      "name": "Fence",
+      "order": "b0g",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [74, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence84": {
+      "name": "Fence",
+      "order": "b0h",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [72, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence85": {
+      "name": "Fence",
+      "order": "b0i",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [70, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence86": {
+      "name": "Fence",
+      "order": "b0j",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [68, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence87": {
+      "name": "Fence",
+      "order": "b0k",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [66, -0.05, 134],
+        "rotation": [0, -180, 0]
+      }
+    },
+    "e_fence88": {
+      "name": "Fence",
+      "order": "b0l",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 134],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence89": {
+      "name": "Fence",
+      "order": "b0m",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 132],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence9": {
+      "name": "Fence",
+      "order": "aU",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [82, -0.05, 72]
+      }
+    },
+    "e_fence90": {
+      "name": "Fence",
+      "order": "b0n",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 130],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence91": {
+      "name": "Fence",
+      "order": "b0o",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 128],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence92": {
+      "name": "Fence",
+      "order": "b0p",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 126],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence93": {
+      "name": "Fence",
+      "order": "b0q",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 124],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence94": {
+      "name": "Fence",
+      "order": "b0r",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 122],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence95": {
+      "name": "Fence",
+      "order": "b0s",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 120],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence96": {
+      "name": "Fence",
+      "order": "b0t",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 118],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence97": {
+      "name": "Fence",
+      "order": "b0u",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 116],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence98": {
+      "name": "Fence",
+      "order": "b0v",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 114],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fence99": {
+      "name": "Fence",
+      "order": "b0w",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_section.gltf#as_kitfencesection"
+      },
+      "Transform": {
+        "position": [64, -0.05, 112],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_fire": {
+      "name": "Campfire",
+      "order": "b2D",
+      "AcousticSource": {},
+      "AudioSource": {
+        "clip": "@assets/third_party/oga_fireplace/fire.wav#as_fire",
+        "gain": 0.5,
+        "looping": true,
+        "referenceDistance": 2,
+        "maxDistance": 30
+      },
+      "Transform": {
+        "position": [84, 0.10000000149011612, 91.5]
+      },
+      "VisualEffect": {}
+    },
+    "e_firelight": {
+      "name": "Campfire light",
+      "order": "b2E",
+      "Light": {
+        "color": [1, 0.5, 0.2, 1],
+        "intensity": 3200,
+        "range": 12
+      },
+      "Transform": {
+        "position": [84, 0.75, 91.5]
+      }
+    },
+    "e_firepit": {
+      "name": "Fire pit",
+      "order": "b2C",
+      "MeshRenderer": {
+        "model": "@assets/third_party/stone_fire_pit/stone_fire_pit_1k.gltf#as_stonefirepit"
+      },
+      "Transform": {
+        "position": [84.012, 0.243, 91.498]
+      }
+    },
+    "e_flood0": {
+      "name": "Floodlight",
+      "order": "b2k",
+      "MeshRenderer": {
+        "model": "@assets/third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "emissive": [4000, 3800, 3400]
+      },
+      "Transform": {
+        "position": [73, 0.05, 79],
+        "rotation": [0, 225, 0]
+      }
+    },
+    "e_flood0c": {
+      "name": "Floodlight collider",
+      "order": "b2l",
+      "Collider": {
+        "halfExtents": [0.35216811299324036, 1.9352777004241943, 0.19324657320976257]
+      },
+      "PhysicsId": {
+        "value": 49
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [73, 1.985, 79],
+        "rotation": [0, 225, 0]
+      }
+    },
+    "e_flood1": {
+      "name": "Floodlight",
+      "order": "b2n",
+      "MeshRenderer": {
+        "model": "@assets/third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "emissive": [4000, 3800, 3400]
+      },
+      "Transform": {
+        "position": [119, 0.05, 79],
+        "rotation": [0, 135, 0]
+      }
+    },
+    "e_flood1c": {
+      "name": "Floodlight collider",
+      "order": "b2o",
+      "Collider": {
+        "halfExtents": [0.35216811299324036, 1.9352777004241943, 0.19324657320976257]
+      },
+      "PhysicsId": {
+        "value": 50
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [119, 1.985, 79],
+        "rotation": [0, 135, 0]
+      }
+    },
+    "e_flood2": {
+      "name": "Floodlight",
+      "order": "b2q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/street_lamp_01/street_lamp_01_1k.gltf#as_streetlamp01",
+        "emissive": [4000, 3800, 3400]
+      },
+      "Transform": {
+        "position": [73, 0.05, 105],
+        "rotation": [0, 315, 0]
+      }
+    },
+    "e_flood2c": {
+      "name": "Floodlight collider",
+      "order": "b2r",
+      "Collider": {
+        "halfExtents": [0.35216811299324036, 1.9352777004241943, 0.19324657320976257]
+      },
+      "PhysicsId": {
+        "value": 51
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [73, 1.985, 105],
+        "rotation": [0, 315, 0]
+      }
+    },
+    "e_floodl0": {
+      "name": "Floodlight beam",
+      "order": "b2m",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.9, 0.78, 1],
+        "intensity": 14000,
+        "range": 34,
+        "innerAngle": 28,
+        "outerAngle": 48
+      },
+      "Transform": {
+        "position": [73, 3.75, 79],
+        "rotation": [-167.56, -52.878, 0]
+      }
+    },
+    "e_floodl1": {
+      "name": "Floodlight beam",
+      "order": "b2p",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.9, 0.78, 1],
+        "intensity": 14000,
+        "range": 34,
+        "innerAngle": 28,
+        "outerAngle": 48
+      },
+      "Transform": {
+        "position": [119, 3.75, 79],
+        "rotation": [-167.56, 52.878, 0]
+      }
+    },
+    "e_floodl2": {
+      "name": "Floodlight beam",
+      "order": "b2s",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.9, 0.78, 1],
+        "intensity": 14000,
+        "range": 34,
+        "innerAngle": 28,
+        "outerAngle": 48
+      },
+      "Transform": {
+        "position": [73, 3.75, 105],
+        "rotation": [-22.62, -67.027, 0]
+      }
+    },
+    "e_gasmask": {
+      "name": "Gas mask",
+      "order": "b2Q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_gas_mask/old_gas_mask_2k.gltf#as_oldgasmask"
+      },
+      "Transform": {
+        "position": [85.529, 1.515, 90.325],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_gate": {
+      "name": "Gate",
+      "order": "b1E",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_gate.gltf#as_kitfencegate"
+      },
+      "Transform": {
+        "position": [100, -0.05, 72],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_gatepost": {
+      "name": "Fence post",
+      "order": "b1D",
+      "MeshRenderer": {
+        "model": "@assets/kit/fence_post.gltf#as_kitfencepost"
+      },
+      "Transform": {
+        "position": [92, -0.05, 72]
+      }
+    },
+    "e_generator": {
+      "name": "Generator",
+      "order": "b1q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/portable_generator/portable_generator_1k.gltf#as_portablegenerator"
+      },
+      "Transform": {
+        "position": [112.398, 0.05, 90.605],
+        "rotation": [0, 250, 0]
+      }
+    },
+    "e_generatorc": {
+      "name": "Generator collider",
+      "order": "b1r",
+      "Collider": {
+        "halfExtents": [0.40917038917541504, 0.2884616255760193, 0.28200000524520874]
+      },
+      "PhysicsId": {
+        "value": 24
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112.4, 0.338, 90.6],
+        "rotation": [0, 250, 0]
+      }
+    },
+    "e_handtruck": {
+      "name": "Hand truck",
+      "order": "b1X",
+      "MeshRenderer": {
+        "model": "@assets/third_party/hand_truck/hand_truck_1k.gltf#as_handtruck"
+      },
+      "Transform": {
+        "position": [101.086, 0.05, 103.336],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_handtruckc": {
+      "name": "Hand truck collider",
+      "order": "b1Y",
+      "Collider": {
+        "halfExtents": [0.2966264486312866, 0.7012563943862915, 0.3462635576725006]
+      },
+      "PhysicsId": {
+        "value": 15
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [101, 0.751, 103.1],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_hangar": {
+      "name": "Hangar",
+      "order": "a9",
+      "MeshRenderer": {
+        "model": "@assets/kit/hangar.gltf#as_kithangar"
+      },
+      "Transform": {
+        "position": [96, 0, 117]
+      }
+    },
+    "e_hangarglow": {
+      "name": "Hangar interior glow",
+      "order": "b2v",
+      "Light": {
+        "color": [1, 0.78, 0.5, 1],
+        "intensity": 6000,
+        "range": 18
+      },
+      "Transform": {
+        "position": [99, 4.5, 109]
+      }
+    },
+    "e_hangarwall0": {
+      "name": "Hangar wall collider",
+      "order": "aA",
+      "Collider": {
+        "halfExtents": [0.10000000149011612, 3.5, 13]
+      },
+      "PhysicsId": {
+        "value": 3
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [86, 3.5, 117]
+      }
+    },
+    "e_hangarwall1": {
+      "name": "Hangar wall collider",
+      "order": "aB",
+      "Collider": {
+        "halfExtents": [0.10000000149011612, 3.5, 13]
+      },
+      "PhysicsId": {
+        "value": 4
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [106, 3.5, 117]
+      }
+    },
+    "e_hangarwall2": {
+      "name": "Hangar wall collider",
+      "order": "aC",
+      "Collider": {
+        "halfExtents": [10, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 5
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [96, 3.5, 130]
+      }
+    },
+    "e_hangarwall3": {
+      "name": "Hangar wall collider",
+      "order": "aD",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 6
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [88.5, 3.5, 104]
+      }
+    },
+    "e_hangarwall4": {
+      "name": "Hangar wall collider",
+      "order": "aE",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 7
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [103.5, 3.5, 104]
+      }
+    },
+    "e_hangarwall5": {
+      "name": "Hangar wall collider",
+      "order": "aF",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 8
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [93.5, 3.5, 103.75]
+      }
+    },
+    "e_humankind": {
+      "name": "Human agents",
+      "order": "a3",
+      "NavAgentType": {
+        "name": "Human",
+        "slope": 40
+      }
+    },
+    "e_hut": {
+      "name": "Guard hut",
+      "order": "b1L",
+      "MeshRenderer": {
+        "model": "@assets/kit/guard_hut.gltf#as_kitguardhut"
+      },
+      "Transform": {
+        "position": [86, 0.05, 80.5],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_hutc": {
+      "name": "Guard hut collider",
+      "order": "b1M",
+      "Collider": {
+        "halfExtents": [1.9000000953674316, 1.4719388484954834, 2.12552809715271]
+      },
+      "PhysicsId": {
+        "value": 12
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [86, 1.522, 80.273],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_hutlight": {
+      "name": "Guard hut lamp",
+      "order": "b1N",
+      "Light": {
+        "color": [1, 0.72, 0.42, 1],
+        "intensity": 900,
+        "range": 7
+      },
+      "Transform": {
+        "position": [86, 2.3, 80.5]
+      }
+    },
+    "e_ladder": {
+      "name": "Ladder",
+      "order": "b1e",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_ladder/wooden_ladder_1k.gltf#as_woodenladder"
+      },
+      "Transform": {
+        "position": [85.195, 0.05, 103.2],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_ladderc": {
+      "name": "Ladder collider",
+      "order": "b1f",
+      "Collider": {
+        "halfExtents": [0.4795858860015869, 0.667461633682251, 0.25]
+      },
+      "PhysicsId": {
+        "value": 18
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [85.2, 0.717, 103.2],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_log0": {
+      "name": "Dead log",
+      "order": "b3m",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf#as_deadtreetrunk"
+      },
+      "Transform": {
+        "position": [62.035, 0.028, 99.998],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_log1": {
+      "name": "Dead log",
+      "order": "b3n",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf#as_deadtreetrunk"
+      },
+      "Transform": {
+        "position": [129.998, 0.055, 65.965],
+        "rotation": [0, 160, 0]
+      }
+    },
+    "e_log2": {
+      "name": "Dead log",
+      "order": "b3o",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dead_tree_trunk/dead_tree_trunk_1k.gltf#as_deadtreetrunk"
+      },
+      "Transform": {
+        "position": [90.024, 0.028, 46.025],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_mast": {
+      "name": "Radio mast",
+      "order": "b2h",
+      "MeshRenderer": {
+        "model": "@assets/kit/mast.gltf#as_kitmast",
+        "emissive": [800, 800, 800]
+      },
+      "Transform": {
+        "position": [121, 0, 124],
+        "rotation": [0, 15, 0]
+      }
+    },
+    "e_mastc": {
+      "name": "Radio mast collider",
+      "order": "b2i",
+      "Collider": {
+        "halfExtents": [0.822489857673645, 12.117231369018555, 0.8244163990020752]
+      },
+      "PhysicsId": {
+        "value": 48
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [121.118, 12.103, 123.968],
+        "rotation": [0, 15, 0]
+      }
+    },
+    "e_music": {
+      "name": "Music",
+      "order": "b3q",
+      "MusicSource": {
+        "music": "@audio/outpost.music#mu_outpost1"
+      }
+    },
+    "e_navsurface": {
+      "name": "Compound navigation",
+      "order": "a6",
+      "NavMeshSurface": {
+        "min": [61, -5, 61],
+        "max": [131, 8, 131]
+      },
+      "Transform": {
+        "position": [96, 0, 96]
+      }
+    },
+    "e_pad": {
+      "name": "Concrete pad",
+      "order": "a7",
+      "MeshRenderer": {
+        "model": "@assets/kit/pad.gltf#as_kitpad"
+      },
+      "Transform": {
+        "position": [96, 0.05, 92]
+      }
+    },
+    "e_padc": {
+      "name": "Pad collider",
+      "order": "a8",
+      "Collider": {
+        "halfExtents": [24, 0.15, 15]
+      },
+      "PhysicsId": {
+        "value": 2
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [96, -0.1, 92]
+      }
+    },
+    "e_player": {
+      "name": "Salvager",
+      "order": "a4",
+      "Animator": {
+        "controller": "@anim/human.animation#an_locomotion"
+      },
+      "AudioListener": {},
+      "CharacterController": {},
+      "MeshRenderer": {
+        "model": "@assets/third_party/m2m_human/human-base-animations.glb#as_m2mhuman"
+      },
+      "PhysicsId": {},
+      "PlayerControl": {
+        "walkSpeed": 1.5,
+        "runSpeed": 5,
+        "yaw": 140,
+        "camera": "e_camera"
+      },
+      "Transform": {
+        "position": [86.5, 0.05, 89],
+        "rotation": [0, 140, 0]
+      }
+    },
+    "e_pole0": {
+      "name": "Utility pole",
+      "order": "b2w",
+      "MeshRenderer": {
+        "model": "@assets/kit/pole.gltf#as_kitpole"
+      },
+      "Transform": {
+        "position": [100.6, 0, 64],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole0c": {
+      "name": "Utility pole collider",
+      "order": "b2x",
+      "Collider": {
+        "halfExtents": [0.6000000238418579, 3.5, 0.33856815099716187]
+      },
+      "PhysicsId": {
+        "value": 52
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [100.627, 3.5, 64.195],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole1": {
+      "name": "Utility pole",
+      "order": "b2y",
+      "MeshRenderer": {
+        "model": "@assets/kit/pole.gltf#as_kitpole"
+      },
+      "Transform": {
+        "position": [103.5, 0, 46],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole1c": {
+      "name": "Utility pole collider",
+      "order": "b2z",
+      "Collider": {
+        "halfExtents": [0.6000000238418579, 3.5, 0.33856815099716187]
+      },
+      "PhysicsId": {
+        "value": 53
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [103.527, 3.5, 46.195],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole2": {
+      "name": "Utility pole",
+      "order": "b30",
+      "MeshRenderer": {
+        "model": "@assets/kit/pole.gltf#as_kitpole"
+      },
+      "Transform": {
+        "position": [108, 0, 30],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole2c": {
+      "name": "Utility pole collider",
+      "order": "b31",
+      "Collider": {
+        "halfExtents": [0.6000000238418579, 3.5, 0.33856815099716187]
+      },
+      "PhysicsId": {
+        "value": 54
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [108.027, 3.5, 30.195],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole3": {
+      "name": "Utility pole",
+      "order": "b32",
+      "MeshRenderer": {
+        "model": "@assets/kit/pole.gltf#as_kitpole"
+      },
+      "Transform": {
+        "position": [110.2, 0, 14],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_pole3c": {
+      "name": "Utility pole collider",
+      "order": "b33",
+      "Collider": {
+        "halfExtents": [0.6000000238418579, 3.5, 0.33856815099716187]
+      },
+      "PhysicsId": {
+        "value": 55
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [110.227, 3.5, 14.195],
+        "rotation": [0, 8, 0]
+      }
+    },
+    "e_puddle0": {
+      "name": "Puddle",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_c.gltf#as_kitpuddlec"
+      },
+      "Transform": {
+        "position": [97.4, 0.03, 60],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_puddle1": {
+      "name": "Puddle",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea"
+      },
+      "Transform": {
+        "position": [101.8, 0.03, 44],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_puddle2": {
+      "name": "Puddle",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_b.gltf#as_kitpuddleb"
+      },
+      "Transform": {
+        "position": [99, 0.05, 84]
+      }
+    },
+    "e_puddle3": {
+      "name": "Puddle",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea"
+      },
+      "Transform": {
+        "position": [106, 0.05, 101],
+        "rotation": [0, 130, 0]
+      }
+    },
+    "e_radio": {
+      "name": "Radio",
+      "order": "b2P",
+      "MeshRenderer": {
+        "model": "@assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [82.031, 0.521, 92.17],
+        "rotation": [0, 160, 0]
+      }
+    },
+    "e_rim0": {
+      "name": "Wheel rim",
+      "order": "b1S",
+      "MeshRenderer": {
+        "model": "@assets/third_party/rusted_wheel_rim_01/rusted_wheel_rim_01_1k.gltf#as_rustedwheelrim01"
+      },
+      "Transform": {
+        "position": [107.5, 0.252, 98.2],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_road": {
+      "name": "Dirt road",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@assets/kit/road.gltf#as_kitroad"
+      },
+      "Transform": {}
+    },
+    "e_seat0": {
+      "name": "Seat",
+      "order": "b2F",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [82.1, 0.05, 92.1],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_seat0c": {
+      "name": "Seat collider",
+      "order": "b2G",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 35
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [82.1, 0.282, 92.1],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_seat1": {
+      "name": "Seat",
+      "order": "b2H",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf#as_woodencrate02"
+      },
+      "Transform": {
+        "position": [85.6, 0.06, 90.2],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_seat1c": {
+      "name": "Seat collider",
+      "order": "b2I",
+      "Collider": {
+        "halfExtents": [0.26455047726631165, 0.23197726905345917, 0.5831629037857056]
+      },
+      "PhysicsId": {
+        "value": 36
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [85.6, 0.282, 90.2],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_seat2": {
+      "name": "Seat",
+      "order": "b2J",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_stove/barrel_stove_1k.gltf#as_barrelstove"
+      },
+      "Transform": {
+        "position": [85.8, 0.05, 92.9]
+      }
+    },
+    "e_seat2c": {
+      "name": "Seat collider",
+      "order": "b2K",
+      "Collider": {
+        "halfExtents": [0.29628369212150574, 0.4278019666671753, 0.29628369212150574]
+      },
+      "PhysicsId": {
+        "value": 37
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [85.8, 0.478, 92.9]
+      }
+    },
+    "e_seat3": {
+      "name": "Seat",
+      "order": "b2L",
+      "MeshRenderer": {
+        "model": "@assets/kit/ammo_crate.gltf#as_kitammocrate"
+      },
+      "Transform": {
+        "position": [83.398, 0.05, 89.505],
+        "rotation": [0, 160, 0]
+      }
+    },
+    "e_seat3c": {
+      "name": "Seat collider",
+      "order": "b2M",
+      "Collider": {
+        "halfExtents": [0.40234997868537903, 0.14999717473983765, 0.23478087782859802]
+      },
+      "PhysicsId": {
+        "value": 38
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [83.4, 0.2, 89.5],
+        "rotation": [0, 160, 0]
+      }
+    },
+    "e_seat4": {
+      "name": "Seat",
+      "order": "b2N",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_crate_01/wooden_crate_01_1k.gltf#as_woodencrate01"
+      },
+      "Transform": {
+        "position": [81.592, 0.058, 90.503],
+        "rotation": [0, 110, 0]
+      }
+    },
+    "e_seat4c": {
+      "name": "Seat collider",
+      "order": "b2O",
+      "Collider": {
+        "halfExtents": [0.4126364588737488, 0.17480914294719696, 0.20447686314582825]
+      },
+      "PhysicsId": {
+        "value": 39
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [81.6, 0.225, 90.5],
+        "rotation": [0, 110, 0]
+      }
+    },
+    "e_seclight": {
+      "name": "Security light",
+      "order": "b2t",
+      "MeshRenderer": {
+        "model": "@assets/third_party/security_light/security_light_1k.gltf#as_securitylight",
+        "emissive": [3000, 2900, 2700]
+      },
+      "Transform": {
+        "position": [90, 6.6, 103.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_seclightl": {
+      "name": "Security light beam",
+      "order": "b2u",
+      "Light": {
+        "kind": "spot",
+        "color": [0.92, 0.95, 1, 1],
+        "intensity": 9000,
+        "range": 22,
+        "innerAngle": 30,
+        "outerAngle": 55
+      },
+      "Transform": {
+        "position": [90, 6.4, 103.4],
+        "rotation": [-48.013, 0, 0]
+      }
+    },
+    "e_store0": {
+      "name": "Stores",
+      "order": "b2R",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [90, 0.05, 99],
+        "rotation": [0, 5, 0]
+      }
+    },
+    "e_store0c": {
+      "name": "Stores collider",
+      "order": "b2S",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 40
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [90, 0.282, 99],
+        "rotation": [0, 5, 0]
+      }
+    },
+    "e_store1": {
+      "name": "Stores",
+      "order": "b2T",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [90.1, 0.47, 99]
+      }
+    },
+    "e_store1c": {
+      "name": "Stores collider",
+      "order": "b2U",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 41
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [90.1, 0.702, 99]
+      }
+    },
+    "e_store2": {
+      "name": "Stores",
+      "order": "b2V",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf#as_woodencrate02"
+      },
+      "Transform": {
+        "position": [91.9, 0.06, 98.4],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_store2c": {
+      "name": "Stores collider",
+      "order": "b2W",
+      "Collider": {
+        "halfExtents": [0.26455047726631165, 0.23197726905345917, 0.5831629037857056]
+      },
+      "PhysicsId": {
+        "value": 42
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [91.9, 0.282, 98.4],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_store3": {
+      "name": "Stores",
+      "order": "b2X",
+      "MeshRenderer": {
+        "model": "@assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf#as_plasticcrate03"
+      },
+      "Transform": {
+        "position": [90.6, 0.05, 100.2],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_store3c": {
+      "name": "Stores collider",
+      "order": "b2Y",
+      "Collider": {
+        "halfExtents": [0.24055056273937225, 0.13296274840831757, 0.1324857622385025]
+      },
+      "PhysicsId": {
+        "value": 43
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [90.6, 0.183, 100.2],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_store4": {
+      "name": "Stores",
+      "order": "b2Z",
+      "MeshRenderer": {
+        "model": "@assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf#as_plasticcrate03"
+      },
+      "Transform": {
+        "position": [91.2, 0.05, 100.3]
+      }
+    },
+    "e_store4c": {
+      "name": "Stores collider",
+      "order": "b2a",
+      "Collider": {
+        "halfExtents": [0.24055056273937225, 0.13296274840831757, 0.1324857622385025]
+      },
+      "PhysicsId": {
+        "value": 44
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [91.2, 0.183, 100.3]
+      }
+    },
+    "e_store5": {
+      "name": "Stores",
+      "order": "b2b",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [92.58, 0.057, 99.574],
+        "rotation": [0, 35, 0]
+      }
+    },
+    "e_store5c": {
+      "name": "Stores collider",
+      "order": "b2c",
+      "Collider": {
+        "halfExtents": [0.19351179897785187, 0.17089977860450745, 0.25793522596359253]
+      },
+      "PhysicsId": {
+        "value": 45
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [92.6, 0.221, 99.6],
+        "rotation": [0, 35, 0]
+      }
+    },
+    "e_store6": {
+      "name": "Stores",
+      "order": "b2d",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [92.867, 0.057, 100.295],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_store6c": {
+      "name": "Stores collider",
+      "order": "b2e",
+      "Collider": {
+        "halfExtents": [0.19351179897785187, 0.17089977860450745, 0.25793522596359253]
+      },
+      "PhysicsId": {
+        "value": 46
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [92.9, 0.221, 100.3],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_store7": {
+      "name": "Stores",
+      "order": "b2f",
+      "MeshRenderer": {
+        "model": "@assets/kit/ammo_crate.gltf#as_kitammocrate"
+      },
+      "Transform": {
+        "position": [87.794, 0.05, 97.601],
+        "rotation": [0, 100, 0]
+      }
+    },
+    "e_store7c": {
+      "name": "Stores collider",
+      "order": "b2g",
+      "Collider": {
+        "halfExtents": [0.40234997868537903, 0.14999717473983765, 0.23478087782859802]
+      },
+      "PhysicsId": {
+        "value": 47
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [87.8, 0.2, 97.6],
+        "rotation": [0, 100, 0]
+      }
+    },
+    "e_sun": {
+      "name": "Setting sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.58, 0.34, 1],
+        "intensity": 9000
+      },
+      "Transform": {
+        "position": [96, 40, 96],
+        "rotation": [-16.699, -68.549, 0]
+      }
+    },
+    "e_terrain": {
+      "name": "Terrain",
+      "order": "a2",
+      "Terrain": {
+        "terrain": "@terrain/outpost.terrain#tr_outpost1",
+        "foliage": "@terrain/outpost.foliage#fo_outpost1"
+      },
+      "Transform": {}
+    },
+    "e_trashbag0": {
+      "name": "Trash bags",
+      "order": "b1V",
+      "MeshRenderer": {
+        "model": "@assets/third_party/trashbag/trashbag_1k.gltf#as_trashbag"
+      },
+      "Transform": {
+        "position": [88.403, 0.051, 102.609],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_trashbag1": {
+      "name": "Trash bags",
+      "order": "b1W",
+      "MeshRenderer": {
+        "model": "@assets/third_party/trashbag/trashbag_1k.gltf#as_trashbag"
+      },
+      "Transform": {
+        "position": [88.908, 0.051, 101.896],
+        "rotation": [0, 140, 0]
+      }
+    },
+    "e_trashcan": {
+      "name": "Trash can",
+      "order": "b1T",
+      "MeshRenderer": {
+        "model": "@assets/kit/trash_can.gltf#as_kittrashcan"
+      },
+      "Transform": {
+        "position": [89.207, 0.05, 102.998],
+        "rotation": [0, 15, 0]
+      }
+    },
+    "e_trashcanc": {
+      "name": "Trash can collider",
+      "order": "b1U",
+      "Collider": {
+        "halfExtents": [0.33453333377838135, 0.4530786871910095, 0.274303138256073]
+      },
+      "PhysicsId": {
+        "value": 14
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [89.2, 0.503, 103],
+        "rotation": [0, 15, 0]
+      }
+    },
+    "e_tree0": {
+      "name": "Quiver tree",
+      "order": "b3S",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf#as_quivertree01"
+      },
+      "Transform": {
+        "position": [59.877, 0.059, 89.994],
+        "rotation": [0, 20, 0],
+        "scale": [2.6, 2.6, 2.6]
+      }
+    },
+    "e_tree0c": {
+      "name": "Quiver tree collider",
+      "order": "b3T",
+      "Collider": {
+        "halfExtents": [1.5356062650680542, 3.5300467014312744, 1.2590570449829102]
+      },
+      "PhysicsId": {
+        "value": 68
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [60, 3.48, 90],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_tree1": {
+      "name": "Quiver tree",
+      "order": "b3U",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf#as_quivertree02"
+      },
+      "Transform": {
+        "position": [55.373, 0.098, 94.927],
+        "rotation": [0, 140, 0],
+        "scale": [3, 3, 3]
+      }
+    },
+    "e_tree1c": {
+      "name": "Quiver tree collider",
+      "order": "b3V",
+      "Collider": {
+        "halfExtents": [1.3074579238891602, 2.2032909393310547, 1.3212296962738037]
+      },
+      "PhysicsId": {
+        "value": 69
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [55.5, 2.153, 95],
+        "rotation": [0, 140, 0]
+      }
+    },
+    "e_tree2": {
+      "name": "Quiver tree",
+      "order": "b3W",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf#as_quivertree01"
+      },
+      "Transform": {
+        "position": [134.137, 0.071, 98.006],
+        "rotation": [0, 200, 0],
+        "scale": [2.9, 2.9, 2.9]
+      }
+    },
+    "e_tree2c": {
+      "name": "Quiver tree collider",
+      "order": "b3X",
+      "Collider": {
+        "halfExtents": [1.7127918004989624, 3.9373602867126465, 1.4043329954147339]
+      },
+      "PhysicsId": {
+        "value": 70
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [134, 3.887, 98],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_tree3": {
+      "name": "Quiver tree",
+      "order": "b3Y",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf#as_quivertree01"
+      },
+      "Transform": {
+        "position": [81.939, 0.05, 58.095],
+        "rotation": [0, 80, 0],
+        "scale": [2.4, 2.4, 2.4]
+      }
+    },
+    "e_tree3c": {
+      "name": "Quiver tree collider",
+      "order": "b3Z",
+      "Collider": {
+        "halfExtents": [1.417482852935791, 3.25850510597229, 1.1622065305709839]
+      },
+      "PhysicsId": {
+        "value": 71
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [82, 3.209, 58],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_tree4": {
+      "name": "Quiver tree",
+      "order": "b3a",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf#as_quivertree02"
+      },
+      "Transform": {
+        "position": [123.128, 0.088, 61.954],
+        "rotation": [0, 10, 0],
+        "scale": [2.8, 2.8, 2.8]
+      }
+    },
+    "e_tree4c": {
+      "name": "Quiver tree collider",
+      "order": "b3b",
+      "Collider": {
+        "halfExtents": [1.2202939987182617, 2.0564048290252686, 1.2331477403640747]
+      },
+      "PhysicsId": {
+        "value": 72
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [123, 2.006, 62],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_tree5": {
+      "name": "Quiver tree",
+      "order": "b3c",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf#as_quivertree01"
+      },
+      "Transform": {
+        "position": [144.981, 1.035, 127.85],
+        "rotation": [0, 300, 0],
+        "scale": [3.2, 3.2, 3.2]
+      }
+    },
+    "e_tree5c": {
+      "name": "Quiver tree collider",
+      "order": "b3d",
+      "Collider": {
+        "halfExtents": [1.8899770975112915, 4.344673156738281, 1.5496087074279785]
+      },
+      "PhysicsId": {
+        "value": 73
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [145, 5.246, 128],
+        "rotation": [0, 300, 0]
+      }
+    },
+    "e_tree6": {
+      "name": "Quiver tree",
+      "order": "b3e",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_01/quiver_tree_01_1k.gltf#as_quivertree01"
+      },
+      "Transform": {
+        "position": [47.874, 0.7, 128.065],
+        "rotation": [0, 50, 0],
+        "scale": [3, 3, 3]
+      }
+    },
+    "e_tree6c": {
+      "name": "Quiver tree collider",
+      "order": "b3f",
+      "Collider": {
+        "halfExtents": [1.7718534469604492, 4.073131084442139, 1.4527581930160522]
+      },
+      "PhysicsId": {
+        "value": 74
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [48, 4.648, 128],
+        "rotation": [0, 50, 0]
+      }
+    },
+    "e_tree7": {
+      "name": "Quiver tree",
+      "order": "b3g",
+      "MeshRenderer": {
+        "model": "@assets/third_party/quiver_tree_02/quiver_tree_02_1k.gltf#as_quivertree02"
+      },
+      "Transform": {
+        "position": [111.943, 0.118, 145.156],
+        "rotation": [0, 240, 0],
+        "scale": [3.4, 3.4, 3.4]
+      }
+    },
+    "e_tree7c": {
+      "name": "Quiver tree collider",
+      "order": "b3h",
+      "Collider": {
+        "halfExtents": [1.4817856550216675, 2.497063159942627, 1.4973937273025513]
+      },
+      "PhysicsId": {
+        "value": 75
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112, 2.447, 145],
+        "rotation": [0, 240, 0]
+      }
+    },
+    "e_tree8": {
+      "name": "Quiver tree",
+      "order": "b3i",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf#as_deadquivertrunk"
+      },
+      "Transform": {
+        "position": [66.038, -0.076, 69.993],
+        "scale": [2.2, 2.2, 2.2]
+      }
+    },
+    "e_tree8c": {
+      "name": "Quiver tree collider",
+      "order": "b3j",
+      "Collider": {
+        "halfExtents": [0.33712032437324524, 2.193516254425049, 0.2948950529098511]
+      },
+      "PhysicsId": {
+        "value": 76
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [66, 2.144, 70]
+      }
+    },
+    "e_tree9": {
+      "name": "Quiver tree",
+      "order": "b3k",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dead_quiver_trunk/dead_quiver_trunk_1k.gltf#as_deadquivertrunk"
+      },
+      "Transform": {
+        "position": [130.994, -0.074, 75.965],
+        "rotation": [0, 90, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_tree9c": {
+      "name": "Quiver tree collider",
+      "order": "b3l",
+      "Collider": {
+        "halfExtents": [0.3064730167388916, 1.994105577468872, 0.26808640360832214]
+      },
+      "PhysicsId": {
+        "value": 77
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [131, 1.944, 76],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_tyre0": {
+      "name": "Old tyre",
+      "order": "b1Q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_tyre/old_tyre_1k.gltf#as_oldtyre"
+      },
+      "Transform": {
+        "position": [108.6, 0.35, 99],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_tyre1": {
+      "name": "Old tyre",
+      "order": "b1R",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_tyre/old_tyre_1k.gltf#as_oldtyre"
+      },
+      "Transform": {
+        "position": [109.1, 0.35, 99.6],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_utility0": {
+      "name": "Utility box",
+      "order": "b1a",
+      "MeshRenderer": {
+        "model": "@assets/third_party/utility_box_02/utility_box_02_1k.gltf#as_utilitybox02"
+      },
+      "Transform": {
+        "position": [106.606, 0.05, 113],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_utility0c": {
+      "name": "Utility box collider",
+      "order": "b1b",
+      "Collider": {
+        "halfExtents": [0.46000009775161743, 0.5601667165756226, 0.21599999070167542]
+      },
+      "PhysicsId": {
+        "value": 16
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [106.6, 0.61, 113],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_utility1": {
+      "name": "Utility box",
+      "order": "b1c",
+      "MeshRenderer": {
+        "model": "@assets/third_party/utility_box_01/utility_box_01_1k.gltf#as_utilitybox01"
+      },
+      "Transform": {
+        "position": [106.606, 0.05, 114.3],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_utility1c": {
+      "name": "Utility box collider",
+      "order": "b1d",
+      "Collider": {
+        "halfExtents": [0.2600001096725464, 0.5601667165756226, 0.21599999070167542]
+      },
+      "PhysicsId": {
+        "value": 17
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [106.6, 0.61, 114.3],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_wind": {
+      "name": "Wind",
+      "order": "b3p",
+      "AudioSource": {
+        "clip": "@assets/third_party/oga_wind/wind_loop.ogg#as_wind",
+        "gain": 0.2,
+        "looping": true,
+        "spatial": false,
+        "referenceDistance": 60,
+        "maxDistance": 400
+      },
+      "Transform": {
+        "position": [96, 2, 96]
+      }
+    },
+    "e_yard0": {
+      "name": "Supplies",
+      "order": "b1u",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_01/Barrel_01_1k.gltf#as_barrel01"
+      },
+      "Transform": {
+        "position": [113, 0.057, 81]
+      }
+    },
+    "e_yard0c": {
+      "name": "Supplies collider",
+      "order": "b1v",
+      "Collider": {
+        "halfExtents": [0.28151756525039673, 0.4399999976158142, 0.2815176248550415]
+      },
+      "PhysicsId": {
+        "value": 26
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [113, 0.49, 81]
+      }
+    },
+    "e_yard1": {
+      "name": "Supplies",
+      "order": "b1w",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_03/barrel_03_1k.gltf#as_barrel03"
+      },
+      "Transform": {
+        "position": [113.7, 0.05, 81.5],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_yard1c": {
+      "name": "Supplies collider",
+      "order": "b1x",
+      "Collider": {
+        "halfExtents": [0.3169717490673065, 0.4652368128299713, 0.31929975748062134]
+      },
+      "PhysicsId": {
+        "value": 27
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [113.7, 0.515, 81.5],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_yard2": {
+      "name": "Supplies",
+      "order": "b1y",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_02/Barrel_02_1k.gltf#as_barrel02"
+      },
+      "Transform": {
+        "position": [113.2, 0.045, 82.2],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_yard2c": {
+      "name": "Supplies collider",
+      "order": "b1z",
+      "Collider": {
+        "halfExtents": [0.24408778548240662, 0.4399999976158142, 0.24230822920799255]
+      },
+      "PhysicsId": {
+        "value": 28
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [113.2, 0.49, 82.2],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_yard3": {
+      "name": "Supplies",
+      "order": "b20",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_01/Barrel_01_1k.gltf#as_barrel01"
+      },
+      "Transform": {
+        "position": [119.5, 0.057, 89.6],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_yard3c": {
+      "name": "Supplies collider",
+      "order": "b21",
+      "Collider": {
+        "halfExtents": [0.28151756525039673, 0.4399999976158142, 0.2815176248550415]
+      },
+      "PhysicsId": {
+        "value": 29
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [119.5, 0.49, 89.6],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_yard4": {
+      "name": "Supplies",
+      "order": "b22",
+      "MeshRenderer": {
+        "model": "@assets/third_party/propane_tank/propane_tank_1k.gltf#as_propanetank"
+      },
+      "Transform": {
+        "position": [112.6, 0.05, 87.2]
+      }
+    },
+    "e_yard4c": {
+      "name": "Supplies collider",
+      "order": "b23",
+      "Collider": {
+        "halfExtents": [0.1686808466911316, 0.27689751982688904, 0.1686808466911316]
+      },
+      "PhysicsId": {
+        "value": 30
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112.6, 0.327, 87.2]
+      }
+    },
+    "e_yard5": {
+      "name": "Supplies",
+      "order": "b24",
+      "MeshRenderer": {
+        "model": "@assets/third_party/propane_tank/propane_tank_1k.gltf#as_propanetank"
+      },
+      "Transform": {
+        "position": [112.9, 0.05, 87.6],
+        "rotation": [0, 50, 0]
+      }
+    },
+    "e_yard5c": {
+      "name": "Supplies collider",
+      "order": "b25",
+      "Collider": {
+        "halfExtents": [0.1686808466911316, 0.27689751982688904, 0.1686808466911316]
+      },
+      "PhysicsId": {
+        "value": 31
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112.9, 0.327, 87.6],
+        "rotation": [0, 50, 0]
+      }
+    },
+    "e_yard6": {
+      "name": "Supplies",
+      "order": "b26",
+      "MeshRenderer": {
+        "model": "@assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf#as_smalllpgtank"
+      },
+      "Transform": {
+        "position": [113.4, 0.05, 87.1]
+      }
+    },
+    "e_yard6c": {
+      "name": "Supplies collider",
+      "order": "b27",
+      "Collider": {
+        "halfExtents": [0.2050096094608307, 0.3209874927997589, 0.2045956403017044]
+      },
+      "PhysicsId": {
+        "value": 32
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [113.4, 0.371, 87.1]
+      }
+    },
+    "e_yard7": {
+      "name": "Supplies",
+      "order": "b28",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf#as_metaljerrycan"
+      },
+      "Transform": {
+        "position": [111.903, 0.05, 89.505],
+        "rotation": [0, 95, 0]
+      }
+    },
+    "e_yard7c": {
+      "name": "Supplies collider",
+      "order": "b29",
+      "Collider": {
+        "halfExtents": [0.17516493797302246, 0.2275799810886383, 0.08587194979190826]
+      },
+      "PhysicsId": {
+        "value": 33
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [111.9, 0.278, 89.5],
+        "rotation": [0, 95, 0]
+      }
+    },
+    "e_yard8": {
+      "name": "Supplies",
+      "order": "b2A",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf#as_metaljerrycangreen"
+      },
+      "Transform": {
+        "position": [112.103, 0.05, 89.986],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_yard8c": {
+      "name": "Supplies collider",
+      "order": "b2B",
+      "Collider": {
+        "halfExtents": [0.18696105480194092, 0.25045517086982727, 0.08543366193771362]
+      },
+      "PhysicsId": {
+        "value": 34
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [112.1, 0.3, 90],
+        "rotation": [0, 80, 0]
+      }
+    }
+  }
+}

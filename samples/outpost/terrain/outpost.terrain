@@ -1,0 +1,566 @@
+{
+  "$schema": "ara://schema/terrain/1",
+  "id": "tr_outpost1",
+  "records": {
+    "h_grid": {
+      "spacing": 1,
+      "cells": 32,
+      "max": {
+        "x": 6,
+        "z": 6
+      }
+    },
+    "l_sculpt": {
+      "name": "Sculpt",
+      "enabled": true,
+      "opacity": 1
+    },
+    "s_1prz": {
+      "layer": "l_sculpt",
+      "sequence": 4,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [60, 120],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [132, 70],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [140, 140],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [54, 44],
+          "radius": 9,
+          "amount": 0.5
+        },
+        {
+          "center": [120, 30],
+          "radius": 9,
+          "amount": 0.5
+        }
+      ],
+      "iterations": 8
+    },
+    "s_322c": {
+      "layer": "l_sculpt",
+      "sequence": 1,
+      "dabs": [
+        {
+          "center": [14, 30],
+          "radius": 30,
+          "amount": 9
+        },
+        {
+          "center": [8, 110],
+          "radius": 34,
+          "amount": 13
+        },
+        {
+          "center": [36, 178],
+          "radius": 30,
+          "amount": 10
+        },
+        {
+          "center": [110, 186],
+          "radius": 34,
+          "amount": 15
+        },
+        {
+          "center": [176, 160],
+          "radius": 30,
+          "amount": 11
+        },
+        {
+          "center": [186, 90],
+          "radius": 28,
+          "amount": 8
+        },
+        {
+          "center": [168, 18],
+          "radius": 30,
+          "amount": 9
+        },
+        {
+          "center": [60, 6],
+          "radius": 24,
+          "amount": 5
+        },
+        {
+          "center": [150, 120],
+          "radius": 14,
+          "amount": 3.5
+        },
+        {
+          "center": [46, 140],
+          "radius": 16,
+          "amount": 4
+        },
+        {
+          "center": [140, 60],
+          "radius": 14,
+          "amount": 1.2
+        },
+        {
+          "center": [52, 64],
+          "radius": 12,
+          "amount": 1
+        },
+        {
+          "center": [70, 156],
+          "radius": 12,
+          "amount": 1.4
+        },
+        {
+          "center": [128, 156],
+          "radius": 10,
+          "amount": 0.8
+        },
+        {
+          "center": [150, 92],
+          "radius": 10,
+          "amount": -0.6
+        },
+        {
+          "center": [40, 96],
+          "radius": 10,
+          "amount": -0.5
+        }
+      ],
+      "iterations": 8
+    },
+    "s_b5ey": {
+      "layer": "l_sculpt",
+      "sequence": 3,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [14, 30],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [8, 110],
+          "radius": 15.299999,
+          "amount": 0.9
+        },
+        {
+          "center": [36, 178],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [110, 186],
+          "radius": 15.299999,
+          "amount": 0.9
+        },
+        {
+          "center": [176, 160],
+          "radius": 13.5,
+          "amount": 0.9
+        },
+        {
+          "center": [186, 90],
+          "radius": 12.599999,
+          "amount": 0.9
+        },
+        {
+          "center": [168, 18],
+          "radius": 13.5,
+          "amount": 0.9
+        }
+      ],
+      "channel": 1,
+      "iterations": 8
+    },
+    "s_h0q4": {
+      "layer": "l_sculpt",
+      "sequence": 2,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [96, 96],
+          "radius": 160,
+          "amount": 1
+        }
+      ],
+      "channel": 2,
+      "iterations": 8
+    },
+    "t_1bgz": {
+      "coord": {
+        "x": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_567t": {
+      "coord": {
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_5dre": {
+      "coord": {
+        "x": 2,
+        "z": 3
+      },
+      "strokes": [
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_5ggp": {
+      "coord": {
+        "x": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_8117": {
+      "coord": {
+        "x": 4,
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_8a7w": {
+      "coord": {
+        "x": 2,
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_9d9q": {
+      "coord": {
+        "x": 1,
+        "z": 3
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_9xr8": {
+      "coord": {
+        "x": 3,
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_b3vq": {
+      "coord": {
+        "x": 2,
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_c5jn": {
+      "coord": {
+        "x": 3,
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_c602": {
+      "coord": {
+        "x": 2,
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_cnf3": {
+      "coord": {
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_dxqz": {
+      "coord": {
+        "x": 1,
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_em8q": {
+      "coord": {
+        "x": 4,
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_g813": {
+      "coord": {
+        "x": 3,
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_ghgq": {
+      "coord": {
+        "x": 5,
+        "z": 3
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_hzmy": {
+      "coord": {
+        "x": 4,
+        "z": 3
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_kd9v": {
+      "coord": {
+        "x": 5,
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_kyzq": {
+      "coord": {
+        "x": 3,
+        "z": 3
+      },
+      "strokes": [
+        "s_h0q4"
+      ]
+    },
+    "t_mgk6": {
+      "coord": {
+        "x": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_n3pg": {
+      "coord": {
+        "x": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey",
+        "s_1prz"
+      ]
+    },
+    "t_nnjr": {
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_psgk": {
+      "coord": {
+        "x": 3
+      },
+      "strokes": [
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_qm3g": {
+      "coord": {
+        "x": 2,
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_rbqh": {
+      "coord": {
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_s7dq": {
+      "coord": {
+        "x": 1,
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_sp6h": {
+      "coord": {
+        "x": 5,
+        "z": 1
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_stst": {
+      "coord": {
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_vpx1": {
+      "coord": {
+        "x": 4,
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_w0ej": {
+      "coord": {
+        "x": 1,
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4"
+      ]
+    },
+    "t_wb2r": {
+      "coord": {
+        "z": 3
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_wg7v": {
+      "coord": {
+        "x": 5,
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_wree": {
+      "coord": {
+        "x": 3,
+        "z": 5
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    },
+    "t_xdnk": {
+      "coord": {
+        "x": 4,
+        "z": 2
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_xpxr": {
+      "coord": {
+        "x": 1,
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_1prz"
+      ]
+    },
+    "t_z8a9": {
+      "coord": {
+        "x": 5,
+        "z": 4
+      },
+      "strokes": [
+        "s_322c",
+        "s_h0q4",
+        "s_b5ey"
+      ]
+    }
+  }
+}

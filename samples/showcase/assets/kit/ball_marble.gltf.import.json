@@ -1,0 +1,10 @@
+{
+  "$schema": "ara://schema/import/1",
+  "id": "as_kitballmarble",
+  "records": {
+    "i_settings": {
+      "importer": "ara.gltf",
+      "version": "4-gltf14-meshopt070-ispc050-tiled-f32text-arag1"
+    }
+  }
+}

@@ -391,27 +391,42 @@ impl Presenter {
                 {
                     *out = a * b;
                 }
-                material.emissive_roughness =
-                    [m.emissive[0], m.emissive[1], m.emissive[2], m.roughness];
-                material.surface = [m.metallic, 1.0, 1.0, m.alpha_cutoff];
+                // glTF emissive factors are relative; the entity's emissive radiance
+                // (cd/m²) scales them, so imported emitters stay dark until lit.
+                material.emissive_roughness = [
+                    m.emissive[0] * draw.emissive[0],
+                    m.emissive[1] * draw.emissive[1],
+                    m.emissive[2] * draw.emissive[2],
+                    m.roughness,
+                ];
+                material.surface = [m.metallic, m.normal_scale, 1.0, m.alpha_cutoff];
                 material.flags[0] = m.alpha_mode;
-                if let Some(t) = m.base_color_texture {
+                for (slot, texture) in [
+                    m.base_color_texture,
+                    m.normal_texture,
+                    m.metallic_roughness_texture,
+                    m.emissive_texture,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let Some(t) = texture else { continue };
                     let key = (model.digest.to_string(), t);
-                    let slot = match texture_slots.get(&key) {
-                        Some(&slot) => slot,
+                    let index = match texture_slots.get(&key) {
+                        Some(&index) => index,
                         None => {
                             let texture = self.texture(model, t)?;
-                            let slot = scene.textures.len() as u32;
+                            let index = scene.textures.len() as u32;
                             scene.textures.push(scene::Texture {
                                 size: texture.size,
                                 rgba: texture.rgba.clone(),
-                                srgb: true,
+                                srgb: texture.srgb,
                             });
-                            texture_slots.insert(key, slot);
-                            slot
+                            texture_slots.insert(key, index);
+                            index
                         }
                     };
-                    material.textures[0] = slot;
+                    material.textures[slot] = index;
                 }
             }
             scene.materials.push(material);
@@ -596,30 +611,45 @@ pub fn sky(env: &Environment) -> ([u32; 2], Vec<[f32; 4]>) {
     ([W, H], pixels)
 }
 
-/// Decodes the finest level of a cooked KTX2 color texture to RGBA8 (BC7 on desktop).
+/// Decodes the finest level of a cooked KTX2 texture to RGBA8: BC7 colour/linear data,
+/// or BC5 normals with Z reconstructed (`srgb` reports the colour space).
 pub fn decode_texture(ktx2: &[u8]) -> Result<scene::Texture> {
     let texture =
         ara_asset_format::Texture::read(ktx2).map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let [w, h] = texture.dimensions();
     let level = texture.levels().next().context("texture has no levels")?;
     let mut pixels = vec![0u32; (w * h) as usize];
-    match texture.format() {
+    let format = texture.format();
+    match format {
         ara_asset_format::TextureFormat::Bc7 | ara_asset_format::TextureFormat::Bc7Srgb => {
             texture2ddecoder::decode_bc7(level, w as usize, h as usize, &mut pixels)
                 .map_err(|e| anyhow::anyhow!("BC7 decode: {e}"))?;
         }
-        format => anyhow::bail!("runtime color textures must be BC7, got {format:?}"),
+        ara_asset_format::TextureFormat::Bc5 => {
+            texture2ddecoder::decode_bc5(level, w as usize, h as usize, &mut pixels)
+                .map_err(|e| anyhow::anyhow!("BC5 decode: {e}"))?;
+        }
+        format => anyhow::bail!("runtime textures must be BC7 or BC5 normals, got {format:?}"),
     }
+    let normal = format == ara_asset_format::TextureFormat::Bc5;
     let rgba = pixels
         .iter()
         .flat_map(|p| {
             let [b, g, r, a] = p.to_le_bytes();
-            [r, g, b, a]
+            if normal {
+                // BC5 stores tangent-space X/Y; rebuild Z for the renderer's RGB normal.
+                let x = f32::from(r) / 127.5 - 1.0;
+                let y = f32::from(g) / 127.5 - 1.0;
+                let z = (1.0 - x * x - y * y).max(0.0).sqrt();
+                [r, g, ((z * 0.5 + 0.5) * 255.0).round() as u8, 255]
+            } else {
+                [r, g, b, a]
+            }
         })
         .collect();
     Ok(scene::Texture {
         size: [w, h],
         rgba,
-        srgb: true,
+        srgb: format == ara_asset_format::TextureFormat::Bc7Srgb,
     })
 }

@@ -1651,6 +1651,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-samples"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-anim",
+ "ara-asset",
+ "ara-diag",
+ "ara-doc",
+ "ara-ops",
+ "ara-runtime",
+ "ara-schema",
+ "ara-terrain",
+ "blake3",
+ "clap",
+ "glam 0.30.9",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-save"
 version = "0.0.0"
 dependencies = [

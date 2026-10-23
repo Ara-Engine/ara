@@ -203,14 +203,21 @@ pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainS
     Ok(Some(TerrainState(Arc::new(data))))
 }
 
-/// Every enabled foliage rule over every tile (renderer input, deterministic).
+/// Every enabled foliage rule over every tile, minus the document's exclusion zones
+/// (renderer input, deterministic).
 fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>> {
     let mut rules: Vec<(String, Rule)> = Vec::new();
+    let mut exclusions: Vec<ara_foliage::Exclusion> = Vec::new();
     for (id, record) in doc.records() {
+        let value = || serde_json::Value::Object(record.clone());
+        if id.as_str().starts_with("x_") {
+            exclusions.push(serde_json::from_value(value())?);
+            continue;
+        }
         if !id.as_str().starts_with("r_") {
             continue;
         }
-        let rule: Rule = serde_json::from_value(serde_json::Value::Object(record.clone()))?;
+        let rule: Rule = serde_json::from_value(value())?;
         if rule.enabled {
             rules.push((id.to_string(), rule));
         }
@@ -229,7 +236,7 @@ fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>>
         };
         for (index, (_, rule)) in rules.iter().enumerate() {
             instances.extend(
-                ara_foliage::scatter(index as u64, rule, bounds, &surface, &[])
+                ara_foliage::scatter(index as u64, rule, bounds, &surface, &exclusions)
                     .map_err(|d| RuntimeError(format!("foliage: {}", d.message)))?,
             );
         }

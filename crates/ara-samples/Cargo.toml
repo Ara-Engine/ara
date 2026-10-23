@@ -1,0 +1,26 @@
+[package]
+name = "ara-samples"
+description = "Sample projects with real CC0 art: pinned asset fetch, scene authoring through the ara CLI, fidelity captures and timings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+ara-anim = { path = "../ara-anim" }
+ara-asset = { path = "../ara-asset" }
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-ops.workspace = true
+ara-runtime = { path = "../ara-runtime" }
+ara-schema.workspace = true
+ara-terrain = { path = "../ara-terrain" }
+blake3 = "1.8"
+clap.workspace = true
+glam = "0.30"
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
