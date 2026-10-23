@@ -64,6 +64,44 @@ fn get(s: &Store, id: &str, key: &str) -> Value {
 }
 
 #[test]
+fn source_path_loading_preserves_transaction_and_undo_save_paths() {
+    let mut s = store();
+    let doc = s
+        .workspace()
+        .doc("sc_test0001")
+        .expect("valid fixture")
+        .clone();
+    s.load_doc_with_asset_path("settings.json", doc, "source.glb");
+    assert_eq!(s.revision(), 0);
+    assert!(s.history().is_empty());
+    s.transact(
+        TxnMeta::by(Author::Human),
+        [set("e_a", "name", json!("Edited"))],
+    )
+    .expect("valid fixture");
+    assert_eq!(get(&s, "e_a", "name"), json!("Edited"));
+    s.undo_last(&Author::Human).expect("valid fixture");
+    assert_eq!(get(&s, "e_a", "name"), json!("A"));
+    assert_eq!(s.workspace().path_of("sc_test0001"), Some("settings.json"));
+    assert_eq!(
+        s.workspace().index().path_of("sc_test0001"),
+        Some("source.glb")
+    );
+
+    let doc = s
+        .workspace()
+        .doc("sc_test0001")
+        .expect("valid fixture")
+        .clone();
+    s.load_doc("ordinary.scene", doc);
+    assert_eq!(s.workspace().path_of("sc_test0001"), Some("ordinary.scene"));
+    assert_eq!(
+        s.workspace().index().path_of("sc_test0001"),
+        Some("ordinary.scene")
+    );
+}
+
+#[test]
 fn transactions_are_all_or_nothing() {
     let mut s = store();
     let before = text(&s);

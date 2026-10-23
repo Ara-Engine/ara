@@ -216,7 +216,7 @@ impl Verification {
         self.step += 1;
         Ok(true)
     }
-    fn screenshot(
+    pub(super) fn screenshot(
         &self,
         name: &str,
         editor: &mut Editor,
@@ -269,8 +269,11 @@ impl Verification {
             .save(self.output.join(format!("{name}.png")))?;
         std::fs::write(
             self.output.join(format!("{name}.layout.json")),
-            ara_json::to_canonical_string(&shell.ui.inspect()),
+            ara_json::to_canonical_string(&shell.layout_report()),
         )?;
+        // Restore live images before releasing the temporary fidelity capture target.
+        super::attach(gpu, renderer)?;
+        gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
         scene_view.destroy(renderer)?;
         Ok(())
     }
@@ -293,6 +296,36 @@ fn gpu_cpu(output: &std::path::Path, renderer: &Renderer) -> ara_ui::Result<()> 
         [300., 140.],
     )?;
     ui.frame(&mut text)?;
+    let scalable = ui.display.commands.iter().find_map(|draw| {
+        if let ara_ui::paint::Draw::GlyphRun {
+            font,
+            glyphs,
+            color,
+            ..
+        } = draw
+        {
+            Some(ara_ui::paint::Draw::ScalableGlyphRun {
+                node: 900,
+                font: *font,
+                size: 14.,
+                origin: [10., 100.],
+                glyphs: glyphs.clone(),
+                color: *color,
+            })
+        } else {
+            None
+        }
+    });
+    if let Some(draw) = scalable {
+        ui.display.commands.push(draw);
+    }
+    ui.display.commands.push(ara_ui::paint::Draw::Line {
+        node: 901,
+        from: [12., 130.],
+        to: [270., 105.],
+        width: 2.,
+        color: ara_ui::style::Color(76, 130, 230, 255),
+    });
     for mode in [TextMode::Raster, TextMode::Msdf] {
         let mut draw = UiRenderer::default();
         let mut cpu = ara_ui_render::CpuGpu::default();

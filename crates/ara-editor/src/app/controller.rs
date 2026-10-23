@@ -25,6 +25,9 @@ impl Controller {
         view: &crate::world::DocumentView,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<(bool, bool, bool)> {
+        if shell.graph_event(editor, &event)? {
+            return Ok((true, false, false));
+        }
         let mut dirty = false;
         let mut scene_dirty = false;
         let mut quit = false;

@@ -61,6 +61,55 @@ pub(crate) struct Native {
     timer: pacing::FrameTimer,
 }
 impl Native {
+    /// Fix a verification window's physical client extent independently of desktop scaling.
+    pub fn verification_extent(&self, pixels: [u32; 2]) -> anyhow::Result<()> {
+        use sdl3_sys::video::{
+            SDL_GetWindowSizeInPixels, SDL_RestoreWindow, SDL_SetWindowBordered,
+            SDL_SetWindowPosition, SDL_SetWindowResizable, SDL_SetWindowSize, SDL_SyncWindow,
+        };
+        // SAFETY: This is the main thread's live SDL window; all output pointers are valid.
+        unsafe {
+            anyhow::ensure!(
+                SDL_RestoreWindow(self.window),
+                "restore verification window"
+            );
+            anyhow::ensure!(
+                SDL_SetWindowResizable(self.window, false),
+                "lock verification extent"
+            );
+            anyhow::ensure!(
+                SDL_SetWindowBordered(self.window, false),
+                "remove verification chrome"
+            );
+            anyhow::ensure!(
+                SDL_SetWindowPosition(self.window, 0, 0),
+                "position verification window"
+            );
+            let density = SDL_GetWindowPixelDensity(self.window).max(0.25);
+            anyhow::ensure!(
+                SDL_SetWindowSize(
+                    self.window,
+                    (pixels[0] as f32 / density).round() as i32,
+                    (pixels[1] as f32 / density).round() as i32
+                ),
+                "set verification extent"
+            );
+            anyhow::ensure!(
+                SDL_SyncWindow(self.window),
+                "synchronize verification window"
+            );
+            let (mut width, mut height) = (0, 0);
+            anyhow::ensure!(
+                SDL_GetWindowSizeInPixels(self.window, &mut width, &mut height),
+                "read verification extent"
+            );
+            anyhow::ensure!(
+                [width as u32, height as u32] == pixels,
+                "verification requested {pixels:?}, native client is {width}x{height}"
+            );
+        }
+        Ok(())
+    }
     pub fn wait(&self, remaining: std::time::Duration) -> anyhow::Result<()> {
         #[cfg(windows)]
         self.timer.wait(remaining)?;

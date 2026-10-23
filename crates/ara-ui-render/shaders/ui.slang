@@ -34,6 +34,10 @@ float4 fragmentMain(Varying input) : SV_Target {
             coverage-=hole;
         }
         color.a*=coverage;
+    } else if(pc.mode==6) {
+        float2 a=i.uv.xy,b=i.uv.zw,d=b-a;
+        float t=saturate(dot(input.local-a,d)/max(dot(d,d),0.0001));
+        color.a*=saturate(i.parameters.x-length(input.local-a-t*d)+0.5);
     } else {
         float4 sample=textures[NonUniformResourceIndex(pc.textureIndex)].Sample(linearClamp,input.uv);
         if(pc.mode==2) color.a*=sample.a;

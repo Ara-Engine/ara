@@ -53,3 +53,6 @@ Rendering goldens and release measurements live in ara-ui-render.
 Numeric editors can select an explicit font-family and text-align:right. These
 properties retain shaping correctly; focused fields keep their caret origin.
 Missing success/info surface tokens derive from the canonical palette colors.
+
+DisplayList supports analytic Line strokes and ScalableGlyphRun labels for graph
+canvases. Per-edge padding properties preserve inspector gutters at narrow widths.

@@ -66,7 +66,7 @@ impl UiGpu for CpuGpu {
         let target = self.target.as_mut().ok_or("ARA7052: draw before begin")?;
         let width = target.width();
         let height = target.height();
-        let texture = if batch.pipeline == Pipeline::Shape {
+        let texture = if matches!(batch.pipeline, Pipeline::Shape | Pipeline::Line) {
             None
         } else {
             Some(
@@ -107,6 +107,18 @@ impl UiGpu for CpuGpu {
                     }
                     let mut color = i.color;
                     match batch.pipeline {
+                        Pipeline::Line => {
+                            let a = [r.x + i.uv[0], r.y + i.uv[1]];
+                            let b = [r.x + i.uv[2], r.y + i.uv[3]];
+                            let d = [b[0] - a[0], b[1] - a[1]];
+                            let t = (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1])
+                                / (d[0] * d[0] + d[1] * d[1]).max(0.0001))
+                            .clamp(0., 1.);
+                            let distance = ((p[0] - a[0] - t * d[0]).powi(2)
+                                + (p[1] - a[1] - t * d[1]).powi(2))
+                            .sqrt();
+                            color[3] *= (i.params[0] - distance + 0.5).clamp(0., 1.);
+                        }
                         Pipeline::Shape => {
                             let outer = (0.5 - distance(r, i.params[0], p)).clamp(0.0, 1.0);
                             let coverage = if i.params[1] > 0.0 {

@@ -130,7 +130,6 @@ service registers them.
   diverged (no flushes) until `doc.sync {keep: memory|disk}` or a clean edit.
 
 ## Gotchas
-
 - Host IDs (sessions, checkpoints, jobs) and the store's IDs come from
   `HostConfig::seed`; reopening with the same seed in tests re-mints the same IDs.
 - `*.types.json` changes are only reported (ARA1912); restart to load them.
@@ -138,7 +137,6 @@ service registers them.
 - Sessions survive restarts (journaled); subscriptions don't.
 
 ## Testing
-
 `cargo test -p ara-host`. Unit tests: query parsing (bare words), logs, journal
 compaction, review roll-up. `tests/host.rs` (fixture copied to a temp dir): JSON-RPC
 round trips, scopes, dry run = apply, symbols, review per entity, rollback, crash
@@ -148,3 +146,5 @@ claims vs agents, `who`, branches, restart, submits, per-participant undo.
 Snapshots: scene-to-text. `tests/diag.rs` (serialized: the bus is global): grouped
 logs and attribution, subscriptions with other threads' emits, report and clear,
 `why` over the protocol with its fix applied, persistence across a restart.
+`Cx::create_document` makes an empty canonical document for typed create actions;
+fill it with `Cx::apply` (normal attribution/review/undo).

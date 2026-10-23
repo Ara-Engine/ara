@@ -56,6 +56,19 @@ pub struct Glyph {
 #[derive(Serialize)]
 #[serde(tag = "op")]
 pub enum Draw {
+    /// Antialiased round-capped line in logical viewport coordinates.
+    Line {
+        /// Stable widget or connection identity.
+        node: u64,
+        /// First endpoint.
+        from: [f32; 2],
+        /// Second endpoint.
+        to: [f32; 2],
+        /// Full stroke width in logical pixels.
+        width: f32,
+        /// Straight working-space stroke color.
+        color: Color,
+    },
     /// Solid rectangular fill.
     Rect {
         /// Stable source node identity.
@@ -102,6 +115,21 @@ pub enum Draw {
         /// Contiguous positioned glyph arena addressed by command ranges.
         glyphs: Range<usize>,
         /// Foreground or glyph tint color.
+        color: Color,
+    },
+    /// Cached outline-distance-field glyphs for continuously zoomable canvases.
+    ScalableGlyphRun {
+        /// Stable source node identity.
+        node: u64,
+        /// Registered font resource handle.
+        font: u32,
+        /// Logical font size after the view transform.
+        size: f32,
+        /// Logical run origin.
+        origin: [f32; 2],
+        /// Range in the containing glyph arena.
+        glyphs: Range<usize>,
+        /// Straight working-space tint.
         color: Color,
     },
     /// Decoded host image resource stretched to the destination rectangle.
@@ -159,7 +187,9 @@ impl DisplayList {
         for (i, draw) in self.commands.iter().enumerate() {
             let key = match draw {
                 Draw::GlyphRun { font, .. } => (1, *font),
+                Draw::ScalableGlyphRun { font, .. } => (1, *font),
                 Draw::Image { image, .. } => (2, *image),
+                Draw::Line { .. } => (3, 0),
                 Draw::Rect { .. } | Draw::RoundedRect { .. } | Draw::Border { .. } => (0, 0),
                 _ => {
                     breaks.push(BatchBreak {

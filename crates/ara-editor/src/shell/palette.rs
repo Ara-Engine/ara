@@ -223,7 +223,7 @@ impl Shell {
 }
 
 /// Subsequence matching with a compactness score; byte offsets never split UTF-8.
-fn fuzzy(value: &str, query: &str) -> Option<(usize, Vec<usize>)> {
+pub(super) fn fuzzy(value: &str, query: &str) -> Option<(usize, Vec<usize>)> {
     let mut wanted = query.chars().filter(|c| !c.is_whitespace()).peekable();
     let mut positions = Vec::new();
     for (i, c) in value.chars().enumerate() {

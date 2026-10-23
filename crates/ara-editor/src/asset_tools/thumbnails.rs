@@ -1,0 +1,298 @@
+//! Bounded thumbnail queue. Source decoding, Vulkan capture and cache IO stay off-frame.
+use ara_render::{
+    Renderer,
+    capture::{CaptureRequest, ViewMode},
+    scene::{CameraSpec, Material, Scene, Texture},
+};
+use glam::Vec3;
+use std::{
+    collections::BTreeSet,
+    path::Path,
+    sync::mpsc::{self, Receiver, SyncSender},
+};
+
+pub(crate) struct Thumbnail {
+    pub key: String,
+    pub image: image::RgbaImage,
+}
+struct Request {
+    path: String,
+    key: String,
+    source: Option<Vec<u8>>,
+    plane: bool,
+}
+pub(crate) struct Thumbnails {
+    send: SyncSender<Request>,
+    receive: Receiver<Result<Thumbnail, (String, String)>>,
+    requested: BTreeSet<String>,
+}
+impl Thumbnails {
+    pub fn new(root: &Path) -> Self {
+        let root = root.to_owned();
+        let (send, rx) = mpsc::sync_channel::<Request>(48);
+        let (tx, receive) = mpsc::sync_channel(8);
+        std::thread::spawn(move || {
+            let mut renderer = None;
+            for request in rx {
+                let result = match make(
+                    &root,
+                    &request.path,
+                    request.source.as_deref(),
+                    request.plane,
+                    &mut renderer,
+                ) {
+                    Ok(image) => Ok(Thumbnail {
+                        key: request.key,
+                        image,
+                    }),
+                    Err(error) => Err((request.key, error.to_string())),
+                };
+                if tx.send(result).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            send,
+            receive,
+            requested: BTreeSet::new(),
+        }
+    }
+    pub fn request(&mut self, path: &str) {
+        if self.requested.contains(path) {
+            return;
+        }
+        if self
+            .send
+            .try_send(Request {
+                path: path.into(),
+                key: path.into(),
+                source: None,
+                plane: false,
+            })
+            .is_ok()
+        {
+            self.requested.insert(path.to_owned());
+        }
+    }
+    pub fn request_live(&mut self, path: &str, source: Vec<u8>, plane: bool) -> String {
+        let key = format!("live:{}:{}", ara_asset::Digest::of(&source), plane);
+        if !self.requested.contains(&key)
+            && self
+                .send
+                .try_send(Request {
+                    path: path.into(),
+                    key: key.clone(),
+                    source: Some(source),
+                    plane,
+                })
+                .is_ok()
+        {
+            self.requested.insert(key.clone());
+        }
+        key
+    }
+    pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, (String, String)>> + '_ {
+        self.receive.try_iter().take(8)
+    }
+    pub fn invalidate_all(&mut self) {
+        self.requested.clear();
+    }
+    pub fn invalidate(&mut self, path: &str) {
+        self.requested.remove(path);
+    }
+}
+fn make(
+    root: &Path,
+    path: &str,
+    override_source: Option<&[u8]>,
+    plane: bool,
+    renderer: &mut Option<Renderer>,
+) -> anyhow::Result<image::RgbaImage> {
+    let source = root.join(path).canonicalize()?;
+    anyhow::ensure!(
+        source.starts_with(root.canonicalize()?),
+        "thumbnail source escapes project"
+    );
+    let bytes = if let Some(source) = override_source {
+        source.to_vec()
+    } else {
+        std::fs::read(&source)?
+    };
+    let source_len = bytes.len();
+    let mut inputs = bytes;
+    if let Ok(settings) = std::fs::read(root.join(format!("{path}.import.json"))) {
+        inputs.extend(settings);
+    }
+    // Cache identity includes referenced textures and external glTF buffers.
+    if let Ok(value) = ara_json::parse(std::str::from_utf8(&inputs[..source_len]).unwrap_or("")) {
+        dependency_bytes(root, source.parent().unwrap_or(root), &value, &mut inputs);
+    }
+    inputs.extend(b"ara-thumb-v3-384");
+    inputs.push(u8::from(plane));
+    let key = ara_asset::Digest::of(&inputs).to_string();
+    let cache = root.join(".ara/cache/thumbnails");
+    std::fs::create_dir_all(&cache)?;
+    let target = cache.join(format!("{key}.png"));
+    if target.exists() {
+        return Ok(image::open(target)?.to_rgba8());
+    }
+    let extension = source.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let image = if matches!(extension, "png" | "jpg" | "jpeg" | "hdr" | "exr") {
+        let image = image::open(&source)?;
+        image.thumbnail(384, 384).to_rgba8()
+    } else {
+        let mut scene = preview_scene();
+        match extension {
+            "fbx" => scene.meshes = super::cooked_mesh::load(root, path)?,
+            "glb" | "gltf" => {
+                scene
+                    .meshes
+                    .push(crate::world::gltf::load(&source, 1, path.into(), 0)?)
+            }
+            "material" | "graph" => {
+                let text = std::str::from_utf8(&inputs[..source_len])?;
+                // Both views compile the same material AST; cached images are presentation only.
+                let material = if extension == "material" {
+                    ara_material::dsl::parse(text, "gr_preview")
+                        .map_err(|d| anyhow::anyhow!("{d:?}"))?
+                } else {
+                    let mut db = ara_schema::SchemaDb::new();
+                    ara_material::register(&mut db).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+                    let graph =
+                        ara_graph::Graph::read(text, &db).map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                    if graph.header.domain == "vfx" {
+                        let effect = ara_vfx::Effect::from_graph(&graph)
+                            .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                        let image = super::vfx_preview::capture(root, &effect)?;
+                        image.save(&target)?;
+                        return Ok(image);
+                    }
+                    ara_material::Material::from_graph(&graph)
+                        .map_err(|d| anyhow::anyhow!("{d:?}"))?
+                };
+                let image = super::material_preview::capture(root, &material, plane)?;
+                image.save(&target)?;
+                return Ok(image);
+            }
+            _ => anyhow::bail!("no thumbnail decoder for {extension}"),
+        }
+        let mut min = Vec3::splat(f32::INFINITY);
+        let mut max = Vec3::splat(f32::NEG_INFINITY);
+        for vertex in scene.meshes.iter().flat_map(|mesh| &mesh.vertices) {
+            min = min.min(vertex.position.into());
+            max = max.max(vertex.position.into());
+        }
+        anyhow::ensure!(
+            min.is_finite() && max.is_finite(),
+            "thumbnail mesh is empty"
+        );
+        if let Some(renderer) = renderer {
+            renderer.update_geometry(scene)?;
+        } else {
+            *renderer = Some(Renderer::new(
+                scene,
+                [384, 384],
+                &[],
+                root.join(".ara/cache/thumbnail-gpu"),
+            )?);
+        }
+        let renderer = renderer
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("thumbnail renderer missing"))?;
+        renderer
+            .capture(&CaptureRequest {
+                camera: CameraSpec::FrameBounds {
+                    min,
+                    max,
+                    direction: Vec3::new(1., 0.65, 1.6),
+                    padding: 0.12,
+                    vertical_fov: 0.8,
+                },
+                size: [384, 384],
+                mode: ViewMode::Lit,
+                deterministic: true,
+                exposure: 0.0015,
+                settle_frames: 4,
+                tick: 0,
+                seed: 0,
+                marks: None,
+            })?
+            .image
+    };
+    image.save(&target)?;
+    Ok(image)
+}
+pub(crate) fn preview_scene() -> Scene {
+    Scene {
+        meshes: Vec::new(),
+        materials: vec![Material {
+            base_color: [0.35, 0.48, 0.65, 1.],
+            ..Default::default()
+        }],
+        textures: vec![
+            Texture {
+                size: [1, 1],
+                rgba: vec![255; 4],
+                srgb: false,
+            },
+            Texture {
+                size: [1, 1],
+                rgba: vec![128, 128, 255, 255],
+                srgb: false,
+            },
+        ],
+        lights: Vec::new(),
+        sun_direction: Vec3::new(-0.6, 1., 0.8).normalize(),
+        sun_lux: Vec3::splat(3500.),
+        environment: vec![[0.15, 0.18, 0.24, 1.]],
+        environment_size: [1, 1],
+    }
+}
+/// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
+pub(crate) fn image_name(slot: usize) -> String {
+    format!("asset-thumbnail-{slot}")
+}
+
+fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, bytes: &mut Vec<u8>) {
+    match value {
+        serde_json::Value::String(text) => {
+            let path = if text.starts_with('@') {
+                ara_schema::grammar::parse_ref(text)
+                    .ok()
+                    .and_then(|r| r.path)
+                    .map(|p| root.join(p))
+            } else {
+                None
+            };
+            if let Some(path) = path
+                .and_then(|p| p.canonicalize().ok())
+                .filter(|p| p.starts_with(root.canonicalize().unwrap_or_default()))
+                && let Ok(data) = std::fs::read(path)
+            {
+                bytes.extend(data);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                dependency_bytes(root, relative, value, bytes);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            if let Some(uri) = fields
+                .get("uri")
+                .and_then(serde_json::Value::as_str)
+                .filter(|s| !s.starts_with("data:"))
+                && let Ok(path) = relative.join(uri).canonicalize()
+                && path.starts_with(root.canonicalize().unwrap_or_default())
+                && let Ok(data) = std::fs::read(path)
+            {
+                bytes.extend(data);
+            }
+            for value in fields.values() {
+                dependency_bytes(root, relative, value, bytes);
+            }
+        }
+        _ => {}
+    }
+}

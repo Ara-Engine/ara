@@ -8,6 +8,19 @@ pub(crate) struct Asset {
     pub path: String,
     pub reference: Option<String>,
     pub kind: String,
+    pub domain: Option<String>,
+    pub uses: Vec<String>,
+    pub stamp: u64,
+}
+impl Asset {
+    /// Prefer the authority's current index when a recent import predates the browser scan.
+    pub fn current_reference(&self, workspace: &ara_doc::Workspace) -> Option<String> {
+        workspace
+            .index()
+            .id_of(&self.path)
+            .map(|id| format!("@{}#{id}", self.path))
+            .or_else(|| self.reference.clone())
+    }
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
@@ -77,7 +90,20 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                 .and_then(|e| e.to_str())
                 .unwrap_or("file")
                 .to_owned();
-            let id = if kind == "scene" || kind == "prefab" {
+            if relative.ends_with(".import.json") {
+                continue;
+            }
+            let document = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| ara_json::parse(&text).ok());
+            let domain = document
+                .as_ref()
+                .and_then(|v| v["records"]["g_meta"]["domain"].as_str())
+                .map(str::to_owned);
+            let id = if matches!(
+                kind.as_str(),
+                "scene" | "prefab" | "graph" | "animation" | "materialinstance"
+            ) {
                 std::fs::read_to_string(&path)
                     .ok()
                     .and_then(|s| ara_json::parse(&s).ok())
@@ -91,9 +117,49 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             };
             out.push(Asset {
                 reference: id.map(|id| format!("@{relative}#{id}")),
+                stamp: stamp(&path),
                 path: relative,
                 kind,
+                domain,
+                uses: document
+                    .map(|v| {
+                        let mut refs = Vec::new();
+                        references(&v, &mut refs);
+                        refs
+                    })
+                    .unwrap_or_default(),
             });
         }
     }
+}
+fn references(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) if s.starts_with('@') => out.push(s.clone()),
+        Value::Array(a) => {
+            for v in a {
+                references(v, out);
+            }
+        }
+        Value::Object(o) => {
+            for v in o.values() {
+                references(v, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn stamp(path: &Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    for path in [
+        path.to_path_buf(),
+        PathBuf::from(format!("{}.import.json", path.display())),
+    ] {
+        if let Ok(meta) = std::fs::metadata(path) {
+            meta.len().hash(&mut hash);
+            meta.modified().ok().hash(&mut hash);
+        }
+    }
+    hash.finish()
 }

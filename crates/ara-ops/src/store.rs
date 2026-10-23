@@ -113,6 +113,17 @@ impl Store {
         self.ws.insert(path, doc);
     }
 
+    /// Loads a sidecar at `path` while its asset ID resolves to `asset_path`.
+    /// Like `load_doc`, this records no ops; record changes require transactions.
+    pub fn load_doc_with_asset_path(
+        &mut self,
+        path: impl Into<String>,
+        doc: Document,
+        asset_path: impl Into<String>,
+    ) {
+        self.ws.insert_with_asset_path(path, doc, asset_path);
+    }
+
     /// Unloads a document whose file was deleted. History that touched it stays, but
     /// undoing it fails with `ARA1506`.
     pub fn unload_doc(&mut self, id: &str) -> Option<(String, Document)> {

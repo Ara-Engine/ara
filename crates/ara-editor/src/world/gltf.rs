@@ -3,7 +3,7 @@ use ara_render::scene::{Mesh, Vertex};
 use glam::{Mat4, Vec3};
 use std::path::Path;
 
-pub(super) fn load(
+pub(crate) fn load(
     path: &Path,
     entity: u64,
     name: String,

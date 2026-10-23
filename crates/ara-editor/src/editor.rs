@@ -32,6 +32,7 @@ impl From<RpcError> for EditorError {
 
 /// One editor process owns the project lock, authority, navigation and review policy.
 pub struct Editor {
+    asset_updates: Receiver<()>,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
     pub host: Host,
     /// Current native view snapshot, updated by editor action notifications.
@@ -40,6 +41,10 @@ pub struct Editor {
     pub session: String,
     /// Active provisional spatial edit.
     pub gesture: Option<Gesture>,
+    /// Frozen trace selected for frame inspection; immutable and shared only with IO workers.
+    pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
+    /// Independent baseline trace for the compare view.
+    pub profile_baseline: Option<std::sync::Arc<ara_profile::Profile>>,
     /// Deferred capture jobs, consumed by the GPU/window owner.
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
@@ -69,6 +74,8 @@ impl Editor {
         let mut project =
             ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let main_scene = project.main_scene();
+        crate::asset_tools::prepare(&mut project)?;
+        crate::authoring::register(&mut project.registry, &mut project.db);
         crate::commands::register(&mut project.registry, &mut project.db);
         let command_schemas = project
             .registry
@@ -85,6 +92,18 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let (asset_changed, asset_updates) = mpsc::channel();
+        host.register(Box::new(crate::asset_tools::AssetService::new(
+            asset_changed,
+        )))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(crate::authoring::AuthoringService))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
+            budget_ns: 6_944_444,
+            ..Default::default()
+        })
+        .map_err(anyhow::Error::msg)?;
         ara_audio_why::register(host.why());
         let workspace = host.store().workspace();
         let doc = main_scene
@@ -140,10 +159,13 @@ impl Editor {
         )
         .map_err(EditorError::from)?;
         Ok(Self {
+            asset_updates,
             host,
             state,
             session,
             gesture: None,
+            profile_current: None,
+            profile_baseline: None,
             captures,
             completed,
             updates,
@@ -194,6 +216,10 @@ impl Editor {
     /// Refresh navigation snapshots without cloning unchanged frame state.
     pub fn sync(&mut self) -> bool {
         let mut changed = false;
+        for _ in self.asset_updates.try_iter().take(32) {
+            self.extraction_revision += 1;
+            changed = true;
+        }
         while let Ok(state) = self.updates.try_recv() {
             if self.state.doc != state.doc
                 || self.state.hidden != state.hidden
@@ -210,6 +236,36 @@ impl Editor {
         }
         while let Ok(control) = self.controls.try_recv() {
             match control {
+                Control::ProfileFreeze { baseline, job } => {
+                    self.host.profiler().collect();
+                    let mut captured = self.host.profiler().profile().clone();
+                    captured.frames.retain(|frame| frame.duration_ns > 0);
+                    let profile = std::sync::Arc::new(captured);
+                    if baseline {
+                        self.profile_baseline = Some(std::sync::Arc::clone(&profile));
+                    } else {
+                        self.profile_current = Some(std::sync::Arc::clone(&profile));
+                    }
+                    let output = self
+                        .host
+                        .root()
+                        .join(".ara/cache/profiles")
+                        .join(format!("{job}.araprofile"));
+                    let completed = self.completed.clone();
+                    std::thread::spawn(move || {
+                        let result = (|| -> anyhow::Result<Value> {
+                            std::fs::create_dir_all(
+                                output
+                                    .parent()
+                                    .ok_or_else(|| anyhow::anyhow!("profile cache path"))?,
+                            )?;
+                            ara_profile::write_capture(&output, &profile)?;
+                            Ok(json!({"path":output}))
+                        })()
+                        .map_err(|e| vec![crate::invalid(e.to_string())]);
+                        let _ = completed.send(CaptureCompletion { job, result });
+                    });
+                }
                 Control::Approve(ticket) => {
                     if let Some(p) = self.pending.iter_mut().find(|p| p.id == ticket) {
                         p.approved = true;
@@ -324,6 +380,9 @@ impl Editor {
         if matches!(
             method,
             "cmd.apply"
+                | "editor.resource.create"
+                | "editor.asset.import"
+                | "editor.animation.layout"
                 | "history.undo"
                 | "history.redo"
                 | "review.revert"

@@ -1,0 +1,58 @@
+{
+  "qualification": "measured on a shared, loaded host",
+  "date": "2026-10-23",
+  "logicalCpus": 16,
+  "sourceCommit": "9d8e20ea50c30ebf752ef99ed25cfacb4ca0fb2c",
+  "otherWorkPaused": false,
+  "cpuMetric": "observed total host CPU percentage, retained as integer samples",
+  "compilerCountMetric": "observed compiler-process counts; the rustc-only count is identified separately where known",
+  "samplingLimits": "Discrete observations, not synchronized to individual frames. Observation order is retained; exact timestamps were not persisted. No CPU values are inferred for unsampled runs.",
+  "earlierPassingRunCpuObservation": null,
+  "compactFirstRunCpuObservation": null,
+  "contendedRunPostObservation": {
+    "panZoomP95Ms": 11.237,
+    "cpuPercent": 50,
+    "rustcProcesses": 8,
+    "relation": "immediate post-run observation; not the average CPU load during the benchmark"
+  },
+  "subsequentHostObservations": [
+    {
+      "cpuPercent": 59,
+      "compilerProcesses": 9
+    },
+    {
+      "cpuPercent": 76,
+      "compilerProcesses": 10
+    },
+    {
+      "cpuPercent": 40,
+      "compilerProcesses": 9
+    },
+    {
+      "cpuPercent": 72,
+      "compilerProcesses": 7
+    },
+    {
+      "cpuPercent": 9,
+      "compilerProcesses": 9
+    },
+    {
+      "cpuPercent": 41,
+      "compilerProcesses": 12
+    },
+    {
+      "cpuPercent": 19,
+      "compilerProcesses": 11
+    },
+    {
+      "cpuPercent": 49,
+      "compilerProcesses": 12
+    }
+  ],
+  "finalMatrixStartObservation": {
+    "cpuPercent": 21,
+    "compilerProcesses": 0,
+    "relation": "last pre-launch observation; no exclusive window or sustained-load claim"
+  },
+  "handoff": "Parent requested no further quiet-window wait and will rerun all performance benchmarks on a quiet machine after integration."
+}

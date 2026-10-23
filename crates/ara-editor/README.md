@@ -92,7 +92,7 @@ exposes `reduceMotion` and the `quality` toggle through the same protocol as the
 native controls. Fidelity uses ara-render-fidelity on the renderer's existing
 device, with bounded temporal settling. Raster stays available. The GPU draws an
 antialiased, distance-faded ground grid, axis lines, silhouettes and hover IDs.
-The view cube selects canonical camera orientations. No CPU viewport bridge is
+The axis sphere and colored caps select canonical camera orientations. No CPU viewport bridge is
 introduced. Glyph atlases, Scene targets, SDL input/IME and Windows UIA geometry
 all follow the selected display scale.
 
@@ -129,17 +129,77 @@ ordering, offscreen swatch painting, a clipped view cube/card, row icon spacing,
 and DPI coordinate mismatches. The 2x capture explicitly uses `--dpi 2` so its
 raster scale is reproducible independently of the current monitor setting.
 
+## Editor panels v1
+
+The Assets dock has a folder tree, grid/list views, `type:` search, source-backed
+references and drag targets in the scene, hierarchy and inspector. Texture
+decoding, mesh cooking/rendering and material thumbnails run off the UI thread;
+the project cache retains their results. Select an asset to edit reflected import
+settings, reimport with cancellable job progress, or inspect uses/used-by links.
+Short drawers use horizontal thumbnail tiles so filenames stay visible. The grid
+reflows after initial layout, splitter changes and monitor/size changes.
+
+Material and animation editors share a culled canvas with typed ports, validated
+connections, pan/zoom, box selection, reroutes, comments, groups, a minimap and a
+search-to-add palette. **Frame / F** fits the cards while leaving space for the
+minimap. Fresh default views frame after layout, preserving an explicitly
+positioned canvas camera. Material graph and DSL edits share command/undo history;
+the generated shader renders the sphere/plane preview and reports node errors
+while retaining the last good image. Animation supports states, transitions and
+blend spaces. VFX uses ordered module stacks, parameter controls and a live
+fixed-tick GPU preview. The Profiler shows actual CPU spans, GPU passes, counters,
+hitches and comparisons of frozen `.araprofile` captures.
+
+Try **Material**, add an `Add` node, connect two compatible sockets, then Ctrl+Z.
+Switch to **VFX** to reorder a module and change a parameter; open **Animation**
+to add a state or blend sample. In **Profiler**, record, freeze, set the baseline,
+record another interval and compare. These actions also appear in protocol
+discovery. Canvas navigation stays separate from content undo.
+
+```powershell
+./crates/ara-editor/verify-panels.ps1 -ScratchRoot D:/AraBuild/panel-check
+```
+
+This release route imports real media, drags a mesh into the scene, edits import
+settings and reimports, then creates/connects/undoes graph nodes through the UI.
+It captures every panel in both themes at exact physical 1440x900 (1x) and
+2560x1440 (2x), and gates 1,000 warm 500-node pan/zoom samples at p95 below 4 ms.
+`evidence/panels/{1440,2560}` contains images, layout reports, interaction results
+and all timing samples. Verification rejects a window with the wrong extent.
+
+Final release measurements on the RTX 4070 SUPER, **measured on a shared, loaded
+host** (16 logical CPUs; other workspace builds/tests were not paused):
+
+| Physical size / scale | 500-node pan/zoom p50 / p95 | Idle CPU p95 | Idle interval p95 |
+|---|---:|---:|---:|
+| 1440x900 / 1x | 1.8368 / 3.1629 ms | 0.1257 ms | 6.6801 ms |
+| 2560x1440 / 2x | 2.1074 / 2.8820 ms | 0.1333 ms | 6.7015 ms |
+
+Each size retains 1,000 active and 1,500 idle samples. The earlier 3.1002 / 3.5037
+ms p95 pass is preserved alongside the 4.0371 and 11.2370 ms noisy runs, stage
+timings and CPU-load observations. No outliers were removed. These are shared-host
+observations, not an isolated performance guarantee; the parent will repeat the
+benchmarks together on a quiet machine after integration. See
+[`evidence/panels/README.md`](evidence/panels/README.md) for the full qualification,
+raw evidence and verification commands.
+
+All 36 final captures were visually inspected in dark/light at both sizes,
+including full-resolution HiDPI asset captions. I would accept these panels as
+v1: the layout is coherent, labels and controls are legible, and previews show
+actual engine output. The compact drawer no longer hides filenames. The
+[`capture gallery`](evidence/panels/gallery.html) compares every panel and theme.
+
 ## Integration boundaries
 
 - `world::EditWorldView` isolates the temporary document projection from ara-sim.
   Provisional gizmos overlay that projection; committed transforms use `transform.set`.
-- Play/Pause/Step are disabled with explanatory tooltips until the simulation
-  player is connected. The Game dock is reserved for that output.
+- Play/Pause/Resume/Step/Stop use the registered `ara-play-host` service and a
+  pooled player window. The Game dock still needs the shared GPU texture output.
 - `world/gltf.rs` is a temporary source geometry loader; ara-asset owns cooked
-  meshes, texture streaming, importer jobs and thumbnails. Browser drag uses stable
-  `@path#id` references (mesh IDs from import sidecars).
-- The C# host can register reflected schemas and host services at the project
-  boundary; this editor does not start or hotload C# itself. The inspector already
-  consumes schema docs, units, ranges, defaults, enums and references.
+  meshes and texture streaming. Editor import jobs use ara-asset's importer/cache
+  APIs; FBX scene geometry consumes a published cooked-cache snapshot. Browser
+  drag uses stable `@path#id` references (mesh IDs from import sidecars).
+- The play host owns C# execution and schema services. The inspector consumes
+  schema docs, units, ranges, defaults, enums and references through the host.
 - Windows clipboard, OS IME and AccessKit use native adapters. The automated
   route exercises UI helpers; it does not claim a manual screen-reader/IME audit.

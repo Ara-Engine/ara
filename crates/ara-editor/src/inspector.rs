@@ -217,7 +217,8 @@ pub fn fields(
     }
     result
 }
-fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
+/// Map reflected field metadata to the shared native control model.
+pub(crate) fn widget(db: &SchemaDb, desc: &FieldDesc) -> Widget {
     let ty = if let ValueType::Option(inner) = &desc.ty {
         inner.as_ref()
     } else {

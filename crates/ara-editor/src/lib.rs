@@ -3,10 +3,13 @@
 
 mod actions;
 mod app;
+mod asset_tools;
+mod authoring;
 mod capture;
 mod commands;
 mod editor;
 mod fixes;
+pub mod graph;
 /// Editor-only Vulkan adapter over the shared engine device.
 pub use ara_editor_gpu as gpu;
 pub mod inspector;

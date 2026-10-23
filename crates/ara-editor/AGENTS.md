@@ -45,3 +45,25 @@ extents and UI glyph raster scale change together. Keep the separate SDL window,
 editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
 bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
 1440x900 at 1x and 2560x1440 at 2x, including palettes and review cards.
+
+Panel authoring: asset_tools owns isolated import jobs and cached off-thread
+thumbnails. authoring registers graph/material/VFX/animation commands; graph is
+the shared culled canvas and pre-shaped label cache. Preserve domain identities.
+The shared play-host schema world owns engine kinds and material/VFX commands;
+register only editor and generic graph commands on top of it.
+
+Shared graph gestures return intents only. Material and VFX edits lower through
+their ASTs to graph ops; animation projections are read-only and edit controller
+data. Animation canvas annotations live in `.ara/editor/animation-<id>.graph`.
+Graph labels are shaped once and use scalable MSDF runs across pan/zoom. Keep
+node/wire culling, the stable lookup table and the bounded thumbnail image pool.
+Generated material previews and fixed-tick VFX previews own worker GPU devices;
+all thumbnail decode/cook/cache IO is off the UI thread. Failures keep last-good
+images and display diagnostics. Host import sidecars save to `.import.json`
+while their asset IDs index source media; do not alter importer version policy.
+Profiler views consume actual ara-profile frames/spans/GPU queue timings. Frozen
+captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
+`--verify-panels` on a scratch project runs real import/reimport jobs, an asset
+drag and graph create/connect/undo, then captures every panel in both themes and
+measures 1,000 warm input-to-present samples with 500 nodes open.
+

@@ -22,6 +22,8 @@ pub enum Pipeline {
     Msdf = 3,
     /// Color glyph, preserving authored glyph color.
     ColorGlyph = 4,
+    /// Analytic round-capped line; modes 5 and 7 are editor viewport overlays.
+    Line = 6,
 }
 /// Exact 64-byte Slang instance ABI, four float4 records, alignment 16.
 #[repr(C, align(16))]
@@ -208,6 +210,27 @@ impl Renderer {
                 params: [0.0; 4],
             };
             match command {
+                Draw::Line {
+                    from,
+                    to,
+                    width,
+                    color,
+                    ..
+                } => {
+                    let pad = width * 0.5 + 1.;
+                    let x = from[0].min(to[0]) - pad;
+                    let y = from[1].min(to[1]) - pad;
+                    instance.rect = [
+                        x + t[0],
+                        y + t[1],
+                        (to[0] - from[0]).abs() + 2. * pad,
+                        (to[1] - from[1]).abs() + 2. * pad,
+                    ];
+                    instance.uv = [from[0] - x, from[1] - y, to[0] - x, to[1] - y];
+                    instance.params[0] = width * 0.5;
+                    instance.color = color_array(*color);
+                    self.push(Pipeline::Line, 0, clip, instance);
+                }
                 Draw::PushTransform { translation } => {
                     transforms.push([t[0] + translation[0], t[1] + translation[1]]);
                 }
@@ -267,7 +290,20 @@ impl Renderer {
                     glyphs,
                     color,
                     ..
+                }
+                | Draw::ScalableGlyphRun {
+                    font,
+                    size,
+                    origin,
+                    glyphs,
+                    color,
+                    ..
                 } => {
+                    let mode = if matches!(command, Draw::ScalableGlyphRun { .. }) {
+                        TextMode::Msdf
+                    } else {
+                        mode
+                    };
                     let font = fonts
                         .get(*font as usize)
                         .ok_or("ARA7051: unknown font resource")?;
@@ -275,6 +311,12 @@ impl Renderer {
                         .glyphs
                         .get(glyphs.clone())
                         .ok_or("ARA7051: invalid glyph arena range")?;
+                    let mut visible = self.clips[clip].rect;
+                    let mut parent = self.clips[clip].parent;
+                    while let Some(index) = parent {
+                        visible = visible.intersection(self.clips[index].rect);
+                        parent = self.clips[index].parent;
+                    }
                     for g in glyphs {
                         let scale = if mode == TextMode::Raster {
                             self.raster_scale.max(1.)
@@ -288,6 +330,15 @@ impl Renderer {
                                 entry.size[0] / scale,
                                 entry.size[1] / scale,
                             ];
+                            let bounds = Box2 {
+                                x: instance.rect[0],
+                                y: instance.rect[1],
+                                w: instance.rect[2],
+                                h: instance.rect[3],
+                            };
+                            if !bounds.intersects(visible) {
+                                continue;
+                            }
                             instance.uv = entry.uv;
                             instance.color = color_array(*color);
                             instance.params = [0.0, 0.0, entry.range, 0.0];

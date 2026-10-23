@@ -119,7 +119,7 @@ impl Shell {
                 }
                 out.push_str("</panel>");
                 if let Some(panel) = tabs.get(*active) {
-                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play opens the game in a player window; the in-editor game viewport (shared GPU texture) comes next.' /></panel>"),"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
+                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play opens the game in a player window; the in-editor game viewport (shared GPU texture) comes next.' /></panel>"),"material"=>self.material_panel(editor,out)?,"vfx"=>self.vfx_panel(editor,out)?,"profiler"=>self.profiler_panel(editor,out)?,"animation"=>self.animation_panel(editor,out)?,"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
                 }
                 out.push_str("</panel>");
             }
@@ -200,21 +200,9 @@ impl Shell {
             ),
             "small quiet",
         ));
-        out.push_str("</panel><panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' /><panel id='view-cube' style='position:absolute;right:12px;top:12px;width:84px;height:84px'>");
-        for (id, label, yaw, pitch, left, top) in [
-            ("view-x", "X", std::f32::consts::FRAC_PI_2, 0., 56, 28),
-            ("view-y", "Y", 0., 1.54, 28, 0),
-            ("view-z", "Z", 0., 0., 0, 28),
-            ("view-iso", "3D", 0.6, 0.4, 28, 28),
-        ] {
-            self.bindings.insert(ara_ui::source::stable_id(id),Binding::Protocol("editor.camera",json!({"target":editor.state.camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":editor.state.camera.distance})));
-            if id == "view-iso" {
-                out.push_str(&format!("<button id='{id}' class='small quiet view-axis' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' label='Perspective view' description='Return to isometric perspective' action='Dispatch'>{}</button>",icons::icon(id,"box")));
-                continue;
-            }
-            out.push_str(&format!("<button id='{id}' class='small quiet view-axis' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' text='{label}' description='Snap Scene camera to {label} view' action='Dispatch' />"));
-        }
-        out.push_str("</panel></panel>");
+        out.push_str("</panel><panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' />");
+        self.axis_markup(editor, out);
+        out.push_str("</panel>");
     }
 }
 pub(super) fn display(v: &Value) -> String {
@@ -234,6 +222,10 @@ pub(super) fn display(v: &Value) -> String {
 }
 fn title(panel: &str) -> &str {
     match panel {
+        "material" => "Material",
+        "vfx" => "VFX",
+        "animation" => "Animation",
+        "profiler" => "Profiler",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",

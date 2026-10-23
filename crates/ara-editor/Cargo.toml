@@ -9,6 +9,16 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-asset = { path = "../ara-asset" }
+ara-asset-format = { path = "../ara-asset-format" }
+ara-importers = { path = "../ara-importers" }
+ara-graph = { path = "../ara-graph" }
+ara-material = { path = "../ara-material" }
+ara-vfx = { path = "../ara-vfx" }
+ara-vfx-gpu = { path = "../ara-vfx-gpu" }
+ara-shader-cook = { path = "../ara-shader-cook" }
+ara-anim = { path = "../ara-anim" }
+ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-audio-why = { path = "../ara-audio-why" }
 ara-cmd = { path = "../ara-cmd" }
 ara-components = { path = "../ara-components" }
@@ -33,8 +43,10 @@ ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 anyhow = "1"
+bytemuck = "1.24"
 glam = { version = "0.30", features = ["serde", "bytemuck"] }
 gltf = "1.4"
+parley = { version = "0.12", default-features = false, features = ["std", "complex-scripts"] }
 resvg = { version = "0.45", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde = { workspace = true }

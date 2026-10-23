@@ -18,6 +18,15 @@ pub(crate) enum Drag {
 impl Shell {
     /// Scroll a finite row pool over the full hierarchy model.
     pub fn scroll_hierarchy(&mut self, delta: f32) -> ara_ui::Result<bool> {
+        if let Some(i) = self.ui.find("asset-grid") {
+            let rect = self.ui.nodes[i].rect;
+            if rect.contains(self.pointer[0], self.pointer[1]) {
+                self.asset_offset = (self.asset_offset + delta)
+                    .clamp(0., (self.asset_grid_extent - rect.h).max(0.));
+                self.asset_grid_dirty = true;
+                return Ok(true);
+            }
+        }
         if let Some(view) = &mut self.asset_view
             && let Some(index) = self.ui.find("asset-rows")
         {
@@ -119,16 +128,59 @@ impl Shell {
                 }
             }
             Drag::Asset { asset, .. } => {
-                let Some(reference) = asset.reference else {
+                let reference = asset.current_reference(editor.host.store().workspace());
+                let Some(reference) = reference else {
                     return Err(
                         "Mesh/prefab needs a stable asset ID from its document or import sidecar"
                             .into(),
                     );
                 };
+                if let Some(i) = self.ui.find("animation-clip-field")
+                    && self.ui.nodes[i]
+                        .rect
+                        .contains(self.pointer[0], self.pointer[1])
+                    && let Some(Binding::AnimationField(doc, item, key)) =
+                        self.bindings.get(&stable_id("animation-clip-field"))
+                {
+                    let (doc, item, key) = (doc.clone(), item.clone(), key.clone());
+                    self.set_animation_field(editor, &doc, &item, &key, json!(reference))?;
+                    self.rebuild(editor)?;
+                    return Ok(true);
+                }
+                let field = self
+                    .fields
+                    .values()
+                    .find(|field| {
+                        matches!(field.widget, crate::inspector::Widget::Asset { .. })
+                            && self
+                                .ui
+                                .find(&format!("asset-field-{}", field.path.replace('.', "-")))
+                                .is_some_and(|i| {
+                                    self.ui.nodes[i]
+                                        .rect
+                                        .contains(self.pointer[0], self.pointer[1])
+                                })
+                    })
+                    .map(|f| f.path.clone());
+                if let Some(field) = field {
+                    editor.apply(
+                        crate::inspector::edit_commands(
+                            &editor.state.selection,
+                            &field,
+                            &json!(reference),
+                        ),
+                        "Drop asset reference",
+                        None,
+                    )?;
+                    self.rebuild(editor)?;
+                    return Ok(true);
+                }
                 let over_scene = self
                     .viewport()
                     .is_some_and(|r| r.contains(self.pointer[0], self.pointer[1]));
-                if entity.is_some() || over_scene {
+                if (entity.is_some() || over_scene)
+                    && matches!(asset.kind.as_str(), "prefab" | "glb" | "gltf" | "fbx")
+                {
                     let position = if over_scene {
                         overlay::ground_point(
                             &editor.state.camera,

@@ -1,0 +1,140 @@
+//! Launch options and typed fixture/resource setup, outside the native frame loop.
+use crate::Editor;
+use serde_json::{Value, json};
+use std::path::PathBuf;
+/// Editor launch settings; bounded verification runs use the same production event loop.
+pub struct Options {
+    /// Project directory containing ara.project.json.
+    pub project: PathBuf,
+    /// Stop after this many event-loop frames; None keeps the editor open.
+    pub frames: Option<u64>,
+    /// Run the scripted native/protocol verification route and write evidence.
+    pub verify: bool,
+    /// Populate an empty scene using one typed sample-content batch.
+    pub sample: bool,
+    /// Screenshots and measurement directory.
+    pub output: PathBuf,
+    /// Requested native content extent in pixels.
+    pub size: [u32; 2],
+    /// Optional explicit DPI for reproducible monitor-scale verification.
+    pub dpi: Option<f32>,
+    /// Open an authoring panel directly; --sample creates its starter asset when absent.
+    pub panel: Option<String>,
+    /// Save the final composited GPU frame before a bounded run exits.
+    pub screenshot: bool,
+    /// Run the native authoring panels, import and 500-node navigation suite.
+    pub verify_panels: bool,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            project: ".".into(),
+            frames: None,
+            verify: false,
+            sample: false,
+            output: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence"),
+            size: [1440, 900],
+            dpi: None,
+            panel: None,
+            screenshot: false,
+            verify_panels: false,
+        }
+    }
+}
+pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
+    if options.sample {
+        sample(editor)?;
+    }
+    if let Some(panel) = &options.panel {
+        if options.sample && matches!(panel.as_str(), "material" | "vfx" | "animation") {
+            let found = editor.host.store().workspace().docs().any(|(_, d)| {
+                if panel == "animation" {
+                    d.kind == "animation"
+                } else {
+                    d.record("g_meta")
+                        .and_then(|r| r.get("domain"))
+                        .and_then(Value::as_str)
+                        == Some(panel)
+                }
+            });
+            if !found {
+                let path = format!(
+                    "samples/{panel}.{}",
+                    if panel == "animation" {
+                        "animation"
+                    } else {
+                        "graph"
+                    }
+                );
+                let doc = if let Some(id) = editor
+                    .host
+                    .store()
+                    .workspace()
+                    .find(&path)
+                    .map(ToString::to_string)
+                {
+                    editor.apply_to(
+                        &id,
+                        vec![json!({"cmd":"editor.graph.initialize","args":{"domain":panel}})],
+                        "Initialize sample asset",
+                    )?;
+                    id
+                } else {
+                    editor.action(
+                        "editor.resource.create",
+                        json!({"path":path,"domain":panel}),
+                    )?["doc"]
+                        .as_str()
+                        .ok_or("resource identity missing")?
+                        .to_owned()
+                };
+                editor.action("editor.workspace", json!({"resource":doc}))?;
+            }
+        }
+        editor.action("editor.focus", json!({"panel":panel}))?;
+    }
+    Ok(())
+}
+fn sample(editor: &mut Editor) -> ara_ui::Result<()> {
+    let empty = editor
+        .host
+        .store()
+        .workspace()
+        .doc(&editor.state.doc)
+        .is_some_and(|d| d.records().is_empty());
+    if !empty {
+        return Ok(());
+    }
+    let mut commands = Vec::new();
+    for (name, position, scale, tint) in [
+        (
+            "Outpost floor",
+            [0., -0.25, 0.],
+            [12., 0.5, 10.],
+            [0.18, 0.20, 0.23, 1.],
+        ),
+        (
+            "Salvage crate",
+            [0., 0.6, 0.],
+            [1.2, 1.2, 1.2],
+            [0.12, 0.28, 0.42, 1.],
+        ),
+        (
+            "Bulkhead",
+            [-3., 1.5, -2.],
+            [0.3, 3., 6.],
+            [0.25, 0.28, 0.32, 1.],
+        ),
+        (
+            "Signal tower",
+            [2.5, 1.5, -2.],
+            [0.8, 3., 0.8],
+            [0.4, 0.3, 0.14, 1.],
+        ),
+    ] {
+        commands.push(json!({"cmd":"entity.create","args":{"name":name,"components":{"Transform":{"position":position,"scale":scale},"MeshRenderer":{"color":tint}}}}));
+    }
+    editor.apply(commands, "Create sample Outpost scene", None)?;
+    editor.host.flush();
+    Ok(())
+}
