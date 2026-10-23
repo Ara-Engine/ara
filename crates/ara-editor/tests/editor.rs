@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)] // Tests assert each fixture operation at its call site.
 use ara_editor::{
     Editor,
     shell::Shell,

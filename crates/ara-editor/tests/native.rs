@@ -1,4 +1,5 @@
 //! Opt-in native GPU golden gate. This opens the production SDL window.
+#![allow(clippy::unwrap_used)] // A failed fixture/capture operation should fail the test immediately.
 use serde_json::json;
 use std::{path::PathBuf, process::Command};
 

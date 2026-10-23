@@ -21,10 +21,10 @@ impl Shell {
                 (self.pointer[1] + 18.).clamp(0., (self.ui.size[1] - 100.).max(0.)),
             ];
         }
-        if let Some(text) = &description {
-            if let Some(i) = self.ui.find("tooltip-text") {
-                self.ui.set_text(i, text)?;
-            }
+        if let Some(text) = &description
+            && let Some(i) = self.ui.find("tooltip-text")
+        {
+            self.ui.set_text(i, text)?;
         }
         self.tooltip_text = description;
         Ok(())

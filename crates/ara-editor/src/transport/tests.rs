@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)] // Test fixtures fail at the operation that broke their invariant.
 use super::*;
 use ara_proto::Endpoint;
 use serde_json::json;
