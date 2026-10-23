@@ -1,0 +1,37 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549",
+  "stages": [
+    {
+      "dxil": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549/spriteFragment.dxil",
+      "dxil_hash": "170964486cc4f2a4f23759bfc39f187b349d09fe89992ec8ee855280af19a352",
+      "source_entry": "spriteFragment",
+      "spirv": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549/spriteFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "66d18ec4030eba4c344bd6af8906ebab773d82c29850d51f35d2d8db3027a54d",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549/spriteVertex.dxil",
+      "dxil_hash": "6db358cc4e18cb6387c2ff40f2c906b3e284d19e70aef061f177757149f56dc6",
+      "source_entry": "spriteVertex",
+      "spirv": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549/spriteVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "39057e0d042d02786d22fe7ae2b251cf6d44e707e5250b6b9c1121d417caea44",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      109,
+      100
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

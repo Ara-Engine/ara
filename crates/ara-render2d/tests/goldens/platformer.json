@@ -1,0 +1,133 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      686829787259933836,
+      "Amber lantern"
+    ],
+    [
+      2,
+      1777936226886777139,
+      "Amber lantern"
+    ],
+    [
+      3,
+      7690608504785830624,
+      "Nine-slice supply crate"
+    ],
+    [
+      4,
+      7731439355775835903,
+      "Scout"
+    ],
+    [
+      5,
+      10558729798364308802,
+      "Parallax mountain"
+    ],
+    [
+      6,
+      13463340161653533772,
+      "Parallax mountain"
+    ],
+    [
+      7,
+      14866164513971931557,
+      "Parallax clouds"
+    ],
+    [
+      8,
+      16759630289329201659,
+      "Ruins tilemap"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "centre": [
+        0.0,
+        0.5
+      ],
+      "kind": "orthographic",
+      "world_size": [
+        20.0,
+        11.25
+      ]
+    },
+    "deterministic": true,
+    "exposure": 1.0,
+    "marks": 32,
+    "mode": "lit",
+    "seed": 42,
+    "settle_frames": 2,
+    "size": [
+      640,
+      360
+    ],
+    "tick": 120
+  },
+  "scene_hash": "fb47ab20281fe6618c50aa49a7cc8240f64869d28ddc28a3afd5f8728d3688e3",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.022528,
+      "pass": "Sprites.TileChunks.Bindless",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.012288,
+      "pass": "Exposure.ACESFitted.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.068064,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "HostReadback",
+      "queue": "Graphics"
+    }
+  ]
+}

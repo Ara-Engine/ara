@@ -1,0 +1,79 @@
+{
+  "maxSize": 256,
+  "regions": [
+    {
+      "name": "grass",
+      "region": {
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "stone",
+      "region": {
+        "x": 16,
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "dirt",
+      "region": {
+        "x": 32,
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "name": "crate",
+      "region": {
+        "x": 48,
+        "width": 16,
+        "height": 16,
+        "borders": [3, 3, 3, 3]
+      }
+    },
+    {
+      "name": "heroIdle",
+      "region": {
+        "y": 16,
+        "width": 16,
+        "height": 24
+      }
+    },
+    {
+      "name": "heroStep",
+      "region": {
+        "x": 16,
+        "y": 16,
+        "width": 16,
+        "height": 24
+      }
+    },
+    {
+      "name": "lantern",
+      "region": {
+        "x": 64,
+        "width": 8,
+        "height": 16
+      }
+    },
+    {
+      "name": "mountain",
+      "region": {
+        "y": 64,
+        "width": 64,
+        "height": 32
+      }
+    },
+    {
+      "name": "cloud",
+      "region": {
+        "x": 64,
+        "y": 64,
+        "width": 64,
+        "height": 32
+      }
+    }
+  ]
+}

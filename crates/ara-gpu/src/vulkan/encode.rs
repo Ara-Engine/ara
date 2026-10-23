@@ -184,6 +184,10 @@ impl VulkanDevice {
                     device.cmd_draw_indexed(cmd, d.index_count, 1, d.first_index, 0, 0);
                 }
                 Command::Fullscreen => device.cmd_draw(cmd, 3, 1, 0, 0),
+                Command::DrawProcedural {
+                    vertices,
+                    instances,
+                } => device.cmd_draw(cmd, *vertices, *instances, 0, 0),
                 Command::EndRendering => device.cmd_end_rendering(cmd),
                 Command::UploadImage {
                     source,

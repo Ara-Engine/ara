@@ -113,11 +113,17 @@ pub struct ShaderMetadata {
     /// Hash of the shared native-backend binding contract.
     pub binding_layout_hash: String,
 }
-pub(crate) struct CaptureContext<'a> {
+/// Provenance and stable entity mapping supplied by an alternate render path.
+pub struct CaptureContext<'a> {
+    /// Compact render IDs map to these stable identities in order, starting at one.
     pub names: &'a [(u64, String)],
+    /// Content hash covering the extraction snapshot and its asset payloads.
     pub hash: &'a str,
+    /// Native device/driver provenance.
     pub device: &'a DeviceInfo,
+    /// GPU timestamps for the captured frame.
     pub timings: &'a [PassTiming],
+    /// Offline shader provenance for this render path.
     pub shaders: &'a ShaderMetadata,
 }
 /// Owned capture channels with stable pixel-to-entity lookup.
@@ -134,7 +140,8 @@ pub struct Capture {
     render_ids: Vec<u32>,
 }
 impl Capture {
-    pub(crate) fn from_render(
+    /// Builds the shared capture/marks/picking result from completed GPU channels.
+    pub fn from_render(
         rgba: Vec<u8>,
         ids: Vec<u32>,
         request: &CaptureRequest,

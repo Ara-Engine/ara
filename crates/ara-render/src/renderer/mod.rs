@@ -1,6 +1,7 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
 mod frame;
 mod passes;
+pub mod post;
 mod transfer;
 mod upload;
 use crate::{

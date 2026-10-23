@@ -10,6 +10,7 @@ use std::{io::Cursor, path::Path};
 pub(super) struct NativePipeline {
     pub handle: vk::Pipeline,
     pub compute: bool,
+    pub vertex_input: bool,
     pub colors: Vec<vk::Format>,
     pub depth: Option<vk::Format>,
 }
@@ -184,6 +185,7 @@ pub(super) fn create(
         Ok(NativePipeline {
             handle,
             compute,
+            vertex_input: cooked.state.vertex_stride != 0,
             colors: cooked
                 .state
                 .color_formats

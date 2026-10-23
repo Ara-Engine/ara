@@ -349,6 +349,25 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Draw outside graphics scope".into()));
                     }
                 }
+                Command::DrawProcedural {
+                    vertices,
+                    instances,
+                } => {
+                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
+                    let native = self
+                        .pipelines
+                        .get(bound.expect("attachment validation requires a bound pipeline"))?;
+                    if !rendering
+                        || pipeline != Some(false)
+                        || native.vertex_input
+                        || *vertices == 0
+                        || *instances == 0
+                    {
+                        return Err(GpuError::Contract(
+                            "Invalid procedural graphics draw".into(),
+                        ));
+                    }
+                }
                 Command::Dispatch(_) => {
                     if rendering || pipeline != Some(true) {
                         return Err(GpuError::Contract("Dispatch outside compute scope".into()));

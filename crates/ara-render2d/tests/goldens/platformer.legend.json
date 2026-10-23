@@ -1,0 +1,90 @@
+[
+  {
+    "bbox": [
+      184,
+      148,
+      16,
+      32
+    ],
+    "entity": 686829787259933836,
+    "mark": 1,
+    "name": "Amber lantern"
+  },
+  {
+    "bbox": [
+      472,
+      180,
+      16,
+      32
+    ],
+    "entity": 1777936226886777139,
+    "mark": 2,
+    "name": "Amber lantern"
+  },
+  {
+    "bbox": [
+      324,
+      228,
+      56,
+      48
+    ],
+    "entity": 7690608504785830624,
+    "mark": 3,
+    "name": "Nine-slice supply crate"
+  },
+  {
+    "bbox": [
+      260,
+      228,
+      24,
+      48
+    ],
+    "entity": 7731439355775835903,
+    "mark": 4,
+    "name": "Scout"
+  },
+  {
+    "bbox": [
+      0,
+      176,
+      324,
+      100
+    ],
+    "entity": 10558729798364308802,
+    "mark": 5,
+    "name": "Parallax mountain"
+  },
+  {
+    "bbox": [
+      312,
+      200,
+      328,
+      76
+    ],
+    "entity": 13463340161653533772,
+    "mark": 6,
+    "name": "Parallax mountain"
+  },
+  {
+    "bbox": [
+      106,
+      41,
+      250,
+      95
+    ],
+    "entity": 14866164513971931557,
+    "mark": 7,
+    "name": "Parallax clouds"
+  },
+  {
+    "bbox": [
+      0,
+      116,
+      640,
+      244
+    ],
+    "entity": 16759630289329201659,
+    "mark": 8,
+    "name": "Ruins tilemap"
+  }
+]

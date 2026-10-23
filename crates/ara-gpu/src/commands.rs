@@ -53,6 +53,13 @@ pub enum Command {
     Draw(Draw),
     /// Fullscreen triangle without vertex input.
     Fullscreen,
+    /// Procedural instanced draw using SV_VertexID/SV_InstanceID, without vertex input.
+    DrawProcedural {
+        /// Vertices in each instance; nonzero.
+        vertices: u32,
+        /// Number of instances; nonzero.
+        instances: u32,
+    },
     /// End dynamic rendering.
     EndRendering,
     /// Buffer-to-image upload with tightly packed pixels.
