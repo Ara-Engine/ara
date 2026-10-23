@@ -17,6 +17,11 @@
 mod commands;
 mod engine;
 mod project;
+
+// Delegates directly to System unless ara-profile/allocation is enabled.
+#[global_allocator]
+static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
+    ara_profile::CountingAllocator(std::alloc::System);
 mod relaxed;
 
 use std::path::PathBuf;

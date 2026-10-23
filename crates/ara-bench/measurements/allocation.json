@@ -1,0 +1,189 @@
+{
+  "rounds": 21,
+  "baseline_ns": 0.20675,
+  "disabled_added_ns": 7.5719,
+  "enabled_added_ns": 68.5625,
+  "collection_ns_per_span": 7.58125,
+  "tracy": false,
+  "allocation": true,
+  "load": {
+    "total_cpu": 0.33074394226074216,
+    "process_cpu": 0.0636368478104225,
+    "background_cpu": 0.26710709445031966
+  },
+  "tracy_connected": false,
+  "samples": [
+    {
+      "round": 0,
+      "enabled_baseline_ns": 0.25625,
+      "enabled_added_ns": 78.78125,
+      "collection_ns_per_span": 13.21875,
+      "disabled_baseline_ns": 0.21805,
+      "disabled_added_ns": 7.4778
+    },
+    {
+      "round": 1,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 78.725,
+      "collection_ns_per_span": 12.5,
+      "disabled_baseline_ns": 0.20555,
+      "disabled_added_ns": 7.439500000000001
+    },
+    {
+      "round": 2,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 73.125,
+      "collection_ns_per_span": 7.61875,
+      "disabled_baseline_ns": 0.20675,
+      "disabled_added_ns": 7.6945
+    },
+    {
+      "round": 3,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 72.5,
+      "collection_ns_per_span": 7.9,
+      "disabled_baseline_ns": 0.20345,
+      "disabled_added_ns": 7.5902
+    },
+    {
+      "round": 4,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 66.6875,
+      "collection_ns_per_span": 7.60625,
+      "disabled_baseline_ns": 0.2035,
+      "disabled_added_ns": 7.45285
+    },
+    {
+      "round": 5,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.81875000000001,
+      "collection_ns_per_span": 7.39375,
+      "disabled_baseline_ns": 0.20895,
+      "disabled_added_ns": 7.673
+    },
+    {
+      "round": 6,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.25625000000001,
+      "collection_ns_per_span": 7.575,
+      "disabled_baseline_ns": 0.2081,
+      "disabled_added_ns": 7.3742
+    },
+    {
+      "round": 7,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.90625,
+      "collection_ns_per_span": 7.53125,
+      "disabled_baseline_ns": 0.20665,
+      "disabled_added_ns": 7.50145
+    },
+    {
+      "round": 8,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.4375,
+      "collection_ns_per_span": 7.58125,
+      "disabled_baseline_ns": 0.20775,
+      "disabled_added_ns": 7.5719
+    },
+    {
+      "round": 9,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.675,
+      "collection_ns_per_span": 7.425,
+      "disabled_baseline_ns": 0.2094,
+      "disabled_added_ns": 7.4981
+    },
+    {
+      "round": 10,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.53125,
+      "collection_ns_per_span": 7.59375,
+      "disabled_baseline_ns": 0.2066,
+      "disabled_added_ns": 7.5908
+    },
+    {
+      "round": 11,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 70.675,
+      "collection_ns_per_span": 7.58125,
+      "disabled_baseline_ns": 0.20555,
+      "disabled_added_ns": 7.4031
+    },
+    {
+      "round": 12,
+      "enabled_baseline_ns": 0.33125,
+      "enabled_added_ns": 79.20625,
+      "collection_ns_per_span": 11.44375,
+      "disabled_baseline_ns": 0.20555,
+      "disabled_added_ns": 7.5661000000000005
+    },
+    {
+      "round": 13,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 69.4,
+      "collection_ns_per_span": 7.68125,
+      "disabled_baseline_ns": 0.20665,
+      "disabled_added_ns": 7.872350000000001
+    },
+    {
+      "round": 14,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 69.34375,
+      "collection_ns_per_span": 7.91875,
+      "disabled_baseline_ns": 0.20555,
+      "disabled_added_ns": 7.788950000000001
+    },
+    {
+      "round": 15,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.97500000000001,
+      "collection_ns_per_span": 7.38125,
+      "disabled_baseline_ns": 0.2167,
+      "disabled_added_ns": 7.73475
+    },
+    {
+      "round": 16,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 67.68125,
+      "collection_ns_per_span": 7.58125,
+      "disabled_baseline_ns": 0.2365,
+      "disabled_added_ns": 7.6655999999999995
+    },
+    {
+      "round": 17,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 69.51875,
+      "collection_ns_per_span": 7.525,
+      "disabled_baseline_ns": 0.3992,
+      "disabled_added_ns": 9.1355
+    },
+    {
+      "round": 18,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 68.10000000000001,
+      "collection_ns_per_span": 7.41875,
+      "disabled_baseline_ns": 0.20935,
+      "disabled_added_ns": 7.19135
+    },
+    {
+      "round": 19,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 70.775,
+      "collection_ns_per_span": 13.3875,
+      "disabled_baseline_ns": 0.2358,
+      "disabled_added_ns": 7.3571
+    },
+    {
+      "round": 20,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 68.5625,
+      "collection_ns_per_span": 7.35625,
+      "disabled_baseline_ns": 0.2067,
+      "disabled_added_ns": 8.40225
+    }
+  ],
+  "platform": "windows",
+  "architecture": "x86_64",
+  "logical_cpus": 16,
+  "note": "Release build, median paired differences; Tracy emits zones even without a viewer (not on-demand). Enabled spans include two clock reads and bounded ring publication."
+}

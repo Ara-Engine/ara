@@ -38,6 +38,9 @@ subscriber. Attach each executing worker before recording starts.
 also back the generated `ara_profile` MCP tool. Parameters carry the session;
 summary parameters are `topN`, `limit`, `maxBytes`; compare accepts baseline/current
 JSON strings plus `relative` and `absoluteNs`. No service path opens arbitrary files.
+Build the CLI/daemon with `--features ara-profile/allocation` to enable its installed
+counting allocator. Other engine executables choose their own global allocator and
+can wrap it in `CountingAllocator`; the feature remains off in ordinary builds.
 
 `ImportJob::record_profile` and `BakeJob::record_profile` attach job-manager samples
 alongside readiness polls. `Boundary::record_profile` imports compile-server
@@ -97,5 +100,21 @@ not on-demand: its zones are emitted even without an attached viewer.
 Recording uses two monotonic clock reads and bounded ring publication; collection
 and serialization are outside the timed scope loop. Compile-time-disabled subsystem
 markers emit no code. Allocation tests assert zero requested bytes across 100 warm
-native frames including collection and GPU/job import. Recorded results follow
-once the hardware gates and measurements finish.
+native frames including collection and GPU/job import.
+
+Recorded 2026-10-23 on Windows 11, Ryzen 7 7800X3D (16 logical CPUs), RTX 4070
+SUPER, Rust 1.99.1. Release builds, 21 paired AB/BA rounds; disabled scopes use a
+registered thread with recording stopped. Values are median added nanoseconds
+per scope above the paired empty loop. Collection is measured separately.
+
+| Mode / raw samples | Disabled | Recording | Collection / span | Background CPU |
+| --- | ---: | ---: | ---: | ---: |
+| [Native](measurements/native.json) | 7.42 ns | 66.54 ns | 7.91 ns | 16.10% |
+| [Counting allocator](measurements/allocation.json) | 7.57 ns | 68.56 ns | 7.58 ns | 26.71% |
+| [Tracy](measurements/tracy.json) | 7.52 ns | 103.04 ns | 7.79 ns | 15.51% |
+
+Tracy had no viewer attached; its zone emission was enabled, without on-demand,
+sampling or system tracing. Its Windows symbol resolver reported
+`SymInitialize` error 87; this run measures explicit zones, without call stacks.
+The machine is shared, so retain the raw round samples and load alongside results
+instead of treating these medians as isolated-machine limits.

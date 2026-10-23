@@ -11,6 +11,7 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 pub struct LoadSampler {
     system: System,
     previous: Instant,
+    previous_cpu_ms: Option<u64>,
     pid: sysinfo::Pid,
 }
 impl Default for LoadSampler {
@@ -24,9 +25,14 @@ impl LoadSampler {
         let mut sampler = Self {
             system: System::new(),
             previous: Instant::now(),
+            previous_cpu_ms: None,
             pid: sysinfo::Pid::from_u32(std::process::id()),
         };
         sampler.refresh();
+        sampler.previous_cpu_ms = sampler
+            .system
+            .process(sampler.pid)
+            .map(|p| p.accumulated_cpu_time());
         sampler.previous = Instant::now();
         sampler
     }
@@ -44,15 +50,28 @@ impl LoadSampler {
             return BackgroundLoad::default();
         }
         self.refresh();
-        self.previous = Instant::now();
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.previous).as_secs_f64();
+        self.previous = now;
         if self.system.cpus().is_empty() {
             return BackgroundLoad::default();
         }
         let total = f64::from(self.system.global_cpu_usage()) / 100.0;
-        let process = self
+        let cpu_ms = self
             .system
             .process(self.pid)
-            .map(|p| f64::from(p.cpu_usage()) / (100.0 * self.system.cpus().len() as f64));
+            .map(|p| p.accumulated_cpu_time());
+        // Use cumulative CPU milliseconds over our measured interval. This keeps
+        // process and system samples on the same interval on every OS backend.
+        let process = self
+            .previous_cpu_ms
+            .zip(cpu_ms)
+            .and_then(|(before, after)| after.checked_sub(before))
+            .map(|delta| {
+                (delta as f64 / (elapsed * 1000.0 * self.system.cpus().len() as f64))
+                    .clamp(0.0, 1.0)
+            });
+        self.previous_cpu_ms = cpu_ms;
         BackgroundLoad {
             total_cpu: Some(total.clamp(0.0, 1.0)),
             process_cpu: process,
