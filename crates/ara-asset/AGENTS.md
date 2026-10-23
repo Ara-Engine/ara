@@ -18,8 +18,10 @@ shared across handles, discovery and cooks. Set `ARA_IMPORT_WORKERS` before star
 to override (positive integer, always capped by `available_parallelism`; invalid or
 zero uses four). Excess jobs stay queued in `ImportJob` and launch when polled;
 queued time does not consume the native worker deadline. Cancellation drops queued
-requests; running children hold their slot until reaped. The cold-batch process
-test is `cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
+requests; a background supervisor reaps children and releases their slots even if
+their completed replies have not been polled. Cancellation returns without waiting
+for the child. The cold-batch process test is
+`cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
 Settings-selected source files use Importer::dependencies_with_settings and
