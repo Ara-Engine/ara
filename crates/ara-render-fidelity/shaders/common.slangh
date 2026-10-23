@@ -22,10 +22,13 @@ struct Frame {
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;uint4 read[7];uint4 write[7];
+    uint4 reservoirs[2];uint4 extraRead[2];uint4 extraWrite[2];uint4 shadow;
 };
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint ri(Frame f,uint i){return f.read[i/4][i%4];}
 uint wi(Frame f,uint i){return f.write[i/4][i%4];}
+float4 extraPixel(Frame f,uint i,int2 p){uint index=f.extraRead[(i-28)/4][(i-28)%4];return textures[NonUniformResourceIndex(index)].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
+void extraStore(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(f.extraWrite[(i-28)/4][(i-28)%4])][p]=v;}
 float4 pixel(Frame f,uint i,int2 p){return textures[NonUniformResourceIndex(ri(f,i))].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
 float4 sampleImage(Frame f,uint i,float2 uv){return textures[NonUniformResourceIndex(ri(f,i))].SampleLevel(samplers[2],uv,0);}
 void store(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(wi(f,i))][p]=v;}
@@ -183,46 +186,7 @@ float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
     if(specular && dot(s.normal,l)<=0){weight=0;return l;}
     float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }
-// Explicit area-light sampling is the sole emitter estimator after the camera
-// event. Non-primary BSDF hits omit emission, avoiding a second energy estimate.
-// All BSDF lobes have finite roughness; there are no delta lobes to exclude.
-float3 emissiveDirect(Frame f,Surface s,float3 v,inout uint rng){
-#ifdef EMISSIVE_LIGHTS
-    uint4 distribution=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(16);uint count=distribution.z;float total=asfloat(distribution.w);if(count==0)return 0;
-    float choice=random(rng)*total;uint low=0,high=count-1;
-    while(low<high){uint middle=(low+high)/2;float cdf=buffers[NonUniformResourceIndex(f.scene.x)].Load<float>(distribution.y+middle*64+12);if(cdf<choice)low=middle+1;else high=middle;}
-    uint offset=distribution.y+low*64;float4 a=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset),b=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+16),c=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+32);uint4 record=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(offset+48);
-    float u=sqrt(random(rng)),t=random(rng);float2 bary=float2(u*(1-t),u*t);
-    if(!accept(f,record.x,record.y,bary,rng))return 0;
-    float3 position=a.xyz*(1-u)+b.xyz*bary.x+c.xyz*bary.y,delta=position-s.position;float distance=length(delta);float3 l=delta/max(distance,1e-6);
-    float lightCosine=abs(dot(normalize(cross(b.xyz-a.xyz,c.xyz-a.xyz)),-l));if(lightCosine<1e-6 || (dot(s.normal,l)<=0 && s.transmission==0) || distance<0.003)return 0;
-    float pdf=(c.w/(total*b.w))*distance*distance/lightCosine;
-    if(occluded(f,rayOrigin(s,l),l,max(0.001,distance-0.003),rng))return 0;
-    float bsdfPdf;return evaluate(s,v,l,bsdfPdf)*surface(f,record.x,record.y,bary).emissive/max(pdf,1e-12);
-#else
-    return 0;
-#endif
-}
-float3 direct(Frame f,Surface s,float3 v,inout uint rng){
-    float3 origin=rayOrigin(s,s.normal);Hit hit;float pdf;float3 sum=emissiveDirect(f,s,v,rng);
-    float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng);
-    float3 sunlight=f.sunLux.rgb;
-#ifdef SKY_ATMOSPHERE
-    [branch]if(f.display.w!=0)sunlight=solarIrradiance(f,s.position);
-#endif
-    if(any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng))sum+=evaluate(s,v,l,pdf)*sunlight;
-    uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
-    for(uint i=0;i<head.w;i++){
-        float4 position=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64);
-        float4 colour=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+16);
-        float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+32);
-        float4 params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+48);
-        float3 delta=position.xyz-s.position;float dist=length(delta);l=delta/max(dist,1e-5);if(dist>position.w)continue;
-        float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
-        float fade=pow(saturate(1-pow(dist/position.w,4)),2);float3 sampled=coneDirection(l,0.025/max(dist,0.025),rng);
-        if((dot(s.normal,sampled)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,sampled),sampled,max(dist-0.03,0.001),rng))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
-    }return sum;
-}
+#include "lighting.slangh"
 float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
 float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
 float4 probeLoad(uint buffer,uint probe,uint texel){return buffers[NonUniformResourceIndex(buffer)].Load<float4>((probe*102+texel)*16);}

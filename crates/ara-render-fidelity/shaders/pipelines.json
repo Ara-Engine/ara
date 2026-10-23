@@ -13,6 +13,20 @@
       "vertex_stride": 0
     }
   },
+  "atrous_split": {
+    "entries": {
+      "atrousSplitMain": "compute"
+    },
+    "source": "denoise-split.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "bloom": {
     "entries": {
       "bloomMain": "compute"
@@ -363,6 +377,132 @@
       "vertex_stride": 0
     }
   },
+  "reservoir_init": {
+    "entries": {
+      "reservoirInit": "compute"
+    },
+    "source": "resampling.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_init_atmosphere": {
+    "entries": {
+      "reservoirInitAtmosphere": "compute"
+    },
+    "source": "resampling-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_init_layers": {
+    "entries": {
+      "reservoirInitLayers": "compute"
+    },
+    "source": "resampling-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_spatial": {
+    "entries": {
+      "reservoirSpatial": "compute"
+    },
+    "source": "resampling.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_spatial_atmosphere": {
+    "entries": {
+      "reservoirSpatialAtmosphere": "compute"
+    },
+    "source": "resampling-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_spatial_layers": {
+    "entries": {
+      "reservoirSpatialLayers": "compute"
+    },
+    "source": "resampling-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_trace": {
+    "entries": {
+      "reservoirTrace": "compute"
+    },
+    "source": "resampling.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_trace_atmosphere": {
+    "entries": {
+      "reservoirTraceAtmosphere": "compute"
+    },
+    "source": "resampling-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_trace_layers": {
+    "entries": {
+      "reservoirTraceLayers": "compute"
+    },
+    "source": "resampling-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "sharpen": {
     "entries": {
       "sharpenMain": "compute"
@@ -396,6 +536,20 @@
       "temporalMain": "compute"
     },
     "source": "denoise.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "temporal_split": {
+    "entries": {
+      "temporalSplitMain": "compute"
+    },
+    "source": "denoise-split.slang",
     "state": {
       "blend": false,
       "color_formats": [],

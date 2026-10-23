@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Offline/editor ground-truth capture over Ara's shared transport semantics.
+pub mod beauty;
+mod gltf_fixture;
+pub mod many_lights;
 pub mod metrics;
 pub mod robust_scenes;
 pub mod scenes;

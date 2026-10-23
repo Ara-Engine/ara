@@ -29,7 +29,7 @@ impl FidelityView {
                 "hybrid_layers",
                 "reference_layers",
             ]
-        } else if self.scene.has_emitters {
+        } else if self.scene.has_emitters || self.scene.many_local_lights {
             [
                 "primary_emissive",
                 "ddgi_emissive",

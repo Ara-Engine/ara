@@ -12,7 +12,7 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     store(f,BASE,p,float4(hit.bary,float(hit.primitive),float(modulation.x|(modulation.y<<8)|(modulation.z<<16))));
     store(f,MOTION,p,float4(previousUv-currentUv,length(previousWorld-f.previousCamera.xyz),max(max(s.emissive.x,s.emissive.y),s.emissive.z)>1?1:0));
     store(f,DEPTH,p,float4(current.w,0,0,0));
-    if(f.transport.x==0){store(f,DIRECT,p,float4(s.emissive+direct(f,s,-ray,rng),1));store(f,RAW,p,0);}
+    if(f.transport.x==0){float3 lighting=primarySun(f,s,-ray,p,rng);if(f.reservoirs[0].w==0)lighting+=directLocal(f,s,-ray,rng);store(f,DIRECT,p,float4(s.emissive+lighting,1));store(f,RAW,p,0);}
 }
 float3 gather(Frame f,Surface s,float3 direction,inout uint rng){
     float3 result=0,throughput=1;

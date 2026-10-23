@@ -1,6 +1,35 @@
 #define RASTER 1
 #include "common.slangh"
+#ifdef SPLIT_SIGNALS
+static const bool splitSignals=true;
+#else
+static const bool splitSignals=false;
+#endif
 float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
+static const uint SPEC_RAW=28,SPEC_HISTORY=29,SPEC_MOMENTS=31,SPEC_FILTER0=33,SPEC_FILTER1=34;
+float3 historyBox(Frame f,uint2 p,float3 history,uint signal){
+    float3 mean=0,square=0;float count=0;float4 center=pixel(f,WORLD+f.control.x,p);
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+        int2 q=int2(p)+int2(x,y);float4 value=signal<28?pixel(f,signal,q):extraPixel(f,signal,q);
+        if(value.w<=0 || pixel(f,WORLD+f.control.x,q).w!=center.w)continue;
+        mean+=value.rgb;square+=value.rgb*value.rgb;count+=1;
+    }
+    if(count<2)return history;mean/=count;float3 sigma=sqrt(max(square/count-mean*mean,float3(0)));
+    return clamp(history,max(0,mean-3*sigma-0.1),mean+3*sigma+0.1);
+}
+void resolveSpecular(Frame f,uint2 p){
+    uint slot=f.control.x;float4 current=extraPixel(f,SPEC_RAW,p);float3 colour=current.rgb;float count=current.w;
+    float l=luminance(colour);float2 moments=float2(l,l*l);float2 uv;int2 at;
+    if(reproject(f,p,uv,at)){
+        float4 old=extraPixel(f,SPEC_HISTORY+1-slot,at);float rough=pixel(f,NORMAL+slot,p).w;
+        float cap=f.transport.w==1?128.:lerp(8.,48.,smoothstep(0.1,0.5,rough));count=min(old.w+current.w,cap);
+        float alpha=current.w>0?max(1/max(count,1),f.temporal.y>0?0.5:f.transport.w==1?1./128.:0.025):0;
+        float3 previous=old.rgb;
+        if(length(pixel(f,MOTION,p).xy*f.sizes.xy)>0.5 || f.temporal.y>0)previous=historyBox(f,p,previous,SPEC_RAW);
+        colour=lerp(previous,colour,alpha);moments=lerp(extraPixel(f,SPEC_MOMENTS+1-slot,at).xy,moments,alpha);
+    }
+    extraStore(f,SPEC_HISTORY+slot,p,float4(colour,count));extraStore(f,SPEC_MOMENTS+slot,p,float4(moments,0,count));
+}
 [shader("compute")][numthreads(8,8,1)]
 void temporalMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint slot=f.control.x,previous=1-slot;
@@ -19,9 +48,10 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
             int2 low=int2(floor(uv*f.sizes.xy-0.5));bool footprint=f.transport.w!=1;
             if(footprint)for(int y=0;y<2;y++)for(int x=0;x<2;x++)footprint=footprint && pixel(f,WORLD+previous,low+int2(x,y)).w==world.w;
             float4 history=footprint?sampleImage(f,HISTORY+previous,uv):pixel(f,HISTORY+previous,at);
-            bool sampled=pixel(f,RAW,p).w>0;count=min(history.w+float(sampled),length(motion.xy*f.sizes.xy)>1?4.:64.);float weight=sampled?max(1/count,motion.w>0?0.35:0.02):0;
+            bool sampled=pixel(f,RAW,p).w>0;float cap=splitSignals && f.transport.w==1?256.:64.;count=min(history.w+float(sampled),length(motion.xy*f.sizes.xy)>1?4.:cap);float weight=sampled?max(1/count,motion.w>0?0.35:splitSignals && f.transport.w==1?1./256.:0.02):0;
             if(f.temporal.y>0 && sampled){weight=max(weight,0.5);count=min(count,2.);}
             float3 clipped=history.rgb;
+            if(splitSignals && (length(motion.xy*f.sizes.xy)>0.5 || f.temporal.y>0))clipped=historyBox(f,p,clipped,RAW);
             // Illumination changes are host-signalled; stochastic highlights are not resets.
             float4 oldDirect=footprint?sampleImage(f,DIRECT_HISTORY+previous,uv):pixel(f,DIRECT_HISTORY+previous,at);
             directCount=min(oldDirect.w+1,length(motion.xy*f.sizes.xy)>1?4.:96.);
@@ -36,25 +66,30 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
     store(f,DIRECT_HISTORY+slot,p,float4(directLight,directCount));
     uint3 q=uint3(saturate(modulation)*1023+0.5);uint packed=q.x|(q.y<<10)|(q.z<<20);
     store(f,HISTORY+slot,p,float4(colour,count));store(f,MOMENTS+slot,p,float4(moments,asfloat(packed),count));
+    if(splitSignals)resolveSpecular(f,p);
 }
 // Three 3x3 wavelet iterations stage incident radiance and geometric guides.
 // Plane distance preserves slanted walls; roughness controls normal rejection.
 groupshared float4 filterColour[256];
 groupshared float4 filterGuide[256];
 groupshared float4 filterWorld[256];
+groupshared float4 filterSpecular[256];
 [shader("compute")][numthreads(8,8,1)]
 void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
     uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
     int step=1<<root.pass;uint width=8+2*step;
-    for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at);filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));}
+    uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
+    for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at);filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at);}
     GroupMemoryBarrierWithGroupSync();
     if(any(p>=f.sizes.xy))return;
     uint2 local=tid.xy-group.xy*8+step;uint centerIndex=local.y*width+local.x;
     float3 center=filterColour[centerIndex].rgb;float4 guide=filterGuide[centerIndex];float3 sum=0;float total=0;
     float2 temporalMoments=pixel(f,MOMENTS+slot,p).xy;float sigma=sqrt(max(temporalMoments.y-temporalMoments.x*temporalMoments.x,0.00001));float l=luminance(center);float historyCount=pixel(f,HISTORY+slot,p).w;
     float scale=max(guide.w*0.001,0.003)*step;float roughness=pixel(f,NORMAL+slot,p).w;float4 world=filterWorld[centerIndex];
+    float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(filterSpecular[centerIndex].rgb):0;
+    float2 specMom=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p).xy:float2(0);float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
         uint at=(int(local.y)+y*step)*width+int(local.x)+x*step;
         float4 g=filterGuide[at];float3 c=filterColour[at].rgb;
@@ -64,6 +99,12 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         float radianceWeight=historyCount<4?1:lerp(exp(-abs(luminance(c)-l)/(4*sigma+0.1)),1,smoothstep(0.1,0.3,roughness));
         weight*=exp(-abs(dot(filterWorld[at].xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(g.xyz,guide.xyz),0),lerp(128.,32.,roughness))*radianceWeight*float(filterWorld[at].w==world.w);
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
+        if(splitSignals){
+            float3 spec=filterSpecular[at].rgb;float sw=weight*exp(-abs(luminance(spec)-specL)/(4*specSigma+0.02))*pow(max(dot(g.xyz,guide.xyz),0),lerp(256.,16.,roughness));
+            if(x==0 && y==0)sw=max(sw,1);specSum+=spec*sw;specTotal+=sw;
+        }
     }uint packed=asuint(pixel(f,MOMENTS+slot,p).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));
-    store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*modulation+pixel(f,DIRECT_HISTORY+slot,p).rgb:sum/max(total,1e-6),1));
+    float3 spec=specSum/max(specTotal,1e-6);
+    if(splitSignals)extraStore(f,root.pass==1?SPEC_FILTER1:SPEC_FILTER0,p,float4(spec,1));
+    store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*modulation+pixel(f,DIRECT_HISTORY+slot,p).rgb+spec:sum/max(total,1e-6),1));
 }

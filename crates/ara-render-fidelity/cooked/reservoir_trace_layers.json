@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621",
+  "stages": [
+    {
+      "dxil": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621/reservoirTraceLayers.dxil",
+      "dxil_hash": "918e9d37e260bb386a0fba3f6ea551b7c2269090dc4c5e0737a99b701c32b4d6",
+      "source_entry": "reservoirTraceLayers",
+      "spirv": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621/reservoirTraceLayers.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "ecd7c2e3ece7ff8129c7ebe740002555e8bda8ea4a21bd501b3a8ce95a053822",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

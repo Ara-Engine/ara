@@ -9,8 +9,12 @@ mod lag;
 mod large;
 mod lighting_sequence;
 mod material_import;
+mod night_components;
+mod night_noise;
 mod quality;
 mod robust;
+mod round3;
+mod round3_timings;
 mod verification;
 
 fn main() -> Result<()> {
@@ -20,6 +24,13 @@ fn main() -> Result<()> {
     let mut gpu = VulkanDevice::new(&[], root.join(".sn/pipeline-cache"))?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "smoke".into());
     match command.as_str() {
+        "night-probe" => round3::night_probe(&mut gpu, root)?,
+        "night-components" => night_components::run(&mut gpu, root)?,
+        "night-noise" => night_noise::run(&mut gpu, root)?,
+        "many-timings" => round3_timings::run(&mut gpu, root, true)?,
+        "beauty-timings" => round3_timings::run(&mut gpu, root, false)?,
+        "many-lights" => round3::quality(&mut gpu, root, true)?,
+        "beauty" => round3::quality(&mut gpu, root, false)?,
         "sequences" => verification::sequences(&mut gpu, root)?,
         "quality" => quality::run(&mut gpu, root)?,
         "content" => content::run(&mut gpu, root)?,
@@ -74,7 +85,9 @@ fn main() -> Result<()> {
             reference.destroy(&mut gpu)?;
             println!("RT hybrid, baked Raster, reference: validation and sync validation clean");
         }
-        _ => anyhow::bail!("Usage: ara-pathtrace [smoke|capture|timings|quality|content]"),
+        _ => anyhow::bail!(
+            "Usage: ara-pathtrace [smoke|capture|timings|quality|content|sponza-reference|sponza-quality|corridor|lighting-sequence|robust-quality|robust-timings|night-noise|many-lights|many-timings|beauty|beauty-timings]"
+        ),
     }
     gpu.assert_clean()?;
     Ok(())

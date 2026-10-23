@@ -1,0 +1,5 @@
+#define MATERIAL_LAYERS 1
+#define reservoirInit reservoirInitLayers
+#define reservoirTrace reservoirTraceLayers
+#define reservoirSpatial reservoirSpatialLayers
+#include "resampling.slang"
