@@ -30,6 +30,11 @@ impl Service for EditorService {
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         use ara_host::params::SessionParams;
         let methods = vec![
+            Method::new::<EditorPreferences>(
+                db,
+                "editor.preferences",
+                "Set reduced motion and Scene rendering quality.",
+            ),
             Method::new::<EditorFollow>(
                 db,
                 "editor.follow",
@@ -185,6 +190,15 @@ impl Service for EditorService {
             state.camera = presence.camera;
         }
         match method {
+            "editor.preferences" => {
+                let p: EditorPreferences = parse(params)?;
+                if let Some(v) = p.reduce_motion {
+                    state.reduce_motion = v;
+                }
+                if let Some(v) = p.quality {
+                    state.quality = v;
+                }
+            }
             "editor.follow" => {
                 let p: EditorFollow = parse(params)?;
                 if agent.is_some() {

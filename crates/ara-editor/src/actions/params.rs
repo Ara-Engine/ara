@@ -218,3 +218,17 @@ pub(super) struct EditorPalette {
     /// Whether the palette is visible.
     pub open: bool,
 }
+
+/// Appearance and rendering preferences shared by native controls and protocol clients.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorPreferences {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Disable 140 ms decorative transitions.
+    pub reduce_motion: Option<bool>,
+    /// Use hardware fidelity lighting, or the fast raster view.
+    pub quality: Option<bool>,
+}

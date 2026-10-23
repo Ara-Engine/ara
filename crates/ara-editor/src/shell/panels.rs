@@ -4,11 +4,75 @@ pub(super) fn escape(s: &str) -> String {
     ara_ui::source::escape(s, b'\'')
 }
 pub(super) fn button(id: &str, text: &str, class: &str) -> String {
+    let (name, only) = match id {
+        "tool-Translate" => ("move-3d", true),
+        "tool-Rotate" => ("rotate-3d", true),
+        "tool-Scale" => ("scaling", true),
+        "tool-space" => ("globe", true),
+        "tool-pivot" => ("crosshair", true),
+        "tool-snap" => ("magnet", true),
+        "play" => ("play", true),
+        "pause" => ("pause", true),
+        "step" => ("step-forward", true),
+        "entity-create" => ("plus", true),
+        "hierarchy-menu" => ("ellipsis", true),
+        "hierarchy-collapse" => ("chevron-down", true),
+        "hierarchy-lock" => ("lock", true),
+        "hierarchy-hide" => ("eye", true),
+        "frame" => ("focus", true),
+        "theme" => (if text == "Dark" { "moon" } else { "sun" }, true),
+        "palette-open" => ("command", false),
+        "add-component" => ("plus", false),
+        _ if id.starts_with("remove-") => ("ellipsis", true),
+        _ if id.starts_with("collapse-component-") => (
+            if text == "Expand" {
+                "chevron-right"
+            } else {
+                "chevron-down"
+            },
+            true,
+        ),
+        _ if id.starts_with("pick-") => ("folder", false),
+        _ if id.starts_with("accept-") => ("check", false),
+        _ if id.starts_with("revert-") => ("undo-2", false),
+        _ if id.starts_with("tab-") => (
+            match &id[4..] {
+                "scene" => "box",
+                "game" => "play",
+                "hierarchy" => "layers",
+                "inspector" => "settings-2",
+                "agents" => "bot",
+                "console" => "activity",
+                _ => "folder",
+            },
+            false,
+        ),
+        _ => ("", false),
+    };
+    if name.is_empty() {
+        return format!(
+            "<button id='{}' class='{}' text='{}' action='Dispatch' />",
+            escape(id),
+            class,
+            escape(text)
+        );
+    }
     format!(
-        "<button id='{}' class='{}' text='{}' action='Dispatch' />",
+        "<button id='{}' class='{} {}' label='{}' description='{}' action='Dispatch'>{}{}</button>",
         escape(id),
         class,
-        escape(text)
+        if only { "icon-button" } else { "" },
+        escape(text),
+        escape(text),
+        super::icons::icon(id, name),
+        if only {
+            String::new()
+        } else {
+            format!(
+                "<text id='{id}-label' text='{}' style='font-size:12px' />",
+                escape(text.trim_start_matches("+ "))
+            )
+        }
     )
 }
 impl Shell {
@@ -29,7 +93,7 @@ impl Shell {
                 let row = *axis == Axis::Horizontal;
                 out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:1px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
                 self.dock(first, &format!("{path}-a"), editor, out)?;
-                out.push_str(&format!("</panel><splitter id='splitter-{path}' style='width:{}px; height:{}px; background:var(--border)' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{3}else{0},if row{0}else{3},1.-ratio));
+                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='width:{}px; height:{}px' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{3}else{0},if row{0}else{3},1.-ratio));
                 self.dock(second, &format!("{path}-b"), editor, out)?;
                 out.push_str("</panel></panel>");
             }
@@ -61,7 +125,7 @@ impl Shell {
         Ok(())
     }
     pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str("<panel id='scene-tools' class='toolbar'>");
+        out.push_str("<panel id='scene-tools' class='toolbar'><panel id='transform-segment' class='segment'>");
         for (tool, label) in [
             (crate::state::Tool::Translate, "Move  W"),
             (crate::state::Tool::Rotate, "Rotate  E"),
@@ -72,12 +136,13 @@ impl Shell {
                 label,
                 Binding::Protocol("editor.tool", json!({"tool":tool})),
                 if editor.state.tool == tool {
-                    "small selected"
+                    "segment-button selected"
                 } else {
-                    "small quiet"
+                    "segment-button quiet"
                 },
             ));
         }
+        out.push_str("</panel><panel id='space-segment' class='segment'>");
         out.push_str(&self.bind_button(
             "tool-space",
             if editor.state.local { "Local" } else { "World" },
@@ -85,7 +150,7 @@ impl Shell {
                 "editor.tool",
                 json!({"tool":editor.state.tool,"local":!editor.state.local}),
             ),
-            "small quiet",
+            "segment-button quiet",
         ));
         out.push_str(&self.bind_button(
             "tool-pivot",
@@ -98,7 +163,7 @@ impl Shell {
                 "editor.tool",
                 json!({"tool":editor.state.tool,"centre":!editor.state.centre}),
             ),
-            "small quiet",
+            "segment-button quiet",
         ));
         out.push_str(&self.bind_button(
             "tool-snap",
@@ -111,16 +176,43 @@ impl Shell {
                 "editor.tool",
                 json!({"tool":editor.state.tool,"snapping":!editor.state.snapping}),
             ),
-            "small quiet",
+            "segment-button quiet",
         ));
-        out.push_str("<panel id='scene-fill' style='flex-grow:1' />");
+        out.push_str("</panel><panel id='scene-fill' style='flex-grow:1' />");
         out.push_str(&self.bind_button(
             "frame",
             "Frame  F",
             Binding::Protocol("editor.frame", json!({})),
+            "segment-button quiet",
+        ));
+        out.push_str(&self.bind_button(
+            "viewport-quality",
+            if editor.state.quality {
+                "Fidelity"
+            } else {
+                "Raster"
+            },
+            Binding::Protocol(
+                "editor.preferences",
+                json!({"quality":!editor.state.quality}),
+            ),
             "small quiet",
         ));
-        out.push_str("</panel><image id='viewport-image' src='editor-viewport' style='flex-grow:1; min-width:0px; min-height:0px' label='Scene viewport' />");
+        out.push_str("</panel><panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' /><panel id='view-cube' style='position:absolute;right:12px;top:12px;width:84px;height:84px'>");
+        for (id, label, yaw, pitch, left, top) in [
+            ("view-x", "X", std::f32::consts::FRAC_PI_2, 0., 56, 28),
+            ("view-y", "Y", 0., 1.54, 28, 0),
+            ("view-z", "Z", 0., 0., 0, 28),
+            ("view-iso", "3D", 0.6, 0.4, 28, 28),
+        ] {
+            self.bindings.insert(ara_ui::source::stable_id(id),Binding::Protocol("editor.camera",json!({"target":editor.state.camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":editor.state.camera.distance})));
+            if id == "view-iso" {
+                out.push_str(&format!("<button id='{id}' class='small quiet' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' label='Perspective view' description='Return to isometric perspective' action='Dispatch'>{}</button>",icons::icon(id,"box")));
+                continue;
+            }
+            out.push_str(&format!("<button id='{id}' class='small quiet' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' text='{label}' description='Snap Scene camera to {label} view' action='Dispatch' />"));
+        }
+        out.push_str("</panel></panel>");
     }
 }
 pub(super) fn display(v: &Value) -> String {

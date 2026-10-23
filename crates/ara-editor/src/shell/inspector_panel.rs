@@ -22,22 +22,7 @@ impl Shell {
             .and_then(|e| e.record.get("name"))
             .and_then(Value::as_str)
             .unwrap_or("Selection");
-        if self.rename {
-            let id = "entity-rename-value";
-            self.bindings
-                .insert(ara_ui::source::stable_id(id), Binding::RenameValue);
-            out.push_str(&format!(
-                "<field id='{id}' text='{}' label='Entity name' action='Dispatch' />",
-                escape(name)
-            ));
-        } else {
-            out.push_str(&self.bind_button(
-                "entity-rename",
-                &format!("{}  ({})", name, editor.state.selection.len()),
-                Binding::Rename,
-                "quiet",
-            ));
-        }
+        out.push_str(&format!("<panel id='entity-heading' class='row'>{}<text id='entity-title' style='font-size:15px' text='{}' /><panel id='entity-title-fill' style='flex-grow:1' /><text id='selection-count' class='badge' text='{} selected' /></panel><panel id='inspector-divider' class='divider' />",icons::icon("entity-heading","box"),escape(name),editor.state.selection.len()));
         let changes = editor.agent_fields();
         let doc = editor
             .host
@@ -45,27 +30,64 @@ impl Shell {
             .workspace()
             .doc(&editor.state.doc)
             .ok_or("document not found")?;
-        let fields = crate::inspector::fields(
+        let mut fields = crate::inspector::fields(
             editor.host.store().schema(),
             doc,
             &resolved,
             &editor.state.selection,
             &changes,
         );
+        fields.sort_by(|a, b| {
+            (!a.path.starts_with("Transform."))
+                .cmp(&(!b.path.starts_with("Transform.")))
+                .then(a.path.cmp(&b.path))
+        });
         let mut component = String::new();
         for field in fields {
             let head = field.path.split('.').next().unwrap_or("");
             if component != head {
                 component = head.into();
-                out.push_str(&format!("<panel id='component-{head}' class='component'><text id='heading-{head}' class='heading' text='{head}' /><panel id='component-fill-{head}' style='flex-grow:1' />"));
-                let calls=editor.state.selection.iter().map(|entity|json!({"cmd":"component.remove","args":{"entity":entity,"component":head}})).collect();
+                out.push_str(&format!("<panel id='divider-{head}' class='divider' /><panel id='component-{head}' class='component'>"));
+                out.push_str(&self.bind_button(
+                    &format!("collapse-component-{head}"),
+                    if self.collapsed_components.contains(head) {
+                        "Expand"
+                    } else {
+                        "Collapse"
+                    },
+                    Binding::ComponentCollapse(head.into()),
+                    "small quiet",
+                ));
+                out.push_str(&icons::icon(
+                    &format!("component-{head}"),
+                    if head == "Transform" {
+                        "move-3d"
+                    } else if head == "Light" {
+                        "lightbulb"
+                    } else {
+                        "box"
+                    },
+                ));
+                out.push_str(&format!("<text id='heading-{head}' class='heading' text='{head}' /><panel id='component-fill-{head}' style='flex-grow:1' />"));
                 out.push_str(&self.bind_button(
                     &format!("remove-{head}"),
-                    "Remove",
-                    Binding::Content(calls, format!("Remove {head}")),
+                    "Component options",
+                    Binding::ComponentMenu(head.into()),
                     "small quiet",
                 ));
                 out.push_str("</panel>");
+                if self.component_menu.as_deref() == Some(head) {
+                    let calls=editor.state.selection.iter().map(|entity|json!({"cmd":"component.remove","args":{"entity":entity,"component":head}})).collect();
+                    out.push_str(&self.bind_button(
+                        &format!("component-remove-{head}"),
+                        "Remove component",
+                        Binding::Content(calls, format!("Remove {head}")),
+                        "small destructive",
+                    ));
+                }
+            }
+            if self.collapsed_components.contains(head) {
+                continue;
             }
             let id = field.path.replace('.', "-");
             let provenance = match field.provenance {
@@ -98,9 +120,35 @@ impl Shell {
                         } else {
                             display(&field.value[axis])
                         };
-                        out.push_str(&format!("<field id='{widget}' style='flex-grow:1; flex-basis:0px' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
+                        let axis_id = format!("scrub-{id}-{axis}");
+                        self.bindings.insert(
+                            ara_ui::source::stable_id(&axis_id),
+                            Binding::Scrub(field.path.clone(), axis),
+                        );
+                        out.push_str(&format!("<panel id='axis-cell-{id}-{axis}' class='vector-cell'><button id='{axis_id}' class='axis axis-{}' text='{}' description='Drag to scrub {}. Shift: fine, Ctrl: coarse. Escape cancels.' action='Dispatch' />",["x","y","z","w"][axis],if *color {["R","G","B","A"][axis]}else{["X","Y","Z","W"][axis]},escape(&field.path)));
+                        out.push_str(&format!("<field id='{widget}' class='number vector-input' style='flex-grow:1; flex-basis:0px' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
+                        out.push_str("</panel>");
                     }
                     out.push_str("</panel>");
+                    if *color && !field.mixed {
+                        let hex = (0..3)
+                            .map(|n| {
+                                format!(
+                                    "{:02X}",
+                                    (field.value[n]
+                                        .as_f64()
+                                        .unwrap_or(1.)
+                                        .clamp(0., 1.)
+                                        .powf(1. / 2.2)
+                                        * 255.)
+                                        .round() as u8
+                                )
+                            })
+                            .collect::<String>();
+                        out.push_str(&format!(
+                            "<text id='color-hex-{id}' class='badge number' text='#{hex}' />"
+                        ));
+                    }
                     if *color && self.color_picker.as_deref() == Some(field.path.as_str()) {
                         for axis in 0..*count {
                             let widget = format!("color-slider-{id}-{axis}");
@@ -153,13 +201,36 @@ impl Shell {
                     }
                     out.push_str("</dropdown>");
                 }
+                Widget::Asset { kind } => {
+                    let widget = format!("edit-{id}");
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&widget),
+                        Binding::Field(field.path.clone(), None),
+                    );
+                    let reference = field.value.as_str().unwrap_or("");
+                    let name = reference
+                        .trim_start_matches('@')
+                        .split('#')
+                        .next()
+                        .and_then(|s| s.rsplit('/').next())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or("No asset assigned");
+                    out.push_str(&format!("<panel id='asset-field-{id}' class='row'><panel id='asset-thumb-{id}' style='width:36px;height:36px;padding:10px;background:var(--background);border-width:1px;border-color:var(--input);border-radius:var(--radius-sm)'>{}</panel><panel id='asset-field-copy-{id}' style='flex-grow:1;flex-basis:0px;gap:4px;overflow:hidden'><text id='asset-name-{id}' text='{}' style='font-size:12px' /><field id='{widget}' text='{}' action='Dispatch' label='{}' style='height:24px;font-size:10px' /></panel>",icons::icon(&format!("asset-thumb-{id}"),"package"),escape(name),escape(reference),escape(&format!("{kind:?} asset reference"))));
+                    out.push_str(&self.bind_button(
+                        &format!("pick-{id}"),
+                        "Pick asset",
+                        Binding::PickField(field.path.clone()),
+                        "small",
+                    ));
+                    out.push_str("</panel>");
+                }
                 _ => {
                     let widget = format!("edit-{id}");
                     self.bindings.insert(
                         ara_ui::source::stable_id(&widget),
                         Binding::Field(field.path.clone(), None),
                     );
-                    out.push_str(&format!("<field id='{widget}' text='{}' action='Dispatch' description='{}' label='{}' {} />",escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path),if field.read_only{"disabled='true'"}else{""}));
+                    out.push_str(&format!("<field id='{widget}' class='number' text='{}' action='Dispatch' description='{}' label='{}' {} />",escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path),if field.read_only{"disabled='true'"}else{""}));
                 }
             }
             if let Widget::Number {
@@ -176,7 +247,7 @@ impl Shell {
                 );
                 out.push_str(&format!("<slider id='{widget}' min='{min}' max='{max}' step='{step}' value='{}' action='Dispatch' />",field.value.as_f64().unwrap_or(*min).clamp(*min,*max)));
             }
-            if let Widget::Asset { .. } | Widget::Entity = &field.widget {
+            if let Widget::Entity = &field.widget {
                 out.push_str(&self.bind_button(
                     &format!("pick-{id}"),
                     if matches!(field.widget, Widget::Entity) {
@@ -211,7 +282,7 @@ impl Shell {
             "add-component",
             "+ Add component",
             Binding::AddComponent,
-            "quiet",
+            "",
         ));
         out.push_str("</scroll>");
         Ok(())

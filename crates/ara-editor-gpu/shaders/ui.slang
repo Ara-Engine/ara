@@ -32,14 +32,40 @@ float4 fragmentMain(Varying input):SV_Target {
         float shape=saturate(0.5-d/aa);
         if(i.parameters.y>0) {float b=i.parameters.y;float2 inner=i.rect.zw-2*b;float hole=0;if(all(inner>0))hole=saturate(0.5-roundedDistance(input.local-b,inner,max(i.parameters.x-b,0))/aa);shape-=hole;}
         color.a*=shape;
+    }else if(pc.mode==7){
+        float2 screen=input.local/i.rect.zw;
+        float2 ndc=screen*float2(2,-2)+float2(-1,1);
+        float sy=sin(i.uv.w),cy=cos(i.uv.w),sp=sin(i.parameters.x),cp=cos(i.parameters.x);
+        float3 forward=float3(-sy*cp,-sp,-cy*cp),right=float3(cy,0,-sy),up=float3(-sy*sp,cp,-cy*sp);
+        float3 ray=normalize(forward+right*(ndc.x*i.parameters.y*i.rect.z/i.rect.w)+up*(ndc.y*i.parameters.y));
+        float distance=-i.uv.y/ray.y;
+        float2 ground=(i.uv.xyz+ray*distance).xz;
+        float2 cell=ground/i.parameters.z;
+        float2 derivative=max(fwidth(cell),0.00001);
+        float2 line=abs(frac(cell+0.5)-0.5)/derivative;
+        float minor=1-saturate(min(line.x,line.y));
+        float2 majorCell=cell/10;
+        float2 major=abs(frac(majorCell+0.5)-0.5)/max(fwidth(majorCell),0.00001);
+        color.a*=max(minor*0.45,(1-saturate(min(major.x,major.y)))*0.8);
+        Instance axes=instances[input.instanceId+1];
+        float xAxis=1-saturate(abs(ground.y)/max(fwidth(ground.y),0.0001));
+        float zAxis=1-saturate(abs(ground.x)/max(fwidth(ground.x),0.0001));
+        if(xAxis>0){color=axes.rect;color.a*=xAxis;}
+        if(zAxis>0){color=axes.uv;color.a*=zAxis;}
+        uint width,height;textures[NonUniformResourceIndex(pc.textureIndex)].GetDimensions(width,height);
+        int2 pixel=clamp(int2(screen*float2(width,height)),int2(0,0),int2(width-1,height-1));
+        bool covered=textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r>0;
+        color.a*=distance>0&&!covered?exp(-distance/max(i.parameters.w,0.01))*smoothstep(0.01,0.1,abs(ray.y)):0;
     }else if(pc.mode==5){
         uint width,height;textures[NonUniformResourceIndex(pc.textureIndex)].GetDimensions(width,height);
         int2 pixel=clamp(int2(input.uv*float2(width,height)),int2(0,0),int2(width-1,height-1));
-        uint wanted=uint(i.parameters.z);uint centre=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r);
+        uint wanted=uint(i.parameters.z);
+        if(i.parameters.w>0){int2 at=clamp(int2(i.parameters.xy*float2(width,height)),int2(0,0),int2(width-1,height-1));wanted=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(at,0)).r);}
+        uint centre=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r);
         bool edge=false;
         static const int2 offsets[4]={int2(-1,0),int2(1,0),int2(0,-1),int2(0,1)};
-        for(uint n=0;n<4;n++){int2 other=clamp(pixel+offsets[n]*2,int2(0,0),int2(width-1,height-1));uint neighbor=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(other,0)).r);edge=edge||((centre==wanted)!=(neighbor==wanted));}
-        color.a*=edge?1:0;
+        for(uint n=0;n<4;n++){int2 other=clamp(pixel+offsets[n]*max(1,int(round(1.25*pc.dpi))),int2(0,0),int2(width-1,height-1));uint neighbor=uint(textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(other,0)).r);edge=edge||((centre==wanted)!=(neighbor==wanted));}
+        color.a*=edge&&wanted>0?1:0;
     }else if(pc.mode==6){
         float2 a=i.uv.xy,b=i.uv.zw;float2 d=b-a;float t=saturate(dot(input.local-a,d)/max(dot(d,d),0.0001));float distance=length(input.local-a-t*d);
         color.a*=saturate((i.parameters.x-distance)*pc.dpi+0.5);

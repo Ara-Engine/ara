@@ -27,10 +27,9 @@ impl Shell {
         self.asset_entries.clear();
         for asset in items {
             let key = ara_ui::source::stable_id(&asset.path);
-            self.asset_rows.items.push((
-                key,
-                format!("{}   {}", asset.kind.to_uppercase(), asset.path),
-            ));
+            self.asset_rows
+                .items
+                .push((key, format!("        {}", asset.path)));
             self.asset_entries.insert(key, asset);
         }
     }

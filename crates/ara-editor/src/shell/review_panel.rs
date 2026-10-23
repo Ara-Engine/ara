@@ -110,12 +110,14 @@ impl Shell {
         let review = editor
             .action("review.list", json!({"limit":100}))
             .unwrap_or(Value::Null);
+        let names =
+            crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap_or_default();
         if let Some(items) = review["items"].as_array() {
             for item in items {
                 let Some(id) = item["txn"].as_str() else {
                     continue;
                 };
-                out.push_str(&format!("<panel id='turn-{id}' class='section'><panel id='turn-header-{id}' class='row'><text id='turn-title-{id}' text='{} / {}' /><panel id='turn-fill-{id}' style='flex-grow:1' />",escape(item["author"].as_str().unwrap_or("Agent")),escape(id)));
+                out.push_str(&format!("<panel id='turn-{id}' class='section agent-card'><panel id='turn-header-{id}' class='row'><panel id='avatar-{id}' class='avatar'>{}</panel><text id='turn-title-{id}' text='{}' /><text id='turn-meta-{id}' class='badge' text='Turn {}' /><panel id='turn-fill-{id}' style='flex-grow:1' />",icons::icon(&format!("avatar-{id}"),"bot"),escape(item["author"].as_str().unwrap_or("Agent")),escape(&id.chars().take(8).collect::<String>())));
                 out.push_str(&self.bind_button(
                     &format!("accept-{id}"),
                     "Accept",
@@ -129,7 +131,8 @@ impl Shell {
                     "small quiet",
                 ));
                 out.push_str("</panel>");
-                out.push_str(&format!("<text id='turn-why-{id}' text='{}' /><text id='turn-commands-{id}' class='muted' text='{}' />",escape(item["why"].as_str().unwrap_or("No reason supplied")),escape(item["label"].as_str().unwrap_or("Commands"))));
+                out.push_str(&format!("<panel id='turn-summary-{id}' class='row'><text id='turn-why-{id}' text='{}' /><text id='turn-commands-{id}' class='badge' text='{}' /></panel>",escape(item["why"].as_str().unwrap_or("No reason supplied")),escape(item["label"].as_str().unwrap_or("Commands"))));
+
                 if let Some(tx) = editor.host.store().txn(&ara_ops::TxnId(id.into())) {
                     for (index, op) in tx.ops.iter().enumerate() {
                         let text = match op {
@@ -140,7 +143,12 @@ impl Shell {
                                 value,
                                 ..
                             } => format!(
-                                "{id} / {path}   {} -> {}",
+                                "{} / {path}   {} -> {}",
+                                names
+                                    .get(id.as_str())
+                                    .and_then(|e| e.record.get("name"))
+                                    .and_then(Value::as_str)
+                                    .unwrap_or(id.as_str()),
                                 display(prev.as_ref().unwrap_or(&Value::Null)),
                                 display(value.as_ref().unwrap_or(&Value::Null))
                             ),
@@ -148,10 +156,12 @@ impl Shell {
                             ara_doc::Op::Delete { id, .. } => format!("− {id}"),
                             ara_doc::Op::Move { id, parent, .. } => format!("{id} -> {parent:?}"),
                         };
-                        out.push_str(&format!(
-                            "<text id='turn-diff-{id}-{index}' class='warning' text='{}' />",
-                            escape(&text)
-                        ));
+                        let class = match op {
+                            ara_doc::Op::Create { .. } => "chip-success",
+                            ara_doc::Op::Delete { .. } => "chip-destructive",
+                            _ => "chip-warning",
+                        };
+                        out.push_str(&format!("<panel id='turn-diff-{id}-{index}' class='diff'><text id='diff-chip-{id}-{index}' class='{class}' text='{}' /></panel>",escape(&text)));
                     }
                 }
                 out.push_str("</panel>");

@@ -464,3 +464,53 @@ fn hierarchy_100k_keeps_a_bounded_row_pool_and_reaches_the_last_entity() {
         json!({"entities":100000,"retainedNodes":node_count,"buildMs":build_ms,"scrollMs":scroll_ms,"idlePaintNodes":work.paint_nodes,"lastEntitySelected":true}),
     );
 }
+
+#[test]
+fn numeric_scrubbing_is_one_undoable_batch_and_escape_is_nonmutating() {
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action(
+            "editor.select",
+            json!({"entities":["e_crate001","e_child001"]}),
+        )
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let chip = shell.ui.find("scrub-Transform-position-0").unwrap();
+    let r = shell.ui.nodes[chip].rect;
+    shell.pointer = [r.x + r.w * 0.5, r.y + r.h * 0.5];
+    let count = editor.host.store().history().len();
+    assert!(shell.begin_scrub(&mut editor).unwrap());
+    shell.pointer[0] += 25.;
+    assert!(shell.move_scrub().unwrap());
+    assert_eq!(x(&editor), 0.);
+    assert!(shell.finish_scrub(&mut editor, false).unwrap());
+    assert_eq!(x(&editor), 0.25);
+    assert_eq!(
+        transform_value(
+            &editor.view().unwrap().entities()["e_child001"].record,
+            "position"
+        )
+        .x,
+        1.25
+    );
+    assert_eq!(editor.host.store().history().len(), count + 1);
+    let i = shell.ui.find("scrub-Transform-position-0").unwrap();
+    let r = shell.ui.nodes[i].rect;
+    shell.pointer = [r.x + 10., r.y + 10.];
+    shell.begin_scrub(&mut editor).unwrap();
+    shell.pointer[0] += 100.;
+    shell.move_scrub().unwrap();
+    shell.finish_scrub(&mut editor, true).unwrap();
+    assert_eq!(x(&editor), 0.25);
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(x(&editor), 0.);
+    editor
+        .action(
+            "editor.preferences",
+            json!({"reduceMotion":true,"quality":false}),
+        )
+        .unwrap();
+    assert!(editor.state.reduce_motion);
+    assert!(!editor.state.quality);
+}

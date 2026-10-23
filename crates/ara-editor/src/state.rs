@@ -127,6 +127,10 @@ pub struct EditorState {
     pub layout: DockNode,
     /// Use Ara Light instead of the default Ara Dark.
     pub light: bool,
+    /// Disable decorative transitions while preserving all interaction feedback.
+    pub reduce_motion: bool,
+    /// Use the same-device fidelity view for Scene lighting.
+    pub quality: bool,
     /// View pose.
     pub camera: Camera,
     /// Transform handle type.
@@ -169,6 +173,8 @@ impl Default for EditorState {
             focus_field: None,
             layout: default_layout(),
             light: false,
+            reduce_motion: false,
+            quality: true,
             camera: Camera::default(),
             tool: Tool::Translate,
             local: false,
@@ -196,6 +202,8 @@ impl EditorState {
             || self.focus_field != other.focus_field
             || self.layout != other.layout
             || self.light != other.light
+            || self.reduce_motion != other.reduce_motion
+            || self.quality != other.quality
             || self.tool != other.tool
             || self.local != other.local
             || self.centre != other.centre

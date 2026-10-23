@@ -199,25 +199,22 @@ pub fn build(
         ])
     };
     let mut overlays = Vec::new();
-    let grid = color("muted-foreground", 0.22)?;
-    for n in -20..=20 {
-        for (a, b) in [
-            (Vec3::new(n as f32, 0., -20.), Vec3::new(n as f32, 0., 20.)),
-            (Vec3::new(-20., 0., n as f32), Vec3::new(20., 0., n as f32)),
-        ] {
-            if let (Some(from), Some(to)) = (
-                project(&state.camera, rect, a),
-                project(&state.camera, rect, b),
-            ) {
-                overlays.push(Overlay::Line {
-                    from,
-                    to,
-                    width: 0.5,
-                    color: grid,
-                });
-            }
-        }
-    }
+    let p = state.camera.position();
+    let spacing = 10f32.powf((state.camera.distance / 20.).max(0.01).log10().floor());
+    overlays.push(Overlay::Grid {
+        camera: [p.x, p.y, p.z, state.camera.yaw],
+        parameters: [
+            state.camera.pitch,
+            25f32.to_radians().tan(),
+            spacing,
+            state.camera.distance * 6.,
+        ],
+        color: color("muted-foreground", 0.5)?,
+        axes: [
+            color("destructive-foreground", 0.7)?,
+            color("info-foreground", 0.7)?,
+        ],
+    });
     for (index, (id, _)) in renderer.entities().iter().enumerate() {
         let selected = state
             .selection

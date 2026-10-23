@@ -68,6 +68,10 @@ pub struct Computed {
     pub border: f32,
     /// Font size in logical pixels.
     pub font_size: f32,
+    /// Explicit font family list, or the host text system default.
+    pub font_family: Option<String>,
+    /// Align text to the trailing edge of its content box.
+    pub text_end: bool,
     /// Whether text may wrap at the available content width.
     pub wrap_text: bool,
     /// Intersected ancestor clip bounds in viewport coordinates.
@@ -103,6 +107,8 @@ impl Computed {
             radius: if control { 6.0 } else { 0.0 },
             border: 0.0,
             font_size: 17.0,
+            font_family: None,
+            text_end: false,
             wrap_text: true,
             clip: false,
             translate: [0.0; 2],

@@ -6,6 +6,22 @@ fn main() -> ara_ui::Result<()> {
         match arg.as_str() {
             "--verify" => options.verify = true,
             "--sample" => options.sample = true,
+            "--size" => {
+                let size = args.next().ok_or("--size needs WxH")?;
+                let (w, h) = size.split_once('x').ok_or("--size needs WxH")?;
+                options.size = [w.parse()?, h.parse()?];
+                if options.size.iter().any(|v| *v < 320 || *v > 8192) {
+                    return Err("invalid window size".into());
+                }
+            }
+            "--dpi" => {
+                let dpi: f32 = args.next().ok_or("--dpi needs a scale")?.parse()?;
+                if !dpi.is_finite() || !(0.5..=4.).contains(&dpi) {
+                    return Err("invalid DPI".into());
+                }
+                options.dpi = Some(dpi);
+            }
+
             "--frames" => {
                 options.frames = Some(args.next().ok_or("--frames needs a number")?.parse()?)
             }

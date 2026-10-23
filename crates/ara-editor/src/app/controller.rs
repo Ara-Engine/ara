@@ -60,9 +60,16 @@ impl Controller {
             Event::MouseMotion { position, delta } => {
                 shell.pointer = position;
                 editor.input_active();
+                if shell.move_scrub()? {
+                    return Ok((true, false, false));
+                }
                 let inside = shell
                     .viewport()
                     .is_some_and(|r| r.contains(position[0], position[1]))
+                    && shell
+                        .ui
+                        .hit_test(shell.pointer[0], shell.pointer[1])
+                        .is_none()
                     && !editor.state.palette
                     && !shell.context;
                 if let Some(drag) = &self.gizmo {
@@ -128,6 +135,10 @@ impl Controller {
                     && shell
                         .viewport()
                         .is_some_and(|r| r.contains(shell.pointer[0], shell.pointer[1]))
+                    && shell
+                        .ui
+                        .hit_test(shell.pointer[0], shell.pointer[1])
+                        .is_none()
                     && !editor.state.palette
                     && !shell.context
                 {
@@ -148,13 +159,19 @@ impl Controller {
                     let inside = shell
                         .viewport()
                         .is_some_and(|r| r.contains(shell.pointer[0], shell.pointer[1]))
+                        && shell
+                            .ui
+                            .hit_test(shell.pointer[0], shell.pointer[1])
+                            .is_none()
                         && !editor.state.palette
                         && !shell.context;
                     if pressed && !shell.modifiers[2] {
                         if !inside {
                             shell.commit_fields(editor)?;
                             shell.event(InputEvent::PointerDown(shell.pointer), clipboard)?;
-                            shell.begin_drag();
+                            if !shell.begin_scrub(editor)? {
+                                shell.begin_drag();
+                            }
                         } else {
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
@@ -219,7 +236,9 @@ impl Controller {
                             }
                         }
                     } else if !pressed {
-                        if self.gizmo.take().is_some() {
+                        if shell.finish_scrub(editor, false)? {
+                            shell.event(InputEvent::Cancel, clipboard)?;
+                        } else if self.gizmo.take().is_some() {
                             editor.finish_gesture(false)?;
                             scene_dirty = true;
                         } else if !shell.drop_at(editor)? {

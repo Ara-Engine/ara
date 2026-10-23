@@ -47,6 +47,8 @@ pub struct Text {
     pub width: Option<f32>,
     /// Logical viewport width and height.
     pub size: f32,
+    /// Optional explicit family list for numeric or branded UI text.
+    pub family: Option<String>,
     /// Separate incremental work flags.
     pub dirty: bool,
 }
@@ -58,6 +60,7 @@ impl Text {
             layout: Layout::new(),
             width: None,
             size: 0.0,
+            family: None,
             dirty: true,
         }
     }
@@ -123,7 +126,9 @@ impl TextSystem {
                 .context
                 .ranged_builder(&mut self.fonts, &text.value, 1.0, true);
             builder.push_default(StyleProperty::FontSize(size));
-            builder.push_default(FontFamily::from(self.families.as_str()));
+            builder.push_default(FontFamily::from(
+                text.family.as_deref().unwrap_or(self.families.as_str()),
+            ));
             builder.push_default(LineHeight::FontSizeRelative(1.5));
             builder.build_into(&mut text.layout, &text.value);
             text.size = size;
