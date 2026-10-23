@@ -48,10 +48,10 @@ startup staging transfers run on the eventual owning queue.
 
 ## Verification
 
-Set `CARGO_BUILD_JOBS=4`. On Windows run `./run.ps1 -Mode Check`.
-It scopes SDL PATH, Vulkan validation layers and an empty implicit-layer directory
-to its process and restores the environment. Run `../ara-platform/setup.ps1` first
-if SDL's development/runtime files are absent.
+Set `CARGO_BUILD_JOBS=2`. On Windows run `./run.ps1 -Mode Check`.
+It scopes Vulkan validation layers and an empty implicit-layer directory to its
+process and restores the environment. SDL is built statically by `ara-sdl3-src`;
+there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`,
 `cargo clippy -p ara-render --all-targets -- -D warnings`,

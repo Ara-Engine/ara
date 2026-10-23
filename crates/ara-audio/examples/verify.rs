@@ -80,15 +80,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     match mode.as_str() {
         "offline" => offline(&directory, steam.as_ref())?,
         "bench" => bench(&directory, steam.as_ref())?,
-        "device" => device(&directory, &native.join("sdl/SDL3.dll"), steam.as_ref())?,
+        "device" => device(&directory, steam.as_ref())?,
         #[cfg(windows)]
-        "latency" => latency(&native.join("sdl/SDL3.dll"))?,
+        "latency" => latency()?,
         _ => return Err("usage: verify [offline|bench|device] [phonon-library-path]".into()),
     }
     Ok(())
 }
 
-fn output(sdl: &Path) -> Result<(Box<dyn DeviceBackend>, serde_json::Value)> {
+fn output() -> Result<(Box<dyn DeviceBackend>, serde_json::Value)> {
     let selected = std::env::var("ARA_AUDIO_BACKEND").unwrap_or_else(|_| {
         if cfg!(windows) {
             "wasapi".into()
@@ -110,13 +110,13 @@ fn output(sdl: &Path) -> Result<(Box<dyn DeviceBackend>, serde_json::Value)> {
             "ARA_AUDIO_BACKEND must be sdl or wasapi (Windows)",
         ));
     }
-    let backend = SdlBackend::open(sdl, 48000)?;
+    let backend = SdlBackend::open(48000)?;
     let details = serde_json::json!({"driver":backend.driver()?,"hardwareFrames":backend.format().buffer_frames,"device":backend.name()?});
     Ok((Box::new(backend), details))
 }
 
 #[cfg(windows)]
-fn latency(sdl: &Path) -> Result<()> {
+fn latency() -> Result<()> {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn QueryPerformanceCounter(value: *mut i64) -> i32;
@@ -137,7 +137,7 @@ fn latency(sdl: &Path) -> Result<()> {
         .collect();
     let clip = Clip::new(48000, frames, 768 * 8)?;
     let mut e = AudioEngine::new(EngineConfig::default())?;
-    let (mut backend, details) = output(sdl)?;
+    let (mut backend, details) = output()?;
     let count = std::env::var("ARA_AUDIO_LATENCY_TRIALS")
         .map_or(Ok(8), |v| v.parse::<usize>())
         .map_err(|_| AudioError::Invalid("latency trial count"))?;
@@ -362,7 +362,7 @@ fn bench(directory: &Path, steam: Option<&SteamAudio>) -> Result<()> {
     println!("{json}");
     Ok(())
 }
-fn device(directory: &Path, sdl: &Path, steam: Option<&SteamAudio>) -> Result<()> {
+fn device(directory: &Path, steam: Option<&SteamAudio>) -> Result<()> {
     let mut engine = AudioEngine::new(EngineConfig::default())?;
     let spatializer = steam
         .map(|s| {
@@ -383,7 +383,7 @@ fn device(directory: &Path, sdl: &Path, steam: Option<&SteamAudio>) -> Result<()
             ..Default::default()
         },
     )?;
-    let (mut backend, mut value) = output(sdl)?;
+    let (mut backend, mut value) = output()?;
     let start = Instant::now();
     let mut max_queue = 0;
     let mut recovered = false;
