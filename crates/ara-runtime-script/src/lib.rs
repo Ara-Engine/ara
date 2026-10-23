@@ -8,9 +8,9 @@
 //! - Each tick: `before_tick` applies staged reloads (`ScriptHost::tick_boundary`, the
 //!   only place code changes); the `scripts` system runs C# systems and behaviours at
 //!   `Stage::Gameplay`, in the host's deterministic `(Order, name)` order.
-//! - Entities C# spawns (systems, behaviours, commands) get a stable identity
-//!   (`e_cs<tick>x<n>`, numbered in content order), so snapshots, state hashes and
-//!   replays include them like authored entities.
+//! - Entities C# spawns get a stable identity (systems and behaviours `e_cs<tick>x<n>`,
+//!   commands `e_cs<recorded tick>c<n>`, numbered in content order), so snapshots,
+//!   state hashes and replays include them like authored entities.
 //! - [`ScriptProvider`] captures C# components (by entity identity) and resources into
 //!   snapshots and state hashes, and restores them.
 //! - [`execute`], [`catalog`] and [`request_compile`] serve play commands and agent
@@ -281,9 +281,10 @@ fn run_scripts(world: &mut World) {
 }
 
 /// Gives every entity C# spawned (no `Identity` yet) a stable one, `<prefix><n>`,
-/// numbered in content order (Transform plus C# component values): spawn handles
-/// depend on allocator history, content does not, and equal entities are
-/// interchangeable. Snapshots, state hashes and replays then include them.
+/// numbered in content order (Transform plus C# component values) after any earlier
+/// names with that prefix: spawn handles depend on allocator history, content does
+/// not, and equal entities are interchangeable. Snapshots, state hashes and replays
+/// then include them.
 fn identify_spawns(scripts: &Scripts, world: &mut World, prefix: &str) {
     let fresh: Vec<Entity> = world
         .query_filtered::<Entity, (Without<Identity>, Without<IsResource>)>()
@@ -292,6 +293,11 @@ fn identify_spawns(scripts: &Scripts, world: &mut World, prefix: &str) {
     if fresh.is_empty() {
         return;
     }
+    let first = world
+        .query::<&Identity>()
+        .iter(world)
+        .filter(|id| id.0.starts_with(prefix))
+        .count();
     let mut names = scripts.host.module_components();
     names.sort_unstable();
     let key = |entity: Entity| {
@@ -309,7 +315,7 @@ fn identify_spawns(scripts: &Scripts, world: &mut World, prefix: &str) {
     for (n, (_, entity)) in keyed.into_iter().enumerate() {
         world
             .entity_mut(entity)
-            .insert(Identity(format!("{prefix}{n}")));
+            .insert(Identity(format!("{prefix}{}", first + n)));
     }
 }
 
@@ -327,25 +333,27 @@ pub struct ScriptCommand {
     pub params: Value,
 }
 
-/// Replays a recorded C# command at its boundary.
+/// Replays a recorded C# command at its boundary (the tick that records it).
 fn replay_command(
     world: &mut World,
     _: &BoundaryCommand,
     command: ScriptCommand,
 ) -> std::result::Result<(), SimError> {
-    run_command(world, &command.name, &command.params, "r")
+    let tick = world.resource::<SimContext>().tick();
+    run_command(world, &command.name, &command.params, tick)
         .map(drop)
         .map_err(|e| SimError(e.0))
 }
 
-/// Runs a command with resolved entity parameters and names what it spawned.
-fn run_command(world: &mut World, name: &str, params: &Value, tag: &str) -> Result<Value> {
+/// Runs a command with resolved entity parameters and names what it spawned after
+/// `tick`, the tick whose record carries the command (live and replayed alike).
+fn run_command(world: &mut World, name: &str, params: &Value, tick: u64) -> Result<Value> {
     if !world.contains_resource::<Scripts>() {
         return Err(RuntimeError("this world runs no C# modules".into()));
     }
     let mut params = params.clone();
     resolve_entities(world, &mut params);
-    let prefix = format!("e_cs{}{tag}", world.resource::<SimContext>().tick());
+    let prefix = format!("e_cs{tick}c");
     world.resource_scope::<Scripts, _>(|world, mut scripts| {
         let record = scripts
             .host
@@ -470,7 +478,8 @@ fn resolve_entities(world: &mut World, params: &mut Value) {
 /// recordings replay it. Entity params may use document addresses. Returns the
 /// command's description (`ScriptHost::describe`: writes, cues, outcome).
 pub fn execute(session: &mut Session, name: &str, params: &Value) -> Result<Value> {
-    let described = run_command(session.world_mut(), name, params, "c")?;
+    let tick = session.tick() + 1;
+    let described = run_command(session.world_mut(), name, params, tick)?;
     session.record_applied(BoundaryCommand {
         kind: COMMAND.into(),
         player: ara_input::PlayerId(0),

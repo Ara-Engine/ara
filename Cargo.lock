@@ -1608,12 +1608,26 @@ dependencies = [
 name = "ara-runtime-world"
 version = "0.0.0"
 dependencies = [
+ "ara-acoustics",
+ "ara-ai",
+ "ara-asset",
+ "ara-cmd",
+ "ara-diag",
  "ara-doc",
+ "ara-foliage",
+ "ara-importers",
+ "ara-input",
+ "ara-music",
+ "ara-nav",
+ "ara-ops",
  "ara-physics",
  "ara-runtime",
  "ara-schema",
  "ara-sim",
+ "ara-terrain",
  "ara-world",
+ "glam 0.34.1",
+ "serde_json",
 ]
 
 [[package]]

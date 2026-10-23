@@ -489,9 +489,30 @@ impl Runtime {
     pub fn play(&self) -> &PlayControl {
         &self.play
     }
-    /// Mutable play control (watches, record, replay, restore).
+    /// Mutable play control (watches, record). Restore and replay through
+    /// [`Runtime::restore`] and [`Runtime::replay`] so plugins resynchronize.
     pub fn play_mut(&mut self) -> &mut PlayControl {
         &mut self.play
+    }
+    /// Restores a checkpoint or portable snapshot, then lets plugins resynchronize
+    /// (streamed cells resident at the checkpoint are adopted, not re-spawned).
+    pub fn restore(&mut self, snapshot: &ara_sim::Snapshot) -> Result<()> {
+        self.play.restore(snapshot)?;
+        self.pending = None;
+        for plugin in &mut self.plugins {
+            plugin.restored(self.play.session_mut())?;
+        }
+        Ok(())
+    }
+    /// Verifies a replay tick by tick from its initial state (ending at its last
+    /// tick), then lets plugins resynchronize. Returns the final state hash.
+    pub fn replay(&mut self, replay: &ara_sim::Replay) -> Result<StateHash> {
+        let hash = self.play.replay(replay)?;
+        self.pending = None;
+        for plugin in &mut self.plugins {
+            plugin.restored(self.play.session_mut())?;
+        }
+        Ok(hash)
     }
     /// The simulation world, read-only.
     pub fn world(&self) -> &World {

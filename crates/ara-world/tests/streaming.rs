@@ -232,8 +232,8 @@ impl CellSource for SlowSource {
     }
 }
 
-#[test]
-fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
+/// Two 4-row cells side by side (32 m), cooked slowly from memory; one session.
+fn slow_world() -> (Manifest, Arc<SlowSource>, SimRegistry, Session) {
     let mut db = SchemaDb::new();
     register(&mut db);
     ara_components::register(&mut db);
@@ -279,9 +279,23 @@ fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
         workspace,
         db: db.clone(),
     });
-    let pool = WorkerPool::new(source, registry.clone(), 1, 1024 * 1024).unwrap();
-    let mut streaming = Streaming::new(
-        &manifest,
+    let edit = EditWorld::new(
+        registry.clone(),
+        Document::new("scene", AssetId::parse("sc_empty").unwrap()),
+    )
+    .unwrap();
+    let session = Session::local(edit, TickConfig::default(), 1, Default::default()).unwrap();
+    (manifest, source, registry, session)
+}
+
+fn slow_streaming(
+    manifest: &Manifest,
+    source: &Arc<SlowSource>,
+    registry: &SimRegistry,
+) -> Streaming {
+    let pool = WorkerPool::new(source.clone(), registry.clone(), 1, 1024 * 1024).unwrap();
+    Streaming::new(
+        manifest,
         pool,
         StreamConfig {
             memory_bytes: 4 * 1024 * 1024,
@@ -289,13 +303,13 @@ fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
             lookahead_seconds: 0.0,
         },
     )
-    .unwrap();
-    let edit = EditWorld::new(
-        registry,
-        Document::new("scene", AssetId::parse("sc_empty").unwrap()),
-    )
-    .unwrap();
-    let mut session = Session::local(edit, TickConfig::default(), 1, Default::default()).unwrap();
+    .unwrap()
+}
+
+#[test]
+fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
+    let (manifest, source, registry, mut session) = slow_world();
+    let mut streaming = slow_streaming(&manifest, &source, &registry);
     // Near the shared edge: both cells are wanted, one worker cooks them in turn.
     let near_both = StreamingSource {
         position: [31.0, 0.0, 16.0],
@@ -326,4 +340,63 @@ fn settled_streaming_arrives_at_the_first_boundary_whatever_the_worker_speed() {
     assert!(streaming.is_resident("c_a") && streaming.is_resident("c_b"));
     assert_eq!(events.ready, ["c_a", "c_b"]);
     assert_eq!(streaming.entity_count(), 8);
+}
+
+#[test]
+fn fresh_state_adopts_rows_a_restored_world_already_holds() {
+    let (manifest, source, registry, mut session) = slow_world();
+    let near_a = StreamingSource {
+        position: [10.0, 0.0, 16.0],
+        velocity: [0.0; 3],
+        range_scale: 1.0,
+    };
+    let budget = ActivationBudget {
+        time: Duration::from_secs(1),
+        max_entities: 64,
+    };
+    let mut events = Events::default();
+    let mut step = |streaming: &mut Streaming, session: &mut Session, tick| {
+        streaming
+            .settle(
+                &manifest,
+                &[near_a],
+                tick,
+                &mut events,
+                Duration::from_secs(10),
+            )
+            .unwrap();
+        let mut stats = FrameStats::default();
+        let result = session.step_with_streaming(|boundary| {
+            stats = streaming
+                .activate(boundary, budget, &mut Events::default())
+                .map_err(|e| ara_sim::SimError(e.to_string()))?;
+            Ok(())
+        });
+        (result.map(drop), stats)
+    };
+    let mut first = slow_streaming(&manifest, &source, &registry);
+    step(&mut first, &mut session, 1).0.unwrap();
+    assert!(first.is_resident("c_a"));
+    // A restored world holds c_a's rows; a fresh state would spawn them again.
+    let mut fresh = slow_streaming(&manifest, &source, &registry);
+    let duplicate = step(&mut fresh, &mut session, 1).0;
+    assert!(
+        duplicate.is_err(),
+        "duplicate rows must fail without adoption"
+    );
+    let (_, _, _, mut restored) = slow_world();
+    step(
+        &mut slow_streaming(&manifest, &source, &registry),
+        &mut restored,
+        1,
+    )
+    .0
+    .unwrap();
+    let mut adopting = slow_streaming(&manifest, &source, &registry);
+    adopting.adopt_resident(true);
+    let (result, stats) = step(&mut adopting, &mut restored, 2);
+    result.unwrap();
+    assert!(adopting.is_resident("c_a"));
+    assert_eq!(stats.spawned, 0, "adopted rows are not spawned again");
+    assert_eq!(adopting.entity_count(), 4);
 }

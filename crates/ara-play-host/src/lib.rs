@@ -384,6 +384,11 @@ impl PlayService {
                     .into_owned(),
             ),
             scripts: self.script_scene()?,
+            imports: workspace
+                .index()
+                .imports()
+                .map(|(id, path)| (id.to_owned(), path.to_owned()))
+                .collect(),
         };
         Ok((scene_id, scene.encode().map_err(|e| fail(codes::PLAY, e))?))
     }
@@ -916,7 +921,7 @@ impl Service for PlayService {
                 if target == "play.capture"
                     && let Some(map) = forward.as_object_mut()
                 {
-                    for key in ["width", "height", "marks"] {
+                    for key in ["width", "height", "marks", "presented"] {
                         if map.get(key).is_some_and(Value::is_null) {
                             map.remove(key);
                         }

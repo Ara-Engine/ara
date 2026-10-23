@@ -1,0 +1,127 @@
+{
+  "$schema": "ara://schema/terrain/1",
+  "id": "tr_valley1",
+  "records": {
+    "h_grid": {
+      "spacing": 1,
+      "cells": 32,
+      "max": {
+        "x": 2,
+        "z": 2
+      }
+    },
+    "l_sculpt": {
+      "name": "Sculpt",
+      "enabled": true,
+      "opacity": 1
+    },
+    "s_f7nr": {
+      "layer": "l_sculpt",
+      "sequence": 2,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [52, 50],
+          "radius": 9,
+          "amount": 0.9
+        },
+        {
+          "center": [8, 48],
+          "radius": 8,
+          "amount": 0.8
+        },
+        {
+          "center": [54, 10],
+          "radius": 5,
+          "amount": 0.7
+        }
+      ],
+      "channel": 1,
+      "iterations": 8
+    },
+    "s_fdxz": {
+      "layer": "l_sculpt",
+      "sequence": 3,
+      "operation": "paint",
+      "dabs": [
+        {
+          "center": [16, 16],
+          "radius": 6,
+          "amount": 0.8
+        }
+      ],
+      "channel": 2,
+      "iterations": 8
+    },
+    "s_qw2b": {
+      "layer": "l_sculpt",
+      "sequence": 1,
+      "dabs": [
+        {
+          "center": [52, 50],
+          "radius": 16,
+          "amount": 7
+        },
+        {
+          "center": [46, 58],
+          "radius": 10,
+          "amount": 3
+        },
+        {
+          "center": [6, 46],
+          "radius": 12,
+          "amount": 5
+        },
+        {
+          "center": [12, 58],
+          "radius": 10,
+          "amount": 4
+        },
+        {
+          "center": [54, 10],
+          "radius": 9,
+          "amount": 2.5
+        },
+        {
+          "center": [30, 50],
+          "radius": 8,
+          "amount": 1.5
+        }
+      ],
+      "iterations": 8
+    },
+    "t_19bc": {
+      "coord": {
+        "x": 1
+      },
+      "strokes": [
+        "s_qw2b",
+        "s_f7nr"
+      ]
+    },
+    "t_eg6r": {
+      "coord": {
+        "x": 1,
+        "z": 1
+      },
+      "strokes": [
+        "s_qw2b",
+        "s_f7nr"
+      ]
+    },
+    "t_g9tz": {
+      "strokes": [
+        "s_fdxz"
+      ]
+    },
+    "t_thpy": {
+      "coord": {
+        "z": 1
+      },
+      "strokes": [
+        "s_qw2b",
+        "s_f7nr"
+      ]
+    }
+  }
+}

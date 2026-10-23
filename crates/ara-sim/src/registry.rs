@@ -303,6 +303,10 @@ impl SimRegistry {
         if let Some(codec) = self.typed.get(name) {
             return (codec.read)(world, entity);
         }
+        if self.external.contains(name) {
+            // Another runtime owns the column: read it through that owner.
+            return Ok(None);
+        }
         let Some(layout) = self.dynamic.get(name) else {
             return Err(SimError(format!("unknown component {name}")));
         };

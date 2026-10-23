@@ -1,0 +1,192 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_cell10",
+  "records": {
+    "e_c10crate0": {
+      "name": "Crate",
+      "order": "a4",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.3499999940395355, 0.3499999940395355, 0.3499999940395355],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.699999988079071, 0.699999988079071, 0.699999988079071],
+        "color": [0.75, 0.4000000059604645, 0.15000000596046448, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 150
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [37.76000213623047, 0.3700000047683716, 13.4399995803833]
+      }
+    },
+    "e_c10crate1": {
+      "name": "Crate",
+      "order": "a5",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.3499999940395355, 0.3499999940395355, 0.3499999940395355],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.699999988079071, 0.699999988079071, 0.699999988079071],
+        "color": [0.75, 0.4000000059604645, 0.15000000596046448, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 151
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [38.720001220703125, 0.3700000047683716, 15.039999961853027]
+      }
+    },
+    "e_c10crate2": {
+      "name": "Crate",
+      "order": "a6",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.3499999940395355, 0.3499999940395355, 0.3499999940395355],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.699999988079071, 0.699999988079071, 0.699999988079071],
+        "color": [0.75, 0.4000000059604645, 0.15000000596046448, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 152
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [38.08000183105469, 0.3700000047683716, 16.639999389648438]
+      }
+    },
+    "e_c10ground": {
+      "name": "Terrain chunk",
+      "order": "a0",
+      "AcousticSurface": {
+        "preset": "gravel"
+      },
+      "TerrainChunk": {
+        "x": 1
+      }
+    },
+    "e_c10lamp0": {
+      "name": "Lamp post",
+      "order": "a7",
+      "MeshRenderer": {
+        "size": [0.12, 2.2, 0.12],
+        "color": [0.15, 0.13, 0.12, 1],
+        "roughness": 0.8
+      },
+      "Transform": {
+        "position": [48, 1.1308642625808716, 16]
+      }
+    },
+    "e_c10lamp1": {
+      "name": "Lamp",
+      "order": "a8",
+      "Light": {
+        "color": [1, 0.75, 0.44999998807907104, 1],
+        "intensity": 9000
+      },
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [0.25, 0.25, 0.25],
+        "color": [1, 0.75, 0.44999998807907104, 1],
+        "emissive": [900, 675, 405]
+      },
+      "Transform": {
+        "position": [48, 2.380864143371582, 16]
+      }
+    },
+    "e_c10rock0": {
+      "name": "Rock",
+      "order": "a1",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.6299999952316284, 0.4899999797344208, 0.6299999952316284]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 140
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [41.599998474121094, 0.42000001668930054, 9.600000381469727],
+        "rotation": [0, 204.7999267578125, 0],
+        "scale": [1.399999976158142, 1.1200000047683716, 1.399999976158142]
+      }
+    },
+    "e_c10rock1": {
+      "name": "Rock",
+      "order": "a2",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.8999999761581421, 0.699999988079071, 0.8999999761581421]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 141
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [51.84000015258789, 0.6000000238418579, 22.399999618530273],
+        "rotation": [0, 4.47998046875, 0],
+        "scale": [2, 1.600000023841858, 2]
+      }
+    },
+    "e_c10rock2": {
+      "name": "Rock",
+      "order": "a3",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.4950000047683716, 0.38499999046325684, 0.4950000047683716]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 142
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [57.599998474121094, 1.8854799270629883, 8],
+        "rotation": [0, 59.199951171875, 0],
+        "scale": [1.100000023841858, 0.8800000548362732, 1.100000023841858]
+      }
+    }
+  }
+}

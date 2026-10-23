@@ -13,7 +13,8 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   `Patch` + `Set`, `Patched`, `CaptureParams`, `Captured` + `Mark`, `WatchParams`,
   `SaveReplay`, `Crash`, `Status`, `CrashReport`. All camelCase JSON.
 - `PlayScene`: documents (`DocumentData`), project types, seed, tick rate, asset pins
-  (`as_…` → 64-hex action digest), cache and nav-cache dirs. `encode`/`decode` (CBOR),
+  (`as_…` → 64-hex action digest), cache and nav-cache dirs, `imports` (imported
+  asset ID → path, so cell cooking resolves references). `encode`/`decode` (CBOR),
   `documents(&Workspace)`, `workspace()`. `hex`/`unhex` for digests.
 - `shm::Section::{create, open, bytes}`: named pagefile-backed sections (Windows);
   other platforms return `Unsupported` and the owner sends `Inline` bytes.

@@ -31,6 +31,8 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
   administrative ops. All are applied before tick systems. Commands are ordered by
   player/sequence and retransmits deduplicated. A handler error faults the session;
   restore a checkpoint before proceeding. Handlers must validate before writing.
+  `record_applied` records a command the host already ran between ticks (agent play
+  commands) with the next tick, so recordings replay it through its handler.
 - `SessionAdapter`: optional ara-net seam for Listen/Dedicated. The adapter owns
   authentication, ownership checks, limits, codecs and connection state. Local has
   no adapter, replica, transport, per-connection allocation or network serialization.

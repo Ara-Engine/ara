@@ -1,0 +1,351 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_valley1",
+  "records": {
+    "e_camera": {
+      "name": "Camera",
+      "order": "a5",
+      "Camera": {},
+      "FollowCamera": {
+        "target": "e_fox",
+        "distance": 6.5,
+        "yaw": 90
+      },
+      "Transform": {
+        "position": [15, 3, 14]
+      }
+    },
+    "e_crate0": {
+      "name": "Crate",
+      "order": "aB",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.30000001192092896, 0.30000001192092896, 0.30000001192092896],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.6000000238418579, 0.6000000238418579, 0.6000000238418579],
+        "color": [0.800000011920929, 0.3499999940395355, 0.11999999731779099, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 50
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [18.5, 0.320000022649765, 13]
+      }
+    },
+    "e_crate1": {
+      "name": "Crate",
+      "order": "aC",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.30000001192092896, 0.30000001192092896, 0.30000001192092896],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.6000000238418579, 0.6000000238418579, 0.6000000238418579],
+        "color": [0.8500000238418579, 0.550000011920929, 0.15000000596046448, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 51
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [18.600000381469727, 0.9200000166893005, 13.199999809265137]
+      }
+    },
+    "e_crate2": {
+      "name": "Crate",
+      "order": "aD",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.30000001192092896, 0.30000001192092896, 0.30000001192092896],
+        "friction": 0.7
+      },
+      "MeshRenderer": {
+        "size": [0.6000000238418579, 0.6000000238418579, 0.6000000238418579],
+        "color": [0.20000000298023224, 0.44999998807907104, 0.800000011920929, 1],
+        "roughness": 0.7
+      },
+      "PhysicsId": {
+        "value": 52
+      },
+      "RigidBody": {
+        "motion": "dynamic",
+        "mass": 12
+      },
+      "Transform": {
+        "position": [17.799999237060547, 0.320000022649765, 12.399999618530273]
+      }
+    },
+    "e_fire": {
+      "name": "Campfire",
+      "order": "a7",
+      "AcousticSource": {},
+      "AudioSource": {
+        "clip": "@audio/crackle.wav#as_crackle",
+        "looping": true,
+        "referenceDistance": 2,
+        "maxDistance": 40
+      },
+      "Transform": {
+        "position": [16, 0, 16]
+      },
+      "VisualEffect": {}
+    },
+    "e_fox": {
+      "name": "Fox",
+      "order": "a4",
+      "Animator": {
+        "controller": "@anim/fox.animation#an_foxmatch"
+      },
+      "CharacterController": {
+        "height": 0.9,
+        "crouchHeight": 0.7,
+        "stepHeight": 0.3,
+        "stickDown": 0.3
+      },
+      "MeshRenderer": {
+        "model": "@assets/fox/Fox.glb#as_fox",
+        "roughness": 0.58
+      },
+      "PhysicsId": {
+        "value": 20
+      },
+      "PlayerControl": {
+        "yaw": 90,
+        "camera": "e_camera"
+      },
+      "Stimulus": {
+        "kind": "player",
+        "height": 0.4
+      },
+      "Transform": {
+        "position": [20, 0.05000000074505806, 14],
+        "rotation": [0, 90, 0],
+        "scale": [0.01, 0.01, 0.01]
+      }
+    },
+    "e_foxkind": {
+      "name": "Fox agents",
+      "order": "a3",
+      "NavAgentType": {
+        "name": "Fox",
+        "height": 1,
+        "slope": 40
+      }
+    },
+    "e_guard": {
+      "name": "Guard",
+      "order": "a6",
+      "Animator": {
+        "controller": "@anim/fox.animation#an_fox"
+      },
+      "Brain": {
+        "behavior": "@ai/guard.behavior.graph#gr_guard1",
+        "overrides": [
+          "route = [vec3(26, 0.00, 24), vec3(27, 0.00, 7), vec3(8, 0.00, 9), vec3(9, 0.00, 25)]"
+        ]
+      },
+      "Collider": {
+        "kind": "capsule",
+        "radius": 0.3,
+        "halfHeight": 0.2
+      },
+      "MeshRenderer": {
+        "model": "@assets/fox/Fox.glb#as_fox",
+        "color": [0.55, 0.65, 1, 1]
+      },
+      "NavAgent": {
+        "height": 0.9,
+        "maxSpeed": 3.2
+      },
+      "Perceiver": {
+        "sightRange": 12,
+        "fov": 110,
+        "eyeHeight": 0.6
+      },
+      "PhysicsId": {
+        "value": 30
+      },
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "Transform": {
+        "position": [26, 0, 24],
+        "scale": [0.011, 0.011, 0.011]
+      }
+    },
+    "e_lamp0": {
+      "name": "Lamp post",
+      "order": "aE",
+      "MeshRenderer": {
+        "size": [0.12, 2.2, 0.12],
+        "color": [0.15, 0.13, 0.12, 1],
+        "roughness": 0.8
+      },
+      "Transform": {
+        "position": [12.5, 1.100000023841858, 19.5]
+      }
+    },
+    "e_lamp1": {
+      "name": "Lamp",
+      "order": "aF",
+      "Light": {
+        "color": [1, 0.550000011920929, 0.25, 1],
+        "intensity": 9000
+      },
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [0.25, 0.25, 0.25],
+        "color": [1, 0.550000011920929, 0.25, 1],
+        "emissive": [900, 495, 225]
+      },
+      "Transform": {
+        "position": [12.5, 2.3499999046325684, 19.5]
+      }
+    },
+    "e_lamp2": {
+      "name": "Lamp post",
+      "order": "aG",
+      "MeshRenderer": {
+        "size": [0.12, 2.2, 0.12],
+        "color": [0.15, 0.13, 0.12, 1],
+        "roughness": 0.8
+      },
+      "Transform": {
+        "position": [21, 1.100000023841858, 11.5]
+      }
+    },
+    "e_lamp3": {
+      "name": "Lamp",
+      "order": "aH",
+      "Light": {
+        "color": [1, 0.6000000238418579, 0.30000001192092896, 1],
+        "intensity": 9000
+      },
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [0.25, 0.25, 0.25],
+        "color": [1, 0.6000000238418579, 0.30000001192092896, 1],
+        "emissive": [900, 540, 270]
+      },
+      "Transform": {
+        "position": [21, 2.3499999046325684, 11.5]
+      }
+    },
+    "e_log0": {
+      "name": "Log bench",
+      "order": "a9",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.9, 0.2, 0.22]
+      },
+      "MeshRenderer": {
+        "size": [1.8, 0.4, 0.45],
+        "color": [0.35, 0.22, 0.12, 1],
+        "roughness": 0.85
+      },
+      "PhysicsId": {
+        "value": 40
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [13, 0.20000000298023224, 15],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_log1": {
+      "name": "Log bench",
+      "order": "aA",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.9, 0.2, 0.22]
+      },
+      "MeshRenderer": {
+        "size": [1.8, 0.4, 0.45],
+        "color": [0.35, 0.22, 0.12, 1],
+        "roughness": 0.85
+      },
+      "PhysicsId": {
+        "value": 41
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [19, 0.20000000298023224, 18.5],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_music": {
+      "name": "Music",
+      "order": "a8",
+      "MusicSource": {
+        "music": "@audio/valley.music#mu_valley1",
+        "intensity": 0.7
+      }
+    },
+    "e_sun": {
+      "name": "Sun",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.72, 0.5, 1],
+        "intensity": 2600
+      },
+      "Transform": {
+        "rotation": [-32, -40, 0]
+      }
+    },
+    "e_terrain": {
+      "name": "Valley",
+      "order": "a2",
+      "AcousticSurface": {
+        "preset": "gravel"
+      },
+      "NavMeshSurface": {
+        "profiles": [0],
+        "min": [0, -10, 0],
+        "max": [64, 30, 64],
+        "cellSize": 0.25
+      },
+      "StreamedWorld": {
+        "world": "@world/valley.world#wd_valley1"
+      },
+      "Terrain": {
+        "terrain": "@terrain/valley.terrain#tr_valley1",
+        "foliage": "@terrain/valley.foliage#fo_valley1"
+      },
+      "TerrainChunk": {}
+    },
+    "e_world": {
+      "name": "World",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.16, 0.3, 0.62, 1],
+        "horizon": [0.92, 0.62, 0.4, 1],
+        "ground": [0.08, 0.07, 0.05, 1],
+        "intensity": 260,
+        "exposure": 0.0022
+      }
+    }
+  }
+}

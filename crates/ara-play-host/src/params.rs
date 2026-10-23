@@ -138,6 +138,9 @@ pub struct PlayCaptureParams {
     /// Networked worlds: which process answers (0 = the authority, the default;
     /// 1.. = clients in launch order, player `index + 1`).
     pub player: Option<u32>,
+    /// Render what windowed frames draw (terrain chunks as meshes; no landscape or
+    /// VFX composite) instead of the full capture (default false).
+    pub presented: Option<bool>,
 }
 
 /// Params of `play.watch`.

@@ -38,7 +38,9 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   `subtree()`; helpers `parent_of`, `order_of`, `prefab_of`, `is_component_key`.
 - `Edit` → `doc.apply(edit, &db) -> Result<Op, Diagnostic>`; `Op::inverse()`,
   `Op::to_edit()`, `Op::touches()`; `doc.revert(&op, &db)` (rollback).
-- `refs::{AssetIndex, resolve, repair_record, record_ref}` (`AssetIndex::closest`: the
+- `refs::{AssetIndex, resolve, repair_record, record_ref}` (`AssetIndex::imports`:
+  imported media `(id, path)`, what a copy of the documents needs to resolve
+  references; `AssetIndex::closest`: the
   nearest assets of a kind to a broken reference; ARA1302 carries a `set` fix per tied
   candidate; `@path#record` into a kind with addressable records is kept as written,
   the record's existence is the consumer's check); `prefab::{resolve, DocLookup,

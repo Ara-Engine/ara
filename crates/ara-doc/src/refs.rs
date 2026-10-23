@@ -49,6 +49,15 @@ impl AssetIndex {
         self.by_id.get(id).and_then(|(_, k)| k.as_deref())
     }
 
+    /// Imported source media (`None` kind), as `(id, path)` in ID order: what a copy
+    /// of the documents needs besides themselves to resolve references.
+    pub fn imports(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.by_id
+            .iter()
+            .filter(|(_, (_, kind))| kind.is_none())
+            .map(|(id, (path, _))| (id.as_str(), path.as_str()))
+    }
+
     /// The known assets closest to a reference that does not resolve (by path, else
     /// by ID), of `kind` when given, as full `@path#id`s; several when tied.
     pub fn closest(&self, text: &str, kind: Option<&str>) -> Vec<String> {
@@ -339,12 +348,24 @@ mod tests {
     #[test]
     fn record_references_name_records_of_their_document_kind() {
         let mut ix = index();
-        ix.insert("ac_foxanim1", "anim/fox.animation", Some("animation".into()));
+        ix.insert(
+            "ac_foxanim1",
+            "anim/fox.animation",
+            Some("animation".into()),
+        );
         assert!(record_ref("@anim/fox.animation#an_walk", "animation", &ix));
         // The document itself, another kind, a known asset ID or no path: not records.
-        assert!(!record_ref("@anim/fox.animation#ac_foxanim1", "animation", &ix));
+        assert!(!record_ref(
+            "@anim/fox.animation#ac_foxanim1",
+            "animation",
+            &ix
+        ));
         assert!(!record_ref("@anim/fox.animation#an_walk", "prefab", &ix));
-        assert!(!record_ref("@anim/fox.animation#pf_rifle001", "animation", &ix));
+        assert!(!record_ref(
+            "@anim/fox.animation#pf_rifle001",
+            "animation",
+            &ix
+        ));
         assert!(!record_ref("@#an_walk", "animation", &ix));
     }
 

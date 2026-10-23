@@ -97,6 +97,7 @@ pub struct Streaming {
     retained: usize,
     entities: usize,
     last_tick: u64,
+    adopt: bool,
 }
 
 impl Streaming {
@@ -143,6 +144,7 @@ impl Streaming {
             retained: 0,
             entities: 0,
             last_tick: 0,
+            adopt: false,
         })
     }
 
@@ -310,6 +312,16 @@ impl Streaming {
         Ok(())
     }
 
+    /// Adoption after a checkpoint or snapshot restore: the restored world already
+    /// holds rows of the cells resident at the checkpoint, which this (fresh) state
+    /// never spawned. While on, activation counts a row whose identity is resident as
+    /// spawned (no spawn, no budget, nothing recorded) instead of failing on the
+    /// duplicate. Turn it off once those cells are resident again: duplicate authored
+    /// identities must keep failing.
+    pub fn adopt_resident(&mut self, adopt: bool) {
+        self.adopt = adopt;
+    }
+
     /// `update`, then waits for every cook and retirement it started (repeating until
     /// nothing is in flight, at most `timeout`), so the next `activate` sees every
     /// wanted cell loaded. Hosts that need reproducible arrival ticks (agent
@@ -347,6 +359,7 @@ impl Streaming {
     ) -> Result<FrameStats> {
         let start = Instant::now();
         let mut stats = FrameStats::default();
+        let adopt = self.adopt;
         while stats.spawned + stats.despawned < budget.max_entities && start.elapsed() < budget.time
         {
             let candidate = self
@@ -382,10 +395,14 @@ impl Streaming {
                 }
             } else {
                 if let Some(entity) = cell.prepared.pop_front() {
-                    boundary.spawn(entity)?;
+                    if adopt && boundary.contains(entity.identity()) {
+                        // Restored with the world: already resident.
+                    } else {
+                        boundary.spawn(entity)?;
+                        stats.spawned += 1;
+                    }
                     state.count += 1;
                     self.entities += 1;
-                    stats.spawned += 1;
                 }
                 if cell.prepared.is_empty() {
                     interest.ready(id, state.key, state.visible, &cell.blob.proxies);

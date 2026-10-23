@@ -841,3 +841,21 @@ fn restore_preserves_explicit_source_defaults_used_by_queued_op_preconditions() 
     play.step(2, &[]).unwrap();
     assert_eq!(play.session().state_hash().unwrap(), expected);
 }
+
+#[test]
+fn external_components_queue_for_their_owner_and_read_as_absent() {
+    let db = schema();
+    let mut registry = SimRegistry::new(db.clone()).unwrap();
+    registry.register_external("Stats").unwrap();
+    let edit = EditWorld::new(registry, scene(&db)).unwrap();
+    let mut session = Session::local(edit, TickConfig::default(), 1, actions()).unwrap();
+    let writes = &session.world().resource::<ara_sim::ExternalWrites>().0;
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].component, "Stats");
+    // The owner's column is not ara-sim's: generic readers (net replication) skip it.
+    assert_eq!(session.component("e_0001", "Stats").unwrap(), None);
+    let entity = session.entity("e_0001").unwrap();
+    assert_eq!(session.component_at(entity, "Stats").unwrap(), None);
+    session.state_hash().unwrap();
+    session.step().unwrap();
+}

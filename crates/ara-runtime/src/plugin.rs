@@ -69,6 +69,13 @@ pub trait RuntimePlugin: Send + Sync {
         let _ = (session, tick);
         Ok(())
     }
+    /// The session was restored (checkpoint, portable snapshot or replay): its world
+    /// now holds the restored state. Host-side state that tracks the world (streamed
+    /// cell residency) resynchronizes here; gameplay state is already restored.
+    fn restored(&mut self, session: &mut Session) -> Result<()> {
+        let _ = session;
+        Ok(())
+    }
     /// Follows one presented frame (interpolated); never mutates gameplay.
     fn frame(&mut self, world: &World, frame: &RenderFrame) {
         let _ = (world, frame);

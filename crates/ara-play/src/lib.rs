@@ -500,6 +500,10 @@ pub struct CaptureParams {
     /// Maximum numbered marks (0 disables marks).
     #[serde(default = "marks")]
     pub marks: usize,
+    /// Render what windowed frames draw (terrain chunks as meshes, no landscape or
+    /// VFX composite) instead of the full capture.
+    #[serde(default)]
+    pub presented: bool,
 }
 fn width() -> u32 {
     1280
@@ -655,6 +659,10 @@ pub struct PlayScene {
     /// C# gameplay modules, when the project has any.
     #[serde(default)]
     pub scripts: Option<ScriptScene>,
+    /// Imported asset ID → project path: the asset index the documents' references
+    /// resolve against (cooking streamed cells checks them).
+    #[serde(default)]
+    pub imports: BTreeMap<String, String>,
 }
 
 impl PlayScene {
@@ -677,7 +685,11 @@ impl PlayScene {
 
     /// Rebuilds the workspace and scene ID (records are validated by projection).
     pub fn workspace(&self) -> Result<(Workspace, AssetId), String> {
-        let mut workspace = Workspace::default();
+        let mut index = ara_doc::refs::AssetIndex::new();
+        for (id, path) in &self.imports {
+            index.insert(id.clone(), path.clone(), None);
+        }
+        let mut workspace = Workspace::new(index);
         for data in &self.documents {
             let mut doc = Document::new(data.kind.clone(), AssetId::parse(&data.id)?);
             for (id, record) in &data.records {

@@ -10,11 +10,13 @@ ara-runtime, ara-sim. The .NET side lives in `dotnet/`.
   Receiver<ScriptEvent>)`; pass the plugin to `Runtime::new`.
 - `ScriptEvent`: `Reload(ReloadReport)`, `Diagnostic`, `RestartRequired` (L4),
   `Types(path → *.types.json document)` after load and after each reload.
-- Between ticks (the player's RPC handlers): `execute(world, name, params)` runs a C#
-  `[Command]` as one undoable step (document addresses like `e_fox` become C# entity
-  values) and returns `ScriptHost::describe`; `catalog(world)`; `read(world, entity,
-  name)`; `request_compile(world, module, paths)` claims an agent edit;
-  `module_of(settings, path)`.
+- Between ticks (the player's RPC handlers): `execute(session, name, params)` runs a
+  C# `[Command]` as one undoable step (document addresses like `e_fox` become C#
+  entity values), records it with the next tick as a `script.command` boundary
+  command (`COMMAND`, `ScriptCommand`; replays re-run it) and returns
+  `ScriptHost::describe`; `catalog(world)`; `read(world, entity, name)`;
+  `request_compile(world, module, paths)` claims an agent edit; `module_of(settings,
+  path)`.
 - `ScriptProvider`: the `scripts` state provider (C# components by entity identity and
   C# resources, in snapshots and state hashes).
 
@@ -38,17 +40,29 @@ writes each module's generated `<Name>.types.json` from `Types` events (so the
 editor and `ara check` validate C# components without .NET) and routes agent source
 writes (`script.write`) through `request_compile(.., Agent)` before writing.
 
+Entities C# spawns get a stable `Identity` right after they appear: systems and
+behaviours `e_cs<tick>x<n>`, commands `e_cs<tick that records it>c<n>`, numbered in
+content order (Transform + C# values) after earlier names with that prefix. Live
+commands and their replays therefore name spawns identically, and ara-sim snapshots,
+hashes and restores include them.
+
 ## Testing
 
 `cargo test -p ara-player --test csharp -- --nocapture` (builds `dotnet/Ara.slnx`):
 Outpost module (`crates/ara-player/demo-scripts/Outpost`) in a copy of the demo,
-agent adds C# components, Gravity/Movement/Door run, `game.UseMedkit`, an agent edit
-hot-reloads while playing, restart keeps C# state. The gate checks the checked-in
-`Outpost.types.json` (`ARA_UPDATE_DEMO=1` regenerates it).
+agent adds C# components, Gravity/Movement/Door run, `game.UseMedkit`, a recording
+with a heal and a `game.DropSupplies` spawn replays exactly, an agent edit
+hot-reloads while playing, restart keeps C# state (the spawned crate included). The
+gate checks the checked-in `Outpost.types.json` (`ARA_UPDATE_DEMO=1` regenerates it).
+`--test valley` plays the module networked in the integration level.
 
 ## Gotchas
 
 - One .NET runtime per process: pooled players are single-use, so one host per world.
-- Entities spawned by C# at runtime (no `Identity`) are not captured in snapshots yet.
-- C# commands run immediately between ticks and are not part of replays yet.
+- All C# systems run in the one Gameplay slot (`scripts`); interleaving individual
+  `ScriptSet`s with Rust systems needs ara-script to schedule sets separately.
+- Replays apply recorded commands at their boundary, after that tick's inputs, live
+  patches and streaming (live, they ran just before it).
+- Boot with modules is ~4 s (CLR start and Roslyn's first compile); there is no
+  prewarm in pooled players yet (it needs a .NET-side entry point).
 - `Scripts` is `Sync` by an explicit `unsafe impl`: never add a `Res<Scripts>` system.

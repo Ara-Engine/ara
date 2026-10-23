@@ -279,8 +279,9 @@ impl Session {
     pub fn schema(&self) -> &ara_schema::SchemaDb {
         self.edit.registry.schema()
     }
-    /// Reads one registered component through a tick-stable entity handle.
-    /// Adapters resolve identities once per boundary instead of rescanning per field.
+    /// Reads one registered component through a tick-stable entity handle (`None`
+    /// for external components: their owner reads them). Adapters resolve identities
+    /// once per boundary instead of rescanning per field.
     pub fn component_at(&self, entity: Entity, name: &str) -> Result<Option<Value>> {
         self.edit
             .registry

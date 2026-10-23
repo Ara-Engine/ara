@@ -112,9 +112,7 @@ impl World {
         }
         // Last: the world workers prepare rows against the complete registry.
         let mut cells = None;
-        if let Some((plugin, events)) =
-            WorldStreaming::from_workspace(&workspace, &schema, id.as_str())?
-        {
+        if let Some((plugin, events)) = WorldStreaming::from_workspace(&workspace, id.as_str())? {
             // Headless (agent) play settles streaming: arrivals are reproducible.
             let plugin = if windowed {
                 plugin
@@ -172,7 +170,7 @@ impl World {
     pub fn resume(&mut self, hex: &str) -> Result<()> {
         let bytes = ara_play::unhex_bytes(hex).map_err(|e| anyhow!(e))?;
         let snapshot = ara_sim::Snapshot::from_bytes(&bytes)?;
-        self.runtime.play_mut().restore(&snapshot)?;
+        self.runtime.restore(&snapshot)?;
         Ok(())
     }
 
@@ -558,6 +556,14 @@ impl World {
                     marks_wanted,
                     self.seed,
                 )?
+            } else if params.presented {
+                self.runtime.extract(frame);
+                presenter.context("no presenter")?.capture_presented(
+                    frame,
+                    size,
+                    marks_wanted,
+                    self.seed,
+                )?
             } else {
                 self.runtime.extract(frame);
                 presenter.context("no presenter")?.capture(
@@ -599,7 +605,7 @@ impl World {
     /// `play.replay`: verifies a replay file tick by tick from its initial state.
     pub fn replay(&mut self, path: &str) -> Result<Value> {
         let replay = ara_sim::Replay::from_bytes(&std::fs::read(path)?)?;
-        let hash = self.runtime.play_mut().replay(&replay)?;
+        let hash = self.runtime.replay(&replay)?;
         self.mark();
         Ok(
             json!({"tick": self.runtime.tick(), "ticks": replay.ticks.len(), "hash": hash.to_string(), "verified": true}),

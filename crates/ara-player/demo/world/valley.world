@@ -1,0 +1,48 @@
+{
+  "$schema": "ara://schema/world/1",
+  "id": "wd_valley1",
+  "records": {
+    "c_00": {
+      "layer": "l_art",
+      "documents": [
+        "@world/cells/c00.scene#sc_cell00"
+      ],
+      "acoustics": "@world/cells/c00.acoustics#as_ac00"
+    },
+    "c_01": {
+      "z": 1,
+      "layer": "l_art",
+      "documents": [
+        "@world/cells/c01.scene#sc_cell01"
+      ],
+      "acoustics": "@world/cells/c01.acoustics#as_ac01"
+    },
+    "c_10": {
+      "x": 1,
+      "layer": "l_art",
+      "documents": [
+        "@world/cells/c10.scene#sc_cell10"
+      ],
+      "acoustics": "@world/cells/c10.acoustics#as_ac10"
+    },
+    "c_11": {
+      "x": 1,
+      "z": 1,
+      "layer": "l_art",
+      "documents": [
+        "@world/cells/c11.scene#sc_cell11"
+      ],
+      "acoustics": "@world/cells/c11.acoustics#as_ac11"
+    },
+    "l_art": {
+      "name": "Art",
+      "loaded": true,
+      "visible": true,
+      "range": 6,
+      "graceTicks": 120
+    },
+    "w_grid": {
+      "cellSize": 32
+    }
+  }
+}
