@@ -27,7 +27,9 @@ impl Default for Params {
     fn default() -> Self {
         Self {
             neighbor_distance: 3.0,
-            max_neighbors: 10,
+            // Measured: 10 -> 8 saves ~10 % of the solve with unchanged test
+            // outcomes (DetourCrowd uses 6).
+            max_neighbors: 8,
             time_horizon: 1.5,
             wall_time_horizon: 0.4,
             wall_margin: 0.02,

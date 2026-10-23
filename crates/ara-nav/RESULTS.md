@@ -4,7 +4,7 @@ Scope: `ara-nav` v2 (large worlds, dynamic world, crowds), `ara-crowd` (ORCA,
 flow fields), `ara-perception` and `ara-ai` (state trees, utility, EQS, DSL,
 `ara why`). Machine: Windows 11, Ryzen 7 7800X3D (8 cores / 16 threads),
 Rust 1.99.1/MSVC, release benches, `CARGO_BUILD_JOBS=2`. The host was shared
-with other agents' builds (6+ `rustc` processes, ~65% CPU load during some
+with other agents' builds (6+ `rustc` processes, 65-88 % CPU load during the
 runs), so timings are upper bounds; tail latencies (p95/max) are the most
 affected. Cross-platform bit equality is not claimed (same-binary determinism is).
 
@@ -12,8 +12,8 @@ affected. Cross-platform bit equality is not claimed (same-binary determinism is
 
 | Target | Result | Status |
 |---|---|---|
-| 10 km path query in <= 1 ms (16 km² world) | 9.85 km route, **0.38 ms p50** (cluster A* + ALT) | met |
-| 10,000 agents with avoidance at 60 Hz on 8 workers, <= 2 ms/tick, deterministic | full ECS nav tick **CROWD_P50 ms p50** (ORCA solve alone 1.48 ms); bit-identical on 1/2/4/8 workers | see below |
+| 10 km path query in <= 1 ms (16 km² world) | 9.85 km route, **0.33-0.38 ms p50**, 0.43 ms p95 (cluster A* + ALT) | met |
+| 10,000 agents with avoidance at 60 Hz on 8 workers, <= 2 ms/tick, deterministic | full ECS nav tick **1.84 ms p50** (median of 3 runs, 1.73-1.97; p95 1.92-2.87 under external load); flow mode 1.48-1.52 ms; bit-identical on 1/2/4/8 workers | met at p50 |
 | Deterministic cross-process hashes at 1/4/8 workers | identical (`ara-ai` 128 NPCs, `ara-crowd` 10k, `ara-perception` 2k) | met |
 | Streaming swap without invalidating paths | agent follows a route across 6+ resident swaps and arrives | met |
 | Golden behaviour scenarios | guard (patrol/investigate/chase/lose/return), cover fight | met |
@@ -31,9 +31,9 @@ affected. Cross-platform bit equality is not claimed (same-binary determinism is
 
 | Query | Straight | Route | Expanded | p50 | p95 |
 |---|---|---|---|---|---|
-| corner to corner through both walls | 4,010 m | **9,853 m** | 1,746 | **0.376 ms** | 1.10 ms |
-| mid-south to far north-west | 4,338 m | 7,979 m | 546 | 0.118 ms | 0.59 ms |
-| east edge south to north | 4,011 m | 9,726 m | 516 | 0.109 ms | 0.32 ms |
+| corner to corner through both walls | 4,010 m | **9,853 m** | 1,746 | **0.329 ms** | 0.429 ms |
+| mid-south to far north-west | 4,338 m | 7,979 m | 546 | 0.104 ms | 0.137 ms |
+| east edge south to north | 4,011 m | 9,726 m | 516 | 0.065 ms | 0.096 ms |
 
   History: Euclidean A* over 32 m portals expanded 4,809 nodes (1.67 ms p50);
   ALT landmarks cut that to 2,801 (0.84 ms); quarter-cell portals (64 m) halved
@@ -44,27 +44,43 @@ affected. Cross-platform bit equality is not claimed (same-binary determinism is
 ## Crowds (`cargo bench -p ara-crowd --bench crowd`, `-p ara-nav --bench scale`)
 
 ORCA solver alone, 10,000 agents in a dense four-way crossing inside a walled
-arena (8.4 % of agent-ticks needed the minimal-violation fallback), 540 ticks:
+arena (~8 % of agent-ticks needed the minimal-violation fallback), 540 ticks,
+default 8 neighbours:
 
 | Workers | p50 | p95 | identical to 1 worker |
 |---|---|---|---|
-| 1 | 7.11 ms | 8.56 ms | - |
-| 2 | 3.71 ms | 4.55 ms | yes |
-| 4 | 2.21 ms | 3.01 ms | yes |
-| 8 | **1.48 ms** | 2.17 ms | yes |
+| 1 | 6.95 ms | 9.15 ms | - |
+| 2 | 4.35 ms | 5.21 ms | yes |
+| 4 | 2.41 ms | 2.85 ms | yes |
+| 8 | **1.39 ms** | 1.56 ms | yes |
+
+Neighbour cap (8 workers, p50, two runs each): 10 -> 1.52-1.58 ms, 8 -> 1.39 ms,
+6 -> 1.26 ms. The default is 8 (DetourCrowd uses 6); every avoidance test passes
+unchanged. Earlier, exact distance-ordered bucket pruning cut the single-worker
+solve from 9.0 to 7.1 ms with identical results.
 
 Full navigation tick (ECS gather, budgeted replans, path following, ORCA with
 navmesh walls and 16 carved pillars, scatter), 10,000 agents crossing a 240 m
 plaza, 300 steady ticks:
 
-CROWD_TABLE
+| Workers | p50 (3 runs) | p95 (3 runs) |
+|---|---|---|
+| 1 | 8.06 / 8.50 / 8.15 ms | 9.4-11.6 ms |
+| 2 | 5.56 / 5.38 / 5.34 ms | 5.9-6.4 ms |
+| 4 | 2.99 / 2.89 / 2.89 ms | 3.1-3.3 ms |
+| 8 | **1.97 / 1.73 / 1.84 ms** | 1.92-2.87 ms |
+| 8, shared flow field (no corridors) | **1.52 / 1.48 / 1.51 ms** | 1.64-1.79 ms |
+
+The tick includes duplicate-ID checks, link gates, budgeted replans, parallel
+path following over ECS table slices, the ORCA solve with per-profile walls and
+the scatter. 0 errors; all 10,000 agents moving.
 
 Solver choice (measured, single worker, same plaza): DetourCrowd 2,000 agents
 12.3-15.6 ms p50 vs ORCA 2,000 agents 1.9-2.3 ms p50 (6.5x), and ORCA scales
 across workers while the DetourCrowd shim is single-threaded per profile.
 **ORCA is the default**; DetourCrowd stays selectable (`CrowdSolver::Detour`).
 
-Flow fields (shared goal): 262,144-cell field built in 21.7-25 ms (one Dijkstra
+Flow fields (shared goal): 262,144-cell field built in 21.7-30 ms (one Dijkstra
 per goal), then 0.07-0.29 ms to steer 10,000 agents. Use for massed groups with
 one destination (RTS/hordes); per-agent paths otherwise (multi-level worlds).
 
@@ -73,7 +89,17 @@ goals are planned within ~40 ticks while existing corridors keep moving.
 
 ## Behaviour (`cargo bench -p ara-ai --bench ai`)
 
-AI_TABLE
+1,000 NPCs (750 guards, 250 soldiers running the example behaviours) on a
+160 m yard with 36 pillars, 8 stimuli and a noise every second; the measured
+tick is the whole schedule: pose sync, perception (sight cones with navmesh
+line of sight, hearing, memory), brains (state trees, utility, EQS), the intent
+bridge, ORCA navigation and locomotion intents.
+
+| Workers | p50 | p95 |
+|---|---|---|
+| 1 | 1.16 ms | 1.76 ms |
+| 4 | 0.63 ms | 0.87 ms |
+| 8 | **0.57 ms** | 0.89 ms |
 
 ## Determinism and verification
 
@@ -92,6 +118,10 @@ AI_TABLE
   LookAround, Patrol, Chase, Search, Patrol); cover fight 99 transitions cycling
   Peek, StepOut, Shoot, FindCover, GoToCover, Hold with hidden cover verified by
   line of sight and health recovering only in cover.
+- `ara-runtime` demo tests (wanderers roam, equal-seed state hashes, exact
+  checkpoints) pass unchanged on nav v2 with ORCA as the default solver.
+- Flow mode: 300 agents following one field all pass a single 4 m gap within
+  60 s and never request corridors.
 - `ara why`: live sims produce ARA7101 (unreachable moveTo), ARA7115 (stuck in
   `Rest`), ARA7116 (perception occluded); the `npc` explainer ranks them with
   evidence plus setup checks (no Brain, maxSpeed 0, no NavMeshSurface).

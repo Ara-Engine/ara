@@ -1,5 +1,6 @@
 //! 10,000-agent ORCA step timings at 1/2/4/8 workers, plus flow-field builds.
 //! `cargo bench -p ara-crowd --bench crowd` (CARGO_BUILD_JOBS=2 on shared hosts).
+//! `ARA_CROWD_NEIGHBORS=n` overrides `Params::max_neighbors` for comparisons.
 use ara_crowd::*;
 use std::time::Instant;
 
@@ -79,7 +80,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .num_threads(threads)
             .build()?;
         let (mut agents, goals) = scenario();
-        let mut crowd = Crowd::new(Params::default())?;
+        let neighbors = std::env::var("ARA_CROWD_NEIGHBORS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(Params::default().max_neighbors);
+        let mut crowd = Crowd::new(Params {
+            max_neighbors: neighbors,
+            ..Params::default()
+        })?;
         let mut samples = Vec::new();
         let mut fallbacks = 0;
         // 600 ticks = 10 s: the blocks meet and fully interpenetrate at the centre.
