@@ -1,0 +1,10 @@
+{
+  "$schema": "ara://schema/import/1",
+  "id": "as_fox",
+  "records": {
+    "i_settings": {
+      "importer": "ara.gltf",
+      "version": "2-gltf14-meshopt070-ispc050-tiled"
+    }
+  }
+}

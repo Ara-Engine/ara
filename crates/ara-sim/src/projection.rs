@@ -74,6 +74,17 @@ impl EditWorld {
         &self.world
     }
 
+    /// The mirrored source documents (including applied live patches). Read-only:
+    /// callers derive ops with `prev` values from it, then queue them for a tick.
+    pub fn workspace(&self) -> &Workspace {
+        &self.workspace
+    }
+
+    /// The projected scene's asset ID.
+    pub fn scene(&self) -> &AssetId {
+        &self.scene
+    }
+
     /// Runtime entity for a document address, stable across set/move operations.
     pub fn entity(&self, address: &str) -> Option<Entity> {
         self.mapping

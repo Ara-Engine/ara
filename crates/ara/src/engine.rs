@@ -7,7 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ara_diag::{Diagnostic, codes};
-use ara_host::{Host, HostConfig, Project};
+use ara_host::{Host, HostConfig};
 use ara_proto::{Endpoint, RpcError};
 use ara_rpc::Client;
 use serde_json::{Value, json};
@@ -30,7 +30,7 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
         if let Some(c) = Client::for_project(root) {
             return Ok(Box::new(c));
         }
-        match Host::open(Project::open(root)?, HostConfig::default()) {
+        match Host::open(crate::project::load(root)?, HostConfig::default()) {
             Ok(h) => return Ok(Box::new(h)),
             Err(d) if d.code == codes::DAEMON_RUNNING && start.elapsed() < LOCK_WAIT => {
                 thread::sleep(Duration::from_millis(50));

@@ -257,6 +257,14 @@ impl PlayControl {
     pub fn snapshot(&self) -> Result<Snapshot> {
         self.session.snapshot(self.build)
     }
+    /// Snapshot plus exact in-process provider checkpoints (bit-exact native rollback).
+    pub fn checkpoint(&mut self) -> Result<Snapshot> {
+        self.session.checkpoint(self.build)
+    }
+    /// Build/module digest that snapshots and replays must match.
+    pub fn build(&self) -> StateHash {
+        self.build
+    }
     /// Restores a matching checkpoint; an active recording must first be finished.
     pub fn restore(&mut self, snapshot: &Snapshot) -> Result<()> {
         if self.recording.is_some() {
@@ -272,7 +280,7 @@ impl PlayControl {
         if self.recording.is_some() {
             return Err(SimError("already recording".into()));
         }
-        let initial = self.snapshot()?;
+        let initial = self.checkpoint()?;
         self.recording = Some(Replay {
             format: 1,
             scene_hash: initial.scene_hash,

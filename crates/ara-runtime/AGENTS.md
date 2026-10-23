@@ -1,0 +1,74 @@
+# ara-runtime
+
+Composes the merged subsystems into one playable world: `ara-sim` session + input
+actions + Jolt physics + ara-anim animation + Recast navigation + cooked assets, with a
+renderer-neutral presentation extraction. No GPU, window or process code (see
+`ara-runtime-render`, `ara-player`).
+
+## Public API
+
+- `schema(project_types)`: kernel types + `components::register_schemas` + project
+  `*.types.json`. Hosts call `components::register_schemas` on their own DB so
+  documents using runtime components validate.
+- `Runtime::new(schema, workspace, scene, assets, RuntimeConfig, plugins)`: projects the
+  scene, loads every `MeshRenderer.model` generation, builds physics/nav/animation at
+  tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
+  catch-up), `pause/resume/set_timescale`, `inject`, `patch_edits` (live edits →
+  baseline-checked ops at the next tick), `changes()` (keep-changes diff),
+  `extract(&mut RenderFrame)`, `reload_assets`, `fault()`, `navigation_errors()`.
+  `play()/play_mut()` expose `ara_sim::PlayControl` (watch, checkpoint, record, replay).
+- `components`: `MeshRenderer` (shape or imported model), `Light`, `Environment`,
+  `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`).
+- `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
+  (FileCache pinned by action digest), `MemoryAssets`, `Models`.
+- `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
+  the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
+- `plugin::RuntimePlugin`: seams for C# scripts, ara-net, audio and VFX
+  (`register`, `install(Stage)`, `before_tick`, `after_tick`, `frame`).
+- `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
+  primitive, interpolated world matrix) and skin-order palettes.
+- `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
+
+## System order
+
+Documented in `lib.rs`. Input → plugin Gameplay → wander → navigation (exclusive) →
+`animation ∥ navigation.follow` (parallel group) → root motion → physics.push →
+physics (exclusive) → physics.pull → camera.place → plugin Late → poses.resolve.
+
+## State and determinism
+
+- Gameplay state is registered components (physics mirrors, `PlayerControl.yaw`,
+  `FollowCamera.yaw/pitch`, `Wanderer` cursors). Provider-owned state:
+  `physics` (native world; exact in-process checkpoints, rebuilt from mirrors on a
+  portable restore), `navigation` (`NavPosition`, `NavAgentState`), `animation`
+  (`AnimatorSlot` snapshots), `poses` (derived world/previous/synced poses).
+- Same seed + inputs → same state hash; tests check two runtimes, exact checkpoint
+  rollback and portable tick-0 snapshot restore.
+- Presentation (`extract`) only reads; it interpolates previous→current world poses.
+
+## Conventions and gotchas
+
+- `Transform.rotation` is intrinsic XYZ Euler degrees (`glam::EulerRot::XYZ`); see
+  `math.rs`. Cameras/lights look along local -Z; characters face +Z at yaw 0.
+- Physics: a body is teleported only when its `Transform` differs from what physics
+  last wrote (`SyncedTransform`). Static bodies keep authored transforms. Kinematic
+  nav agents lift their collider so it rests on the ground.
+- Navmeshes bake at load from static box colliders inside each `NavMeshSurface`
+  (cached by tile content in `nav_cache`). `NavMeshSurface.geometry` assets are not
+  baked yet (structured error).
+- Animation: tick rate must divide 48 000. The move-state cycle is the mean of the
+  locomotion clip lengths. Cubic glTF channels keep key values; morph channels are
+  not animated. A reloaded model restarts its animators (old snapshots are rejected).
+- `ara_anim::document::register` is not called: its `Joint` value type clashes with
+  the physics `Joint` component in one Schema DB.
+- Models: glTF imports only; FBX manifests return a structured error.
+- Live patches always apply at the next tick boundary (paused worlds reach it by
+  stepping). `changes()` compares at f32 precision with defaults materialized and
+  marks system-written values `driven`.
+
+## Testing
+
+`CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=2 cargo test -p ara-runtime`. `tests/demo.rs`
+cooks the Fox in-process from `../ara-player/demo` and plays the demo scene: walking
+and grounding, crowd roaming, skin palettes, determinism, exact/portable restore, live
+patch + keep changes. `cargo clippy -p ara-runtime --all-targets -- -D warnings`.

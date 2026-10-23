@@ -1,0 +1,33 @@
+[package]
+name = "ara-runtime"
+description = "Composes simulation, input, physics, animation, navigation and cooked assets into one playable runtime."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-anim = { path = "../ara-anim" }
+ara-asset = { path = "../ara-asset" }
+ara-asset-format = { path = "../ara-asset-format" }
+ara-components.workspace = true
+ara-doc.workspace = true
+ara-input = { path = "../ara-input" }
+ara-json.workspace = true
+ara-ops.workspace = true
+ara-nav = { path = "../ara-nav" }
+ara-physics = { path = "../ara-physics" }
+ara-physics-jolt = { path = "../ara-physics-jolt" }
+ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+glam = { version = "0.34", features = ["serde"] }
+bytemuck = "1.24"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-importers = { path = "../ara-importers" }
+
+[lints]
+workspace = true

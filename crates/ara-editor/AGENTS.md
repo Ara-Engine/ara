@@ -19,7 +19,9 @@ Escape drops the preview; release commits one transform.set batch with its base.
 View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 
-Play controls stay disabled until the disposable ara-sim player is connected.
+Play/Pause/Resume/Step/Stop bind `play.*` (ara-play-host's `PlayService`, registered
+in `Editor::open`): Play opens the scene in a pooled `ara-player` window. The in-editor
+Game viewport through a shared GPU texture (D19) is still to wire.
 C# integration registers host services/schema types, not mutable UI state.
 The temporary glTF loader is isolated in `world/gltf.rs`; replace with ara-asset.
 

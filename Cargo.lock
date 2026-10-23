@@ -401,6 +401,7 @@ dependencies = [
  "ara-json",
  "ara-mcp",
  "ara-merge",
+ "ara-play-host",
  "ara-profile",
  "ara-proto",
  "ara-rpc",
@@ -623,6 +624,7 @@ dependencies = [
  "ara-mcp",
  "ara-ops",
  "ara-platform",
+ "ara-play-host",
  "ara-proto",
  "ara-render",
  "ara-render-fidelity",
@@ -1082,6 +1084,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-play"
+version = "0.0.0"
+dependencies = [
+ "ara-doc",
+ "ciborium",
+ "serde",
+ "serde_json",
+ "tungstenite 0.30.0",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ara-play-host"
+version = "0.0.0"
+dependencies = [
+ "ara-asset",
+ "ara-diag",
+ "ara-doc",
+ "ara-host",
+ "ara-json",
+ "ara-play",
+ "ara-proto",
+ "ara-runtime",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-player"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset",
+ "ara-doc",
+ "ara-gpu",
+ "ara-host",
+ "ara-input",
+ "ara-mcp",
+ "ara-platform",
+ "ara-play",
+ "ara-play-host",
+ "ara-render",
+ "ara-runtime",
+ "ara-runtime-render",
+ "ara-sim",
+ "clap",
+ "glam 0.34.1",
+ "serde",
+ "serde_json",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ara-profile"
 version = "0.0.0"
 dependencies = [
@@ -1172,6 +1228,50 @@ dependencies = [
  "serde",
  "serde_json",
  "tungstenite 0.30.0",
+]
+
+[[package]]
+name = "ara-runtime"
+version = "0.0.0"
+dependencies = [
+ "ara-anim",
+ "ara-asset",
+ "ara-asset-format",
+ "ara-components",
+ "ara-doc",
+ "ara-importers",
+ "ara-input",
+ "ara-json",
+ "ara-nav",
+ "ara-ops",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "bytemuck",
+ "glam 0.34.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-runtime-render"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset",
+ "ara-asset-format",
+ "ara-doc",
+ "ara-importers",
+ "ara-input",
+ "ara-render",
+ "ara-runtime",
+ "ara-sim",
+ "glam 0.30.9",
+ "glam 0.34.1",
+ "serde_json",
+ "texture2ddecoder",
 ]
 
 [[package]]

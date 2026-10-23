@@ -131,7 +131,8 @@ pub fn render_id(address: &str) -> u64 {
 pub(crate) fn vector(value: Option<&Value>, default: Vec3) -> Vec3 {
     value
         .and_then(Value::as_array)
-        .filter(|a| a.len() == 3)
+        // RGBA colors read their first three channels.
+        .filter(|a| a.len() == 3 || a.len() == 4)
         .and_then(|a| {
             Some(Vec3::new(
                 a[0].as_f64()? as f32,
@@ -188,7 +189,8 @@ impl EditWorldView for DocumentView {
                 .unwrap_or(id);
             if let Some(renderer) = entity.record.get("MeshRenderer") {
                 let tint = renderer
-                    .get("tint")
+                    .get("color")
+                    .or_else(|| renderer.get("tint"))
                     .and_then(Value::as_array)
                     .filter(|a| a.len() == 4)
                     .map(|a| std::array::from_fn(|i| a[i].as_f64().unwrap_or(1.) as f32))
@@ -199,7 +201,10 @@ impl EditWorldView for DocumentView {
                     emissive_roughness: [0., 0., 0., 0.65],
                     ..Material::default()
                 });
-                let mesh_ref = renderer.get("mesh").and_then(Value::as_str);
+                let mesh_ref = renderer
+                    .get("model")
+                    .or_else(|| renderer.get("mesh"))
+                    .and_then(Value::as_str);
                 let mut mesh = if let Some(reference) = mesh_ref {
                     let reference =
                         ara_schema::grammar::parse_ref(reference).map_err(anyhow::Error::msg)?;
