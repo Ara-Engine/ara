@@ -1,0 +1,106 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -17.99624252393627,
+      "rmsDbfs": -32.24518522239907
+    },
+    {
+      "kind": "bus",
+      "name": "sfx",
+      "overloads": 0,
+      "peakDbfs": -17.99624252393627,
+      "rmsDbfs": -32.24518522239907
+    },
+    {
+      "kind": "aux",
+      "name": "room",
+      "overloads": 0,
+      "peakDbfs": -6.202698050966649,
+      "rmsDbfs": -22.380406202642963
+    }
+  ],
+  "channelRms": [0.08126641981796642, 0.07805962109158106],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "integratedLufs": -16.232289201207198,
+  "occlusion": [
+    {
+      "air": [0.9979984, 0.98311365, 0.83332855],
+      "blockers": [
+        {
+          "distance": 3.9,
+          "entity": "e_wallnorth",
+          "material": "concrete",
+          "transmission": [0.015, 0.002, 0.001]
+        }
+      ],
+      "emitter": "e_radio",
+      "occluded": true,
+      "portals": [
+        "west<->east"
+      ],
+      "reverbSend": 5.3915854,
+      "transmission": [0.6730561, 0.5939882, 0.5150817],
+      "visibility": 0,
+      "zone": "east"
+    },
+    {
+      "air": [0.9988007, 0.98985183, 0.8965511],
+      "emitter": "e_car",
+      "occluded": false,
+      "reverbSend": 6.5555553,
+      "transmission": [0, 0, 0],
+      "visibility": 1,
+      "zone": "west"
+    },
+    {
+      "air": [0.9995418, 0.9961124, 0.9591561],
+      "emitter": "e_drip",
+      "occluded": false,
+      "reverbSend": 2.3425577,
+      "transmission": [0, 0, 0],
+      "visibility": 1,
+      "zone": "west"
+    }
+  ],
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -21.97310562176761,
+  "samplePeak": 0.48735949397087097,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -44.728772839332024
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -38.342338027998785
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -32.28868076669216
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -27.05547553755234
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -24.457251053808427
+    }
+  ],
+  "truePeak": 0.4962867200374603,
+  "wavBlake3": "cd48c269b2c0a1fdd3981a8f51196980a42663d4a7056c5d8a8048bdf34ee81f"
+}

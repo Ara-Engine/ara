@@ -17,8 +17,9 @@ pub struct AcousticPath {
     /// Low/mid/high band transmission through occluders.
     #[ara(range(min = 0, max = 1))]
     pub transmission: [f32; 3],
-    /// Per-voice room reverb send amplitude into the bus's routed aux return.
-    #[ara(range(min = 0, max = 1))]
+    /// Per-voice room reverb send amplitude into the bus's routed aux return. Values above
+    /// one compensate distance attenuation so the diffuse reverberant level stays physical.
+    #[ara(range(min = 0, max = 16))]
     pub reverb_send: f32,
     /// Low/mid/high air absorption gain over the propagation distance; one is none.
     #[ara(default = [1, 1, 1], range(min = 0, max = 1))]
@@ -65,6 +66,10 @@ pub struct SpatialParameters {
     pub attenuation: f32,
     /// Doppler playback-rate multiplier, clamped to [0.25, 4].
     pub doppler: f32,
+    /// Source-listener distance in meters.
+    pub distance: f32,
+    /// Product of the source and listener cone gains (1 outside any cone effect).
+    pub cone: f32,
 }
 
 /// Computes equal-power panning, finite-range rolloff, both cones and Doppler.
@@ -135,20 +140,20 @@ pub fn evaluate(source: &AudioSource, listener: &AudioListener) -> Result<Spatia
             Attenuation::InverseSquare => (source.reference_distance / d).powi(2) * fade,
         }
     };
-    attenuation *= cone(
+    let cones = cone(
         normalize(source.forward)?,
         scale(direction, -1.0),
         source.cone_inner,
         source.cone_outer,
         source.cone_outer_gain,
-    );
-    attenuation *= cone(
+    ) * cone(
         forward,
         direction,
         listener.cone_inner,
         listener.cone_outer,
         listener.cone_outer_gain,
     );
+    attenuation *= cones;
     let speed = 343.0;
     let listener_toward = dot(listener.velocity, direction).clamp(-speed * 0.9, speed * 0.9);
     let source_away = dot(source.velocity, direction).clamp(-speed * 0.9, speed * 0.9);
@@ -164,6 +169,8 @@ pub fn evaluate(source: &AudioSource, listener: &AudioListener) -> Result<Spatia
         } else {
             1.0
         },
+        distance,
+        cone: if source.spatial { cones } else { 1.0 },
     })
 }
 

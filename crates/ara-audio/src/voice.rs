@@ -28,7 +28,9 @@ pub use clip::Clip;
 pub(crate) use input::Input;
 
 /// Prepared voice controls. All values must be finite; linear gain is in [0,16].
-#[derive(Debug, Clone, Copy, ara_schema::Schema, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, ara_schema::Schema, serde::Serialize, serde::Deserialize,
+)]
 #[ara(module = "audio")]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceParameters {
@@ -94,7 +96,12 @@ impl VoiceParameters {
                 .iter()
                 .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
             || !self.path.reverb_send.is_finite()
-            || !(0.0..=1.0).contains(&self.path.reverb_send)
+            || !(0.0..=16.0).contains(&self.path.reverb_send)
+            || self
+                .path
+                .air
+                .iter()
+                .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
         {
             return Err(AudioError::Invalid("voice parameters"));
         }
