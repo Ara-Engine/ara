@@ -1,0 +1,14 @@
+material CarPaint : surface budget 2 {
+  param paint : ColorLinear = linear(0.02, 0.06, 0.4);
+  static param coat : bool = true;
+  param roughness : float = 0.22;
+  custom coatCoverage(enabled: bool) -> float cost(alu: 2) doc "Enable or disable the clear coat layer." slang "return enabled ? 1.0 : 0.0;";
+  let clear : float = coatCoverage(coat);
+  let coatRoughness : float = 0.08;
+  let metal : float = 0.9;
+  output baseColor = paint;
+  output metallic = metal;
+  output roughness = roughness;
+  output clearCoat = clear;
+  output clearCoatRoughness = coatRoughness;
+}

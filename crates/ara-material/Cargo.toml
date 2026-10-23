@@ -1,0 +1,22 @@
+[package]
+name = "ara-material"
+description = "One typed material AST, text and graph authoring, and offline Slang cooking."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-graph = { path = "../ara-graph" }
+ara-json = { path = "../ara-json" }
+ara-ops = { path = "../ara-ops" }
+ara-schema = { path = "../ara-schema" }
+serde.workspace = true
+serde_json.workspace = true
+blake3 = "1.8"
+
+[lints]
+workspace = true

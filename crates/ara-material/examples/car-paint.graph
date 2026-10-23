@@ -1,0 +1,248 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_carpaint",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "surface",
+        "functions": {
+          "coatCoverage": {
+            "body": "return enabled ? 1.0 : 0.0;",
+            "cost": {
+              "alu": 2,
+              "branches": 0,
+              "textureSamples": 0
+            },
+            "doc": "Enable or disable the clear coat layer.",
+            "inputs": [
+              [
+                "enabled",
+                "bool"
+              ]
+            ],
+            "output": "float"
+          }
+        },
+        "name": "CarPaint",
+        "variantBudget": 2
+      }
+    },
+    "l_editor": {},
+    "n_clear": {
+      "kind": "material.custom",
+      "ports": {
+        "in0": {
+          "ty": "bool",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "function": "coatCoverage",
+        "name": "clear",
+        "order": 0,
+        "ty": "float"
+      }
+    },
+    "n_coat": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "bool",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": true,
+        "value": true
+      },
+      "payload": {
+        "name": "coat",
+        "order": 1,
+        "ty": "bool"
+      }
+    },
+    "n_coatr": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.08]
+      },
+      "payload": {
+        "name": "coatRoughness",
+        "order": 1,
+        "ty": "float"
+      }
+    },
+    "n_color": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": false,
+        "value": [0.02, 0.06, 0.4]
+      },
+      "payload": {
+        "name": "paint",
+        "order": 0,
+        "ty": "ColorLinear"
+      }
+    },
+    "n_metal": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.9]
+      },
+      "payload": {
+        "name": "metal",
+        "order": 2,
+        "ty": "float"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "baseColor": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "clearCoat": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "clearCoatRoughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "emissive": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "metallic": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "normal": {
+          "ty": "vec3",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "roughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "transmission": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "n_rough": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": false,
+        "value": [0.22]
+      },
+      "payload": {
+        "name": "roughness",
+        "order": 2,
+        "ty": "float"
+      }
+    },
+    "w_5b3b4fd1cf7ac8b8f333": {
+      "from": {
+        "node": "n_metal",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "metallic"
+      }
+    },
+    "w_5d540221540c76514165": {
+      "from": {
+        "node": "n_coatr",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "clearCoatRoughness"
+      }
+    },
+    "w_8f2efe80a1cf5d501b1a": {
+      "from": {
+        "node": "n_coat",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_clear",
+        "port": "in0"
+      }
+    },
+    "w_9671402b226db595804b": {
+      "from": {
+        "node": "n_rough",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "roughness"
+      }
+    },
+    "w_b7ab1c23f4603bb6e959": {
+      "from": {
+        "node": "n_color",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "baseColor"
+      }
+    },
+    "w_de1aadbc7fcaa36e73a9": {
+      "from": {
+        "node": "n_clear",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "clearCoat"
+      }
+    }
+  }
+}
