@@ -1,0 +1,17 @@
+{
+  "cachedFramesAtCommand": [64, 96, 0, 32, 64, 96, 0, 32],
+  "capacityFrames": 1056,
+  "commandQpc100ns": [5143725243968, 5143727735630, 5143730238615, 5143732738903, 5143735236127, 5143737747495, 5143740248789, 5143742745691],
+  "commandToFirstSubmitMs": [3.0508, 3.081, 3.04, 4.5865, 4.1012, 3.113, 3.0637, 3.045],
+  "device": "{0.0.0.00000000}.{74d7e156-bf79-4d0b-9bf8-0c55e731d69e}",
+  "driver": "IAudioClient3 RAW GameEffects",
+  "hardwareFrames": 480,
+  "latencyEstimate": {
+    "estimatedOutputMs": 20,
+    "queuedFrames": 480
+  },
+  "queuedFramesAtCommand": [480, 480, 480, 480, 480, 480, 480, 480],
+  "reportedLatencyMs": 0,
+  "submittedFrames": 144000
+}
+

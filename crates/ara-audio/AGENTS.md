@@ -24,7 +24,28 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
 - `AudioImporter`: pure local importer contract; adapt its envelope to ara-asset
   later. Opus music/dialogue; PCM/IMA ADPCM short SFX on every platform.
 - `capture_audio`: bounded offline WAV + canonical JSON, LUFS/peaks/spectrum,
-  silence, clipping, pre-limiter overloads and a WAV BLAKE3 hash.
+  silence, clipping, pre-limiter overloads and a WAV BLAKE3 hash. `Analysis::buses`
+  (per-bus/aux peak + RMS over the window) is filled by `capture_audio`;
+  `occlusion` (ara-acoustics) and `graphs` (ara-audio-graph) are attached by callers.
+
+## Audio v2 mechanisms (additive)
+
+- `add_aux(name, Box<dyn AuxEffect>)` + `route_aux(bus, aux)`: per-voice sends
+  (`AcousticPath::reverb_send`, up to 16 for distance compensation) summed into a fixed
+  atomic accumulator; the return runs on a send track after every bus in the same
+  quantum (zero latency). Sends follow the bus's effective gain, so mutes silence them.
+- `SignalSource` + `PreparedVoice::procedural`: synthesized voices (audio graphs);
+  blocks render with the voice's output frame for sample-accurate controls.
+- `set_voice_limit(bus, n)`: category limits (bus and descendants), priority then
+  audibility then age; `voice_state(id)` → `VoiceStatus` (playing, virtual by global
+  or bus limit, idle). `set_bus_gain`, `effective_gain`, `muted_ancestor`, `buses()`.
+- `set_loudness_target(bus, lufs)` + `loudness::{integrated, trim}`: installation-time
+  trim from clip/stream loudness (`Clip::measure_loudness`, importer v3 metadata,
+  `PreparedVoice::with_loudness`), capped at +12 dB and peak-safe.
+- `AcousticPath::air` and `band_gains`; `StereoPanner` uses `dsp::BandSplit` (SVF
+  800 Hz / 8 kHz) for occlusion/transmission/air, a vectorized multiply when clear.
+- `diagnose::{codes, Audibility}`: ARA3400–3410 with `property.set` fixes; the runtime
+  emits `Audibility::explain()` for `ara-audio-why`.
 
 ## Gates
 

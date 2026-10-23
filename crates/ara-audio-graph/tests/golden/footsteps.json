@@ -1,0 +1,156 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -4.4837702884043065,
+      "rmsDbfs": -18.121816444381203
+    }
+  ],
+  "channelRms": [0.1241392672148417, 0.1241392672148417],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "graphs": [
+    {
+      "graph": "Footsteps",
+      "instance": "footsteps",
+      "nodes": [
+        {
+          "activeBlocks": 9,
+          "blocks": 751,
+          "node": "concrete",
+          "op": "random.pick",
+          "peak": 0,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 9,
+          "blocks": 751,
+          "node": "grass",
+          "op": "random.pick",
+          "peak": 0,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 9,
+          "blocks": 751,
+          "node": "metal",
+          "op": "random.pick",
+          "peak": 0,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 9,
+          "blocks": 751,
+          "node": "clip",
+          "op": "switch",
+          "peak": 0,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "pitch",
+          "op": "random.range",
+          "peak": 1.0590116,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 693,
+          "blocks": 751,
+          "node": "player",
+          "op": "sample",
+          "peak": 0.76,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "level",
+          "op": "map",
+          "peak": 0.75,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "jitter",
+          "op": "random.range",
+          "peak": 0.98786914,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "gain",
+          "op": "mul",
+          "peak": 0.7409018,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 693,
+          "blocks": 751,
+          "node": "footfall",
+          "op": "mul",
+          "peak": 0.5630854,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "tone",
+          "op": "map",
+          "peak": 7250,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 693,
+          "blocks": 751,
+          "node": "shaped",
+          "op": "lowpass",
+          "peak": 0.5967762,
+          "triggers": 0
+        }
+      ]
+    }
+  ],
+  "integratedLufs": -15.404901357404752,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -18.121816451042395,
+  "samplePeak": 0.5967761874198914,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0.07878125,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -55.41389712814595
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -20.60455192717408
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -21.670110134404112
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -46.913288156256684
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -62.766600787717614
+    }
+  ],
+  "truePeak": 0.597510576248169,
+  "wavBlake3": "ee0552ae69025a08fee7b9c0cf201f175d50b011457188be3c902b9d3e1456ca"
+}

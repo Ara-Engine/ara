@@ -6,6 +6,8 @@ use std::sync::atomic::Ordering;
 impl Voice {
     // Unit-rate resident playback is a contiguous multiply, not 128 cubic resamplings.
     // Keep the four history samples identical so rate changes rejoin the general path.
+    // Gain ramps stay here: at fraction 0 the cubic resampler returns the sample exactly,
+    // so per-sample smoothed gains match the general path bit for bit.
     pub(super) fn resident_block(&mut self, out: &mut [Frame], dt: f64, target: f32) -> bool {
         let n = out.len();
         if n < 4
@@ -15,9 +17,8 @@ impl Voice {
             || self
                 .pending
                 .is_some_and(|c| c.at_frame() < self.time + n as u64)
-            || self.gain.remaining != 0
             || self.rate.remaining != 0
-            || self.virtual_gain.remaining != 0
+            || (target == 0.0 && self.virtual_gain.remaining != 0)
             || self.fraction != 0.0
             || self.rate.value as f64 * self.source_rate as f64 * dt != 1.0
         {
@@ -40,7 +41,11 @@ impl Voice {
             for (i, sample) in self.history.iter_mut().enumerate() {
                 *sample = clip.frames[(*cursor + clip.len() - (4 - i) % clip.len()) % clip.len()];
             }
+            for _ in 0..n {
+                self.gain.next();
+            }
             out.fill(Frame::ZERO);
+            self.send = 0.0;
             self.time += n as u64;
             self.shared.position.fetch_add(n as u64, Ordering::Relaxed);
             self.shared
@@ -48,7 +53,8 @@ impl Voice {
                 .store(self.gain.value.to_bits(), Ordering::Relaxed);
             return true;
         }
-        let gain = self.gain.value * self.virtual_gain.value;
+        let ramp = self.gain.remaining != 0 || self.virtual_gain.remaining != 0;
+        let gain = self.gain.value * self.virtual_gain.value * self.trim;
         let mut samples = [Frame::ZERO; QUANTUM];
         samples[..3].copy_from_slice(&self.history[1..]);
         let mut written = 3;
@@ -73,8 +79,14 @@ impl Voice {
         }
         if self.spatial {
             for (mono, sample) in self.mono.iter_mut().zip(&samples[..n]) {
+                let gain = if ramp {
+                    self.gain.next() * self.virtual_gain.next() * self.trim
+                } else {
+                    gain
+                };
                 *mono = (sample.left + sample.right) * 0.5 * gain;
             }
+            self.send_aux(n);
             self.spatializer.process(
                 &self.mono[..n],
                 out,
@@ -83,6 +95,11 @@ impl Voice {
             );
         } else {
             for (frame, sample) in out.iter_mut().zip(&samples[..n]) {
+                let gain = if ramp {
+                    self.gain.next() * self.virtual_gain.next() * self.trim
+                } else {
+                    gain
+                };
                 *frame = *sample * gain;
             }
         }

@@ -13,6 +13,7 @@ ecs = ["dep:bevy_ecs"]
 [dependencies]
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-schema = { path = "../ara-schema" }
+ara-diag = { path = "../ara-diag" }
 ara-json = { path = "../ara-json" }
 kira = { version = "0.12.5", default-features = false }
 sdl3-sys = { package = "ara-sdl3-src", path = "../ara-sdl3-src" }

@@ -1,0 +1,17 @@
+graph UiClick {
+  param pitch = 1 range(0.5, 2) "Per-widget pitch variation";
+  param position = 0 range(-1, 1) "Screen-space position of the widget, left to right";
+  let go = start();
+  let envelope = ad(go, 0.001, 0.035);
+  let freq = mul(pitch, 2400);
+  let tone = sine(freq);
+  let tick = noise.white(5);
+  let bright = highpass(tick, 3000, 0.7);
+  let body = mix(tone, bright);
+  let shaped = mul(body, envelope.out);
+  let level = gain(shaped, -6);
+  let stereo = pan(level, position);
+  output left = stereo.left;
+  output right = stereo.right;
+  output done = envelope.done;
+}
