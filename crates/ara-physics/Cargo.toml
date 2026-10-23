@@ -1,0 +1,17 @@
+[package]
+name = "ara-physics"
+description = "Ara physics schemas, deterministic tick contract and Bevy ECS integration."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-schema = { path = "../ara-schema" }
+ara-diag = { path = "../ara-diag" }
+bevy_ecs = "0.20"
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

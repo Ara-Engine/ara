@@ -10,6 +10,7 @@ renderer, file IO, clock, task pool or importer in the production library.
 - `document`: schema/kind registration, canonical documents and typed op edits.
 - `Skeleton::cook`, `CookedClip::cook`: validate off-thread; publish at a tick boundary.
 - `Pose`, `Sampler`: preallocate, then sample without allocation.
+- `Sampler::sample_prefix`: opt-in presentation bone LOD; excluded joints use bind.
 - `pose`: masked/additive blends, model/palette matrices, root deltas.
 - `ik`: analytic two-bone and look-at constraints.
 - `graph`, `Controller`, `Animator`: typed parameters, compiled blend trees,
@@ -33,6 +34,12 @@ Run the explicitly requested performance workload with
 - Clip tracks and skeleton joints share an explicit cooked skeleton signature.
 - Pose arrays are separate SIMD translation, quaternion and scale streams.
 - Clip data, graph programs and skeletons are immutable; all scratch is per actor.
+- Cache version 2 strips defaults, packs exact uniform times and selects component/
+  segment rates, with optional lossless integer prediction. Loading derives
+  four-track time-major packets, then frees cooker
+  arrays. `CookedClip::runtime_bytes` includes resident packets and encoded bytes.
+- Cursors reuse endpoints; clipped/prefix sampling and compatible clip switches
+  allocate nothing. Keep authoritatively consumed animation at the fixed tick rate.
 - No tick allocations, clones, locks, wall clocks or hidden task dispatch.
 - Root extraction uses SE(3) deltas across every loop, before root removal.
 - Events use (previous, current], including tick zero at a loop boundary; initial

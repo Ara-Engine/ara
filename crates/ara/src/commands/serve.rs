@@ -22,10 +22,12 @@ use ara_rpc::{Client, DaemonInfo, Handler, STDIO, ServeOptions, project_token};
 use serde_json::Value;
 
 /// The daemon's handler: Engine Protocol on sockets (and stdio for `serve
-/// --stdio`), MCP on `/mcp` (and on stdio for `ara mcp`).
+/// --stdio`), MCP on `/mcp` (and on stdio for `ara mcp`). The stdio client gets
+/// its own per-connection adapter (optional `session`); `/mcp` is stateless.
 struct Daemon {
     host: Host,
-    adapter: Adapter,
+    http_mcp: Adapter,
+    stdio_mcp: Adapter,
     mcp_on_stdio: bool,
 }
 
@@ -33,7 +35,7 @@ impl Handler for Daemon {
     fn message(&mut self, conn: ConnId, text: &str) -> Option<String> {
         if conn == STDIO && self.mcp_on_stdio {
             let reply = match serde_json::from_str::<Value>(text) {
-                Ok(msg) => self.adapter.handle(&mut self.host, msg),
+                Ok(msg) => self.stdio_mcp.handle(&mut self.host, msg),
                 Err(_) => ara_proto::Incoming::parse(text).err(),
             };
             return reply.map(|r| r.to_string());
@@ -49,7 +51,10 @@ impl Handler for Daemon {
             return HttpResponse::empty(405);
         }
         let header = |name: &str| req.header(name).map(str::to_owned);
-        match self.adapter.handle_http(&mut self.host, &header, &req.body) {
+        match self
+            .http_mcp
+            .handle_http(&mut self.host, &header, &req.body)
+        {
             (status, Some(body)) => HttpResponse::json(status, &body),
             (status, None) => HttpResponse::empty(status),
         }
@@ -117,7 +122,8 @@ fn run_daemon(
     }
     let mut daemon = Daemon {
         host,
-        adapter: Adapter::new(),
+        http_mcp: Adapter::new(),
+        stdio_mcp: Adapter::per_connection(),
         mcp_on_stdio,
     };
     let opts = ServeOptions {

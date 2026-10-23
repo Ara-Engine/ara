@@ -1,0 +1,38 @@
+{
+  "settings": {
+    "translation_m": 0.0001,
+    "rotation_rad": 0.0005,
+    "scale": 0.0001,
+    "scalar": 0.0001
+  },
+  "clips": [
+    {
+      "multiplier": 1,
+      "source_bytes": 143796,
+      "cooked_bytes": 12051,
+      "runtime_bytes": 45059,
+      "translation_error_m": 7.86921e-05,
+      "rotation_error_rad": 1.8380497e-05,
+      "scale_error": 0.0,
+      "curve_error": 0.0,
+      "translation_bound_m": 7.8754434e-05,
+      "rotation_bound_rad": 0.00033419707,
+      "scale_bound": 0.0,
+      "curve_bound": 6.1519444e-05
+    },
+    {
+      "multiplier": 2,
+      "source_bytes": 143796,
+      "cooked_bytes": 13025,
+      "runtime_bytes": 47100,
+      "translation_error_m": 7.838849e-05,
+      "rotation_error_rad": 1.896627e-05,
+      "scale_error": 0.0,
+      "curve_error": 0.0,
+      "translation_bound_m": 7.8459954e-05,
+      "rotation_bound_rad": 0.00034852023,
+      "scale_bound": 0.0,
+      "curve_bound": 6.1519444e-05
+    }
+  ]
+}

@@ -19,6 +19,27 @@ pub struct SimContext {
 }
 
 impl SimContext {
+    pub(crate) fn persistent_cursor(&self) -> crate::PersistentCursor {
+        crate::PersistentCursor {
+            tick: self.tick,
+            dt: self.dt,
+            seed: self.seed,
+            streams: self.streams.clone(),
+            next_identity: self.next_identity,
+        }
+    }
+
+    pub(crate) fn from_persistent(cursor: &crate::PersistentCursor) -> Self {
+        Self {
+            tick: cursor.tick,
+            dt: cursor.dt,
+            seed: cursor.seed,
+            streams: cursor.streams.clone(),
+            next_identity: cursor.next_identity,
+            inputs: InputState::default(),
+        }
+    }
+
     /// Current fixed simulation tick, beginning at zero.
     pub fn tick(&self) -> u64 {
         self.tick

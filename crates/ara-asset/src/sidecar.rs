@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 #[ara(record(prefix = "i"), module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ImportSettings {
+    /// Final shipping quality; the editor may show a fast generation first.
+    pub preset: crate::CookPreset,
     /// Stable worker importer ID.
     pub importer: String,
     /// Exact importer version, including encoder implementation versions.
@@ -20,6 +22,7 @@ pub struct ImportSettings {
 impl Default for ImportSettings {
     fn default() -> Self {
         Self {
+            preset: crate::CookPreset::default(),
             importer: String::new(),
             version: String::new(),
             settings: serde_json::Value::Null,
@@ -29,6 +32,7 @@ impl Default for ImportSettings {
 }
 /// Registers the import document kind and reflected settings in the kernel DB.
 pub fn register_schema(db: &mut SchemaDb) {
+    db.register::<crate::CookPreset>();
     db.register::<ImportSettings>();
     let _ = db.add_kind(DocKindDesc {
         name: "import".into(),
@@ -114,6 +118,8 @@ pub enum SidecarCommand {
     Initialize(ImportSettings),
     /// Replace only importer-specific settings; inverse restores prior settings.
     Settings(serde_json::Value),
+    /// Change final shipping quality; this op is undoable like other settings.
+    Preset(crate::CookPreset),
     /// Replace declared asset dependencies.
     Dependencies(Vec<AssetRef>),
 }
@@ -137,6 +143,12 @@ impl SidecarCommand {
                 id,
                 path: FieldPath::field("settings"),
                 value: Some(settings),
+            },
+            Self::Preset(preset) => Edit::Set {
+                doc,
+                id,
+                path: FieldPath::field("preset"),
+                value: Some(serde_json::to_value(preset)?),
             },
             Self::Dependencies(deps) => Edit::Set {
                 doc,

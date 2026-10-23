@@ -1,0 +1,38 @@
+[package]
+name = "ara-script"
+description = "The C# host: the generated Rust<->C# ABI, C# bindings from the Schema DB, C# systems/behaviours/commands on bevy_ecs, hot reload and the ara_run worker."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Dependencies are declared here (not in the workspace table) while the root
+# Cargo.toml is owned by another task; move them to `workspace = true` later.
+[dependencies]
+ara-components.workspace = true
+ara-diag.workspace = true
+ara-schema.workspace = true
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded", "async_executor"] }
+bevy_tasks = { version = "0.20", features = ["multi_threaded"] }
+libloading = "0.8"
+# No `nethost`: `clr::find_hostfxr` locates hostfxr, so nothing is linked or downloaded at build time.
+netcorehost = { version = "0.22", default-features = false, features = ["net10_0", "utils"] }
+nonmax = { version = "0.5", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

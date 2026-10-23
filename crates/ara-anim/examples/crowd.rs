@@ -5,6 +5,7 @@ use ara_anim::{glam::Mat4, graph::ParameterValue, *};
 use rayon::prelude::*;
 use std::{hint::black_box, time::Instant};
 
+#[repr(align(64))]
 struct Actor {
     animator: Animator,
     model: Vec<Mat4>,
@@ -35,12 +36,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.parse())
         .transpose()?
         .unwrap_or(200);
-    if frames == 0 {
+    let workers = std::env::args()
+        .nth(2)
+        .map(|s| s.parse::<usize>())
+        .transpose()?;
+    let chunk = std::env::args()
+        .nth(3)
+        .map(|s| s.parse::<usize>())
+        .transpose()?
+        .unwrap_or(16);
+    if frames == 0 || chunk == 0 || workers == Some(0) {
         return Err("benchmark requires at least one measured frame".into());
     }
     let s = common::skeleton(65);
     let raw = common::clip(&s, 1.0);
-    let (_, report) = CookedClip::cook(&raw, &s, CompressionSettings::default())?;
+    let (clip, report) = CookedClip::cook(&raw, &s, CompressionSettings::default())?;
+    println!("runtime clip bytes {}", clip.runtime_bytes());
     println!(
         "compression {report:?}; ratio {:.3}x",
         report.source_bytes as f64 / report.cooked_bytes as f64
@@ -81,7 +92,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     println!("mode,threads,characters,bones,p50_ms,p95_ms");
     for palette in [false, true] {
-        for threads in [1, 2, 8] {
+        for threads in [1, 2, 8, 16]
+            .into_iter()
+            .filter(|t| workers.is_none_or(|w| w == *t))
+        {
             let mut actors = make()?;
             let pool = rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
@@ -95,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 } else {
                     pool.install(|| {
-                        actors.par_chunks_mut(32).for_each(|chunk| {
+                        actors.par_chunks_mut(chunk).for_each(|chunk| {
                             for actor in chunk {
                                 frame(actor, &c, &s, palette);
                             }

@@ -5,11 +5,14 @@ mod fbx;
 mod gltf;
 mod mesh;
 mod texture;
+mod texture_codec;
 
 pub use fbx::FbxImporter;
 pub use gltf::GltfImporter;
 pub use mesh::{MeshSettings, Vertex, cook_mesh};
-pub use texture::{TextureImporter, TextureSettings, TextureUsage, cook_texture};
+pub use texture::{
+    TextureImporter, TextureSettings, TextureUsage, cook_texture, cook_texture_with_preset,
+};
 
 use ara_asset::{ImporterRegistry, Result};
 /// Builtin registry; other tracks add their importer before calling `serve_worker`.

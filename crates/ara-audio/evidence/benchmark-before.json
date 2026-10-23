@@ -1,0 +1,52 @@
+{
+  "measurements": [
+    {
+      "allocations": 0,
+      "deallocations": 0,
+      "maxMs": 3.2444,
+      "meanMs": 1.4714394531250001,
+      "p50Ms": 1.4199,
+      "p95Ms": 1.6341,
+      "quantumFrames": 128,
+      "realVoices": 1000,
+      "sampleRate": 48000,
+      "samples": 256,
+      "spatializer": "equal-power stereo",
+      "voices": 1000
+    },
+    {
+      "allocations": 0,
+      "deallocations": 0,
+      "maxMs": 13.0061,
+      "meanMs": 8.945884765624998,
+      "p50Ms": 8.695599999999999,
+      "p95Ms": 11.2608,
+      "quantumFrames": 128,
+      "realVoices": 1000,
+      "sampleRate": 48000,
+      "samples": 256,
+      "spatializer": "Steam Audio bilinear HRTF + direct effect",
+      "voices": 1000
+    },
+    {
+      "allocations": 0,
+      "deallocations": 0,
+      "maxMs": 2.8558,
+      "meanMs": 1.9156632812499996,
+      "p50Ms": 1.9184,
+      "p95Ms": 2.1129000000000002,
+      "quantumFrames": 128,
+      "realVoices": 128,
+      "sampleRate": 48000,
+      "samples": 256,
+      "spatializer": "Steam Audio bilinear HRTF + direct effect",
+      "voices": 1000
+    }
+  ],
+  "preparedFirstRenderAndStop": {
+    "allocations": 0,
+    "deallocations": 0,
+    "quanta": 32,
+    "steamHrtf": true
+  }
+}

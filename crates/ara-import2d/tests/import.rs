@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use ara_asset::{
-    Cancellation, ImportContext, ImportInput, JobEvent, ProcessWorker, TargetPlatform,
+    Cancellation, CookPreset, DEFAULT_THREAD_BUDGET, ImportContext, ImportInput, JobEvent,
+    ProcessWorker, TargetPlatform,
 };
 use std::collections::BTreeMap;
 fn input() -> ImportInput {
@@ -10,6 +11,8 @@ fn input() -> ImportInput {
     let mut png = std::io::Cursor::new(Vec::new());
     image.write_to(&mut png, image::ImageFormat::Png).unwrap();
     ImportInput {
+        preset: CookPreset::default(),
+        thread_budget: DEFAULT_THREAD_BUDGET,
         source_path: "sprite.png".into(),
         source: png.into_inner(),
         importer: "ara.atlas2d".into(),
@@ -27,6 +30,7 @@ fn pure_pack_extrudes_edges_rejects_bad_crops_and_honors_cancellation() {
     let token = Cancellation::default();
     let mut progress = |_| {};
     let mut ctx = ImportContext {
+        metrics: None,
         cancellation: &token,
         progress: &mut progress,
     };
@@ -68,6 +72,7 @@ fn real_worker_matches_pure_output_and_cache_action_identity() {
         .import(
             &input,
             &mut ImportContext {
+                metrics: None,
                 cancellation: &token,
                 progress: &mut progress,
             },

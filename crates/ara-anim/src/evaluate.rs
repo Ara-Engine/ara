@@ -169,30 +169,36 @@ impl Animator {
                 NodeKind::Blend1d | NodeKind::Directional2d => {
                     let w = weights(node, &self.state.parameters);
                     let first = (0..w.len).find(|i| w.values[*i] > 0.0).unwrap_or(0);
-                    for bone in 0..c.joints {
-                        let reference = inputs[w.indices[first]].pose.rotations[bone];
-                        let mut translation = Vec3A::ZERO;
-                        let mut rotation = Vec4::ZERO;
-                        let mut scale = Vec3A::ZERO;
-                        for j in 0..w.len {
-                            if w.values[j] == 0.0 {
-                                continue;
+                    if w.len == 2 {
+                        out.pose.copy_from(&inputs[w.indices[0]].pose)?;
+                        out.pose
+                            .blend(&inputs[w.indices[1]].pose, w.values[1], None)?;
+                    } else {
+                        for bone in 0..c.joints {
+                            let reference = inputs[w.indices[first]].pose.rotations[bone];
+                            let mut translation = Vec3A::ZERO;
+                            let mut rotation = Vec4::ZERO;
+                            let mut scale = Vec3A::ZERO;
+                            for j in 0..w.len {
+                                if w.values[j] == 0.0 {
+                                    continue;
+                                }
+                                let p = &inputs[w.indices[j]].pose;
+                                translation += p.translations[bone] * w.values[j];
+                                let q = p.rotations[bone];
+                                rotation += Vec4::from_array(q.to_array())
+                                    * if q.dot(reference) < 0.0 {
+                                        -w.values[j]
+                                    } else {
+                                        w.values[j]
+                                    };
+                                scale += p.scales[bone] * w.values[j];
                             }
-                            let p = &inputs[w.indices[j]].pose;
-                            translation += p.translations[bone] * w.values[j];
-                            let q = p.rotations[bone];
-                            rotation += Vec4::from_array(q.to_array())
-                                * if q.dot(reference) < 0.0 {
-                                    -w.values[j]
-                                } else {
-                                    w.values[j]
-                                };
-                            scale += p.scales[bone] * w.values[j];
+                            out.pose.translations[bone] = translation;
+                            out.pose.rotations[bone] =
+                                Quat::from_array(rotation.normalize().to_array());
+                            out.pose.scales[bone] = scale;
                         }
-                        out.pose.translations[bone] = translation;
-                        out.pose.rotations[bone] =
-                            Quat::from_array(rotation.normalize().to_array());
-                        out.pose.scales[bone] = scale;
                     }
                     let mut translation = glam::Vec3::ZERO;
                     let mut rotation = Vec4::ZERO;
@@ -338,8 +344,7 @@ fn root_for(
             (time % d) as f64 * f64::from(clip.duration) / f64::from(state.duration),
         )
     };
-    let start = clip.root_at(skeleton, 0.0);
-    let cycle = RootMotion::between(start, clip.root_at(skeleton, f64::from(clip.duration)));
+    let (start, cycle) = clip.root_cache;
     let a = RootMotion::between(start, at(previous));
     let b = RootMotion::between(start, at(current));
     a.inverse()

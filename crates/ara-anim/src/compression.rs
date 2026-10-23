@@ -73,24 +73,19 @@ pub(crate) struct PackedCurve {
 /// An immutable, checked, bit-packed clip. Decode only with `from_bytes`.
 #[derive(Debug)]
 pub struct CookedClip {
+    pub(crate) root_cache: (crate::RootMotion, crate::RootMotion),
+    pub(crate) plan: crate::sampling_plan::SamplingPlan,
     pub(crate) duration: u32,
     pub(crate) frequency: u32,
     pub(crate) skeleton: u64,
-    pub(crate) tracks: Vec<Track>,
+    pub(crate) joints: usize,
+    pub(crate) root_track: Track,
+    encoded: Vec<u8>,
     pub(crate) curves: Vec<PackedCurve>,
     pub(crate) notifies: Vec<Notify>,
     pub(crate) signature: u64,
 }
-#[derive(Serialize)]
-struct BlobRef<'a> {
-    duration: u32,
-    frequency: u32,
-    skeleton: u64,
-    tracks: &'a [Track],
-    curves: &'a [PackedCurve],
-    notifies: &'a [Notify],
-}
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Blob {
     duration: u32,
     frequency: u32,
@@ -123,7 +118,7 @@ impl CookedClip {
         )?;
         let mut report = CompressionReport::default();
         let mut tracks = Vec::with_capacity(skeleton.len());
-        for raw in &data.tracks {
+        for (joint, raw) in data.tracks.iter().enumerate() {
             let translation = pack(
                 raw.translations
                     .iter()
@@ -148,7 +143,7 @@ impl CookedClip {
             let mut previous = Quat::IDENTITY;
             let mut near_half_turn = false;
             for (i, key) in raw.rotations.iter().enumerate() {
-                let mut q = Quat::from_array(key.value);
+                let mut q = Quat::from_array(key.value).normalize();
                 if i != 0 {
                     near_half_turn |= previous.dot(q).abs() < 0.001;
                     if previous.dot(q) < 0.0 {
@@ -193,11 +188,38 @@ impl CookedClip {
                 &mut report.scale_bound,
                 &mut report.source_bytes,
             )?;
-            tracks.push(Track {
+            let mut track = Track {
                 translation,
                 rotation,
                 scale,
-            });
+            };
+            let bind = skeleton.bind.joint(joint).expect("source tracks match rig");
+            let defaults = [
+                [
+                    bind.translation.x,
+                    bind.translation.y,
+                    bind.translation.z,
+                    0.0,
+                ],
+                bind.rotation.to_array(),
+                [bind.scale.x, bind.scale.y, bind.scale.z, 0.0],
+            ];
+            for (channel, value) in [
+                &mut track.translation,
+                &mut track.rotation,
+                &mut track.scale,
+            ]
+            .into_iter()
+            .zip(defaults)
+            {
+                if channel
+                    .as_ref()
+                    .is_some_and(|t| t.times.len() == 1 && t.decode(0) == value)
+                {
+                    *channel = None;
+                }
+            }
+            tracks.push(track);
         }
         let mut properties = BTreeSet::new();
         let mut curves = Vec::new();
@@ -227,19 +249,21 @@ impl CookedClip {
                 track,
             });
         }
-        let mut result = Self {
+        let blob = Blob {
             duration: data.duration,
             frequency: data.ticks_per_second,
             skeleton: skeleton.signature(),
             tracks,
             curves,
             notifies: data.notifies.clone(),
-            signature: 0,
         };
-        result.validate(skeleton)?;
-        let bytes = result.to_bytes()?;
-        result.signature = signature(&bytes);
+        Self::validate(&blob, skeleton)?;
+        let mut bytes = b"ARAANM\x02\0".to_vec();
+        bytes.extend(postcard::to_allocvec(&blob).map_err(|e| Error(e.to_string()))?);
+        ensure(bytes.len() <= 64 * 1024 * 1024, "oversized animation cache")?;
         report.cooked_bytes = bytes.len();
+        let result = Self::from_blob(blob, bytes, skeleton);
+        crate::measure::runtime(data, &result, skeleton, &mut report)?;
         ensure(
             report.translation_error <= settings.translation
                 && report.rotation_error <= settings.rotation
@@ -256,56 +280,57 @@ impl CookedClip {
         )?;
         Ok((result, report))
     }
-    /// Encodes cache format version 1; never used as an authoring document.
+    /// Encodes cache format version 2; never used as an authoring document.
     pub fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut bytes = b"ARAANM\x01\0".to_vec();
-        let blob = BlobRef {
-            duration: self.duration,
-            frequency: self.frequency,
-            skeleton: self.skeleton,
-            tracks: &self.tracks,
-            curves: &self.curves,
-            notifies: &self.notifies,
-        };
-        bytes.extend(postcard::to_allocvec(&blob).map_err(|e| Error(e.to_string()))?);
-        Ok(bytes)
+        Ok(self.encoded.to_vec())
     }
     /// Decodes and checks all packed metadata before any hot-path access.
     pub fn from_bytes(bytes: &[u8], skeleton: &Skeleton) -> Result<Self, Error> {
         ensure(
-            bytes.starts_with(b"ARAANM\x01\0") && bytes.len() <= 64 * 1024 * 1024,
+            bytes.starts_with(b"ARAANM\x02\0") && bytes.len() <= 64 * 1024 * 1024,
             "unsupported or oversized animation cache",
         )?;
         let (blob, trailing): (Blob, _) =
             postcard::take_from_bytes(&bytes[8..]).map_err(|e| Error(e.to_string()))?;
         ensure(trailing.is_empty(), "trailing animation cache data")?;
+        Self::validate(&blob, skeleton)?;
+        Ok(Self::from_blob(blob, bytes.to_vec(), skeleton))
+    }
+    /// Builds derived packets, then releases the track-major cooker representation.
+    fn from_blob(mut blob: Blob, encoded: Vec<u8>, skeleton: &Skeleton) -> Self {
+        let plan = crate::sampling_plan::SamplingPlan::new(&blob.tracks, skeleton);
+        let joints = blob.tracks.len();
+        let root_track = blob.tracks.swap_remove(skeleton.data.motion_root as usize);
         let mut clip = Self {
+            root_cache: Default::default(),
+            plan,
             duration: blob.duration,
             frequency: blob.frequency,
             skeleton: blob.skeleton,
-            tracks: blob.tracks,
+            joints,
+            root_track,
+            signature: signature(&encoded),
+            encoded,
             curves: blob.curves,
             notifies: blob.notifies,
-            signature: 0,
         };
-        clip.validate(skeleton)?;
-        clip.signature = signature(bytes);
-        Ok(clip)
+        clip.prepare_root(skeleton);
+        clip
     }
-    fn validate(&self, skeleton: &Skeleton) -> Result<(), Error> {
+    fn validate(blob: &Blob, skeleton: &Skeleton) -> Result<(), Error> {
         ensure(
-            self.duration > 0
-                && self.frequency > 0
-                && self.skeleton == skeleton.signature()
-                && self.tracks.len() == skeleton.len(),
+            blob.duration > 0
+                && blob.frequency > 0
+                && blob.skeleton == skeleton.signature()
+                && blob.tracks.len() == skeleton.len(),
             "cooked clip skeleton or timing mismatch",
         )?;
-        for track in &self.tracks {
+        for track in &blob.tracks {
             if let Some(t) = &track.translation {
-                t.validate(self.duration, 3)?;
+                t.validate(blob.duration, 3)?;
             }
             if let Some(t) = &track.rotation {
-                t.validate(self.duration, 4)?;
+                t.validate(blob.duration, 4)?;
                 for i in 0..t.times.len() {
                     ensure(
                         (0.99..=1.01).contains(&Quat::from_array(t.decode(i)).length_squared()),
@@ -314,7 +339,7 @@ impl CookedClip {
                 }
             }
             if let Some(t) = &track.scale {
-                t.validate(self.duration, 3)?;
+                t.validate(blob.duration, 3)?;
                 for i in 0..t.times.len() {
                     ensure(
                         t.decode(i)[..3].iter().all(|v| *v > 0.0),
@@ -324,22 +349,29 @@ impl CookedClip {
             }
         }
         let mut properties = BTreeSet::new();
-        for curve in &self.curves {
+        for curve in &blob.curves {
             ensure(
                 curve.property.parse::<FieldPath>().is_ok() && properties.insert(&curve.property),
                 "invalid cooked property path",
             )?;
-            curve.track.validate(self.duration, 1)?;
+            curve.track.validate(blob.duration, 1)?;
         }
         let mut ids = BTreeSet::new();
         ensure(
-            self.notifies.windows(2).all(|w| w[0].tick <= w[1].tick)
-                && self
+            blob.notifies.windows(2).all(|w| w[0].tick <= w[1].tick)
+                && blob
                     .notifies
                     .iter()
-                    .all(|n| n.tick < self.duration && !n.id.is_empty() && ids.insert(&n.id)),
+                    .all(|n| n.tick < blob.duration && !n.id.is_empty() && ids.insert(&n.id)),
             "invalid or duplicate clip notifies",
         )
+    }
+    fn prepare_root(&mut self, skeleton: &Skeleton) {
+        let start = self.root_at(skeleton, 0.0);
+        self.root_cache = (
+            start,
+            crate::RootMotion::between(start, self.root_at(skeleton, f64::from(self.duration))),
+        );
     }
     /// Clip duration in integer ticks.
     pub fn duration(&self) -> u32 {
@@ -360,6 +392,37 @@ impl CookedClip {
     /// Immutable clip notifies in delivery order.
     pub fn notifies(&self) -> &[Notify] {
         &self.notifies
+    }
+    /// Owned runtime storage, including packet caches and metadata, excluding
+    /// allocator bookkeeping and the shared skeleton. No float key expansion.
+    pub fn runtime_bytes(&self) -> usize {
+        let tracks = [
+            &self.root_track.translation,
+            &self.root_track.rotation,
+            &self.root_track.scale,
+        ]
+        .into_iter()
+        .flatten()
+        .map(Packed::storage_bytes)
+        .sum::<usize>();
+        let curves = self
+            .curves
+            .iter()
+            .map(|c| c.property.capacity() + c.track.storage_bytes())
+            .sum::<usize>();
+        let notifies = self
+            .notifies
+            .iter()
+            .map(|n| n.id.capacity() + n.name.capacity() + n.payload.capacity())
+            .sum::<usize>();
+        std::mem::size_of::<Self>()
+            + self.encoded.capacity()
+            + self.curves.capacity() * std::mem::size_of::<PackedCurve>()
+            + self.notifies.capacity() * std::mem::size_of::<Notify>()
+            + tracks
+            + curves
+            + notifies
+            + self.plan.storage_bytes()
     }
 }
 
@@ -385,7 +448,13 @@ fn pack(
         "keys must be finite, ordered and within clip duration",
     )?;
     *source_bytes += keys.len() * (4 + usize::from(dimensions) * 4);
-    let track = Packed::cook(keys.clone(), dimensions, interpolation, budget);
+    let track = Packed::cook(
+        keys.clone(),
+        dimensions,
+        interpolation,
+        budget,
+        rotation && budget > f32::MIN_POSITIVE,
+    );
     let e = track.bound();
     // For unit quaternions, nlerp's denominator is >= 1/sqrt(2). Endpoint
     // perturbation and final normalization give a conservative angular bound.

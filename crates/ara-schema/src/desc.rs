@@ -66,6 +66,9 @@ pub enum StructRole {
     Params,
     /// A plain value nested inside other types.
     Value,
+    /// A world singleton (a simulation resource such as game rules), not attached to
+    /// entities.
+    Resource,
 }
 
 /// Extra data for record types.
@@ -129,6 +132,7 @@ impl TypeDesc {
                 StructRole::Record(_) => "record",
                 StructRole::Params => "params",
                 StructRole::Value => "struct",
+                StructRole::Resource => "resource",
             },
         }
     }

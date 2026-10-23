@@ -102,6 +102,8 @@ fn cook_atlas(
 ) -> Result<AtlasImage> {
     use ara_asset::{CacheBackend, FileCache, JobEvent, ProcessWorker};
     let input = ara_asset::ImportInput {
+        preset: ara_asset::CookPreset::default(),
+        thread_budget: ara_asset::DEFAULT_THREAD_BUDGET,
         source_path: source.into(),
         source: std::fs::read(root.join("sample").join(source))?,
         importer: "ara.atlas2d".into(),

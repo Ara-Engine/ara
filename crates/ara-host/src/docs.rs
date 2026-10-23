@@ -131,6 +131,7 @@ fn kind_label(t: &TypeDesc) -> &'static str {
         Some(StructRole::Record(_)) => "Record type",
         Some(StructRole::Params) => "Params",
         Some(StructRole::Value) => "Value struct",
+        Some(StructRole::Resource) => "Resource",
         None => "Enum",
     }
 }

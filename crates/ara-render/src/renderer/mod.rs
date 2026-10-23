@@ -96,6 +96,11 @@ impl Renderer {
     pub fn gpu(&self) -> &VulkanDevice {
         &self.gpu
     }
+    /// Borrow the device between completed frames to record independent graph extensions.
+    /// Extensions own their targets and must preserve this renderer's resource states.
+    pub fn gpu_mut(&mut self) -> &mut VulkanDevice {
+        &mut self.gpu
+    }
     /// Upload an extraction snapshot and prewarm its complete cooked pipeline set.
     /// Shader cooking must have happened offline, before this call.
     pub fn new(
