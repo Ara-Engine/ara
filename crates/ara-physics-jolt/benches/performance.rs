@@ -10,7 +10,7 @@ use support::*;
 
 type BenchResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn persist(records: &[serde_json::Value], complete: bool) -> BenchResult<String> {
-    let result = serde_json::json!({"schemaVersion":1,"complete":complete,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"instrumented":cfg!(feature="profile"),"records":records});
+    let result = serde_json::json!({"schemaVersion":2,"runId":std::env::var("ARA_PHYSICS_BENCH_RUN_ID").ok(),"complete":complete,"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"instrumented":cfg!(feature="profile"),"records":records});
     let text = ara_json::to_canonical_string(&ara_json::sort_keys(&result));
     if let Some(path) = std::env::var_os("ARA_PHYSICS_BENCH_OUTPUT") {
         std::fs::write(path, &text)?;
@@ -226,17 +226,36 @@ where
 fn main() -> BenchResult<()> {
     if let Some(dir) = std::env::var_os("ARA_PHYSICS_BENCH_AGGREGATE_DIR") {
         let mut cases = serde_json::Map::new();
-        for entry in std::fs::read_dir(dir)? {
-            let path = entry?.path();
-            if path.extension().is_some_and(|s| s == "json") {
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .ok_or("invalid result filename")?;
-                cases.insert(name.into(), serde_json::from_slice(&std::fs::read(&path)?)?);
+        let run_id = std::env::var("ARA_PHYSICS_BENCH_RUN_ID")?;
+        let manifest = std::env::var("ARA_PHYSICS_BENCH_CASES")?;
+        let names = manifest.split(',').collect::<Vec<_>>();
+        if names.is_empty() {
+            return Err("empty case manifest".into());
+        }
+        for &name in &names {
+            if name.is_empty()
+                || !name
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+            {
+                return Err("invalid case manifest name".into());
+            }
+            let path = std::path::Path::new(&dir).join(format!("{name}.json"));
+            let value: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+            if value.get("complete").is_some_and(|v| v != true) {
+                return Err(format!("incomplete case: {name}").into());
+            }
+            // Retained historical binaries predate run IDs; their fresh launches
+            // are linked by the explicit manifest and provenance receipts.
+            if value.get("runId").is_some_and(|v| v != &run_id) {
+                return Err(format!("case belongs to a different run: {name}").into());
+            }
+            if cases.insert(name.into(), value).is_some() {
+                return Err("duplicate case name".into());
             }
         }
-        let result = serde_json::json!({"schemaVersion":1,"cases":cases});
+        let result =
+            serde_json::json!({"schemaVersion":2,"runId":run_id,"caseNames":names,"cases":cases});
         let output =
             std::env::var_os("ARA_PHYSICS_BENCH_OUTPUT").ok_or("aggregate output required")?;
         std::fs::write(

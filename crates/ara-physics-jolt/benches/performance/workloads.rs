@@ -197,11 +197,14 @@ fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
     let start = Instant::now();
     prepare_ecs::<JoltBackend>(&mut world)?;
     let setup_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let mut phases: [Vec<f64>; 5] = std::array::from_fn(|_| Vec::with_capacity(steps));
+    let mut phases: [Vec<f64>; 6] = std::array::from_fn(|_| Vec::with_capacity(steps));
     let mut total = Vec::with_capacity(steps);
     for _ in 0..steps {
         let start = Instant::now();
         tick_ecs::<JoltBackend>(&mut world)?;
+        let maintenance = Instant::now();
+        world.clear_trackers();
+        phases[5].push(maintenance.elapsed().as_secs_f64() * 1000.0);
         total.push(start.elapsed().as_secs_f64() * 1000.0);
         let t = world.resource::<PhysicsTimings>();
         for (times, value) in phases.iter_mut().zip([
@@ -215,6 +218,6 @@ fn ecs(threads: u32, steps: usize) -> BenchResult<serde_json::Value> {
         }
     }
     Ok(
-        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"setupMs":setup_ms,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>(),"loadBefore":load_before,"loadAfter":load()}),
+        serde_json::json!({"scenario":"ecs_flat_grid","bodies":20000,"threads":threads,"steps":steps,"setupMs":setup_ms,"totalIncludesTrackerMaintenance":true,"totalMs":distribution(&mut total),"phaseOrder":["lifecycle","inputs","step","extraction","writeback","tracker_maintenance"],"phaseMs":phases.iter_mut().map(|p|distribution(p)).collect::<Vec<_>>(),"loadBefore":load_before,"loadAfter":load()}),
     )
 }

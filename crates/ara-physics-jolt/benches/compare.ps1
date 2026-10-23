@@ -1,6 +1,8 @@
-param([Parameter(Mandatory)][string]$BaselineBinary, [string]$PreviousEcsBinary, [int]$Steps = 600)
+param([Parameter(Mandatory)][string]$BaselineBinary, [string]$PreviousEcsBinary, [switch]$IncludeMatrix, [int]$Steps = 600)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+. (Join-Path $PSScriptRoot 'artifacts.ps1')
+Clear-AggregationMode
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo 'target' }
 $bins = Join-Path $target 'physics-bench'
 $results = Join-Path $PSScriptRoot 'results'
@@ -10,19 +12,9 @@ $env:ARA_PHYSICS_BENCH_STEPS = "$Steps"
 $env:ARA_PHYSICS_BENCH_PRESET = 'game_default'
 $env:ARA_PHYSICS_BENCH_ROUNDS = '0'
 $env:ARA_PHYSICS_BENCH_EXTRAS = '1'
-$provenance = [ordered]@{ steps = $Steps; order = 'ABBA'; runs = @() }
-function Host-Load {
-    $cpu = Get-CimInstance Win32_Processor
-    $os = Get-CimInstance Win32_OperatingSystem
-    return [ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); cpuPercent = $cpu.LoadPercentage; freeMemoryKiB = $os.FreePhysicalMemory; processCount = (Get-Process).Count }
-}
+$run = New-BenchmarkRun $repo $results -IncludeMatrix:$IncludeMatrix
 function Measure-Binary([string]$Binary, [string]$Name) {
-    $binaryPath = (Resolve-Path -LiteralPath $Binary).Path
-    $before = Host-Load
-    $env:ARA_PHYSICS_BENCH_OUTPUT = Join-Path $results "$Name.json"
-    $process = Start-Process -FilePath $binaryPath -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput (Join-Path $results "$Name.log") -RedirectStandardError (Join-Path $results "$Name.stderr.log") -Wait -PassThru
-    if ($process.ExitCode -ne 0) { throw "Benchmark failed: $Name" }
-    $provenance.runs += [ordered]@{ name = $Name; binarySha256 = (Get-FileHash -LiteralPath $binaryPath -Algorithm SHA256).Hash; loadBefore = $before; loadAfter = (Host-Load) }
+    Invoke-Benchmark $run $repo $results $Binary $Name
 }
 # The retained baseline is the pre-pass S6 15/2, 64 MiB executable. It ignores
 # PRESET. The current executable uses game_default, retaining 15/2 with 256 MiB.
@@ -41,10 +33,4 @@ if ($PreviousEcsBinary) {
     Measure-Binary (Join-Path $bins 'deterministic.exe') 'ecs-after-b'
     Measure-Binary $PreviousEcsBinary 'ecs-before-b'
 }
-# Intermediate metadata is canonicalized by Ara's writer in the final aggregate.
-$metadata = $provenance | ConvertTo-Json -Depth 32
-[System.IO.File]::WriteAllText((Join-Path $results 'provenance.json'), $metadata, [System.Text.UTF8Encoding]::new($false))
-$env:ARA_PHYSICS_BENCH_AGGREGATE_DIR = $results
-$env:ARA_PHYSICS_BENCH_OUTPUT = Join-Path $PSScriptRoot 'RESULTS.json'
-& (Join-Path $bins 'deterministic.exe')
-if ($LASTEXITCODE -ne 0) { throw 'Result aggregation failed' }
+Publish-BenchmarkRun $run $bins $results 'provenance'

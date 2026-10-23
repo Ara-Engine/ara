@@ -2,6 +2,8 @@ param([switch]$BuildOnly, [switch]$RunOnly, [int]$Steps = 600, [int]$Rounds = 2)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 Set-Location $repo
+. (Join-Path $PSScriptRoot 'artifacts.ps1')
+Clear-AggregationMode
 $env:CARGO_BUILD_JOBS = '2'
 $env:RUST_TEST_THREADS = '2'
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo 'target' }
@@ -26,15 +28,17 @@ if (-not $RunOnly) {
     Build-Bench 'profile' @('--features', 'profile')
 }
 if ($BuildOnly) { $global:LASTEXITCODE = 0; return }
+$run = New-BenchmarkRun $repo $results
+foreach ($setting in @('EXTRAS','SCRATCH_MB','NATIVE_SCRATCH_MB','POOL','NATIVE_POOL','SPLITTER','NATIVE_SPLITTER','ORDERING','NATIVE_ORDERING')) {
+    Remove-Item "Env:ARA_PHYSICS_BENCH_$setting" -ErrorAction SilentlyContinue
+}
 $env:ARA_PHYSICS_BENCH_THREADS = '8'
 $env:ARA_PHYSICS_BENCH_STEPS = "$Steps"
 $env:ARA_PHYSICS_BENCH_ROUNDS = "$Rounds"
 $env:ARA_PHYSICS_BENCH_PRESETS = 's6,game_default,stress,deterministic_network'
 $env:ARA_PHYSICS_BENCH_COUNTS = '5000,20000'
 function Run-Bench([string]$Binary, [string]$Name) {
-    $env:ARA_PHYSICS_BENCH_OUTPUT = Join-Path $results "$Name.json"
-    $process = Start-Process -FilePath (Join-Path $bins "$Binary.exe") -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput (Join-Path $results "$Name.log") -RedirectStandardError (Join-Path $results "$Name.stderr.log") -Wait -PassThru
-    if ($process.ExitCode -ne 0) { throw "Benchmark failed: $Name (see results/$Name.stderr.log)" }
+    Invoke-Benchmark $run $repo $results (Join-Path $bins "$Binary.exe") $Name
 }
 # Reverse build-flavour order across rounds. Each binary also alternates direct
 # Jolt and Ara every tick; presets always disclose their distinct settings.
@@ -72,7 +76,4 @@ Remove-Item Env:ARA_PHYSICS_BENCH_NATIVE_SCRATCH_MB
 $env:ARA_PHYSICS_BENCH_ROUNDS = '0'
 $env:ARA_PHYSICS_BENCH_EXTRAS = '1'
 Run-Bench 'deterministic' 'outpost-queries-ecs'
-$env:ARA_PHYSICS_BENCH_AGGREGATE_DIR = $results
-$env:ARA_PHYSICS_BENCH_OUTPUT = Join-Path $PSScriptRoot 'RESULTS.json'
-& (Join-Path $bins 'deterministic.exe')
-if ($LASTEXITCODE -ne 0) { throw 'Result aggregation failed' }
+Publish-BenchmarkRun $run $bins $results 'matrix-provenance'
