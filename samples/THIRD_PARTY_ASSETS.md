@@ -29,12 +29,14 @@ lighting and the generated kit geometry are original Ara work.
 | Classic Laptop (`classic_laptop`) | model | Arrangemonk | outpost | <https://polyhaven.com/a/classic_laptop> |
 | Concrete Block Wall (`concrete_block_wall`) | texture | Charlotte Baglioni | outpost | <https://polyhaven.com/a/concrete_block_wall> |
 | Concrete Floor 02 (`concrete_floor_02`) | texture | Rob Tuytel | showcase | <https://polyhaven.com/a/concrete_floor_02> |
+| Concrete Floor Worn 001 (`concrete_floor_worn_001`) | texture | Dimitrios Savva, Rico Cilliers | outpost | <https://polyhaven.com/a/concrete_floor_worn_001> |
 | Concrete Road Barrier (`concrete_road_barrier`) | model | Amal Kumar | outpost | <https://polyhaven.com/a/concrete_road_barrier> |
 | Concrete Road Barrier 02 (`concrete_road_barrier_02`) | model | Amal Kumar | outpost | <https://polyhaven.com/a/concrete_road_barrier_02> |
 | Container Side (`container_side`) | texture | Dimitrios Savva | outpost | <https://polyhaven.com/a/container_side> |
 | Corrugated Iron 02 (`corrugated_iron_02`) | texture | Jenelle van Heerden, Sergej Majboroda | outpost | <https://polyhaven.com/a/corrugated_iron_02> |
 | Covered Car (`covered_car`) | model | MP | outpost | <https://polyhaven.com/a/covered_car> |
 | Crowbar 01 (`crowbar_01`) | model | Alexander Otterbeck | outpost | <https://polyhaven.com/a/crowbar_01> |
+| Crystalline Iceplant (`crystalline_iceplant`) | model | James Ray Cock, Jenelle van Heerden | outpost | <https://polyhaven.com/a/crystalline_iceplant> |
 | Dead Quiver Branch 01 (`dead_quiver_branch_01`) | model | Greg Zaal, Jenelle van Heerden | outpost | <https://polyhaven.com/a/dead_quiver_branch_01> |
 | Dead Quiver Trunk (`dead_quiver_trunk`) | model | James Ray Cock, Dario Barresi, Rico Cilliers | outpost | <https://polyhaven.com/a/dead_quiver_trunk> |
 | Dead Tree Trunk (`dead_tree_trunk`) | model | Rob Tuytel | outpost | <https://polyhaven.com/a/dead_tree_trunk> |
@@ -64,13 +66,12 @@ lighting and the generated kit geometry are original Ara work.
 | Metal Jerrycan (`metal_jerrycan`) | model | Sean Buckley | outpost | <https://polyhaven.com/a/metal_jerrycan> |
 | Metal Jerrycan Green (`metal_jerrycan_green`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_jerrycan_green> |
 | Metal Office Desk (`metal_office_desk`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_office_desk> |
-| Metal Plate (`metal_plate`) | texture | Rob Tuytel | outpost | <https://polyhaven.com/a/metal_plate> |
+| Metal Plate (`metal_plate`) | texture | Rob Tuytel | outpost, showcase | <https://polyhaven.com/a/metal_plate> |
 | Metal Stool 01 (`metal_stool_01`) | model | Ulan Cabanilla | outpost | <https://polyhaven.com/a/metal_stool_01> |
 | Metal Tool Chest (`metal_tool_chest`) | model | Yann Kervran, John Hutcheson | outpost | <https://polyhaven.com/a/metal_tool_chest> |
 | Metal Toolbox (`metal_toolbox`) | model | Mateusz Sadek | outpost | <https://polyhaven.com/a/metal_toolbox> |
 | Metal Trash Can (`metal_trash_can`) | model | GurJas Studios | outpost | <https://polyhaven.com/a/metal_trash_can> |
 | Modular Airduct Rectangular 01 (`modular_airduct_rectangular_01`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/modular_airduct_rectangular_01> |
-| Modular Chainlink Fence (`modular_chainlink_fence`) | model | James Ray Cock, Amal Kumar | outpost | <https://polyhaven.com/a/modular_chainlink_fence> |
 | Modular Electric Cables (`modular_electric_cables`) | model | Kuutti Siitonen | outpost | <https://polyhaven.com/a/modular_electric_cables> |
 | Modular Electricity Poles (`modular_electricity_poles`) | model | James Ray Cock | outpost | <https://polyhaven.com/a/modular_electricity_poles> |
 | Modular Industrial Pipes 01 (`modular_industrial_pipes_01`) | model | Jorge Camacho | outpost | <https://polyhaven.com/a/modular_industrial_pipes_01> |
@@ -104,6 +105,7 @@ lighting and the generated kit geometry are original Ara work.
 | Retro Multimeter (`retro_multimeter`) | model | elli moeller | outpost | <https://polyhaven.com/a/retro_multimeter> |
 | Rock 07 (`rock_07`) | model | Jenelle van Heerden | outpost | <https://polyhaven.com/a/rock_07> |
 | Rock 09 (`rock_09`) | model | Jenelle van Heerden | outpost | <https://polyhaven.com/a/rock_09> |
+| Rocky Terrain 02 (`rocky_terrain_02`) | texture | Amal Kumar | outpost | <https://polyhaven.com/a/rocky_terrain_02> |
 | Rocky Trail (`rocky_trail`) | texture | Amal Kumar | outpost | <https://polyhaven.com/a/rocky_trail> |
 | Rollershutter Door (`rollershutter_door`) | model | MP | outpost | <https://polyhaven.com/a/rollershutter_door> |
 | Rusted Wheel Rim 01 (`rusted_wheel_rim_01`) | model | John Hutcheson | outpost | <https://polyhaven.com/a/rusted_wheel_rim_01> |

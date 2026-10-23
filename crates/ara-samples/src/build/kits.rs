@@ -302,7 +302,7 @@ pub fn mast(project: &Path, lock: &Lock, name: &str, height: f32) -> Result<Stri
         let a = i as f32 * std::f32::consts::TAU / 3.0;
         Vec3::new(a.cos() * r, y, a.sin() * r)
     };
-    let mut beam = |kit: &mut Kit, a: Vec3, b: Vec3, thickness: f32| {
+    let beam = |kit: &mut Kit, a: Vec3, b: Vec3, thickness: f32| {
         let dir = b - a;
         let length = dir.length();
         let rot = Quat::from_rotation_arc(Vec3::Y, dir / length);

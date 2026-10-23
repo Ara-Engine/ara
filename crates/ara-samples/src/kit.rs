@@ -239,11 +239,16 @@ impl Kit {
             let theta = r as f32 / rings as f32 * std::f32::consts::PI;
             for s in 0..=segments {
                 let phi = s as f32 / segments as f32 * std::f32::consts::TAU;
-                let n = Vec3::new(
-                    theta.sin() * phi.cos(),
-                    theta.cos(),
-                    -theta.sin() * phi.sin(),
-                );
+                // Poles are exact, so their fan triangles are exactly degenerate.
+                let n = match r {
+                    0 => Vec3::Y,
+                    r if r == rings => Vec3::NEG_Y,
+                    _ => Vec3::new(
+                        theta.sin() * phi.cos(),
+                        theta.cos(),
+                        -theta.sin() * phi.sin(),
+                    ),
+                };
                 mesh.positions.push(center + n * radius);
                 mesh.normals.push(n);
                 mesh.uvs.push(Vec2::new(
@@ -345,7 +350,7 @@ impl Kit {
         let count = mesh.positions.len() - start;
         let mut normals = vec![Vec3::ZERO; count];
         let first = self_tri_start(mesh, base);
-        for t in mesh.indices[first..].chunks_exact(3) {
+        for t in mesh.indices[first..].as_chunks::<3>().0 {
             let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
             let n = (mesh.positions[b] - mesh.positions[a])
                 .cross(mesh.positions[c] - mesh.positions[a]);
@@ -368,7 +373,7 @@ impl Kit {
         let mut accessors = Vec::new();
         let mut primitives = Vec::new();
         let mut push = |bytes: &[u8], target: u32| -> usize {
-            while bin.len() % 4 != 0 {
+            while !bin.len().is_multiple_of(4) {
                 bin.push(0);
             }
             views.push(json!({"buffer": 0, "byteOffset": bin.len(), "byteLength": bytes.len(), "target": target}));
@@ -854,7 +859,7 @@ mod tests {
 
     /// Every triangle's winding agrees with its vertices' stored normals.
     fn wound_outward(mesh: &Mesh) -> bool {
-        mesh.indices.chunks_exact(3).all(|t| {
+        mesh.indices.as_chunks::<3>().0.iter().all(|t| {
             let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.positions[i as usize]);
             let face = (b - a).cross(c - a);
             face.length() < 1e-9 || face.dot(mesh.normals[t[0] as usize]) > 0.0
@@ -863,17 +868,26 @@ mod tests {
 
     #[test]
     fn primitives_wind_counter_clockwise_outward() {
-        let mut kit = Kit::new(vec![Material::flat("m", [0.5; 3], 0.5, 0.0)]);
-        kit.cuboid(
+        let m = || Kit::new(vec![Material::flat("m", [0.5; 3], 0.5, 0.0)]);
+        let mut cuboid = m();
+        cuboid.cuboid(
             0,
             Vec3::new(2.0, 1.0, 3.0),
             Mat4::from_rotation_y(0.7),
             Vec2::ONE,
         );
-        kit.cylinder(0, 0.5, 2.0, 12, Mat4::IDENTITY, Vec2::ONE);
-        kit.sphere(0, Vec3::ZERO, 1.0, 8, Vec2::ONE);
-        kit.disc(0, 1.0, 3, 0.0);
-        kit.ribbon(
+        assert!(wound_outward(&cuboid.meshes[0]), "cuboid");
+        let mut cylinder = m();
+        cylinder.cylinder(0, 0.5, 2.0, 12, Mat4::IDENTITY, Vec2::ONE);
+        assert!(wound_outward(&cylinder.meshes[0]), "cylinder");
+        let mut sphere = m();
+        sphere.sphere(0, Vec3::ZERO, 1.0, 8, Vec2::ONE);
+        assert!(wound_outward(&sphere.meshes[0]), "sphere");
+        let mut disc = m();
+        disc.disc(0, 1.0, 3, 0.0);
+        assert!(wound_outward(&disc.meshes[0]), "disc");
+        let mut ribbon = m();
+        ribbon.ribbon(
             0,
             &[Vec2::ZERO, Vec2::new(0.0, 10.0), Vec2::new(5.0, 20.0)],
             4.0,
@@ -881,6 +895,6 @@ mod tests {
             Vec2::ONE,
             &|x, _| x * 0.1,
         );
-        assert!(wound_outward(&kit.meshes[0]));
+        assert!(wound_outward(&ribbon.meshes[0]), "ribbon");
     }
 }

@@ -28,6 +28,7 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
 | `ara-runtime-render` | Play ignored normal/ORM/emissive maps; glTF emissive factors were not scaled by `MeshRenderer.emissive` although the field doc says so (imported lamps could never glow). | Presenter binds all four slots, decodes BC5 normals, scales emissive by the entity radiance. |
 | `ara-runtime-render` | With real content Play failed outright: `ARA_GPU_CONTRACT: Sampled heap exhausted` (see P0 #1). | `SCENE_TEXTURE_BUDGET` (32): colour maps first, then normal/ORM/emissive; maps past it fold into material factors (mean texel of the coarsest mip) with one stderr note. Degrades instead of failing. |
 | `ara-player` | Windowed players were killed by the owner's watchdog (`player_unresponsive: no heartbeat for 2.98s`) during their first frame: the full scene upload (CPU texture decode) is not covered by `play.busy`, whose grace ends with the `play.start` response. | The first presented frame of a world announces `busy("upload")`. |
+| `ara-editor` | In the editor's fidelity viewport, faces whose object-space normal is ±X rendered pure black (plinth sides, container walls, hangar beams) and the NaNs spread dark blocks around them. Both editor mesh loaders gave every vertex a `+X` tangent, and the shading basis `normalize(t − n·dot(t, n))` is NaN when the two are parallel. | `world/gltf.rs` `tangent()`: any unit vector perpendicular to the normal, used by the glTF and cooked-FBX loaders. Verified in the new editor captures. |
 
 ## P0: blocks real content
 
@@ -67,10 +68,15 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
    panels and bulbs in the fidelity view, is near-black in Play (only `Light` components
    light the raster path).
 7. **ReSTIR is 2.1× slower than the plain hybrid path in a realistic interior and
-   noisier.** Hangar native 1440p: 23.6 ms with reservoirs vs 11.2 ms without;
-   `ReSTIR.Spatial.Visibility.Shade` is 11.2 ms here vs 1.6 ms in the synthetic
+   noisier.** Hangar native 1440p: 24.1 ms with reservoirs vs 11.5 ms without;
+   `ReSTIR.Spatial.Visibility.Shade` is 10.6 ms here vs 1.6 ms in the synthetic
    1000-light corridor (alpha-blended glass, real textures, 245 objects). Upscaled
-   11.9 ms (> the 8 ms budget). Visible grain on corrugated walls at EV 6.
+   11.9 ms (> the 8 ms budget). Visible grain on corrugated walls at EV 6 when still,
+   and under camera motion every frame is grain (`hangar-sequence.png`: only the
+   settled first frame is clean; 10 ticks between frames; no strip was taken without
+   reservoirs). Other agents held the shared GPU at 93–99 % during these windows, so
+   treat the absolute numbers as pessimistic; the 2.1× ratio was the same in both runs
+   (23.6 vs 11.2 ms earlier).
 8. **Terrain materials stop at the renderer.** `Header.materials` is ignored; the
    landscape renderer and the windowed terrain meshes use fixed grass/rock/soil/snow
    colours, so an arid biome renders green unless soil is painted everywhere. The
@@ -93,46 +99,71 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     gradient sky; the fidelity captures show the physical sky.
 13. **VFX is limited to the committed library.** Only `campfire`, `sparks`, `smoke`,
     `magic_swirl`, `muzzle_flash`, `rain` resolve (`depth_sparks` is cooked but not in
-    `ara_vfx::samples::all()` → `no cooked VFX effect`). Project effects cannot be cooked,
-    so the campfire's oversized smoke plume can't be tuned and there is no dust effect
-    for the hangar. Compositing into the fidelity view works through
-    `feature_inputs`/`post_process` (done by the bridge).
+    `ara_vfx::samples::all()` → `no cooked VFX effect`). Project effects cannot be cooked
+    and `VisualEffect` has no scale or intensity, so nothing can tune the library
+    `campfire` (1 000 additive flame sprites/s, HDR colour up to 6 with curl noise): over
+    the dusk exposure it saturates into a ~4 m white plume, the worst element of the
+    Outpost captures. There is no dust effect for the hangar either. Compositing into
+    the fidelity view works through `feature_inputs`/`post_process` (done by the bridge).
 14. **Music longer than ~2.8 minutes cannot be imported.** The audio importer decodes the
     whole file against a fixed 64 MiB budget (`audio capacity exhausted: resident decode
     budget`), even for streamed music; not a sidecar setting. The 4-minute CC0 track was
     swapped for a 2-minute one.
-15. **Editor viewport with real content.** The editor opens only the project's main
-    scene (no Engine Protocol method opens another document), draws imported models
-    with their flat `MeshRenderer.color` (no textures), and its console errors do not
-    reach `ara logs`. See the editor captures.
+15. **The editor viewport cannot show real content** (`*-editor.png`). It draws imported
+    models with their flat `MeshRenderer.color` only: no textures and no glTF material
+    factors, so all 18 showcase material balls are the same white. Terrain documents are
+    not drawn (the Outpost compound floats on the grid), and nor are foliage, VFX or
+    lights' emissive look. In the night hangar the fidelity viewport is heavily grained.
+    *Repro:* `ara-samples editor showcase levels/showcase.scene showcase`.
+16. **The editor opens only the project's main scene.** No Engine Protocol method opens
+    another document, so `ara-samples editor` rewrites `ara.project.json` `main` for the
+    capture and restores it. Editor console errors do not reach `ara logs`.
+17. **An agent cannot frame the editor viewport.** `editor.camera` from an agent session
+    moves that agent's presence marker, not the view; the capture opens a separate
+    navigation-only session with `author: "human"` (labelled `ara-samples`).
+18. **The editor exited once on startup with `ARA7014 Node asset-card-0 inline style:
+    length must be finite and nonnegative`** (Outpost project, 640 assets; not
+    reproduced on retry). Probable cause: `shell/assets_panel.rs` places card *n* at
+    `top: 8 + row·step − asset_offset`, which is negative for the first visible row
+    whenever the grid is scrolled by 8 px to one row, and `ara-ui` rejects negative
+    lengths. `ARA7014` also has no catalog entry: `ara-ui` builds the code from the
+    number `7014`, which `ara-diag`'s coverage test does not see.
 
 ## P2: authoring friction (CLI/MCP dogfood)
 
-16. **No `doc.create`.** New scenes, terrains, foliage, animation and music documents
+19. **No `doc.create`.** New scenes, terrains, foliage, animation and music documents
     must be written by hand as empty canonical skeletons before commands can fill them.
     `ara init` seeds `levels/main.scene` with a random ID; renaming it or pointing
     `main` elsewhere is a hand edit of `ara.project.json`.
-17. **Import sidecars have no CLI/MCP command** (`editor.import.initialize` exists only in
+20. **Import sidecars have no CLI/MCP command** (`editor.import.initialize` exists only in
     the editor host). An agent with only `ara`/MCP writes `*.import.json` by hand and
     must know the importer's exact version string (the build asks the worker).
-18. **`.animation` and `.music` documents have no commands** (`AnimationCommand` is a Rust
+21. **`.animation` and `.music` documents have no commands** (`AnimationCommand` is a Rust
     API; the demo writes music with the canonical writer).
-19. **`MeshRenderer` can't address part of a model or override its material.** Poly Haven
+22. **`MeshRenderer` can't address part of a model or override its material.** Poly Haven
     ships variant sheets (4 rocks, 5 bushes, a 103-piece pole kit in one file) and lamps
     with their bulbs off; each needs a derived glTF (`kit::variant`). There is no material
     asset slot on `MeshRenderer`, so a palette-textured character can't be recoloured
     without a derived texture.
-20. **Colliders have no offset and models can't be colliders in play.** Model origins sit
+23. **Colliders have no offset and models can't be colliders in play.** Model origins sit
     at the base, box colliders at the entity origin; every solid prop needs a second
     entity at its bounds centre. `PhysicsId` defaults to 1 and must be made unique by hand.
-21. **Aiming lights and cameras needs Euler math.** `Transform.rotation` is intrinsic XYZ
+24. **Aiming lights and cameras needs Euler math.** `Transform.rotation` is intrinsic XYZ
     degrees; there is no look-at helper or `direction` field, and the obvious
     pitch/yaw split yields upside-down cameras for targets behind −Z.
-22. **The landscape renderer requires an origin-anchored square terrain**, so a level
+25. **The landscape renderer requires an origin-anchored square terrain**, so a level
     centred in a terrain has to be offset by hand (`outpost::SHIFT`).
-23. **Agent edits enter review.** A scripted build ends with `ara accept --all`, or every
-    entity stays "unreviewed".
-24. **What worked well:** typed batches with `@file` args, deterministic record IDs,
+26. **A scripted agent build cannot finish its own review.** Every agent edit enters
+    review and `ara accept --all` from the same agent fails (`ARA1813`), so a freshly
+    built project shows every entity as "unreviewed" in the editor until a human
+    accepts. The journal lives in the gitignored `.ara/`, so a fresh clone starts clean;
+    the editor capture deletes the local journal for the same reason.
+27. **Terrain strokes and foliage exclusions get random IDs.** `terrain.raise`/`paint`
+    and `foliage.exclude` take no `id`/`as`, so every scripted rebuild rewrites
+    ~2 100 lines of `outpost.terrain` (stroke IDs and the per-tile stroke lists) and
+    reorders `outpost.foliage` with no content change. Entities don't have this
+    problem because `entity.create` accepts an ID.
+28. **What worked well:** typed batches with `@file` args, deterministic record IDs,
     exact diagnostics with JSON paths (`commands[6].args.components[NavMeshSurface].size`),
     `ara check`, terrain/foliage commands, the import worker (107 assets cook in 166 s
     cold, 4–8 s warm), `ara mcp` + `ara_play` for Play automation, and the fidelity

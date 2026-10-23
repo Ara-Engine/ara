@@ -132,15 +132,11 @@ pub fn fetch(samples: &Path, lock: &Lock, projects: &[String], jobs: usize) -> R
     std::thread::scope(|scope| {
         for _ in 0..jobs.max(1) {
             scope.spawn(|| {
-                loop {
-                    let Some(&(asset, project)) = queue.lock().ok().and_then(|mut q| q.next())
-                    else {
-                        break;
-                    };
-                    if let Err(e) = materialize(&cache, &samples.join(project), asset) {
-                        if let Ok(mut errors) = errors.lock() {
-                            errors.push(format!("{project}/{}: {e:#}", asset.id));
-                        }
+                while let Some(&(asset, project)) = queue.lock().ok().and_then(|mut q| q.next()) {
+                    if let Err(e) = materialize(&cache, &samples.join(project), asset)
+                        && let Ok(mut errors) = errors.lock()
+                    {
+                        errors.push(format!("{project}/{}: {e:#}", asset.id));
                     }
                     if let Ok(mut done) = done.lock() {
                         *done += 1;

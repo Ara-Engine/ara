@@ -50,16 +50,14 @@ pub(crate) fn load(
             let base = u32::try_from(mesh.vertices.len())?;
             let normal_matrix = matrix.inverse().transpose();
             for (i, position) in positions.into_iter().enumerate() {
+                let normal = normal_matrix
+                    .transform_vector3(normals.get(i).copied().map(Vec3::from).unwrap_or(Vec3::Y))
+                    .normalize_or_zero();
                 mesh.vertices.push(Vertex {
                     position: matrix.transform_point3(position.into()).into(),
-                    normal: normal_matrix
-                        .transform_vector3(
-                            normals.get(i).copied().map(Vec3::from).unwrap_or(Vec3::Y),
-                        )
-                        .normalize_or_zero()
-                        .into(),
+                    normal: normal.into(),
                     uv: texcoords.get(i).copied().unwrap_or([0.; 2]),
-                    tangent: [1., 0., 0., 1.],
+                    tangent: tangent(normal),
                 });
             }
             if let Some(indices) = read.read_indices() {
@@ -74,4 +72,32 @@ pub(crate) fn load(
         "glTF contains no triangle geometry"
     );
     Ok(mesh)
+}
+
+/// A unit tangent perpendicular to `normal`, for loaders without UV tangents. A fixed
+/// +X tangent is parallel to ±X normals, and the fidelity shading basis
+/// (`normalize(t - n·dot(t, n))`) then turns those faces black.
+pub(crate) fn tangent(normal: Vec3) -> [f32; 4] {
+    normal.any_orthonormal_vector().extend(1.).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tangent_is_perpendicular_to_axis_normals() {
+        for normal in [
+            Vec3::X,
+            Vec3::NEG_X,
+            Vec3::Y,
+            Vec3::NEG_Y,
+            Vec3::Z,
+            Vec3::NEG_Z,
+        ] {
+            let t = Vec3::from_slice(&tangent(normal)[..3]);
+            assert!((t.length() - 1.).abs() < 1e-5, "{normal}");
+            assert!(t.dot(normal).abs() < 1e-5, "{normal}");
+        }
+    }
 }

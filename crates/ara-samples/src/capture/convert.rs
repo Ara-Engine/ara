@@ -178,7 +178,7 @@ pub fn scene(
         .sum();
     stats.upload_mib = (vertex_bytes as f64 + stats.texels as f64 * 8.0) / (1024.0 * 1024.0);
     let mut breakdown: Vec<(String, usize)> = names.into_iter().collect();
-    breakdown.sort_by(|a, b| b.1.cmp(&a.1));
+    breakdown.sort_by_key(|b| std::cmp::Reverse(b.1));
     breakdown.truncate(24);
     stats.breakdown = breakdown;
     Ok((scene, stats))
@@ -534,7 +534,7 @@ impl Builder {
         // weighted by how much the map shows (colour > emissive > normal > ARM).
         let mut area = vec![0.0f64; self.materials.len()];
         for (&material, group) in &self.groups {
-            for t in group.indices.chunks_exact(3) {
+            for t in group.indices.as_chunks::<3>().0 {
                 let p = |i: u32| Vec3::from_array(group.vertices[i as usize].position);
                 area[material] +=
                     f64::from((p(t[1]) - p(t[0])).cross(p(t[2]) - p(t[0])).length() * 0.5);
@@ -580,9 +580,8 @@ impl Builder {
         for material in &mut self.materials {
             let t = material.textures.map(|t| t as usize);
             if t[0] > 1 && !keep.contains(&t[0]) {
-                for c in 0..3 {
-                    material.base_color[c] =
-                        (material.base_color[c] * means[t[0]][c]).clamp(0.0, 1.0);
+                for (c, m) in material.base_color.iter_mut().zip(means[t[0]]).take(3) {
+                    *c = (*c * m).clamp(0.0, 1.0);
                 }
                 material.textures[0] = 0;
             }
@@ -595,8 +594,13 @@ impl Builder {
                 material.textures[2] = 0;
             }
             if t[3] > 1 && !keep.contains(&t[3]) {
-                for c in 0..3 {
-                    material.emissive_roughness[c] *= means[t[3]][c];
+                for (c, m) in material
+                    .emissive_roughness
+                    .iter_mut()
+                    .zip(means[t[3]])
+                    .take(3)
+                {
+                    *c *= m;
                 }
                 material.textures[3] = 0;
             }
@@ -646,7 +650,7 @@ fn mean(t: &Texture) -> [f32; 4] {
     let mut sum = [0.0f64; 4];
     let step = (t.rgba.len() / 4 / 4096).max(1);
     let mut n = 0.0;
-    for px in t.rgba.chunks_exact(4).step_by(step) {
+    for px in t.rgba.as_chunks::<4>().0.iter().step_by(step) {
         for c in 0..4 {
             let v = f64::from(px[c]) / 255.0;
             sum[c] += if t.srgb && c < 3 {

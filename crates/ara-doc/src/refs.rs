@@ -251,7 +251,7 @@ impl Walker<'_> {
                     }
                     Err(mut d) => {
                         let near = if d.code == codes::UNRESOLVED_REF {
-                            self.index.closest(s, kind.as_deref())
+                            self.index.closest(s, kind)
                         } else {
                             Vec::new()
                         };

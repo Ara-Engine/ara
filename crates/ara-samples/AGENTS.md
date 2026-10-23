@@ -18,9 +18,10 @@ pins them, `fetch` restores them.
 | `build outpost\|showcase` | author the project through `ara` (typed command batches via `ara do`), then `ara check` |
 | `capture <project> <look> [--quick]` | fidelity captures + per-pass GPU timings → `<project>/evidence/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
+| `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `evidence/<name>-editor.png` |
 
-`build`, `capture` and `play` need release builds of `ara`, `ara-import-worker` and
-`ara-player` (found next to this binary, in `target/release`, or via `ARA_BIN`,
+`build`, `capture`, `play` and `editor` need release builds of `ara`,
+`ara-import-worker`, `ara-player` and `ara-editor` (found next to this binary, in `target/release`, or via `ARA_BIN`,
 `ARA_IMPORT_WORKER`). GPU commands need the Vulkan SDK on `PATH` and the
 process-local layer isolation the renderer crates use (`VK_IMPLICIT_LAYER_PATH` =
 an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
@@ -41,6 +42,9 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   `vfx` (cooked effects composited through `feature_inputs`/`post_process`),
   `render` (shots, upscaled pass, strip, timings), `look` (the per-scene look file).
 - `play`: MCP client over `ara mcp`.
+- `editor`: switches the project's `main` scene for the run (the editor opens only
+  `main`), then frames the view from a navigation-only `human` session, because an
+  agent session's `editor.camera` moves only its presence marker.
 
 ## Gotchas
 
@@ -52,8 +56,10 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
 - Outpost layout code works in layout coordinates; `outpost::SHIFT` moves the
   layout into the middle of the 384 m terrain (the landscape renderer needs an
   origin-anchored terrain). Look shots are world coordinates.
-- Every Python-free edit path is Rust; keep generated files deterministic so a
-  rebuild leaves `git status` clean apart from intended changes.
+- Keep generated files deterministic so a rebuild leaves `git status` clean apart
+  from intended changes.
+- Agents cannot accept their own edits (`ARA1813`), so a fresh build shows every
+  entity as unreviewed in the editor; `editor` deletes the local `.ara/journal` first.
 
 ## Testing
 

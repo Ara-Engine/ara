@@ -86,8 +86,8 @@
     }
   ],
   "sequence": {
-    "from": "gate",
-    "to": "campfire",
+    "from": "vista",
+    "to": "gate",
     "frames": 6,
     "step": 10
   },

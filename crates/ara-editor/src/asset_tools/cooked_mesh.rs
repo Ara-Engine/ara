@@ -91,14 +91,16 @@ fn decode(bytes: &[u8], entity: u64, name: String) -> anyhow::Result<Mesh> {
         .iter()
         .map(|bytes| {
             let v = bytemuck::pod_read_unaligned::<ara_asset_format::QuantizedVertex>(bytes);
+            let normal: [f32; 3] =
+                std::array::from_fn(|axis| (f32::from(v.normal[axis]) / 32767.).max(-1.));
             Vertex {
                 position: std::array::from_fn(|axis| {
                     bounds[axis]
                         + f32::from(v.position[axis]) / 65535. * (bounds[axis + 3] - bounds[axis])
                 }),
-                normal: std::array::from_fn(|axis| (f32::from(v.normal[axis]) / 32767.).max(-1.)),
+                normal,
                 uv: [0.; 2],
-                tangent: [1., 0., 0., 1.],
+                tangent: crate::world::gltf::tangent(glam::Vec3::from(normal).normalize_or_zero()),
             }
         })
         .collect();

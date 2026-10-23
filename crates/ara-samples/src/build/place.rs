@@ -17,13 +17,6 @@ pub struct Model {
     pub max: Vec3,
 }
 
-impl Model {
-    /// Height of the model at scale 1.
-    pub fn height(&self) -> f32 {
-        self.max.y - self.min.y
-    }
-}
-
 /// The models of a project by short name.
 #[derive(Default)]
 pub struct Models(pub BTreeMap<String, Model>);
@@ -225,11 +218,6 @@ impl Prop {
     /// Extra `MeshRenderer` fields.
     pub fn renderer(mut self, fields: Value) -> Self {
         self.renderer = fields;
-        self
-    }
-    /// Extra components.
-    pub fn with(mut self, components: Value) -> Self {
-        merge(&mut self.extra, components);
         self
     }
 
