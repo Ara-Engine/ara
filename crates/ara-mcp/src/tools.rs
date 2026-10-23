@@ -41,7 +41,7 @@ pub const TOOLS: [ToolSpec; 13] = [
     ToolSpec {
         name: "ara_apply",
         title: "Apply commands",
-        description: "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session).",
+        description: "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session). Entities another participant claimed reject your edits (ARA2500 names who and why): work elsewhere, wait, or pass `branch` to work in a branch session (ara_session `branch`), which nobody sees until you `submit` it.",
         reserved: "cmd",
     },
     ToolSpec {
@@ -83,7 +83,7 @@ pub const TOOLS: [ToolSpec; 13] = [
     ToolSpec {
         name: "ara_session",
         title: "Session, history and review",
-        description: "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`.",
+        description: "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`. Collaboration: `who` (who is here, what they are doing, and the claims your edits must avoid; check it before planning), `claim` / `release` (soft-lock entities, components or documents for your turn), `branch` (open a branch session to apply into with ara_apply `branch`) and `submit` (hand it over; it merges per the human's apply policy once nobody claims what it touches).",
         reserved: "session",
     },
     ToolSpec {

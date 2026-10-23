@@ -393,7 +393,7 @@ expression: pretty
   {
     "name": "ara_apply",
     "title": "Apply commands",
-    "description": "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session).",
+    "description": "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session). Entities another participant claimed reject your edits (ARA2500 names who and why): work elsewhere, wait, or pass `branch` to work in a branch session (ara_session `branch`), which nobody sees until you `submit` it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -426,6 +426,10 @@ expression: pretty
         },
         "idempotencyKey": {
           "description": "Retrying with the same key returns the first result instead of applying twice.",
+          "type": "string"
+        },
+        "branch": {
+          "description": "Branch session (`br_…` from `branch.open`) to apply in instead of the live documents: nobody sees it until `branch.submit` merges it. Claims do not block edits inside your own branch.",
           "type": "string"
         }
       },
@@ -699,7 +703,7 @@ expression: pretty
   {
     "name": "ara_session",
     "title": "Session, history and review",
-    "description": "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`.",
+    "description": "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`. Collaboration: `who` (who is here, what they are doing, and the claims your edits must avoid; check it before planning), `claim` / `release` (soft-lock entities, components or documents for your turn), `branch` (open a branch session to apply into with ara_apply `branch`) and `submit` (hand it over; it merges per the human's apply policy once nobody claims what it touches).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -716,9 +720,14 @@ expression: pretty
             "undo",
             "redo",
             "review",
-            "revert"
+            "revert",
+            "who",
+            "claim",
+            "release",
+            "branch",
+            "submit"
           ],
-          "description": "What to do. `begin`: Begin a session: returns the handle every other call takes, and the scopes granted. `status`: The session's scopes, turns, unreviewed changes, checkpoints and unsaved documents. `diff`: What the session changed since a checkpoint, per entity, with was → now per field. `checkpoint`: Mark the current revision to roll back to. Agent turns get one automatically. `rollback`: Undo every transaction of this session after a checkpoint, all or nothing. `end`: End the session; its handle stops working. `history`: Transactions newest first: author, why, revision, review status and touched entities. `undo`: Undo the author's latest transaction, or a given one, as a new transaction. `redo`: Redo the author's most recently undone transaction. `review`: Agent transactions by review status (default: unreviewed), with per-entity status. `revert`: Revert agent changes per transaction or per entity (inverse ops, conflict-checked)."
+          "description": "What to do. `begin`: Begin a session: returns the handle every other call takes, and the scopes granted. `status`: The session's scopes, turns, unreviewed changes, checkpoints and unsaved documents. `diff`: What the session changed since a checkpoint, per entity, with was → now per field. `checkpoint`: Mark the current revision to roll back to. Agent turns get one automatically. `rollback`: Undo every transaction of this session after a checkpoint, all or nothing. `end`: End the session; its handle stops working. `history`: Transactions newest first: author, why, revision, review status and touched entities. `undo`: Undo the author's latest transaction, or a given one, as a new transaction. `redo`: Redo the author's most recently undone transaction. `review`: Agent transactions by review status (default: unreviewed), with per-entity status. `revert`: Revert agent changes per transaction or per entity (inverse ops, conflict-checked). `who`: Who is here and doing what: participants, what they look at and do, their claims (which agents must avoid) and branch sessions, as short text. `claim`: Claim entities, components, documents or files for your turn, with an expiry. Others' agents cannot edit what you claim; humans are only warned. `release`: Release your claims (all, or by ID). `branch`: Open a branch session: a private copy of the live documents to apply your turn in (`ara_apply` with `branch`); nothing is live until it is submitted and merged. `submit`: Submit your branch session for merging; it merges per the human's apply policy once nobody claims what it touches."
         },
         "client": {
           "type": "string",
@@ -753,7 +762,7 @@ expression: pretty
         },
         "doc": {
           "type": "string",
-          "description": "Only transactions touching this document. (for: history)"
+          "description": "Only transactions touching this document. / Document the entities are in; default: the one document holding them. (for: history, claim)"
         },
         "since": {
           "type": "integer",
@@ -780,6 +789,32 @@ expression: pretty
         "all": {
           "type": "boolean",
           "description": "Every unreviewed transaction. (for: revert)"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What to claim: entity IDs or addresses (`e_door01`), `name:Gate Door`, a component or field of one (`e_door01.Light`), a document path (`levels/outpost.scene`), or another project file (`@scripts/Gate.cs`). (for: claim)"
+        },
+        "why": {
+          "type": "string",
+          "description": "Why, shown to everyone (`tuning the gate`). / Why: what the branch is for; it becomes the merge's why. / Why, if it changed since `branch.open`. (for: claim, branch, submit)"
+        },
+        "ttlMs": {
+          "type": "integer",
+          "description": "Lifetime without heartbeats in ms (default 60000; presence updates and `collab.heartbeat` extend it). (for: claim)"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Claim IDs (`cl_…`) to release; default: all of yours. (for: release)"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch ID (`br_…`). (for: submit)"
         }
       },
       "required": [
