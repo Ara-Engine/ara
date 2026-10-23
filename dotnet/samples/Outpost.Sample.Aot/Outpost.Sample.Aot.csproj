@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The shipping shape of a game's scripts: every module linked into one NativeAOT shared
+       library exporting ara_script_init (no ALCs, no Roslyn, no reload). The generator emits
+       the export because AraNativeEntry is set; it links the referenced Outpost.Sample. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Outpost.Sample.Native</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AraNativeEntry>true</AraNativeEntry>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AraNativeEntry" />
+    <ProjectReference Include="../Outpost.Sample/Outpost.Sample.csproj" />
+    <ProjectReference Include="../../src/Ara.Generators/Ara.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>
