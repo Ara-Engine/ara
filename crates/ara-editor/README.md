@@ -61,11 +61,21 @@ diffs, viewport marks and raw timings. Golden comparison tolerance is 1-SSIM ≤
 0.005; GPU/CPU glyph comparison tolerance is 0.01.
 
 Release timings on the RTX 4070 SUPER at 1440×900 with the four-entity scene:
-idle active CPU p50 0.014 ms / p95 0.024 ms; warm camera command through completed
-presentation p50 1.44 ms / p95 1.70 ms. These are 5,000 idle and 240 warm input
-samples, not a large-scene renderer benchmark. Cold startup input is recorded
-separately in `timings.json`. Main-thread active CPU excludes idle wait and
-background file scanning. Native submissions currently serialize on completion.
+idle active time p50 0.016 ms / p95 0.033 ms; warm camera command through completed
+presentation p50 1.37 ms / p95 1.69 ms (maximum 4.29 ms). Event-loop intervals are
+p50 6.51 ms / p95 6.69 ms, supporting the 144 Hz target. These are 5,000 idle and
+240 warm input samples, not a large-scene renderer benchmark. The active-time
+measurements use elapsed wall time, exclude idle wait/background file scanning,
+and include scheduling delays: one idle sample exceeded 2 ms (11.85 ms).
+Cold startup input is recorded separately (6.37 ms). Native submissions currently
+serialize on completion. The 100k hierarchy retains 134 UI nodes; scrolling to
+the last row takes 0.44 ms, with no idle paint work (initial model build: 618 ms).
+
+Windows frame pacing waits on an owned [high-resolution timer](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createwaitabletimerexw)
+and the [window message queue](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-msgwaitformultipleobjectsex),
+so input wakes the loop immediately. `evidence/timings-coarse-wait.json` preserves
+the release measurement before this fix: its message timeout rounded waits to a
+15.48 ms median despite only 0.027 ms of active idle work.
 
 ## Integration boundaries
 

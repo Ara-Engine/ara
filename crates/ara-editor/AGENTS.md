@@ -19,7 +19,7 @@ Escape drops the preview; release commits one transform.set batch with its base.
 View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 
-No Play implementation until ara-sim lands; controls explain this and stay disabled.
+Play controls stay disabled until the disposable ara-sim player is connected.
 C# integration registers host services/schema types, not mutable UI state.
 The temporary glTF loader is isolated in `world/gltf.rs`; replace with ara-asset.
 

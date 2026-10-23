@@ -93,52 +93,52 @@
   },
   "timings": [
     {
-      "milliseconds": 0.012736,
+      "milliseconds": 0.013184,
       "pass": "ShadowAtlas.4Cascades",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.080128,
+      "milliseconds": 0.08096,
       "pass": "GBuffer",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.006144,
+      "milliseconds": 0.006784,
       "pass": "TiledLightCull",
       "queue": "Compute"
     },
     {
-      "milliseconds": 0.065344,
+      "milliseconds": 0.067072,
       "pass": "DeferredLighting",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001536,
+      "milliseconds": 0.002464,
       "pass": "ForwardTransparency",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.013536,
+      "milliseconds": 0.014592,
       "pass": "TemporalResolve",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.02176,
+      "milliseconds": 0.020512,
       "pass": "Exposure.ACESFitted.SDR",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.144032,
+      "milliseconds": 0.14304,
       "pass": "CaptureReadback",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002848,
+      "milliseconds": 0.002816,
       "pass": "HostReadback",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.000096,
+      "milliseconds": 0.000064,
       "pass": "TileOwnershipReturn",
       "queue": "Compute"
     }
