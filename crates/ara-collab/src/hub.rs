@@ -104,6 +104,10 @@ pub struct Hub {
     pub(crate) policy: ApplyPolicy,
     pub(crate) idle_ms: u64,
     pub(crate) last_human: u64,
+    /// Bumped when claims are taken, released or expire.
+    pub(crate) claims_version: u64,
+    /// When the claim guard was last installed (ms).
+    pub(crate) guard_at: u64,
 }
 
 /// Presence broadcasts per participant are at most one per this interval (20 Hz).
@@ -127,6 +131,8 @@ impl Hub {
             policy: ApplyPolicy::default(),
             idle_ms: 2_000,
             last_human: 0,
+            claims_version: 0,
+            guard_at: 0,
         }
     }
 
@@ -152,6 +158,12 @@ impl Hub {
     /// Live claims.
     pub fn claims(&self) -> &[Claim] {
         self.claims.all()
+    }
+
+    /// Changes whenever claims are taken, released or expire (not on heartbeats):
+    /// persist then.
+    pub fn claims_version(&self) -> u64 {
+        self.claims_version
     }
 
     /// The conflict log.
@@ -183,8 +195,15 @@ impl Hub {
         self.emit(Audience::All, methods::ROSTER, params);
     }
 
-    fn claims_changed(&mut self, store: &mut Store, now: u64) {
+    /// Installs the claim guard as of `now`.
+    fn install(&mut self, store: &mut Store, now: u64) {
         store.set_guard(Some(Box::new(self.claims.guard(now))));
+        self.guard_at = now;
+    }
+
+    fn claims_changed(&mut self, store: &mut Store, now: u64) {
+        self.install(store, now);
+        self.claims_version += 1;
         let params = json!({ "claims": self.claims.all() });
         self.emit(Audience::All, methods::CLAIMS, params);
     }
@@ -292,7 +311,7 @@ impl Hub {
     /// Extends `id`'s claims.
     pub fn heartbeat(&mut self, store: &mut Store, id: &ParticipantId, now: u64) {
         if self.claims.heartbeat(id, now) > 0 {
-            store.set_guard(Some(Box::new(self.claims.guard(now))));
+            self.install(store, now);
         }
     }
 
@@ -300,8 +319,9 @@ impl Hub {
     pub fn expire(&mut self, store: &mut Store, now: u64) {
         if !self.claims.expire(now).is_empty() {
             self.claims_changed(store, now);
-        } else {
-            store.set_guard(Some(Box::new(self.claims.guard(now))));
+        } else if now.saturating_sub(self.guard_at) >= 1000 {
+            // Keeps the "time left" in ARA2500 messages within a second.
+            self.install(store, now);
         }
     }
 
@@ -309,7 +329,7 @@ impl Hub {
     pub fn restore_claims(&mut self, store: &mut Store, claims: Vec<Claim>, now: u64) {
         self.claims.restore(claims);
         self.claims.expire(now);
-        store.set_guard(Some(Box::new(self.claims.guard(now))));
+        self.install(store, now);
     }
 
     /// Periodic work: claim expiry, coalesced presence, branch merges per policy.

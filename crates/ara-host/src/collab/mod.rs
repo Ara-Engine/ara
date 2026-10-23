@@ -62,8 +62,8 @@ pub(crate) struct Collab {
     conns: BTreeMap<ParticipantId, ConnId>,
     /// `.ara`.
     dir: PathBuf,
-    /// The claims text last written to `.ara/claims.json`.
-    saved_claims: String,
+    /// The claims version last written to `.ara/claims.json`, and when (ms).
+    saved_claims: (u64, u64),
 }
 
 impl Collab {
@@ -73,7 +73,7 @@ impl Collab {
             hub: Hub::new(0, IdGen::seeded(0)),
             conns: BTreeMap::new(),
             dir,
-            saved_claims: String::new(),
+            saved_claims: (0, 0),
         }
     }
 }
@@ -97,7 +97,6 @@ impl State {
                 .filter(|c| self.sessions.live(&c.holder.0).is_some())
                 .collect();
             self.collab.hub.restore_claims(&mut self.store, live, now);
-            self.collab.saved_claims = text;
         } else {
             self.collab
                 .hub
@@ -162,11 +161,15 @@ impl State {
                 self.outbox.push((conn, msg.clone()));
             }
         }
-        let claims = serde_json::to_string_pretty(self.collab.hub.claims()).unwrap_or_default();
-        if claims != self.collab.saved_claims {
+        // Heartbeats only move expiry times: write those at most every 10 s.
+        let (version, now) = (self.collab.hub.claims_version(), now_ms());
+        let (saved, at) = self.collab.saved_claims;
+        let stale = !self.collab.hub.claims().is_empty() && now.saturating_sub(at) >= 10_000;
+        if version != saved || stale {
+            let claims = serde_json::to_string_pretty(self.collab.hub.claims()).unwrap_or_default();
             let path = self.collab.dir.join("claims.json");
-            match fs::write(&path, &claims) {
-                Ok(()) => self.collab.saved_claims = claims,
+            match fs::write(&path, claims) {
+                Ok(()) => self.collab.saved_claims = (version, now),
                 Err(e) => self.log(Diagnostic::warning(
                     kernel::IO,
                     format!("cannot write `.ara/claims.json`: {e}"),
