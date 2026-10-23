@@ -32,7 +32,7 @@ pub use components::{
     ActionIntent, Brain, BrainState, Change, LocomotionIntent, LookIntent, MoveIntent, TaskState,
     TaskStatus, register,
 };
-pub use eval::{EYE, EqsItem, FAR};
+pub use eval::{EYE, EqsItem, FAR, HEARD_WINDOW};
 pub use los::NavLineOfSight;
 pub use program::{
     Builtin, CAction, CTrigger, ExprId, Generator, Node, Program, Query, Slot, StateNode, Task,

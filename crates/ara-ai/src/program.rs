@@ -89,7 +89,7 @@ impl Ty {
 pub enum Builtin {
     /// `sees(e)`: e is visible this tick.
     Sees,
-    /// `heard()`: any noise heard this tick.
+    /// `heard()`: a noise was heard within the last second.
     Heard,
     /// `noise()`: position of the most recently heard noise.
     Noise,

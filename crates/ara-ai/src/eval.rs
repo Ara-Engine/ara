@@ -7,6 +7,9 @@ use ara_perception::{LineOfSight, Perception, Sense};
 
 /// Value returned for unknown distances/durations.
 pub const FAR: f32 = 1.0e9;
+/// `heard()` is true for this many seconds after a noise (so periodic
+/// re-selection never misses a one-tick sound).
+pub const HEARD_WINDOW: f32 = 1.0;
 /// Eye height used by `visible(a, b)`.
 pub const EYE: f32 = 1.5;
 
@@ -159,10 +162,11 @@ impl<'m> Env<'_, 'm> {
                         .is_some_and(|k| k.visible),
                 )
             }
-            Builtin::Heard => Value::Bool(
-                self.perception
-                    .is_some_and(|p| p.known.iter().any(|k| k.heard)),
-            ),
+            Builtin::Heard => Value::Bool(self.perception.is_some_and(|p| {
+                p.known
+                    .iter()
+                    .any(|k| k.sense == Sense::Hearing && k.since as f32 * self.dt <= HEARD_WINDOW)
+            })),
             Builtin::Noise => self
                 .perception
                 .and_then(|p| {
