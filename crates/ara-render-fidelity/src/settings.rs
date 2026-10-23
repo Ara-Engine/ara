@@ -16,7 +16,7 @@ pub enum Tier {
 /// Transport selected for a view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    /// DDGI diffuse and selective specular transport.
+    /// Ray-gathered diffuse/specular transport terminated in a DDGI field.
     Hybrid,
     /// Undenoised path transport with mixed GGX/diffuse importance sampling.
     Reference {
@@ -92,9 +92,11 @@ pub struct Settings {
     pub mode: Mode,
     /// Reconstruction implementation.
     pub upscaler: Upscaler,
-    /// Maximum probe rays per frame; rounded down to a whole 64-ray probe.
+    /// Primary probe paths per frame, rounded down to a whole 64-ray probe.
+    /// Each path resolves up to five surfaces plus their explicit shadow rays.
     pub probe_ray_budget: u32,
-    /// Skip traced specular rays above this perceptual roughness.
+    /// Fade traced specular into probe lighting over the preceding 0.1 roughness.
+    /// Values above this cutoff use only the filtered directional probe field.
     pub reflection_cutoff: f32,
     /// Post processing in physical units.
     pub post: PostSettings,

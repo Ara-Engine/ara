@@ -16,7 +16,8 @@ pub struct ProbeVolume {
     pub counts: [u32; 3],
 }
 impl ProbeVolume {
-    /// Enclose geometry with one padding cell; clamp density to a bounded lattice.
+    /// Enclose geometry with half a padding cell and a bounded lattice.
+    /// Probe centres avoid the bounding planes, where zero-distance hits vanish.
     pub fn automatic(min: Vec3, max: Vec3) -> Result<Self> {
         ensure!(
             min.is_finite() && max.is_finite() && min.cmple(max).all(),
@@ -24,9 +25,9 @@ impl ProbeVolume {
         );
         let extent = (max - min).max(Vec3::ONE);
         let counts = [10, 6, 10];
-        let spacing = extent / Vec3::new(7., 3., 7.);
+        let spacing = extent / Vec3::new(8., 4., 8.);
         Ok(Self {
-            origin: min - spacing,
+            origin: min - spacing * 0.5,
             spacing,
             counts,
         })

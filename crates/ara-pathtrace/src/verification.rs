@@ -113,11 +113,14 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 struct SequenceError {
     scene: String,
     frames: u32,
+    simulation_frames: u32,
+    capture_stride: u32,
     maximum_residual: f64,
     mean_residual: f64,
     reset_residual: f64,
 }
-fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+/// Record every fourth simulated frame and bound history rejection residuals.
+pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let camera = scenes::camera();
     let size = [240, 135];
     let mut reports = Vec::new();
@@ -132,13 +135,19 @@ fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut errors = Vec::new();
         let mut sheet = image::RgbaImage::new(size[0] * 4, size[1] * 3);
         for i in 0..12 {
-            let tick = i * 4;
-            let scene = scenes::scene(name, tick);
-            view.update_scene(gpu, &scene)?;
-            fresh_view.update_scene(gpu, &scene)?;
-            let mut request = input(&camera, tick, false);
-            request.lighting_changed = name != "disocclusion";
-            view.render(gpu, &request)?;
+            // Simulate every intervening frame; the contact sheet samples every
+            // fourth frame rather than teleporting geometry four ticks per render.
+            for subframe in 0..4 {
+                let tick = i * 4 + subframe;
+                let scene = scenes::scene(name, tick);
+                view.update_scene(gpu, &scene)?;
+                fresh_view.update_scene(gpu, &scene)?;
+                let mut request = input(&camera, tick, false);
+                request.lighting_changed = name != "disocclusion";
+                view.render(gpu, &request)?;
+                request.reset = true;
+                fresh_view.render(gpu, &request)?;
+            }
             let accumulated = view.capture(gpu)?;
             image::imageops::replace(
                 &mut sheet,
@@ -146,8 +155,6 @@ fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 i64::from((i % 4) * size[0]),
                 i64::from((i / 4) * size[1]),
             );
-            request.reset = true;
-            fresh_view.render(gpu, &request)?;
             let fresh = fresh_view.capture(gpu)?;
             let error = metrics::temporal_residual(&accumulated, &fresh, |x, y| {
                 x > size[0] / 4 && x < size[0] * 3 / 4 && y > size[1] / 5 && y < size[1] * 4 / 5
@@ -155,7 +162,7 @@ fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             errors.push(error);
         }
         sheet.save(root.join(format!("captures/{name}-sequence.png")))?;
-        let request = input(&camera, 44, true);
+        let request = input(&camera, 47, true);
         view.render(gpu, &request)?;
         let a = view.capture(gpu)?;
         view.render(gpu, &request)?;
@@ -164,7 +171,7 @@ fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let maximum = errors.iter().copied().fold(0_f64, f64::max);
         let mean = errors.iter().sum::<f64>() / errors.len() as f64;
         anyhow::ensure!(
-            maximum < 0.15 && reset < 0.03,
+            maximum < 0.035 && reset < 0.03,
             "{name}: temporal residual exceeds explicit limits: max {maximum}, reset {reset}"
         );
         println!(
@@ -173,6 +180,8 @@ fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         reports.push(SequenceError {
             scene: name.into(),
             frames: 12,
+            simulation_frames: 48,
+            capture_stride: 4,
             maximum_residual: maximum,
             mean_residual: mean,
             reset_residual: reset,
@@ -272,6 +281,10 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         view.destroy(gpu)?;
     }
     write_json(&root.join("measurements/gpu-timings.json"), &results)?;
+    anyhow::ensure!(
+        results.iter().all(|result| result.budget_passed),
+        "Native or upscaled p95 GPU budget exceeded"
+    );
     write_json(&root.join("measurements/device.json"), &gpu.context().info)?;
     gpu.assert_clean()?;
     Ok(())
