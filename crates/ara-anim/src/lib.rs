@@ -18,6 +18,7 @@ mod packed_wire;
 pub mod pose;
 mod prediction;
 mod quantization;
+pub mod retarget;
 mod sampling;
 mod sampling_plan;
 mod skeleton;
