@@ -2,10 +2,12 @@
 #![deny(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 mod gpu;
+mod native;
 mod pool;
 mod source;
 mod types;
 pub use gpu::Residency;
+pub use native::{NativeMip, NativeSource};
 pub use pool::{Pool, Upload};
 pub use source::{Catalog, Source};
 pub use types::{Binding, Stats};

@@ -226,6 +226,7 @@ impl Gpu {
                 // Enabling the reported core feature also permits that interface
                 // when the producer is a mesh stage rather than geometry stage.
                 .geometry_shader(core_supported.geometry_shader != 0)
+                .texture_compression_bc(core_supported.texture_compression_bc != 0)
                 .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
@@ -291,6 +292,7 @@ impl Gpu {
                 vendor_id: properties.vendor_id,
                 device_id: properties.device_id,
                 ray_tracing,
+                texture_compression_bc: core_supported.texture_compression_bc != 0,
                 mesh_shading,
                 mesh_dispatch: [
                     mesh_properties.max_mesh_work_group_count[0],

@@ -7,6 +7,9 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+- `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
+  `UploadImage`/`ReadImage` copy every resident level, finest first, without padding
+  between levels. Barriers span the chain; copy validation checks block footprints.
 - `Handle<T>`: arena/device identity plus a 64-bit generation. Shader `HeapIndex`
   identities are separate. An expired CPU handle never aliases a replacement.
 - `Recorder` / `CommandList`: owned portable commands; no borrowed ECS state.

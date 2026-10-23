@@ -2,6 +2,9 @@
 Software virtual textures: 128x128 interiors, one-texel wrapping gutters,
 bounded device-local RGBA8 page pool and GPU derivative/min-mip feedback.
 Public API: Source::{rgba8,from_cooked}, Catalog, Residency, Binding, Stats.
+`NativeSource` retains validated cooked BC4/BC5/BC7 blocks without CPU decode;
+`mip`, `resident_bytes` and `stage` expose complete native mip tails for residency.
+It is an asset-preparation boundary, separate from the existing RGBA virtual pages.
 Preparation/decoding belongs on the extraction worker. Completed frame boundaries
 own feedback consumption, LRU planning and uploads; never wait in record().
 The caller submits begin_frame(), then its material sampling passes with Binding,

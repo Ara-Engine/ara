@@ -57,6 +57,7 @@ mod tests {
             vendor_id: 1,
             device_id: 2,
             ray_tracing: false,
+            texture_compression_bc: false,
             max_image_dimension: 16384,
             api_version: String::new(),
             driver_version: 3,

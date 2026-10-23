@@ -118,6 +118,8 @@ pub struct DeviceInfo {
     pub device_id: u32,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
+    /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
+    pub texture_compression_bc: bool,
     /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
     pub mesh_shading: bool,
     /// Mesh indirect group limits: x, y, z, and the total group count.
