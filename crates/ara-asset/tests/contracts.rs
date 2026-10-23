@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 fn input() -> ImportInput {
     ImportInput {
+        preset: Default::default(),
+        thread_budget: 16,
         source_path: "test.bin".into(),
         source: b"source".to_vec(),
         importer: "test".into(),
@@ -32,7 +34,15 @@ fn action_keys_cover_every_input_and_ignore_json_insertion_order() {
     let mut reordered = base.clone();
     reordered.settings = json!({"a":1,"b":2});
     assert_eq!(key, reordered.key().unwrap());
+    reordered.thread_budget = 1;
+    assert_eq!(key, reordered.key().unwrap());
     let mut variants = Vec::new();
+    let mut v = base.clone();
+    v.preset = CookPreset::Fast;
+    variants.push(v);
+    let mut v = base.clone();
+    v.preset = CookPreset::Balanced;
+    variants.push(v);
     let mut v = base.clone();
     v.source.push(0);
     variants.push(v);
@@ -118,6 +128,7 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     );
     let mut store = ara_ops::Store::new(db, ws);
     let settings = ImportSettings {
+        preset: Default::default(),
         importer: "ara.gltf".into(),
         version: "1".into(),
         settings: json!({"lodCount":4}),
@@ -137,6 +148,10 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     let sidecar = Sidecar::read(&before, "mesh.glb.import.json", store.schema()).unwrap();
     assert_eq!(before, sidecar.write(store.schema()));
     assert_eq!(sidecar.settings().unwrap().importer, "ara.gltf");
+    assert_eq!(sidecar.settings().unwrap().preset, CookPreset::HighQuality);
+    let desc = store.schema().get("ImportSettings").unwrap();
+    let field = desc.fields().iter().find(|f| f.name == "preset").unwrap();
+    assert_eq!(store.schema().field_default(field), json!("highQuality"));
     let mut index = ara_doc::AssetIndex::new();
     sidecar.index("models/mesh.glb", &mut index);
     assert_eq!(
@@ -152,9 +167,21 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
                 SidecarCommand::Settings(json!({"lodCount":2}))
                     .edit(id.clone())
                     .unwrap(),
+                SidecarCommand::Preset(CookPreset::Balanced)
+                    .edit(id.clone())
+                    .unwrap(),
             ],
         )
         .unwrap();
+    let changed = ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema());
+    assert_eq!(
+        Sidecar::read(&changed, "mesh.glb.import.json", store.schema())
+            .unwrap()
+            .settings()
+            .unwrap()
+            .preset,
+        CookPreset::Balanced
+    );
     store.undo_last(&ara_ops::Author::Human).unwrap();
     assert_eq!(
         before,

@@ -13,7 +13,9 @@ a message, a structured location and machine-applicable fixes. Leaf crate (serde
 - `Fix { title, action: FixAction }`, `FixAction::{Set, Remove, Rename, Command, Call, Cli}`
   (`Call` = an Engine Protocol method, `Cli` = an `ara` command line).
 - `codes::*`: the catalog. `codes::ALL` lists `(Code, NAME, description)`.
-- `has_errors(&[Diagnostic])`, `did_you_mean(input, candidates)`.
+- `has_errors(&[Diagnostic])`, `did_you_mean(input, candidates)` (closest, ties
+  by name), `nearest(input, candidates)` (every tied candidate: an ambiguous guess
+  becomes several fixes, never one).
 
 ## Code ranges
 

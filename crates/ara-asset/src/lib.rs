@@ -5,6 +5,8 @@ mod cache;
 mod graph;
 mod hot_reload;
 mod importer;
+mod metrics;
+mod preset;
 mod sidecar;
 mod source;
 mod worker;
@@ -16,6 +18,8 @@ pub use importer::{
     Artifact, ArtifactKind, Cancellation, Digest, ImportContext, ImportInput, ImportOutput,
     Importer, ImporterRegistry, Progress, TargetPlatform,
 };
+pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
+pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use worker::{ImportJob, JobEvent, ProcessWorker, serve_worker};

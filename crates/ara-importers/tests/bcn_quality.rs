@@ -1,18 +1,23 @@
 #![allow(clippy::unwrap_used)]
-use ara_asset::{Cancellation, ImportContext, TargetPlatform};
+use ara_asset::{Cancellation, CookPreset, ImportContext, TargetPlatform};
 use ara_asset_format::{Texture, TextureFormat};
-use ara_importers::{TextureSettings, TextureUsage, cook_texture};
+use ara_importers::{TextureSettings, TextureUsage, cook_texture_with_preset};
 use image::ImageEncoder;
 
 fn cook(source: &[u8], usage: TextureUsage) -> Vec<u8> {
-    cook_texture(
+    cook_preset(source, usage, CookPreset::HighQuality)
+}
+fn cook_preset(source: &[u8], usage: TextureUsage, preset: CookPreset) -> Vec<u8> {
+    cook_texture_with_preset(
         source,
         &TextureSettings {
             usage,
             ..Default::default()
         },
         TargetPlatform::Windows,
+        preset,
         &mut ImportContext {
+            metrics: None,
             cancellation: &Cancellation::default(),
             progress: &mut |_| {},
         },
@@ -99,33 +104,40 @@ fn independent_float_decoders_measure_bc4_bc5_and_hdr_bc6h_quality() {
     image::DynamicImage::ImageRgba32F(image)
         .write_to(&mut exr, image::ImageFormat::OpenExr)
         .unwrap();
-    let bytes = cook(&exr.into_inner(), TextureUsage::Hdr);
-    let texture = Texture::read(&bytes).unwrap();
-    assert_eq!(texture.format(), TextureFormat::Bc6h);
-    let mut square = 0.0;
-    for (block_index, block) in texture
-        .levels()
-        .next()
-        .unwrap()
-        .as_chunks::<16>()
-        .0
-        .iter()
-        .enumerate()
-    {
-        let mut decoded = [0.0; 48];
-        bcdec_rs::bc6h_float(block, &mut decoded, 12, false);
-        let bx = block_index % (n as usize / 4);
-        let by = block_index / (n as usize / 4);
-        for y in 0..4 {
-            for x in 0..4 {
-                let p = reference.get_pixel((bx * 4 + x) as u32, (by * 4 + y) as u32);
-                for c in 0..3 {
-                    square += (p[c] as f64 - decoded[(y * 4 + x) * 3 + c] as f64).powi(2);
+    let exr = exr.into_inner();
+    for preset in [
+        CookPreset::Fast,
+        CookPreset::Balanced,
+        CookPreset::HighQuality,
+    ] {
+        let bytes = cook_preset(&exr, TextureUsage::Hdr, preset);
+        let texture = Texture::read(&bytes).unwrap();
+        assert_eq!(texture.format(), TextureFormat::Bc6h);
+        let mut square = 0.0;
+        for (block_index, block) in texture
+            .levels()
+            .next()
+            .unwrap()
+            .as_chunks::<16>()
+            .0
+            .iter()
+            .enumerate()
+        {
+            let mut decoded = [0.0; 48];
+            bcdec_rs::bc6h_float(block, &mut decoded, 12, false);
+            let bx = block_index % (n as usize / 4);
+            let by = block_index / (n as usize / 4);
+            for y in 0..4 {
+                for x in 0..4 {
+                    let p = reference.get_pixel((bx * 4 + x) as u32, (by * 4 + y) as u32);
+                    for c in 0..3 {
+                        square += (p[c] as f64 - decoded[(y * 4 + x) * 3 + c] as f64).powi(2);
+                    }
                 }
             }
         }
+        let quality = psnr(square, (n * n * 3) as usize, 8.0);
+        println!("BC6H {preset:?}: {quality:.3} dB linear RGB HDR PSNR, peak=8");
+        assert!(quality > 40.0);
     }
-    let quality = psnr(square, (n * n * 3) as usize, 8.0);
-    println!("BC6H: {quality:.3} dB linear RGB HDR PSNR, peak=8");
-    assert!(quality > 40.0);
 }

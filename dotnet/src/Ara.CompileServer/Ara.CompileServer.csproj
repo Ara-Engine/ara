@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The warm, out-of-process compile server (decision A13): retained Roslyn compilations per
+       module, the Ara generator and analyzers, the L1/L3 edit classifier and EnC baselines.
+       It ships PE/PDB images and EnC deltas to the game process over a named pipe, so
+       Roslyn's CPU and GC never stall ticks. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Ara.CompileServer</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- A compile server benefits from server-style throughput, but stays on workstation GC
+         to keep its footprint small next to the editor. -->
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" />
+    <!-- Only for the shared ABI constants (reload kinds, escalation codes). -->
+    <ProjectReference Include="../Ara.Runtime/Ara.Runtime.csproj" />
+    <ProjectReference Include="../Ara.Generators/Ara.Generators.csproj" />
+    <ProjectReference Include="../Ara.Analyzers/Ara.Analyzers.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ara.CompileServer.Tests" />
+  </ItemGroup>
+</Project>

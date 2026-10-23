@@ -55,10 +55,19 @@ fn is_pascal(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase()) && s.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
+/// True if `tok` names a component, or nearly does (a typo the check will report).
+fn component_term(tok: &str, db: &SchemaDb) -> bool {
+    is_pascal(tok)
+        && (db.get(tok).is_some_and(|t| t.is_component())
+            || did_you_mean(tok, db.components().map(|t| t.name.as_str())).is_some())
+}
+
 /// Parses the compact syntax into a filter, checking component names and field paths
-/// against the Schema DB.
+/// against the Schema DB. Bare words that are not components (`radio`, `Crate`)
+/// search names: `*radio*`, case-insensitive.
 pub fn parse(q: &str, db: &SchemaDb) -> Result<Filter, Diagnostic> {
     let mut f = Filter::default();
+    let mut words: Vec<String> = Vec::new();
     for tok in tokens(q) {
         let negated = tok
             .strip_prefix('!')
@@ -103,18 +112,25 @@ pub fn parse(q: &str, db: &SchemaDb) -> Result<Filter, Diagnostic> {
             }
             continue;
         }
-        if is_pascal(&tok) {
+        if component_term(&tok, db) {
             f.has.push(tok);
         } else if is_entity_address(&tok) {
             f.ids.push(tok);
         } else {
+            words.push(tok);
+        }
+    }
+    if !words.is_empty() {
+        if f.name.is_some() {
             return Err(invalid(
                 q,
                 format!(
-                    "cannot read `{tok}`; terms are components (`Light`), `key:value` (name, parent, under, prefab, id), `depth<=N` or comparisons (`Light.intensity>500`)"
+                    "`{}` and `name:` both name entities; use one",
+                    words.join(" ")
                 ),
             ));
         }
+        f.name = Some(format!("*{}*", words.join(" ")));
     }
     check(&f, db, Some(q))?;
     Ok(f)
@@ -288,7 +304,14 @@ mod tests {
         assert_eq!(d.fixes.len(), 1, "{d}");
         assert!(matches!(&d.fixes[0].action, FixAction::Set { value, .. } if value == "Transform"));
         assert!(parse("Transform.positon>1", &db()).is_err());
-        assert!(parse("what?", &db()).is_err());
+        assert!(parse("radio name:Crate", &db()).is_err(), "two name terms");
+    }
+
+    #[test]
+    fn bare_words_search_names() {
+        let f = parse("Transform Radio tower", &db()).expect("parses");
+        assert_eq!(f.has, ["Transform"]);
+        assert_eq!(f.name.as_deref(), Some("*Radio tower*"));
     }
 
     #[test]

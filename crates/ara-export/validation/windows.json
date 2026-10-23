@@ -1,0 +1,70 @@
+{
+  "artifacts": {
+    "ara-launch.json": 156,
+    "ara-player.exe": 1023488,
+    "game.arapack": 12288,
+    "game/Game.dll": 1891328
+  },
+  "config": "release",
+  "elapsed_ms": 51713,
+  "format": "ara.export.report/1",
+  "lane": "nativeAot",
+  "pack_id": "9303307cf9ecfcf325c517a409320112cc3021ae93900aa4a49b1ed6365b6706",
+  "platform": "windows",
+  "signing": "unsigned",
+  "stages_ms": {
+    "assemble": 71,
+    "native": 11,
+    "pack": 464,
+    "resolve": 0,
+    "script": 50345,
+    "template": 122,
+    "verify": 692
+  },
+  "verify": {
+    "evidence": {
+      "bench": null,
+      "checksum_cs": "0x825f3722a803f55c",
+      "checksum_rust": "0x825f3722a803f55c",
+      "entities": 100000,
+      "fault_contained": true,
+      "lane": "nativeaot",
+      "mod_status": null,
+      "pack_bytes": 12288,
+      "pack_id": "9303307cf9ecfcf325c517a409320112cc3021ae93900aa4a49b1ed6365b6706",
+      "platform": "windows-x86_64",
+      "startup": {
+        "content_ms": 0.7301,
+        "first_cs_call_ms": 233.8228,
+        "pack_open_ms": 0.5299,
+        "script_load_ms": 229.7235,
+        "spawn_ms": 2.7066,
+        "spawn_to_first_cs_call_ms": null
+      },
+      "texture": "fixture-media blake3:c988bafebaac1951",
+      "tick": {
+        "cs_mean_ms": 0.32382000000000005,
+        "cs_min_ms": 0.1825,
+        "cs_ns_per_entity": 1.825,
+        "rust_ns_per_entity": 1.438
+      },
+      "ticks": 120,
+      "verified": true
+    },
+    "logs": "verify.log",
+    "method": "desktop_smoke",
+    "passed": true,
+    "perf": {
+      "cs_mean_ms": 0.32382000000000005,
+      "cs_min_ms": 0.1825,
+      "cs_ns_per_entity": 1.825,
+      "rust_ns_per_entity": 1.438
+    },
+    "runtime_executed": true,
+    "screenshot": null,
+    "unavailable": [
+      "ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template",
+      "ARA-EXP-BRG-015: GPU timing hook requires ara-render"
+    ]
+  }
+}

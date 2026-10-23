@@ -1,0 +1,2 @@
+# Preserve the release archive's trailing blank lines without editing upstream files.
+* whitespace=-blank-at-eof

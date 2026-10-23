@@ -22,3 +22,10 @@ canonical writer's output. The source-media path, not sidecar path, is indexed.
 
 GC requires writers to be quiescent and roots from every active/staged/undo
 generation in every process. CacheBackend is the shared cache server seam.
+
+CookPreset is a semantic input (default HQ); thread_budget defaults to 16 and only
+controls the private Rayon pool. Keep scheduling out of action identities.
+HotReload stages Fast then final quality on misses; Ready.final_pass distinguishes
+them. Cancel/supersede the entire epoch, including HQ. Never downgrade a final hit.
+Export via exact ProcessWorker preset, or disable HotReload.progressive explicitly.
+ImportContext.metrics is optional offline profiling; never encode timing values.

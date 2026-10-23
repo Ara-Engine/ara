@@ -8,15 +8,18 @@ use std::collections::BTreeMap;
 
 fn context<'a>(
     cancel: &'a Cancellation,
-    progress: &'a mut dyn FnMut(Progress),
+    progress: &'a mut (dyn FnMut(Progress) + Send),
 ) -> ImportContext<'a> {
     ImportContext {
+        metrics: None,
         cancellation: cancel,
         progress,
     }
 }
 fn input(source: Vec<u8>, importer: &dyn Importer, settings: Value) -> ImportInput {
     ImportInput {
+        preset: Default::default(),
+        thread_budget: 16,
         source_path: "fixture".into(),
         source,
         importer: importer.id().into(),
@@ -246,8 +249,9 @@ fn gltf_fixture() -> Vec<u8> {
 }
 #[test]
 fn generated_gltf_cooks_mesh_skin_clip_materials_and_hierarchy_byte_identically() {
-    let input = input(gltf_fixture(), &GltfImporter, Value::Null);
+    let mut input = input(gltf_fixture(), &GltfImporter, Value::Null);
     let first = cook(&input);
+    input.thread_budget = 1;
     assert_eq!(first, cook(&input));
     assert_eq!(first.artifacts.len(), 6);
     let mesh = first
@@ -289,6 +293,21 @@ fn generated_gltf_cooks_mesh_skin_clip_materials_and_hierarchy_byte_identically(
         .unwrap();
     let manifest: Value = serde_json::from_slice(&scene.bytes).unwrap();
     assert_eq!(manifest["document"]["nodes"][0]["children"], json!([1]));
+    // Exercise independent mesh jobs and stable manifest ordering, not only one primitive.
+    let mut fixture: Value = serde_json::from_slice(&input.source).unwrap();
+    fixture["meshes"] = Value::Array(vec![fixture["meshes"][0].clone(); 8]);
+    input.source = serde_json::to_vec(&fixture).unwrap();
+    let serial = cook(&input);
+    input.thread_budget = 16;
+    assert_eq!(serial, cook(&input));
+    assert_eq!(
+        serial
+            .artifacts
+            .iter()
+            .filter(|a| a.kind == ArtifactKind::Mesh)
+            .count(),
+        8
+    );
 }
 #[test]
 fn external_dependency_discovery_is_sorted_and_missing_inputs_fail() {

@@ -1,12 +1,10 @@
-use crate::{
-    MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, cook_texture, invalid,
-    json_bytes,
-};
+use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, invalid, json_bytes};
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, Result,
 };
 use ara_asset_format::{Builder, Channel, Clip, Joint, Kind, write_skeleton};
 use base64::Engine;
+use rayon::prelude::*;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,7 +15,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "1-gltf14-meshopt070-ispc050"
+        "2-gltf14-meshopt070-ispc050-tiled"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -63,14 +61,19 @@ impl Importer for GltfImporter {
             buffers.push(data);
         }
         let mut output = ImportOutput::default();
-        let mut mesh_map = Vec::new();
-        let mesh_count = gltf.meshes().count().max(1);
-        for mesh in gltf.meshes() {
-            for primitive in mesh.primitives() {
-                ctx.report(
-                    mesh.index() as f32 / mesh_count as f32 * 0.3,
-                    "optimize glTF geometry",
-                )?;
+        ctx.report(0.05, "optimize glTF geometry")?;
+        let cancellation = ctx.cancellation;
+        let metrics = ctx.metrics;
+        let primitives: Vec<_> = gltf
+            .meshes()
+            .flat_map(|mesh| {
+                let index = mesh.index();
+                mesh.primitives().map(move |p| (index, p))
+            })
+            .collect();
+        let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
+        let meshes: Result<Vec<_>> = primitives.into_par_iter().map(|(mesh_index, primitive)| {
+                cancellation.check()?;
                 let reader = primitive.reader(|b| buffers.get(b.index()).map(Vec::as_slice));
                 let positions: Vec<_> = reader
                     .read_positions()
@@ -144,19 +147,24 @@ impl Importer for GltfImporter {
                         v.weights1 = w;
                     }
                 }
-                let name = format!("meshes/{}-{}.mesh", mesh.index(), primitive.index());
-                output.artifacts.push(Artifact {
-                    name: name.clone(),
-                    kind: ArtifactKind::Mesh,
+                let name = format!("meshes/{}-{}.mesh", mesh_index, primitive.index());
+                let artifact = Artifact {
+                    name: name.clone(), kind: ArtifactKind::Mesh,
                     bytes: cook_mesh(&vertices, &indices, mesh_settings)?,
-                });
+                };
                 // Preserve all morph target deltas independently of quantized base geometry.
                 let mut targets = Vec::new();
                 for (positions, normals, tangents) in reader.read_morph_targets() {
                     targets.push(json!({"positions":positions.map(Iterator::collect::<Vec<_>>),"normals":normals.map(Iterator::collect::<Vec<_>>),"tangents":tangents.map(Iterator::collect::<Vec<_>>)}));
                 }
-                mesh_map.push(json!({"mesh":mesh.index(),"primitive":primitive.index(),"material":primitive.material().index(),"artifact":name,"morphTargets":targets}));
-            }
+                let metadata = json!({"mesh":mesh_index,"primitive":primitive.index(),"material":primitive.material().index(),"artifact":name,"morphTargets":targets});
+                Ok((artifact, metadata))
+        }).collect();
+        drop(mesh_timer);
+        let mut mesh_map = Vec::new();
+        for (artifact, metadata) in meshes? {
+            output.artifacts.push(artifact);
+            mesh_map.push(metadata);
         }
         let mut texture_usages: BTreeMap<(usize, u8), (TextureUsage, Vec<u8>)> = BTreeMap::new();
         for material in gltf.materials() {
@@ -208,22 +216,26 @@ impl Importer for GltfImporter {
             }
         }
         let mut texture_map = Vec::new();
-        let texture_count = texture_usages.len().max(1);
-        for (i, ((image, _), (usage, bytes))) in texture_usages.into_iter().enumerate() {
-            ctx.report(
-                0.3 + i as f32 / texture_count as f32 * 0.6,
-                "cook glTF texture",
-            )?;
+        let textures: Vec<_> = texture_usages.into_iter().collect();
+        let jobs: Vec<_> = textures
+            .iter()
+            .map(|(_, (usage, bytes))| {
+                (
+                    TextureSettings {
+                        usage: *usage,
+                        ..Default::default()
+                    },
+                    bytes.clone(),
+                )
+            })
+            .collect();
+        let cooked = crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx)?;
+        for (((image, _), (usage, _)), bytes) in textures.into_iter().zip(cooked) {
             let name = format!("textures/{image}-{usage:?}.ktx2");
-            let settings = TextureSettings {
-                usage,
-                ..Default::default()
-            };
-            let cooked = cook_texture(&bytes, &settings, input.target, ctx)?;
             output.artifacts.push(Artifact {
                 name: name.clone(),
                 kind: ArtifactKind::Texture,
-                bytes: cooked,
+                bytes,
             });
             texture_map.push(json!({"image":image,"usage":usage,"artifact":name}));
         }

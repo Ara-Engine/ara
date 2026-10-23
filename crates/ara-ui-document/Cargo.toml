@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-roxmltree = "=0.21.1"
+roxmltree = "0.21.1"
 serde = { workspace = true }
 
 [lints]

@@ -1,0 +1,3 @@
+# Test module for the Rust host tests: counters, faults and structural commands.
+[module]
+name = "Ara.TestModule"

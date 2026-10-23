@@ -1,0 +1,16 @@
+{
+  "capturedPeak": 0.20000000298023224,
+  "commandQpc100ns": [4844846696077, 4844849188766, 4844851686854, 4844854193539, 4844856690565, 4844859193366, 4844861699359, 4844864191597],
+  "correlations": [1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002, 1.0000000000000002],
+  "device": "Speakers (BlackShark V3 - Game)",
+  "latencyEstimate": {
+    "estimatedOutputMs": 22.666666666666668,
+    "queuedFrames": 608
+  },
+  "latencyMs": [82.9115, 81.6525, 82.51096669921876, 82.51253330078124, 83.4817, 81.1995, 81.25776669921875, 82.73303330078124],
+  "limitation": "Measures command to Windows output mix; excludes DAC, wireless and acoustic propagation.",
+  "method": "WASAPI loopback packet QPC timestamp + 768-frame MLS correlation",
+  "p50Ms": 82.51175,
+  "p95Ms": 83.28213000000001,
+  "submittedFrames": 144736
+}

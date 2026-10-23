@@ -1,0 +1,184 @@
+{
+  "atrous": {
+    "entries": {
+      "atrousMain": "compute"
+    },
+    "source": "denoise.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "bloom": {
+    "entries": {
+      "bloomMain": "compute"
+    },
+    "source": "post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "ddgi": {
+    "entries": {
+      "ddgiMain": "compute"
+    },
+    "source": "ddgi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "exposure": {
+    "entries": {
+      "exposureMain": "compute"
+    },
+    "source": "post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "hybrid": {
+    "entries": {
+      "hybridMain": "compute"
+    },
+    "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "hybrid_raster": {
+    "entries": {
+      "hybridRasterMain": "compute"
+    },
+    "source": "raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "post": {
+    "entries": {
+      "postMain": "compute"
+    },
+    "source": "post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "primary": {
+    "entries": {
+      "primaryMain": "compute"
+    },
+    "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "primary_raster": {
+    "entries": {
+      "primaryRasterMain": "compute"
+    },
+    "source": "raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reference": {
+    "entries": {
+      "referenceMain": "compute"
+    },
+    "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "sharpen": {
+    "entries": {
+      "sharpenMain": "compute"
+    },
+    "source": "upscale.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "temporal": {
+    "entries": {
+      "temporalMain": "compute"
+    },
+    "source": "denoise.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "upscale": {
+    "entries": {
+      "upscaleMain": "compute"
+    },
+    "source": "upscale.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  }
+}

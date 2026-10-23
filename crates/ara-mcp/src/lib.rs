@@ -13,6 +13,9 @@
 //!
 //! The adapter holds no engine state: every call goes to an
 //! [`Endpoint`](ara_proto::Endpoint) (the daemon client, or the host in-process).
+//! [`Adapter::per_connection`] (one client, `ara mcp` on stdio) also keeps that
+//! client's session, so `session` becomes optional: calls without one use the
+//! session the client began, or one begun for it on first use.
 
 pub mod tools;
 
@@ -32,7 +35,7 @@ pub const UNSUPPORTED_VERSION: i64 = -32022;
 pub const HEADER_MISMATCH: i64 = -32020;
 const VERSION_KEY: &str = "io.modelcontextprotocol/protocolVersion";
 
-const INSTRUCTIONS: &str = "Ara game engine tools. Start with ara_session {\"action\": \"begin\", \"client\": \"<your name>\"} and pass the returned `session` to every tool. Find commands and components with ara_schema {\"action\": \"search\"}; read scenes with ara_inspect and ara_query; edit only through ara_apply (atomic batches with a `why`, symbolic IDs via `as`). Conventions: Y-up, meters, degrees, IDs like e_8b21, references @path#id. Diagnostics carry stable ARA codes and fixes.";
+const INSTRUCTIONS: &str = "Ara game engine tools. ara_session {\"action\": \"begin\", \"client\": \"<your name>\"} returns a `session` handle and the project's documents; over `ara mcp` the session is optional (one begins on first use). Read scenes with ara_inspect and ara_query; edit only through ara_apply (atomic batches with a `why`; `doc` defaults to the document holding the entities you name). Name entities by ID (`e_8b21`), `$symbol` from an earlier call, or `name:Crate` / `name:Floor/Crate`. Find components and fields with ara_schema {\"action\": \"search\"}. Conventions: Y-up, meters, degrees, linear colors, references @path#id. Diagnostics carry stable ARA codes and machine-applicable fixes.";
 
 fn server_info() -> Value {
     json!({ "name": "ara", "title": "Ara engine", "version": env!("CARGO_PKG_VERSION") })
@@ -62,12 +65,70 @@ fn rpc_error(code: i64, message: impl Into<String>, data: Option<Value>) -> RpcE
 #[derive(Default)]
 pub struct Adapter {
     catalog: Option<Vec<MethodInfo>>,
+    /// Set in per-connection mode: the one client's name and session.
+    connection: Option<Connection>,
+}
+
+/// The single client of a per-connection adapter.
+#[derive(Debug, Default)]
+struct Connection {
+    /// From `initialize` or the request `_meta` clientInfo (`claude-code`).
+    client: Option<String>,
+    /// What calls without `session` use; begun on first need.
+    session: Option<String>,
+}
+
+/// A client name usable as an author name (`agent:<name>`).
+fn author_name(client: Option<&str>) -> String {
+    let name: String = client
+        .unwrap_or_default()
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "-_.".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let name = name.trim_matches('-');
+    if name.is_empty() {
+        "mcp-client".into()
+    } else {
+        name.to_owned()
+    }
 }
 
 impl Adapter {
-    /// A new adapter.
+    /// A stateless adapter (Streamable HTTP): every call names its session.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An adapter for one client (`ara mcp` on stdio): `session` is optional, and
+    /// calls without it use the client's session, begun on first use.
+    pub fn per_connection() -> Self {
+        Adapter {
+            catalog: None,
+            connection: Some(Connection::default()),
+        }
+    }
+
+    /// The session for a call that named none, beginning one if needed.
+    fn default_session(&mut self, ep: &mut dyn Endpoint) -> Result<Option<String>, RpcError> {
+        let Some(conn) = self.connection.as_mut() else {
+            return Ok(None);
+        };
+        if let Some(s) = &conn.session {
+            return Ok(Some(s.clone()));
+        }
+        let begun = ep.call(
+            "session.begin",
+            json!({ "client": author_name(conn.client.as_deref()), "label": "MCP connection" }),
+        )?;
+        conn.session = begun["session"].as_str().map(str::to_owned);
+        Ok(conn.session.clone())
     }
 
     fn refresh(&mut self, ep: &mut dyn Endpoint) -> Result<&[MethodInfo], RpcError> {
@@ -79,8 +140,9 @@ impl Adapter {
 
     /// The tool definitions (always regenerated from a fresh catalog).
     pub fn tools(&mut self, ep: &mut dyn Endpoint) -> Result<Vec<Value>, RpcError> {
+        let optional = self.connection.is_some();
         let catalog = self.refresh(ep)?;
-        Ok(tools::definitions(catalog))
+        Ok(tools::definitions(catalog, optional))
     }
 
     /// Handles one MCP JSON-RPC message; returns the response (none for
@@ -91,6 +153,15 @@ impl Adapter {
             Ok(_) => return None,
             Err(error) => return Some(error),
         };
+        if let Some(conn) = self.connection.as_mut() {
+            let info = params
+                .get("_meta")
+                .and_then(|m| m.get("io.modelcontextprotocol/clientInfo"))
+                .or_else(|| params.get("clientInfo"));
+            if let Some(name) = info.and_then(|i| i.get("name")).and_then(Value::as_str) {
+                conn.client = Some(name.to_owned());
+            }
+        }
         if let Some(v) = params
             .get("_meta")
             .and_then(|m| m.get(VERSION_KEY))
@@ -227,7 +298,39 @@ impl Adapter {
                 }
             }
         };
-        Ok(match ep.call(&method, Value::Object(args)) {
+        let takes_session = tools::methods_of(catalog, name)
+            .iter()
+            .find(|m| m.name == method)
+            .is_none_or(|m| m.params.pointer("/properties/session").is_some());
+        let named = args
+            .get("session")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty());
+        if takes_session && !named && method != "session.begin" {
+            match self.default_session(ep) {
+                Ok(Some(sid)) => {
+                    args.insert("session".into(), sid.into());
+                }
+                Ok(None) => {}
+                Err(e) => return Ok(tool_error(&e)),
+            }
+        }
+        let ending = (method == "session.end")
+            .then(|| {
+                args.get("session")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .flatten();
+        let result = ep.call(&method, Value::Object(args));
+        if let (Some(conn), Ok(v)) = (self.connection.as_mut(), &result) {
+            if method == "session.begin" {
+                conn.session = v["session"].as_str().map(str::to_owned);
+            } else if ending.is_some() && ending == conn.session {
+                conn.session = None;
+            }
+        }
+        Ok(match result {
             Ok(result) => tool_result(result),
             Err(e) => tool_error(&e),
         })
@@ -374,13 +477,14 @@ pub fn tool_error(e: &RpcError) -> Value {
     })
 }
 
-/// Serves MCP over stdio until end of input: one JSON-RPC message per line.
+/// Serves MCP over stdio until end of input: one JSON-RPC message per line, for one
+/// client ([`Adapter::per_connection`]).
 pub fn serve_stdio(
     ep: &mut dyn Endpoint,
     input: &mut dyn BufRead,
     output: &mut dyn Write,
 ) -> io::Result<()> {
-    let mut adapter = Adapter::new();
+    let mut adapter = Adapter::per_connection();
     let mut input = input;
     let mut output = output;
     while let Some(line) = lines::read_line(&mut input)? {
