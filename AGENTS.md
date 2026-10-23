@@ -14,7 +14,15 @@ Ara is a Rust game engine. AI agents build it, and agents and humans use it to m
 
 ## Status
 
-Pre-M0. The repo is initialized and the research is done. Next up: the M0 spikes (S1–S8).
+M0 is done: every spike decision is in `docs/decisions.md`. M1 and M2 are in progress.
+
+**Merged:**
+- the kernel (`ara-schema`, `ara-doc`, `ara-ops`, `ara-cmd`, `ara-merge`, `ara-json`, `ara-diag`);
+- the Engine Protocol, daemon and MCP (`ara-proto`, `ara-host`, `ara-rpc`, `ara-mcp`, the `ara` CLI);
+- the UI runtime (`ara-ui-*`);
+- animation (`ara-anim`).
+
+The renderer, simulation, C# host, assets, physics, audio, navigation, materials and export are still being built in parallel worktrees. Run `ara init` in a scratch dir to try the CLI and MCP.
 
 ## Layout
 
