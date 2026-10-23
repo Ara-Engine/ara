@@ -24,10 +24,24 @@ fn main() -> Result<()> {
     effects.push(ara_vfx::samples::million());
     effects.extend(ara_vfx::samples::additional().into_iter().map(|(e, _)| e));
     let selected = std::env::args().nth(1);
+    let text_only = selected.as_deref() == Some("--text-only");
+    if !text_only {
+        let bytes=ara_vfx_gpu::cook_atlas();
+        std::fs::create_dir_all(root.join("cooked"))?;
+        std::fs::write(root.join("cooked/atlas.rgba"),&bytes)?;
+        image::save_buffer(root.join("cooked/atlas.png"),&bytes,ara_vfx_gpu::ATLAS_SIZE[0],ara_vfx_gpu::ATLAS_SIZE[1],image::ColorType::Rgba8)?;
+    }
     for effect in effects {
-        if selected.as_ref().is_some_and(|name| name != &effect.name) {
+        if !text_only && selected.as_ref().is_some_and(|name| name != &effect.name) {
             continue;
         }
+        let samples = root.join("../ara-vfx/examples");
+        std::fs::create_dir_all(&samples)?;
+        std::fs::write(
+            samples.join(format!("{}.vfx", effect.name)),
+            effect.text().map_err(|d| anyhow::anyhow!("{d:?}"))?,
+        )?;
+        if text_only { continue; }
         let source = root.join("generated").join(&effect.name);
         std::fs::create_dir_all(&source)?;
         std::fs::write(
@@ -47,8 +61,8 @@ fn main() -> Result<()> {
         }
         for (name, fragment, formats, blend) in [
             ("backdrop", "backdropFragment", vec![109, 100], false),
-            ("particles", "particleFragment", vec![109], true),
-            ("tonemap", "tonemapFragment", vec![37, 100], false),
+            ("particles", "particleFragment", vec![109, 100], true),
+            ("tonemap", "tonemapFragment", vec![37], false),
         ] {
             let vertex = if name == "particles" {
                 "particleVertex"
@@ -72,7 +86,7 @@ fn main() -> Result<()> {
             );
         }
         // The canonical writer owns text ordering for this derived manifest.
-        let value = serde_json::to_value(
+        let value = ara_json::to_value(&
             manifest
                 .iter()
                 .map(|(name, p)| {
@@ -92,12 +106,6 @@ fn main() -> Result<()> {
         std::fs::write(
             output.join("effect.json"),
             ara_json::to_canonical_string(&metadata),
-        )?;
-        let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-vfx/examples");
-        std::fs::create_dir_all(&samples)?;
-        std::fs::write(
-            samples.join(format!("{}.vfx", effect.name)),
-            effect.text().map_err(|d| anyhow::anyhow!("{d:?}"))?,
         )?;
         println!("{}: {count} pipelines cooked", effect.name);
     }

@@ -3,6 +3,7 @@
 //! Graph-backed hardware ray-query lighting and reference rendering.
 mod capture;
 mod frame;
+mod features;
 pub mod probes;
 mod render;
 pub mod scene;
@@ -13,3 +14,4 @@ pub use settings::{
     FrameInput, Mode, PostSettings, Quality, Settings, Tier, Upscaler, UpscalerInput,
 };
 pub use view::FidelityView;
+pub use features::{FeatureInputs, ImageInput};

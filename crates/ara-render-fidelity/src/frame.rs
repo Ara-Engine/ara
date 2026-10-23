@@ -19,13 +19,13 @@ pub(crate) struct GpuFrame {
     probes: [u32; 4],
     sun_direction: [f32; 4],
     sun_lux: [f32; 4],
-    temporal: [f32; 4],
+    pub(crate) temporal: [f32; 4],
     post: [f32; 4],
     lens: [f32; 4],
-    control: [u32; 4],
+    pub(crate) control: [u32; 4],
     transport: [u32; 4],
     pub(crate) jitter: [f32; 4],
-    read: [[u32; 4]; 6],
+    pub(crate) read: [[u32; 4]; 6],
     write: [[u32; 4]; 6],
 }
 impl FidelityView {

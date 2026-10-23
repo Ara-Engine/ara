@@ -15,6 +15,7 @@ macro_rules! kinds {($(($name:literal,$stage:ident,$doc:literal)),* $(,)?)=>{
     pub const MODULES:&[ModuleKind]=&[$(ModuleKind{name:$name,stage:Stage::$stage,doc:$doc}),*];
 };}
 kinds![
+    ("appearance", Render, "Blend offline fire/smoke/streak/ripple/wisp sheets with typed alpha/additive output, alignment and a fixed-tick shutter."),
     (
         "rate",
         Spawn,

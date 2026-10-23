@@ -32,15 +32,15 @@
             "module": {
               "op": "lifetime",
               "seconds": 2,
-              "size": 0.03500000014901161,
-              "color": [8, 2.799999952316284, 0.25, 0.8999999761581421]
+              "size": 0.035,
+              "color": [8, 2.8, 0.25, 0.9]
             }
           },
           {
             "name": "source",
             "module": {
               "op": "point",
-              "position": [0, 0.699999988079071, 0]
+              "position": [0, 0.7, 0]
             }
           },
           {
@@ -48,7 +48,7 @@
             "module": {
               "op": "velocity",
               "value": [0, 3, 0],
-              "spread": [2.5999999046325684, 2, 2.5999999046325684]
+              "spread": [2.6, 2, 2.6]
             }
           }
         ],
@@ -57,7 +57,7 @@
             "name": "gravity",
             "module": {
               "op": "gravity",
-              "acceleration": [0, -9.8100004196167, 0]
+              "acceleration": [0, -9.81, 0]
             }
           },
           {
@@ -66,7 +66,7 @@
               "op": "plane_collision",
               "normal": [0, 1, 0],
               "offset": 0,
-              "restitution": 0.6000000238418579
+              "restitution": 0.6
             }
           }
         ],
@@ -76,7 +76,7 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
             }
           }

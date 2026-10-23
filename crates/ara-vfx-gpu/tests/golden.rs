@@ -89,7 +89,7 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
         std::fs::write(
             root.join("captures")
                 .join(format!("{}.stats.json", effect.name)),
-            ara_json::to_canonical_string(&serde_json::to_value(&stats).unwrap()),
+            ara_json::to_canonical_string(&ara_json::to_value(&stats).unwrap()),
         )
         .unwrap();
         system.retire(&mut gpu).unwrap();

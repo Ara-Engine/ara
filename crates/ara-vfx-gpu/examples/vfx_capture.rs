@@ -39,7 +39,7 @@ fn main() -> Result<()> {
         let stats = system.stats(&gpu)?;
         std::fs::write(
             output.join(format!("{}.stats.json", effect.name)),
-            ara_json::to_canonical_string(&serde_json::to_value(&stats)?),
+            ara_json::to_canonical_string(&ara_json::to_value(&stats)?),
         )?;
         println!(
             "{}: {} alive; {} batches",

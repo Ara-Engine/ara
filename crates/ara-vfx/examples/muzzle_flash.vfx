@@ -32,9 +32,9 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 0.11999999731779099,
-              "size": 0.30000001192092896,
-              "color": [15, 5, 0.5, 0.699999988079071]
+              "seconds": 0.12,
+              "size": 0.3,
+              "color": [15, 5, 0.5, 0.7]
             }
           },
           {
@@ -42,8 +42,8 @@
             "module": {
               "op": "cone",
               "origin": [0, 0.5, 0],
-              "height": 0.800000011920929,
-              "radius": 0.30000001192092896
+              "height": 0.8,
+              "radius": 0.3
             }
           },
           {
@@ -51,7 +51,7 @@
             "module": {
               "op": "velocity",
               "value": [0, 1, 0],
-              "spread": [0.6000000238418579, 1, 0.6000000238418579]
+              "spread": [0.6, 1, 0.6]
             }
           }
         ],
@@ -62,7 +62,7 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
             }
           },
@@ -78,7 +78,7 @@
             "name": "light",
             "module": {
               "op": "light",
-              "color": [1, 0.44999998807907104, 0.07999999821186066],
+              "color": [1, 0.45, 0.08],
               "lumens": 900,
               "radius": 3
             }

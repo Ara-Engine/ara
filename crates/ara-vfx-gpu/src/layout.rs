@@ -3,7 +3,7 @@ use ara_vfx::{Effect, Module, Sorting};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec4};
 
-pub(crate) const CONFIG_STRIDE: usize = 160;
+pub(crate) const CONFIG_STRIDE: usize = 192;
 pub(crate) const CONTROL_STRIDE: usize = 64;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -18,6 +18,8 @@ pub(crate) struct Config {
     pub bounds_max: [f32; 4],
     pub light_color: [f32; 4],    // rgb, lumens
     pub light_position: [f32; 4], // xyz,radius
+    pub appearance: [u32; 4], // sheet, blend, alignment, reserved
+    pub motion: [f32; 4], // stretch, shutter, reserved
 }
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -32,6 +34,13 @@ pub(crate) struct Frame {
     pub clock: [f32; 4],  // dt,exposure,near,unused
     pub inputs: [u32; 4], // config index,depth index,depth enabled,tick
     pub demands: [[u32; 4]; 16],
+    pub visuals: [u32; 4], // atlas, background, flags (linear depth/background), reserved
+    pub ambient: [f32; 4],
+    pub sun_direction: [f32; 4],
+    pub sun_color: [f32; 4],
+    pub probe_origin: [f32; 4],
+    pub probe_spacing: [f32; 4],
+    pub probe_counts: [u32; 4], // xyz, buffer index + 1
 }
 pub(crate) struct Layout {
     pub configs: Vec<Config>,
@@ -51,12 +60,18 @@ impl Layout {
             c.partition = [total, capacity, groups, padded / 256];
             c.scratch[3] = padded;
             c.atlas = [1, 1, effect.quality.events, 0];
+            c.motion = [1., 0., 0., 0.];
             c.surface[3] = effect.quality.overdraw * capacity as f32
                 / effect.capacities().iter().sum::<u32>().max(1) as f32;
             c.bounds_min = [e.bounds.min[0], e.bounds.min[1], e.bounds.min[2], 0.];
             c.bounds_max = [e.bounds.max[0], e.bounds.max[1], e.bounds.max[2], 0.];
             for m in &e.stacks.render {
                 let domain = match &m.module {
+                    Module::Appearance { texture, blend, alignment, stretch, shutter } => {
+                        c.appearance=[*texture as u32,*blend as u32,*alignment as u32,0];
+                        c.motion=[*stretch,*shutter,0.,0.];
+                        None
+                    }
                     Module::Sprite {
                         domain,
                         soft_distance,

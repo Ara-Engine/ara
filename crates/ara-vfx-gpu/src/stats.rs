@@ -123,7 +123,7 @@ impl crate::GpuSystem {
                 .iter()
                 .filter(|c| c.light_color[3] > 0.)
                 .count() as u32,
-            device: serde_json::to_value(&gpu.context().info)?,
+            device: ara_json::to_value(&gpu.context().info)?,
             effect_hash: self.hash.clone(),
             shader_key: self.metadata.content_key.clone(),
             async_compute: self.async_compute,
