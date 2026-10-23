@@ -1,7 +1,9 @@
 //! Project assets for play: every `*.import.json` sidecar is registered with an
 //! `ara_asset::AssetPipeline` (importers run in disposable worker processes; D20).
 //! Play pins the published generation of each asset (`as_…` → action digest); players
-//! load those from the shared content-addressed cache and never import.
+//! load those from the shared content-addressed cache and never import. Imports run
+//! non-progressively, so every published generation is already persisted and is the
+//! requested preset (never a preview that a later pass replaces).
 //! Generations published during Play reach players only when allowed or approved.
 //! A sidecar recorded by an older importer is upgraded (one typed
 //! `SidecarCommand::Version` transaction, an info diagnostic) and reimported; only an
@@ -64,6 +66,11 @@ impl Assets {
             Arc::new(schema.clone()),
         )
         .map_err(|e| e.to_string())?;
+        // Players load generations from the disk cache in another process, so only a
+        // persisted generation is playable. Progressive previews are published before
+        // they are persisted (an in-process speedup), and pinning one would also make
+        // Play depend on import timing; play cooks the requested preset directly.
+        pipeline.reload.progressive = false;
         let mut files = Vec::new();
         sidecars(root, root, &mut files);
         files.sort();

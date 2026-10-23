@@ -16,7 +16,8 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
   checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
-  (imports in worker processes); `pins` waits for published generations.
+  (imports in worker processes, non-progressive); `pins` waits for published
+  generations, which are always persisted final-preset cooks players can load.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`
@@ -59,7 +60,9 @@ every player of a world; reads go to the authority.
 
 - Host calls are serialized on the daemon thread; long steps block other calls.
   Players heartbeat between 30-tick chunks so the watchdog never kills a busy step.
-- The first Play of a fresh clone waits for the first cooks (progressive Fast first).
+- The first Play of a fresh clone waits for the first full-preset cooks. Never turn
+  progressive previews on here: a preview is published before it is on disk, so a
+  player pinned to it fails with "asset … has no published generation" (a race).
   Generations published during Play reach a world only with `hotReload`.
 - Multi-instance without `ara-net`: every process runs the same deterministic world
   from the same snapshot and broadcast inputs; clients do the S5 UDP hello/welcome.
