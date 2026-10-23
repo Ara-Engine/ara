@@ -84,7 +84,6 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
 /// Builds the showcase project.
 pub fn build(ctx: &Ctx) -> Result<()> {
     clean(&ctx.root, &["levels", "anim", "assets/kit", ".scratch"])?;
-    ctx.project_settings("Material and character showcase", SCENE.0)?;
     let mut models = Models::default();
     for (name, asset) in [
         ("flight_helmet", "khronos_flight_helmet"),
@@ -300,6 +299,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         "Showcase stage: turntable character, hero props, material grid",
         calls,
     )?;
+    ctx.set_main(SCENE.0, SCENE.1)?;
     ctx.check()?;
     Ok(())
 }

@@ -70,6 +70,113 @@ fn begin(h: &mut Host, author: &str) -> String {
     r["session"].as_str().expect("handle").to_owned()
 }
 
+#[test]
+#[allow(clippy::unwrap_used)]
+fn recovery_replays_only_unsaved_documents_after_a_partial_flush() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("partial-flush-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    copy_dir(&fixtures(), &dir);
+    let mut h = open(&dir, 2030);
+    let session = begin(&mut h, "agent:builder");
+    let created = call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":session,"why":"Create two levels","commands":[
+            {"cmd":"doc.create","args":{"path":"levels/first.scene","id":"sc_first"}},
+            {"cmd":"doc.create","args":{"path":"levels/second.scene","id":"sc_second"}}
+        ]}),
+    );
+    h.flush();
+    h.kill();
+    // Simulate a crash after the first file's rename and flush journal entry.
+    fs::remove_file(dir.join("levels/second.scene")).unwrap();
+    let journal = dir.join(".ara/journal");
+    let text = fs::read_to_string(&journal).unwrap();
+    let text = text
+        .lines()
+        .filter(|line| {
+            let entry: Value = serde_json::from_str(line).unwrap();
+            !(entry["t"] == "flush" && entry["doc"] == "sc_second")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(journal, text).unwrap();
+    let mut h = open(&dir, 2031);
+    let docs = call(&mut h, "session.begin", json!({"client":"recovery"}));
+    let docs = docs["documents"].as_array().unwrap();
+    assert!(docs.iter().any(|d| d["id"] == "sc_first"));
+    assert!(docs.iter().any(|d| d["id"] == "sc_second"));
+    h.flush();
+    assert!(dir.join("levels/second.scene").is_file());
+    let session = begin(&mut h, "agent:builder");
+    call(
+        &mut h,
+        "history.undo",
+        json!({"session":session,"txn":created["txn"]}),
+    );
+    h.flush();
+    assert!(!dir.join("levels/first.scene").exists());
+    assert!(!dir.join("levels/second.scene").exists());
+}
+
+#[test]
+fn document_creation_and_main_scene_survive_crash_and_undo() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("host-documents-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    copy_dir(&fixtures(), &dir);
+    let mut h = open(&dir, 2026);
+    let session = begin(&mut h, "agent:builder");
+    let request = |dry| json!({"session":session,"why":"Create a second level","dryRun":dry,"commands":[{"cmd":"doc.create","as":"level","args":{"path":"levels/new.scene"}}]});
+    let dry = call(&mut h, "cmd.apply", request(true));
+    assert!(!dir.join("levels/new.scene").exists());
+    let created = call(&mut h, "cmd.apply", request(false));
+    assert_eq!(dry["ops"], created["ops"]);
+    assert_eq!(dry["ids"], created["ids"]);
+    assert!(created["txn"].is_string());
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":session,"why":"Start in the new level","commands":[{"cmd":"project.setMain","args":{"scene":"@levels/new.scene"}}]}),
+    );
+    h.kill();
+    let mut h = open(&dir, 2027);
+    let resumed = begin(&mut h, "agent:builder");
+    assert!(
+        dir.join("levels/new.scene").is_file(),
+        "unflushed document recovered"
+    );
+    let marker: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("ara.project.json")).expect("marker"))
+            .expect("settings");
+    assert_eq!(marker["main"], "levels/new.scene");
+    call(&mut h, "history.undo", json!({"session":resumed}));
+    call(&mut h, "history.undo", json!({"session":resumed}));
+    h.flush();
+    assert!(
+        !dir.join("levels/new.scene").exists(),
+        "undo removes the empty skeleton"
+    );
+    drop(h);
+    let mut h = open(&dir, 2028);
+    let resumed = begin(&mut h, "agent:builder");
+    assert!(
+        !dir.join("levels/new.scene").exists(),
+        "recovery respects the deletion flush"
+    );
+    // A source file must never be overwritten by a document command.
+    let d = fail(
+        &mut h,
+        "cmd.apply",
+        json!({"session":resumed,"why":"Collision test","commands":[{"cmd":"doc.create","args":{"path":"levels/arena.scene"}}]}),
+    );
+    assert_eq!(d.code, codes::INVALID_PARAMS);
+}
+
 fn scene(dir: &Path) -> String {
     fs::read_to_string(dir.join("levels/arena.scene")).expect("scene file")
 }
@@ -278,17 +385,12 @@ fn review_accepts_and_reverts_per_transaction_and_entity() {
     let txn = r["txn"].as_str().expect("txn").to_owned();
     let marker = r["ids"]["$m"].as_str().expect("marker").to_owned();
     let pending = call(&mut h, "review.list", json!({ "session": human }));
-    assert_eq!(pending["items"][0]["txn"], txn.as_str());
+    assert_eq!(pending["items"], json!([]), "D24 has no pending review");
 
-    let d = fail(
+    call(
         &mut h,
         "review.accept",
         json!({ "session": agent, "txn": txn }),
-    );
-    assert_eq!(
-        d.code,
-        codes::NOT_REVIEWABLE,
-        "agents cannot accept their own changes"
     );
 
     call(
@@ -313,8 +415,8 @@ fn review_accepts_and_reverts_per_transaction_and_entity() {
         .expect("listed")
         .clone();
     assert_eq!(
-        original["status"], "applied",
-        "the marker is still unreviewed"
+        original["status"], "accepted",
+        "the marker remains accepted"
     );
 
     call(
@@ -335,12 +437,11 @@ fn review_accepts_and_reverts_per_transaction_and_entity() {
         accepted["items"][0]["review"]["sc_arena001/e_flr1"],
         "reverted"
     );
-    let d = fail(
+    call(
         &mut h,
         "review.accept",
         json!({ "session": human, "all": true }),
     );
-    assert_eq!(d.code, codes::NOT_REVIEWABLE, "nothing left");
 }
 
 #[test]
@@ -415,7 +516,7 @@ fn the_journal_replays_commits_lost_in_a_crash() {
         "same transaction ID"
     );
     assert_eq!(
-        history["items"][0]["status"], "applied",
+        history["items"][0]["status"], "accepted",
         "review state survives"
     );
     call(&mut h, "history.undo", json!({ "session": s }));
@@ -711,8 +812,8 @@ fn calls_find_their_document_and_report_created_ids_plainly() {
     let begun = call(&mut h, "session.begin", json!({ "client": "codex" }));
     assert_eq!(
         begun["documents"].as_array().map(Vec::len),
-        Some(3),
-        "scene and two prefabs"
+        Some(4),
+        "scene, two prefabs and project settings"
     );
 
     // No `doc`: the entity named by its selector picks the scene; `as` may repeat `id`.

@@ -38,6 +38,22 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       }
     ]
   },
+  "doc.create": {
+    "kind": "command",
+    "summary": "Create a canonical empty scene, prefab or other registered document.",
+    "params": "DocCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "path": "levels/arena.scene",
+        "id": "sc_arena001"
+      }
+    ]
+  },
   "entity.create": {
     "kind": "command",
     "summary": "Create an entity, optionally with a parent, a position among its siblings and components.",
@@ -169,6 +185,21 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       }
     ]
   },
+  "project.setMain": {
+    "kind": "command",
+    "summary": "Set ara.project.json's startup scene with history and undo.",
+    "params": "ProjectSetMainParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "scene": "@levels/arena.scene#sc_arena001"
+      }
+    ]
+  },
   "property.set": {
     "kind": "command",
     "summary": "Set one field of an entity (its name or a component field).",
@@ -203,6 +234,23 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
     "examples": [
       {
         "count": 2
+      }
+    ]
+  },
+  "transform.lookAt": {
+    "kind": "command",
+    "summary": "Aim local -Z at a world point or entity with a preferred world up vector.",
+    "params": "TransformLookAtParams",
+    "hints": {
+      "idempotent": true,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "entity": "e_camera",
+        "point": [0, 1, 0],
+        "up": [0, 1, 0]
       }
     ]
   },

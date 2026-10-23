@@ -112,10 +112,10 @@ service registers them.
   params type → service → **drain**. The drain journals each commit, tracks agent
   commits for review, schedules the flush and notifies subscribers. Command scopes
   are checked by the ara-cmd registry inside `cmd.apply`.
-- Review: agent transactions start `applied`; `review.revert` undoes a whole
+- Review: agent transactions start `accepted` under amended D24; `review.revert` undoes a whole
   transaction (store undo) or a subset of entities (a compensating transaction
-  based on the target's revision, so later edits conflict). Only human sessions
-  accept. A redo (undo of an undo) makes the original `applied` again.
+  based on the target's revision, so later edits conflict). Accept remains an
+  idempotent compatibility action for humans and agents. Redo restores `accepted`.
 - Checkpoints: one per agent `cmd.apply` turn (at the revision before it), plus
   manual ones; `session.rollback` undoes the session's later transactions all or
   nothing.

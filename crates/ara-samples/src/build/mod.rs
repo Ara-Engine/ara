@@ -1,9 +1,8 @@
 //! `build`: authors a sample project through Ara's own tools, as an agent would.
 //! Content edits are typed command batches applied by the `ara` CLI (`ara do --args
 //! @batch.json`), so the documents carry the same history and review state as any
-//! agent session. Where no command exists yet (new empty documents, import sidecars,
-//! animation controllers) the build writes canonical documents with the engine's own
-//! writers, and each such gap is listed in `samples/FINDINGS.md`.
+//! agent session. Documents, import sidecars and animation controllers use the same
+//! typed commands available to agents through the CLI and MCP.
 pub mod anim;
 pub mod hangar;
 pub mod kits;
@@ -27,7 +26,6 @@ pub struct Ctx {
     /// The pinned assets.
     pub lock: Lock,
     ara: PathBuf,
-    worker: PathBuf,
     batches: Cell<usize>,
 }
 
@@ -61,7 +59,6 @@ impl Ctx {
     pub fn open(samples: &Path, project: &str, title: &str, lock: Lock) -> Result<Self> {
         let root = samples.join(project);
         let ara = tool("ara", "ARA_BIN")?;
-        let worker = tool("ara-import-worker", "ARA_IMPORT_WORKER")?;
         if !root.join("ara.project.json").is_file() {
             run(Command::new(&ara)
                 .arg("init")
@@ -74,30 +71,26 @@ impl Ctx {
             root,
             lock,
             ara,
-            worker,
             batches: Cell::new(0),
         })
     }
 
-    /// Writes `ara.project.json` (name and main scene).
-    pub fn project_settings(&self, name: &str, main: &str) -> Result<()> {
-        let text = serde_json::to_string_pretty(&json!({"name": name, "main": main}))?;
-        std::fs::write(self.root.join("ara.project.json"), text + "\n")?;
-        Ok(())
+    /// Selects the completed main scene through the project settings command.
+    pub fn set_main(&self, main: &str, id: &str) -> Result<()> {
+        self.apply(
+            "ara.project.json",
+            "Select the sample's main scene",
+            vec![("project.setMain", json!({"scene": format!("@{main}#{id}")}))],
+        )
     }
 
-    /// Creates an empty canonical document (`ara init` style) so commands can fill it:
-    /// the engine has no document-creation command yet. Replaces an existing file.
+    /// Creates an empty canonical document through the shared authoring command.
     pub fn new_document(&self, path: &str, kind: &str, id: &str) -> Result<()> {
-        let file = self.root.join(path);
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let text = format!(
-            "{{\n  \"$schema\": \"ara://schema/{kind}/1\",\n  \"id\": \"{id}\",\n  \"records\": {{}}\n}}\n"
-        );
-        std::fs::write(file, text)?;
-        Ok(())
+        self.apply(
+            "ara.project.json",
+            "Create a sample document",
+            vec![("doc.create", json!({"path": path, "kind": kind, "id": id}))],
+        )
     }
 
     /// Runs `ara` in the project with JSON output; fails on `ok: false`.
@@ -106,6 +99,7 @@ impl Ctx {
             .arg("--root")
             .arg(&self.root)
             .arg("--json")
+            .args(["--author", "agent:ara-samples"])
             .args(args)
             .output()
             .context("running ara")?;
@@ -148,40 +142,40 @@ impl Ctx {
         Ok(())
     }
 
-    /// Writes an import sidecar for `source` (project-relative) through the asset
-    /// crate's typed `SidecarCommand` and the canonical writer, recording the
-    /// installed importer version. No engine command creates sidecars outside the editor.
-    pub fn sidecar(&self, source: &str, id: &str, importer: &str, settings: Value) -> Result<()> {
+    /// Initializes or reconfigures a sidecar with engine-selected import/version data.
+    pub fn sidecar(&self, source: &str, id: &str, settings: Value) -> Result<()> {
         ensure!(
             self.root.join(source).is_file(),
             "{source} is missing; run `ara-samples fetch` first"
         );
-        let versions = ara_asset::ProcessWorker::new(&self.worker)
-            .versions()
-            .map_err(|e| anyhow::anyhow!("asking the import worker for versions: {e}"))?;
-        let version = versions
-            .get(importer)
-            .with_context(|| format!("the import worker has no {importer}"))?;
-        let mut db = ara_schema::SchemaDb::new();
-        ara_doc::register(&mut db);
-        ara_asset::register_schema(&mut db);
-        let asset = ara_doc::AssetId::parse(id).map_err(anyhow::Error::msg)?;
-        let mut document = ara_doc::Document::new("import", asset.clone());
-        let edit = ara_asset::SidecarCommand::Initialize(ara_asset::ImportSettings {
-            importer: importer.into(),
-            version: version.clone(),
-            settings,
-            ..Default::default()
-        })
-        .edit(asset)?;
-        document
-            .apply(edit, &db)
-            .map_err(|d| anyhow::anyhow!("{d}"))?;
-        std::fs::write(
-            self.root.join(format!("{source}.import.json")),
-            ara_doc::write(&document, &db),
-        )?;
-        Ok(())
+        let settings = if settings.is_null() {
+            json!({})
+        } else {
+            settings
+        };
+        let sidecar = self.root.join(format!("{source}.import.json"));
+        let (command, args) = if sidecar.is_file() {
+            let existing: Value = serde_json::from_slice(&std::fs::read(&sidecar)?)?;
+            ensure!(
+                existing["id"] == id,
+                "{} has a different asset identity",
+                sidecar.display()
+            );
+            (
+                "import.configure",
+                json!({"source":source, "settings":settings}),
+            )
+        } else {
+            (
+                "import.initialize",
+                json!({"source":source, "id":id, "settings":settings}),
+            )
+        };
+        self.apply(
+            "ara.project.json",
+            "Configure sample asset import",
+            vec![(command, args)],
+        )
     }
 
     /// `ara check` over every document; errors fail the build.

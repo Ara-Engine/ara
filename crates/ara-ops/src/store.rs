@@ -242,6 +242,24 @@ impl Store {
     /// Fails with `ARA1501` unless `txn.result` is past the current revision, and with
     /// the op's diagnostic if an op no longer applies (nothing changes then).
     pub fn restore(&mut self, txn: Transaction, apply: bool) -> Result<(), Vec<Diagnostic>> {
+        self.restore_selected(txn, |_| apply)
+    }
+
+    /// Restores full transaction history while replaying only documents whose files
+    /// predate it. Recovery uses this when a crash interrupted a multi-document flush.
+    pub fn restore_documents(
+        &mut self,
+        txn: Transaction,
+        documents: &BTreeSet<AssetId>,
+    ) -> Result<(), Vec<Diagnostic>> {
+        self.restore_selected(txn, |op| documents.contains(op.doc()))
+    }
+
+    fn restore_selected(
+        &mut self,
+        txn: Transaction,
+        apply: impl Fn(&Op) -> bool,
+    ) -> Result<(), Vec<Diagnostic>> {
         if txn.result <= self.rev {
             return Err(vec![Diagnostic::error(
                 codes::STALE_BASE,
@@ -251,16 +269,10 @@ impl Store {
                 ),
             )]);
         }
-        if apply {
+        {
             let mut applied = Vec::new();
-            for op in &txn.ops {
-                let result = match self.ws.doc_mut(op.doc().as_str()) {
-                    Some(doc) => doc.apply(op.to_edit(), &self.db),
-                    None => Err(Diagnostic::error(
-                        codes::DOC_NOT_FOUND,
-                        format!("no document `{}` is loaded", op.doc()),
-                    )),
-                };
+            for op in txn.ops.iter().filter(|op| apply(op)) {
+                let result = self.ws.apply(op.to_edit(), &self.db);
                 match result {
                     Ok(done) => applied.push(done),
                     Err(d) => {
@@ -526,7 +538,11 @@ impl Store {
     /// Undoes applied ops, newest first. Used when a transaction fails.
     fn rollback(&mut self, ops: &[Op]) {
         for op in ops.iter().rev() {
-            if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
+            if matches!(op, Op::Document { .. }) {
+                self.ws
+                    .apply(op.inverse().to_edit(), &self.db)
+                    .expect("inverse of a staged document lifecycle op applies");
+            } else if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
                 doc.revert(op, &self.db);
             }
         }
@@ -592,7 +608,9 @@ impl Touch {
 
     fn overlaps(&self, other: &Touch) -> bool {
         self.doc == other.doc
-            && self.record == other.record
+            && (self.record == other.record
+                || self.record.as_str() == "d_document"
+                || other.record.as_str() == "d_document")
             && match (&self.path, &other.path) {
                 (Some(a), Some(b)) => a.overlaps(b),
                 _ => true,
@@ -644,7 +662,9 @@ impl<'s> Staged<'s> {
         let doc_id = edit.doc().clone();
         if !self.baselines.contains_key(&doc_id) {
             let store = self.store();
-            if store.ws.doc(doc_id.as_str()).is_none() {
+            if store.ws.doc(doc_id.as_str()).is_none()
+                && !matches!(edit, Edit::Document { kind: Some(_), .. })
+            {
                 return Err(Diagnostic::error(
                     codes::DOC_NOT_FOUND,
                     format!("no document `{doc_id}` is loaded"),
@@ -654,13 +674,7 @@ impl<'s> Staged<'s> {
             self.baselines.insert(doc_id.clone(), baseline);
         }
         let store = self.store_mut();
-        let doc = store.ws.doc_mut(doc_id.as_str()).ok_or_else(|| {
-            Diagnostic::error(
-                codes::DOC_NOT_FOUND,
-                format!("no document `{doc_id}` is loaded"),
-            )
-        })?;
-        let op = doc.apply(edit, &store.db)?;
+        let op = store.ws.apply(edit, &store.db)?;
         let index = self.ops.len();
         self.ops.push(op);
         Ok(&self.ops[index])

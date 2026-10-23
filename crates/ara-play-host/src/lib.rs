@@ -372,7 +372,10 @@ impl PlayService {
         let scene = PlayScene {
             format: 1,
             scene: scene_id.clone(),
-            documents: PlayScene::documents(workspace),
+            documents: PlayScene::documents(workspace)
+                .into_iter()
+                .filter(|d| !matches!(d.kind.as_str(), "project" | "import"))
+                .collect(),
             types,
             seed,
             tick_hz,
@@ -1031,8 +1034,11 @@ impl Service for PlayService {
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
     ara_host::Project::open_with(root, |db, registry| {
-        let problems = ara_runtime::engine::register_schemas(db);
+        let mut problems = ara_runtime::engine::register_schemas(db);
         ara_runtime::engine::register_commands(registry, db);
+        if let Err(d) = ara_importers::commands::register(registry, db) {
+            problems.push(d);
+        }
         problems
     })
 }

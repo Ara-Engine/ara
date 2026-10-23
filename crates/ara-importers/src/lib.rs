@@ -1,6 +1,8 @@
 //! Production source importers installed only in the disposable import worker.
 #![deny(missing_docs)]
 
+pub mod audio;
+pub mod commands;
 mod fbx;
 mod gltf;
 mod mesh;
@@ -22,6 +24,7 @@ pub fn registry() -> Result<ImporterRegistry> {
     registry.register(GltfImporter)?;
     registry.register(FbxImporter)?;
     registry.register(TextureImporter)?;
+    registry.register(audio::AudioAsset::default())?;
     registry.register(ara_geo::GeoImporter)?;
     Ok(registry)
 }

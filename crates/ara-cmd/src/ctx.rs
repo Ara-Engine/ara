@@ -278,6 +278,51 @@ pub struct EditCtx<'a, 's> {
 }
 
 impl EditCtx<'_, '_> {
+    /// Apply an existing subsystem's typed intent after it lowers to a kernel edit.
+    pub fn apply_edit(&mut self, edit: Edit) -> Result<(), Diagnostic> {
+        self.staged.apply(edit).map(drop)
+    }
+    /// Create an empty document through a workspace lifecycle op, with a stable or symbolic ID.
+    pub fn create_document(
+        &mut self,
+        path: &str,
+        kind: &str,
+        id: Option<&str>,
+    ) -> Result<AssetId, Diagnostic> {
+        let prefix = self
+            .read()
+            .schema()
+            .kind(kind)
+            .ok_or_else(|| {
+                Diagnostic::error(
+                    codes::UNKNOWN_SCHEMA,
+                    format!("unknown document kind `{kind}`"),
+                )
+            })?
+            .id_prefix
+            .clone();
+        let asset = match id {
+            Some(symbol) if symbol.starts_with('$') => {
+                if self.symbols.contains_key(symbol) {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_ID,
+                        "symbol is already bound",
+                    ));
+                }
+                let id = self.staged.ids().asset_id(&prefix);
+                self.symbols.insert(symbol.to_owned(), id.to_string());
+                id
+            }
+            Some(id) => AssetId::parse(id).map_err(|e| Diagnostic::error(codes::INVALID_ID, e))?,
+            None => self.staged.ids().asset_id(&prefix),
+        };
+        self.staged.apply(Edit::Document {
+            doc: asset.clone(),
+            path: path.to_owned(),
+            kind: Some(kind.to_owned()),
+        })?;
+        Ok(asset)
+    }
     /// Read access, reflecting the writes made so far.
     pub fn read(&self) -> ReadCtx<'_> {
         ReadCtx::new(self.staged.store(), &self.doc, self.symbols)

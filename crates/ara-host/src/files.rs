@@ -16,8 +16,9 @@ use std::fs;
 use std::path::Path;
 use std::time::{Instant, SystemTime};
 
+use crate::project_settings::{read, write};
 use ara_diag::{Diagnostic, codes};
-use ara_doc::{AssetId, Document, Edit, OrderKey, field, read, write};
+use ara_doc::{AssetId, Document, Edit, OrderKey, field};
 use ara_ops::{Author, TxnMeta};
 use ara_schema::FieldPath;
 use serde_json::Value;
@@ -78,6 +79,8 @@ pub(crate) enum Diverged {
 /// Per-document persistence state.
 #[derive(Debug)]
 pub(crate) struct Files {
+    /// Paths retained until an undo of document creation is flushed.
+    pub deleted: BTreeMap<AssetId, String>,
     pub synced: BTreeMap<AssetId, Synced>,
     /// Documents changed by a transaction, with the time of the latest change.
     pub changed: BTreeMap<AssetId, Instant>,
@@ -89,6 +92,7 @@ pub(crate) struct Files {
 impl Default for Files {
     fn default() -> Self {
         Files {
+            deleted: BTreeMap::new(),
             synced: BTreeMap::new(),
             changed: BTreeMap::new(),
             diverged: BTreeMap::new(),
@@ -189,6 +193,35 @@ impl State {
     /// journals that the file now holds the current revision.
     pub(crate) fn write_doc(&mut self, id: &AssetId, always: bool) {
         let Some(doc) = self.store.workspace().doc(id.as_str()) else {
+            if let Some(path) = self.files.deleted.get(id).cloned() {
+                if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
+                    self.files.changed.insert(id.clone(), Instant::now());
+                    self.log(d);
+                    return;
+                }
+                let result = fs::remove_file(self.root.join(&path));
+                if let Err(e) = result
+                    && e.kind() != std::io::ErrorKind::NotFound
+                {
+                    self.files.changed.insert(id.clone(), Instant::now());
+                    self.log(
+                        Diagnostic::error(
+                            codes::FLUSH_FAILED,
+                            format!("cannot remove `{path}`: {e}"),
+                        )
+                        .file(path),
+                    );
+                    return;
+                }
+                self.files.deleted.remove(id);
+                self.files.synced.remove(id);
+                self.files.diverged.remove(id);
+                self.journal(&Entry::Flush {
+                    doc: id.to_string(),
+                    rev: self.store.revision(),
+                    hash: journal::hash("deleted"),
+                });
+            }
             return;
         };
         let path = self
@@ -198,6 +231,24 @@ impl State {
             .unwrap_or_default()
             .to_owned();
         let abs = self.root.join(&path);
+        if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
+            self.files.changed.insert(id.clone(), Instant::now());
+            self.log(d);
+            return;
+        }
+        if let Some(parent) = abs.parent()
+            && let Err(e) = fs::create_dir_all(parent)
+        {
+            self.files.changed.insert(id.clone(), Instant::now());
+            self.log(
+                Diagnostic::error(
+                    codes::FLUSH_FAILED,
+                    format!("cannot create `{path}` parent: {e}"),
+                )
+                .file(path),
+            );
+            return;
+        }
         let unchanged = self.files.synced.get(id).is_some_and(|s| s.doc == *doc);
         let text = if unchanged && !always {
             self.files

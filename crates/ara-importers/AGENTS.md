@@ -1,8 +1,14 @@
 # ara-importers
 
-Production pure glTF/GLB, FBX and image importers for ara-import-worker.
-Public API: registry, the three Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
+Production pure glTF/GLB, FBX, image and audio importers for ara-import-worker.
+Public API: registry, Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
+`commands::register` exposes `import.initialize` and `import.configure` to the
+shared CLI/MCP registry. It selects the importer from the source extension and
+records its installed version; callers provide source, optional stable ID and settings.
+Audio settings include `usage`, `codec`, `opusBitrate` and `decodedBudget` (resident
+PCM bytes, 64 MiB default, 64 KiB minimum). Music/dialogue cook incrementally to
+Opus; effects remain resident. Compressed data and codec/meter scratch are separate.
 The builtin registry also installs ara-geo::GeoImporter (`ara.geo`) for extracted
 single-material SourceMesh snapshots. glTF/FBX also emit one ARAG v1 Custom
 artifact per static material primitive automatically; MeshSettings.virtualGeometry

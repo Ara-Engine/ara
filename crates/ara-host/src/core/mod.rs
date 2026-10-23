@@ -5,7 +5,7 @@
 //! |---|---|
 //! | `rpc.discover` | (adapter metadata) |
 //! | `session.begin/status/diff/checkpoint/rollback/end`, `history.list/undo/redo`, `review.list/revert` | `ara_session` (`action`) |
-//! | `review.accept` (humans only), `subscribe`, `unsubscribe`, `doc.sync`, `daemon.shutdown` | none |
+//! | `review.accept` (legacy compatibility), `subscribe`, `unsubscribe`, `doc.sync`, `daemon.shutdown` | none |
 //! | `schema.list/describe/search` | `ara_schema` (`action`) |
 //! | `query` | `ara_query` |
 //! | `inspect` | `ara_inspect` |
@@ -72,7 +72,7 @@ pub(crate) fn methods(db: &mut SchemaDb) -> Vec<Method> {
         Method::new::<ReviewListParams>(db, "review.list", "Agent transactions by review status (default: unreviewed), with per-entity status.")
             .read_only()
             .action(s, "review"),
-        Method::new::<ReviewParams>(db, "review.accept", "Accept agent changes per transaction, per entity or all. Human sessions only.")
+        Method::new::<ReviewParams>(db, "review.accept", "Legacy compatibility: agent changes are accepted immediately; accepting again is harmless.")
             .scope(Scope::EditScene),
         Method::new::<ReviewParams>(db, "review.revert", "Revert agent changes per transaction or per entity (inverse ops, conflict-checked).")
             .scope(Scope::EditScene)
