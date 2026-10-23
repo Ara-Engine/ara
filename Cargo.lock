@@ -939,7 +939,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-asset",
- "ara-cmd",
  "ara-doc",
  "ara-gpu",
  "ara-host",
@@ -947,7 +946,7 @@ dependencies = [
  "ara-mcp",
  "ara-platform",
  "ara-play",
- "ara-proto",
+ "ara-play-host",
  "ara-render",
  "ara-runtime",
  "ara-runtime-render",
