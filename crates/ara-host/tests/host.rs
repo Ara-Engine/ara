@@ -607,3 +607,102 @@ fn services_register_methods_that_light_up_immediately() {
     let jobs = call(&mut h, "jobs.list", json!({ "session": s }));
     assert_eq!(jobs["jobs"][0]["result"], 3);
 }
+
+/// Params of `test.spawn`.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SpawnParams {
+    /// Entities to create.
+    count: u32,
+}
+
+/// A registry job that creates entities and reports progress after each.
+struct Spawn;
+
+impl ara_cmd::Job for Spawn {
+    type Params = SpawnParams;
+    type Output = u32;
+    const NAME: &'static str = "test.spawn";
+    const SUMMARY: &'static str = "Create entities, reporting progress.";
+
+    fn examples() -> Vec<Value> {
+        vec![json!({ "count": 2 })]
+    }
+
+    fn run(ctx: &mut ara_cmd::JobCtx<'_, '_>, p: SpawnParams) -> Result<u32, Diagnostic> {
+        for i in 0..p.count {
+            let id = ctx.edit.new_id(None, "e")?;
+            ctx.edit.create(id, ara_doc::Record::new())?;
+            ctx.progress((i + 1) as f32 / p.count as f32, "spawned");
+        }
+        Ok(p.count)
+    }
+}
+
+#[test]
+fn subscribers_get_ops_history_and_job_progress() {
+    let dir = project("subscribe");
+    let mut project = Project::open(&dir).expect("project");
+    project.registry.job::<Spawn>(&mut project.db);
+    let config = HostConfig {
+        seed: Some(10),
+        ..HostConfig::default()
+    };
+    let mut h = Host::open(project, config).expect("host");
+    let s = begin(&mut h, "human");
+    let conn = ConnId(7);
+    h.call(
+        conn,
+        "subscribe",
+        json!({ "session": s, "topics": ["ops", "history", "jobs"] }),
+    )
+    .expect("subscribed");
+    let job = call(
+        &mut h,
+        "jobs.start",
+        json!({ "session": s, "doc": "levels/arena.scene", "job": "test.spawn", "args": { "count": 2 } }),
+    );
+    assert_eq!(
+        (job["status"].clone(), job["result"]["output"].clone()),
+        (json!("done"), json!(2))
+    );
+
+    let notes: Vec<Value> = h
+        .drain_outbox()
+        .into_iter()
+        .filter(|(c, _)| *c == conn)
+        .map(|(_, n)| n)
+        .collect();
+    let of =
+        |method: &str| -> Vec<&Value> { notes.iter().filter(|n| n["method"] == method).collect() };
+    let progress: Vec<Value> = of("jobs")
+        .iter()
+        .map(|n| n["params"]["progress"].clone())
+        .collect();
+    assert_eq!(
+        progress,
+        [json!(0.0), json!(0.5), json!(1.0), json!(1.0)],
+        "start, two steps, done"
+    );
+    let ops = of("ops");
+    assert_eq!(ops.len(), 1, "one transaction");
+    assert_eq!(
+        ops[0]["params"]["txn"]["ops"].as_array().map(Vec::len),
+        Some(2)
+    );
+    assert_eq!(of("history")[0]["params"]["label"], "test.spawn");
+
+    h.call(
+        conn,
+        "unsubscribe",
+        json!({ "session": s, "topics": ["ops", "history", "jobs"] }),
+    )
+    .expect("unsubscribed");
+    call(
+        &mut h,
+        "jobs.start",
+        json!({ "session": s, "doc": "levels/arena.scene", "job": "test.spawn", "args": { "count": 1 } }),
+    );
+    assert!(h.drain_outbox().is_empty());
+}

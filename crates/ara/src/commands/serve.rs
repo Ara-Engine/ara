@@ -77,8 +77,15 @@ impl Handler for Daemon {
 }
 
 /// Runs the daemon for `root` until it is shut down (or stdin closes, with
-/// `stdio`).
-fn run_daemon(root: &Path, port: u16, stdio: bool, mcp_on_stdio: bool) -> Result<bool, String> {
+/// `stdio`). With `announce`, prints `{pid, port, url, mcp}` as one JSON line once
+/// listening (never with stdio, where stdout carries protocol messages).
+fn run_daemon(
+    root: &Path,
+    port: u16,
+    stdio: bool,
+    mcp_on_stdio: bool,
+    announce: bool,
+) -> Result<bool, String> {
     let host = Host::open(
         Project::open(root).map_err(|d| d.to_string())?,
         HostConfig::default(),
@@ -97,11 +104,17 @@ fn run_daemon(root: &Path, port: u16, stdio: bool, mcp_on_stdio: bool) -> Result
     };
     info.write(&root)
         .map_err(|e| format!("cannot write `.ara/daemon.json`: {e}"))?;
+    let mcp_url = format!("http://127.0.0.1:{port}/mcp");
     eprintln!(
-        "ara: serving {} on {} (MCP: POST http://127.0.0.1:{port}/mcp)",
+        "ara: serving {} on {} (MCP: POST {mcp_url})",
         root.display(),
         info.url()
     );
+    if announce && !stdio {
+        let line =
+            serde_json::json!({ "pid": info.pid, "port": port, "url": info.url(), "mcp": mcp_url });
+        println!("{line}");
+    }
     let mut daemon = Daemon {
         host,
         adapter: Adapter::new(),
@@ -121,8 +134,8 @@ fn run_daemon(root: &Path, port: u16, stdio: bool, mcp_on_stdio: bool) -> Result
 }
 
 /// `ara serve`.
-pub fn serve(root: &Path, port: Option<u16>, stdio: bool) -> Result<bool, String> {
-    run_daemon(root, port.unwrap_or(0), stdio, false)
+pub fn serve(root: &Path, port: Option<u16>, stdio: bool, json: bool) -> Result<bool, String> {
+    run_daemon(root, port.unwrap_or(0), stdio, false, json)
 }
 
 /// `ara mcp`.
@@ -134,5 +147,5 @@ pub fn mcp(root: &Path) -> Result<bool, String> {
         ara_mcp::serve_stdio(&mut client, &mut input, &mut output).map_err(|e| e.to_string())?;
         return Ok(true);
     }
-    run_daemon(root, 0, true, true)
+    run_daemon(root, 0, true, true, false)
 }

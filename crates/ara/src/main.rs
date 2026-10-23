@@ -356,7 +356,7 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
             commands::docs(&open(&[])?, out.as_deref(), json).map_err(io)
         }
         Command::Serve { port, stdio } => {
-            commands::serve(&project::root(root_flag, &[])?, port, stdio).map_err(io)
+            commands::serve(&project::root(root_flag, &[])?, port, stdio, json).map_err(io)
         }
         Command::Mcp => commands::mcp(&project::root(root_flag, &[])?).map_err(io),
         other => {

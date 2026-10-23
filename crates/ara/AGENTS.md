@@ -14,7 +14,7 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 | `ara schema [--out dir]` | Schema DB summary; `--json` = `reflection.json`; `--out` writes JSON Schemas | project types are invalid |
 | `ara merge [-o out] <base> <ours> <theirs>` | semantic 3-way merge over `ours` (git `%O %A %B`) | conflicts |
 | `ara docs --llms [--out dir]` | `llms.txt`, `llms-full.txt`, per-type/command/method pages (default `.ara/docs`) | never |
-| `ara serve [--port n] [--stdio]` | the daemon: EP over WebSocket (+stdio), MCP at `POST /mcp` | it cannot start |
+| `ara serve [--port n] [--stdio]` | the daemon: EP over WebSocket (+stdio), MCP at `POST /mcp`; `--json` prints `{pid, port, url, mcp}` once listening | it cannot start |
 | `ara mcp` | MCP on stdio; a client of the daemon, or the daemon itself if none runs | it cannot start |
 | `ara do <cmd> --doc d [--args json] [-p k=v].. [--as $s] [--why w] [--dry-run]` | one-call `cmd.apply` | the batch fails |
 | `ara query [q] [--doc] [--fields a,b] [--limit] [--cursor]` | `query` | bad query |
@@ -63,6 +63,7 @@ with ARA1901 and a `Cli ["init", dir]` fix. Scans skip hidden dirs (`.git`,
 `cargo test -p ara`. `tests/cli.rs`: file commands on `tests/fixtures/`
 (`project/`, `broken/`, `merge/`, `messy.scene`; the `reflection` snapshot is the
 whole Schema DB). `tests/engine.rs`: root discovery and skips, `init`, offline
-protocol commands across runs, `docs --llms`, and the end-to-end test: `ara serve`
-→ `ara mcp` client → session, batch with `why`, query, revert, file checked on
-disk (the CLI sees the same daemon).
+protocol commands across runs, `docs --llms`, `ara mcp` becoming the daemon (MCP
+over Streamable HTTP too), and the end-to-end test: `ara serve` → `ara mcp`
+client → session, batch with `why`, query, revert, file checked on disk (the CLI
+sees the same daemon).

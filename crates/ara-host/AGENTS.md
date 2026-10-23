@@ -76,4 +76,5 @@ service registers them.
 `cargo test -p ara-host`. Unit tests: query parsing, logs, journal compaction,
 review roll-up. `tests/host.rs` (fixture project copied to a temp dir): JSON-RPC
 round trips, scopes, dry run = apply, symbols, review per entity, rollback, crash
-replay, external edits/conflicts, service registration. Snapshots: scene-to-text.
+replay, external edits/conflicts, service registration, subscriptions with a
+registry job's progress. Snapshots: scene-to-text.

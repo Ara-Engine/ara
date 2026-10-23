@@ -242,10 +242,10 @@ impl Drop for Proc {
 
 /// An `ara mcp` child speaking JSON lines.
 struct Mcp {
-    _proc: Proc,
-    stdin: ChildStdin,
+    stdin: Option<ChildStdin>,
     lines: Receiver<String>,
     next: u64,
+    proc: Proc,
 }
 
 impl Mcp {
@@ -269,11 +269,19 @@ impl Mcp {
             }
         });
         Mcp {
-            _proc: Proc(child),
-            stdin,
+            stdin: Some(stdin),
             lines,
             next: 1,
+            proc: Proc(child),
         }
+    }
+
+    /// Closes stdin (the MCP client went away) and waits for a clean exit.
+    fn close(mut self) {
+        self.stdin = None;
+        wait_for("ara mcp to exit", || {
+            matches!(self.proc.0.try_wait(), Ok(Some(_)))
+        });
     }
 
     fn request(&mut self, method: &str, params: Value) -> Value {
@@ -282,8 +290,9 @@ impl Mcp {
         let mut params = params;
         params["_meta"] = json!({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
         let msg = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
-        writeln!(self.stdin, "{msg}").expect("send");
-        self.stdin.flush().expect("flush");
+        let stdin = self.stdin.as_mut().expect("open");
+        writeln!(stdin, "{msg}").expect("send");
+        stdin.flush().expect("flush");
         let line = self
             .lines
             .recv_timeout(Duration::from_secs(30))
@@ -395,4 +404,78 @@ fn an_mcp_agent_edits_through_the_daemon_and_reverts_its_turn() {
     });
     drop(mcp);
     drop(daemon);
+}
+
+/// POSTs one MCP message to the daemon's `/mcp` endpoint; returns (status, body).
+fn mcp_http(port: u16, token: &str, headers: &str, body: &Value) -> (u16, String) {
+    use std::io::Read;
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    let text = body.to_string();
+    write!(
+        s,
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\n{headers}Content-Length: {}\r\n\r\n{text}",
+        text.len()
+    )
+    .expect("write");
+    let mut out = String::new();
+    s.read_to_string(&mut out).expect("read");
+    let status = out
+        .split(' ')
+        .nth(1)
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(0);
+    (
+        status,
+        out.split("\r\n\r\n").nth(1).unwrap_or_default().to_owned(),
+    )
+}
+
+#[test]
+fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
+    let root = scratch("mcp-daemon");
+    ara_in(&root, &["init"]);
+    let mut mcp = Mcp::start(&root);
+    let begun = mcp.tool(
+        "ara_session",
+        json!({ "action": "begin", "client": "codex" }),
+    );
+    let session = begun["session"].as_str().expect("session").to_owned();
+    mcp.tool(
+        "ara_apply",
+        json!({ "session": session, "doc": "levels/main.scene", "why": "first entity",
+                "commands": [{ "cmd": "entity.create", "args": { "name": "Probe" } }] }),
+    );
+
+    let info = json_of(
+        &fs::read_to_string(root.join(".ara/daemon.json")).expect("ara mcp wrote the daemon file"),
+    );
+    let (port, token) = (
+        info["port"].as_u64().expect("port") as u16,
+        info["token"].as_str().expect("token").to_owned(),
+    );
+    let (code, out, _) = ara_in(&root, &["history", "--json"]);
+    assert_eq!(code, 0, "the CLI uses the running engine: {out}");
+    assert_eq!(json_of(&out)["items"][0]["why"], "first entity");
+
+    let list = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list",
+                       "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } } });
+    let (status, body) = mcp_http(
+        port,
+        &token,
+        "MCP-Protocol-Version: 2026-07-28\r\nMcp-Method: tools/list\r\n",
+        &list,
+    );
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        json_of(&body)["result"]["tools"].as_array().map(Vec::len),
+        Some(12)
+    );
+    let (status, _) = mcp_http(port, "wrong-token", "", &list);
+    assert_eq!(status, 401);
+
+    mcp.close();
+    assert!(
+        !root.join(".ara/daemon.json").exists(),
+        "removed on a clean exit"
+    );
 }

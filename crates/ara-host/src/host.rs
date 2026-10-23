@@ -675,20 +675,30 @@ impl State {
                 .file(".ara/journal"),
             );
         }
-        for doc in skipped {
+        for (doc, rev) in &on_disk {
+            if rev.is_some() {
+                continue;
+            }
             let path = self
                 .store
                 .workspace()
                 .path_of(doc.as_str())
                 .unwrap_or_default()
                 .to_owned();
-            self.logs.push(
+            let d = if skipped.contains(doc) {
                 Diagnostic::warning(
                     codes::EXTERNAL_EDIT,
-                    format!("`{path}` changed on disk while no host was running; journaled edits newer than its last save were not replayed onto it"),
+                    format!(
+                        "`{path}` changed on disk while no host was running; loaded as is, and journaled edits newer than its last save were not replayed onto it"
+                    ),
                 )
-                .file(path),
-            );
+            } else {
+                Diagnostic::info(
+                    codes::EXTERNAL_EDIT,
+                    format!("`{path}` changed on disk while no host was running; loaded as is"),
+                )
+            };
+            self.logs.push(d.file(path));
         }
     }
 
