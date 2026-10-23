@@ -30,7 +30,7 @@ impl Command for Initialize {
         }
         let id = cx.read().doc().id.clone();
         let graph=match p.domain.as_str(){
-            "material"=>ara_material::dsl::parse(p.source.as_deref().unwrap_or("material Paint : surface { param color : ColorLinear = linear(0.18, 0.42, 0.72); param roughness : float = 0.35; let metallic : float = 0.3; output baseColor = color; output roughness = roughness; output metallic = metallic; }"),id.as_str()).map_err(first)?.to_graph(Default::default())?,
+            "material"=>ara_material::dsl::parse(p.source.as_deref().unwrap_or("material Paint : surface budget 1 { param color : ColorLinear = linear(0.18, 0.42, 0.72); param roughness : float = 0.35; let metallic : float = 0.3; output baseColor = color; output roughness = roughness; output metallic = metallic; }"),id.as_str()).map_err(first)?.to_graph(Default::default())?,
             "vfx"=>p.source.map(|s|ara_vfx::Effect::parse(&s)).transpose()?.unwrap_or_else(ara_vfx::samples::campfire).to_graph(id,Default::default())?,
             _=>Graph::new(id,p.domain),
         };
@@ -38,7 +38,7 @@ impl Command for Initialize {
         Ok(Value::Null)
     }
 }
-fn first(diags: Vec<Diagnostic>) -> Diagnostic {
+pub(super) fn first(diags: Vec<Diagnostic>) -> Diagnostic {
     diags
         .into_iter()
         .next()
@@ -69,10 +69,7 @@ impl Command for MaterialAdd {
         let mut material = ara_material::Material::from_graph(&graph).map_err(first)?;
         let op = p.kind.strip_prefix("material.").unwrap_or(&p.kind);
         let id = cx.new_id(None, "n")?.to_string();
-        let name = format!(
-            "value{}",
-            material.bindings.len() + material.parameters.len() + 1
-        );
+        let name = format!("value_{}", id.trim_start_matches("n_"));
         let order = material
             .bindings
             .values()
@@ -100,14 +97,8 @@ impl Command for MaterialAdd {
                 let mut signature = None;
                 // Registry signatures define the valid arity/types; defaults are independent nodes.
                 for arity in 0..=4 {
-                    for ty in Type::ALL {
-                        let types = vec![*ty; arity];
-                        if let Some(output) = ara_material::library::infer(op, &types) {
-                            signature = Some((output, types));
-                            break;
-                        }
-                    }
-                    if signature.is_some() {
+                    if let Some(found) = signature_for(op, arity, &mut Vec::new()) {
+                        signature = Some(found);
                         break;
                     }
                 }
@@ -135,7 +126,10 @@ impl Command for MaterialAdd {
                                 order: order + index as u32,
                                 ty,
                                 expr: Expr::Literal {
-                                    values: vec![0.5; ty.lanes()],
+                                    values: vec![
+                                        if ty == Type::Bool { 0. } else { 0.5 };
+                                        ty.lanes()
+                                    ],
                                 },
                             },
                         );
@@ -194,6 +188,7 @@ impl Command for AnimationSet {
         if cx.read().doc().kind != "animation" {
             return Err(crate::invalid("expected an animation document"));
         }
+        super::animation::validate(&p.controller)?;
         for state in p.controller.states.values() {
             if !p.controller.nodes.contains_key(&state.node) {
                 return Err(crate::invalid("state references a missing pose node"));
@@ -288,4 +283,23 @@ pub(super) fn register(registry: &mut Registry, db: &mut SchemaDb) {
         .command::<MaterialAdd>(db)
         .command::<AnimationSet>(db)
         .command::<ModuleSet>(db);
+    registry.command::<super::material_fields::Set>(db);
+}
+
+fn signature_for(
+    op: &str,
+    arity: usize,
+    types: &mut Vec<ara_material::Type>,
+) -> Option<(ara_material::Type, Vec<ara_material::Type>)> {
+    if types.len() == arity {
+        return ara_material::library::infer(op, types).map(|output| (output, types.clone()));
+    }
+    for ty in ara_material::Type::ALL {
+        types.push(*ty);
+        if let Some(found) = signature_for(op, arity, types) {
+            return Some(found);
+        }
+        types.pop();
+    }
+    None
 }

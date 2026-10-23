@@ -1,0 +1,607 @@
+//! Bounded native authoring route: real imports, UI drags, captures and 500-node navigation.
+use super::*;
+use ara_platform::Event;
+
+pub(super) struct Verification {
+    phase: u32,
+    age: u32,
+    job: Option<String>,
+    material: String,
+    vfx: String,
+    animation: String,
+    output: PathBuf,
+    pub samples: Vec<f64>,
+    bench_frames: u32,
+    interactions: Vec<&'static str>,
+}
+pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
+    if !root.join("ara.project.json").exists() {
+        std::fs::create_dir_all(root.join("levels"))?;
+        std::fs::write(
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(&json!({"name":"Outpost"})),
+        )?;
+        std::fs::write(
+            root.join("levels/main.scene"),
+            ara_json::to_canonical_string(
+                &json!({"$schema":"ara://schema/scene/1","id":"sc_golden00","records":{}}),
+            ),
+        )?;
+    }
+    std::fs::create_dir_all(root.join("models"))?;
+    std::fs::create_dir_all(root.join("textures"))?;
+    let mesh = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../ara-render/examples/assets/Avocado.glb");
+    if !root.join("models/Avocado.glb").exists() {
+        std::fs::copy(mesh, root.join("models/Avocado.glb"))?;
+    }
+    let texture = root.join("textures/checker.png");
+    if !texture.exists() {
+        image::RgbaImage::from_fn(128, 128, |x, y| {
+            image::Rgba(if (x / 16 + y / 16) % 2 == 0 {
+                [54, 133, 214, 255]
+            } else {
+                [215, 230, 246, 255]
+            })
+        })
+        .save(texture)?;
+    }
+    Ok(())
+}
+fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
+    let preferred = format!(
+        "samples/{domain}.{}",
+        if domain == "animation" {
+            "animation"
+        } else {
+            "graph"
+        }
+    );
+    if let Some(id) = editor.host.store().workspace().find(&preferred) {
+        return Ok(id.to_string());
+    }
+    if let Some((_, doc)) = editor.host.store().workspace().docs().find(|(_, d)| {
+        if domain == "animation" {
+            d.kind == "animation"
+        } else {
+            d.record("g_meta")
+                .is_some_and(|r| r.get("domain") == Some(&json!(domain)))
+        }
+    }) {
+        return Ok(doc.id.to_string());
+    }
+    let path = format!(
+        "samples/{domain}.{}",
+        if domain == "animation" {
+            "animation"
+        } else {
+            "graph"
+        }
+    );
+    Ok(editor.action(
+        "editor.resource.create",
+        json!({"path":path,"domain":domain}),
+    )?["doc"]
+        .as_str()
+        .ok_or("sample resource identity")?
+        .to_owned())
+}
+impl Verification {
+    pub fn new(editor: &mut Editor, output: &std::path::Path) -> ara_ui::Result<Self> {
+        editor.action("editor.preferences", json!({"reduceMotion":true}))?;
+        editor.action("editor.theme", json!({"light":false}))?;
+        editor.action("editor.layout.reset", json!({}))?;
+        let material = resource(editor, "material")?;
+        let vfx = resource(editor, "vfx")?;
+        let animation = resource(editor, "animation")?;
+        let controller = json!({"initial":"Idle","parameters":{"speed":{}},"nodes":{"idle":{"clip":null},"run":{"clip":null},"locomotion":{"kind":"blend1d","parameterX":"speed","samples":[{"node":"idle","x":0},{"node":"run","x":1}]}},"states":{"Idle":{"node":"idle","duration":48000},"Run":{"node":"run","duration":24000},"Locomotion":{"node":"locomotion","duration":48000}},"transitions":[{"id":"idle_to_run","from":"Idle","to":"Run","duration":4800,"conditions":[{"parameter":"speed","comparison":"greater","floatValue":0.2}]},{"id":"run_to_idle","from":"Run","to":"Idle","duration":4800}]});
+        editor.apply_to(&animation,vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":controller}})],"Prepare animation panel verification")?;
+        editor.action("editor.focus", json!({"panel":"scene"}))?;
+        editor.action("editor.focus", json!({"panel":"assets"}))?;
+        let job =
+            editor.action("editor.asset.import", json!({"path":"models/Avocado.glb"}))?["job"]
+                .as_str()
+                .map(str::to_owned);
+        Ok(Self {
+            phase: 0,
+            age: 0,
+            job,
+            material,
+            vfx,
+            animation,
+            output: output.into(),
+            samples: Vec::new(),
+            bench_frames: 0,
+            interactions: Vec::new(),
+        })
+    }
+    pub fn finished(&self) -> bool {
+        self.phase >= 14
+    }
+    pub fn benchmarking(&self) -> bool {
+        self.phase == 13
+    }
+    pub fn record(&mut self, ms: f64) {
+        if self.phase == 13 {
+            if self.bench_frames >= 120 {
+                self.samples.push(ms);
+            }
+            self.bench_frames += 1;
+        }
+    }
+    fn next(&mut self) {
+        eprintln!("panel verification completed phase {}", self.phase);
+        self.phase += 1;
+        self.age = 0;
+    }
+    fn job_done(&self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let Some(job) = &self.job else {
+            return Ok(true);
+        };
+        let status = editor.action("jobs.status", json!({"job":job}))?;
+        match status["status"].as_str() {
+            Some("done") => Ok(true),
+            Some("failed" | "cancelled") => {
+                Err(format!("panel verification import failed: {status}").into())
+            }
+            _ => Ok(false),
+        }
+    }
+    pub fn step(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        gpu: &mut NativeUi,
+        ui: &mut UiRenderer,
+        renderer: &mut Renderer,
+    ) -> ara_ui::Result<bool> {
+        if self.finished() {
+            return Ok(false);
+        }
+        self.age += 1;
+        if self.age > 8000 {
+            return Err(format!("panel verification timed out at phase {}", self.phase).into());
+        }
+        let mut clipboard = OsClipboard;
+        match self.phase {
+            0 => {
+                if !self.job_done(editor)? {
+                    return Ok(false);
+                }
+                self.interactions.push("isolated mesh import completed");
+                self.job = editor.action(
+                    "editor.asset.import",
+                    json!({"path":"textures/checker.png"}),
+                )?["job"]
+                    .as_str()
+                    .map(str::to_owned);
+                self.next();
+            }
+            1 => {
+                if !self.job_done(editor)? {
+                    return Ok(false);
+                }
+                editor.action(
+                    "editor.workspace",
+                    json!({"asset":"models/Avocado.glb","folder":"models"}),
+                )?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            2 => {
+                let Some(point) = shell.asset_point("models/Avocado.glb") else {
+                    return Ok(false);
+                };
+                let rect = shell.viewport().ok_or("asset drag scene viewport")?;
+                let before = editor.host.store().revision();
+                shell.pointer = point;
+                shell.begin_drag();
+                shell.pointer = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
+                if !shell.drop_at(editor)? || editor.host.store().revision() != before + 1 {
+                    return Err("asset drag did not produce one transaction".into());
+                }
+                self.interactions
+                    .push("thumbnail asset drag instantiated mesh through typed ops");
+                editor.action("history.undo", json!({}))?;
+                editor.action("history.redo", json!({}))?;
+                let doc = editor
+                    .host
+                    .store()
+                    .workspace()
+                    .find("models/Avocado.glb")
+                    .ok_or("import settings doc")?
+                    .to_string();
+                editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"lodCount":2},"preset":"fast"}})],"Verify reimport settings")?;
+                self.job = editor.action(
+                    "editor.asset.reimport",
+                    json!({"path":"models/Avocado.glb"}),
+                )?["job"]
+                    .as_str()
+                    .map(str::to_owned);
+                self.next();
+            }
+            3 => {
+                if !self.job_done(editor)? {
+                    return Ok(false);
+                }
+                editor.action(
+                    "editor.workspace",
+                    json!({"asset":"models/Avocado.glb","folder":""}),
+                )?;
+                shell.rebuild(editor)?;
+                if self.age < 240
+                    || !shell.asset_previews_ready(&[
+                        "models/Avocado.glb",
+                        "textures/checker.png",
+                        "samples/material.graph",
+                        "samples/vfx.graph",
+                    ])
+                {
+                    return Ok(false);
+                }
+                self.interactions
+                    .push("settings edit and isolated reimport completed");
+                self.capture_pair("assets", editor, shell, gpu, ui, renderer)?;
+                editor.action(
+                    "editor.workspace",
+                    json!({"resource":self.material,"asset":""}),
+                )?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            4 => {
+                if !shell.preview_ready("material") {
+                    return Ok(false);
+                }
+                self.material_interaction(editor, shell, &mut clipboard)?;
+                self.next();
+            }
+            5 => {
+                if !shell.preview_ready("material") || self.age < 30 {
+                    return Ok(false);
+                }
+                self.capture_pair("material", editor, shell, gpu, ui, renderer)?;
+                editor.action(
+                    "editor.workspace",
+                    json!({"resource":self.vfx,"item":"flame|update|curl"}),
+                )?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            6 => {
+                if !shell.preview_ready("vfx") || self.age < 90 {
+                    return Ok(false);
+                }
+                editor.action("editor.workspace", json!({"playing":false}))?;
+                shell.rebuild(editor)?;
+                self.capture_pair("vfx", editor, shell, gpu, ui, renderer)?;
+                editor.action(
+                    "editor.workspace",
+                    json!({"resource":self.animation,"item":"","blends":false}),
+                )?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            7 => {
+                let projected = crate::authoring::animation::projection(
+                    editor
+                        .host
+                        .store()
+                        .workspace()
+                        .doc(&self.animation)
+                        .ok_or("animation sample")?,
+                    Default::default(),
+                    false,
+                )?;
+                if let Some((id, _)) = projected
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| n.payload["state"] == "Idle")
+                {
+                    editor.action("editor.canvas", json!({"selection":[id]}))?;
+                    shell.rebuild(editor)?;
+                }
+                self.capture_pair("animation-states", editor, shell, gpu, ui, renderer)?;
+                editor.action("editor.workspace", json!({"blends":true}))?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            8 => {
+                let projected = crate::authoring::animation::projection(
+                    editor
+                        .host
+                        .store()
+                        .workspace()
+                        .doc(&self.animation)
+                        .ok_or("animation sample")?,
+                    Default::default(),
+                    true,
+                )?;
+                if let Some((id, _)) = projected
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| n.payload["pose"] == "locomotion")
+                {
+                    editor.action("editor.canvas", json!({"selection":[id]}))?;
+                    shell.rebuild(editor)?;
+                }
+                self.capture_pair("animation-blends", editor, shell, gpu, ui, renderer)?;
+                editor.action("editor.focus", json!({"panel":"scene"}))?;
+                let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                    .map_err(|d| format!("{d:?}"))?
+                    .iter()
+                    .find(|(_, e)| e.record.get("name") == Some(&json!("Salvage crate")))
+                    .map(|(id, _)| id.clone());
+                if let Some(entity) = entity {
+                    editor.action("editor.select", json!({"entities":[entity]}))?;
+                }
+                shell.rebuild(editor)?;
+                self.capture_pair("scene", editor, shell, gpu, ui, renderer)?;
+                editor.action("profile.start", json!({}))?;
+                shell.rebuild(editor)?;
+                self.next();
+            }
+            9 => {
+                let mut camera = editor.state.camera;
+                camera.yaw += 0.002;
+                set_camera(editor, &camera)?;
+                if self.age >= 120 {
+                    editor.action("profile.stop", json!({}))?;
+                    editor.action("editor.profile.freeze", json!({"baseline":true}))?;
+                    editor.action("profile.start", json!({}))?;
+                    self.next();
+                }
+            }
+            10 => {
+                let mut camera = editor.state.camera;
+                camera.yaw += 0.002;
+                set_camera(editor, &camera)?;
+                if self.age >= 120 {
+                    editor.action("profile.stop", json!({}))?;
+                    editor.action("editor.profile.freeze", json!({}))?;
+                    editor.action("editor.focus", json!({"panel":"profiler"}))?;
+                    shell.rebuild(editor)?;
+                    self.next();
+                }
+            }
+            11 => {
+                if editor.profile_current.is_none() {
+                    return Ok(false);
+                }
+                self.capture_pair("profiler", editor, shell, gpu, ui, renderer)?;
+                editor.action("editor.workspace", json!({"compare":true}))?;
+                shell.rebuild(editor)?;
+                self.capture_pair("profiler-compare", editor, shell, gpu, ui, renderer)?;
+                self.interactions
+                    .push("two real frame/GPU captures frozen and compared");
+                self.load_large_graph(editor, shell)?;
+                self.next();
+            }
+            12 => {
+                if self.age < 180 {
+                    return Ok(false);
+                }
+                let rect = shell
+                    .ui
+                    .find("graph-canvas")
+                    .map(|i| shell.ui.nodes[i].rect)
+                    .ok_or("benchmark canvas")?;
+                shell.pointer = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
+                shell.graph_event(
+                    editor,
+                    &Event::MouseButton {
+                        button: 2,
+                        pressed: true,
+                    },
+                )?;
+                self.next();
+            }
+            13 => {
+                if self.bench_frames >= 1120 {
+                    shell.graph_event(
+                        editor,
+                        &Event::MouseButton {
+                            button: 2,
+                            pressed: false,
+                        },
+                    )?;
+                    self.capture_pair("graph-500", editor, shell, gpu, ui, renderer)?;
+                    std::fs::write(
+                        self.output.join("panel-interactions.json"),
+                        ara_json::to_canonical_string(
+                            &json!({"verified":true,"flow":self.interactions,"graphNodes":500,"panZoomInputToPresentMs":statistics(&self.samples),"samplesMs":self.samples}),
+                        ),
+                    )?;
+                    self.next();
+                    return Ok(true);
+                }
+                let rect = shell
+                    .ui
+                    .find("graph-canvas")
+                    .map(|i| shell.ui.nodes[i].rect)
+                    .ok_or("benchmark canvas")?;
+                let t = self.bench_frames as f32 * 0.017;
+                let position = [
+                    rect.x + rect.w * 0.5 + t.sin() * 240.,
+                    rect.y + rect.h * 0.5 + t.cos() * 160.,
+                ];
+                shell.graph_event(
+                    editor,
+                    &Event::MouseMotion {
+                        position,
+                        delta: [0., 0.],
+                    },
+                )?;
+                if self.bench_frames.is_multiple_of(8) {
+                    shell.graph_event(
+                        editor,
+                        &Event::Wheel([
+                            0.,
+                            if self.bench_frames % 240 < 120 {
+                                0.4
+                            } else {
+                                -0.4
+                            },
+                        ]),
+                    )?;
+                }
+            }
+            _ => {}
+        }
+        Ok(true)
+    }
+    fn capture_pair(
+        &self,
+        name: &str,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        gpu: &mut NativeUi,
+        ui: &mut UiRenderer,
+        renderer: &mut Renderer,
+    ) -> ara_ui::Result<()> {
+        let capture = super::verify::Verification::new(&self.output);
+        for (theme, light) in [("dark", false), ("light", true)] {
+            editor.action("editor.theme", json!({"light":light}))?;
+            shell.rebuild(editor)?;
+            shell.upload_thumbnails(ui)?;
+            capture.screenshot(&format!("{name}-{theme}"), editor, shell, gpu, ui, renderer)?;
+        }
+        editor.action("editor.theme", json!({"light":false}))?;
+        shell.rebuild(editor)?;
+        crate::shell::icons::install(ui, editor.state.light, gpu.dpi())?;
+        Ok(())
+    }
+    fn material_interaction(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        clipboard: &mut OsClipboard,
+    ) -> ara_ui::Result<()> {
+        shell.click("graph-add", clipboard)?;
+        shell.dispatch(editor)?;
+        editor.action(
+            "editor.search",
+            json!({"panel":"nodes","query":"material.add"}),
+        )?;
+        shell.rebuild(editor)?;
+        let before = editor.host.store().revision();
+        shell.click("node-add-0", clipboard)?;
+        shell.dispatch(editor)?;
+        if editor.host.store().revision() != before + 1 {
+            return Err("node palette did not create a node transaction".into());
+        }
+        let graph = ara_graph::Graph::from_document(
+            editor
+                .host
+                .store()
+                .workspace()
+                .doc(&self.material)
+                .ok_or("material")?,
+        )
+        .map_err(|d| d.to_string())?;
+        let from = graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.payload["name"] == "roughness")
+            .map(|(id, _)| ara_graph::Endpoint {
+                node: id.clone(),
+                port: "out".into(),
+            })
+            .ok_or("roughness port")?;
+        let to = graph
+            .nodes
+            .iter()
+            .find(|(_, n)| n.kind == "material.add")
+            .map(|(id, _)| ara_graph::Endpoint {
+                node: id.clone(),
+                port: "in0".into(),
+            })
+            .ok_or("add port")?;
+        editor.action("editor.canvas", json!({"zoom":0.45,"pan":[24,24]}))?;
+        shell.sync_canvas(editor);
+        shell.frame()?;
+        for (endpoint, pressed) in [(&from, true), (&to, false)] {
+            let position = shell.graph_port(endpoint).ok_or("live socket")?;
+            shell.pointer = position;
+            shell.graph_event(
+                editor,
+                &Event::MouseMotion {
+                    position,
+                    delta: [0., 0.],
+                },
+            )?;
+            shell.graph_event(editor, &Event::MouseButton { button: 1, pressed })?;
+        }
+        let after = ara_graph::Graph::from_document(
+            editor
+                .host
+                .store()
+                .workspace()
+                .doc(&self.material)
+                .ok_or("material")?,
+        )
+        .map_err(|d| d.to_string())?;
+        if !after.edges.values().any(|e| e.from == from && e.to == to) {
+            return Err("UI socket connection missing".into());
+        }
+        shell.key(editor, 224, true, clipboard)?;
+        shell.key(editor, 29, true, clipboard)?;
+        shell.key(editor, 224, false, clipboard)?;
+        editor.action("history.undo", json!({}))?;
+        editor.action(
+            "editor.canvas",
+            json!({"zoom":0.85,"pan":[36,48],"selection":[from.node]}),
+        )?;
+        shell.rebuild(editor)?;
+        self.interactions
+            .push("UI search added node; sockets connected; keyboard undo restored graph");
+        Ok(())
+    }
+    fn load_large_graph(&self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
+        let mut text =
+            String::from("material Navigation : surface budget 1 {\nlet v0 : float = 0.001;\n");
+        for i in 1..250 {
+            text.push_str(&format!(
+                "let v{i} : float = 0.001;\nlet a{i} : float = add({}, v{i});\n",
+                if i == 1 {
+                    "v0".into()
+                } else {
+                    format!("a{}", i - 1)
+                }
+            ));
+        }
+        text.push_str("output roughness = a249;\n}");
+        let result=editor.action("editor.resource.create",json!({"path":format!("samples/graph-500-{}.graph",editor.host.store().revision()),"domain":"material","source":text}))?;
+        let doc = result["doc"].as_str().ok_or("benchmark material")?;
+        let graph = ara_graph::Graph::from_document(
+            editor
+                .host
+                .store()
+                .workspace()
+                .doc(doc)
+                .ok_or("large graph")?,
+        )
+        .map_err(|d| d.to_string())?;
+        if graph.nodes.len() != 500 {
+            return Err(format!("expected 500 nodes, got {}", graph.nodes.len()).into());
+        }
+        let mut layout = graph.editor;
+        for (i, id) in graph.nodes.keys().enumerate() {
+            layout
+                .positions
+                .insert(id.clone(), [(i % 20) as f32 * 260., (i / 20) as f32 * 164.]);
+        }
+        editor.apply_to(
+            doc,
+            vec![json!({"cmd":"graph.editor.set","args":{"editor":layout}})],
+            "Lay out 500-node navigation fixture",
+        )?;
+        editor.action(
+            "editor.workspace",
+            json!({"resource":doc,"asset":"","item":""}),
+        )?;
+        editor.action("editor.canvas", json!({"zoom":0.5,"pan":[24,24]}))?;
+        shell.rebuild(editor)?;
+        Ok(())
+    }
+}

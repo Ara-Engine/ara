@@ -9,6 +9,7 @@ pub(crate) struct Asset {
     pub reference: Option<String>,
     pub kind: String,
     pub uses: Vec<String>,
+    pub stamp: u64,
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
@@ -81,7 +82,10 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             if relative.ends_with(".import.json") {
                 continue;
             }
-            let id = if kind == "scene" || kind == "prefab" {
+            let id = if matches!(
+                kind.as_str(),
+                "scene" | "prefab" | "graph" | "animation" | "materialinstance"
+            ) {
                 std::fs::read_to_string(&path)
                     .ok()
                     .and_then(|s| ara_json::parse(&s).ok())
@@ -95,6 +99,7 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             };
             out.push(Asset {
                 reference: id.map(|id| format!("@{relative}#{id}")),
+                stamp: stamp(&path),
                 path: relative,
                 kind,
                 uses: std::fs::read_to_string(&path)
@@ -125,4 +130,19 @@ fn references(value: &Value, out: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+fn stamp(path: &Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    for path in [
+        path.to_path_buf(),
+        PathBuf::from(format!("{}.import.json", path.display())),
+    ] {
+        if let Ok(meta) = std::fs::metadata(path) {
+            meta.len().hash(&mut hash);
+            meta.modified().ok().hash(&mut hash);
+        }
+    }
+    hash.finish()
 }

@@ -134,6 +134,18 @@ impl Shell {
                             .into(),
                     );
                 };
+                if let Some(i) = self.ui.find("animation-clip-field")
+                    && self.ui.nodes[i]
+                        .rect
+                        .contains(self.pointer[0], self.pointer[1])
+                    && let Some(Binding::AnimationField(doc, item, key)) =
+                        self.bindings.get(&stable_id("animation-clip-field"))
+                {
+                    let (doc, item, key) = (doc.clone(), item.clone(), key.clone());
+                    self.set_animation_field(editor, &doc, &item, &key, json!(reference))?;
+                    self.rebuild(editor)?;
+                    return Ok(true);
+                }
                 let field = self
                     .fields
                     .values()

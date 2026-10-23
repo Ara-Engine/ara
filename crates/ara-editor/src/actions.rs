@@ -21,6 +21,7 @@ pub(crate) struct EditorService {
 pub(crate) enum Control {
     Approve(String),
     Reject(String),
+    ProfileFreeze { baseline: bool, job: String },
 }
 type R = Result<Value, Vec<Diagnostic>>;
 impl Service for EditorService {
@@ -30,6 +31,11 @@ impl Service for EditorService {
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         use ara_host::params::SessionParams;
         let methods = vec![
+            Method::new::<EditorProfileFreeze>(
+                db,
+                "editor.profile.freeze",
+                "Freeze and save the current profiler trace for frame inspection or comparison.",
+            ),
             Method::new::<EditorCanvas>(
                 db,
                 "editor.canvas",
@@ -163,6 +169,17 @@ impl Service for EditorService {
             cx.log(crate::invalid(p.message));
             return Ok(json!({"ok":true}));
         }
+        if method == "editor.profile.freeze" {
+            let p: EditorProfileFreeze = parse(params)?;
+            let job = cx.start_job("Save profiler capture");
+            self.controls
+                .send(Control::ProfileFreeze {
+                    baseline: p.baseline.unwrap_or(false),
+                    job: job.clone(),
+                })
+                .map_err(|_| vec![crate::invalid("editor window has closed")])?;
+            return Ok(json!({"job":job}));
+        }
         if method.starts_with("editor.pending.") {
             let p: EditorPending = parse(params)?;
             if !cx
@@ -231,6 +248,24 @@ impl Service for EditorService {
                 }
                 if let Some(grid) = p.grid {
                     state.asset_grid = grid;
+                }
+                if let Some(frame) = p.frame {
+                    state.profiler_frame = Some(frame);
+                }
+                if let Some(compare) = p.compare {
+                    state.profiler_compare = compare;
+                }
+                if let Some(playing) = p.playing {
+                    state.preview_playing = playing;
+                }
+                if let Some(plane) = p.plane {
+                    state.preview_plane = plane;
+                }
+                if let Some(blends) = p.blends {
+                    state.animation_blends = blends;
+                }
+                if let Some(item) = p.item {
+                    state.resource_item = (!item.is_empty()).then_some(item);
                 }
                 if let Some(resource) = p.resource {
                     let id = cx
@@ -382,6 +417,7 @@ impl Service for EditorService {
                     dock.resize_split(p.path.as_deref().unwrap_or(&[]), ratio)
                         .map_err(ui_error)?;
                 } else if let Some(panel) = p.panel {
+                    state.focus = panel.clone();
                     if let Some(area) = p.area {
                         let target = if let Some(new_area) = p.new_area {
                             DockDrop::Split {

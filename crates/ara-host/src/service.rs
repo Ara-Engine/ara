@@ -221,6 +221,18 @@ impl Cx<'_> {
         let parent = target
             .parent()
             .ok_or_else(|| Diagnostic::error(codes::INVALID_PARAMS, "document has no parent"))?;
+        let ancestor = parent.ancestors().find(|p| p.exists()).ok_or_else(|| {
+            Diagnostic::error(codes::INVALID_PARAMS, "document has no existing ancestor")
+        })?;
+        let ancestor = ancestor
+            .canonicalize()
+            .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        if !ancestor.starts_with(&self.st.root) {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "document parent escapes the project",
+            ));
+        }
         std::fs::create_dir_all(parent).map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
         let resolved = parent
             .canonicalize()
@@ -242,7 +254,8 @@ impl Cx<'_> {
         file.write_all(ara_doc::write(&doc, self.st.store.schema()).as_bytes())
             .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
         let id = doc.id.to_string();
-        self.st.store.load_doc(path, doc);
+        let source = crate::project::asset_path(path, &doc.kind);
+        self.st.store.load_doc_with_asset_path(path, doc, source);
         Ok(id)
     }
 

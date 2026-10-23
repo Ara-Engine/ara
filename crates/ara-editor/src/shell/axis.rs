@@ -5,7 +5,7 @@ use glam::Vec3;
 
 impl Shell {
     pub(super) fn axis_markup(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:96px;height:96px'>");
+        out.push_str("<panel id='view-cube' style='position:absolute;right:12px;top:12px;width:96px;height:96px;background:var(--background);border-radius:48px'>");
         let camera = editor.state.camera;
         self.axis_camera = camera;
         let mut caps = caps(&camera);
@@ -50,8 +50,8 @@ impl Shell {
                 let origin = self.ui.nodes[root].rect;
                 let rect = self.ui.nodes[i].rect;
                 self.ui.nodes[i].paint_offset = [
-                    origin.x + p[0] - 10. - rect.x,
-                    origin.y + p[1] - 10. - rect.y,
+                    self.ui.nodes[i].paint_offset[0] + origin.x + p[0] - 10. - rect.x,
+                    self.ui.nodes[i].paint_offset[1] + origin.y + p[1] - 10. - rect.y,
                 ];
                 self.ui.nodes[i].dirty.paint = true;
             }
@@ -63,8 +63,8 @@ impl Shell {
             return;
         };
         let root = &self.ui.nodes[i];
-        let x = root.rect.x + root.paint_offset[0];
-        let y = root.rect.y + root.paint_offset[1];
+        let x = root.rect.x - root.paint_offset[0];
+        let y = root.rect.y - root.paint_offset[1];
         let mut stems = Vec::new();
         for (axis, sign, _, p) in caps(&self.axis_camera) {
             let name = [
@@ -96,7 +96,7 @@ impl Shell {
                 });
             }
         }
-        let at = self.ui.display.commands.iter().position(|d| matches!(d, Draw::RoundedRect {node,..} | Draw::Rect {node,..} | Draw::Border {node,..} if *node == stable_id("view-iso") || (0..3).any(|a| [false,true].iter().any(|s| *node == stable_id(&cap_id(a,*s)))))).unwrap_or(self.ui.display.commands.len());
+        let at = self.ui.display.commands.iter().position(|d|matches!(d,Draw::Rect{node,..}|Draw::RoundedRect{node,..} if *node==stable_id("view-cube"))).map(|i|i+1).unwrap_or(self.ui.display.commands.len());
         self.ui.display.commands.splice(at..at, stems);
     }
 }

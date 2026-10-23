@@ -66,6 +66,62 @@ impl Shell {
                     continue;
                 };
                 match binding {
+                    Binding::MaterialValue(doc, node) => {
+                        self.drafts.insert(
+                            format!("@material|{doc}|{node}"),
+                            action.value.as_str().unwrap_or("").into(),
+                        );
+                    }
+                    Binding::AnimationEdit(kind) => {
+                        self.edit_animation(editor, kind)?;
+                        rebuild = true;
+                    }
+                    Binding::AnimationField(doc, item, key) => {
+                        if action.value.is_boolean() {
+                            self.set_animation_field(editor, doc, item, key, action.value)?;
+                            rebuild = true;
+                        } else {
+                            self.drafts.insert(
+                                format!("@animation|{doc}|{item}|{key}"),
+                                action.value.as_str().unwrap_or("").into(),
+                            );
+                        }
+                    }
+                    Binding::VfxPlayback(playing) => {
+                        editor.action("editor.workspace", json!({"playing":playing}))?;
+                        rebuild = true;
+                    }
+                    Binding::VfxField(doc, item, key) => {
+                        if action.value.is_boolean() {
+                            self.set_vfx_field(editor, doc, item, key, action.value)?;
+                            rebuild = true;
+                        } else {
+                            self.drafts.insert(
+                                format!("@vfx|{doc}|{item}|{key}"),
+                                action.value.as_str().unwrap_or("").into(),
+                            );
+                        }
+                    }
+                    Binding::ResourceCreate(domain) => {
+                        self.create_resource(editor, domain)?;
+                        rebuild = true;
+                    }
+                    Binding::ResourceText(doc, _domain) => {
+                        self.resource_text =
+                            Some((doc.clone(), action.value.as_str().unwrap_or("").into()));
+                    }
+                    Binding::ResourceApply => {
+                        self.apply_resource_text(editor)?;
+                        rebuild = true;
+                    }
+                    Binding::PreviewShape(plane) => {
+                        editor.action("editor.workspace", json!({"plane":plane}))?;
+                        rebuild = true;
+                    }
+                    Binding::GraphLayout(kind) => {
+                        self.edit_graph_layout(editor, kind)?;
+                        rebuild = true;
+                    }
                     Binding::ComponentCollapse(name) => {
                         if !self.collapsed_components.remove(name) {
                             self.collapsed_components.insert(name.clone());
@@ -82,6 +138,14 @@ impl Shell {
                     }
                     Binding::ResourceContent(doc, commands, why) => {
                         editor.apply_to(doc, commands.clone(), why)?;
+                        if commands.iter().any(|c| {
+                            c["cmd"]
+                                .as_str()
+                                .is_some_and(|s| s.starts_with("editor.material"))
+                        }) {
+                            editor.action("editor.canvas", json!({"add":false}))?;
+                            self.resource_text = None;
+                        }
                         rebuild = true;
                     }
                     Binding::ImportField(doc, key) => {
@@ -303,7 +367,79 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let material_keys = self
+            .drafts
+            .keys()
+            .filter(|k| k.starts_with("@material|"))
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in &material_keys {
+            let parts = key.split('|').collect::<Vec<_>>();
+            if let [_, doc, node] = parts.as_slice() {
+                let text = self.drafts.get(key).ok_or("material draft missing")?;
+                let mut value: Value = serde_json::from_str(text)?;
+                if value.is_number() {
+                    value = json!([value]);
+                }
+                editor.apply_to(doc,vec![json!({"cmd":"editor.material.value.set","args":{"node":node,"value":value}})],"Edit material node value")?;
+            }
+        }
+        for key in &material_keys {
+            self.drafts.remove(key);
+        }
+        if !material_keys.is_empty() && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
+        let animation_keys = self
+            .drafts
+            .keys()
+            .filter(|k| k.starts_with("@animation|"))
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in &animation_keys {
+            let parts = key.split('|').collect::<Vec<_>>();
+            if let [_, doc, item, field] = parts.as_slice() {
+                let text = self.drafts.get(key).ok_or("animation draft missing")?;
+                let value = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+                self.set_animation_field(editor, doc, item, field, value)?;
+            }
+        }
+        for key in &animation_keys {
+            self.drafts.remove(key);
+        }
+        if !animation_keys.is_empty() && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         let imported = self.commit_import_fields(editor)?;
+        let vfx_keys = self
+            .drafts
+            .keys()
+            .filter(|k| k.starts_with("@vfx|"))
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in &vfx_keys {
+            let parts = key.split('|').collect::<Vec<_>>();
+            if let [_, doc, emitter, stage, name, field] = parts.as_slice() {
+                let text = self.drafts.get(key).ok_or("VFX edit missing")?;
+                let value = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+                self.set_vfx_field(
+                    editor,
+                    doc,
+                    &format!("{emitter}|{stage}|{name}"),
+                    field,
+                    value,
+                )?;
+            }
+        }
+        for key in &vfx_keys {
+            self.drafts.remove(key);
+        }
+        if !vfx_keys.is_empty() && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if imported && self.drafts.is_empty() {
             self.rebuild(editor)?;
             return Ok(true);

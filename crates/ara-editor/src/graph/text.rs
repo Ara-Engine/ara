@@ -60,7 +60,7 @@ impl Labels {
                     x: g.x * scale,
                     y: g.y * scale,
                 }));
-                list.commands.push(Draw::GlyphRun {
+                list.commands.push(Draw::ScalableGlyphRun {
                     node: id,
                     font: run.font,
                     size: run.size * scale,

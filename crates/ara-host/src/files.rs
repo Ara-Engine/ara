@@ -347,7 +347,9 @@ impl State {
                 doc.id.clone(),
                 Synced::new(rel.clone(), text, doc.clone(), &abs),
             );
-            self.store.load_doc(rel.clone(), doc);
+            let source = crate::project::asset_path(&rel, &doc.kind);
+            self.store
+                .load_doc_with_asset_path(rel.clone(), doc, source);
             self.log(
                 Diagnostic::info(codes::EXTERNAL_EDIT, format!("loaded new document `{rel}`"))
                     .file(rel),

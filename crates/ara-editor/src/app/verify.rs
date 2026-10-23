@@ -214,7 +214,7 @@ impl Verification {
         self.step += 1;
         Ok(true)
     }
-    fn screenshot(
+    pub(super) fn screenshot(
         &self,
         name: &str,
         editor: &mut Editor,
@@ -269,6 +269,9 @@ impl Verification {
             self.output.join(format!("{name}.layout.json")),
             ara_json::to_canonical_string(&shell.ui.inspect()),
         )?;
+        // Restore live images before releasing the temporary fidelity capture target.
+        super::attach(gpu, renderer)?;
+        gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
         scene_view.destroy(renderer)?;
         Ok(())
     }

@@ -4,7 +4,7 @@ impl Canvas {
     pub(super) fn paint_impl(&self, list: &mut DisplayList, rect: Box2, theme: Theme) {
         list.commands.push(Draw::PushClip { rect });
         fill(list, 0, rect, 0., theme.background);
-        let step = 32. * self.camera.zoom;
+        let step = if self.camera.zoom < 0.5 { 128. } else { 32. } * self.camera.zoom;
         let offset = [
             self.camera.pan[0].rem_euclid(step),
             self.camera.pan[1].rem_euclid(step),
@@ -80,8 +80,22 @@ impl Canvas {
             let color = port_color(ty);
             let id = stable_id(&wire.id);
             let mut previous = a;
-            for p in &wire.points {
-                let p = self.screen(*p, rect);
+            for (index, p) in wire.points.iter().enumerate() {
+                let p = if let Some(super::interaction::Drag::Reroute {
+                    edge,
+                    index: dragged,
+                    start,
+                }) = &self.drag
+                {
+                    if edge == &wire.id && index == *dragged {
+                        self.drag_point(*p, *start)
+                    } else {
+                        *p
+                    }
+                } else {
+                    *p
+                };
+                let p = self.screen(p, rect);
                 curve(list, id, previous, p, 2., color);
                 fill(
                     list,
@@ -124,7 +138,13 @@ impl Canvas {
                 r,
                 8. * self.camera.zoom,
                 if selected { 2. } else { 1. },
-                if selected { theme.accent } else { theme.border },
+                if self.errors.contains_key(&node.id) {
+                    theme.error
+                } else if selected {
+                    theme.accent
+                } else {
+                    theme.border
+                },
             );
             self.labels.paint(
                 list,
@@ -142,6 +162,16 @@ impl Canvas {
                 self.camera.zoom * 0.82,
                 theme.muted,
             );
+            if let Some(error) = self.errors.get(&node.id) {
+                self.labels.paint(
+                    list,
+                    id,
+                    error,
+                    [r.x + 8., r.y + r.h - 17. * self.camera.zoom],
+                    self.camera.zoom * 0.72,
+                    theme.error,
+                );
+            }
             line(
                 list,
                 id,
@@ -150,12 +180,27 @@ impl Canvas {
                 1.,
                 theme.border,
             );
+            let mut inputs = 0;
+            let mut outputs = 0;
             for (name, direction, ty) in &node.ports {
-                let endpoint = Endpoint {
-                    node: node.id.clone(),
-                    port: name.clone(),
+                let index = if *direction == Direction::Input {
+                    let i = inputs;
+                    inputs += 1;
+                    i
+                } else {
+                    let i = outputs;
+                    outputs += 1;
+                    i
                 };
-                if let Some(p) = self.port_position(&endpoint, rect) {
+                let p = [
+                    if *direction == Direction::Input {
+                        r.x
+                    } else {
+                        r.x + r.w
+                    },
+                    r.y + (64. + index as f32 * 24.) * self.camera.zoom,
+                ];
+                {
                     let color = port_color(ty);
                     let radius = 4. * self.camera.zoom;
                     fill(
@@ -180,8 +225,21 @@ impl Canvas {
                 }
             }
         }
-        for comment in self.graph.editor.comments.values() {
-            let p = self.screen(comment.position, rect);
+        for (key, comment) in &self.graph.editor.comments {
+            let position = if let Some(super::interaction::Drag::Comment {
+                key: dragged,
+                start,
+            }) = &self.drag
+            {
+                if key == dragged {
+                    self.drag_point(comment.position, *start)
+                } else {
+                    comment.position
+                }
+            } else {
+                comment.position
+            };
+            let p = self.screen(position, rect);
             let mut color = theme.accent;
             color.3 = 24;
             fill(
@@ -243,6 +301,7 @@ impl Canvas {
             w: 138.,
             h: 92.,
         };
+        list.commands.push(Draw::PushClip { rect: map });
         fill(list, 6, map, 6., theme.card);
         border(list, 6, map, 6., 1., theme.border);
         let bounds = self.bounds();
@@ -282,11 +341,13 @@ impl Canvas {
                 y: p[1],
                 w: rect.w / self.camera.zoom * scale,
                 h: rect.h / self.camera.zoom * scale,
-            },
+            }
+            .intersection(map),
             1.,
             1.,
             theme.accent,
         );
+        list.commands.push(Draw::PopClip);
     }
     pub(super) fn bounds(&self) -> Box2 {
         self.nodes

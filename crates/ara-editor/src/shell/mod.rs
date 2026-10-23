@@ -9,14 +9,20 @@ mod motion;
 mod polish;
 mod scrub;
 use drag::Drag;
+mod animation_panel;
 mod assets_panel;
+mod graph_input;
+mod graph_panel;
 mod hierarchy;
 mod import_panel;
 mod inspector_panel;
+mod material_inspector;
 pub mod overlay;
 mod palette;
 mod panels;
+mod profiler_panel;
 mod review_panel;
+mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
     Ui,
@@ -59,6 +65,8 @@ pub struct Shell {
     thumbnails: crate::asset_tools::thumbnails::Thumbnails,
     thumbnail_slots: BTreeMap<String, usize>,
     thumbnail_next: usize,
+    thumbnail_errors: BTreeMap<String, String>,
+    material_previews: BTreeMap<String, String>,
     thumbnail_uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
     asset_grid_extent: f32,
     asset_grid_dirty: bool,
@@ -82,6 +90,17 @@ pub struct Shell {
     pub(crate) version: u64,
     tooltip_text: Option<String>,
     field_request: Option<String>,
+    canvas: Option<crate::graph::Canvas>,
+    canvas_display: ara_ui::paint::DisplayList,
+    canvas_doc: Option<String>,
+    canvas_revision: u64,
+    canvas_navigation: u64,
+    canvas_dragging: bool,
+    resource_text: Option<(String, String)>,
+    vfx_stream: crate::asset_tools::vfx_stream::VfxStream,
+    vfx_visible: bool,
+    vfx_ready: bool,
+    vfx_error: Option<String>,
     axis_camera: crate::state::Camera,
 }
 pub(crate) enum Binding {
@@ -96,6 +115,16 @@ pub(crate) enum Binding {
     Asset(assets::Asset),
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
+    ResourceCreate(String),
+    ResourceText(String, String),
+    ResourceApply,
+    PreviewShape(bool),
+    GraphLayout(String),
+    VfxPlayback(bool),
+    AnimationEdit(String),
+    AnimationField(String, String, String),
+    VfxField(String, String, String),
+    MaterialValue(String, String),
     Fix(ara_diag::Diagnostic, usize),
     Approve(String),
     Reject(String),
@@ -144,6 +173,8 @@ impl Shell {
             thumbnails: crate::asset_tools::thumbnails::Thumbnails::new(editor.host.root()),
             thumbnail_slots: BTreeMap::new(),
             thumbnail_next: 0,
+            thumbnail_errors: BTreeMap::new(),
+            material_previews: BTreeMap::new(),
             thumbnail_uploads: Vec::new(),
             asset_grid_extent: 0.,
             asset_grid_dirty: false,
@@ -167,6 +198,17 @@ impl Shell {
             version: 0,
             tooltip_text: None,
             field_request: None,
+            canvas_display: Default::default(),
+            canvas: None,
+            canvas_doc: None,
+            canvas_revision: 0,
+            canvas_navigation: 0,
+            canvas_dragging: false,
+            resource_text: None,
+            vfx_stream: crate::asset_tools::vfx_stream::VfxStream::new(editor.host.root()),
+            vfx_visible: false,
+            vfx_ready: false,
+            vfx_error: None,
             axis_camera: Default::default(),
         };
         shell.rebuild(editor)?;
@@ -182,6 +224,7 @@ impl Shell {
         self.hierarchy_view = None;
         self.asset_view = None;
         self.browser.poll();
+        self.vfx_visible = false;
         let mut markup = String::from("<ui id='editor'>");
         markup.push_str("<panel id='topbar' class='topbar'>");
         markup.push_str(&format!("<text id='brand' class='brand' text='ara' /><text id='project-name' text='{}' /><text id='project-divider' class='muted' text='/' /><text id='scene-name' class='muted' text='{}' /><panel id='top-spacer' style='flex-grow:1' />",escape(&project_name(editor)),escape(editor.host.store().workspace().path_of(&editor.state.doc).unwrap_or("Scene"))));
@@ -225,6 +268,9 @@ impl Shell {
         );
         self.dock(&editor.state.layout.clone(), "root", editor, &mut markup)?;
         markup.push_str("</panel>");
+        if !self.vfx_visible {
+            self.vfx_stream.pause();
+        }
         let jobs = editor.action("jobs.list", json!({})).unwrap_or(Value::Null);
         let running = jobs["jobs"]
             .as_array()
@@ -308,6 +354,30 @@ impl Shell {
         }
         ui.frame(&mut self.text)?;
         self.ui = ui;
+        if editor.state.focus == "vfx"
+            && let Some(item) = editor.state.resource_item.as_deref()
+        {
+            let parts = item.split('|').collect::<Vec<_>>();
+            if let [emitter, stage, name] = parts.as_slice()
+                && let (Some(list), Some(module)) = (
+                    self.ui.find("vfx-stack-list"),
+                    self.ui
+                        .find(&format!("module-{emitter}-{stage}-{name}-card")),
+                )
+            {
+                let list_rect = self.ui.nodes[list].rect;
+                let module_rect = self.ui.nodes[module].rect;
+                if module_rect.y + module_rect.h > list_rect.y + list_rect.h {
+                    self.ui.scroll_to(
+                        list,
+                        [
+                            0.,
+                            (module_rect.y - list_rect.y - list_rect.h * 0.35).max(0.),
+                        ],
+                    )?;
+                }
+            }
+        }
         self.decorate_hierarchy();
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
@@ -367,6 +437,7 @@ impl Shell {
         self.paint_swatches();
         self.paint_polish();
         self.paint_axis();
+        self.paint_graph();
         if self.field_request != editor.state.focus_field {
             if let Some(path) = editor.state.focus_field.as_deref() {
                 self.reveal_field(path)?;
@@ -441,6 +512,7 @@ impl Shell {
             self.paint_swatches();
             self.paint_polish();
             self.paint_axis();
+            self.paint_graph();
         }
         if self.motion.apply(
             &mut self.ui.display,
@@ -452,16 +524,31 @@ impl Shell {
         Ok(work)
     }
     pub(crate) fn poll_assets(&mut self) -> bool {
-        let mut changed = self.browser.poll() || std::mem::take(&mut self.asset_grid_dirty);
-        for result in self.thumbnails.poll() {
+        let browser_changed = self.browser.poll();
+        if browser_changed {
+            self.thumbnails.invalidate_all();
+            self.thumbnail_slots
+                .retain(|key, _| key.starts_with("live:"));
+        }
+        let mut changed = browser_changed || std::mem::take(&mut self.asset_grid_dirty);
+        let completed = self.thumbnails.poll().collect::<Vec<_>>();
+        for result in completed {
             match result {
                 Ok(thumb) => {
+                    self.thumbnail_errors.remove(&thumb.key);
                     let slot = if let Some(slot) = self.thumbnail_slots.get(&thumb.key) {
                         *slot
                     } else {
                         let slot = self.thumbnail_next % 48;
                         self.thumbnail_next += 1;
-                        self.thumbnail_slots.retain(|_, v| *v != slot);
+                        if let Some(key) = self
+                            .thumbnail_slots
+                            .iter()
+                            .find_map(|(key, v)| (*v == slot).then(|| key.clone()))
+                        {
+                            self.thumbnails.invalidate(&key);
+                            self.thumbnail_slots.remove(&key);
+                        }
                         self.thumbnail_slots.insert(thumb.key, slot);
                         slot
                     };
@@ -476,7 +563,32 @@ impl Shell {
                     ));
                     changed = true;
                 }
-                Err(error) => eprintln!("thumbnail: {error}"),
+                Err((key, error)) => {
+                    eprintln!("thumbnail: {error}");
+                    self.thumbnail_errors.insert(key, error);
+                    changed = true;
+                }
+            }
+        }
+        for result in self.vfx_stream.poll() {
+            match result {
+                Ok(image) => {
+                    changed |= !self.vfx_ready;
+                    self.vfx_ready = true;
+                    self.vfx_error = None;
+                    self.thumbnail_uploads.push((
+                        ara_ui::source::stable_id("vfx-live-preview") as u32 & 0x7fff_ffff,
+                        ara_ui_render::gpu::Image {
+                            width: image.width(),
+                            height: image.height(),
+                            rgba: image.into_raw(),
+                        },
+                    ));
+                }
+                Err(error) => {
+                    self.vfx_error = Some(error);
+                    changed = true;
+                }
             }
         }
         changed
@@ -485,11 +597,12 @@ impl Shell {
     pub fn upload_thumbnails(
         &mut self,
         renderer: &mut ara_ui_render::gpu::Renderer,
-    ) -> ara_ui::Result<()> {
+    ) -> ara_ui::Result<bool> {
+        let changed = !self.thumbnail_uploads.is_empty();
         for (id, image) in self.thumbnail_uploads.drain(..) {
             renderer.image(id, image)?;
         }
-        Ok(())
+        Ok(changed)
     }
     /// Current scene image rectangle, also the picking and spatial-input boundary.
     pub fn viewport(&self) -> Option<Box2> {
@@ -499,7 +612,37 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"size":self.ui.size,"focus":self.input.focused(),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find("graph-canvas").and_then(|i|self.canvas.as_ref().map(|c|c.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+    }
+    /// Visible asset payload centre for scripted drags through the production drop route.
+    pub fn asset_point(&self, path: &str) -> Option<[f32; 2]> {
+        self.ui.paint_order.iter().find_map(|i| {
+            let node = &self.ui.nodes[*i];
+            match self
+                .bindings
+                .get(&ara_ui::source::stable_id(&node.element.id))
+            {
+                Some(Binding::Asset(asset)) if asset.path == path => Some([
+                    node.rect.x + node.rect.w * 0.5,
+                    node.rect.y + node.rect.h * 0.5,
+                ]),
+                _ => None,
+            }
+        })
+    }
+    pub(crate) fn preview_ready(&self, panel: &str) -> bool {
+        if panel == "vfx" {
+            self.vfx_ready
+        } else if panel == "material" {
+            self.ui.find("material-live-preview-thumbnail").is_some()
+        } else {
+            true
+        }
+    }
+    pub(crate) fn asset_previews_ready(&self, paths: &[&str]) -> bool {
+        paths
+            .iter()
+            .all(|path| self.thumbnail_slots.contains_key(*path))
     }
     /// Scripted pointer activation through the actual UI input helper.
     pub fn click(

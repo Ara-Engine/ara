@@ -177,6 +177,18 @@ pub struct EditorState {
     pub canvas_selection: BTreeSet<String>,
     /// Search-to-add palette visibility.
     pub canvas_add: bool,
+    /// Selected module or controller state in the active authoring resource.
+    pub resource_item: Option<String>,
+    /// Frame selected in the profiler's frozen or live timeline.
+    pub profiler_frame: Option<u64>,
+    /// Show capture deltas instead of a single-frame detail.
+    pub profiler_compare: bool,
+    /// Show the animation pose/blend-space graph instead of the state machine.
+    pub animation_blends: bool,
+    /// Run fixed ticks in the live effect preview.
+    pub preview_playing: bool,
+    /// Render material previews on a plane.
+    pub preview_plane: bool,
 }
 impl Default for EditorState {
     fn default() -> Self {
@@ -212,6 +224,12 @@ impl Default for EditorState {
             canvas: Default::default(),
             canvas_selection: BTreeSet::new(),
             canvas_add: false,
+            resource_item: None,
+            profiler_frame: None,
+            profiler_compare: false,
+            animation_blends: false,
+            preview_playing: true,
+            preview_plane: false,
         }
     }
 }
@@ -223,6 +241,10 @@ impl EditorState {
             || self.asset_grid != other.asset_grid
             || self.resource != other.resource
             || self.canvas_add != other.canvas_add
+            || self.resource_item != other.resource_item
+            || self.profiler_frame != other.profiler_frame
+            || self.profiler_compare != other.profiler_compare
+            || self.animation_blends != other.animation_blends
             || self.selection != other.selection
             || self.focus != other.focus
             || self.focus_field != other.focus_field

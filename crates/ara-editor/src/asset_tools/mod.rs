@@ -1,6 +1,9 @@
 //! Import settings are commands; native importers run only in disposable workers.
 mod commands;
+mod material_preview;
 pub(crate) mod thumbnails;
+mod vfx_preview;
+pub(crate) mod vfx_stream;
 use ara_asset::{
     CacheBackend, Cancellation, FileCache, ImportSettings, JobEvent, ProcessWorker, SourceAsset,
     TargetPlatform,
@@ -33,6 +36,10 @@ pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
     let mut files = Vec::new();
     ara_host::project::walk_documents(&project.root, &project.db, &mut files);
     import_files(&project.root, &mut files)?;
+    let editor_layouts = project.root.join(".ara/editor");
+    if editor_layouts.is_dir() {
+        ara_host::project::walk_documents(&editor_layouts, &project.db, &mut files);
+    }
     files.sort();
     files.dedup();
     for file in files {
@@ -40,9 +47,18 @@ pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
             if let Ok(text) = std::fs::read_to_string(&file)
                 && let Some((kind, id)) = ara_doc::read_header(&text, &project.db)
             {
-                project
-                    .index
-                    .insert(id.to_string(), project.rel(&file), Some(kind));
+                project.index.insert(
+                    id.to_string(),
+                    if kind == "import" {
+                        project
+                            .rel(&file)
+                            .trim_end_matches(".import.json")
+                            .to_owned()
+                    } else {
+                        project.rel(&file)
+                    },
+                    Some(kind),
+                );
             }
             project.docs.push(file);
         }
@@ -137,7 +153,13 @@ impl Service for AssetService {
             return Err(vec![crate::invalid("source path must stay in the project")]);
         }
         let sidecar = format!("{}.import.json", p.path);
-        if method == "editor.asset.import" && cx.store().workspace().find(&sidecar).is_none() {
+        if method == "editor.asset.import"
+            && !cx
+                .store()
+                .workspace()
+                .docs()
+                .any(|(path, _)| path == sidecar)
+        {
             let registry =
                 ara_importers::registry().map_err(|e| vec![crate::invalid(e.to_string())])?;
             let extension = relative.extension().and_then(|s| s.to_str()).unwrap_or("");
@@ -166,8 +188,8 @@ impl Service for AssetService {
         let doc = cx
             .store()
             .workspace()
-            .find(&sidecar)
-            .and_then(|id| cx.store().workspace().doc(id.as_str()));
+            .docs()
+            .find_map(|(path, doc)| (path == sidecar).then_some(doc));
         let settings = doc
             .and_then(|d| d.record("i_settings"))
             .map(|r| serde_json::from_value::<ImportSettings>(Value::Object(r.clone())))

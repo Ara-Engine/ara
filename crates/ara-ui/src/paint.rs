@@ -117,6 +117,21 @@ pub enum Draw {
         /// Foreground or glyph tint color.
         color: Color,
     },
+    /// Cached outline-distance-field glyphs for continuously zoomable canvases.
+    ScalableGlyphRun {
+        /// Stable source node identity.
+        node: u64,
+        /// Registered font resource handle.
+        font: u32,
+        /// Logical font size after the view transform.
+        size: f32,
+        /// Logical run origin.
+        origin: [f32; 2],
+        /// Range in the containing glyph arena.
+        glyphs: Range<usize>,
+        /// Straight working-space tint.
+        color: Color,
+    },
     /// Decoded host image resource stretched to the destination rectangle.
     Image {
         /// Stable source node identity.
@@ -172,6 +187,7 @@ impl DisplayList {
         for (i, draw) in self.commands.iter().enumerate() {
             let key = match draw {
                 Draw::GlyphRun { font, .. } => (1, *font),
+                Draw::ScalableGlyphRun { font, .. } => (1, *font),
                 Draw::Image { image, .. } => (2, *image),
                 Draw::Line { .. } => (3, 0),
                 Draw::Rect { .. } | Draw::RoundedRect { .. } | Draw::Border { .. } => (0, 0),

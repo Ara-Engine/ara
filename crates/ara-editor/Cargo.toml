@@ -14,6 +14,8 @@ ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
 ara-material = { path = "../ara-material" }
 ara-vfx = { path = "../ara-vfx" }
+ara-vfx-gpu = { path = "../ara-vfx-gpu" }
+ara-shader-cook = { path = "../ara-shader-cook" }
 ara-anim = { path = "../ara-anim" }
 ara-profile = { path = "../ara-profile", features = ["gpu"] }
 ara-cmd = { path = "../ara-cmd" }

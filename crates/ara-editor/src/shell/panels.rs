@@ -117,7 +117,7 @@ impl Shell {
                 }
                 out.push_str("</panel>");
                 if let Some(panel) = tabs.get(*active) {
-                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play becomes available with the simulation host.' /></panel>"),"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
+                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play becomes available with the simulation host.' /></panel>"),"material"=>self.material_panel(editor,out)?,"vfx"=>self.vfx_panel(editor,out)?,"profiler"=>self.profiler_panel(editor,out)?,"animation"=>self.animation_panel(editor,out)?,"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
                 }
                 out.push_str("</panel>");
             }
@@ -220,6 +220,10 @@ pub(super) fn display(v: &Value) -> String {
 }
 fn title(panel: &str) -> &str {
     match panel {
+        "material" => "Material",
+        "vfx" => "VFX",
+        "animation" => "Animation",
+        "profiler" => "Profiler",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",

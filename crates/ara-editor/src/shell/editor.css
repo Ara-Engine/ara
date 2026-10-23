@@ -99,5 +99,11 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .view-cap:hover { background:var(--accent-surface); border-width:2px; border-color:var(--foreground); }
 .asset-card { flex-direction:column; align-items:center; padding:4px; gap:3px; background:var(--card); border-color:var(--border); border-radius:var(--radius-md); overflow:hidden; }
 .asset-card:hover { background:var(--muted); }
-.asset-card.selected { background:var(--accent-surface); border-color:var(--primary); }
+.asset-selected { background:var(--accent-surface); border-color:var(--primary); }
 .folder-row { justify-content:start; overflow:hidden; }
+
+.module-card { padding:4px; gap:2px; background:var(--card); border-color:var(--border); border-width:1px; border-radius:var(--radius-md); }
+.module-selected { background:var(--accent-surface); border-color:var(--primary); }
+.module-title { background:transparent; border-width:0px; justify-content:start; height:26px; font-size:12px; }
+
+.profile-delta { flex-direction:row;align-items:center;gap:12px;min-height:30px;border-width:1px;border-color:var(--border);padding:4px; }

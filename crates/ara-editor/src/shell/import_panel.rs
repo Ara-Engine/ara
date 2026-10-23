@@ -18,6 +18,7 @@ impl Shell {
                 reference: None,
                 kind: path.rsplit('.').next().unwrap_or("file").into(),
                 uses: Vec::new(),
+                stamp: 0,
             });
         out.push_str("<scroll id='import-inspector' class='body'>");
         let mut preview_asset = asset.clone();
@@ -41,8 +42,8 @@ impl Shell {
             .host
             .store()
             .workspace()
-            .find(&sidecar)
-            .and_then(|id| editor.host.store().workspace().doc(id.as_str()));
+            .docs()
+            .find_map(|(path, doc)| (path == sidecar).then_some(doc));
         if let Some(doc) = doc {
             let record = doc
                 .record("i_settings")

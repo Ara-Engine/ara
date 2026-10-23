@@ -220,6 +220,21 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
                     glyphs: glyphs.clone(),
                     color: *color,
                 },
+                Draw::ScalableGlyphRun {
+                    node,
+                    font,
+                    size,
+                    origin,
+                    glyphs,
+                    color,
+                } => Draw::ScalableGlyphRun {
+                    node: *node,
+                    font: *font,
+                    size: size * scale,
+                    origin: [origin[0] * scale, origin[1] * scale],
+                    glyphs: glyphs.clone(),
+                    color: *color,
+                },
                 Draw::PushClip { rect } => Draw::PushClip {
                     rect: scaled(*rect, scale),
                 },

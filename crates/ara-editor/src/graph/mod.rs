@@ -26,7 +26,7 @@ impl Default for Camera {
     fn default() -> Self {
         Self {
             pan: [36., 48.],
-            zoom: 1.,
+            zoom: 0.85,
         }
     }
 }
@@ -82,8 +82,10 @@ pub struct Canvas {
     pub diagnostic: Option<String>,
     graph: Graph,
     nodes: Vec<NodeView>,
+    index: BTreeMap<String, usize>,
     wires: Vec<Wire>,
     labels: Labels,
+    errors: BTreeMap<String, String>,
     drag: Option<interaction::Drag>,
     pointer: [f32; 2],
 }
@@ -96,8 +98,10 @@ impl Canvas {
             diagnostic: None,
             graph,
             nodes: Vec::new(),
+            index: BTreeMap::new(),
             wires: Vec::new(),
             labels: Labels::default(),
+            errors: BTreeMap::new(),
             drag: None,
             pointer: [0.; 2],
         };
@@ -109,8 +113,28 @@ impl Canvas {
         self.graph = graph;
         self.refresh_views(text);
     }
+    /// Attach compiler diagnostics to their stable node records without changing the graph.
+    pub fn diagnostics(
+        &mut self,
+        diagnostics: &[ara_diag::Diagnostic],
+        text: &mut ara_ui_text::TextSystem,
+    ) {
+        self.errors.clear();
+        for diagnostic in diagnostics {
+            if let Some(id) = &diagnostic.location.record {
+                let message = diagnostic.message.chars().take(34).collect::<String>();
+                self.labels.prepare(&message, text);
+                self.errors.insert(id.clone(), message);
+            }
+        }
+    }
+    /// Semantic node/port geometry for agents, including culled nodes and annotations.
+    pub fn report(&self, rect: Box2) -> serde_json::Value {
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.subtitle,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|(port,direction,ty)|serde_json::json!({"port":port,"direction":direction,"type":ty,"position":self.port_position(&Endpoint{node:n.id.clone(),port:port.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor})
+    }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();
+        self.index.clear();
         self.wires.clear();
         for (index, (id, node)) in self.graph.nodes.iter().enumerate() {
             let title = node
@@ -125,7 +149,26 @@ impl Canvas {
                 .positions
                 .get(id)
                 .copied()
-                .unwrap_or([(index % 4) as f32 * 256., (index / 4) as f32 * 196.]);
+                .unwrap_or_else(|| {
+                    if self.graph.header.domain == "material" && self.graph.nodes.len() < 12 {
+                        if id == "n_output" {
+                            [300., 112.]
+                        } else {
+                            [
+                                0.,
+                                self.graph
+                                    .nodes
+                                    .keys()
+                                    .filter(|key| key.as_str() != "n_output")
+                                    .position(|key| key == id)
+                                    .unwrap_or(index) as f32
+                                    * 136.,
+                            ]
+                        }
+                    } else {
+                        [(index % 4) as f32 * 256., (index / 4) as f32 * 196.]
+                    }
+                });
             let inputs = node
                 .ports
                 .values()
@@ -139,6 +182,7 @@ impl Canvas {
                 self.labels.prepare(name, text);
                 self.labels.prepare(&port.ty, text);
             }
+            self.index.insert(id.clone(), self.nodes.len());
             self.nodes.push(NodeView {
                 id: id.clone(),
                 title,
@@ -238,8 +282,12 @@ impl Canvas {
             h: node.height * self.camera.zoom,
         }
     }
+    /// Resolve a stable socket into host logical coordinates for semantic input/testing.
+    pub fn endpoint_position(&self, endpoint: &Endpoint, rect: Box2) -> Option<[f32; 2]> {
+        self.port_position(endpoint, rect)
+    }
     fn port_position(&self, endpoint: &Endpoint, rect: Box2) -> Option<[f32; 2]> {
-        let node = self.nodes.iter().find(|n| n.id == endpoint.node)?;
+        let node = self.nodes.get(*self.index.get(&endpoint.node)?)?;
         let (_, direction, _) = node
             .ports
             .iter()

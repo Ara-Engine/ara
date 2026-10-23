@@ -46,6 +46,18 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
+        if scancode == 40
+            && self.input.focused() == Some(ara_ui::source::stable_id("material-source"))
+        {
+            if ctrl {
+                self.dispatch(editor)?;
+                self.apply_resource_text(editor)?;
+                self.rebuild(editor)?;
+            } else {
+                self.event(InputEvent::Edit(EditEvent::Insert("\n".into())), clipboard)?;
+            }
+            return Ok(true);
+        }
         if scancode == 40 {
             self.dispatch(editor)?;
             let committed = self.commit_fields(editor)?;

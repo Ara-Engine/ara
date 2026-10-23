@@ -141,3 +141,135 @@ fn malformed_display_lists_are_rejected_before_submission() {
         );
     }
 }
+
+#[test]
+fn scalable_glyphs_reuse_one_outline_at_every_zoom() -> Result<()> {
+    use ara_ui::{paint::Draw, paint::Glyph};
+    let font = ara_ui_text::FontAsset {
+        source_id: 99,
+        index: 0,
+        bytes: include_bytes!("../../ara-ui-text/fonts/NotoSans.ttf").to_vec(),
+    };
+    let fonts = [font];
+    let mut renderer = Renderer::default();
+    let mut list = DisplayList {
+        commands: vec![Draw::ScalableGlyphRun {
+            node: 1,
+            font: 0,
+            size: 12.,
+            origin: [10., 10.],
+            glyphs: 0..1,
+            color: Color(255, 255, 255, 255),
+        }],
+        glyphs: vec![Glyph {
+            id: 36,
+            x: 0.,
+            y: 0.,
+        }],
+    };
+    renderer.prepare(&list, &fonts, [200, 100], TextMode::Raster)?;
+    let uv = renderer.instances[0].uv;
+    let height = renderer.instances[0].rect[3];
+    for size in [18., 24., 8., 12.5] {
+        if let Draw::ScalableGlyphRun { size: current, .. } = &mut list.commands[0] {
+            *current = size;
+        }
+        renderer.prepare(&list, &fonts, [200, 100], TextMode::Raster)?;
+        assert_eq!(renderer.instances[0].uv, uv);
+        assert!((renderer.instances[0].rect[3] - height * size / 12.).abs() < 0.001);
+    }
+    Ok(())
+}
+#[test]
+fn analytic_lines_preserve_endpoints_through_translation_and_clipping() -> Result<()> {
+    let list = DisplayList {
+        commands: vec![
+            Draw::PushTransform {
+                translation: [8., 4.],
+            },
+            Draw::PushClip {
+                rect: Box2 {
+                    x: 0.,
+                    y: 0.,
+                    w: 12.,
+                    h: 12.,
+                },
+            },
+            Draw::Line {
+                node: 1,
+                from: [0., 6.],
+                to: [16., 6.],
+                width: 2.,
+                color: Color(255, 0, 0, 255),
+            },
+            Draw::PopClip,
+            Draw::PopTransform,
+        ],
+        glyphs: vec![],
+    };
+    let mut renderer = Renderer::default();
+    let mut cpu = CpuGpu::default();
+    renderer.render(&mut cpu, &list, &[], [32, 24], TextMode::Raster)?;
+    let image = cpu.pixmap()?;
+    let alpha = |x, y| image.data()[((y * 32 + x) * 4 + 3) as usize];
+    assert_eq!(alpha(12, 10), 255);
+    assert_eq!(alpha(21, 10), 0);
+    assert_eq!(alpha(12, 15), 0);
+    Ok(())
+}
+
+#[test]
+fn clipped_text_does_not_submit_offscreen_glyphs() -> Result<()> {
+    use ara_ui::paint::Glyph;
+    let fonts = [ara_ui_text::FontAsset {
+        source_id: 99,
+        index: 0,
+        bytes: include_bytes!("../../ara-ui-text/fonts/NotoSans.ttf").to_vec(),
+    }];
+    let list = DisplayList {
+        commands: vec![
+            Draw::PushClip {
+                rect: Box2 {
+                    x: 12.,
+                    y: 10.,
+                    w: 24.,
+                    h: 24.,
+                },
+            },
+            Draw::PushTransform {
+                translation: [4., 3.],
+            },
+            Draw::PushClip {
+                rect: Box2 {
+                    x: 0.,
+                    y: 0.,
+                    w: 100.,
+                    h: 100.,
+                },
+            },
+            Draw::GlyphRun {
+                node: 1,
+                font: 0,
+                size: 12.,
+                origin: [10., 22.],
+                glyphs: 0..4,
+                color: Color(255, 255, 255, 255),
+            },
+            Draw::PopClip,
+            Draw::PopTransform,
+            Draw::PopClip,
+        ],
+        glyphs: [(0., 0.), (1000., 0.), (0., 1000.), (-1000., 0.)]
+            .into_iter()
+            .map(|(x, y)| Glyph { id: 36, x, y })
+            .collect(),
+    };
+    let mut renderer = Renderer::default();
+    renderer.prepare(&list, &fonts, [128, 128], TextMode::Raster)?;
+    assert_eq!(
+        renderer.instances.len(),
+        1,
+        "the nested ancestor clip excludes the other three glyphs"
+    );
+    Ok(())
+}

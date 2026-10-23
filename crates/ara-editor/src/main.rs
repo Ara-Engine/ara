@@ -9,7 +9,10 @@ fn main() -> ara_ui::Result<()> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--verify" => options.verify = true,
+            "--verify-panels" => options.verify_panels = true,
             "--sample" => options.sample = true,
+            "--screenshot" => options.screenshot = true,
+            "--panel" => options.panel = Some(args.next().ok_or("--panel needs a panel name")?),
             "--size" => {
                 let size = args.next().ok_or("--size needs WxH")?;
                 let (w, h) = size.split_once('x').ok_or("--size needs WxH")?;
@@ -34,7 +37,7 @@ fn main() -> ara_ui::Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--sample] [--frames N] [--verify] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits."
+                    "ara-editor <project> [--sample] [--frames N] [--verify | --verify-panels] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark."
                 );
                 return Ok(());
             }

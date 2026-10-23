@@ -2,7 +2,7 @@
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, ViewMode},
-    scene::{self, CameraSpec, Material, Scene, Texture},
+    scene::{CameraSpec, Material, Scene, Texture},
 };
 use glam::Vec3;
 use std::{
@@ -23,7 +23,7 @@ struct Request {
 }
 pub(crate) struct Thumbnails {
     send: SyncSender<Request>,
-    receive: Receiver<Result<Thumbnail, String>>,
+    receive: Receiver<Result<Thumbnail, (String, String)>>,
     requested: BTreeSet<String>,
 }
 impl Thumbnails {
@@ -34,18 +34,19 @@ impl Thumbnails {
         std::thread::spawn(move || {
             let mut renderer = None;
             for request in rx {
-                let result = make(
+                let result = match make(
                     &root,
                     &request.path,
                     request.source.as_deref(),
                     request.plane,
                     &mut renderer,
-                )
-                .map(|image| Thumbnail {
-                    key: request.key,
-                    image,
-                })
-                .map_err(|e| e.to_string());
+                ) {
+                    Ok(image) => Ok(Thumbnail {
+                        key: request.key,
+                        image,
+                    }),
+                    Err(error) => Err((request.key, error.to_string())),
+                };
                 if tx.send(result).is_err() {
                     break;
                 }
@@ -91,8 +92,11 @@ impl Thumbnails {
         }
         key
     }
-    pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, String>> + '_ {
+    pub fn poll(&mut self) -> impl Iterator<Item = Result<Thumbnail, (String, String)>> + '_ {
         self.receive.try_iter().take(8)
+    }
+    pub fn invalidate_all(&mut self) {
+        self.requested.clear();
     }
     pub fn invalidate(&mut self, path: &str) {
         self.requested.remove(path);
@@ -120,7 +124,11 @@ fn make(
     if let Ok(settings) = std::fs::read(root.join(format!("{path}.import.json"))) {
         inputs.extend(settings);
     }
-    inputs.extend(b"ara-thumb-v2-384");
+    // Cache identity includes referenced textures and external glTF buffers.
+    if let Ok(value) = ara_json::parse(std::str::from_utf8(&inputs[..source_len]).unwrap_or("")) {
+        dependency_bytes(root, source.parent().unwrap_or(root), &value, &mut inputs);
+    }
+    inputs.extend(b"ara-thumb-v3-384");
     inputs.push(u8::from(plane));
     let key = ara_asset::Digest::of(&inputs).to_string();
     let cache = root.join(".ara/cache/thumbnails");
@@ -143,7 +151,7 @@ fn make(
             }
             "material" | "graph" => {
                 let text = std::str::from_utf8(&inputs[..source_len])?;
-                // A source material's checked constant outputs feed the renderer's PBR block.
+                // Both views compile the same material AST; cached images are presentation only.
                 let material = if extension == "material" {
                     ara_material::dsl::parse(text, "gr_preview")
                         .map_err(|d| anyhow::anyhow!("{d:?}"))?
@@ -152,17 +160,19 @@ fn make(
                     ara_material::register(&mut db).map_err(|d| anyhow::anyhow!(d.to_string()))?;
                     let graph =
                         ara_graph::Graph::read(text, &db).map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                    if graph.header.domain == "vfx" {
+                        let effect = ara_vfx::Effect::from_graph(&graph)
+                            .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+                        let image = super::vfx_preview::capture(root, &effect)?;
+                        image.save(&target)?;
+                        return Ok(image);
+                    }
                     ara_material::Material::from_graph(&graph)
                         .map_err(|d| anyhow::anyhow!("{d:?}"))?
                 };
-                scene.materials[0] = material_parameters(&material)?;
-                if plane {
-                    scene.meshes.push(plane_mesh());
-                } else {
-                    scene
-                        .meshes
-                        .push(scene::sphere(1, path.into(), Vec3::ZERO, 1., 0));
-                }
+                let image = super::material_preview::capture(root, &material, plane)?;
+                image.save(&target)?;
+                return Ok(image);
             }
             _ => anyhow::bail!("no thumbnail decoder for {extension}"),
         }
@@ -238,73 +248,54 @@ pub(crate) fn preview_scene() -> Scene {
         lights: Vec::new(),
         sun_direction: Vec3::new(-0.6, 1., 0.8).normalize(),
         sun_lux: Vec3::splat(3500.),
-        environment: Vec::new(),
-        environment_size: [0; 2],
+        environment: vec![[0.15, 0.18, 0.24, 1.]],
+        environment_size: [1, 1],
     }
-}
-pub(crate) fn material_parameters(material: &ara_material::Material) -> anyhow::Result<Material> {
-    let material = ara_material::fold_constants(material).map_err(|d| anyhow::anyhow!("{d:?}"))?;
-    let mut result = Material::default();
-    for (output, id) in &material.outputs {
-        let values = material
-            .bindings
-            .get(id)
-            .and_then(|b| {
-                if let ara_material::Expr::Literal { values } = &b.expr {
-                    Some(values.as_slice())
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                material.parameters.get(id).and_then(|p| {
-                    if let ara_material::ParameterValue::Numeric(v) = &p.default {
-                        Some(v.as_slice())
-                    } else {
-                        None
-                    }
-                })
-            });
-        if let Some(v) = values {
-            match output.as_str() {
-                "baseColor" => {
-                    for (to, from) in result.base_color.iter_mut().zip(v) {
-                        *to = *from as f32;
-                    }
-                }
-                "roughness" => result.emissive_roughness[3] = v[0] as f32,
-                "metallic" => result.surface[0] = v[0] as f32,
-                "emissive" => {
-                    for (to, from) in result.emissive_roughness[..3].iter_mut().zip(v) {
-                        *to = *from as f32;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    Ok(result)
 }
 /// Stable image resource identity; thumbnail resources use a bounded rotating slot pool.
 pub(crate) fn image_name(slot: usize) -> String {
     format!("asset-thumbnail-{slot}")
 }
 
-fn plane_mesh() -> scene::Mesh {
-    scene::Mesh {
-        entity: 1,
-        name: "Material plane".into(),
-        material: 0,
-        vertices: [[-1., -1., 0.], [1., -1., 0.], [1., 1., 0.], [-1., 1., 0.]]
-            .into_iter()
-            .enumerate()
-            .map(|(i, position)| scene::Vertex {
-                position,
-                normal: [0., 0., 1.],
-                uv: [[0., 1.], [1., 1.], [1., 0.], [0., 0.]][i],
-                tangent: [1., 0., 0., 1.],
-            })
-            .collect(),
-        indices: vec![0, 1, 2, 0, 2, 3],
+fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, bytes: &mut Vec<u8>) {
+    match value {
+        serde_json::Value::String(text) => {
+            let path = if text.starts_with('@') {
+                ara_schema::grammar::parse_ref(text)
+                    .ok()
+                    .and_then(|r| r.path)
+                    .map(|p| root.join(p))
+            } else {
+                None
+            };
+            if let Some(path) = path
+                .and_then(|p| p.canonicalize().ok())
+                .filter(|p| p.starts_with(root.canonicalize().unwrap_or_default()))
+                && let Ok(data) = std::fs::read(path)
+            {
+                bytes.extend(data);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                dependency_bytes(root, relative, value, bytes);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            if let Some(uri) = fields
+                .get("uri")
+                .and_then(serde_json::Value::as_str)
+                .filter(|s| !s.starts_with("data:"))
+                && let Ok(path) = relative.join(uri).canonicalize()
+                && path.starts_with(root.canonicalize().unwrap_or_default())
+                && let Ok(data) = std::fs::read(path)
+            {
+                bytes.extend(data);
+            }
+            for value in fields.values() {
+                dependency_bytes(root, relative, value, bytes);
+            }
+        }
+        _ => {}
     }
 }

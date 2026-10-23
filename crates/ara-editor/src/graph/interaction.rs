@@ -16,6 +16,15 @@ pub(super) enum Drag {
         endpoint: Endpoint,
         direction: Direction,
     },
+    Comment {
+        key: String,
+        start: [f32; 2],
+    },
+    Reroute {
+        edge: String,
+        index: usize,
+        start: [f32; 2],
+    },
 }
 impl Canvas {
     /// Begin pan (middle/right), node move, box select or a socket connection.
@@ -48,6 +57,40 @@ impl Canvas {
                 direction,
             });
             return;
+        }
+        for (edge, points) in &self.graph.editor.reroutes {
+            if let Some(index) = points.iter().position(|point| {
+                let point = self.screen(*point, rect);
+                (point[0] - p[0]).hypot(point[1] - p[1]) < 9.
+            }) {
+                self.selection.clear();
+                self.selection.insert(edge.clone());
+                self.drag = Some(Drag::Reroute {
+                    edge: edge.clone(),
+                    index,
+                    start: p,
+                });
+                return;
+            }
+        }
+        for (key, comment) in &self.graph.editor.comments {
+            let point = self.screen(comment.position, rect);
+            if (Box2 {
+                x: point[0],
+                y: point[1],
+                w: 220. * self.camera.zoom,
+                h: 42. * self.camera.zoom,
+            })
+            .contains(p[0], p[1])
+            {
+                self.selection.clear();
+                self.selection.insert(key.clone());
+                self.drag = Some(Drag::Comment {
+                    key: key.clone(),
+                    start: p,
+                });
+                return;
+            }
         }
         if let Some(node) = self
             .nodes
@@ -98,6 +141,24 @@ impl Canvas {
         };
         match drag {
             Drag::Pan { .. } => Ok(Vec::new()),
+            Drag::Comment { key, start } => {
+                let mut layout = self.graph.editor.clone();
+                if let Some(comment) = layout.comments.get_mut(&key) {
+                    comment.position = self.drag_point(comment.position, start);
+                }
+                Ok(vec![Edit::Layout(layout)])
+            }
+            Drag::Reroute { edge, index, start } => {
+                let mut layout = self.graph.editor.clone();
+                if let Some(point) = layout
+                    .reroutes
+                    .get_mut(&edge)
+                    .and_then(|points| points.get_mut(index))
+                {
+                    *point = self.drag_point(*point, start);
+                }
+                Ok(vec![Edit::Layout(layout)])
+            }
             Drag::Nodes { start, positions } => {
                 if (p[0] - start[0]).hypot(p[1] - start[1]) < 2. {
                     return Ok(Vec::new());
@@ -170,6 +231,12 @@ impl Canvas {
                 Ok(vec![Edit::Connect(from, to)])
             }
         }
+    }
+    pub(super) fn drag_point(&self, base: [f32; 2], start: [f32; 2]) -> [f32; 2] {
+        [
+            base[0] + (self.pointer[0] - start[0]) / self.camera.zoom,
+            base[1] + (self.pointer[1] - start[1]) / self.camera.zoom,
+        ]
     }
     fn hit_port(&self, p: [f32; 2], rect: Box2) -> Option<(Endpoint, Direction)> {
         for node in self.nodes.iter().rev() {

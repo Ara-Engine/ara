@@ -1,4 +1,15 @@
 use super::*;
+/// Freeze a complete profiler capture for inspection and comparison.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorProfileFreeze {
+    /// Calling editor or agent session.
+    #[expect(dead_code, reason = "Host validates sessions")]
+    pub session: String,
+    /// Store as the comparison baseline instead of the current capture.
+    pub baseline: Option<bool>,
+}
 /// Shared node-canvas navigation. Content edits use graph/material commands.
 #[derive(Schema, Deserialize)]
 #[ara(params)]
@@ -32,6 +43,18 @@ pub(super) struct EditorWorkspace {
     pub grid: Option<bool>,
     /// Resource graph or controller to open.
     pub resource: Option<String>,
+    /// Module or controller-state address to inspect.
+    pub item: Option<String>,
+    /// Frame identity in the profiler timeline.
+    pub frame: Option<u64>,
+    /// Show the two-capture comparison.
+    pub compare: Option<bool>,
+    /// Show animation pose nodes and blend-space samples.
+    pub blends: Option<bool>,
+    /// Run the live VFX preview.
+    pub playing: Option<bool>,
+    /// Show a plane instead of a sphere in the material preview.
+    pub plane: Option<bool>,
 }
 /// Follow an agent's separate selection/camera without letting it interrupt the human by default.
 #[derive(Schema, Deserialize)]

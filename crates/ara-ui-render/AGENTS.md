@@ -45,3 +45,7 @@ The host owns actual SDL IME, OS clipboard, AccessKit platform integration and G
 
 Renderer::set_raster_scale rasterizes hinted glyphs at physical density while
 leaving display-list geometry logical. Apply the same scale in the native target.
+
+ScalableGlyphRun forces MSDF for cached graph labels; MSDF outlines share one
+48px atlas entry across requested sizes. Line uses mode 6 in the unchanged 64-byte
+instance ABI: UV stores local endpoints and parameters.x stores the half width.

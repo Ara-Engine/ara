@@ -1,6 +1,7 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod capture;
 mod controller;
+mod panels_verify;
 mod verify;
 mod viewport;
 use crate::{
@@ -43,6 +44,12 @@ pub struct Options {
     pub size: [u32; 2],
     /// Optional explicit DPI for reproducible monitor-scale verification.
     pub dpi: Option<f32>,
+    /// Open an authoring panel directly; --sample creates its starter asset when absent.
+    pub panel: Option<String>,
+    /// Save the final composited GPU frame before a bounded run exits.
+    pub screenshot: bool,
+    /// Run the native authoring panels, import and 500-node navigation suite.
+    pub verify_panels: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -54,14 +61,68 @@ impl Default for Options {
             output: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence"),
             size: [1440, 900],
             dpi: None,
+            panel: None,
+            screenshot: false,
+            verify_panels: false,
         }
     }
 }
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
+    if options.verify_panels {
+        panels_verify::fixtures(&options.project)?;
+    }
     let mut editor = Editor::open(&options.project)?;
     if options.sample {
         sample(&mut editor)?;
+    }
+    if let Some(panel) = &options.panel {
+        if options.sample && matches!(panel.as_str(), "material" | "vfx" | "animation") {
+            let found = editor.host.store().workspace().docs().any(|(_, d)| {
+                if panel == "animation" {
+                    d.kind == "animation"
+                } else {
+                    d.record("g_meta")
+                        .and_then(|r| r.get("domain"))
+                        .and_then(Value::as_str)
+                        == Some(panel)
+                }
+            });
+            if !found {
+                let path = format!(
+                    "samples/{panel}.{}",
+                    if panel == "animation" {
+                        "animation"
+                    } else {
+                        "graph"
+                    }
+                );
+                let doc = if let Some(id) = editor
+                    .host
+                    .store()
+                    .workspace()
+                    .find(&path)
+                    .map(ToString::to_string)
+                {
+                    editor.apply_to(
+                        &id,
+                        vec![json!({"cmd":"editor.graph.initialize","args":{"domain":panel}})],
+                        "Initialize sample asset",
+                    )?;
+                    id
+                } else {
+                    editor.action(
+                        "editor.resource.create",
+                        json!({"path":path,"domain":panel}),
+                    )?["doc"]
+                        .as_str()
+                        .ok_or("resource identity missing")?
+                        .to_owned()
+                };
+                editor.action("editor.workspace", json!({"resource":doc}))?;
+            }
+        }
+        editor.action("editor.focus", json!({"panel":panel}))?;
     }
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
@@ -117,6 +178,18 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let mut verification = options
         .verify
         .then(|| verify::Verification::new(&options.output));
+    let mut panel_verification = if options.verify_panels {
+        Some(panels_verify::Verification::new(
+            &mut editor,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
+    if panel_verification.is_some() {
+        shell.rebuild(&mut editor)?;
+    }
+
     let result = (|| -> ara_ui::Result<()> {
         let mut last_revision = editor.host.store().revision();
         let mut last_view = editor.view_revision;
@@ -139,9 +212,20 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let frame_budget = Duration::from_secs_f64(1. / 144.);
         let mut previous = Instant::now();
         loop {
+            let profile_frame = if editor.host.profiler().is_recording() {
+                editor.host.profiler().begin_frame().ok()
+            } else {
+                None
+            };
+            let profile_scope = profile_frame.map(|_| ara_profile::scope("editor.frame"));
+            let input_scope = profile_frame.map(|_| ara_profile::scope("editor.input"));
+            let mut profile_draws = 0;
+            let mut profile_triangles = 0;
+            let mut profile_gpu = false;
             let frame_start = Instant::now();
             let interval = frame_start.duration_since(previous).as_secs_f64() * 1000.;
             let mut camera_start = None;
+            let mut graph_start = None;
             let dt = frame_start.duration_since(previous).as_secs_f32().min(0.05);
             previous = frame_start;
             let events = window.poll()?;
@@ -167,7 +251,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                 }
             }
+            drop(input_scope);
             if quit || editor.host.stopping() {
+                drop(profile_scope);
+                if profile_frame.is_some() {
+                    let _ = editor
+                        .host
+                        .profiler()
+                        .end_frame(Default::default(), Default::default());
+                }
                 break;
             }
             match native.input(&mut shell.ui, &mut shell.input) {
@@ -196,13 +288,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
+            let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
             server.pump(&mut editor);
             editor.tick();
             if shell.poll_assets() {
-                shell.upload_thumbnails(&mut ui_renderer)?;
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }
+            dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 view = editor.view()?;
@@ -265,8 +358,28 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty |= changed;
                 scene_dirty |= dirty;
             }
+            if let Some(suite) = &mut panel_verification {
+                graph_start = suite.benchmarking().then(Instant::now);
+                let changed = suite.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                )?;
+                dirty |= changed;
+                scene_dirty |= changed;
+            }
+            drop(authority_scope);
             let physical = window.size()?;
             if physical.contains(&0) {
+                drop(profile_scope);
+                if profile_frame.is_some() {
+                    let _ = editor
+                        .host
+                        .profiler()
+                        .end_frame(Default::default(), Default::default());
+                }
                 std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
@@ -292,14 +405,25 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     render_samples.last().copied().unwrap_or(0.),
                 )?;
             }
+            if recording_profiler_visible(&mut editor) && frames.is_multiple_of(12) {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+            }
+            let graph_control = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
+            shell.sync_canvas(&editor);
             shell.orient_axis(editor.state.camera);
+            let ui_scope = profile_frame.map(|_| ara_profile::scope("editor.ui"));
             let work = shell.frame()?;
+            let graph_paint = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
+            drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
-            if scene_view.needs_frame(editor.state.quality) {
+            if shell.viewport().is_some() && scene_view.needs_frame(editor.state.quality) {
                 dirty = true;
                 scene_dirty = true;
             }
             if dirty {
+                let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));
+                profile_gpu = shell.viewport().is_some() && scene_dirty;
                 let render_start = Instant::now();
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
@@ -362,11 +486,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     shell.ui.size.map(|v| v.round() as u32),
                     TextMode::Raster,
                 )?;
+                let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let (image, size) = gpu.output()?;
                 // SAFETY: UI submission is complete, image is CopySource and all native owners are live.
                 unsafe {
                     present.display(renderer.gpu().context(), image, size)?;
                 }
+                let graph_present = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
                     native.update(&shell.ui, &shell.input, dpi)?;
                     last_ui = shell.version;
@@ -375,6 +501,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if let Some(start) = camera_start {
                     camera_samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }
+                if let (Some(start), Some(suite)) = (graph_start, &mut panel_verification) {
+                    suite.record(start.elapsed().as_secs_f64() * 1000.);
+                    if !suite.samples.is_empty() && suite.samples.len().is_multiple_of(200) {
+                        eprintln!(
+                            "graph cumulative ms: control={graph_control:?} paint={graph_paint:?} gpu={graph_gpu:?} present={graph_present:?} native={:.3}; {} batches / {} instances",
+                            start.elapsed().as_secs_f64() * 1000.,
+                            ui_renderer.batches.len(),
+                            ui_renderer.instances.len()
+                        );
+                    }
+                }
+                profile_draws = ui_renderer.batches.len() as u64;
+                profile_triangles = ui_renderer.instances.len() as u64 * 2;
                 dirty = false;
                 scene_dirty = false;
                 if let Some(start) = interaction_start {
@@ -409,11 +548,40 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                 }
             }
+            drop(profile_scope);
+            if let Some(token) = profile_frame {
+                if profile_gpu {
+                    editor
+                        .host
+                        .profiler()
+                        .gpu_timings(token.id(), renderer.timings());
+                    editor
+                        .host
+                        .profiler()
+                        .gpu_timings(token.id(), scene_view.timings());
+                }
+                editor
+                    .host
+                    .profiler()
+                    .end_frame(
+                        ara_profile::Counters {
+                            entities: view.entities().len() as u64,
+                            draws: profile_draws,
+                            triangles: profile_triangles,
+                            ..Default::default()
+                        },
+                        Default::default(),
+                    )
+                    .map_err(String::from)?;
+            }
             frames += 1;
             if options.frames.is_some_and(|limit| frames >= limit)
                 || verification
                     .as_ref()
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 5000)
+                || panel_verification
+                    .as_ref()
+                    .is_some_and(|v| v.finished() && idle_samples.len() >= 1500)
             {
                 break;
             }
@@ -424,11 +592,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         if verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("native verification did not complete within the frame budget".into());
         }
+        if panel_verification.as_ref().is_some_and(|v| !v.finished()) {
+            return Err("native panel verification did not finish".into());
+        }
         editor.host.flush();
-        renderer.gpu().assert_clean()?;
-        if options.verify {
+        if options.screenshot {
             std::fs::create_dir_all(&options.output)?;
-            let timings = json!({"targetHz":144,"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
+            gpu.pixels()?.save(options.output.join("editor.png"))?;
+            std::fs::write(
+                options.output.join("editor.layout.json"),
+                ara_json::to_canonical_string(&shell.layout_report()),
+            )?;
+        }
+        renderer.gpu().assert_clean()?;
+        if options.verify || options.verify_panels {
+            std::fs::create_dir_all(&options.output)?;
+            let timings = json!({"targetHz":144,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
             std::fs::write(
                 options.output.join("timings.json"),
                 ara_json::to_canonical_string(&timings),
@@ -528,4 +707,22 @@ fn sample(editor: &mut Editor) -> ara_ui::Result<()> {
     editor.apply(commands, "Create sample Outpost scene", None)?;
     editor.host.flush();
     Ok(())
+}
+
+fn recording_profiler_visible(editor: &mut Editor) -> bool {
+    fn active(node: &ara_ui::docking::DockNode) -> bool {
+        match node {
+            ara_ui::docking::DockNode::Area {
+                tabs,
+                active: selected,
+                ..
+            } => tabs.get(*selected).is_some_and(|t| t == "profiler"),
+            ara_ui::docking::DockNode::Split { first, second, .. } => {
+                active(first) || active(second)
+            }
+        }
+    }
+    active(&editor.state.layout)
+        && editor.profile_current.is_none()
+        && editor.host.profiler().is_recording()
 }

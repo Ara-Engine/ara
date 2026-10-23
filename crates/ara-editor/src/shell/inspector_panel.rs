@@ -7,6 +7,15 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
+        if editor.state.focus == "material" {
+            return self.material_inspector(editor, out);
+        }
+        if editor.state.focus == "animation" {
+            return self.animation_inspector(editor, out);
+        }
+        if editor.state.focus == "vfx" {
+            return self.vfx_inspector(editor, out);
+        }
         if editor.state.asset_path.is_some() {
             return self.import_panel(editor, out);
         }
@@ -100,7 +109,27 @@ impl Shell {
                 Provenance::Authored => "instance",
                 Provenance::AgentChanged => "agent change",
             };
-            out.push_str(&format!("<panel id='field-{id}' class='field-row'><panel id='label-row-{id}' class='row'><text id='label-{id}' class='field-label' text='{}{}' description='{}' /><panel id='label-fill-{id}' style='flex-grow:1' /><text id='origin-{id}' class='badge' text='{provenance}' /></panel>",escape(&field.label),field.unit.as_ref().map(|u|format!(" ({u})")).unwrap_or_default(),escape(&field.doc)));
+            let hex = if matches!(field.widget, Widget::Vector { color: true, .. }) && !field.mixed
+            {
+                let hex = (0..3)
+                    .map(|n| {
+                        format!(
+                            "{:02X}",
+                            (field.value[n]
+                                .as_f64()
+                                .unwrap_or(1.)
+                                .clamp(0., 1.)
+                                .powf(1. / 2.2)
+                                * 255.)
+                                .round() as u8
+                        )
+                    })
+                    .collect::<String>();
+                format!("<text id='color-hex-{id}' class='badge number' text='#{hex}' />")
+            } else {
+                String::new()
+            };
+            out.push_str(&format!("<panel id='field-{id}' class='field-row'><panel id='label-row-{id}' class='row'><text id='label-{id}' class='field-label' text='{}{}' description='{}' /><panel id='label-fill-{id}' style='flex-grow:1' />{hex}<text id='origin-{id}' class='badge' text='{provenance}' /></panel>",escape(&field.label),field.unit.as_ref().map(|u|format!(" ({u})")).unwrap_or_default(),escape(&field.doc)));
             match &field.widget {
                 Widget::Vector { count, color } => {
                     out.push_str(&format!("<panel id='vector-{id}' class='row'>"));
@@ -133,25 +162,6 @@ impl Shell {
                         out.push_str("</panel>");
                     }
                     out.push_str("</panel>");
-                    if *color && !field.mixed {
-                        let hex = (0..3)
-                            .map(|n| {
-                                format!(
-                                    "{:02X}",
-                                    (field.value[n]
-                                        .as_f64()
-                                        .unwrap_or(1.)
-                                        .clamp(0., 1.)
-                                        .powf(1. / 2.2)
-                                        * 255.)
-                                        .round() as u8
-                                )
-                            })
-                            .collect::<String>();
-                        out.push_str(&format!(
-                            "<text id='color-hex-{id}' class='badge number' text='#{hex}' />"
-                        ));
-                    }
                     if *color && self.color_picker.as_deref() == Some(field.path.as_str()) {
                         for axis in 0..*count {
                             let widget = format!("color-slider-{id}-{axis}");

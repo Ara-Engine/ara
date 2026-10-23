@@ -19,7 +19,7 @@ impl Shell {
                 },
             ));
         }
-        out.push_str("<text id='asset-hint' class='badge' text='type:mesh  type:texture  type:material' /></panel><panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'><scroll id='asset-folders' style='width:168px;flex-shrink:0;padding:8px;gap:2px;border-right-width:1px;border-color:var(--border)'>");
+        out.push_str("<text id='asset-hint' class='badge' text='type:mesh  type:texture  type:material' /></panel><panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'><scroll id='asset-folders' style='width:168px;min-width:168px;flex-basis:168px;flex-shrink:0;padding:8px;gap:2px;border-width:1px;border-color:var(--border)'>");
         out.push_str(&self.bind_button(
             "asset-folder-root",
             "Project",
@@ -106,7 +106,7 @@ impl Shell {
                 ara_ui::source::stable_id(&id),
                 Binding::Asset(asset.clone()),
             );
-            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:104px;height:108px' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"selected"}else{""},8+(n%columns)*112,8.+(n/columns) as f32*116.-self.asset_offset,escape(&asset.path),escape(&asset.path)));
+            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:104px;height:108px' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8+(n%columns)*112,8.+(n/columns) as f32*116.-self.asset_offset,escape(&asset.path),escape(&asset.path)));
             self.asset_thumbnail(asset, out, &id, 68.);
             out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' /></button>",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(&asset.kind)));
         }
