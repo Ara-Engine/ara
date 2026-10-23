@@ -26,7 +26,7 @@ pub struct ColorKey {
 pub enum Sorting {
     /// Stable compacted slot order, ideal for additive effects.
     None,
-    /// Back-to-front camera depth using stable GPU radix passes.
+    /// Back-to-front camera depth with stable slot-ID ties.
     Depth,
     /// Oldest particles first.
     Age,
