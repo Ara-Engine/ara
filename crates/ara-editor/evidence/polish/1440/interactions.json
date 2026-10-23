@@ -3,58 +3,58 @@
   "steps": [
     {
       "step": 0,
-      "cpuMs": 0.0212
+      "cpuMs": 0.0194
     },
     {
       "step": 1,
-      "cpuMs": 5.0514
+      "cpuMs": 5.2821
     },
     {
       "step": 2,
-      "cpuMs": 4.1748
+      "cpuMs": 4.2058
     },
     {
       "step": 3,
-      "cpuMs": 4.349600000000001
+      "cpuMs": 3.6412
     },
     {
       "step": 4,
-      "cpuMs": 4.0649
+      "cpuMs": 3.3817999999999997
     },
     {
       "step": 5,
-      "cpuMs": 6.0571
+      "cpuMs": 5.8971
     },
     {
       "step": 6,
-      "cpuMs": 308.8725
+      "cpuMs": 428.6105
     },
     {
       "step": 7,
-      "cpuMs": 4.722600000000001
+      "cpuMs": 4.0444
     },
     {
       "step": 8,
-      "cpuMs": 334.4235
+      "cpuMs": 210.4338
     },
     {
       "step": 9,
-      "cpuMs": 305.7754
+      "cpuMs": 223.6296
     },
     {
       "step": 10,
-      "cpuMs": 791.1428000000001
+      "cpuMs": 614.6945000000001
     },
     {
       "step": 11,
-      "cpuMs": 1.1888999999999998
+      "cpuMs": 1.0610000000000002
     },
     {
       "step": 12,
-      "cpuMs": 0.216
+      "cpuMs": 0.2284
     }
   ],
-  "totalMs": 2283.8390999999997,
+  "totalMs": 8559.9075,
   "flow": [
     "hierarchy selection",
     "unit-aware inspector position",

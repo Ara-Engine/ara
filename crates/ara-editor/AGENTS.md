@@ -30,3 +30,12 @@ isolation and requires validation layers, SDL3 and this machine's GPU.
 GPU/CPU comparison, captures both themes and records raw timing samples.
 Intentional goldens live in `tests/goldens`; evidence lives in `evidence`.
 Never update goldens implicitly during ordinary tests.
+
+Polish assets: bundled Lucide SVGs (ISC), Inter and JetBrains Mono (OFL); see
+THIRD_PARTY_NOTICES.md. Icons rasterize only on theme/DPI changes. The fidelity
+view and its bounded settling live in app/viewport.rs; destroy it before its GPU.
+Raster IDs drive picking, silhouette outlines and GPU-only hover. Physical Scene
+extents and UI glyph raster scale change together. Keep the separate SDL window,
+editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
+bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
+1440x900 at 1x and 2560x1440 at 2x, including palettes and review cards.

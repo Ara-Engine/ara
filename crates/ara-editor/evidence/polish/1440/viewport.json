@@ -93,47 +93,47 @@
   },
   "timings": [
     {
-      "milliseconds": 0.011776,
+      "milliseconds": 0.011712,
       "pass": "ShadowAtlas.4Cascades",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.076704,
+      "milliseconds": 0.077056,
       "pass": "GBuffer",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.004608,
+      "milliseconds": 0.004384,
       "pass": "TiledLightCull",
       "queue": "Compute"
     },
     {
-      "milliseconds": 0.065824,
+      "milliseconds": 0.066688,
       "pass": "DeferredLighting",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002432,
+      "milliseconds": 0.002112,
       "pass": "ForwardTransparency",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.014784,
+      "milliseconds": 0.015392,
       "pass": "TemporalResolve",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.021728,
+      "milliseconds": 0.022432,
       "pass": "Exposure.ACESFitted.SDR",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.139776,
+      "milliseconds": 0.153888,
       "pass": "CaptureReadback",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.0032,
+      "milliseconds": 0.00288,
       "pass": "HostReadback",
       "queue": "Graphics"
     },

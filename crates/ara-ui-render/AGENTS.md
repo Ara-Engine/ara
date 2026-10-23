@@ -42,3 +42,6 @@ Verification (set `CARGO_BUILD_JOBS=4`):
 - Initial timing evidence is retained alongside final evidence; shared-machine scheduling outliers are included.
 
 The host owns actual SDL IME, OS clipboard, AccessKit platform integration and GPU presentation.
+
+Renderer::set_raster_scale rasterizes hinted glyphs at physical density while
+leaving display-list geometry logical. Apply the same scale in the native target.

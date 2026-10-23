@@ -49,3 +49,7 @@ Widget rules:
 Tests: `CARGO_BUILD_JOBS=4 cargo test -p ara-ui`.
 Also run `cargo clippy -p ara-ui --all-targets -- -D warnings` and package rustfmt check.
 Rendering goldens and release measurements live in ara-ui-render.
+
+Numeric editors can select an explicit font-family and text-align:right. These
+properties retain shaping correctly; focused fields keep their caret origin.
+Missing success/info surface tokens derive from the canonical palette colors.
