@@ -2,8 +2,9 @@
 //! A scene mixing 3D, VFX and audio in Play, driven over MCP: the demo (skinned Fox,
 //! physics, crowds, lights) with its campfire effect gets a crackle sound an agent
 //! attaches through `ara_apply`; the sound imports through the pipeline (the
-//! `ara.audio` worker importer), plays spatially from the fire and renders offline to
-//! an analysed WAV; the image capture composites the fire's GPU particles.
+//! `ara.audio` worker importer), plays through the play audio path (mixer, room
+//! reverb, acoustics against the physics scene) and renders offline to an analysed
+//! WAV; the image capture composites the fire's GPU particles.
 mod support;
 
 use ara_asset::{ImportSettings, Sidecar, SidecarCommand};
@@ -100,6 +101,14 @@ fn agent_plays_a_scene_mixing_3d_vfx_and_audio() {
     );
     let audio_ms = t.elapsed().as_secs_f64() * 1000.0;
     assert_eq!(audio["voices"], json!(["e_fire"]), "{audio}");
+    // Acoustics against the physics scene: distance, attenuation and the direct path.
+    let fire = &audio["sources"][0];
+    assert!(fire["distance"].as_f64().unwrap() > 1.0, "{fire}");
+    // The fire sits at ground height: the ground occludes part of its direct path and
+    // the audibility report (an `ara why` cause) says so.
+    assert!(fire["visibility"].as_f64().unwrap() < 1.0, "{fire}");
+    assert_eq!(fire["occluders"], json!(["generic e_ground"]), "{fire}");
+    assert_eq!(fire["explain"][0]["code"], json!("ARA3402"), "{fire}");
     let analysis = &audio["analysis"];
     assert_eq!(analysis["silent"], json!(false), "{analysis}");
     assert!(analysis["integratedLufs"].as_f64().is_some(), "{analysis}");
@@ -119,6 +128,7 @@ fn agent_plays_a_scene_mixing_3d_vfx_and_audio() {
         serde_json::to_string_pretty(&json!({
             "audio": {
                 "captureMs": audio_ms,
+                "fire": fire,
                 "integratedLufs": analysis["integratedLufs"],
                 "samplePeak": analysis["samplePeak"],
             },

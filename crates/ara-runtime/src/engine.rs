@@ -20,6 +20,7 @@ pub fn register_schemas(db: &mut SchemaDb) -> Vec<Diagnostic> {
         ));
     }
     ara_audio::register(db);
+    ara_acoustics::register(db);
     ara_2d::register(db);
     ara_physics2d::register(db);
     ara_world::register(db);
@@ -29,6 +30,8 @@ pub fn register_schemas(db: &mut SchemaDb) -> Vec<Diagnostic> {
         ara_terrain::register(db),
         ara_foliage::register(db),
         ara_material::register(db),
+        ara_audio_mix::register(db),
+        ara_music::register(db),
     ] {
         problems.extend(result.err());
     }
@@ -46,4 +49,5 @@ pub fn register_commands(registry: &mut Registry, db: &mut SchemaDb) {
     ara_terrain::commands::register(registry, db);
     ara_foliage::commands::register(registry, db);
     ara_l10n::tools::register(registry, db);
+    ara_audio_graph::commands::register(registry, db);
 }

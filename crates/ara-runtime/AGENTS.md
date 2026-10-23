@@ -25,7 +25,9 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   `VisualEffect` (a cooked GPU particle effect). Also simulated: ara-2d sprites,
   tilemaps, 2D lights and cameras, Rapier2D bodies (2D physics installs when the scene
   has 2D bodies; `PlayerControl` on a `CharacterController2d` drives it), and
-  ara-audio `AudioSource`/`AudioListener` (presentation intent only).
+  ara-audio `AudioSource`/`AudioListener` plus ara-acoustics `AcousticSource`,
+  `AcousticSurface`, `ReverbZone`, `AcousticPortal` (presentation intent only; played by
+  `ara-runtime-audio`). Mixer and music documents are part of the engine schema world.
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns

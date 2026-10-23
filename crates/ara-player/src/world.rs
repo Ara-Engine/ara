@@ -11,6 +11,7 @@ use ara_render::capture::ViewMode;
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
+use ara_runtime_audio::AudioPresenter;
 use ara_runtime_render::{
     Presenter,
     two_d::{self, Presenter2d},
@@ -114,70 +115,48 @@ impl World {
         Ok(())
     }
 
+    /// The audio listener: at the camera, facing its view direction.
+    pub fn listener(&mut self, frame: &mut RenderFrame) -> ara_audio::AudioListener {
+        self.runtime.extract(frame);
+        let mut listener = ara_audio::AudioListener::default();
+        if let Some(camera) = &frame.camera {
+            listener.position = camera.position;
+            listener.forward = camera.forward;
+        }
+        listener
+    }
+
+    /// One live audio update (windowed players, every presented frame).
+    pub fn audio(&mut self, audio: &mut AudioPresenter, frame: &mut RenderFrame) -> Result<()> {
+        let listener = self.listener(frame);
+        let assets = assets(&self.cache, &self.pins)?;
+        audio.update(self.runtime.world(), &listener, &mut |reference| {
+            ara_runtime_audio::clip(&assets, reference)
+        })?;
+        Ok(())
+    }
+
+    /// A fresh audio presenter for this world (its project mixer, room reverb).
+    pub fn audio_presenter(&self) -> Result<AudioPresenter> {
+        Ok(AudioPresenter::new(self.runtime.documents())?)
+    }
+
     /// `play.captureAudio`: renders `seconds` of the world's sound offline from the
-    /// current tick (each `AudioSource` at its world pose, the listener at the camera)
-    /// to a WAV plus analysis JSON. Presentation only; the simulation is untouched.
+    /// current tick through the play audio path (project mixer, room reverb, acoustics
+    /// against the physics scene, the listener at the camera) to a WAV plus analysis
+    /// JSON, with how each source is heard. Presentation only.
     pub fn capture_audio(
         &mut self,
         params: &ara_play::CaptureAudio,
         frame: &mut RenderFrame,
     ) -> Result<Value> {
-        use ara_audio::{AudioEngine, AudioListener, AudioSource, EngineConfig, Playback};
-        use ara_runtime::assets::AssetSource;
-        self.runtime.extract(frame);
-        let mut listener = AudioListener::default();
-        if let Some(camera) = &frame.camera {
-            listener.position = camera.position;
-            listener.forward = camera.forward;
-        }
-        let mut engine = AudioEngine::new(EngineConfig::default())?;
-        let bus = engine.bus("master").context("no master bus")?;
+        let mut audio = self.audio_presenter()?;
+        let listener = self.listener(frame);
         let assets = assets(&self.cache, &self.pins)?;
-        let world = self.runtime.world();
-        let mut sources: Vec<(String, AudioSource, [f32; 3])> = world
-            .iter_entities()
-            .filter_map(|e| {
-                let id = e.get::<ara_sim::Identity>()?.0.clone();
-                let source = e.get::<AudioSource>()?.clone();
-                let pose = e.get::<ara_runtime::sync::WorldPose>()?;
-                Some((id, source, pose.0.translation.to_array()))
-            })
-            .collect();
-        sources.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut voices = Vec::new();
-        for (id, mut source, position) in sources {
-            let Some(clip) = &source.clip else { continue };
-            let asset = ara_runtime::assets::asset_id(clip).map_err(|e| anyhow!(e.0))?;
-            let (_, cached) = assets
-                .load(asset)
-                .map_err(|e| anyhow!(e.0))?
-                .with_context(|| format!("{id}: sound {} is not imported", clip.0))?;
-            let artifact = |name: &str| {
-                cached
-                    .output
-                    .artifacts
-                    .iter()
-                    .find(|a| a.name == name)
-                    .map(|a| a.bytes.clone())
-                    .with_context(|| format!("{id}: sound has no {name}"))
-            };
-            let meta: Value = serde_json::from_slice(&artifact("audio.json")?)?;
-            let bytes = std::io::Cursor::new(artifact("audio.bin")?);
-            let mut decoder: Box<dyn ara_audio::codec::AudioDecoder> = if meta["codec"] == "opus" {
-                Box::new(ara_audio::codec::OpusDecoder::open(bytes)?)
-            } else {
-                Box::new(ara_audio::codec::MediaDecoder::open(
-                    Box::new(bytes),
-                    "wav",
-                )?)
-            };
-            let decoded = ara_audio::codec::decode_clip(decoder.as_mut(), 64 * 1024 * 1024)?;
-            source.position = position;
-            let playback = Playback::from_source(&source, &listener, 0, Default::default())?;
-            engine.play(bus, decoded, playback)?;
-            voices.push(id);
-        }
-        let capture = ara_audio::capture::capture_audio(&mut engine, params.seconds)?;
+        let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
+            ara_runtime_audio::clip(&assets, reference)
+        })?;
+        let capture = audio.capture(params.seconds)?;
         let path = std::path::Path::new(&params.path);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -185,9 +164,23 @@ impl World {
         std::fs::write(path, &capture.wav)?;
         let analysis = capture.analysis_json()?;
         std::fs::write(path.with_extension("audio.json"), &analysis)?;
+        let sources: Vec<Value> = heard
+            .iter()
+            .map(|h| {
+                json!({
+                    "entity": h.entity,
+                    "distance": ara_runtime::live::tidy(json!(h.distance)),
+                    "attenuation": ara_runtime::live::tidy(json!(h.attenuation)),
+                    "visibility": ara_runtime::live::tidy(json!(h.visibility)),
+                    "occluders": h.occluders,
+                    "explain": h.explain,
+                })
+            })
+            .collect();
         Ok(json!({
             "tick": self.runtime.tick(),
-            "voices": voices,
+            "voices": heard.iter().map(|h| h.entity.clone()).collect::<Vec<_>>(),
+            "sources": sources,
             "analysis": serde_json::from_str::<Value>(&analysis)?,
         }))
     }

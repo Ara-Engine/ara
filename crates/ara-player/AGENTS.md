@@ -60,7 +60,9 @@ loudness analysis).
 `tests/two_d.rs` plays the ara-render2d platformer sample (atlases imported through
 the worker, the scout as a 2D player, an ara-render2d capture with marks).
 `tests/mixed.rs` plays the demo with its campfire effect and an agent-attached sound:
-`play.captureAudio` (offline, spatial, analysed WAV) and a VFX-composited capture.
+`play.captureAudio` (ara-runtime-audio: mixer, room reverb, acoustics against Jolt,
+audibility report) and a VFX-composited capture. Windowed players play live audio
+through SDL (`AUDIO_WATERMARK` queued frames); without a device play stays silent.
 `tests/csharp.rs` (builds `dotnet/Ara.slnx`) plays a demo copy with the Outpost C#
 module (`demo-scripts/Outpost`: Door, UseMedkit, Gravity/Movement): published types,
 agent-added C# components, `play.command`, an agent `script.write` hot reload while

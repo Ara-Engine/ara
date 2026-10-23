@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-audio-why = { path = "../ara-audio-why" }
 ara-cmd = { path = "../ara-cmd" }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }

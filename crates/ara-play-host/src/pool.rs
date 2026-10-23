@@ -427,7 +427,7 @@ impl Pool {
     }
 
     /// Takes `count` ready players of one kind (single-use), waiting up to `timeout`
-    /// for spawns to connect, then refills behind them.
+    /// for spawns to connect. The host tick refills the pool behind them.
     pub fn take(
         &mut self,
         count: usize,
@@ -460,7 +460,8 @@ impl Pool {
                 .ok_or("pool emptied while taking")?;
             taken.push(self.idle.swap_remove(index));
         }
-        self.refill();
+        // No refill here: spawning a player (CreateProcess of a large image) costs
+        // ~100 ms on Windows; the host tick refills after Play has started.
         Ok(taken)
     }
 }

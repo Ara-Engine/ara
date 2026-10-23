@@ -395,6 +395,7 @@ dependencies = [
 name = "ara"
 version = "0.0.0"
 dependencies = [
+ "ara-audio-why",
  "ara-diag",
  "ara-doc",
  "ara-host",
@@ -672,6 +673,7 @@ dependencies = [
  "accesskit 0.25.1",
  "accesskit_windows 0.35.1",
  "anyhow",
+ "ara-audio-why",
  "ara-cmd",
  "ara-components",
  "ara-diag",
@@ -1230,6 +1232,7 @@ dependencies = [
  "ara-play-host",
  "ara-render",
  "ara-runtime",
+ "ara-runtime-audio",
  "ara-runtime-render",
  "ara-runtime-script",
  "ara-schema",
@@ -1355,10 +1358,13 @@ name = "ara-runtime"
 version = "0.0.0"
 dependencies = [
  "ara-2d",
+ "ara-acoustics",
  "ara-anim",
  "ara-asset",
  "ara-asset-format",
  "ara-audio",
+ "ara-audio-graph",
+ "ara-audio-mix",
  "ara-cmd",
  "ara-components",
  "ara-diag",
@@ -1369,6 +1375,7 @@ dependencies = [
  "ara-json",
  "ara-l10n",
  "ara-material",
+ "ara-music",
  "ara-nav",
  "ara-ops",
  "ara-physics",
@@ -1384,6 +1391,24 @@ dependencies = [
  "bytemuck",
  "glam 0.34.1",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-runtime-audio"
+version = "0.0.0"
+dependencies = [
+ "ara-acoustics",
+ "ara-audio",
+ "ara-audio-mix",
+ "ara-diag",
+ "ara-doc",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-runtime",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
  "serde_json",
 ]
 

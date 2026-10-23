@@ -527,6 +527,9 @@ pub struct Status {
     pub frame_ms_p95: f64,
     /// A subsystem fault that paused the world.
     pub fault: Option<String>,
+    /// A live audio device is open and fed (windowed players with sound).
+    #[serde(default)]
+    pub audio: bool,
 }
 
 /// `play.busy` notification.

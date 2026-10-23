@@ -85,6 +85,7 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        ara_audio_why::register(host.why());
         let workspace = host.store().workspace();
         let doc = main_scene
             .as_deref()

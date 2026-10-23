@@ -188,6 +188,10 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     // Presentation sound intent; playback cursors never enter the simulation.
     registry.register_component::<ara_audio::AudioSource>()?;
     registry.register_component::<ara_audio::AudioListener>()?;
+    registry.register_component::<ara_acoustics::AcousticSource>()?;
+    registry.register_component::<ara_acoustics::AcousticSurface>()?;
+    registry.register_component::<ara_acoustics::ReverbZone>()?;
+    registry.register_component::<ara_acoustics::AcousticPortal>()?;
     // 2D scenes: sprites, tilemaps, lights, cameras and Rapier2D bodies.
     ara_2d::register_sim(registry)?;
     ara_physics2d::register_sim(registry)?;
@@ -364,6 +368,11 @@ impl Runtime {
     /// The authoring schema this world was projected with.
     pub fn schema(&self) -> &SchemaDb {
         &self.schema
+    }
+
+    /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).
+    pub fn documents(&self) -> &Workspace {
+        &self.baseline
     }
 
     /// Play control: watches, snapshots, record/replay and the session.

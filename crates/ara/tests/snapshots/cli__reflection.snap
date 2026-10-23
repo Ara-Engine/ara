@@ -5,6 +5,31 @@ expression: out
 {
   "$schema": "ara://schema/reflection/1",
   "types": {
+    "AcousticMaterial": {
+      "kind": "struct",
+      "doc": "Surface acoustics for reflection, scattering and transmission.",
+      "module": "audio",
+      "fields": {
+        "absorption": {
+          "type": "vec3",
+          "doc": "Fraction of energy absorbed on reflection: low/mid/high bands.",
+          "default": [0.1, 0.2, 0.3],
+          "range": [0, 1]
+        },
+        "scattering": {
+          "type": "f32",
+          "doc": "Fraction of reflected energy scattered diffusely (0 specular, 1 diffuse).",
+          "default": 0.05,
+          "range": [0, 1]
+        },
+        "transmission": {
+          "type": "vec3",
+          "doc": "Fraction of energy transmitted through the surface: low/mid/high bands.",
+          "default": [0.1, 0.05, 0.03],
+          "range": [0, 1]
+        }
+      }
+    },
     "AcousticPath": {
       "kind": "struct",
       "doc": "Acoustic simulation result. Physics/Steam workers publish this at a frame boundary.",
@@ -24,9 +49,161 @@ expression: out
         },
         "reverbSend": {
           "type": "f32",
-          "doc": "Late reverberation send amplitude, consumed by the mixer bus bridge.",
+          "doc": "Per-voice room reverb send amplitude into the bus's routed aux return. Values above one compensate distance attenuation so the diffuse reverberant level stays physical.",
           "default": 0,
+          "range": [0, 16]
+        },
+        "air": {
+          "type": "vec3",
+          "doc": "Low/mid/high air absorption gain over the propagation distance; one is none.",
+          "default": [1, 1, 1],
           "range": [0, 1]
+        }
+      }
+    },
+    "AcousticPortal": {
+      "kind": "component",
+      "doc": "An opening (door, window, archway) connecting two zones. An empty zone name is outdoors.",
+      "module": "audio",
+      "fields": {
+        "a": {
+          "type": "string",
+          "doc": "First zone's name; empty means outdoors.",
+          "default": ""
+        },
+        "b": {
+          "type": "string",
+          "doc": "Second zone's name; empty means outdoors.",
+          "default": ""
+        },
+        "position": {
+          "type": "vec3",
+          "doc": "World-space center of the opening, supplied by the bridge.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "width": {
+          "type": "f32",
+          "doc": "Opening width.",
+          "default": 1,
+          "unit": "m",
+          "range": [0.01, 1000]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Opening height.",
+          "default": 2,
+          "unit": "m",
+          "range": [0.01, 1000]
+        },
+        "open": {
+          "type": "f32",
+          "doc": "How open it is: 0 closed (blocks), 1 fully open. Drive from door state.",
+          "default": 1,
+          "range": [0, 1]
+        }
+      }
+    },
+    "AcousticSource": {
+      "kind": "component",
+      "doc": "Per-source acoustic behaviour, alongside `AudioSource`. Optional: sources without it use `AcousticSource::default()`.",
+      "module": "audio",
+      "fields": {
+        "occlusion": {
+          "type": "bool",
+          "doc": "Trace geometry between source and listener for occlusion and transmission.",
+          "default": true
+        },
+        "occlusionRadius": {
+          "type": "f32",
+          "doc": "Radius sampled for partial (volumetric) occlusion; 0 traces only the center ray.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, 50]
+        },
+        "airAbsorption": {
+          "type": "bool",
+          "doc": "Apply frequency-dependent air absorption over the propagation distance.",
+          "default": true
+        },
+        "doppler": {
+          "type": "f32",
+          "doc": "Doppler strength: 0 disables pitch shift, 1 is physical, larger exaggerates.",
+          "default": 1,
+          "range": [0, 4]
+        },
+        "reverbSend": {
+          "type": "f32",
+          "doc": "Room reverb send before zone and portal attenuation.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "distanceCurve": {
+          "type": "list<vec2>",
+          "doc": "Custom distance curve: `[meters, linear gain]` points with increasing distance. Empty uses `AudioSource.attenuation`; cones still apply.",
+          "default": []
+        }
+      }
+    },
+    "AcousticSurface": {
+      "kind": "component",
+      "doc": "Acoustic surface of static geometry or a collider. The physics ray adapter maps hit bodies to this component; absent components read as `generic`.",
+      "module": "audio",
+      "fields": {
+        "preset": {
+          "type": "MaterialPreset",
+          "doc": "Named material; ignored when `custom` is set.",
+          "default": "generic",
+          "options": [
+            "generic",
+            "brick",
+            "concrete",
+            "ceramic",
+            "gravel",
+            "carpet",
+            "glass",
+            "plaster",
+            "wood",
+            "metal",
+            "rock"
+          ]
+        },
+        "custom": {
+          "type": "option<AcousticMaterial>",
+          "doc": "Explicit material values overriding the preset.",
+          "default": null
+        }
+      }
+    },
+    "AcousticsSettings": {
+      "kind": "struct",
+      "doc": "World-wide propagation constants, stored in project/world settings.",
+      "module": "audio",
+      "fields": {
+        "speedOfSound": {
+          "type": "f32",
+          "doc": "Speed of sound, for Doppler and reflection delays.",
+          "default": 343,
+          "unit": "m/s",
+          "range": [1, 2000]
+        },
+        "airCoefficients": {
+          "type": "vec3",
+          "doc": "Air absorption per meter for low/mid/high bands: gain = exp(-coefficient × distance).",
+          "default": [0.0002, 0.0017, 0.0182],
+          "range": [0, 1]
+        },
+        "occlusionRays": {
+          "type": "u32",
+          "doc": "Rays per source for volumetric occlusion, including the center ray.",
+          "default": 9,
+          "range": [1, 64]
+        },
+        "maxPortalDepth": {
+          "type": "u32",
+          "doc": "Maximum portals sound may pass through between zones.",
+          "default": 3,
+          "range": [0, 8]
         }
       }
     },
@@ -562,6 +739,209 @@ expression: out
         }
       }
     },
+    "AudioBus": {
+      "kind": "record",
+      "doc": "One bus (category) in the mixer tree. `AudioSource.bus` names it.",
+      "module": "audio",
+      "prefix": "b",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique bus name; `master` configures the root bus.",
+          "default": ""
+        },
+        "output": {
+          "type": "string",
+          "doc": "Bus this one mixes into; empty means `master`. (`parent` is reserved by the kernel.)",
+          "default": ""
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Base gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        },
+        "mute": {
+          "type": "bool",
+          "doc": "Silences the bus and its reverb sends.",
+          "default": false
+        },
+        "voiceLimit": {
+          "type": "u32",
+          "doc": "Real-voice cap for this category and its children; 0 is unlimited.",
+          "default": 0
+        },
+        "loudness": {
+          "type": "option<f32>",
+          "doc": "Integrated loudness target for sources on this bus (music and dialogue: -16 LUFS).",
+          "default": null,
+          "unit": "dB"
+        },
+        "reverb": {
+          "type": "bool",
+          "doc": "Route spatial voices on this bus to the listener's room reverb.",
+          "default": false
+        },
+        "duck": {
+          "type": "option<AudioDuck>",
+          "doc": "Sidechain ducking driven by another bus.",
+          "default": null
+        }
+      }
+    },
+    "AudioDuck": {
+      "kind": "struct",
+      "doc": "Sidechain ducking: another bus's level pulls this bus down (dialogue over music).",
+      "module": "audio",
+      "fields": {
+        "by": {
+          "type": "string",
+          "doc": "Name of the bus whose level triggers the duck.",
+          "default": ""
+        },
+        "thresholdDb": {
+          "type": "f32",
+          "doc": "Trigger level of that bus's block peak.",
+          "default": -30,
+          "unit": "dB",
+          "range": [-96, 0]
+        },
+        "amountDb": {
+          "type": "f32",
+          "doc": "Attenuation while ducked.",
+          "default": -9,
+          "unit": "dB",
+          "range": [-60, 0]
+        },
+        "attack": {
+          "type": "f32",
+          "doc": "Seconds to reach the ducked level.",
+          "default": 0.05,
+          "unit": "s",
+          "range": [0.001, 10]
+        },
+        "release": {
+          "type": "f32",
+          "doc": "Seconds to recover.",
+          "default": 0.4,
+          "unit": "s",
+          "range": [0.001, 10]
+        }
+      }
+    },
+    "AudioGraphAddParams": {
+      "kind": "params",
+      "doc": "Adds an operation node.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "New unique node name.",
+          "required": true
+        },
+        "op": {
+          "type": "string",
+          "doc": "Operation (`lowpass`, `random.pick`).",
+          "required": true
+        },
+        "args": {
+          "type": "map<json>",
+          "doc": "Arguments by input name: numbers, `@clip` references or `name`/`name.port` references.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphParamParams": {
+      "kind": "params",
+      "doc": "Edits a parameter's default, range or documentation.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Parameter name.",
+          "required": true
+        },
+        "default": {
+          "type": "option<json>",
+          "doc": "New default: a number, or an `@clip` reference for clip parameters.",
+          "default": null
+        },
+        "range": {
+          "type": "option<vec2>",
+          "doc": "New `[lo, hi]` range for value parameters.",
+          "default": null
+        },
+        "doc": {
+          "type": "option<string>",
+          "doc": "New documentation.",
+          "default": null
+        }
+      }
+    },
+    "AudioGraphRemoveParams": {
+      "kind": "params",
+      "doc": "Removes a node or parameter and every reference to it.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Name to remove.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphRenameParams": {
+      "kind": "params",
+      "doc": "Renames a parameter or node, keeping its identity, wiring and canvas position.",
+      "module": "audio",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Current name.",
+          "required": true
+        },
+        "to": {
+          "type": "string",
+          "doc": "New unique name.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphSetInputParams": {
+      "kind": "params",
+      "doc": "Sets one input of a node, or a graph output, to a literal or a reference.",
+      "module": "audio",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Node name, or `output` for graph outputs.",
+          "required": true
+        },
+        "input": {
+          "type": "string",
+          "doc": "Input name (`cutoff`, `in0`) or output field (`out`, `left`, `right`, `done`).",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "A number, an `@clip` reference or a `name`/`name.port` reference.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphTextParams": {
+      "kind": "params",
+      "doc": "Replaces the graph with edited `.audiograph` text; surviving names keep their IDs.",
+      "module": "audio",
+      "fields": {
+        "text": {
+          "type": "string",
+          "doc": "Complete `.audiograph` source.",
+          "required": true
+        }
+      }
+    },
     "AudioListener": {
       "kind": "component",
       "doc": "Presentation listener, usually copied from the local player's camera component.",
@@ -607,6 +987,44 @@ expression: out
           "doc": "Linear sensitivity outside the listener cone.",
           "default": 1,
           "range": [0, 1]
+        }
+      }
+    },
+    "AudioMixState": {
+      "kind": "record",
+      "doc": "A named mix (combat, explore, menu): per-bus gain offsets reached over `fade` seconds.",
+      "module": "audio",
+      "prefix": "s",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique state name.",
+          "default": ""
+        },
+        "buses": {
+          "type": "map<f32>",
+          "doc": "Gain offsets in dB added to each named bus's base gain; -96 or below mutes.",
+          "default": {}
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Transition time into this state.",
+          "default": 1,
+          "unit": "s",
+          "range": [0, 60]
+        }
+      }
+    },
+    "AudioMixerSettings": {
+      "kind": "record",
+      "doc": "Mixer-wide settings (one record per mixer document).",
+      "module": "audio",
+      "prefix": "m",
+      "fields": {
+        "initialState": {
+          "type": "string",
+          "doc": "State applied at startup; empty is the base mix.",
+          "default": ""
         }
       }
     },
@@ -3057,6 +3475,46 @@ expression: out
         }
       }
     },
+    "MaterialPreset": {
+      "kind": "enum",
+      "doc": "Named surface materials with Steam Audio's published values.",
+      "module": "audio",
+      "variants": {
+        "generic": {
+          "doc": "Average interior surface."
+        },
+        "brick": {
+          "doc": "Brick wall."
+        },
+        "concrete": {
+          "doc": "Poured concrete."
+        },
+        "ceramic": {
+          "doc": "Ceramic tile."
+        },
+        "gravel": {
+          "doc": "Loose gravel."
+        },
+        "carpet": {
+          "doc": "Carpet on concrete."
+        },
+        "glass": {
+          "doc": "Window glass."
+        },
+        "plaster": {
+          "doc": "Plaster on brick."
+        },
+        "wood": {
+          "doc": "Wooden panels."
+        },
+        "metal": {
+          "doc": "Sheet metal."
+        },
+        "rock": {
+          "doc": "Natural rock."
+        }
+      }
+    },
     "MaterialRenameParams": {
       "kind": "params",
       "doc": "Renames an authored value while retaining its graph identity and layout.",
@@ -3251,6 +3709,244 @@ expression: out
           "type": "f32",
           "doc": "Maximum applied torque in N*m.",
           "default": 250
+        }
+      }
+    },
+    "MusicNext": {
+      "kind": "struct",
+      "doc": "A weighted follow-up for horizontal resequencing.",
+      "module": "audio",
+      "fields": {
+        "segment": {
+          "type": "string",
+          "doc": "Segment to continue with.",
+          "default": ""
+        },
+        "weight": {
+          "type": "f32",
+          "doc": "Relative probability.",
+          "default": 1,
+          "range": [0, 1000]
+        }
+      }
+    },
+    "MusicSegment": {
+      "kind": "record",
+      "doc": "A playable section with synchronized stems on one tempo map.",
+      "module": "audio",
+      "prefix": "sg",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique segment name.",
+          "default": ""
+        },
+        "bars": {
+          "type": "u32",
+          "doc": "Length in bars; the follow-up starts on the last bar line.",
+          "default": 4,
+          "range": [1, 4096]
+        },
+        "tempo": {
+          "type": "list<MusicTempo>",
+          "doc": "Tempo map; empty is 120 BPM in 4/4. The first change must be at bar 0.",
+          "default": []
+        },
+        "stems": {
+          "type": "list<MusicStem>",
+          "doc": "Layers played together.",
+          "default": []
+        },
+        "next": {
+          "type": "list<MusicNext>",
+          "doc": "Weighted follow-ups; empty repeats this segment.",
+          "default": []
+        },
+        "loudness": {
+          "type": "option<f32>",
+          "doc": "Cooked integrated loudness of the full mix (all stems), so a loudness-targeted bus trims every stem equally. Measure with `measure_mix_loudness`.",
+          "default": null,
+          "unit": "dB"
+        }
+      }
+    },
+    "MusicSettings": {
+      "kind": "record",
+      "doc": "Music-wide settings (one record).",
+      "module": "audio",
+      "prefix": "ms",
+      "fields": {
+        "initial": {
+          "type": "string",
+          "doc": "Segment to start with.",
+          "default": ""
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Starting intensity 0..1.",
+          "default": 0.5,
+          "range": [0, 1]
+        },
+        "layerFade": {
+          "type": "f32",
+          "doc": "Seconds for layers to follow an intensity change.",
+          "default": 1,
+          "unit": "s",
+          "range": [0, 30]
+        },
+        "seed": {
+          "type": "u32",
+          "doc": "Seed for weighted follow-ups (deterministic resequencing).",
+          "default": 0
+        }
+      }
+    },
+    "MusicStem": {
+      "kind": "struct",
+      "doc": "A synchronized layer (stem) of a segment, faded in by intensity.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Stem name (`drums`, `strings`).",
+          "default": ""
+        },
+        "clip": {
+          "type": "option<asset<audio>>",
+          "doc": "The stem's audio clip.",
+          "default": null
+        },
+        "intensity": {
+          "type": "vec2",
+          "doc": "Intensity window: silent at or below `[0]`, full at or above `[1]`; equal values make a hard switch, `[0, 0]` is always on.",
+          "default": [0, 0]
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Stem gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        }
+      }
+    },
+    "MusicStinger": {
+      "kind": "record",
+      "doc": "A one-shot played on top of the music, aligned to the grid.",
+      "module": "audio",
+      "prefix": "st",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique stinger name.",
+          "default": ""
+        },
+        "clip": {
+          "type": "option<asset<audio>>",
+          "doc": "The stinger's clip.",
+          "default": null
+        },
+        "sync": {
+          "type": "MusicSync",
+          "doc": "Grid alignment.",
+          "default": "bar",
+          "options": [
+            "bar",
+            "beat",
+            "end",
+            "immediate"
+          ]
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Stinger gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        }
+      }
+    },
+    "MusicSync": {
+      "kind": "enum",
+      "doc": "Where a transition or stinger may land.",
+      "module": "audio",
+      "variants": {
+        "bar": {
+          "doc": "On the next bar line."
+        },
+        "beat": {
+          "doc": "On the next beat."
+        },
+        "end": {
+          "doc": "When the current segment ends."
+        },
+        "immediate": {
+          "doc": "At the next control update."
+        }
+      }
+    },
+    "MusicTempo": {
+      "kind": "struct",
+      "doc": "A tempo and meter that applies from `bar` until the next change.",
+      "module": "audio",
+      "fields": {
+        "bar": {
+          "type": "u32",
+          "doc": "First bar (0-based) at this tempo.",
+          "default": 0
+        },
+        "bpm": {
+          "type": "f32",
+          "doc": "Beats per minute.",
+          "default": 120,
+          "range": [20, 400]
+        },
+        "beatsPerBar": {
+          "type": "u32",
+          "doc": "Beats in each bar.",
+          "default": 4,
+          "range": [1, 32]
+        }
+      }
+    },
+    "MusicTransition": {
+      "kind": "record",
+      "doc": "How a requested change of segment lands. An empty `from` matches any segment.",
+      "module": "audio",
+      "prefix": "tn",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Segment being left; empty matches any.",
+          "default": ""
+        },
+        "to": {
+          "type": "string",
+          "doc": "Segment requested.",
+          "default": ""
+        },
+        "sync": {
+          "type": "MusicSync",
+          "doc": "Musical boundary to land on.",
+          "default": "bar",
+          "options": [
+            "bar",
+            "beat",
+            "end",
+            "immediate"
+          ]
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Crossfade length in seconds; zero cuts.",
+          "default": 0.5,
+          "unit": "s",
+          "range": [0, 30]
+        },
+        "bridge": {
+          "type": "string",
+          "doc": "Optional bridge segment played between them.",
+          "default": ""
         }
       }
     },
@@ -3873,6 +4569,102 @@ expression: out
           "type": "f32",
           "doc": "Bone length in meters; zero means unspecified.",
           "default": 0
+        }
+      }
+    },
+    "ReverbZone": {
+      "kind": "component",
+      "doc": "A room or space with its own reverb. The listener's zone drives the room reverb; sources in other zones reach the listener through portals.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique zone name; portals, traces and diagnostics refer to zones by name.",
+          "default": ""
+        },
+        "shape": {
+          "type": "ZoneShape",
+          "doc": "Volume shape.",
+          "default": "box",
+          "options": [
+            "box",
+            "sphere"
+          ]
+        },
+        "position": {
+          "type": "vec3",
+          "doc": "World-space center, supplied from the entity transform by the bridge.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "rotation": {
+          "type": "vec4",
+          "doc": "World rotation as a unit quaternion (x, y, z, w), supplied by the bridge.",
+          "default": [0, 0, 0, 1]
+        },
+        "halfExtents": {
+          "type": "vec3",
+          "doc": "Box half extents.",
+          "default": [5, 3, 5],
+          "unit": "m"
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Sphere radius.",
+          "default": 5,
+          "unit": "m",
+          "range": [0.1, 10000]
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Width inside the boundary over which the listener crossfades to the outer space.",
+          "default": 1,
+          "unit": "m",
+          "range": [0, 100]
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Nested zones: the highest priority containing zone wins.",
+          "default": 0
+        },
+        "material": {
+          "type": "MaterialPreset",
+          "doc": "Wall material, deriving absorption for the realtime room model.",
+          "default": "generic",
+          "options": [
+            "generic",
+            "brick",
+            "concrete",
+            "ceramic",
+            "gravel",
+            "carpet",
+            "glass",
+            "plaster",
+            "wood",
+            "metal",
+            "rock"
+          ]
+        },
+        "rt60": {
+          "type": "option<vec3>",
+          "doc": "Explicit low/mid/high reverberation times in seconds, overriding derived and baked values.",
+          "default": null
+        },
+        "wet": {
+          "type": "f32",
+          "doc": "Reverb return gain.",
+          "default": 1,
+          "range": [0, 4]
+        },
+        "earlyReflections": {
+          "type": "bool",
+          "doc": "Geometric early reflections from the zone's walls.",
+          "default": true
+        },
+        "useBaked": {
+          "type": "bool",
+          "doc": "Prefer baked probe reverb times inside this zone when cooked cells are loaded.",
+          "default": true
         }
       }
     },
@@ -5450,6 +6242,19 @@ expression: out
           "unit": "m"
         }
       }
+    },
+    "ZoneShape": {
+      "kind": "enum",
+      "doc": "Reverb zone volume shape.",
+      "module": "audio",
+      "variants": {
+        "box": {
+          "doc": "Oriented box with `halfExtents`."
+        },
+        "sphere": {
+          "doc": "Sphere with `radius`."
+        }
+      }
     }
   },
   "documents": {
@@ -5506,6 +6311,29 @@ expression: out
       ],
       "singleRoot": true
     },
+    "mixer": {
+      "doc": "Audio mixer: bus tree, sends, ducking, voice limits, loudness targets and mix states.",
+      "schema": "ara://schema/mixer/1",
+      "idPrefix": "mx",
+      "extension": "mixer",
+      "records": [
+        "AudioBus",
+        "AudioMixState",
+        "AudioMixerSettings"
+      ]
+    },
+    "music": {
+      "doc": "Interactive music: segments with stems and tempo maps, transitions, stingers.",
+      "schema": "ara://schema/music/1",
+      "idPrefix": "mu",
+      "extension": "music",
+      "records": [
+        "MusicSegment",
+        "MusicTransition",
+        "MusicStinger",
+        "MusicSettings"
+      ]
+    },
     "prefab": {
       "doc": "A reusable entity subtree with exactly one root, instantiated by reference.",
       "schema": "ara://schema/prefab/1",
@@ -5550,6 +6378,106 @@ expression: out
     }
   },
   "commands": {
+    "audiograph.input.set": {
+      "kind": "command",
+      "summary": "Wire or set one audio graph input (or graph output) to a literal or another node.",
+      "params": "AudioGraphSetInputParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "filtered",
+          "input": "cutoff",
+          "value": 1200
+        }
+      ]
+    },
+    "audiograph.node.add": {
+      "kind": "command",
+      "summary": "Add an operation node to an audio graph.",
+      "params": "AudioGraphAddParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "filtered",
+          "op": "lowpass",
+          "args": {
+            "in": "osc",
+            "cutoff": 800
+          }
+        }
+      ]
+    },
+    "audiograph.node.remove": {
+      "kind": "command",
+      "summary": "Remove an audio graph node or parameter and every reference to it.",
+      "params": "AudioGraphRemoveParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "filtered"
+        }
+      ]
+    },
+    "audiograph.param.set": {
+      "kind": "command",
+      "summary": "Edit an audio graph parameter's default, range or documentation.",
+      "params": "AudioGraphParamParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "pitch",
+          "default": 220,
+          "range": [20, 2000]
+        }
+      ]
+    },
+    "audiograph.rename": {
+      "kind": "command",
+      "summary": "Rename an audio graph parameter or node without changing its identity.",
+      "params": "AudioGraphRenameParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "from": "osc",
+          "to": "tone"
+        }
+      ]
+    },
+    "audiograph.text.apply": {
+      "kind": "command",
+      "summary": "Replace an audio graph with edited .audiograph text (names keep their IDs).",
+      "params": "AudioGraphTextParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "text": "graph Tone { param pitch = 440; let osc = sine(pitch); output out = osc; }"
+        }
+      ]
+    },
     "camera2d.set": {
       "kind": "command",
       "summary": "Set Camera2d through validated ops.",

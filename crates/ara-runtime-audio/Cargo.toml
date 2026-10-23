@@ -1,0 +1,24 @@
+[package]
+name = "ara-runtime-audio"
+description = "Audio in play on ara-audio v2: mixer, room reverb, acoustics against the physics scene, audibility reports and captures."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-acoustics = { path = "../ara-acoustics", features = ["physics", "ecs"] }
+ara-audio = { path = "../ara-audio", features = ["ecs"] }
+ara-audio-mix = { path = "../ara-audio-mix" }
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-physics = { path = "../ara-physics" }
+ara-physics-jolt = { path = "../ara-physics-jolt" }
+ara-runtime = { path = "../ara-runtime" }
+ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

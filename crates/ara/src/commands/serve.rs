@@ -97,6 +97,8 @@ fn run_daemon(
     )
     .map_err(|d| d.to_string())?;
     let root = host.root().to_path_buf();
+    // "Why can't I hear X?" next to the built-in explainers.
+    ara_audio_why::register(host.why());
     // Play and test run in pooled ara-player processes owned by this daemon.
     host.register(Box::new(ara_play_host::PlayService::new(
         &root,
