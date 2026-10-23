@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use ara_diag::{Diagnostic, codes};
-use ara_doc::{AssetId, Edit, IdGen, Op, RecordId, Workspace};
+use ara_doc::{AssetId, Document, Edit, IdGen, Op, RecordId, Workspace};
 use ara_schema::{FieldPath, SchemaDb};
 
 use crate::{Author, Transaction, TxnId, TxnMeta};
@@ -93,6 +93,18 @@ impl Store {
         &self.ws
     }
 
+    /// Loads a document that appeared on disk (or replaces one by ID). This is not an
+    /// edit: no op is recorded. Record changes always go through transactions.
+    pub fn load_doc(&mut self, path: impl Into<String>, doc: Document) {
+        self.ws.insert(path, doc);
+    }
+
+    /// Unloads a document whose file was deleted. History that touched it stays, but
+    /// undoing it fails with `ARA1506`.
+    pub fn unload_doc(&mut self, id: &str) -> Option<(String, Document)> {
+        self.ws.remove(id)
+    }
+
     /// The current revision: the number of committed transactions.
     pub fn revision(&self) -> u64 {
         self.rev
@@ -160,6 +172,66 @@ impl Store {
             staged.apply(edit).map_err(|d| vec![d])?;
         }
         staged.commit()
+    }
+
+    /// Puts a journaled transaction back into history after a restart, keeping its ID,
+    /// author and revisions. With `apply`, its ops are applied first (the documents on
+    /// disk predate it); without, the documents already contain it. Subscribers are not
+    /// notified. Redo stacks are not restored.
+    ///
+    /// Fails with `ARA1501` unless `txn.result` is past the current revision, and with
+    /// the op's diagnostic if an op no longer applies (nothing changes then).
+    pub fn restore(&mut self, txn: Transaction, apply: bool) -> Result<(), Vec<Diagnostic>> {
+        if txn.result <= self.rev {
+            return Err(vec![Diagnostic::error(
+                codes::STALE_BASE,
+                format!(
+                    "`{}` ends at revision {}, but the store is already at {}",
+                    txn.id, txn.result, self.rev
+                ),
+            )]);
+        }
+        if apply {
+            let mut applied = Vec::new();
+            for op in &txn.ops {
+                let result = match self.ws.doc_mut(op.doc().as_str()) {
+                    Some(doc) => doc.apply(op.to_edit(), &self.db),
+                    None => Err(Diagnostic::error(
+                        codes::DOC_NOT_FOUND,
+                        format!("no document `{}` is loaded", op.doc()),
+                    )),
+                };
+                match result {
+                    Ok(done) => applied.push(done),
+                    Err(d) => {
+                        self.rollback(&applied);
+                        return Err(vec![d]);
+                    }
+                }
+            }
+        }
+        self.rev = txn.result;
+        let index = self.history.len();
+        if let Some(key) = &txn.idempotency_key {
+            self.by_key.insert(key.clone(), index);
+        }
+        match &txn.reverts {
+            Some(target) => {
+                self.reverted_by.insert(target.clone(), txn.id.clone());
+                for stacks in self.stacks.values_mut() {
+                    stacks.undo.retain(|t| t != target);
+                }
+            }
+            None => self
+                .stacks
+                .entry(txn.author.clone())
+                .or_default()
+                .undo
+                .push(txn.id.clone()),
+        }
+        self.by_id.insert(txn.id.clone(), index);
+        self.history.push(txn);
+        Ok(())
     }
 
     /// Undoes one transaction by applying its inverse as a new transaction by `by`.

@@ -1,0 +1,11 @@
+---
+source: crates/ara-host/tests/host.rs
+expression: "summary[\"text\"].as_str().expect(\"text\")"
+---
+scene arena (sc_arena001) · levels/arena.scene · 6 entities · showing 1-6 of 6, depth≤9 · units m/deg · Y-up
+e_flr1 Floor pos(0,0,0) scale(40,0.5,40)
+e_stk2 Crates prefab:stack pos(4,0,-2)
+  e_stk2/e_c001 Crate [MeshRenderer] pos(0,0,0)
+    e_lmp1 Lamp [Light] pos(0,1,0)
+    e_stk2/e_c001/e_lid1 Lid [MeshRenderer] pos(0,0.5,0)
+  e_stk2/e_c002 Crate [MeshRenderer Light] pos(0,1,0)

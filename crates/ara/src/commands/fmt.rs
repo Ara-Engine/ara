@@ -4,15 +4,17 @@ use std::fs;
 use std::path::PathBuf;
 
 use ara_doc::{read, write};
+use serde_json::json;
 
 use super::print_text;
 use crate::project::Project;
 
 /// Formats `files` in place, or with `check` only reports those that would change.
-/// Files with errors are left untouched.
-pub fn fmt(project: &Project, files: &[PathBuf], check: bool) -> Result<bool, String> {
+/// Files with errors are left untouched. `json` prints one report object instead.
+pub fn fmt(project: &Project, files: &[PathBuf], check: bool, json: bool) -> Result<bool, String> {
     let mut ok = true;
-    let mut changed = 0;
+    let mut changed = Vec::new();
+    let mut skipped = Vec::new();
     for file in files {
         let rel = project.rel(file);
         let text = fs::read_to_string(file).map_err(|e| format!("cannot read `{rel}`: {e}"))?;
@@ -24,8 +26,11 @@ pub fn fmt(project: &Project, files: &[PathBuf], check: bool) -> Result<bool, St
             .cloned()
             .collect();
         let Some(doc) = result.doc.filter(|_| errors.is_empty()) else {
-            print_text(&errors);
-            println!("skipped {rel}: fix the errors above first");
+            if !json {
+                print_text(&errors);
+                println!("skipped {rel}: fix the errors above first");
+            }
+            skipped.push(json!({ "file": rel, "diagnostics": errors }));
             ok = false;
             continue;
         };
@@ -33,20 +38,30 @@ pub fn fmt(project: &Project, files: &[PathBuf], check: bool) -> Result<bool, St
         if formatted == text {
             continue;
         }
-        changed += 1;
         if check {
-            println!("would reformat {rel}");
+            if !json {
+                println!("would reformat {rel}");
+            }
             ok = false;
         } else {
             fs::write(file, formatted).map_err(|e| format!("cannot write `{rel}`: {e}"))?;
-            println!("formatted {rel}");
+            if !json {
+                println!("formatted {rel}");
+            }
         }
+        changed.push(rel);
+    }
+    if json {
+        let report =
+            json!({ "files": files.len(), "check": check, "changed": changed, "skipped": skipped });
+        print!("{}", ara_json::to_canonical_string(&report));
+        return Ok(ok);
     }
     let verb = if check {
         "would reformat"
     } else {
         "reformatted"
     };
-    println!("{}: {verb} {changed}", super::files(files.len()));
+    println!("{}: {verb} {}", super::files(files.len()), changed.len());
     Ok(ok)
 }

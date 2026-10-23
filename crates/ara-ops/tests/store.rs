@@ -336,3 +336,44 @@ proptest! {
         prop_assert_eq!(text(&s), end);
     }
 }
+
+#[test]
+fn restore_rebuilds_history_with_ids_and_optionally_reapplies() {
+    let mut s = store();
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("One"))])
+        .expect("first");
+    s.transact(TxnMeta::by(agent()), [set("e_b", "name", json!("Two"))])
+        .expect("second");
+    let journal = s.history().to_vec();
+
+    // A restart: the disk has the first change but not the second.
+    let mut fresh = store();
+    fresh
+        .transact(
+            TxnMeta::by(Author::Human),
+            [set("e_a", "name", json!("One"))],
+        )
+        .expect("disk state");
+    let mut fresh = {
+        let ws = fresh.workspace().clone();
+        Store::with_ids(fresh.schema().clone(), ws, IdGen::seeded(9))
+    };
+    fresh.restore(journal[0].clone(), false).expect("on disk");
+    fresh.restore(journal[1].clone(), true).expect("lost");
+    assert_eq!(fresh.revision(), 2);
+    assert_eq!(get(&fresh, "e_b", "name"), json!("Two"));
+    assert_eq!(fresh.txn(&journal[0].id), Some(&journal[0]));
+    assert_eq!(
+        fresh
+            .restore(journal[1].clone(), true)
+            .expect_err("not past")
+            .remove(0)
+            .code,
+        codes::STALE_BASE
+    );
+
+    // Restored transactions are undoable, newest first.
+    let undo = fresh.undo_last(&agent()).expect("undo");
+    assert_eq!(undo.reverts.as_ref(), Some(&journal[1].id));
+    assert_eq!(get(&fresh, "e_b", "name"), json!("B"));
+}

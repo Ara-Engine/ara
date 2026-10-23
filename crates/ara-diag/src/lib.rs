@@ -140,6 +140,18 @@ pub enum FixAction {
         /// Command parameters.
         params: Value,
     },
+    /// Call an Engine Protocol method (`session.begin`).
+    Call {
+        /// Method name.
+        method: String,
+        /// Method parameters.
+        params: Value,
+    },
+    /// Run an `ara` command line: `["init"]` means `ara init`.
+    Cli {
+        /// Arguments after `ara`.
+        args: Vec<String>,
+    },
 }
 
 /// One problem (or note) reported by any subsystem.

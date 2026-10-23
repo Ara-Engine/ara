@@ -48,6 +48,13 @@ impl AssetIndex {
     pub fn kind_of(&self, id: &str) -> Option<&str> {
         self.by_id.get(id).and_then(|(_, k)| k.as_deref())
     }
+
+    /// Forgets an asset (its file was deleted).
+    pub fn remove(&mut self, id: &str) {
+        if let Some((path, _)) = self.by_id.remove(id) {
+            self.by_path.remove(&path);
+        }
+    }
 }
 
 /// Resolves one reference. Returns the canonical text and, if it changed, a note

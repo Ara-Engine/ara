@@ -1,0 +1,8 @@
+---
+source: crates/ara-host/tests/host.rs
+expression: "q[\"text\"].as_str().expect(\"text\")"
+---
+3 matches in 3 documents · showing 1-2 · units m/deg · Y-up
+e_stk2/e_c001 Crate [MeshRenderer] pos(0,0,0) MeshRenderer.tint=(1,1,1,1) · levels/arena.scene
+e_stk2/e_c001/e_lid1 Lid [MeshRenderer] pos(0,0.5,0) MeshRenderer.tint=(0.2,0.9,0.2,1) · levels/arena.scene
+… 1 more · next: {"cursor":"c2"}

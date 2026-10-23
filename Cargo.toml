@@ -16,9 +16,13 @@ ara-cmd = { path = "crates/ara-cmd" }
 ara-components = { path = "crates/ara-components" }
 ara-diag = { path = "crates/ara-diag" }
 ara-doc = { path = "crates/ara-doc" }
+ara-host = { path = "crates/ara-host" }
 ara-json = { path = "crates/ara-json" }
+ara-mcp = { path = "crates/ara-mcp" }
 ara-merge = { path = "crates/ara-merge" }
 ara-ops = { path = "crates/ara-ops" }
+ara-proto = { path = "crates/ara-proto" }
+ara-rpc = { path = "crates/ara-rpc" }
 ara-schema = { path = "crates/ara-schema" }
 ara-schema-derive = { path = "crates/ara-schema-derive" }
 
@@ -33,6 +37,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 # float_roundtrip: parsing is exact, so read -> write is byte-identical.
 serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 syn = { version = "2.0.119", features = ["full"] }
+# WebSocket transport for the Engine Protocol (blocking; no async runtime).
+tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 
 # Tests
 insta = "1.49.0"

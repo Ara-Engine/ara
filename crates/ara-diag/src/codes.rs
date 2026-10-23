@@ -1,7 +1,8 @@
 //! The catalog of kernel diagnostic codes.
 //!
 //! Ranges: `1000` JSON and files, `1100` schema, `1200` documents, `1300`
-//! references, `1400` prefabs, `1500` transactions, `1600` commands, `1700` merge.
+//! references, `1400` prefabs, `1500` transactions, `1600` commands, `1700` merge,
+//! `1800` Engine Protocol and sessions, `1900` projects, the daemon and persistence.
 //! `ARA0001`–`ARA0999` are reserved for the C# analyzers. Add new codes at the end
 //! of their range; never renumber or reuse one.
 
@@ -142,6 +143,58 @@ codes! {
     MERGE_CONFLICT = 1701,
     /// The three merge inputs are not versions of the same document.
     MERGE_ID_MISMATCH = 1702,
+
+    /// A message is not valid JSON-RPC 2.0, or its params are not an object.
+    INVALID_REQUEST = 1801,
+    /// No Engine Protocol method with this name is registered.
+    UNKNOWN_METHOD = 1802,
+    /// The session handle is unknown or the session has ended; begin a new one.
+    SESSION_NOT_FOUND = 1803,
+    /// A scope name is not part of the scope vocabulary.
+    UNKNOWN_SCOPE = 1804,
+    /// The connection-approval policy refused some requested scopes.
+    SCOPE_DENIED = 1805,
+    /// No service providing this method is registered yet.
+    SERVICE_UNAVAILABLE = 1806,
+    /// The connection did not present the project token.
+    UNAUTHORIZED = 1807,
+    /// A query string or query object is malformed.
+    INVALID_QUERY = 1808,
+    /// A pagination cursor is malformed or from another query.
+    INVALID_CURSOR = 1809,
+    /// No checkpoint with this ID exists in the session.
+    CHECKPOINT_NOT_FOUND = 1810,
+    /// No job with this ID exists.
+    JOB_NOT_FOUND = 1811,
+    /// A session was approved; records the granted scopes and who decided.
+    SESSION_APPROVED = 1812,
+    /// The transaction or entity has nothing left to review.
+    NOT_REVIEWABLE = 1813,
+
+    /// No `ara.project.json` was found; the command needs a project.
+    NO_PROJECT = 1901,
+    /// `ara init` found an existing project.
+    PROJECT_EXISTS = 1902,
+    /// Another daemon already serves this project.
+    DAEMON_RUNNING = 1903,
+    /// The daemon in `.ara/daemon.json` did not answer.
+    DAEMON_UNREACHABLE = 1904,
+    /// A journal entry could not be read and was skipped.
+    JOURNAL_CORRUPT = 1905,
+    /// Transactions from the journal were recovered after an unclean shutdown.
+    JOURNAL_REPLAYED = 1906,
+    /// A document changed on disk and the change was merged in.
+    EXTERNAL_EDIT = 1907,
+    /// A document changed on disk in a way that conflicts with unsaved changes.
+    EXTERNAL_CONFLICT = 1908,
+    /// A document changed on disk but no longer reads cleanly; it was not loaded.
+    EXTERNAL_INVALID = 1909,
+    /// A loaded document was deleted on disk.
+    DOC_DELETED = 1910,
+    /// A document could not be written to disk.
+    FLUSH_FAILED = 1911,
+    /// Project types (`*.types.json`) changed on disk; restart the daemon to load them.
+    TYPES_CHANGED = 1912,
 }
 
 #[cfg(test)]

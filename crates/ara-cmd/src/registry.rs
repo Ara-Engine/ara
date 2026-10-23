@@ -48,7 +48,8 @@ pub struct Info {
     pub params: String,
     /// Behaviour hints.
     pub hints: Hints,
-    /// Capability scope a session needs (`edit`, `read`).
+    /// Capability scope a session needs (`edit:scene`, `read`; see the Engine
+    /// Protocol scope vocabulary).
     pub scope: &'static str,
     /// Example params.
     pub examples: Vec<Value>,
@@ -65,8 +66,8 @@ pub trait Command: 'static {
     const NAME: &'static str;
     /// One line on what it does.
     const SUMMARY: &'static str;
-    /// Capability scope required.
-    const SCOPE: &'static str = "edit";
+    /// Capability scope required. Scene and prefab edits need `edit:scene`.
+    const SCOPE: &'static str = "edit:scene";
     /// Behaviour hints.
     const HINTS: Hints = Hints {
         idempotent: false,
@@ -106,8 +107,8 @@ pub trait Job: 'static {
     const NAME: &'static str;
     /// One line on what it does.
     const SUMMARY: &'static str;
-    /// Capability scope required.
-    const SCOPE: &'static str = "edit";
+    /// Capability scope required. Scene and prefab edits need `edit:scene`.
+    const SCOPE: &'static str = "edit:scene";
     /// Behaviour hints.
     const HINTS: Hints = Hints {
         idempotent: false,
@@ -540,7 +541,7 @@ impl Batch {
 pub struct Session {
     /// Recorded as the transaction author.
     pub author: Author,
-    /// Granted scopes: exact (`edit`), prefixed (`edit:*`) or everything (`*`).
+    /// Granted scopes: exact (`edit:scene`), prefixed (`edit:*`) or everything (`*`).
     pub scopes: Vec<String>,
 }
 
