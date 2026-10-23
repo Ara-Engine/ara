@@ -1,0 +1,34 @@
+[package]
+name = "ara-net"
+description = "Optional schema-driven multiplayer sessions and agent tooling for Ara."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-sim = { path = "../ara-sim" }
+ara-input = { path = "../ara-input" }
+ara-schema.workspace = true
+ara-host.workspace = true
+ara-proto.workspace = true
+ara-diag.workspace = true
+ara-json.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+postcard = { version = "=1.1.3", features = ["alloc"] }
+ciborium = "=0.2.2"
+bevy_app = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_reflect = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_math = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_time = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_state = { version = "=0.20.0", default-features = false, features = ["std", "bevy_app"] }
+lightyear = { version = "=0.31.0", default-features = false, features = ["std", "client", "server", "replication", "prediction", "interpolation", "input_native", "udp", "netcode"] }
+bevy_replicon = { version = "=0.45.2", default-features = false, features = ["client", "server"] }
+
+[dev-dependencies]
+ara-doc.workspace = true
+
+[lints]
+workspace = true
