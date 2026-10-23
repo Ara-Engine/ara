@@ -247,7 +247,7 @@ fn held(c: &Claim, now: u64, tail: &str) -> Diagnostic {
 /// the ways forward.
 pub fn claimed(c: &Claim, now: u64) -> Diagnostic {
     let message = format!(
-        "`{}` is claimed by {} ({}). Agents cannot edit claimed subjects: work on something else, wait for the claim to end, ask {} to release it, or make the change in a branch session (`branch.open`), which merges once nobody claims what it touches",
+        "`{}` is claimed by {} ({}), and agents cannot edit claimed subjects, so nothing in this batch was applied. Leave it out and apply the rest of your changes now; for the claimed part only, wait for the claim to end, ask {} to release it, or queue it in a branch session (`branch.open`, `ara_apply` with `branch`, then `submit`), which merges once the claim ends",
         c.label,
         who(c),
         remaining(c, now),
@@ -262,7 +262,7 @@ pub fn claimed(c: &Claim, now: u64) -> Diagnostic {
             },
         )
         .with_fix(
-            "Open a branch session and make the change there (ara_session branch)",
+            "Queue just the claimed part in a branch session (ara_session branch)",
             FixAction::Call {
                 method: "branch.open".into(),
                 params: json!({ "why": "<this change>" }),

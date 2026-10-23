@@ -10,8 +10,8 @@ Causes:
 - Another agent claimed it before planning its own turn.
 
 Fixes:
-- Work on something else first; `ara_session {"action": "who"}` lists every claim.
-- Make the change in a branch session (`branch.open`, then `ara_apply` with `branch`, then `branch.submit`); it merges once nobody claims what it touches.
+- Drop the claimed subject from the batch and apply the rest now; `ara_session {"action": "who"}` lists every claim.
+- Queue only the claimed part in a branch session (`branch.open`, then `ara_apply` with `branch`, then `branch.submit`); it merges once nobody claims what it touches.
 - Wait for the claim to end, or ask the claimant to release it.
 
 ## ARA2501 collab::CLAIM_HELD: Claim already held
