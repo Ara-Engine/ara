@@ -5,8 +5,8 @@ use ara_doc::Op;
 use ara_input::{ActionMap, Injection, PlayerId};
 use bevy_ecs::{
     prelude::*,
-    schedule::{ScheduleBuildSettings, SingleThreadedExecutor},
-    system::IntoSystem,
+    schedule::{LogLevel, MultiThreadedExecutor, ScheduleBuildSettings, SingleThreadedExecutor},
+    system::{BoxedSystem, IntoSystem},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -85,6 +85,8 @@ pub struct Session {
     pub(crate) mode: SessionMode,
     pub(crate) record_hashes: bool,
     pub(crate) fault: Option<SimError>,
+    pub(crate) providers: Vec<Box<dyn crate::StateProvider>>,
+    slots: usize,
 }
 
 impl Session {
@@ -120,7 +122,68 @@ impl Session {
             mode: SessionMode::Local,
             record_hashes: false,
             fault: None,
+            providers: Vec::new(),
+            slots: 0,
         })
+    }
+
+    /// Installs a subsystem checkpoint provider (physics, navigation, animation).
+    /// Its owned types become exempt from the registered-state check; it captures and
+    /// restores them itself. Install providers before the first snapshot.
+    pub fn add_provider(&mut self, provider: impl crate::StateProvider) -> Result<()> {
+        if self.providers.iter().any(|p| p.name() == provider.name()) {
+            return Err(SimError(format!(
+                "duplicate state provider {}",
+                provider.name()
+            )));
+        }
+        self.providers.push(Box::new(provider));
+        Ok(())
+    }
+
+    /// Adds systems that share one ordering slot and may run in parallel. The group
+    /// runs after every earlier system and before every later one. Their declared
+    /// accesses must not conflict: a conflicting pair is rejected here (ambiguity
+    /// detection is an error), so parallel execution never changes results.
+    pub fn add_parallel_systems(&mut self, mut systems: Vec<(&str, BoxedSystem)>) -> Result<()> {
+        let mut seen = std::collections::BTreeSet::new();
+        if systems.is_empty()
+            || systems.iter().any(|(name, _)| {
+                name.is_empty() || self.systems.iter().any(|s| s == name) || !seen.insert(*name)
+            })
+        {
+            return Err(SimError(
+                "empty group or empty/duplicate system identity".into(),
+            ));
+        }
+        // Initialization is idempotent; checking here leaves the schedule untouched on error.
+        let access: Vec<_> = systems
+            .iter_mut()
+            .map(|(_, system)| system.initialize(&mut self.edit.world))
+            .collect();
+        for (i, a) in access.iter().enumerate() {
+            if let Some(j) = (i + 1..access.len()).find(|&j| !a.is_compatible(&access[j])) {
+                return Err(SimError(format!(
+                    "parallel systems `{}` and `{}` have conflicting access",
+                    systems[i].0, systems[j].0
+                )));
+            }
+        }
+        let index = self.next_slot();
+        for (name, system) in systems {
+            self.schedule.add_systems(system.in_set(Order(index)));
+            self.systems.push(name.into());
+        }
+        self.schedule.set_executor(MultiThreadedExecutor::new());
+        self.schedule.set_build_settings(ScheduleBuildSettings {
+            auto_insert_apply_deferred: false,
+            ambiguity_detection: LogLevel::Error,
+            ..Default::default()
+        });
+        self.schedule
+            .initialize(&mut self.edit.world)
+            .map_err(|e| SimError(format!("invalid parallel system group: {e}")))?;
+        Ok(())
     }
 
     /// Adds one system in call order. Deferred structural writes flush at tick end,
@@ -132,15 +195,22 @@ impl Session {
         if name.is_empty() || self.systems.iter().any(|s| s == name) {
             return Err(SimError("empty or duplicate system identity".into()));
         }
-        let index = self.systems.len();
-        if index > 0 {
-            self.schedule
-                .configure_sets(Order(index).after(Order(index - 1)));
-        }
+        let index = self.next_slot();
         self.schedule
             .add_systems(IntoSystem::into_system(system).in_set(Order(index)));
         self.systems.push(name.into());
         Ok(())
+    }
+
+    /// Opens the next ordering slot, after every earlier one.
+    fn next_slot(&mut self) -> usize {
+        let index = self.slots;
+        if index > 0 {
+            self.schedule
+                .configure_sets(Order(index).after(Order(index - 1)));
+        }
+        self.slots += 1;
+        index
     }
 
     /// Authority topology (Local until an optional adapter drives it).

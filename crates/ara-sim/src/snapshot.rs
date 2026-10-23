@@ -72,6 +72,12 @@ pub struct Snapshot {
     pub(crate) sequences: BTreeMap<PlayerId, u64>,
     pub(crate) mode: SessionMode,
     pub(crate) systems: Vec<String>,
+    /// Portable provider state by provider name (absent in pre-provider snapshots).
+    #[serde(default)]
+    pub(crate) external: BTreeMap<String, Value>,
+    /// Exact in-process provider checkpoints; never serialized.
+    #[serde(skip)]
+    pub(crate) trusted: crate::provider::Trusted,
 }
 
 impl Snapshot {
@@ -90,6 +96,23 @@ impl Snapshot {
     /// Compatibility hash of all reflected types.
     pub fn schema_hash(&self) -> StateHash {
         self.schema_hash
+    }
+    /// Session seed captured with the simulation context.
+    pub fn seed(&self) -> u64 {
+        self.context.seed
+    }
+    /// The captured source documents and scene, for projecting a fresh world in
+    /// another process before calling `restore` (for example a replay's initial state).
+    pub fn workspace(&self) -> (Workspace, AssetId) {
+        let mut workspace = Workspace::default();
+        for (path, source) in &self.documents {
+            workspace.insert(path, source.restore());
+        }
+        (workspace, self.scene.clone())
+    }
+    /// Whether exact in-process provider checkpoints are attached (see `Session::checkpoint`).
+    pub fn is_trusted(&self) -> bool {
+        !self.trusted.0.is_empty()
     }
 }
 
@@ -146,9 +169,40 @@ impl Session {
             return Err(SimError(format!("cannot hash a faulted session: {error}")));
         }
         let (entities, resources) = self.capture_world()?;
-        Ok(StateHash::of_value(&serde_json::json!({
+        let mut state = serde_json::json!({
             "entities": entities, "resources": resources, "context": self.context(), "sequences": self.sequences, "systems": self.systems,
-        })))
+        });
+        if !self.providers.is_empty() {
+            state["external"] = serde_json::to_value(self.capture_external()?)?;
+        }
+        Ok(StateHash::of_value(&state))
+    }
+
+    /// Captures a snapshot plus exact in-process provider checkpoints (native physics
+    /// state). Restoring it in this process is bit-exact; its serialized bytes carry
+    /// only the portable part, which providers rebuild from on restore.
+    pub fn checkpoint(&mut self, build_hash: StateHash) -> Result<Snapshot> {
+        if let Some(error) = &self.fault {
+            return Err(SimError(format!(
+                "cannot checkpoint a faulted session: {error}"
+            )));
+        }
+        let mut trusted = std::collections::BTreeMap::new();
+        for provider in &self.providers {
+            if let Some(state) = provider.checkpoint(&mut self.edit.world)? {
+                trusted.insert(provider.name().to_owned(), state);
+            }
+        }
+        let mut snapshot = self.snapshot(build_hash)?;
+        snapshot.trusted = crate::provider::Trusted(trusted);
+        Ok(snapshot)
+    }
+
+    fn capture_external(&self) -> Result<BTreeMap<String, Value>> {
+        self.providers
+            .iter()
+            .map(|p| Ok((p.name().to_owned(), p.capture(self.world())?)))
+            .collect()
     }
 
     /// Captures a complete checkpoint. `build_hash` includes all simulation modules.
@@ -193,6 +247,8 @@ impl Session {
             sequences: self.sequences.clone(),
             mode: self.mode,
             systems: self.systems.clone(),
+            external: self.capture_external()?,
+            trusted: crate::provider::Trusted::default(),
         })
     }
 
@@ -232,6 +288,14 @@ impl Session {
         }
         if snapshot.ops.keys().any(|&tick| tick <= snapshot.tick()) {
             return Err(SimError("snapshot contains stale queued ops".into()));
+        }
+        if snapshot.external.len() != self.providers.len()
+            || self
+                .providers
+                .iter()
+                .any(|p| !snapshot.external.contains_key(p.name()))
+        {
+            return Err(SimError("snapshot state provider mismatch".into()));
         }
         self.validate_storage()?;
         let mut workspace = Workspace::default();
@@ -361,6 +425,18 @@ impl Session {
             .into_iter()
             .filter(|(id, _)| self.edit.resolved.contains_key(id))
             .collect();
+        for provider in &self.providers {
+            let state = &snapshot.external[provider.name()];
+            let result = match snapshot.trusted.0.get(provider.name()) {
+                Some(trusted) => provider.restore_checkpoint(&mut self.edit.world, state, trusted),
+                None => provider.restore(&mut self.edit.world, state),
+            };
+            if let Err(error) = result {
+                // Registered state is already restored; never continue half-restored.
+                self.fault = Some(error.clone());
+                return Err(error);
+            }
+        }
         Ok(())
     }
 
@@ -434,7 +510,13 @@ impl Session {
     }
 
     fn validate_storage(&self) -> Result<()> {
+        let owned = crate::provider::owned(&self.providers);
         let mut allowed: BTreeSet<_> = self.edit.ids.values().copied().collect();
+        allowed.extend(
+            owned
+                .iter()
+                .filter_map(|ty| self.world().components().get_id(*ty)),
+        );
         for entity in self.world().iter_entities() {
             let resource = entity
                 .get::<IsResource>()
@@ -477,6 +559,7 @@ impl Session {
             if ty == Some(std::any::TypeId::of::<SimContext>())
                 || ty == Some(std::any::TypeId::of::<DefaultQueryFilters>())
                 || ty == Some(std::any::TypeId::of::<bevy_ecs::schedule::Schedules>())
+                || ty.is_some_and(|ty| owned.contains(&ty))
             {
                 continue;
             }
