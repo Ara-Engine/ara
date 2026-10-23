@@ -200,6 +200,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-graph"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-host"
 version = "0.0.0"
 dependencies = [
@@ -263,6 +278,22 @@ version = "0.0.0"
 dependencies = [
  "proptest",
  "ryu",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-material"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "blake3",
  "serde",
  "serde_json",
 ]
