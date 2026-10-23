@@ -7,7 +7,8 @@ Archive: SDL3-3.4.18.tar.gz, SHA-256
 `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3`.
 Upstream revision: `829a65d76` (see vendor/SDL3-3.4.18/REVISION.txt).
 License: zlib, preserved in vendor/SDL3-3.4.18/LICENSE.txt and source headers.
-HIDAPI's original/BSD license alternatives are retained in src/hidapi/LICENSE*.
+HIDAPI's original/BSD license alternatives are retained in
+vendor/SDL3-3.4.18/src/hidapi/LICENSE*.
 Ara selects a source subset and provides altered, clearly marked build-config
 templates in config/. Upstream implementation source is otherwise unchanged.
 

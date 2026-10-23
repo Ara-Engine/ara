@@ -48,3 +48,20 @@ clean SDL C/C++ compilation + archives took 52.12 s with two Cargo jobs and
 WASAPI loopback, 32 trials: p50/p95 24.45/26.08 ms before, 25.31/26.35 ms after.
 SDL WASAPI fallback, 8 trials: 92.48/93.72 ms before, 82.67/83.39 ms after.
 Both use the existing QPC/MLS probe; output endpoint was BlackShark V3 - Game.
+
+## Verified matrix (2026-10-23)
+
+- Windows x64/MSVC: platform/audio/render/source tests, Clippy all targets with
+  warnings denied, formatting, and `cargo test --workspace --no-run` passed after
+  merging main at 3b9a091. Build jobs were two; only the timing comparison used eight.
+- The explicit native test passed without any SDL DLL in the worktree: injected
+  keyboard/mouse, virtual gamepad enumeration, audio recovery and owner lifetimes.
+- The 120-frame windowed resize route exited validation-clean; its 960x540 capture
+  was inspected. Audio/render executables have no SDL3.dll import or PATH entry.
+- Linux x64/GNU: `cargo check -p ara-platform` and a statically linked SDL query
+  executable passed. Auditing 271 native sources found no system desktop/audio
+  development-header dependency. Native window/audio runtime was not exercised.
+- Android ARM64/API 26, NDK 28.2: `cargo check -p ara-platform` passed; device
+  packaging/runtime remains unverified. Apple source support remains TODO(D15).
+- Vendor: 994 LF plain-text files, 18,574,364 bytes, above the 15 MB size aim;
+  enabled subsystem sources, required API cores and declaration headers are retained.
