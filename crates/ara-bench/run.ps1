@@ -20,8 +20,10 @@ try {
     $env:TEMP = $temporary
     $env:TMP = $temporary
     if (-not $env:VULKAN_SDK) { $env:VULKAN_SDK = 'C:/VulkanSDK/1.4.363.0' }
-    if (-not $env:SDL3_LIB_DIR) { $env:SDL3_LIB_DIR = "$repo/crates/ara-platform/native" }
-    $env:PATH = "$env:SDL3_LIB_DIR;$env:VULKAN_SDK/Bin;$env:PATH"
+    # SDL is vendored by ara-sdl3-src. Only an explicit prebuilt override needs
+    # a runtime DLL search path; do not invent an obsolete native/ directory.
+    if ($env:SDL3_LIB_DIR) { $env:PATH = "$env:SDL3_LIB_DIR;$env:PATH" }
+    $env:PATH = "$env:VULKAN_SDK/Bin;$env:PATH"
     $layers = Join-Path $TargetDir 'empty-vulkan-layers'
     New-Item -ItemType Directory -Force -Path $layers | Out-Null
     $env:VK_IMPLICIT_LAYER_PATH = $layers

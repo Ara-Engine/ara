@@ -170,7 +170,8 @@ the real Vulkan correlation test, tests for every instrumented subsystem and the
 host/CLI, strict Clippy across all targets, and formatting checks. It scopes its
 environment and always uses two Cargo jobs. Pass `-TargetDir` to reuse a cache.
 
-The fixture scene `ara-host/tests/fixtures/project/levels/arena.scene`, seed 1,
+Before this overhead pass, the fixture scene
+`ara-host/tests/fixtures/project/levels/arena.scene`, seed 1,
 completed four AB/BA rounds of 120 measured ticks after eight warmup ticks per
 variant. The 960-frame binary capture and canonical summaries had no dropped
 records or hitches. CPU frame p50/p95/p99 were 500/1500/3600 ns; both measured
