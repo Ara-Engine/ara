@@ -1149,7 +1149,7 @@ fn valley_streams_cells_grounds_the_fox_and_the_guard_hunts_on_streamed_navigati
     );
     let speed = (locomotion.velocity[0].powi(2) + locomotion.velocity[2].powi(2)).sqrt();
     println!(
-        "VALLEY build {build_ms:.0} ms (terrain, nav cell bakes, physics, AI), fox {start:?} -> {end:?},          guard at {guard:?} speed {speed:.2} state {:?}, nav swaps {:?}",
+        "VALLEY build {build_ms:.0} ms (terrain, nav cell bakes, physics, AI), fox {start:?} -> {end:?}, guard at {guard:?} speed {speed:.2} state {:?}, nav swaps {:?}",
         brain.last, nav.swaps
     );
 }
