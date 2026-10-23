@@ -29,6 +29,8 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
 2. Run gameplay input systems before `PhysicsSet` in the fixed schedule. Resolve parent
    transforms and bake scale into geometry first. `PhysicsPose` is world-space quaternion
    data; ara-components' authoring Transform currently uses parent-relative Euler degrees.
+   The host clears Bevy change/removal trackers at its frame boundary after all
+   consumers finish; otherwise resource-scope removal history grows over time.
 3. `prepare_ecs` builds native objects without advancing time; `snapshot_ecs` also does this
    for an initial tick-zero checkpoint. Retain `EcsPhysicsSnapshot<B::Snapshot>` beside
    the ECS/RNG/input checkpoint at the same

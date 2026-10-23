@@ -106,6 +106,7 @@ fn bowl_pair(
     let mut extract_ms = Vec::with_capacity(steps);
     let mut column_ms = Vec::with_capacity(steps);
     let mut columns = BodyColumns::default();
+    let mut native_columns = BodyColumns::default();
     let mut phases = [0u64; 8];
     let mut ara_phases = [0u64; 8];
     let mut scratch_peak = 0;
@@ -113,6 +114,7 @@ fn bowl_pair(
     let mut ara_scratch_peak = 0;
     let mut ara_fallbacks = 0;
     let mut states = Vec::with_capacity(count);
+    let mut native_states = Vec::with_capacity(count);
     for tick in 0..steps {
         // AB/BA alternates every tick and round, so both see the same contention.
         for side in 0..2 {
@@ -144,14 +146,38 @@ fn bowl_pair(
                 fallbacks += stats[10];
             }
         }
-        for side in 0..2 {
-            let start = Instant::now();
-            if (side + tick).is_multiple_of(2) {
-                ara.backend_mut().read_bodies(&ids, &mut states)?;
-                extract_ms.push(start.elapsed().as_secs_f64() * 1000.0);
+        // Warm both worlds identically. Reading only Ara after the pair would
+        // give its next Update warmer body caches and bias the boundary delta.
+        for world_side in 0..2 {
+            let is_ara = (world_side + tick).is_multiple_of(2);
+            let (world, handles, output, column_output) = if is_ara {
+                (&mut ara, &ids, &mut states, &mut columns)
             } else {
-                ara.backend_mut().read_body_columns(&ids, &mut columns)?;
-                column_ms.push(start.elapsed().as_secs_f64() * 1000.0);
+                (
+                    &mut native,
+                    &native_ids,
+                    &mut native_states,
+                    &mut native_columns,
+                )
+            };
+            for side in 0..2 {
+                let aos = (side + tick).is_multiple_of(2);
+                let start = Instant::now();
+                if aos {
+                    world.backend_mut().read_bodies(handles, output)?;
+                } else {
+                    world
+                        .backend_mut()
+                        .read_body_columns(handles, column_output)?;
+                }
+                if is_ara {
+                    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+                    if aos {
+                        extract_ms.push(elapsed);
+                    } else {
+                        column_ms.push(elapsed);
+                    }
+                }
             }
         }
     }
@@ -162,7 +188,6 @@ fn bowl_pair(
     if escaped != 0 {
         return Err(format!("{escaped} escaped bodies").into());
     }
-    let mut native_states = Vec::with_capacity(count);
     native
         .backend_mut()
         .read_bodies(&native_ids, &mut native_states)?;
