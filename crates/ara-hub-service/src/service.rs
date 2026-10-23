@@ -1,12 +1,12 @@
 //! Serialized Hub registry authority.
 mod background;
+mod create;
 mod lifecycle;
 mod transport;
 use crate::{
     DirectoryTemplates, EngineBuild, ProjectEntry, Registry, TemplateSource, invalid, io_error,
     now, registry::write_json, templates::Layered,
 };
-use ara_diag::{Diagnostic, codes};
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
 use serde::Deserialize;
@@ -299,15 +299,9 @@ impl Hub {
                     return Ok(json!({"valid":true,"path":path}));
                 }
                 fs::create_dir(&path).map_err(io_error)?;
-                self.config.templates.instantiate(&template, &path)?;
+                self.config.templates.instantiate(&template.id, &path)?;
                 // Keep the template's preview as the new project's (`thumbnail.png`).
-                if let Some(preview) = self
-                    .config
-                    .templates
-                    .list()?
-                    .into_iter()
-                    .find(|t| t.id == template)
-                    .and_then(|t| t.thumbnail)
+                if let Some(preview) = template.thumbnail
                     && !path.join("thumbnail.png").exists()
                 {
                     fs::copy(preview, path.join("thumbnail.png")).map_err(io_error)?;
@@ -384,70 +378,6 @@ impl Hub {
                 message: format!("unknown Hub method `{method}`"),
                 data: None,
             }),
-        }
-    }
-}
-impl Hub {
-    /// Validate `hub.create` (also its `dryRun`), reporting every problem at once.
-    /// Each diagnostic's `location.path` names the field (`name`, `path`,
-    /// `template`, `engineVersion`) so the Hub form can show it inline.
-    fn check_create(&self, p: &Params) -> Result<(String, String, PathBuf, String), RpcError> {
-        let field = |path: &str, message: String| {
-            Diagnostic::error(codes::INVALID_PARAMS, message).path(path)
-        };
-        let mut problems = Vec::new();
-        let name = p.name.as_deref().map(str::trim).unwrap_or_default();
-        if name.is_empty() {
-            problems.push(field("name", "Give the project a name".into()));
-        } else if self.registry.check_name(name, None).is_err() {
-            problems.push(field(
-                "name",
-                format!("A project named `{name}` is already registered; choose another name"),
-            ));
-        }
-        match &p.path {
-            None => problems.push(field("path", "Choose where to create the project".into())),
-            Some(path) if path.exists() => problems.push(field(
-                "path",
-                format!("`{}` already exists; choose a new folder", path.display()),
-            )),
-            Some(path) if !path.parent().is_some_and(Path::is_dir) => problems.push(field(
-                "path",
-                format!(
-                    "The folder `{}` does not exist",
-                    path.parent().unwrap_or(path).display()
-                ),
-            )),
-            Some(_) => {}
-        }
-        let version = p
-            .engine_version
-            .clone()
-            .unwrap_or_else(|| self.config.engine.version.clone());
-        if self.registry.engine(&version).is_err() {
-            problems.push(field(
-                "engineVersion",
-                format!("Engine `{version}` is not installed"),
-            ));
-        }
-        let template = p.template.clone().unwrap_or_default();
-        match self
-            .config
-            .templates
-            .list()?
-            .into_iter()
-            .find(|t| t.id == template)
-        {
-            None => problems.push(field("template", format!("No template `{template}`"))),
-            Some(found) => {
-                if let Some(error) = found.incomplete() {
-                    problems.extend(error.diagnostics());
-                }
-            }
-        }
-        match (problems.is_empty(), &p.path) {
-            (true, Some(path)) => Ok((template, name.to_owned(), path.clone(), version)),
-            _ => Err(RpcError::from_diagnostics(problems)),
         }
     }
 }
