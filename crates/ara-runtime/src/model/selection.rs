@@ -30,7 +30,19 @@ pub struct ModelSelection {
 impl Model {
     /// Validates selectors against this generation before presentation starts.
     pub fn validate_renderer(&self, renderer: &crate::components::MeshRenderer) -> Result<()> {
+        let subtree = self.select(renderer.node.as_deref(), None)?;
         self.select(renderer.node.as_deref(), renderer.primitive)?;
+        let mut slots = std::collections::BTreeSet::new();
+        for entry in &renderer.material_overrides {
+            if entry.primitive as usize >= subtree.primitives.len()
+                || !slots.insert(entry.primitive)
+            {
+                return Err(RuntimeError(format!(
+                    "{}: duplicate or out-of-range material override slot {}",
+                    self.asset, entry.primitive
+                )));
+            }
+        }
         if renderer.emissive_factor.is_some() {
             for selector in &renderer.emissive_materials {
                 if !self.materials.iter().enumerate().any(|(index, material)| {

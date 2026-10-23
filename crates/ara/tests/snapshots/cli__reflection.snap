@@ -4162,6 +4162,11 @@ expression: out
           "doc": "Zero-based primitive within the selected subtree (or whole model).",
           "default": null
         },
+        "materialOverrides": {
+          "type": "list<PrimitiveMaterialOverride>",
+          "doc": "Native material assets by subtree-local primitive slot; omitted slots use the model.",
+          "default": []
+        },
         "color": {
           "type": "color",
           "doc": "Linear base color multiplier and opacity.",
@@ -4184,7 +4189,7 @@ expression: out
         },
         "emissive": {
           "type": "vec3",
-          "doc": "Procedural emitted radiance, or the RGB multiplier of a model's emission. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
+          "doc": "Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
           "default": [0, 0, 0]
         },
         "emissiveEnabled": {
@@ -5360,6 +5365,23 @@ expression: out
           "doc": "Local position of the instance.",
           "default": null,
           "unit": "m"
+        }
+      }
+    },
+    "PrimitiveMaterialOverride": {
+      "kind": "struct",
+      "doc": "One native material graph/instance replacing a selected model primitive's material.",
+      "module": "render",
+      "fields": {
+        "primitive": {
+          "type": "u32",
+          "doc": "Zero-based primitive within the selected subtree, before `primitive` filtering.",
+          "default": 0
+        },
+        "material": {
+          "type": "asset",
+          "doc": "Authoritative material graph or material-instance asset (`@path#id`).",
+          "default": null
         }
       }
     },

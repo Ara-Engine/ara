@@ -658,18 +658,20 @@ Fixes:
 - None needed; review and commit the updated sidecar with the cooked result.
 - If the sidecar names a newer importer than this engine has, that is `ARA7303` instead: update the engine.
 
-## ARA7310 runtime::ASSET_PLACEHOLDER: Model content or selector unavailable in Play
+## ARA7310 runtime::ASSET_PLACEHOLDER: Model or native material unavailable in Play
 owner: ara-runtime
 
-A model could not be loaded or its node/primitive selector could not be resolved, so the runtime drew placeholder geometry and kept playing. An invalid emissive material selector reports the same warning while retaining the source material.
+A model could not be loaded or its node/primitive selector could not be resolved, so the runtime drew placeholder geometry and kept playing. Invalid emissive/material slots or unavailable native material graphs report the same warning while retaining source or last-good material data.
 
 Causes:
 - The asset's source file is missing or its import failed (see the matching `ARA7303` or `ARA21xx` diagnostic).
 - The cooked generation was removed from the cache while the player was running.
 - A node name is missing or ambiguous, a primitive index exceeds its subtree, or an emissive material selector does not exist in the source.
+- A native graph/instance or one of its textures is unavailable, or a reachable expression cannot lower to the current PBR contract. The warning identifies the graph/node.
 
 Fixes:
 - Choose an existing source node/material name or numeric index. Use `name:3` for a numeric name; use a source node index when names are duplicated.
+- Use unique, in-range subtree-local override slots. Check referenced surface graphs and instances; fix the named unsupported expression or import its texture.
 - Restore or re-import the asset, then Play again (or let hot reload swap it in).
 - Point the referencing field at an asset that exists (`property.set`).
 
