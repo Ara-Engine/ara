@@ -17,6 +17,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
+  `resource_dir` finds executable-relative installed shaders before checkout data;
+  a distribution with engine.json never silently falls back to checkout shaders.
 
 ## Contracts
 

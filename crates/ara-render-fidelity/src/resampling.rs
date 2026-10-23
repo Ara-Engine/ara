@@ -69,7 +69,10 @@ impl crate::FidelityView {
         }
         if enabled {
             // Prewarm the optional family at explicit setup, never in render.
-            let artifacts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+            let artifacts = ara_gpu::cooked::resource_dir(
+                env!("CARGO_PKG_NAME"),
+                concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+            );
             for name in [
                 "reservoir_init",
                 "primary_reservoir",

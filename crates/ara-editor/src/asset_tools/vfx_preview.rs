@@ -55,17 +55,8 @@ pub(super) fn cooked(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<Pa
                 &file,
                 ara_json::to_canonical_string(&ara_json::to_value(&manifest)?),
             )?;
-            let sdk = std::env::var_os("VULKAN_SDK")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("C:/VulkanSDK/1.4.363.0"));
-            ara_shader_cook::cook(
-                &file,
-                &cooked,
-                &ara_shader_cook::Toolchain {
-                    slangc: sdk.join("Bin/slangc.exe"),
-                    spirv_val: sdk.join("Bin/spirv-val.exe"),
-                },
-            )?;
+
+            ara_shader_cook::cook(&file, &cooked, &ara_shader_cook::Toolchain::discover())?;
             std::fs::write(
                 cooked.join("effect.json"),
                 ara_json::to_canonical_string(&serde_json::json!({"hash":hash})),

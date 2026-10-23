@@ -8,6 +8,7 @@ it runs (`.ara/daemon.json`), else an in-process `ara_host::Host`.
 
 | Command | Does | Exit 1 when |
 |---|---|---|
+| `ara doctor` | Project-free .NET 10 SDK/runtime and bundled shader tool checks, with download fixes | a prerequisite is missing |
 | `ara init [dir] [--name n]` | `ara.project.json` (`name`, `main` scene), `AGENTS.md` (conventions), `.gitattributes` (merge driver), `.gitignore` (`.ara/`), `.mcp.json`, `levels/main.scene`; configures `merge.ara` in a git work tree | the project exists (ARA1902) |
 | `ara fmt [--check] <files>` | canonical rewrite, repairing `@path#id` references | `--check` and a file would change; a file has errors |
 | `ara check [--fix] [files]` | schema, reference, structure and prefab checks (all documents by default); `--fix` first applies every diagnostic with exactly one `rename`/`set`/`remove` fix | any error |
@@ -90,4 +91,6 @@ sees the same daemon); agent shells (attribution, required `why`, quote-stripped
 
 `ara hub serve/add/remove/rename/projects/templates/create/open/close/status/engines/
 activity/install-mcp` manage the user service. Install output is one-time global
+`ara hub register-engine/unregister-engine` register this exact installed build;
+`ara hub shutdown` stops the service without closing user projects.
 Claude JSON or Codex TOML. Wire API and UI contract: ../ara-hub-service/AGENTS.md.

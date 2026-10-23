@@ -20,10 +20,10 @@ const MAX_REPLAY: u64 = 240;
 /// The cooked library effects shipped with ara-vfx-gpu (`cooked/<name>`); a project
 /// asset pipeline for authored effects is the next step.
 fn cooked_root() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../ara-vfx-gpu/cooked"
-    ))
+    ara_gpu::cooked::resource_dir(
+        "ara-vfx-gpu",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-vfx-gpu/cooked"),
+    )
 }
 
 fn library(name: &str) -> Result<Effect> {

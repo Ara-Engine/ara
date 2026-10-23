@@ -21,10 +21,10 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 const NEAR: f32 = 0.1;
 
 fn cooked_root() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../ara-landscape/cooked"
-    ))
+    ara_gpu::cooked::resource_dir(
+        "ara-landscape",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-landscape/cooked"),
+    )
 }
 
 /// One built landscape: for this terrain data at this capture size.

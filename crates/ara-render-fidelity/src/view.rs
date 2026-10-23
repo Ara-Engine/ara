@@ -11,7 +11,7 @@ use ara_gpu::{
 };
 use ara_render::graph::State;
 use glam::{Mat4, Vec3};
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 /// An offscreen fidelity view. The host owns the device and invokes render at frame
 /// boundaries. Resources and temporal histories belong to this view alone.
@@ -129,7 +129,10 @@ impl FidelityView {
             include_bytes!("../shaders/sheen-albedo.bin"),
         )?;
         let sheen_index = gpu.sampled_image(sheen_lut, false)?.index;
-        let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
         let mut pipelines = BTreeMap::new();
         let names = if settings.tier == Tier::Rt {
             vec![

@@ -20,11 +20,13 @@ pub struct ScriptPaths {
 }
 
 impl ScriptPaths {
-    /// The build under `ARA_DOTNET_ARTIFACTS`, else the nearest `dotnet/artifacts/bin`
-    /// above `start` (a development checkout). `None` until `dotnet build` ran.
+    /// Installed .NET tools, then `ARA_DOTNET_ARTIFACTS`, then checkout artifacts.
     pub fn locate(start: &Path) -> Option<Self> {
-        let bin = std::env::var_os("ARA_DOTNET_ARTIFACTS")
-            .map(PathBuf::from)
+        let bin = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join("dotnet/artifacts/bin")))
+            .filter(|bin| bin.join("Ara.Host/release/Ara.Host.dll").is_file())
+            .or_else(|| std::env::var_os("ARA_DOTNET_ARTIFACTS").map(PathBuf::from))
             .or_else(|| {
                 start
                     .ancestors()

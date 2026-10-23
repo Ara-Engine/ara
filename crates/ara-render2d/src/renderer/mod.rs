@@ -14,10 +14,7 @@ use ara_render::{
     renderer::post::ToneMap,
     scene::CameraSpec,
 };
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 mod passes;
 mod upload;

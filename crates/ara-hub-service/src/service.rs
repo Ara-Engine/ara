@@ -41,7 +41,13 @@ impl HubConfig {
             "ara-editor"
         });
         Ok(Self {
-            templates: Box::new(DirectoryTemplates(directory.join("templates"))),
+            templates: Box::new(DirectoryTemplates(
+                executable
+                    .parent()
+                    .map(|dir| dir.join("templates"))
+                    .filter(|dir| dir.is_dir())
+                    .unwrap_or_else(|| directory.join("templates")),
+            )),
             directory,
             engine: EngineBuild {
                 version: crate::ALPHA_VERSION.into(),
@@ -69,6 +75,7 @@ pub struct Hub {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Params {
+    engine: Option<EngineBuild>,
     project: Option<String>,
     path: Option<PathBuf>,
     name: Option<String>,
@@ -180,6 +187,51 @@ impl Hub {
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
             "hub.templates" => Ok(json!({"templates":self.config.templates.list()?})),
             "hub.engines" => Ok(json!({"engines":self.registry.engines})),
+            "hub.engine.register" => {
+                let engine = required(p.engine, "engine")?;
+                if engine.version.is_empty()
+                    || !engine.executable.is_absolute()
+                    || !engine.executable.is_file()
+                    || engine
+                        .editor
+                        .as_ref()
+                        .is_some_and(|path| !path.is_absolute() || !path.is_file())
+                {
+                    return Err(invalid(
+                        "engine needs a version and existing absolute executable paths",
+                    ));
+                }
+                if let Some(old) = self
+                    .registry
+                    .engines
+                    .iter_mut()
+                    .find(|old| old.version == engine.version)
+                {
+                    *old = engine.clone();
+                } else {
+                    self.registry.engines.push(engine.clone());
+                }
+                self.registry.save(&self.config.directory)?;
+                self.changed("engine", None);
+                Ok(json!(engine))
+            }
+            "hub.engine.remove" => {
+                let engine = required(p.engine, "engine")?;
+                if self.registry.projects.iter().any(|project| {
+                    project.engine_version == engine.version
+                        && self.status_of(project)["state"] == "open"
+                }) {
+                    return Err(invalid(
+                        "close projects using this engine before uninstalling",
+                    ));
+                }
+                self.registry.engines.retain(|old| {
+                    old.version != engine.version || old.executable != engine.executable
+                });
+                self.registry.save(&self.config.directory)?;
+                self.changed("engine", None);
+                Ok(json!({"removed":engine.version}))
+            }
             "hub.register" => {
                 let project =
                     self.registry

@@ -24,7 +24,10 @@ impl Renderer2d {
             "invalid 2D target extent"
         );
         let mut gpu = VulkanDevice::new(extensions, cache)?;
-        let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
         let cooked: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(artifacts.join("sprites.json"))?)?;
         let pipeline = gpu.create_pipeline(&cooked, &artifacts)?;

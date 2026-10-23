@@ -126,7 +126,10 @@ impl Renderer {
     ) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
         let mut gpu = VulkanDevice::new(extensions, cache)?;
-        let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
         let metadata: ara_gpu::cooked::CookedPipeline =
             serde_json::from_slice(&std::fs::read(artifacts.join("gbuffer.json"))?)?;
         let shader_metadata = crate::capture::ShaderMetadata {

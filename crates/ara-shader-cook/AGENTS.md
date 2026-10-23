@@ -23,7 +23,7 @@ Y, DXIL does not. Both targets use column-major matrices and 32-byte root data.
 Set `CARGO_BUILD_JOBS=4`.
 `cargo run -p ara-shader-cook -- shaders/pipelines.json crates/ara-render/cooked`
 from the repository root. Optional third argument is the Vulkan SDK directory;
-otherwise VULKAN_SDK or the pinned Windows SDK 1.4.363.0 is used.
+otherwise bundled tools beside the executable, VULKAN_SDK, then PATH are used.
 
 Run `cargo check -p ara-shader-cook`, `cargo test -p ara-shader-cook`,
 `cargo clippy -p ara-shader-cook --all-targets -- -D warnings`, and

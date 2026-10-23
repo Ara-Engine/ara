@@ -34,6 +34,9 @@ use std::{
 };
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
+    if options.headless {
+        return headless(options);
+    }
     if options.verify_panels || options.verify_ux {
         panels_verify::fixtures(&options.project)?;
     }
@@ -756,6 +759,38 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     }
     floats.destroy(&renderer);
     result
+}
+/// Exercise the editor's document extraction and production renderer without SDL.
+fn headless(options: Options) -> ara_ui::Result<()> {
+    std::fs::create_dir_all(&options.output)?;
+    let mut editor = Editor::open_with(
+        &options.project,
+        Some(options.output.join("user-settings.json")),
+    )?;
+    setup::prepare(&mut editor, &options)?;
+    let view = editor.view()?;
+    let mut renderer = Renderer::new(
+        view.scene(editor.host.root(), &editor.state, None)?,
+        options.size,
+        &[],
+        editor.host.root().join(".ara/gpu"),
+    )?;
+    renderer
+        .capture(&CaptureRequest {
+            camera: editor.state.camera.spec(),
+            size: options.size,
+            mode: ViewMode::Lit,
+            deterministic: true,
+            exposure: 0.0015,
+            settle_frames: 4,
+            tick: 0,
+            seed: 0,
+            marks: Some(16),
+        })?
+        .write(&options.output.join("editor-scene.png"))?;
+    editor.host.flush();
+    renderer.gpu().assert_clean()?;
+    Ok(())
 }
 fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
     [
