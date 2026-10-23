@@ -21,7 +21,7 @@ pub use kira::track::{SendTrackBuilder, SendTrackId};
 mod delay;
 pub use delay::DelayBuilder;
 
-/// Lock-free peak meter. Copy the handle only while configuring a graph.
+/// Lock-free peak/energy meter. Copy the handle only while configuring a graph.
 #[derive(Clone, Default)]
 pub struct Meter(Arc<MeterState>);
 #[derive(Default)]
@@ -30,6 +30,31 @@ struct MeterState {
     overloads: AtomicU64,
     block_peak: AtomicU32,
     clipped: [AtomicU64; 4],
+    energy: AtomicU64,
+    frames: AtomicU64,
+    window_peak: AtomicU32,
+}
+
+/// Cumulative meter totals. Subtract two readings to measure a capture window.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct MeterReading {
+    /// Sum of squared samples over both channels since the graph started.
+    pub energy: f64,
+    /// Frames observed since the graph started.
+    pub frames: u64,
+    /// Channel samples beyond full scale since the graph started.
+    pub overloads: u64,
+    /// Highest absolute sample since the graph started.
+    pub peak: f32,
+}
+
+impl MeterReading {
+    /// Stereo RMS in dBFS between `earlier` and this reading; None for silence.
+    pub fn rms_dbfs_since(&self, earlier: &MeterReading) -> Option<f64> {
+        let frames = self.frames.saturating_sub(earlier.frames);
+        let energy = (self.energy - earlier.energy).max(0.0);
+        (frames > 0 && energy > 0.0).then(|| 10.0 * (energy / (frames * 2) as f64).log10())
+    }
 }
 
 impl Meter {
@@ -41,22 +66,38 @@ impl Meter {
     pub fn overloads(&self) -> u64 {
         self.0.overloads.load(Ordering::Relaxed)
     }
+    /// Highest absolute sample in the most recent quantum.
+    pub fn block_peak(&self) -> f32 {
+        f32::from_bits(self.0.block_peak.load(Ordering::Relaxed))
+    }
+    /// Cumulative totals for windowed RMS (see `MeterReading::rms_dbfs_since`).
+    pub fn reading(&self) -> MeterReading {
+        MeterReading {
+            energy: f64::from_bits(self.0.energy.load(Ordering::Relaxed)),
+            frames: self.0.frames.load(Ordering::Relaxed),
+            overloads: self.overloads(),
+            peak: self.peak(),
+        }
+    }
+    /// Highest absolute sample since the previous call; resets the window (control path).
+    pub fn take_window_peak(&self) -> f32 {
+        f32::from_bits(self.0.window_peak.swap(0, Ordering::Relaxed))
+    }
     pub(crate) fn effect(&self) -> Box<dyn Effect> {
         Box::new(MeterEffect(self.clone()))
     }
     pub(crate) fn clipped_mask(&self) -> [u64; 4] {
         std::array::from_fn(|i| self.0.clipped[i].load(Ordering::Relaxed))
     }
-}
-
-struct MeterEffect(Meter);
-impl Effect for MeterEffect {
-    fn process(&mut self, input: &mut [Frame], _: f64, _: &Info) {
+    /// Records one block. Called only by the renderer thread that owns this meter's track.
+    pub(crate) fn observe(&self, input: &[Frame]) {
         let mut peak = 0.0_f32;
         let mut overloads = 0;
         let mut clipped = [0_u64; 4];
+        let mut energy = 0.0_f32;
         for (i, f) in input.iter().enumerate() {
             peak = peak.max(f.left.abs()).max(f.right.abs());
+            energy += f.left * f.left + f.right * f.right;
             overloads += u64::from(f.left.abs() > 1.0) + u64::from(f.right.abs() > 1.0);
             for (c, s) in [f.left, f.right].into_iter().enumerate() {
                 if s.abs() > 1.0 || !s.is_finite() {
@@ -67,12 +108,31 @@ impl Effect for MeterEffect {
                 }
             }
         }
-        for (dst, value) in self.0.0.clipped.iter().zip(clipped) {
+        let state = &self.0;
+        for (dst, value) in state.clipped.iter().zip(clipped) {
             dst.store(value, Ordering::Relaxed);
         }
-        self.0.0.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
-        self.0.0.block_peak.store(peak.to_bits(), Ordering::Relaxed);
-        self.0.0.overloads.fetch_add(overloads, Ordering::Relaxed);
+        state.peak.fetch_max(peak.to_bits(), Ordering::Relaxed);
+        state
+            .window_peak
+            .fetch_max(peak.to_bits(), Ordering::Relaxed);
+        state.block_peak.store(peak.to_bits(), Ordering::Relaxed);
+        state.overloads.fetch_add(overloads, Ordering::Relaxed);
+        // Single writer: load/add/store keeps the f64 total exact without a CAS loop.
+        if energy.is_finite() {
+            let total = f64::from_bits(state.energy.load(Ordering::Relaxed)) + f64::from(energy);
+            state.energy.store(total.to_bits(), Ordering::Relaxed);
+        }
+        state
+            .frames
+            .fetch_add(input.len() as u64, Ordering::Relaxed);
+    }
+}
+
+struct MeterEffect(Meter);
+impl Effect for MeterEffect {
+    fn process(&mut self, input: &mut [Frame], _: f64, _: &Info) {
+        self.0.observe(input);
     }
 }
 

@@ -61,6 +61,7 @@ uint32_t ara_character_step(AraWorld* w, const AraCharacterInput* input, float d
         auto layer = ObjectLayer(d.layer);
         c.ExtendedUpdate(dt,w->system.GetGravity(),us,w->system.GetDefaultBroadPhaseLayerFilter(layer),
             w->system.GetDefaultLayerFilter(layer),{},{},*w->temp);
+        w->character_collision.Update(&c);
         return 1;
     } ARA_CATCH(0)
 }

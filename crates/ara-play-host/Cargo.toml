@@ -12,6 +12,7 @@ ara-diag.workspace = true
 ara-doc.workspace = true
 ara-host.workspace = true
 ara-json.workspace = true
+ara-ops.workspace = true
 ara-play = { path = "../ara-play" }
 ara-proto.workspace = true
 ara-runtime = { path = "../ara-runtime" }

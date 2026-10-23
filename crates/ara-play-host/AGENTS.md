@@ -9,14 +9,18 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 
 - `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
-  `ARA_IMPORT_WORKER`); two warm headless players, no warm window by default.
-- `register_engine_schemas(&mut SchemaDb)`: runtime components for the host's DB.
+  `ARA_IMPORT_WORKER`), the .NET host (`ScriptPaths::locate`: `ARA_DOTNET_ARTIFACTS`
+  or the nearest `dotnet/artifacts/bin`); two warm headless players, no warm window.
+- `open_project(root)`: opens a project with the engine schema world and commands
+  (`ara_runtime::engine`) for a host before `Host::open`; clashes become diagnostics.
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
   checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
   (imports in worker processes); `pins` waits for published generations.
-- `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets,
-  7304 test failed, 7305 bad request (local range; reserve centrally later).
+- `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
+  import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
+  recorded an older importer; it was upgraded (typed `SidecarCommand::Version`
+  transaction, canonical write) and reimported. Local range; reserve centrally later.
 
 ## Methods
 
@@ -24,8 +28,11 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 tickHz, hotReload}` → `{world: "play:N", players[], bootMs, prepareMs, transport}`;
 `stop`, `pause`, `resume`, `step`, `until`, `input`, `timescale`, `inspect`, `read`,
 `patch` (acked after the applying tick), `capture` (hash, optional labelled PNG),
-`watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`,
-`debug.crash`, `pool`, `status`. `world` defaults to the most recent world (editor
+`watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`
+(`keepState` resumes from the current tick), `debug.crash`, `pool`, `status`,
+`captureAudio` (offline render through the play audio path to an analysed WAV, with
+how each source is heard), and C#:
+`command`, `commands`, `events`; `script.write` (MCP `ara_play` action `write`). `world` defaults to the most recent world (editor
 toolbar bindings rely on it). Pause/resume/step/input/patch/timescale broadcast to
 every player of a world; reads go to the authority.
 
@@ -38,6 +45,15 @@ every player of a world; reads go to the authority.
 - `test.run {steps, seed, determinism}` runs a spec (`spec.rs`: input, step, until,
   expect, patch, watch, capture, hash) in fresh headless players; `determinism` runs
   it twice in separate processes and requires equal final hashes.
+
+- C# (`scripts.rs`): projects with module folders (`ara.module.toml`) send them to
+  players (`PlayScene::scripts`); without a .NET build Play is refused with a setup
+  diagnostic. `script.write` from an agent session makes every world claim the path
+  (`play.compile`) before the file is written. Player `play.event`s: reloads and
+  diagnostics (buffered for `play.events`, logged), `types` (the owner keeps each
+  module's `<Name>.types.json` current, canonical, inside the project), `restart`
+  (L4: resume a fresh player from `play.snapshot`). The C# catalog is published to the
+  host (`Cx::publish_commands("play", ..)`) on start, after reloads and on stop.
 
 ## Gotchas
 

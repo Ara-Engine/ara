@@ -1,0 +1,18 @@
+graph Footsteps {
+  param surface = 0 range(0, 2) "Ground under the foot: 0 concrete, 1 grass, 2 metal";
+  param speed = 1 range(0, 2) "Movement speed: running steps are louder and brighter";
+  trigger step "Fired by the character controller on each footfall";
+  let concrete = random.pick(step, 11, @sfx/footsteps/concrete_1.wav, @sfx/footsteps/concrete_2.wav, @sfx/footsteps/concrete_3.wav);
+  let grass = random.pick(step, 12, @sfx/footsteps/grass_1.wav, @sfx/footsteps/grass_2.wav);
+  let metal = random.pick(step, 13, @sfx/footsteps/metal_1.wav, @sfx/footsteps/metal_2.wav);
+  let clip = switch(surface, concrete, grass, metal);
+  let pitch = random.range(step, 14, 0.94, 1.06);
+  let player = sample(clip, step, pitch);
+  let level = map(speed, 0, 2, 0.5, 1);
+  let jitter = random.range(step, 15, 0.85, 1);
+  let gain = mul(level, jitter);
+  let footfall = mul(player.out, gain);
+  let tone = map(speed, 0, 2, 2500, 12000);
+  let shaped = lowpass(footfall, tone, 0.707);
+  output out = shaped;
+}

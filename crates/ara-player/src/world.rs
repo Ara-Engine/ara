@@ -11,7 +11,12 @@ use ara_render::capture::ViewMode;
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
-use ara_runtime_render::Presenter;
+use ara_runtime_audio::AudioPresenter;
+use ara_runtime_render::{
+    Presenter,
+    two_d::{self, Presenter2d},
+};
+use ara_runtime_script::{ScriptEvent, ScriptPlugin, ScriptSettings};
 use ara_sim::{TickConfig, Watch};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf, sync::atomic::Ordering, time::Instant};
@@ -39,6 +44,8 @@ pub struct World {
     pins: BTreeMap<String, Digest>,
     /// Patches acknowledged after their tick.
     pub pending: Vec<PendingPatch>,
+    /// C# modules and their host's event channel, when the scene runs any.
+    scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
 }
 
 fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAssets> {
@@ -57,6 +64,18 @@ impl World {
             .map(|(k, v)| Ok((k.clone(), Digest(unhex(v).map_err(|e| anyhow!(e))?))))
             .collect::<Result<BTreeMap<_, _>>>()?;
         let cache = PathBuf::from(&scene.cache);
+        let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = Vec::new();
+        let mut scripts = None;
+        if let Some(s) = &scene.scripts {
+            let settings = ScriptSettings {
+                host_dir: PathBuf::from(&s.host_dir),
+                compile_server: s.compile_server.as_ref().map(PathBuf::from),
+                modules: s.modules.iter().map(PathBuf::from).collect(),
+            };
+            let (plugin, events) = ScriptPlugin::new(settings.clone());
+            plugins.push(Box::new(plugin));
+            scripts = Some((settings, events));
+        }
         let runtime = Runtime::new(
             schema,
             workspace,
@@ -71,7 +90,7 @@ impl World {
                 nav_cache: scene.nav_cache.as_ref().map(PathBuf::from),
                 ..Default::default()
             },
-            Vec::new(),
+            plugins,
         )?;
         Ok((
             Self {
@@ -81,9 +100,159 @@ impl World {
                 cache,
                 pins,
                 pending: Vec::new(),
+                scripts,
             },
             started.elapsed().as_secs_f64() * 1000.0,
         ))
+    }
+
+    /// Restores a portable snapshot (`play.snapshot` of an earlier player): restarts
+    /// continue from that tick, C# state included.
+    pub fn resume(&mut self, hex: &str) -> Result<()> {
+        let bytes = ara_play::unhex_bytes(hex).map_err(|e| anyhow!(e))?;
+        let snapshot = ara_sim::Snapshot::from_bytes(&bytes)?;
+        self.runtime.play_mut().restore(&snapshot)?;
+        Ok(())
+    }
+
+    /// The audio listener: at the camera, facing its view direction.
+    pub fn listener(&mut self, frame: &mut RenderFrame) -> ara_audio::AudioListener {
+        self.runtime.extract(frame);
+        let mut listener = ara_audio::AudioListener::default();
+        if let Some(camera) = &frame.camera {
+            listener.position = camera.position;
+            listener.forward = camera.forward;
+        }
+        listener
+    }
+
+    /// One live audio update (windowed players, every presented frame).
+    pub fn audio(&mut self, audio: &mut AudioPresenter, frame: &mut RenderFrame) -> Result<()> {
+        let listener = self.listener(frame);
+        let assets = assets(&self.cache, &self.pins)?;
+        audio.update(self.runtime.world(), &listener, &mut |reference| {
+            ara_runtime_audio::clip(&assets, reference)
+        })?;
+        Ok(())
+    }
+
+    /// A fresh audio presenter for this world (its project mixer, room reverb).
+    pub fn audio_presenter(&self) -> Result<AudioPresenter> {
+        Ok(AudioPresenter::new(self.runtime.documents())?)
+    }
+
+    /// `play.captureAudio`: renders `seconds` of the world's sound offline from the
+    /// current tick through the play audio path (project mixer, room reverb, acoustics
+    /// against the physics scene, the listener at the camera) to a WAV plus analysis
+    /// JSON, with how each source is heard. Presentation only.
+    pub fn capture_audio(
+        &mut self,
+        params: &ara_play::CaptureAudio,
+        frame: &mut RenderFrame,
+    ) -> Result<Value> {
+        let mut audio = self.audio_presenter()?;
+        let listener = self.listener(frame);
+        let assets = assets(&self.cache, &self.pins)?;
+        let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
+            ara_runtime_audio::clip(&assets, reference)
+        })?;
+        let capture = audio.capture(params.seconds)?;
+        let path = std::path::Path::new(&params.path);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(path, &capture.wav)?;
+        let analysis = capture.analysis_json()?;
+        std::fs::write(path.with_extension("audio.json"), &analysis)?;
+        let sources: Vec<Value> = heard
+            .iter()
+            .map(|h| {
+                json!({
+                    "entity": h.entity,
+                    "distance": ara_runtime::live::tidy(json!(h.distance)),
+                    "attenuation": ara_runtime::live::tidy(json!(h.attenuation)),
+                    "visibility": ara_runtime::live::tidy(json!(h.visibility)),
+                    "occluders": h.occluders,
+                    "explain": h.explain,
+                })
+            })
+            .collect();
+        Ok(json!({
+            "tick": self.runtime.tick(),
+            "voices": heard.iter().map(|h| h.entity.clone()).collect::<Vec<_>>(),
+            "sources": sources,
+            "analysis": serde_json::from_str::<Value>(&analysis)?,
+        }))
+    }
+
+    /// `play.snapshot`: the current tick as a portable snapshot (hex CBOR).
+    pub fn snapshot(&self) -> Result<Value> {
+        let snapshot = self.runtime.play().snapshot()?;
+        Ok(json!({"tick": snapshot.tick(), "snapshot": ara_play::hex(&snapshot.to_bytes()?)}))
+    }
+
+    /// `play.command`: a C# command between ticks.
+    pub fn command(&mut self, command: &ara_play::Command) -> Result<Value> {
+        let world = self.runtime.play_mut().session_mut().world_mut();
+        Ok(ara_runtime_script::execute(
+            world,
+            &command.name,
+            &command.params,
+        )?)
+    }
+
+    /// `play.commands`: the C# command catalog.
+    pub fn commands(&self) -> Value {
+        ara_runtime_script::catalog(self.runtime.world())
+    }
+
+    /// `play.compile`: claims sources as an agent edit in their modules.
+    pub fn compile(&self, compile: &ara_play::Compile) -> Value {
+        let Some((settings, _)) = &self.scripts else {
+            return json!({"claimed": false});
+        };
+        let mut claimed = false;
+        for path in compile.paths.iter().map(PathBuf::from) {
+            if let Some((module, _)) = ara_runtime_script::module_of(settings, &path) {
+                claimed |= ara_runtime_script::request_compile(
+                    self.runtime.world(),
+                    &module,
+                    std::slice::from_ref(&path),
+                );
+            }
+        }
+        json!({"claimed": claimed})
+    }
+
+    /// C# host events since the last call, as protocol events.
+    pub fn events(&self) -> Vec<ara_play::Event> {
+        let Some((_, receiver)) = &self.scripts else {
+            return Vec::new();
+        };
+        let tick = self.runtime.tick();
+        receiver
+            .try_iter()
+            .map(|event| match event {
+                ScriptEvent::Reload(r) => ara_play::Event::Reload {
+                    tick,
+                    level: r.kind,
+                    module: r.module,
+                    origin: r.origin,
+                    cascade: r.cascade,
+                    errors: r.error_count,
+                },
+                ScriptEvent::Diagnostic(d) => ara_play::Event::Diagnostic {
+                    diagnostic: serde_json::to_value(d).unwrap_or_default(),
+                },
+                ScriptEvent::RestartRequired => ara_play::Event::Restart,
+                ScriptEvent::Types(files) => ara_play::Event::Types {
+                    files: files
+                        .into_iter()
+                        .map(|(path, doc)| (path.to_string_lossy().into_owned(), doc))
+                        .collect(),
+                },
+            })
+            .collect()
     }
 
     /// Starts host-time ticking and runs the first tick now (S5 "first tick").
@@ -224,7 +393,7 @@ impl World {
         };
         let mut out = serde_json::Map::new();
         for name in names {
-            if let Some(value) = session.component(entity, &name)? {
+            if let Some(value) = component(session, entity, &name)? {
                 out.insert(name, value);
             }
         }
@@ -277,18 +446,36 @@ impl World {
         &mut self,
         params: &ara_play::CaptureParams,
         presenter: Option<&mut Presenter>,
+        presenter2d: Option<&mut Presenter2d>,
         frame: &mut RenderFrame,
     ) -> Result<Captured> {
         let mut marks = Vec::new();
-        if let (Some(path), Some(presenter)) = (&params.path, presenter) {
-            self.runtime.extract(frame);
-            let capture = presenter.capture(
-                frame,
-                [params.width, params.height],
-                ViewMode::Lit,
-                (params.marks > 0).then_some(params.marks),
-                self.seed,
-            )?;
+        if let Some(path) = &params.path {
+            let size = [params.width, params.height];
+            let marks_wanted = (params.marks > 0).then_some(params.marks);
+            let tick = self.runtime.tick();
+            let world = self.runtime.play_mut().session_mut().world_mut();
+            // A Camera2d makes it a 2D scene: ara-render2d draws it.
+            let capture = if two_d::camera(world).is_some() {
+                let atlases = two_d::atlases(world, &assets(&self.cache, &self.pins)?)?;
+                presenter2d.context("no 2D presenter")?.capture(
+                    world,
+                    atlases,
+                    tick,
+                    size,
+                    marks_wanted,
+                    self.seed,
+                )?
+            } else {
+                self.runtime.extract(frame);
+                presenter.context("no presenter")?.capture(
+                    frame,
+                    size,
+                    ViewMode::Lit,
+                    marks_wanted,
+                    self.seed,
+                )?
+            };
             capture.write(std::path::Path::new(path))?;
             marks = capture
                 .legend
@@ -382,6 +569,22 @@ fn injection(input: &Input) -> Result<Injection> {
 
 /// Reads `entity.Component.field…` (any registered component); vector fields accept
 /// `x/y/z/w`, `r/g/b/a` or numeric indices. Missing entities/components read as `None`.
+/// A component's value: ara-sim's columns, or the C# host's for C# components.
+fn component(session: &ara_sim::Session, entity: &str, name: &str) -> Result<Option<Value>> {
+    match session.component(entity, name) {
+        Ok(Some(value)) => Ok(Some(value)),
+        result => {
+            let script = session
+                .entity(entity)
+                .and_then(|e| ara_runtime_script::read(session.world(), e, name));
+            match script {
+                Some(value) => Ok(Some(value)),
+                None => Ok(result?),
+            }
+        }
+    }
+}
+
 pub fn read_path(session: &ara_sim::Session, path: &str) -> Result<Option<Value>> {
     let mut parts = path.split('.');
     let entity = parts.next().context("empty path")?;
@@ -391,7 +594,7 @@ pub fn read_path(session: &ara_sim::Session, path: &str) -> Result<Option<Value>
     if session.entity(entity).is_none() {
         return Ok(None);
     }
-    let Some(mut current) = session.component(entity, component)? else {
+    let Some(mut current) = self::component(session, entity, component)? else {
         return Ok(None);
     };
     for part in parts {

@@ -1,0 +1,44 @@
+{
+  "budgetMs": 1,
+  "evaluate": {
+    "emitters": 1000,
+    "maxMs": 19.451900000000002,
+    "meanMs": 16.320335,
+    "occludedEmitters": 990,
+    "p50Ms": 16.045299999999997,
+    "p95Ms": 18.634600000000002,
+    "raysPerEmitter": 9,
+    "samples": 20,
+    "thread": "control/worker (not the audio thread)",
+    "triangles": 2400
+  },
+  "machine": "Windows 11 dev box, shared with ~8 concurrent agent builds; release profile",
+  "render": [
+    {
+      "allocations": 0,
+      "maxMs": 0.9205,
+      "meanMs": 0.5022486328125002,
+      "p50Ms": 0.4611,
+      "p95Ms": 0.6557,
+      "parameterUpdates": "static",
+      "path": "occluded three-band SVF path, air absorption, per-voice reverb send, FDN + 18 early taps",
+      "quantumFrames": 128,
+      "realVoices": 1000,
+      "samples": 512,
+      "voices": 1000
+    },
+    {
+      "allocations": 0,
+      "maxMs": 1.5592,
+      "meanMs": 0.5429105468749996,
+      "p50Ms": 0.47709999999999997,
+      "p95Ms": 0.7565000000000001,
+      "parameterUpdates": "all 1000 voices retargeted every 8 blocks (256-frame ramps)",
+      "path": "occluded three-band SVF path, air absorption, per-voice reverb send, FDN + 18 early taps",
+      "quantumFrames": 128,
+      "realVoices": 1000,
+      "samples": 512,
+      "voices": 1000
+    }
+  ]
+}

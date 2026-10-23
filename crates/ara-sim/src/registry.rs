@@ -5,7 +5,10 @@ use ara_schema::{Schema, SchemaDb, Validator, ValueType};
 use bevy_ecs::{component::ComponentId, prelude::*};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 #[derive(Clone, Copy)]
 pub(crate) struct Codec {
@@ -41,6 +44,7 @@ pub struct SimRegistry {
     pub(crate) typed: BTreeMap<String, Codec>,
     pub(crate) resources: BTreeMap<String, ResourceCodec>,
     pub(crate) dynamic: BTreeMap<String, DynamicLayout>,
+    pub(crate) external: BTreeSet<String>,
     pub(crate) handlers: BTreeMap<String, CommandCodec>,
     pub(crate) stream_signature: [u8; 32],
 }
@@ -62,10 +66,12 @@ impl SimRegistry {
             typed: BTreeMap::new(),
             resources: BTreeMap::new(),
             dynamic,
+            external: BTreeSet::new(),
             handlers: BTreeMap::new(),
             stream_signature: [0; 32],
         };
         registry.register_component::<ara_components::Transform>()?;
+        registry.refresh_layouts()?;
         Ok(registry)
     }
 
@@ -79,12 +85,16 @@ impl SimRegistry {
     pub fn register_component<T: Component + Schema + Serialize + DeserializeOwned>(
         &mut self,
     ) -> Result<()> {
+        // A schema that already holds `T` (engine schemas do) needs no re-verification.
+        let known = self.schema.registers::<T>();
         self.schema.register::<T>();
         let desc = T::describe();
         if !desc.is_component() {
             return Err(SimError(format!("{} is not a component schema", desc.name)));
         }
-        self.check_schema()?;
+        if !known {
+            self.check_schema()?;
+        }
         self.dynamic.remove(&desc.name);
         self.typed.insert(
             desc.name,
@@ -111,6 +121,9 @@ impl SimRegistry {
                 },
             },
         );
+        if known {
+            return Ok(());
+        }
         self.refresh_layouts()
     }
 
@@ -199,6 +212,27 @@ impl SimRegistry {
         Ok(())
     }
 
+    /// Hands a schema component's storage to another runtime (C# modules own their
+    /// columns). Documents still validate against its schema type; the projection
+    /// queues its values in [`crate::ExternalWrites`] instead of writing an ara-sim
+    /// column, and the owner's `StateProvider` captures and restores it.
+    pub fn register_external(&mut self, name: &str) -> Result<()> {
+        if !self.schema.get(name).is_some_and(|t| t.is_component()) {
+            return Err(SimError(format!("{name} is not a component schema")));
+        }
+        if self.typed.contains_key(name) {
+            return Err(SimError(format!("{name} is a typed Rust component")));
+        }
+        self.dynamic.remove(name);
+        self.external.insert(name.to_owned());
+        Ok(())
+    }
+
+    /// Whether another runtime owns `name`'s storage ([`SimRegistry::register_external`]).
+    pub fn is_external(&self, name: &str) -> bool {
+        self.external.contains(name)
+    }
+
     /// Layout of a data-only component, absent for typed Rust components.
     pub fn dynamic_layout(&self, name: &str) -> Option<&DynamicLayout> {
         self.dynamic.get(name)
@@ -229,7 +263,10 @@ impl SimRegistry {
 
     fn refresh_layouts(&mut self) -> Result<()> {
         for desc in self.schema.components() {
-            if !self.typed.contains_key(&desc.name) && !self.dynamic.contains_key(&desc.name) {
+            if !self.typed.contains_key(&desc.name)
+                && !self.dynamic.contains_key(&desc.name)
+                && !self.external.contains(&desc.name)
+            {
                 self.dynamic
                     .insert(desc.name.clone(), DynamicLayout::new(desc)?);
             }

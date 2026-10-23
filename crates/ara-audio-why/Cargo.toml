@@ -1,0 +1,18 @@
+[package]
+name = "ara-audio-why"
+description = "`ara why` audio explainer: why a sound can't be heard (documents plus runtime audibility reports)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag = { path = "../ara-diag" }
+ara-why = { path = "../ara-why" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ara-audio = { path = "../ara-audio" }
+
+[lints]
+workspace = true

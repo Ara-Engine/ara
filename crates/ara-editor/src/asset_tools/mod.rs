@@ -27,13 +27,9 @@ pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
     ara_asset::register_schema(&mut project.db);
     ara_importers::registry()?.register_schemas(&mut project.db);
     register(&mut project.registry, &mut project.db);
-    ara_graph::register(&mut project.db).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+    // The shared play-host schema world already owns graph/material/animation kinds
+    // and material/VFX commands. Only generic canvas commands are editor additions.
     ara_graph::commands::register(&mut project.registry, &mut project.db);
-    // Material graph commands use graph records. The separate material-instance
-    // schema currently shares `i_` with importer sidecars and cannot coexist yet.
-    ara_material::commands::register(&mut project.registry, &mut project.db);
-    ara_vfx::commands::register(&mut project.registry, &mut project.db);
-    ara_anim::document::register(&mut project.db)?;
     let mut files = Vec::new();
     ara_host::project::walk_documents(&project.root, &project.db, &mut files);
     import_files(&project.root, &mut files)?;

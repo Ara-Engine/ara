@@ -465,17 +465,7 @@
         "roughness": 0.58
       },
       "Animator": {
-        "idle": "Survey",
-        "locomotion": [
-          {
-            "clip": "Walk",
-            "speed": 1.4
-          },
-          {
-            "clip": "Run",
-            "speed": 4.5
-          }
-        ]
+        "controller": "@anim/fox.animation#ac_foxanim1"
       },
       "CharacterController": {
         "radius": 0.3,
@@ -1037,6 +1027,14 @@
         "roughness": 0.3
       },
       "Transform": {}
+    },
+    "e_fire": {
+      "name": "Campfire",
+      "order": "aW",
+      "Transform": {
+        "position": [1.5, 0, 3]
+      },
+      "VisualEffect": {}
     }
   }
 }

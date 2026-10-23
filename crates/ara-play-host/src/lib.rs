@@ -9,7 +9,10 @@ pub mod assets;
 mod keep;
 pub mod params;
 pub mod pool;
+mod scripts;
 mod spec;
+
+pub use scripts::ScriptPaths;
 
 use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, parse};
@@ -40,6 +43,8 @@ pub mod codes {
     pub const TEST_FAILED: Code = Code(7304);
     /// Invalid play request (scene, mode, spec).
     pub const REQUEST: Code = Code(7305);
+    /// Info: a sidecar recorded an older importer version; it was upgraded and reimported.
+    pub const ASSET_UPGRADED: Code = Code(7306);
 }
 
 fn fail(code: Code, message: impl Into<String>) -> Vec<Diagnostic> {
@@ -55,6 +60,9 @@ pub struct PlayConfig {
     pub import_worker: PathBuf,
     /// Default fixed tick rate.
     pub tick_hz: u32,
+    /// The .NET host for C# modules; `None` when not built (projects with modules
+    /// then refuse Play with a setup diagnostic).
+    pub scripts: Option<ScriptPaths>,
 }
 
 impl PlayConfig {
@@ -85,6 +93,9 @@ impl PlayConfig {
             },
             import_worker: sibling("ara-import-worker", "ARA_IMPORT_WORKER"),
             tick_hz: 60,
+            scripts: std::env::current_exe()
+                .ok()
+                .and_then(|exe| ScriptPaths::locate(&exe)),
         }
     }
 }
@@ -102,6 +113,8 @@ struct World {
     start_paused: bool,
     fault: Option<Value>,
     hot_reload: bool,
+    /// Player events (C# reloads, diagnostics) not yet read with `play.events`.
+    events: Vec<Value>,
 }
 
 /// The `play` and `test` service. Construction is cheap; the pool and the asset
@@ -176,6 +189,30 @@ impl PlayService {
         self.assets
             .as_mut()
             .ok_or_else(|| fail(codes::ASSETS, "asset pipeline unavailable"))
+    }
+
+    /// Logs pending asset notes (importer upgrades) and adds them to a successful
+    /// result as `notes`.
+    fn with_notes(
+        &mut self,
+        cx: &mut Cx<'_>,
+        mut result: Result<Value, Vec<Diagnostic>>,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        let notes = self
+            .assets
+            .as_mut()
+            .map(assets::Assets::take_notes)
+            .unwrap_or_default();
+        if notes.is_empty() {
+            return result;
+        }
+        if let Ok(value) = &mut result {
+            value["notes"] = json!(notes);
+        }
+        for note in notes {
+            cx.log(note);
+        }
+        result
     }
 
     /// The most recently started world.
@@ -323,6 +360,7 @@ impl PlayService {
                     .to_string_lossy()
                     .into_owned(),
             ),
+            scripts: self.script_scene()?,
         };
         Ok((scene_id, scene.encode().map_err(|e| fail(codes::PLAY, e))?))
     }
@@ -334,6 +372,7 @@ impl PlayService {
         window: bool,
         snapshot: &SnapshotRef,
         start_paused: bool,
+        resume: Option<&str>,
     ) -> Result<Launched, Vec<Diagnostic>> {
         let windowed = roles
             .iter()
@@ -366,6 +405,7 @@ impl PlayService {
                     None
                 },
                 start_paused,
+                resume: resume.map(str::to_owned),
             };
             match player.call(
                 method::START,
@@ -450,7 +490,7 @@ impl PlayService {
         let window = p.window.unwrap_or(false);
         let start_paused = p.start_paused.unwrap_or(false);
         let launch = Instant::now();
-        let (players, started) = self.launch(&roles, window, &snapshot, start_paused)?;
+        let (players, started) = self.launch(&roles, window, &snapshot, start_paused, None)?;
         let boot_ms = launch.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.clone(),
@@ -463,6 +503,7 @@ impl PlayService {
                 start_paused,
                 fault: None,
                 hot_reload: p.hot_reload.unwrap_or(false),
+                events: Vec::new(),
             },
         );
         Ok(json!({
@@ -476,7 +517,9 @@ impl PlayService {
         }))
     }
 
-    fn restart(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
+    /// Restarts a world in fresh players from its start snapshot, or from `resume`
+    /// (a portable snapshot of a later tick: C# L4 restarts keep the game state).
+    fn restart(&mut self, id: &str, resume: Option<&str>) -> Result<Value, Vec<Diagnostic>> {
         let world = self
             .worlds
             .remove(id)
@@ -507,7 +550,7 @@ impl PlayService {
             ..
         } = world;
         drop(players);
-        let (players, started) = self.launch(&roles, window, &snapshot, start_paused)?;
+        let (players, started) = self.launch(&roles, window, &snapshot, start_paused, resume)?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.to_owned(),
@@ -520,6 +563,7 @@ impl PlayService {
                 start_paused,
                 fault: None,
                 hot_reload,
+                events: Vec::new(),
             },
         );
         Ok(json!({"world": id, "bootMs": boot_ms, "players": started}))
@@ -634,8 +678,10 @@ fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         if path.is_dir() {
+            // C# module folders hold generated types the player's host registers itself.
             if !(name.starts_with('.') || name == "target" || name == "node_modules")
                 && !(path != root && path.join("ara.project.json").exists())
+                && !path.join("ara.module.toml").exists()
             {
                 types_files(root, &path, out);
             }
@@ -675,9 +721,16 @@ impl Service for PlayService {
             play(Method::new::<PlayFileParams>(db, "play.replay", "Verify a replay file tick by tick in this world."), "replay"),
             play(Method::new::<WorldParams>(db, "play.diff", "Field-level differences between play and the start documents.").read_only(), "diff"),
             play(Method::new::<PlayKeepParams>(db, "play.keep", "Keep play changes: one typed-command transaction on the scene (driven values skipped unless asked)."), "keep"),
-            play(Method::new::<WorldParams>(db, "play.restart", "Restart a (faulted) world from the same snapshot in fresh players."), "restart"),
+            play(Method::new::<PlayRestartParams>(db, "play.restart", "Restart a (faulted) world in fresh players from the same snapshot, or from the current tick with keepState."), "restart"),
             play(Method::new::<PlayCrashParams>(db, "play.debug.crash", "Test fault isolation: make the player panic, raise an access violation or hang.").destructive(), "crash"),
             play(Method::new::<PlayPoolParams>(db, "play.pool", "Set how many headless/windowed players stay warm."), "pool"),
+            play(Method::new::<PlayCommandParams>(db, "play.command", "Run a C# [Command] (game.UseMedkit) in the running world between ticks; returns its effects."), "command"),
+            play(Method::new::<WorldParams>(db, "play.commands", "The running world's C# command catalog (params schemas, examples; scope play).").read_only(), "commands"),
+            play(Method::new::<WorldParams>(db, "play.events", "C# reload reports and module diagnostics since the last call.").read_only(), "events"),
+            play(Method::new::<PlayCaptureAudioParams>(db, "play.captureAudio", "Render the world's sound offline (sources at their poses, the listener at the camera) to a WAV with loudness, peak and spectrum analysis.").read_only(), "captureAudio"),
+            Method::new::<ScriptWriteParams>(db, "script.write", "Write a C# module source; agent writes are claimed by running players first and reload at a tick boundary (D20 policy).")
+                .scope(Scope::EditCode)
+                .action("ara_play", "write"),
             Method::new::<PlayStatusParams>(db, "play.status", "Pool readiness, worlds, player heartbeats and faults.").read_only().action("ara_play", "status"),
             Method::new::<TestRunParams>(db, "test.run", "Run a playtest (inputs, steps, tick-level assertions) in a fresh headless player; optionally twice for determinism.")
                 .scope(Scope::Play)
@@ -700,10 +753,32 @@ impl Service for PlayService {
         match method {
             "play.start" => {
                 let p: PlayStartParams = parse(params)?;
-                self.start(cx, p)
+                let result = self.start(cx, p);
+                if let Ok(started) = &result
+                    && let Some(id) = started["world"].as_str()
+                {
+                    self.publish_commands(cx, id);
+                }
+                self.with_notes(cx, result)
             }
-            "play.stop" => self.stop(&world_of(&params)),
-            "play.restart" => self.restart(&world_of(&params)),
+            "play.stop" => {
+                let result = self.stop(&world_of(&params));
+                if let Some(id) = self.latest() {
+                    self.publish_commands(cx, &id);
+                } else {
+                    cx.publish_commands("play", &Value::Null);
+                }
+                result
+            }
+            "play.restart" => {
+                let p: PlayRestartParams = parse(params)?;
+                let id = p.world.unwrap_or_else(|| latest.clone());
+                if p.keep_state.unwrap_or(false) {
+                    self.resume(&id)
+                } else {
+                    self.restart(&id, None)
+                }
+            }
             "play.status" => Ok(self.status()),
             "play.pool" => {
                 let p: PlayPoolParams = parse(params)?;
@@ -717,9 +792,18 @@ impl Service for PlayService {
                 let p: PlayKeepParams = parse(params)?;
                 self.keep(cx, p)
             }
+            "script.write" => {
+                let p: ScriptWriteParams = parse(params)?;
+                self.script_write(cx, p)
+            }
+            "play.events" => {
+                let world = self.world(&world_of(&params))?;
+                Ok(json!({"events": std::mem::take(&mut world.events)}))
+            }
             "test.run" => {
                 let p: TestRunParams = parse(params)?;
-                self.test(cx, p)
+                let result = self.test(cx, p);
+                self.with_notes(cx, result)
             }
             _ => {
                 let id = world_of(&params);
@@ -733,7 +817,9 @@ impl Service for PlayService {
                     | "play.patch" | "play.step" => (method, true),
                     "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
                     | "play.record" | "play.recording" | "play.replay" | "play.diff"
-                    | "play.debug.crash" => (method, false),
+                    | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
+                    // C# commands mutate the world: every player of it runs them.
+                    "play.command" => (method, true),
                     other => {
                         return Err(fail(
                             codes::REQUEST,
@@ -793,6 +879,15 @@ impl Service for PlayService {
                 ),
             );
         }
+        for id in self.drain_events(cx) {
+            match self.resume(&id) {
+                Ok(_) => cx.log(Diagnostic::info(
+                    codes::PLAY,
+                    format!("{id}: engine bindings changed; restarted from the current tick"),
+                )),
+                Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
+            }
+        }
         let playing = !self.worlds.is_empty();
         let allow = self.worlds.values().any(|w| w.hot_reload);
         if let Ok(assets) = self.assets() {
@@ -820,7 +915,14 @@ impl Service for PlayService {
     }
 }
 
-/// Every engine component the runtime understands, for the host's Schema DB.
-pub fn register_engine_schemas(db: &mut SchemaDb) {
-    ara_runtime::components::register_schemas(db);
+/// Opens a project with the engine schema world and authoring commands registered
+/// first (`ara_runtime::engine`): engine document kinds (`.animation`, `.terrain`,
+/// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
+/// editor) validates documents exactly as its players do. Clashes become diagnostics.
+pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
+    ara_host::Project::open_with(root, |db, registry| {
+        let problems = ara_runtime::engine::register_schemas(db);
+        ara_runtime::engine::register_commands(registry, db);
+        problems
+    })
 }

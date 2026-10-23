@@ -132,7 +132,7 @@ fn sample(editor: &mut Editor) -> ara_ui::Result<()> {
             [0.4, 0.3, 0.14, 1.],
         ),
     ] {
-        commands.push(json!({"cmd":"entity.create","args":{"name":name,"components":{"Transform":{"position":position,"scale":scale},"MeshRenderer":{"tint":tint}}}}));
+        commands.push(json!({"cmd":"entity.create","args":{"name":name,"components":{"Transform":{"position":position,"scale":scale},"MeshRenderer":{"color":tint}}}}));
     }
     editor.apply(commands, "Create sample Outpost scene", None)?;
     editor.host.flush();

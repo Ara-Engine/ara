@@ -1,27 +1,32 @@
 //! Skeletal animation in the fixed tick. Each entity with an `Animator` and a skinned
 //! `MeshRenderer.model` owns an [`AnimatorSlot`]: an ara-anim animator running a
-//! compiled [`Program`] (idle state + speed-driven 1D blend tree). Animator state is
+//! compiled [`Program`]: the `.animation` controller of `Animator.controller`
+//! ([`crate::controller`]: state machines, blend trees, motion matching), else the
+//! built-in idle state + speed-driven 1D blend tree. A float `speed` parameter, when
+//! present, follows ground speed. Animator and motion-matching predictor state are
 //! captured into snapshots by [`AnimationProvider`]; poses become skinning palettes
 //! only in presentation.
 use crate::{
     Result, RuntimeError,
     assets::{Models, asset_id},
     components::{Animator, MeshRenderer},
+    controller::{Documents, MatchProgram, MatchSnapshot, MatchState},
     model::Model,
     skin::{Skin, TICKS_PER_SECOND},
 };
 use ara_anim::{
     CompressionSettings, Controller, CookedClip, RootMotion,
-    glam::Mat4,
+    glam::{Mat4, Vec3},
     graph::{
         BlendSample, Comparison, Condition, ControllerData, Node, NodeKind, Parameter, ParameterId,
         ParameterKind, ParameterValue, State, Transition,
     },
 };
+use ara_components::Transform;
 use ara_nav::NavAgentState;
 use ara_physics::Velocity;
 use ara_schema::AssetRef;
-use ara_sim::{Identity, SimError, StateProvider};
+use ara_sim::{Identity, SimContext, SimError, StateProvider};
 use bevy_ecs::prelude::*;
 use serde_json::Value;
 use std::{any::TypeId, collections::BTreeMap, sync::Arc};
@@ -34,8 +39,10 @@ pub struct Program {
     pub skin: usize,
     /// Immutable ara-anim program.
     pub controller: Controller,
-    /// The `speed` float parameter.
-    pub speed: ParameterId,
+    /// The `speed` float parameter, when the controller has one.
+    pub speed: Option<ParameterId>,
+    /// Motion matching, when the controller has a motion-matching node.
+    pub matching: Option<MatchProgram>,
 }
 
 impl Program {
@@ -50,6 +57,8 @@ impl Program {
 pub struct Library {
     /// Live model generations by asset ID.
     pub models: Models,
+    /// The project's `.animation` records (controllers, clips, motion databases).
+    pub documents: Documents,
     programs: BTreeMap<String, Arc<Program>>,
 }
 
@@ -70,7 +79,19 @@ impl Library {
         if let Some(program) = self.programs.get(&key) {
             return Ok(Arc::clone(program));
         }
-        let program = Arc::new(compile(model, animator, hz)?);
+        let program = Arc::new(match &animator.controller {
+            Some(reference) => {
+                let compiled = crate::controller::compile(model, &self.documents, reference, hz)?;
+                Program {
+                    model: Arc::clone(model),
+                    skin: 0,
+                    speed: compiled.controller.parameter("speed"),
+                    controller: compiled.controller,
+                    matching: compiled.matching,
+                }
+            }
+            None => compile(model, animator, hz)?,
+        });
         self.programs.insert(key, Arc::clone(&program));
         Ok(program)
     }
@@ -96,17 +117,33 @@ pub struct AnimatorSlot {
     pub root: RootMotion,
     /// First runtime failure; the slot stops advancing until restored.
     pub fault: Option<String>,
+    /// Motion-matching predictor and feature scratch.
+    pub matching: Option<MatchState>,
 }
 
 impl AnimatorSlot {
-    fn new(program: Arc<Program>) -> Result<Self> {
+    fn new(program: Arc<Program>, transform: Option<&Transform>) -> Result<Self> {
         let animator = ara_anim::Animator::new(&program.controller, &program.skin().skeleton)
             .map_err(|e| RuntimeError(e.0))?;
+        let (position, yaw) = transform.map_or((Vec3::ZERO, 0.0), |t| {
+            (Vec3::from_array(t.position), t.rotation[1].to_radians())
+        });
+        let matching = match &program.matching {
+            Some(m) => Some(MatchState::new(
+                m,
+                program.skin(),
+                &animator,
+                position,
+                yaw,
+            )?),
+            None => None,
+        };
         Ok(Self {
             program,
             animator,
             root: RootMotion::default(),
             fault: None,
+            matching,
         })
     }
 
@@ -271,14 +308,12 @@ fn compile(model: &Arc<Model>, animator: &Animator, hz: u32) -> Result<Program> 
     }
     let controller =
         Controller::compile(&data, &skin.skeleton, bindings).map_err(|e| RuntimeError(e.0))?;
-    let speed = controller
-        .parameter("speed")
-        .ok_or_else(|| RuntimeError("compiled program lost its speed parameter".into()))?;
     Ok(Program {
         model: Arc::clone(model),
         skin: 0,
+        speed: controller.parameter("speed"),
         controller,
-        speed,
+        matching: None,
     })
 }
 
@@ -286,14 +321,21 @@ fn compile(model: &Arc<Model>, animator: &Animator, hz: u32) -> Result<Program> 
 /// Entities whose model is not loaded or has no skin are skipped.
 pub fn ensure_slots(world: &mut World, hz: u32) -> Result<()> {
     let mut wanted = Vec::new();
-    let mut query =
-        world.query_filtered::<(Entity, &Animator, &MeshRenderer), Without<AnimatorSlot>>();
-    for (entity, animator, renderer) in query.iter(world) {
+    let mut query = world.query_filtered::<
+        (Entity, &Animator, &MeshRenderer, Option<&Transform>),
+        Without<AnimatorSlot>,
+    >();
+    for (entity, animator, renderer, transform) in query.iter(world) {
         if let Some(model) = &renderer.model {
-            wanted.push((entity, animator.clone(), asset_id(model)?.to_owned()));
+            wanted.push((
+                entity,
+                animator.clone(),
+                asset_id(model)?.to_owned(),
+                transform.copied(),
+            ));
         }
     }
-    for (entity, animator, asset) in wanted {
+    for (entity, animator, asset, transform) in wanted {
         let program = {
             let mut library = world.resource_mut::<Library>();
             let Some(model) = library.models.get(&asset).cloned() else {
@@ -304,7 +346,7 @@ pub fn ensure_slots(world: &mut World, hz: u32) -> Result<()> {
             }
             library.program(&model, &animator, hz)?
         };
-        let slot = AnimatorSlot::new(program)?;
+        let slot = AnimatorSlot::new(program, transform.as_ref())?;
         world.entity_mut(entity).insert(slot);
     }
     Ok(())
@@ -313,7 +355,11 @@ pub fn ensure_slots(world: &mut World, hz: u32) -> Result<()> {
 /// Fixed-tick animation: sets `speed` from the entity's ground velocity (navigation
 /// state when present, else physics velocity) and advances one tick, keeping the
 /// extracted root displacement. Entities are independent, so order is irrelevant.
-pub fn animate(mut query: Query<(&mut AnimatorSlot, Option<&Velocity>, Option<&NavAgentState>)>) {
+pub fn animate(
+    context: Res<SimContext>,
+    mut query: Query<(&mut AnimatorSlot, Option<&Velocity>, Option<&NavAgentState>)>,
+) {
+    let dt = context.dt() as f32;
     for (mut slot, velocity, nav) in &mut query {
         if slot.fault.is_some() {
             continue;
@@ -324,15 +370,29 @@ pub fn animate(mut query: Query<(&mut AnimatorSlot, Option<&Velocity>, Option<&N
             .unwrap_or_default();
         let speed = (v[0] * v[0] + v[2] * v[2]).sqrt();
         let slot = &mut *slot;
-        let result = slot
-            .animator
-            .set(slot.program.speed, ParameterValue::Float(speed))
+        let program = &*slot.program;
+        let result = program
+            .speed
+            .map_or(Ok(()), |id| {
+                slot.animator.set(id, ParameterValue::Float(speed))
+            })
+            .and_then(|()| match (&mut slot.matching, &program.matching) {
+                (Some(state), Some(matching)) => state.query(
+                    matching,
+                    program.skin(),
+                    &mut slot.animator,
+                    Vec3::from_array(v),
+                    dt,
+                ),
+                _ => Ok(()),
+            })
             .and_then(|()| {
-                slot.animator.tick(
-                    &slot.program.controller,
-                    &slot.program.skin().skeleton,
-                    |_| {},
-                )
+                slot.animator
+                    .tick(&program.controller, &program.skin().skeleton, |_| {})
+            })
+            .and_then(|root| match &mut slot.matching {
+                Some(state) => state.observe(slot.animator.pose()).map(|()| root),
+                None => Ok(root),
             });
         match result {
             Ok(root) => slot.root = root,
@@ -362,6 +422,7 @@ impl StateProvider for AnimationProvider {
                 rows.push((
                     id.0.clone(),
                     serde_json::to_value(slot.animator.snapshot())?,
+                    serde_json::to_value(slot.matching.as_ref().map(MatchState::snapshot))?,
                 ));
             }
         }
@@ -370,22 +431,30 @@ impl StateProvider for AnimationProvider {
     }
     fn restore(&self, world: &mut World, state: &Value) -> std::result::Result<(), SimError> {
         ensure_slots(world, self.hz).map_err(|e| SimError(e.0))?;
-        let rows: BTreeMap<String, ara_anim::Snapshot> =
-            serde_json::from_value::<Vec<(String, ara_anim::Snapshot)>>(state.clone())?
+        type Row = (String, ara_anim::Snapshot, Option<MatchSnapshot>);
+        let rows: BTreeMap<String, (ara_anim::Snapshot, Option<MatchSnapshot>)> =
+            serde_json::from_value::<Vec<Row>>(state.clone())?
                 .into_iter()
+                .map(|(id, snapshot, predictor)| (id, (snapshot, predictor)))
                 .collect();
         let mut query = world.query::<(&Identity, &mut AnimatorSlot)>();
         for (id, mut slot) in query.iter_mut(world) {
             let slot = &mut *slot;
             match rows.get(&id.0) {
-                Some(snapshot) => slot
-                    .animator
-                    .restore(
-                        &slot.program.controller,
-                        &slot.program.skin().skeleton,
-                        snapshot,
-                    )
-                    .map_err(|e| SimError(format!("animator {}: {}", id.0, e.0)))?,
+                Some((snapshot, predictor)) => {
+                    slot.animator
+                        .restore(
+                            &slot.program.controller,
+                            &slot.program.skin().skeleton,
+                            snapshot,
+                        )
+                        .map_err(|e| SimError(format!("animator {}: {}", id.0, e.0)))?;
+                    if let (Some(state), Some(saved)) = (&mut slot.matching, predictor) {
+                        state
+                            .restore(saved)
+                            .map_err(|e| SimError(format!("animator {}: {}", id.0, e.0)))?;
+                    }
+                }
                 None => {
                     slot.animator = ara_anim::Animator::new(
                         &slot.program.controller,

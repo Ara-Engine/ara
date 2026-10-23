@@ -24,6 +24,23 @@ pub struct SceneMetadata {
     pub order: String,
 }
 
+/// One projected value of an external component ([`SimRegistry::register_external`]):
+/// `value` is the complete (defaults materialized) value, `None` when removed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternalWrite {
+    /// The entity the value belongs to.
+    pub entity: Entity,
+    /// Component schema name.
+    pub component: String,
+    /// The new value, or `None` when the component was removed.
+    pub value: Option<Value>,
+}
+
+/// Projected external-component values not yet applied by their owner. The owner
+/// drains it before its systems run in the same tick (and once after setup).
+#[derive(Resource, Debug, Default)]
+pub struct ExternalWrites(pub Vec<ExternalWrite>);
+
 /// A document's ECS projection, updated by committed ops without rebuilding entities.
 pub struct EditWorld {
     pub(crate) world: World,
@@ -50,10 +67,21 @@ impl EditWorld {
         workspace: Workspace,
         scene: AssetId,
     ) -> Result<Self> {
+        Self::from_workspace_in(World::new(), registry, workspace, scene)
+    }
+
+    /// Like [`EditWorld::from_workspace`], projecting into a prepared `world` (one
+    /// that already hosts an external runtime's components, such as C# modules).
+    pub fn from_workspace_in(
+        mut world: World,
+        registry: SimRegistry,
+        workspace: Workspace,
+        scene: AssetId,
+    ) -> Result<Self> {
         if workspace.doc(scene.as_str()).is_none() {
             return Err(SimError("scene is not loaded".into()));
         }
-        let mut world = World::new();
+        world.init_resource::<ExternalWrites>();
         let ids = registry.install(&mut world);
         let mut this = Self {
             world,
@@ -278,6 +306,27 @@ impl EditWorld {
                         .write(&mut self.world, &self.ids, entity, name, value)?;
                 } else {
                     self.world.entity_mut(entity).remove_by_id(component_id);
+                }
+            }
+            for name in &self.registry.external {
+                let old = previous.and_then(|row| row.record.get(name));
+                let new = row.record.get(name);
+                if old != new {
+                    let value = new.map(|v| {
+                        crate::dynamic::materialize(
+                            &self.registry.schema,
+                            &ara_schema::ValueType::Named(name.clone()),
+                            v,
+                        )
+                    });
+                    self.world
+                        .resource_mut::<ExternalWrites>()
+                        .0
+                        .push(ExternalWrite {
+                            entity,
+                            component: name.clone(),
+                            value,
+                        });
                 }
             }
             self.world.entity_mut(entity).insert(metadata(row));

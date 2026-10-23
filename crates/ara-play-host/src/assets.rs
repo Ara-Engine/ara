@@ -3,10 +3,15 @@
 //! Play pins the published generation of each asset (`as_…` → action digest); players
 //! load those from the shared content-addressed cache and never import.
 //! Generations published during Play reach players only when allowed or approved.
+//! A sidecar recorded by an older importer is upgraded (one typed
+//! `SidecarCommand::Version` transaction, an info diagnostic) and reimported; only an
+//! importer older than the sidecar's, or a failed import, is an error.
 use ara_asset::{
-    AssetChanged, AssetPipeline, FileCache, ProcessWorker, ReloadEvent, Sidecar, SourceAsset,
-    TargetPlatform,
+    AssetChanged, AssetPipeline, FileCache, ProcessWorker, ReloadEvent, Sidecar, SidecarCommand,
+    SourceAsset, TargetPlatform, VersionCheck,
 };
+use ara_diag::Diagnostic;
+use ara_schema::SchemaDb;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -19,6 +24,7 @@ pub struct Assets {
     pipeline: AssetPipeline,
     sources: BTreeSet<String>,
     failures: BTreeMap<String, String>,
+    notes: Vec<Diagnostic>,
     /// Cache directory shared with players.
     pub cache: PathBuf,
 }
@@ -61,18 +67,49 @@ impl Assets {
         let mut files = Vec::new();
         sidecars(root, root, &mut files);
         files.sort();
+        // An older worker without the query keeps every recorded version.
+        let installed = ProcessWorker::new(worker).versions().unwrap_or_default();
         let mut sources = BTreeSet::new();
+        let mut failures = BTreeMap::new();
+        let mut notes = Vec::new();
         for file in files {
             let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
             let sidecar = Sidecar::read(&text, &file.to_string_lossy(), &schema)
                 .map_err(|e| e.to_string())?;
-            let settings = sidecar.settings().map_err(|e| e.to_string())?;
+            let mut settings = sidecar.settings().map_err(|e| e.to_string())?;
             let rel = file
                 .strip_prefix(root)
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .replace('\\', "/");
             let id = sidecar.document().id.to_string();
+            if let Some(version) = installed.get(&settings.importer) {
+                match settings.check_version(version) {
+                    VersionCheck::Current => {}
+                    VersionCheck::Upgrade => {
+                        upgrade(&file, sidecar, version, &schema)?;
+                        notes.push(Diagnostic::info(
+                            crate::codes::ASSET_UPGRADED,
+                            format!(
+                                "{rel} was imported with {} {}; reimporting with {version} and recording it",
+                                settings.importer, settings.version
+                            ),
+                        ));
+                        settings.version = version.clone();
+                    }
+                    VersionCheck::Newer => {
+                        failures.insert(
+                            id.clone(),
+                            format!(
+                                "{rel} needs {} {}, newer than this engine's {version}; update the engine",
+                                settings.importer, settings.version
+                            ),
+                        );
+                        sources.insert(id);
+                        continue;
+                    }
+                }
+            }
             pipeline
                 .register(SourceAsset {
                     preset: settings.preset,
@@ -98,9 +135,15 @@ impl Assets {
         Ok(Self {
             pipeline,
             sources,
-            failures: BTreeMap::new(),
+            failures,
+            notes,
             cache: cache_dir,
         })
+    }
+
+    /// Info diagnostics (importer upgrades) not yet reported.
+    pub fn take_notes(&mut self) -> Vec<Diagnostic> {
+        std::mem::take(&mut self.notes)
     }
 
     /// Drains import events and publishes ready generations. `playing` blocks
@@ -168,4 +211,29 @@ impl Assets {
     pub fn importing(&self) -> bool {
         self.pipeline.is_importing()
     }
+}
+
+/// Records the installed importer `version` in the sidecar at `file`: one typed
+/// `SidecarCommand::Version` transaction, persisted through the canonical writer.
+fn upgrade(file: &Path, sidecar: Sidecar, version: &str, schema: &SchemaDb) -> Result<(), String> {
+    let id = sidecar.document().id.clone();
+    let mut workspace = ara_doc::Workspace::new(ara_doc::AssetIndex::new());
+    workspace.insert(file.to_string_lossy(), sidecar.into_document());
+    let mut store = ara_ops::Store::new(schema.clone(), workspace);
+    let mut meta = ara_ops::TxnMeta::by(ara_ops::Author::Agent("ara.assets".into()));
+    meta.why = Some(format!("Importer upgraded to {version}"));
+    let edit = SidecarCommand::Version(version.to_owned())
+        .edit(id.clone())
+        .map_err(|e| e.to_string())?;
+    store.transact(meta, vec![edit]).map_err(|d| {
+        d.iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    })?;
+    let doc = store
+        .workspace()
+        .doc(id.as_str())
+        .ok_or_else(|| format!("{} vanished during the upgrade", file.display()))?;
+    std::fs::write(file, ara_doc::write(doc, store.schema())).map_err(|e| e.to_string())
 }

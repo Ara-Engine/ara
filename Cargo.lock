@@ -395,6 +395,7 @@ dependencies = [
 name = "ara"
 version = "0.0.0"
 dependencies = [
+ "ara-audio-why",
  "ara-diag",
  "ara-doc",
  "ara-host",
@@ -425,6 +426,23 @@ dependencies = [
  "ara-sim",
  "bevy_ecs",
  "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-acoustics"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-json",
+ "ara-physics",
+ "ara-schema",
+ "bevy_ecs",
+ "blake3",
+ "libloading 0.9.0",
+ "rtrb",
  "serde",
  "serde_json",
 ]
@@ -508,6 +526,7 @@ dependencies = [
 name = "ara-audio"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "ara-opus-sys",
  "ara-profile",
@@ -526,6 +545,47 @@ dependencies = [
  "symphonia",
  "thiserror 2.0.21",
  "windows",
+]
+
+[[package]]
+name = "ara-audio-graph"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "blake3",
+ "rtrb",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-mix"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-why"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-why",
+ "serde_json",
 ]
 
 [[package]]
@@ -613,6 +673,7 @@ dependencies = [
  "accesskit 0.25.1",
  "accesskit_windows 0.35.1",
  "anyhow",
+ "ara-audio-why",
  "ara-cmd",
  "ara-components",
  "ara-diag",
@@ -629,6 +690,8 @@ dependencies = [
  "ara-render",
  "ara-render-fidelity",
  "ara-rpc",
+ "ara-runtime",
+ "ara-runtime-render",
  "ara-schema",
  "ara-ui",
  "ara-ui-render",
@@ -778,8 +841,11 @@ version = "0.0.0"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
+ "ara-audio",
  "ara-doc",
+ "ara-import2d",
  "ara-importers",
+ "ara-json",
  "ara-schema",
  "gltf",
  "image",
@@ -944,6 +1010,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-music"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-nav"
 version = "0.0.0"
 dependencies = [
@@ -1068,6 +1147,7 @@ dependencies = [
  "ara-physics",
  "ara-schema",
  "bevy_ecs",
+ "bevy_tasks",
  "glam 0.33.12",
  "serde_json",
 ]
@@ -1124,6 +1204,7 @@ dependencies = [
  "ara-doc",
  "ara-host",
  "ara-json",
+ "ara-ops",
  "ara-play",
  "ara-proto",
  "ara-runtime",
@@ -1138,17 +1219,24 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-asset",
+ "ara-audio",
  "ara-doc",
  "ara-gpu",
  "ara-host",
+ "ara-import2d",
  "ara-input",
+ "ara-json",
  "ara-mcp",
+ "ara-ops",
  "ara-platform",
  "ara-play",
  "ara-play-host",
  "ara-render",
  "ara-runtime",
+ "ara-runtime-audio",
  "ara-runtime-render",
+ "ara-runtime-script",
+ "ara-schema",
  "ara-sim",
  "clap",
  "glam 0.34.1",
@@ -1270,20 +1358,36 @@ dependencies = [
 name = "ara-runtime"
 version = "0.0.0"
 dependencies = [
+ "ara-2d",
+ "ara-acoustics",
  "ara-anim",
  "ara-asset",
  "ara-asset-format",
+ "ara-audio",
+ "ara-audio-graph",
+ "ara-audio-mix",
+ "ara-cmd",
  "ara-components",
+ "ara-diag",
  "ara-doc",
+ "ara-foliage",
  "ara-importers",
  "ara-input",
  "ara-json",
+ "ara-l10n",
+ "ara-material",
+ "ara-music",
  "ara-nav",
  "ara-ops",
  "ara-physics",
  "ara-physics-jolt",
+ "ara-physics2d",
+ "ara-save",
  "ara-schema",
  "ara-sim",
+ "ara-terrain",
+ "ara-vfx",
+ "ara-world",
  "bevy_ecs",
  "bytemuck",
  "glam 0.34.1",
@@ -1292,22 +1396,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-runtime-audio"
+version = "0.0.0"
+dependencies = [
+ "ara-acoustics",
+ "ara-audio",
+ "ara-audio-mix",
+ "ara-diag",
+ "ara-doc",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-runtime",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-runtime-render"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-2d",
  "ara-asset",
  "ara-asset-format",
  "ara-doc",
  "ara-importers",
  "ara-input",
  "ara-render",
+ "ara-render2d",
  "ara-runtime",
+ "ara-schema",
  "ara-sim",
+ "ara-vfx",
+ "ara-vfx-gpu",
+ "bevy_ecs",
  "glam 0.30.9",
  "glam 0.34.1",
  "serde_json",
  "texture2ddecoder",
+]
+
+[[package]]
+name = "ara-runtime-script"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-diag",
+ "ara-runtime",
+ "ara-schema",
+ "ara-script",
+ "ara-sim",
+ "bevy_ecs",
+ "serde_json",
 ]
 
 [[package]]

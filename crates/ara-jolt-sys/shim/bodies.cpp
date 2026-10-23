@@ -2,9 +2,11 @@
 
 extern "C" {
 uint32_t ara_bodies_create(AraWorld* w, const AraBodyDesc* descs, uint32_t count, uint32_t* out) {
-    std::vector<BodyID> batch;
+    std::vector<BodyID>* allocated = nullptr;
     try {
         require(w && (!count || (descs && out)), "null body batch");
+        auto& batch = w->body_batch;
+        batch.clear(); allocated = &batch;
         auto& bi = w->system.GetBodyInterfaceNoLock();
         require(count<=w->system.GetMaxBodies()-w->system.GetNumBodies(),"body capacity exhausted");
         // Validate the complete batch before allocating any native object.
@@ -37,10 +39,10 @@ uint32_t ara_bodies_create(AraWorld* w, const AraBodyDesc* descs, uint32_t count
         }
         return 1;
     } catch (const std::exception& e) {
-        if (w) for (auto id : batch) w->system.GetBodyInterfaceNoLock().DestroyBody(id);
+        if (w && allocated) for (auto id : *allocated) w->system.GetBodyInterfaceNoLock().DestroyBody(id);
         set_error(e.what()); return 0;
     } catch (...) {
-        if (w) for (auto id : batch) w->system.GetBodyInterfaceNoLock().DestroyBody(id);
+        if (w && allocated) for (auto id : *allocated) w->system.GetBodyInterfaceNoLock().DestroyBody(id);
         set_error("body creation exception"); return 0;
     }
 }
@@ -53,6 +55,29 @@ uint32_t ara_body_destroy(AraWorld* w, uint32_t id) {
         bi.RemoveBody(BodyID(id)); bi.DestroyBody(BodyID(id)); ++w->structure; return 1;
     } ARA_CATCH(0)
 }
+uint32_t ara_bodies_destroy(AraWorld* w, const uint32_t* ids, uint32_t count) {
+    try {
+        require(w && (!count || ids), "null removal batch");
+        auto& batch = w->body_batch;
+        batch.clear(); batch.reserve(count);
+        for (uint32_t i=0; i<count; ++i) {
+            w->body(ids[i]);
+            require(!w->has_joint(ids[i]), "remove attached joints before destroying a body");
+            for (const auto& v : w->vehicles)
+                require(v.constraint == nullptr || v.chassis.GetIndexAndSequenceNumber() != ids[i], "destroy vehicle through vehicle API");
+            batch.emplace_back(ids[i]);
+        }
+        std::sort(batch.begin(), batch.end(), [](BodyID a, BodyID b) { return a.GetIndexAndSequenceNumber() < b.GetIndexAndSequenceNumber(); });
+        require(std::adjacent_find(batch.begin(), batch.end()) == batch.end(), "duplicate removal handle");
+        if (count) {
+            auto& bi = w->system.GetBodyInterfaceNoLock();
+            bi.RemoveBodies(batch.data(), int(count));
+            bi.DestroyBodies(batch.data(), int(count));
+            w->structure += count;
+        }
+        return 1;
+    } ARA_CATCH(0)
+}
 uint32_t ara_bodies_read(const AraWorld* w, const uint32_t* ids, uint32_t count, AraBodyState* out) {
     try {
         require(w && (!count || (ids && out)), "null extraction buffer");
@@ -61,6 +86,20 @@ uint32_t ara_bodies_read(const AraWorld* w, const uint32_t* ids, uint32_t count,
             auto* b = w->find(ids[i]);
             out[i] = {ids[i], uint32_t(b->IsActive()), a3(Vec3(b->GetPosition())), aq(b->GetRotation()),
                       a3(b->GetLinearVelocity()), a3(b->GetAngularVelocity())};
+        }
+        return 1;
+    } ARA_CATCH(0)
+}
+uint32_t ara_bodies_read_columns(const AraWorld* w, const uint32_t* ids, uint32_t count,
+    AraVec3* positions, AraQuat* rotations, AraVec3* linear, AraVec3* angular, uint32_t* active) {
+    try {
+        require(w && (!count || (ids && positions && rotations && linear && angular && active)), "null extraction columns");
+        for (uint32_t i=0; i<count; ++i) require(w->find(ids[i]), "stale body handle");
+        for (uint32_t i=0; i<count; ++i) {
+            auto* b = w->find(ids[i]);
+            positions[i] = a3(Vec3(b->GetPosition())); rotations[i] = aq(b->GetRotation());
+            linear[i] = a3(b->GetLinearVelocity()); angular[i] = a3(b->GetAngularVelocity());
+            active[i] = uint32_t(b->IsActive());
         }
         return 1;
     } ARA_CATCH(0)

@@ -303,11 +303,13 @@ impl Spatializer for SteamSpatializer {
             samples: QUANTUM as i32,
             data: output_channels.as_mut_ptr(),
         };
+        // Occlusion | transmission, plus air absorption (flag 2) when the path carries it.
+        let air_flag = if path.air == [1.0; 3] { 0 } else { 2 };
         let mut direct = DirectParams {
-            flags: 8 | 16,
+            flags: 8 | 16 | air_flag,
             transmission_type: 1,
             distance: 1.0,
-            air: [1.0; 3],
+            air: path.air,
             directivity: 1.0,
             occlusion: path.visibility,
             transmission: path.transmission,

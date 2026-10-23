@@ -1,0 +1,40 @@
+diff --git a/crates/ara-physics/src/ecs.rs b/crates/ara-physics/src/ecs.rs
+index 5826346..8acb6a5 100644
+--- a/crates/ara-physics/src/ecs.rs
++++ b/crates/ara-physics/src/ecs.rs
+@@ -219,9 +219,9 @@ fn run<B: PhysicsBackend>(
+     let start = std::time::Instant::now();
+     r.commands.clear();
+     r.bodies.clear();
+-    // synchronize establishes one binding per sorted row. Walk both ordered
+-    // collections together instead of doing a tree lookup for every column.
+-    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values()) {
++    // Benchmark control: retain the same row order, restoring per-row lookups.
++    for &(id, e) in &r.rows {
++        let b = &r.bindings[&id];
+         if let Some(body) = b.body() {
+             let pose = world.get::<PhysicsPose>(e).copied().unwrap_or_default();
+             let velocity = world.get::<Velocity>(e).copied().unwrap_or_default();
+@@ -251,7 +251,8 @@ fn run<B: PhysicsBackend>(
+         queue.bodies.clear();
+         Ok(())
+     })?;
+-    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values()) {
++    for &(id, e) in &r.rows {
++        let b = &r.bindings[&id];
+         if let Some(c) = b.character {
+             physics.step_character(
+                 c,
+@@ -295,7 +296,11 @@ fn writeback<B: PhysicsBackend>(
+     #[cfg(feature = "bench")]
+     let start = std::time::Instant::now();
+     let mut index = 0;
+-    for (&(_, e), b) in r.rows.iter().zip(r.bindings.values_mut()) {
++    for &(id, e) in &r.rows {
++        let b = r
++            .bindings
++            .get_mut(&id)
++            .expect("synchronize established every binding");
+         if b.body().is_some() {
+             let (pose, velocity) = r
+                 .columns

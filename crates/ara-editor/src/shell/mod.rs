@@ -489,7 +489,8 @@ impl Shell {
             .apply(&mut self.ui.display, true, self.reduce_motion);
         Ok(())
     }
-    fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
+    /// Scrolls the inspector to the field at `path` (`Transform.position.x`) and focuses it.
+    pub(crate) fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
         let (path, axis) = path
             .rsplit_once('.')
             .and_then(|(base, axis)| {

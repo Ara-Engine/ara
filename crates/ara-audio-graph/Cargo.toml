@@ -1,0 +1,26 @@
+[package]
+name = "ara-audio-graph"
+description = "Procedural audio graphs: text DSL, ara-graph projection, typed commands and a flat allocation-free DSP program."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-audio = { path = "../ara-audio" }
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-graph = { path = "../ara-graph" }
+ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
+blake3 = "1"
+rtrb = "0.4"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ara-ops = { path = "../ara-ops" }
+
+[lints]
+workspace = true

@@ -31,7 +31,10 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
             return Ok(Box::new(c));
         }
         match Host::open(crate::project::load(root)?, HostConfig::default()) {
-            Ok(h) => return Ok(Box::new(h)),
+            Ok(mut h) => {
+                ara_audio_why::register(h.why());
+                return Ok(Box::new(h));
+            }
             Err(d) if d.code == codes::DAEMON_RUNNING && start.elapsed() < LOCK_WAIT => {
                 thread::sleep(Duration::from_millis(50));
             }

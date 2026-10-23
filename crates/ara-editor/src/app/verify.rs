@@ -61,6 +61,8 @@ impl Verification {
             }
             2 => {
                 let id = "edit-Transform-position-0";
+                // Engine components (MeshRenderer) can push Transform below the fold.
+                shell.reveal_field("Transform.position.x")?;
                 shell.click(id, &mut clipboard)?;
                 shell.event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)?;
                 shell.event(

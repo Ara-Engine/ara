@@ -485,3 +485,13 @@ fn real_khronos_scenes_are_deterministic_and_cacheable() {
         assert!(count(ArtifactKind::Texture) > 0);
     }
 }
+
+#[test]
+fn worker_reports_installed_importer_versions() {
+    let registry = ara_importers::registry().unwrap();
+    let versions = worker().versions().unwrap();
+    for (id, version) in registry.versions() {
+        assert_eq!(versions[&id], version, "{id}");
+    }
+    assert!(versions.contains_key("ara.atlas2d"), "{versions:?}");
+}

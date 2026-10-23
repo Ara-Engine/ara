@@ -1,0 +1,9 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_foxsurv1",
+  "records": {
+    "an_survey": {
+      "name": "Survey"
+    }
+  }
+}

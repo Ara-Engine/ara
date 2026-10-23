@@ -55,6 +55,8 @@ impl DocumentView {
             let Some(mesh_renderer) = record.get("MeshRenderer") else {
                 continue;
             };
+            let renderer: ara_runtime::components::MeshRenderer =
+                serde_json::from_value(mesh_renderer.clone()).unwrap_or_default();
             let material = scene.materials.len();
             scene.materials.push(Material {
                 base_color: ghost_color,
@@ -65,13 +67,9 @@ impl DocumentView {
                 "{} (deleted)",
                 record.get("name").and_then(Value::as_str).unwrap_or(id)
             );
-            let mut mesh = if let Some(reference) = mesh_renderer
-                .get("model")
-                .or_else(|| mesh_renderer.get("mesh"))
-                .and_then(Value::as_str)
-            {
+            let mut mesh = if let Some(reference) = &renderer.model {
                 let parts =
-                    ara_schema::grammar::parse_ref(reference).map_err(anyhow::Error::msg)?;
+                    ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
                 gltf::load(
                     &crate::commands::project_path(
                         root,
@@ -84,7 +82,7 @@ impl DocumentView {
                     material,
                 )?
             } else {
-                cube(render_id(id), name, material)
+                super::shape(&renderer, render_id(id), name, material)
             };
             let matrix = ghost_worlds.get(id).copied().unwrap_or(Mat4::IDENTITY);
             let normal = matrix.inverse().transpose();

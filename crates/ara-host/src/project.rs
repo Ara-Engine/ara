@@ -67,6 +67,16 @@ pub struct Project {
 impl Project {
     /// Opens the project at `root`, which must contain `ara.project.json`.
     pub fn open(root: &Path) -> Result<Project, Diagnostic> {
+        Self::open_with(root, |_, _| Vec::new())
+    }
+
+    /// Like [`Project::open`], with `register` adding engine types, document kinds and
+    /// commands first, so project types build on them and files of those kinds load as
+    /// documents. Its diagnostics join [`Project::diags`].
+    pub fn open_with(
+        root: &Path,
+        register: impl FnOnce(&mut SchemaDb, &mut Registry) -> Vec<Diagnostic>,
+    ) -> Result<Project, Diagnostic> {
         let root = fs::canonicalize(root).map_err(|e| {
             Diagnostic::error(
                 codes::IO,
@@ -79,7 +89,8 @@ impl Project {
         let mut db = SchemaDb::new();
         ara_doc::register(&mut db);
         ara_components::register(&mut db);
-        let registry = Registry::builtin(&mut db);
+        let mut registry = Registry::builtin(&mut db);
+        let engine = register(&mut db, &mut registry);
 
         let mut files = Vec::new();
         walk(&root, &root, &mut files);
@@ -90,7 +101,7 @@ impl Project {
             index: AssetIndex::new(),
             docs: Vec::new(),
             type_files: Vec::new(),
-            diags: Vec::new(),
+            diags: engine,
         };
         let mut sidecars = Vec::new();
         for file in files {

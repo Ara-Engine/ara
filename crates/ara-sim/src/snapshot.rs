@@ -554,6 +554,10 @@ impl Session {
                 .iter()
                 .filter_map(|ty| self.world().components().get_id(*ty)),
         );
+        allowed.extend(crate::provider::owned_components(
+            &self.providers,
+            self.world(),
+        ));
         for entity in self.world().iter_entities() {
             let resource = entity
                 .get::<IsResource>()
@@ -589,11 +593,13 @@ impl Session {
                 }
             }
         }
-        for (_, info, _) in self.world().iter_resources() {
+        for (id, info, _) in self.world().iter_resources() {
             let ty = info.type_id();
             // Bevy initializes an empty schedule registry when building our externally
             // owned schedule. It is infrastructure, not an additional gameplay schedule.
             if ty == Some(std::any::TypeId::of::<SimContext>())
+                || ty == Some(std::any::TypeId::of::<crate::ExternalWrites>())
+                || allowed.contains(&id)
                 || ty == Some(std::any::TypeId::of::<DefaultQueryFilters>())
                 || ty == Some(std::any::TypeId::of::<bevy_ecs::schedule::Schedules>())
                 || ty.is_some_and(|ty| owned.contains(&ty))

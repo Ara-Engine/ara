@@ -188,3 +188,36 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
         ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema())
     );
 }
+
+#[test]
+fn importer_upgrades_are_recorded_and_only_older_importers_fail() {
+    let recorded = |version: &str| ImportSettings {
+        importer: "ara.gltf".into(),
+        version: version.into(),
+        ..Default::default()
+    };
+    let installed = "3-gltf14-f32text";
+    assert_eq!(
+        recorded(installed).check_version(installed),
+        VersionCheck::Current
+    );
+    for older in ["2-gltf14", "3-gltf14", "legacy"] {
+        assert_eq!(
+            recorded(older).check_version(installed),
+            VersionCheck::Upgrade,
+            "{older}"
+        );
+    }
+    assert_eq!(
+        recorded("4-gltf15").check_version(installed),
+        VersionCheck::Newer
+    );
+    let id = ara_doc::AssetId::parse("as_fixture").unwrap();
+    match SidecarCommand::Version(installed.into()).edit(id).unwrap() {
+        ara_doc::Edit::Set { path, value, .. } => {
+            assert_eq!(path.to_string(), "version");
+            assert_eq!(value, Some(json!(installed)));
+        }
+        _ => panic!("expected a set"),
+    }
+}

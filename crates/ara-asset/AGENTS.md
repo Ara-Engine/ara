@@ -20,6 +20,11 @@ Sidecars are import documents with one i_settings record. Commands return kernel
 Edits; submit these through ara-ops with author/revision metadata. Persist only the
 canonical writer's output. The source-media path, not sidecar path, is indexed.
 
+Importer upgrades never hard-fail: ProcessWorker::versions asks the worker for its
+installed importer versions; ImportSettings::check_version says Current, Upgrade
+(installed is newer: record it with SidecarCommand::Version and reimport) or Newer
+(the sidecar needs a newer engine: a real failure). Generation = leading number.
+
 GC requires writers to be quiescent and roots from every active/staged/undo
 generation in every process. CacheBackend is the shared cache server seam.
 
