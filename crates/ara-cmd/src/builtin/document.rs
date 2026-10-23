@@ -20,7 +20,7 @@ pub struct ProjectSettings {
 pub struct DocCreateParams {
     /// Project-relative output path, with the document kind's extension.
     pub path: String,
-    /// Registered document kind; inferred from the path when omitted.
+    /// Registered kind, or the material template (.graph); inferred from the path when omitted.
     pub kind: Option<String>,
     /// Stable asset ID or batch symbol; generated when omitted.
     pub id: Option<String>,
@@ -59,8 +59,20 @@ impl Command for DocCreate {
                 "use ara init to create a project",
             ));
         }
-        let id = ctx.create_document(&p.path, &kind, p.id.as_deref())?;
-        Ok(json!({"id":id,"path":p.path,"kind":kind}))
+        if kind == "import" {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "use import.initialize to select the importer and its current version",
+            ));
+        }
+        let id = ctx.create_from_template(&p.path, &kind, p.id.as_deref())?;
+        let actual_kind = &ctx
+            .read()
+            .workspace()
+            .doc(id.as_str())
+            .expect("document template creates its returned document")
+            .kind;
+        Ok(json!({"id":id,"path":p.path,"kind":actual_kind}))
     }
 }
 

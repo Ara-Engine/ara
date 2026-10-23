@@ -6,6 +6,7 @@ mod ast;
 mod check;
 pub mod commands;
 mod compiler;
+mod create;
 pub mod dsl;
 mod generate;
 pub mod instance_asset;

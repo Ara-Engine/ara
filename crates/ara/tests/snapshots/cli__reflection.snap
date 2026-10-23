@@ -2322,7 +2322,7 @@ expression: out
         },
         "kind": {
           "type": "option<string>",
-          "doc": "Registered document kind; inferred from the path when omitted.",
+          "doc": "Registered kind, or the material template (.graph); inferred from the path when omitted.",
           "default": null
         },
         "id": {
@@ -6893,6 +6893,31 @@ expression: out
         }
       }
     },
+    "UiSource": {
+      "kind": "record",
+      "doc": "Lossless UI source; persistence writes native XML through `SourceDocument`.",
+      "module": "ui",
+      "prefix": "us",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Complete XML, including comments and stable asset identity metadata.",
+          "default": ""
+        }
+      }
+    },
+    "UiSourceApplyParams": {
+      "kind": "params",
+      "doc": "Replaces a UI document's native markup through revision-checked source ops.",
+      "module": "ui",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Complete native UI XML. Existing identity metadata may be retained or omitted.",
+          "required": true
+        }
+      }
+    },
     "VectorKey": {
       "kind": "struct",
       "doc": "A vector key at an exact integer clip time.",
@@ -7452,6 +7477,15 @@ expression: out
         "TerrainLayer",
         "TerrainStroke",
         "TerrainTile"
+      ]
+    },
+    "ui": {
+      "doc": "Lossless native UI XML, edited through attributed source operations.",
+      "schema": "ara://schema/ui/1",
+      "idPrefix": "ui",
+      "extension": "ui",
+      "records": [
+        "UiSource"
       ]
     },
     "world": {
@@ -8953,6 +8987,21 @@ expression: out
           ],
           "position": [2, 0, 3],
           "rotation": [0, 45, 0]
+        }
+      ]
+    },
+    "ui.source.apply": {
+      "kind": "command",
+      "summary": "Apply lossless native UI markup with validation, attribution and undo.",
+      "params": "UiSourceApplyParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "<ui id=\"hud\"><text id=\"title\" text=\"Hello\" /></ui>\n"
         }
       ]
     },

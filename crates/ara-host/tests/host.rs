@@ -71,6 +71,58 @@ fn begin(h: &mut Host, author: &str) -> String {
 }
 
 #[test]
+fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("native-ui-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    copy_dir(&fixtures(), &dir);
+    let mut h = open(&dir, 2040);
+    let session = begin(&mut h, "agent:builder");
+    let request = |dry| {
+        json!({"session":session,"why":"Create the HUD","dryRun":dry,"commands":[
+            {"cmd":"doc.create","args":{"path":"ui/hud.ui","id":"ui_hud"}}
+        ]})
+    };
+    let preview = call(&mut h, "cmd.apply", request(true));
+    let applied = call(&mut h, "cmd.apply", request(false));
+    assert_eq!(preview["ops"], applied["ops"]);
+    assert!(!dir.join("ui/hud.ui").exists());
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":session,"doc":"ui/hud.ui","why":"Add the title","commands":[
+            {"cmd":"ui.source.apply","args":{"source":"<?xml version=\"1.0\"?>\n<ui id=\"hud\"><!-- keep --><text id=\"title\" text=\"Hello &amp; welcome\" /></ui>\n"}}
+        ]}),
+    );
+    h.flush();
+    let text = fs::read_to_string(dir.join("ui/hud.ui")).expect("native source");
+    assert!(text.starts_with("<?xml"));
+    assert!(text.contains("<!-- ara:asset ui_hud -->"));
+    assert!(text.contains("<!-- keep -->"));
+    assert!(text.contains("Hello &amp; welcome"));
+    let project = Project::open(&dir).expect("project");
+    let loaded = project.read_document(&text, "ui/hud.ui");
+    assert!(loaded.diags.is_empty(), "{:?}", loaded.diags);
+    assert_eq!(
+        project
+            .write_document(&loaded.doc.expect("UI document"))
+            .expect("writer"),
+        text
+    );
+    h.kill();
+    let mut h = open(&dir, 2041);
+    let session = begin(&mut h, "agent:builder");
+    call(&mut h, "history.undo", json!({"session":session}));
+    h.flush();
+    let text = fs::read_to_string(dir.join("ui/hud.ui")).expect("empty native source");
+    assert!(text.contains("<ui id=\"ui_hud\" />"));
+    call(&mut h, "history.undo", json!({"session":session}));
+    h.flush();
+    assert!(!dir.join("ui/hud.ui").exists());
+}
+
+#[test]
 #[allow(clippy::unwrap_used)]
 fn recovery_replays_only_unsaved_documents_after_a_partial_flush() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))

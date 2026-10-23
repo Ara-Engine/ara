@@ -54,6 +54,8 @@ compilation runs externally and only checked programs can generate shaders.
   saves a definition @path#id and typed overrides, including symbolic textures.
 - commands::register: text/graph apply, rename, wiring, typed fixes, budget and
   instance override/clear commands. All mutations produce invertible kernel ops.
+  Registers the `doc.create` material template: an empty, valid authoritative
+  `.graph`, with the graph records and document lifecycle in one transaction.
 - Instance::{validate,variant_key,pack}, parameter_layout: typed overrides, static
   selection and GPU uploads. Runtime artistic/texture overrides do not add variants.
 - generate/Generated/ENGINE_TEMPLATE: Slang, node/line mappings, sample/ALU/branch

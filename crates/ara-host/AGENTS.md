@@ -102,6 +102,12 @@ service registers them.
 - `cmd.apply`'s catalog entry lists every command with its args in the `cmd`
   field's description (`list_commands`), so MCP clients see them without lookups.
 - `session.begin` also returns `documents` (path, kind, ID) and `mainScene`.
+- Native `.ui` XML is projected into `UiSource` records. `doc.create` seeds the
+  markup; `ui.source.apply` validates a lossless source operation. Save and CLI
+  formatting use `Project::read_document`/`write_document`, preserving XML and
+  identity comments. UI conflicts must be reconciled before native persistence.
+- `Cx::main_scene` reads current transactional settings, including unsaved
+  `project.setMain` changes; Play's default scene uses this value.
 - `inspect` entities and `query` terms accept names: `name:Crate`, a bare word
   (`query`: names containing it; `inspect`: one exact match).
 - Scene-to-text flags unresolved merge conflicts with the `ara resolve` hint.

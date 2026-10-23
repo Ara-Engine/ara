@@ -337,13 +337,9 @@ impl PlayService {
     ) -> Result<(String, Vec<u8>), Vec<Diagnostic>> {
         let store = cx.store();
         let workspace = store.workspace();
-        let main = std::fs::read_to_string(self.root.join("ara.project.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v["main"].as_str().map(str::to_owned));
         let wanted = scene
+            .or_else(|| cx.main_scene())
             .map(str::to_owned)
-            .or(main)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
         let (_, doc) = workspace
             .docs()

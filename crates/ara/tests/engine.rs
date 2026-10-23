@@ -576,6 +576,55 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
 }
 
 #[test]
+fn native_ui_and_material_documents_are_created_and_formatted_through_the_cli() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("cli-native-docs-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("scratch project");
+    let (code, out, err) = ara_in(&root, &["init"]);
+    assert_eq!(code, 0, "{out}{err}");
+    for args in [
+        json!({"path":"levels/second.scene","id":"sc_second"}),
+        json!({"path":"prefabs/empty.prefab","id":"pf_empty"}),
+        json!({"path":"terrain/empty.terrain","id":"tr_empty"}),
+        json!({"path":"terrain/empty.foliage","id":"fo_empty"}),
+        json!({"path":"anim/empty.animation","id":"ac_empty"}),
+        json!({"path":"audio/empty.music","id":"mu_empty"}),
+        json!({"path":"ui/hud.ui","id":"ui_hud"}),
+        json!({"path":"materials/plain.graph","kind":"material","id":"gr_plain"}),
+    ] {
+        let args = args.to_string();
+        let (code, out, err) = ara_in(
+            &root,
+            &[
+                "do",
+                "doc.create",
+                "--args",
+                &args,
+                "--why",
+                "Create a native asset",
+            ],
+        );
+        assert_eq!(code, 0, "{out}{err}");
+    }
+    let source = fs::read_to_string(root.join("ui/hud.ui")).expect("UI source");
+    assert!(source.starts_with("<!-- ara:asset ui_hud -->"));
+    assert!(source.contains("<ui id=\"ui_hud\" />"));
+    let (code, out, err) = ara_in(
+        &root,
+        &["fmt", "--check", "ui/hud.ui", "materials/plain.graph"],
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, err) = ara_in(&root, &["check"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(
+        fs::read_to_string(root.join("ui/hud.ui")).expect("source unchanged"),
+        source
+    );
+}
+
+#[test]
 fn agent_shells_are_attributed_and_args_survive_stripped_quotes() {
     let root = scratch("agent-cli");
     ara_in(&root, &["init"]);

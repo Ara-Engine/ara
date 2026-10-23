@@ -16,7 +16,19 @@ ara do project.setMain --args '{"scene":"@levels/yard.scene#sc_yard"}' --why 'St
 `doc.create` infers the kind from its registered extension, or accepts `kind`.
 The document lifecycle is undoable, including after restarting the host. Existing
 files are rejected. New scene, prefab, terrain, foliage, animation and music
-documents can then be filled by their domain commands.
+documents can then be filled by their domain commands. Material templates create
+an authoritative `.graph`; native UI templates create lossless XML:
+
+```powershell
+ara do doc.create --args '{"path":"materials/plain.graph","kind":"material","id":"gr_plain"}' --why 'Create a surface material'
+ara do doc.create --args '{"path":"ui/hud.ui","id":"ui_hud"}' --why 'Create the HUD'
+ara do ui.source.apply --doc ui/hud.ui --args '{"source":"<ui id=\"hud\"><text id=\"title\" text=\"Outpost\" /></ui>"}' --why 'Add the title'
+```
+
+UI comments, whitespace and XML declarations survive save, restart and `ara fmt`.
+An `ara:asset` XML comment retains asset identity independently of element IDs.
+`project.setMain` also changes Play's default scene immediately within a live
+host, before the debounced file save.
 
 Import source media without knowing importer IDs or version strings:
 

@@ -95,6 +95,11 @@ pub(crate) fn read(
     db: &SchemaDb,
     index: Option<&AssetIndex>,
 ) -> ReadResult {
+    if (file.ends_with(".ui") || text.trim_start().starts_with("<!-- ara:asset ui_"))
+        && !text.trim_start().starts_with('{')
+    {
+        return crate::ui_document::read(text, file);
+    }
     if file != crate::project::MARKER {
         return ara_doc::read(text, file, db, index);
     }
@@ -127,14 +132,26 @@ pub(crate) fn read(
     }
 }
 
-pub(crate) fn write(doc: &Document, db: &SchemaDb) -> String {
+pub(crate) fn read_header(text: &str, file: &str, db: &SchemaDb) -> Option<(String, AssetId)> {
+    if file.ends_with(".ui") && !text.trim_start().starts_with('{') {
+        crate::ui_document::header(text, file)
+    } else {
+        ara_doc::read_header(text, db)
+    }
+}
+
+pub(crate) fn write(doc: &Document, db: &SchemaDb) -> Result<String, Diagnostic> {
     if doc.kind == "project" {
         let settings = doc
             .record("p_settings")
             .and_then(|r| r.get("settings"))
             .expect("project document retains its settings record");
-        ara_json::to_canonical_string(&ara_json::sort_keys(settings))
+        Ok(ara_json::to_canonical_string(&ara_json::sort_keys(
+            settings,
+        )))
+    } else if doc.kind == "ui" {
+        crate::ui_document::write(doc)
     } else {
-        ara_doc::write(doc, db)
+        Ok(ara_doc::write(doc, db))
     }
 }
