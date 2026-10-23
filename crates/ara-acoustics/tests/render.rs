@@ -283,9 +283,8 @@ fn golden_two_room_capture_is_deterministic() {
         std::fs::write(golden, &json).unwrap();
     }
     let expected = std::fs::read_to_string(golden).unwrap();
-    assert_eq!(
-        json.trim_end(),
-        expected.trim_end(),
+    assert!(
+        json.trim_end() == expected.trim_end(),
         "run with ARA_UPDATE_GOLDENS=1 after intended changes"
     );
     let value = ara_json::parse(&json).unwrap();
@@ -301,5 +300,42 @@ fn golden_two_room_capture_is_deterministic() {
     assert!(
         room["rmsDbfs"].as_f64().unwrap() > -40.0,
         "reverb return is audible"
+    );
+}
+
+#[test]
+fn band_overshoot_never_makes_the_network_grow() {
+    // A dead low band with long mid/high times used to push the loop gain above one.
+    for rt60 in [[0.0, 3.0, 3.0], [0.1, 8.0, 8.0], [8.0, 0.0, 8.0]] {
+        let energy = impulse_response(&params(rt60), 4.0);
+        assert!(energy.iter().all(|e| e.is_finite()), "{rt60:?}");
+        let early: f32 = energy[..48000].iter().sum();
+        let late: f32 = energy[144000..].iter().sum();
+        assert!(late < early, "{rt60:?}: late {late} early {early}");
+    }
+}
+
+#[test]
+fn leaving_a_room_keeps_its_tail() {
+    let (mut reverb, mut handle) = room_reverb(48000, &AcousticsSettings::default());
+    handle.set(&params([2.0; 3])).unwrap();
+    let mut out = [Frame::ZERO; 128];
+    let noise = [0.3_f32; 128];
+    for _ in 0..40 {
+        reverb.process(&noise, &mut out, 48000);
+    }
+    // Outdoors: a silent room of another size; nothing new is sent.
+    handle.set(&ReverbParams::silent()).unwrap();
+    let silence = [0.0_f32; 128];
+    let mut tail = 0.0;
+    for block in 0..80 {
+        reverb.process(&silence, &mut out, 48000);
+        if (40..80).contains(&block) {
+            tail += out.iter().map(|f| f.left * f.left).sum::<f32>();
+        }
+    }
+    assert!(
+        tail > 1e-3,
+        "the hall's tail rings on after leaving: {tail}"
     );
 }

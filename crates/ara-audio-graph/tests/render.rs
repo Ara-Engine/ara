@@ -393,13 +393,68 @@ fn golden_example_captures() {
             std::fs::write(&path, &json).unwrap();
         }
         let expected = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(
-            json.trim_end(),
-            expected.trim_end(),
+        assert!(
+            json.trim_end() == expected.trim_end(),
             "{name}: run with ARA_UPDATE_GOLDENS=1 after intended changes"
         );
         let value = ara_json::parse(&json).unwrap();
         assert_eq!(value["clipping"], false, "{name}");
         assert_eq!(value["silent"], false, "{name}");
     }
+}
+
+#[test]
+fn engine_voices_fire_triggers_on_the_exact_output_frame() {
+    let program = example("footsteps");
+    let mut engine = AudioEngine::new(EngineConfig {
+        real_voices: 4,
+        total_voices: 8,
+        buses: 4,
+        limiter: None,
+        ..EngineConfig::default()
+    })
+    .unwrap();
+    let (voice, mut handle) = program.instantiate(5);
+    handle.trigger("step", 1000).unwrap();
+    handle.trigger("step", 7777).unwrap();
+    engine
+        .install(
+            BusId::MASTER,
+            PreparedVoice::procedural(
+                Box::new(voice),
+                Playback {
+                    spatial: false,
+                    ..Playback::default()
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let mut out = vec![0.0; 9000 * 2];
+    engine.render(&mut out).unwrap();
+    let first = out.chunks(2).position(|f| f[0] != 0.0).unwrap();
+    assert_eq!(first, 1000);
+}
+
+#[test]
+fn extreme_values_neither_hang_nor_poison_filters() {
+    let text = "graph Extreme {
+  param p = 0;
+  let wild = noise.smooth(1e30, 1);
+  let inf = pow(p, -1);
+  let loud = gain(wild, 900);
+  let sum = mix(wild, inf, loud);
+  let filtered = lowpass(sum, 800);
+  let calm = sine(220);
+  let out = mix(filtered, calm);
+  output out = out;
+}";
+    let program = load(text, "gr_extreme", 48000, &mut clips).unwrap();
+    let (mut voice, mut handle) = program.instantiate(0);
+    let out = render(&mut voice, &mut handle, 40, |_, _| {});
+    assert!(out.iter().all(|f| f.left.is_finite()));
+    assert!(
+        energy(&out[QUANTUM * 30..]) > 0.0,
+        "the sine survives the infinite inputs"
+    );
 }

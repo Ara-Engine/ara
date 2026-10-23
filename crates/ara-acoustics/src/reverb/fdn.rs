@@ -17,7 +17,7 @@ pub(crate) struct FdnTarget {
     pub decay: [[f32; 3]; LINES],
     /// Predelay in samples.
     pub predelay: u32,
-    /// Output scale for the requested reverberant energy.
+    /// Output scale for the requested reverberant energy, including the wet gain.
     pub output: f32,
 }
 
@@ -62,7 +62,11 @@ pub(crate) struct Fdn {
     filters: [BandSplit; LINES],
     decay: [[f32; 3]; LINES],
     predelay: Line,
+    /// Current and target output gain (room level × wet), smoothed per sample.
     output: f32,
+    output_target: f32,
+    smoothing: f32,
+    level: f32,
     sample_rate: u32,
 }
 
@@ -93,25 +97,54 @@ const INPUT: [f32; LINES] = [1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0];
 /// 1/sqrt(8): input is spread over and output summed from eight lines at unit total energy.
 const NORM: f32 = 0.353_553_38;
 
+/// Output gain smoothing for in-place retargets (level or wet changes).
+const OUTPUT_SECONDS: f32 = 0.05;
+
 impl Fdn {
     /// Allocates lines for up to `max_seconds` of delay and predelay.
     pub(crate) fn new(sample_rate: u32, max_seconds: f32) -> Self {
         let capacity = (max_seconds * sample_rate as f32).ceil() as usize + 1;
-        Self {
+        let mut fdn = Self {
             lines: std::array::from_fn(|_| Line::new(capacity)),
             filters: [BandSplit::new(sample_rate); LINES],
             decay: [[0.0; 3]; LINES],
             predelay: Line::new(capacity),
             output: 0.0,
+            output_target: 0.0,
+            smoothing: 0.0,
+            level: 0.0,
             sample_rate,
-        }
+        };
+        fdn.smooth_over(OUTPUT_SECONDS);
+        fdn
+    }
+
+    fn smooth_over(&mut self, seconds: f32) {
+        self.smoothing = 1.0 - (-1.0 / (seconds * self.sample_rate as f32)).exp();
     }
 
     pub(crate) fn lengths(&self) -> [u32; LINES] {
         std::array::from_fn(|i| self.lines[i].length as u32)
     }
 
-    /// Applies a target. Changing lengths also clears memory (callers crossfade instances).
+    /// Peak absolute output since the last `begin_block`.
+    pub(crate) fn level(&self) -> f32 {
+        self.level
+    }
+
+    /// Starts a block's level measurement.
+    pub(crate) fn begin_block(&mut self) {
+        self.level = 0.0;
+    }
+
+    /// Fades the output to silence over `seconds` (before reusing a ringing network).
+    pub(crate) fn fade_out(&mut self, seconds: f32) {
+        self.output_target = 0.0;
+        self.smooth_over(seconds);
+    }
+
+    /// Applies a target. New lengths clear memory and take the output gain at once (the
+    /// network is silent); same lengths retarget decay in place and glide the output.
     pub(crate) fn configure(&mut self, target: &FdnTarget) {
         if self.lengths() != target.lengths {
             for (line, &length) in self.lines.iter_mut().zip(&target.lengths) {
@@ -122,10 +155,12 @@ impl Fdn {
                 *filter = BandSplit::new(self.sample_rate);
             }
             self.predelay.clear();
+            self.output = target.output;
         }
         self.predelay.set_length(target.predelay.max(1) as usize);
         self.decay = target.decay;
-        self.output = target.output;
+        self.output_target = target.output;
+        self.smooth_over(OUTPUT_SECONDS);
     }
 
     /// Processes one sample of mono input into a stereo pair (added to `out`).
@@ -147,7 +182,10 @@ impl Fdn {
         for i in 0..LINES {
             self.lines[i].write(taps[i] + delayed * INPUT[i]);
         }
-        out[0] += left * self.output * NORM;
-        out[1] += right * self.output * NORM;
+        self.output += (self.output_target - self.output) * self.smoothing;
+        let (l, r) = (left * self.output * NORM, right * self.output * NORM);
+        self.level = self.level.max(l.abs()).max(r.abs());
+        out[0] += l;
+        out[1] += r;
     }
 }

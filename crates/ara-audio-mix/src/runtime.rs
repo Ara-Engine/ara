@@ -35,7 +35,8 @@ fn base_gain(bus: &BusDesc) -> f32 {
 }
 
 impl Mixer {
-    /// Creates every bus (parents and duck sources first), applies limits, loudness
+    /// Creates every bus (in `desc` order: outputs and duck sources must come first, as
+    /// `MixerDesc::new` orders them), applies limits, loudness
     /// targets and reverb routes, then the initial state. `room` is the room-reverb aux.
     /// Control path: call while configuring the engine, before playback.
     pub fn build(
@@ -52,8 +53,14 @@ impl Mixer {
             } else {
                 let mut builder = TrackBuilder::new();
                 if let Some(duck) = &bus.duck {
+                    let by = *buses.get(&duck.by).ok_or_else(|| {
+                        error(format!(
+                            "bus `{}` ducks by `{}`, which is not built yet",
+                            bus.name, duck.by
+                        ))
+                    })?;
                     let source = engine
-                        .bus_meter(buses[&duck.by])
+                        .bus_meter(by)
                         .map_err(|e| fail("duck source", e))?
                         .clone();
                     let effect = Ducking {
@@ -67,13 +74,19 @@ impl Mixer {
                     .map_err(|e| fail("ducking", e))?;
                     builder.add_built_effect(effect);
                 }
-                let parent = if bus.output.is_empty() {
+                let output = if bus.output.is_empty() {
                     "master"
                 } else {
                     &bus.output
                 };
+                let output = *buses.get(output).ok_or_else(|| {
+                    error(format!(
+                        "bus `{}` outputs to `{output}`, which is not built yet",
+                        bus.name
+                    ))
+                })?;
                 engine
-                    .add_bus(bus.name.clone(), buses[parent], builder)
+                    .add_bus(bus.name.clone(), output, builder)
                     .map_err(|e| fail(&bus.name, e))?
             };
             buses.insert(bus.name.clone(), id);
@@ -153,7 +166,7 @@ impl Mixer {
             name: state.unwrap_or("base").to_owned(),
             gains: gains
                 .iter()
-                .map(|(bus, gain)| (self.buses[bus], *gain))
+                .filter_map(|(bus, gain)| Some((*self.buses.get(bus)?, *gain)))
                 .collect(),
         };
         let frames = (fade * engine.sample_rate() as f32) as u32;

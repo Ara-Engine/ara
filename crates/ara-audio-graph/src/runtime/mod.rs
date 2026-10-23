@@ -284,6 +284,14 @@ impl SignalSource for GraphVoice {
             let (inputs, rest) = self.arena.split_at_mut(start);
             let outputs = &mut rest[..usize::from(instr.outputs)];
             ops::run(instr, state, inputs, outputs, &ctx);
+            // inf/NaN (pow of 0, huge gains) never reaches downstream filter state.
+            for out in outputs.iter_mut() {
+                for v in &mut out[..n] {
+                    if !v.is_finite() {
+                        *v = 0.0;
+                    }
+                }
+            }
             let first = &outputs[0][..n];
             stats.blocks.fetch_add(1, Ordering::Relaxed);
             let active = match instr.first {

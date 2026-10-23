@@ -14,15 +14,19 @@ pub(crate) enum Input {
         source: Box<dyn SignalSource>,
         block: Box<[Frame; QUANTUM]>,
         cursor: usize,
+        /// Source-clock frame of the next block: the playback start plus samples rendered.
+        /// At unit rate source frame k plays at output frame `at_frame + k`.
+        clock: u64,
     },
 }
 
 impl Input {
-    pub(crate) fn procedural(source: Box<dyn SignalSource>) -> Self {
+    pub(crate) fn procedural(source: Box<dyn SignalSource>, at_frame: u64) -> Self {
         Self::Procedural {
             source,
             block: Box::new([Frame::ZERO; QUANTUM]),
             cursor: QUANTUM,
+            clock: at_frame,
         }
     }
     pub(crate) fn sample_rate(&self) -> u32 {
@@ -32,8 +36,8 @@ impl Input {
             Self::Procedural { source, .. } => source.sample_rate(),
         }
     }
-    /// Next source frame. `time` is the voice's output frame, passed to procedural blocks.
-    pub(crate) fn next(&mut self, time: u64) -> Frame {
+    /// Next source frame.
+    pub(crate) fn next(&mut self) -> Frame {
         match self {
             Self::Resident {
                 clip,
@@ -56,12 +60,14 @@ impl Input {
                 source,
                 block,
                 cursor,
+                clock,
             } => {
                 if *cursor == QUANTUM {
                     if source.ended() {
                         return Frame::ZERO;
                     }
-                    source.render(block.as_mut_slice(), time);
+                    source.render(block.as_mut_slice(), *clock);
+                    *clock += QUANTUM as u64;
                     *cursor = 0;
                 }
                 let frame = block[*cursor];

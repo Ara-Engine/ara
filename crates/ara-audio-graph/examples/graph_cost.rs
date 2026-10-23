@@ -44,19 +44,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (0..voices).map(|i| program.instantiate(i as u64)).collect();
             let mut block = [Frame::ZERO; QUANTUM];
             let blocks = 2000_u64;
+            let mut rendered = 0_u64;
             let start = Instant::now();
             for b in 0..blocks {
                 let frame = b * QUANTUM as u64;
                 for (voice, handle) in &mut instances {
                     if b % 40 == 0 {
-                        // One-shots get retriggered so they keep doing work.
+                        // Triggered one-shots get retriggered so they keep doing work.
                         let _ = handle.trigger("step", frame);
                         let _ = handle.trigger("fire", frame);
                     }
-                    voice.render(&mut block, frame);
+                    // Self-ending one-shots (UI click) only count blocks they actually render.
+                    if !voice.ended() {
+                        voice.render(&mut block, frame);
+                        rendered += 1;
+                    }
                 }
             }
-            let ns = start.elapsed().as_nanos() as f64 / (blocks as f64 * voices as f64);
+            let ns = start.elapsed().as_nanos() as f64 / rendered.max(1) as f64;
             if let Some(o) = row.as_object_mut() {
                 o.insert(format!("nsPerBlockPerVoice{voices}"), ns.round().into());
             }

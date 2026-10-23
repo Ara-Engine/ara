@@ -5,40 +5,40 @@
       "estimatedNsPerBlock": 4900,
       "graph": "footsteps",
       "nodes": 12,
-      "nsPerBlockPerVoice1": 3042,
-      "nsPerBlockPerVoice100": 3469
+      "nsPerBlockPerVoice1": 3727,
+      "nsPerBlockPerVoice100": 3923
     },
     {
       "arenaBytes": 13824,
       "estimatedNsPerBlock": 5100,
       "graph": "wind",
       "nodes": 11,
-      "nsPerBlockPerVoice1": 3856,
-      "nsPerBlockPerVoice100": 4198
+      "nsPerBlockPerVoice1": 6191,
+      "nsPerBlockPerVoice100": 4435
     },
     {
       "arenaBytes": 17408,
       "estimatedNsPerBlock": 7400,
       "graph": "engine",
       "nodes": 15,
-      "nsPerBlockPerVoice1": 4742,
-      "nsPerBlockPerVoice100": 5571
+      "nsPerBlockPerVoice1": 5241,
+      "nsPerBlockPerVoice100": 5738
     },
     {
       "arenaBytes": 11776,
       "estimatedNsPerBlock": 4550,
       "graph": "ui_click",
       "nodes": 10,
-      "nsPerBlockPerVoice1": 31,
-      "nsPerBlockPerVoice100": 28
+      "nsPerBlockPerVoice1": 3521,
+      "nsPerBlockPerVoice100": 3314
     },
     {
       "arenaBytes": 20992,
       "estimatedNsPerBlock": 7600,
       "graph": "rifle",
       "nodes": 16,
-      "nsPerBlockPerVoice1": 5075,
-      "nsPerBlockPerVoice100": 6127
+      "nsPerBlockPerVoice1": 5769,
+      "nsPerBlockPerVoice100": 6134
     }
   ],
   "machine": "Windows 11 dev box, shared with ~8 concurrent agent builds; release profile",

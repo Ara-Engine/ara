@@ -4,11 +4,11 @@
       "kind": "bus",
       "name": "master",
       "overloads": 0,
-      "peakDbfs": -2.6698975506953286,
-      "rmsDbfs": -26.049569693655926
+      "peakDbfs": -2.484465027754096,
+      "rmsDbfs": -26.050708908172517
     }
   ],
-  "channelRms": [0.04983351354094602, 0.04983351354094602],
+  "channelRms": [0.04982697840571318, 0.04982697840571318],
   "clippedSamples": 0,
   "clipping": false,
   "frames": 96000,
@@ -46,7 +46,7 @@
           "blocks": 751,
           "node": "low",
           "op": "mul",
-          "peak": 0.9345957,
+          "peak": 0.9335554,
           "triggers": 0
         },
         {
@@ -70,7 +70,7 @@
           "blocks": 751,
           "node": "snap",
           "op": "mul",
-          "peak": 0.971017,
+          "peak": 0.9679763,
           "triggers": 0
         },
         {
@@ -78,7 +78,7 @@
           "blocks": 751,
           "node": "body",
           "op": "mix",
-          "peak": 2.32544,
+          "peak": 2.3756187,
           "triggers": 0
         },
         {
@@ -102,7 +102,7 @@
           "blocks": 751,
           "node": "tail",
           "op": "delay",
-          "peak": 2.32544,
+          "peak": 2.3756187,
           "triggers": 0
         },
         {
@@ -134,7 +134,7 @@
           "blocks": 751,
           "node": "shot",
           "op": "mix",
-          "peak": 2.32544,
+          "peak": 2.3756187,
           "triggers": 0
         },
         {
@@ -142,47 +142,47 @@
           "blocks": 751,
           "node": "level",
           "op": "gain",
-          "peak": 0.73536867,
+          "peak": 0.7512366,
           "triggers": 0
         }
       ]
     }
   ],
-  "integratedLufs": -22.68146970087171,
+  "integratedLufs": -22.679186558289533,
   "preLimiterOverloads": 0,
-  "rmsDbfs": -26.049569831272464,
-  "samplePeak": 0.7353686690330505,
+  "rmsDbfs": -26.05070896800307,
+  "samplePeak": 0.751236617565155,
   "sampleRate": 48000,
   "seconds": 2,
-  "silenceFraction": 0.35058333333333336,
+  "silenceFraction": 0.35041666666666665,
   "silent": false,
   "spectrum": [
     {
       "highHz": 125,
       "lowHz": 0,
-      "rmsDbfs": -27.505575128541714
+      "rmsDbfs": -27.509411171029832
     },
     {
       "highHz": 500,
       "lowHz": 125,
-      "rmsDbfs": -49.55645372305373
+      "rmsDbfs": -49.586683961842475
     },
     {
       "highHz": 2000,
       "lowHz": 500,
-      "rmsDbfs": -28.379192708060007
+      "rmsDbfs": -28.38161790996251
     },
     {
       "highHz": 8000,
       "lowHz": 2000,
-      "rmsDbfs": -41.3733045043182
+      "rmsDbfs": -41.374808705458875
     },
     {
       "highHz": 24000,
       "lowHz": 8000,
-      "rmsDbfs": -37.44041414505554
+      "rmsDbfs": -37.4404104074323
     }
   ],
-  "truePeak": 0.7616912722587585,
-  "wavBlake3": "fe9f282e3ee04dccc9a3ec1ea1e752c26d9f3cc6389f08db454213af0edc4974"
+  "truePeak": 0.7766422629356384,
+  "wavBlake3": "965ac8f4137b0dfa4182e8a50ba53f2248fae4790bd7608a4b6b3d2fd97e19bf"
 }

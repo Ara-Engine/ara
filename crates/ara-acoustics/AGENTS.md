@@ -54,6 +54,12 @@ Everything is deterministic for golden captures; only `RoomReverb` runs on the a
 - Steam's baked tails model little air loss in the top band; low/mid track Eyring.
   Long hard rooms need ~100+ bounces (`SteamBakeSettings::default` uses 128).
 - The FDN quantizes room size to 15% steps so probe interpolation doesn't respawn networks.
+- Each FDN line's 3-band absorption filter is scaled on the control path so its peak gain
+  never exceeds the largest band gain (complementary crossover bands overshoot ~15%);
+  otherwise extreme RT60 mixes (e.g. `[0, 3, 3]`) would grow without bound.
+- Each network carries its own smoothed output (level × wet). A new room size switches to
+  the idle network once it is quiet (a still-ringing one is faded over 10 ms first), so
+  leaving a hall keeps its tail.
 
 ## Tests
 

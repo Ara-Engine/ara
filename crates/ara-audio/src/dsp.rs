@@ -136,6 +136,9 @@ impl Lowpass2 {
     }
 }
 
+/// Default low/mid and mid/high crossover frequencies in Hz.
+pub const CROSSOVER_HZ: [f32; 2] = [800.0, 8000.0];
+
 /// Three-band splitter with exact reconstruction: `low + mid + high == input`.
 ///
 /// Two critically damped low-passes at `low_hz` and `high_hz` run in parallel on the
@@ -148,9 +151,9 @@ pub struct BandSplit {
 }
 
 impl BandSplit {
-    /// Ara's default 800 Hz / 8 kHz crossover.
+    /// Ara's default crossover (`CROSSOVER_HZ`).
     pub fn new(sample_rate: u32) -> Self {
-        Self::with_crossovers(800.0, 8000.0, sample_rate)
+        Self::with_crossovers(CROSSOVER_HZ[0], CROSSOVER_HZ[1], sample_rate)
     }
     /// Custom crossover frequencies in Hz.
     pub fn with_crossovers(low_hz: f32, high_hz: f32, sample_rate: u32) -> Self {

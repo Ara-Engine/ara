@@ -18,15 +18,15 @@
       "kind": "aux",
       "name": "room",
       "overloads": 0,
-      "peakDbfs": -6.22134478172593,
-      "rmsDbfs": -22.395012739266548
+      "peakDbfs": -6.202831810018946,
+      "rmsDbfs": -22.37896621563493
     }
   ],
-  "channelRms": [0.08113591122857133, 0.07794514996224908],
+  "channelRms": [0.08126675806248994, 0.07808263475399034],
   "clippedSamples": 0,
   "clipping": false,
   "frames": 96000,
-  "integratedLufs": -16.239919100095747,
+  "integratedLufs": -16.22474710856857,
   "occlusion": [
     {
       "air": [0.9979984, 0.98311365, 0.83332855],
@@ -68,8 +68,8 @@
     }
   ],
   "preLimiterOverloads": 0,
-  "rmsDbfs": -21.98648350345106,
-  "samplePeak": 0.4870619475841522,
+  "rmsDbfs": -21.971857943265377,
+  "samplePeak": 0.4877510964870453,
   "sampleRate": 48000,
   "seconds": 2,
   "silenceFraction": 0,
@@ -78,29 +78,29 @@
     {
       "highHz": 125,
       "lowHz": 0,
-      "rmsDbfs": -44.7113155448374
+      "rmsDbfs": -44.71072926982498
     },
     {
       "highHz": 500,
       "lowHz": 125,
-      "rmsDbfs": -38.45521271472038
+      "rmsDbfs": -38.452986252464854
     },
     {
       "highHz": 2000,
       "lowHz": 500,
-      "rmsDbfs": -32.40937519571448
+      "rmsDbfs": -32.40361159385873
     },
     {
       "highHz": 8000,
       "lowHz": 2000,
-      "rmsDbfs": -27.057613423723666
+      "rmsDbfs": -27.045442518651157
     },
     {
       "highHz": 24000,
       "lowHz": 8000,
-      "rmsDbfs": -24.455971816919522
+      "rmsDbfs": -24.43883748946622
     }
   ],
-  "truePeak": 0.4959878623485565,
-  "wavBlake3": "8616cb1aac33b26334dabe623a40b195367a88208d075cce448846281f462f9e"
+  "truePeak": 0.4970581829547882,
+  "wavBlake3": "0c82c6f4f2f79a9cfbb8c5b17f74fb864a5b2dbb554cf1102a04f4e0ed5bcc1e"
 }

@@ -10,8 +10,9 @@ use crate::Frame;
 pub trait SignalSource: Send {
     /// Frames per second the source renders at, normally the engine's sample rate.
     fn sample_rate(&self) -> u32;
-    /// Fills `out` (at most one quantum) with the next frames. `frame` is the voice's
-    /// output-clock frame when the block was requested; schedule control changes against it.
+    /// Fills `out` (at most one quantum) with the next frames. `frame` is the source-clock
+    /// frame of `out[0]`: the voice's `at_frame` plus frames already rendered. At unit
+    /// playback rate it is the output frame where `out[0]` plays; schedule controls on it.
     fn render(&mut self, out: &mut [Frame], frame: u64);
     /// True once every remaining frame is silence and the voice may finish.
     fn ended(&self) -> bool;

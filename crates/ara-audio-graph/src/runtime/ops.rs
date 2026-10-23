@@ -368,8 +368,10 @@ pub(crate) fn run(
             for i in 0..n {
                 let s = 0.5 - 0.5 * (*t * PI).cos();
                 outputs[0][i] = *from + (*to - *from) * s;
-                *t += rate[i].max(0.0) / fs;
-                while *t >= 1.0 {
+                // At most one new target per sample: bounded work for any (even infinite) rate.
+                let step = rate[i] / fs;
+                *t += if step > 0.0 { step.min(1.0) } else { 0.0 };
+                if *t >= 1.0 {
                     *t -= 1.0;
                     *from = *to;
                     *to = rng.bipolar();

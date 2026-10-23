@@ -46,6 +46,8 @@ struct Play {
     start: u64,
     end: u64,
     stems: Vec<Stem>,
+    /// Intensity the stem gains were last set for.
+    intensity: f32,
 }
 
 /// Interactive music: segments, layers, transitions, stingers and resequencing.
@@ -186,6 +188,7 @@ impl MusicPlayer {
             start: at,
             end: at + self.grids[segment].length().round() as u64,
             stems,
+            intensity: self.intensity,
         })
     }
 
@@ -233,8 +236,9 @@ impl MusicPlayer {
         Ok(())
     }
 
-    /// Stops all music from `at_frame` with a fade.
+    /// Stops all music from `at_frame` (no earlier than the next rendered frame) with a fade.
     pub fn stop(&mut self, engine: &mut AudioEngine, at_frame: u64, fade_frames: u32) {
+        let at_frame = at_frame.max(engine.next_frame());
         for play in [self.current.take(), self.next.take()]
             .into_iter()
             .flatten()
@@ -257,6 +261,28 @@ impl MusicPlayer {
     /// Call every control update: promotes the queued segment and schedules the
     /// follow-up (resequencing) half a second before the current segment ends.
     pub fn update(&mut self, engine: &mut AudioEngine, loader: &mut dyn StemLoader) -> Result<()> {
+        self.promote(engine)?;
+        let now = engine.next_frame();
+        let due = self
+            .current
+            .as_ref()
+            .filter(|c| self.next.is_none() && c.end <= now + self.lookahead)
+            .map(|c| (c.segment, c.end));
+        if let Some((segment, end)) = due {
+            let target = match self.then {
+                Some(t) => t,
+                None => self.follow_up(segment),
+            };
+            // A late update (long render, stall) starts the follow-up now rather than failing.
+            self.next = Some(self.schedule(engine, loader, target, end.max(now), 0)?);
+            self.then = None;
+        }
+        Ok(())
+    }
+
+    /// Makes a queued segment current once it has started, and brings stems that were
+    /// scheduled before an intensity change up to date.
+    fn promote(&mut self, engine: &mut AudioEngine) -> Result<()> {
         let now = engine.next_frame();
         if self.next.as_ref().is_some_and(|n| n.start <= now) {
             if let Some(c) = &self.current {
@@ -264,17 +290,37 @@ impl MusicPlayer {
             }
             self.current = self.next.take();
         }
-        let due = self
-            .current
-            .as_ref()
-            .filter(|c| self.next.is_none() && c.end <= now + self.lookahead)
-            .map(|c| (c.segment, c.end));
-        if let Some((segment, end)) = due {
-            let target = match self.then.take() {
-                Some(t) => t,
-                None => self.follow_up(segment),
-            };
-            self.next = Some(self.schedule(engine, loader, target, end, 0)?);
+        self.refresh(engine)
+    }
+
+    /// Sends layer gains to started segments whose intensity is stale. Segments that have
+    /// not started yet are refreshed by `promote`, so their command queues never grow.
+    fn refresh(&mut self, engine: &mut AudioEngine) -> Result<()> {
+        let now = engine.next_frame();
+        let ramp = (self.desc.settings.layer_fade * self.rate as f32) as u32;
+        let intensity = self.intensity;
+        for play in [self.current.as_mut(), self.next.as_mut()]
+            .into_iter()
+            .flatten()
+            .filter(|p| p.start <= now && p.intensity != intensity)
+        {
+            let segment = &self.desc.segments[play.segment];
+            for s in &mut play.stems {
+                let stem = &segment.stems[s.stem];
+                let gain = linear(stem.gain_db) * weight(stem.intensity, intensity);
+                let at = now.max(s.last);
+                let command = VoiceCommand::Set {
+                    at_frame: at,
+                    parameters: Self::parameters(gain),
+                    ramp_frames: ramp,
+                };
+                match engine.command(s.id, command) {
+                    Ok(()) => s.last = at,
+                    Err(AudioError::UnknownHandle) => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            play.intensity = intensity;
         }
         Ok(())
     }
@@ -322,6 +368,7 @@ impl MusicPlayer {
         to: &str,
     ) -> Result<u64> {
         let target = self.segment(Some(to))?;
+        self.promote(engine)?;
         let now = engine.next_frame();
         let rule = self.rule(self.current.as_ref().map(|c| c.segment), target);
         let at = self.boundary(now, rule.sync);
@@ -373,6 +420,7 @@ impl MusicPlayer {
             .get(name)
             .cloned()
             .ok_or(AudioError::Invalid("unknown music stinger"))?;
+        self.promote(engine)?;
         let at = self.boundary(engine.next_frame(), stinger.sync);
         let playback = Playback {
             at_frame: at,
@@ -389,36 +437,14 @@ impl MusicPlayer {
         Ok(at)
     }
 
-    /// Fades every stem toward its layer weight at `intensity` (0..1) over `layer_fade`.
+    /// Fades every playing stem toward its layer weight at `intensity` (0..1) over
+    /// `layer_fade`; queued segments pick it up when they start.
     pub fn set_intensity(&mut self, engine: &mut AudioEngine, intensity: f32) -> Result<()> {
         if !intensity.is_finite() {
             return Err(AudioError::Invalid("music intensity"));
         }
         self.intensity = intensity.clamp(0.0, 1.0);
-        let now = engine.next_frame();
-        let ramp = (self.desc.settings.layer_fade * self.rate as f32) as u32;
-        for play in [self.current.as_mut(), self.next.as_mut()]
-            .into_iter()
-            .flatten()
-        {
-            let segment = &self.desc.segments[play.segment];
-            for s in &mut play.stems {
-                let stem = &segment.stems[s.stem];
-                let gain = linear(stem.gain_db) * weight(stem.intensity, self.intensity);
-                let at = now.max(s.last);
-                let command = VoiceCommand::Set {
-                    at_frame: at,
-                    parameters: Self::parameters(gain),
-                    ramp_frames: ramp,
-                };
-                match engine.command(s.id, command) {
-                    Ok(()) => s.last = at,
-                    Err(AudioError::UnknownHandle) => {}
-                    Err(e) => return Err(e),
-                }
-            }
-        }
-        Ok(())
+        self.promote(engine)
     }
 
     /// The segment and bar/beat audible at `frame`.

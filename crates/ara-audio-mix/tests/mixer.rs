@@ -275,3 +275,15 @@ fn limits_routes_and_states_apply_to_the_engine() {
     assert!(mixer.set_state(&mut e, Some("nope"), None).is_err());
     assert!(mixer.bus("world").is_some() && mixer.bus("master") == Some(BusId::MASTER));
 }
+
+#[test]
+fn hand_built_descriptions_in_the_wrong_order_report_instead_of_panicking() {
+    let desc = MixerDesc {
+        buses: vec![bus("child", "parent"), bus("parent", "")],
+        states: BTreeMap::new(),
+        settings: MixerSettings::default(),
+    };
+    let mut e = engine();
+    let error = Mixer::build(&mut e, desc, None).err().unwrap();
+    assert!(error.message.contains("not built yet"), "{}", error.message);
+}

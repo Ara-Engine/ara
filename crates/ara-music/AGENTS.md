@@ -45,3 +45,6 @@ document round trips and a golden session (`tests/golden/session.json`;
   stems at the landing frame with the rule's fade; new stems fade in over the same time.
 - Default rule when none matches: bar sync, 0.5 s crossfade, no bridge.
 - Voice commands must stay ordered per voice; the player tracks each stem's last command.
+- `update`, `transition`, `stinger` and `set_intensity` first promote a queued segment that
+  has started; a late `update` starts the follow-up at the current frame instead of failing.
+  Intensity changes reach queued segments when they start (no command build-up).

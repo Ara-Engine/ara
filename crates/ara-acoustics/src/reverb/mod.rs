@@ -11,7 +11,7 @@ mod early;
 mod fdn;
 
 use crate::{ROOM_CROSSFADE_SECONDS, propagation::AcousticsSettings};
-use ara_audio::{AudioError, AuxEffect, Frame, Result};
+use ara_audio::{AudioError, AuxEffect, Frame, Result, dsp::CROSSOVER_HZ};
 pub use early::MAX_TAPS;
 use early::{Early, EarlyTarget};
 use fdn::{Fdn, FdnTarget, LINES};
@@ -125,6 +125,55 @@ fn next_prime(mut n: u32) -> u32 {
     }
 }
 
+/// Peak magnitude over frequency of a line's absorption filter
+/// `g0·L1 + g1·(L2 − L1) + g2·(1 − L2)` (`dsp::BandSplit` with band gains `g`).
+fn peak_gain(g: [f32; 3], sample_rate: u32) -> f32 {
+    type C = (f64, f64);
+    let mul = |a: C, b: C| -> C { (a.0 * b.0 - a.1 * b.1, a.0 * b.1 + a.1 * b.0) };
+    let div = |a: C, b: C| -> C {
+        let d = b.0 * b.0 + b.1 * b.1;
+        ((a.0 * b.0 + a.1 * b.1) / d, (a.1 * b.0 - a.0 * b.1) / d)
+    };
+    let fs = f64::from(sample_rate);
+    let gains = CROSSOVER_HZ.map(|hz| {
+        let g = (std::f64::consts::PI * f64::from(hz).min(fs * 0.49) / fs).tan();
+        g / (1.0 + g)
+    });
+    let [g0, g1, g2] = g.map(f64::from);
+    let mut peak = 0.0_f64;
+    for k in 0..256 {
+        let hz = 10.0 * (0.499 * fs / 10.0).powf(f64::from(k) / 255.0);
+        let w = std::f64::consts::TAU * hz / fs;
+        let z = (w.cos(), -w.sin());
+        // Bilinear one-pole G(1 + z⁻¹) / (1 − (1 − 2G) z⁻¹), squared for the cascade.
+        let lp = |big: f64| {
+            let h = div(
+                (big * (1.0 + z.0), big * z.1),
+                (1.0 - (1.0 - 2.0 * big) * z.0, -(1.0 - 2.0 * big) * z.1),
+            );
+            mul(h, h)
+        };
+        let (l1, l2) = (lp(gains[0]), lp(gains[1]));
+        let re = g0 * l1.0 + g1 * (l2.0 - l1.0) + g2 * (1.0 - l2.0);
+        let im = g0 * l1.1 + g1 * (l2.1 - l1.1) - g2 * l2.1;
+        peak = peak.max((re * re + im * im).sqrt());
+    }
+    peak as f32
+}
+
+/// Scales a line's band gains so its filter never exceeds the largest band gain at any
+/// frequency. Complementary bands of a critically damped crossover overshoot by up to
+/// ~15%, which would otherwise push the loop gain above one (unbounded growth).
+fn stable(g: [f32; 3], sample_rate: u32) -> [f32; 3] {
+    let max = g.iter().fold(0.0_f32, |m, v| m.max(*v));
+    let peak = peak_gain(g, sample_rate) * 1.001;
+    if peak > max && peak > 0.0 {
+        g.map(|v| v * max / peak)
+    } else {
+        g
+    }
+}
+
 fn target(params: &ReverbParams, sample_rate: u32, speed_of_sound: f32) -> Target {
     let fs = sample_rate as f32;
     // Quantize room size to ~15% steps: interpolated probes then retarget decay and level
@@ -149,9 +198,10 @@ fn target(params: &ReverbParams, sample_rate: u32, speed_of_sound: f32) -> Targe
             }
         })
     });
+    let decay = decay.map(|g| stable(g, sample_rate));
     // Stationary FDN energy gain is ~1/(1-g²); scale it to the requested room level.
     let mean = decay.iter().map(|g| g[1] * g[1]).sum::<f32>() / LINES as f32;
-    let output = (params.level * (1.0 - mean)).max(0.0).sqrt();
+    let output = (params.level * (1.0 - mean)).max(0.0).sqrt() * params.wet;
     let predelay =
         ((1.5 * params.mean_free_path / speed_of_sound).clamp(0.005, MAX_DELAY * 0.8) * fs) as u32;
     let mut early = EarlyTarget::silent();
@@ -184,8 +234,11 @@ pub struct RoomReverb {
     fade_step: f32,
     early: Early,
     targets: Consumer<Target>,
+    /// Early-reflection gain; each network carries its own output gain.
     wet: f32,
     wet_target: f32,
+    /// A new room waiting for the idle network to fall quiet.
+    pending: Option<FdnTarget>,
 }
 
 /// Control-path handle that retargets a [`RoomReverb`].
@@ -214,6 +267,7 @@ pub fn room_reverb(
         targets,
         wet: 0.0,
         wet_target: 0.0,
+        pending: None,
     };
     let handle = RoomReverbHandle {
         producer,
@@ -245,17 +299,37 @@ impl RoomReverbHandle {
     }
 }
 
+/// Peak level below which a network counts as silent (-80 dBFS).
+const QUIET: f32 = 1e-4;
+/// Fade applied to a still-ringing network before it is reused for a new room.
+const REUSE_FADE_SECONDS: f32 = 0.01;
+
 impl RoomReverb {
     fn apply(&mut self, target: &Target) {
-        let lengths_change = self.networks[self.active].lengths() != target.fdn.lengths;
-        let silent_before = self.wet_target == 0.0;
-        if lengths_change && !silent_before {
-            self.active = 1 - self.active;
-            self.fade = 0.0;
-        }
-        self.networks[self.active].configure(&target.fdn);
         self.early.configure(&target.early);
         self.wet_target = target.wet;
+        let active = &mut self.networks[self.active];
+        if active.lengths() == target.fdn.lengths || active.level() < QUIET {
+            // Same room size (retarget in place) or nothing ringing yet.
+            active.configure(&target.fdn);
+            self.pending = None;
+        } else {
+            // A new room: the current network keeps its tail; switch once the idle one is quiet.
+            self.pending = Some(target.fdn);
+        }
+    }
+
+    fn switch(&mut self) {
+        let Some(pending) = self.pending else { return };
+        let other = 1 - self.active;
+        if self.networks[other].level() < QUIET {
+            self.networks[other].configure(&pending);
+            self.active = other;
+            self.fade = 0.0;
+            self.pending = None;
+        } else {
+            self.networks[other].fade_out(REUSE_FADE_SECONDS);
+        }
     }
 }
 
@@ -263,6 +337,10 @@ impl AuxEffect for RoomReverb {
     fn process(&mut self, input: &[f32], out: &mut [Frame], _: u32) {
         while let Ok(target) = self.targets.pop() {
             self.apply(&target);
+        }
+        self.switch();
+        for network in &mut self.networks {
+            network.begin_block();
         }
         let step = (self.wet_target - self.wet) / input.len().max(1) as f32;
         let other = 1 - self.active;
@@ -272,9 +350,10 @@ impl AuxEffect for RoomReverb {
             let fade = self.fade;
             self.networks[self.active].tick(x * fade, &mut acc);
             self.networks[other].tick(x * (1.0 - fade), &mut acc);
-            self.early.tick(*x, &mut acc);
+            let mut early = [0.0_f32; 2];
+            self.early.tick(*x, &mut early);
             self.fade = (self.fade + self.fade_step).min(1.0);
-            *frame = Frame::new(acc[0] * self.wet, acc[1] * self.wet);
+            *frame = Frame::new(acc[0] + early[0] * self.wet, acc[1] + early[1] * self.wet);
         }
         self.wet = self.wet_target;
     }

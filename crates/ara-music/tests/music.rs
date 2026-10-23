@@ -23,12 +23,16 @@ impl Clips {
         self.0
             .entry(reference.to_owned())
             .or_insert_with(|| {
-                let frames: Vec<Frame> = if let Some(hz) = reference.strip_prefix("@tone/") {
+                let tone = reference
+                    .strip_prefix("@tone/")
+                    .map(|hz| (hz, 0.2))
+                    .or_else(|| reference.strip_prefix("@loud/").map(|hz| (hz, 0.6)));
+                let frames: Vec<Frame> = if let Some((hz, amplitude)) = tone {
                     let hz: f32 = hz.parse().unwrap();
                     (0..RATE as usize * 4)
                         .map(|i| {
-                            let s =
-                                (i as f32 / RATE as f32 * hz * std::f32::consts::TAU).sin() * 0.2;
+                            let s = (i as f32 / RATE as f32 * hz * std::f32::consts::TAU).sin()
+                                * amplitude;
                             Frame::new(s, s)
                         })
                         .collect()
@@ -467,10 +471,74 @@ fn golden_music_session() {
         std::fs::write(path, &json).unwrap();
     }
     let expected = std::fs::read_to_string(path).unwrap();
-    assert_eq!(
-        json.trim_end(),
-        expected.trim_end(),
+    assert!(
+        json.trim_end() == expected.trim_end(),
         "run with ARA_UPDATE_GOLDENS=1 after intended changes"
     );
     assert!(json.contains("\"segment\": \"battle\""));
+}
+
+#[test]
+fn late_updates_and_unpromoted_segments_keep_the_music_going() {
+    let mut e = engine();
+    let mut clips = Clips::new();
+    let mut player = MusicPlayer::new(desc(3), BusId::MASTER, RATE);
+    player.start(&mut e, &mut clips, None, 0).unwrap();
+    // Render well past the intro without any update: the follow-up starts late, not never.
+    capture_audio(&mut e, 2.5).unwrap();
+    player.update(&mut e, &mut clips).unwrap();
+    let late = player.history()[1].frame;
+    assert!(late >= (2.5 * RATE as f64) as u64, "{:?}", player.history());
+    // The verse is queued; render past its start, then transition before any update.
+    run(
+        &mut e,
+        &mut player,
+        &mut clips,
+        late + BAR - 1000,
+        |_, _, _, _| {},
+    );
+    let queued = player.history().last().unwrap().frame;
+    let mut block = [0.0_f32; 4000];
+    while e.next_frame() < queued + 2000 {
+        e.render(&mut block).unwrap();
+    }
+    let landed = player.transition(&mut e, &mut clips, "chorus").unwrap();
+    assert_eq!(
+        landed,
+        queued + BAR,
+        "the boundary comes from the segment now playing"
+    );
+    // Intensity spam while voices wait for their start never fills command queues.
+    for _ in 0..500 {
+        player.set_intensity(&mut e, 0.3).unwrap();
+        player.set_intensity(&mut e, 0.7).unwrap();
+    }
+}
+
+#[test]
+fn segment_loudness_trims_respect_the_stem_peak() {
+    let mut clips = Clips::new();
+    let tone = clips.get("@loud/440");
+    let mut desc = layered();
+    desc.segments[0].stems.truncate(1);
+    desc.segments[0].stems[0].clip = Some(AssetRef("@loud/440".into()));
+    // Claimed quieter than reality: the bus would boost +12 dB without the peak cap.
+    desc.segments[0].loudness = Some(-40.0);
+    let mut e = engine();
+    let music = e
+        .add_bus("music", BusId::MASTER, TrackBuilder::new())
+        .unwrap();
+    e.set_loudness_target(music, Some(-16.0)).unwrap();
+    let mut player = MusicPlayer::new(desc, music, RATE);
+    player.start(&mut e, &mut clips, None, 0).unwrap();
+    let c = capture_audio(&mut e, 1.0).unwrap();
+    assert!(
+        c.analysis.sample_peak <= 1.0 + 1e-6,
+        "{}",
+        c.analysis.sample_peak
+    );
+    assert!(
+        c.analysis.sample_peak > f64::from(tone.peak()) * 1.5,
+        "boosted until the peak cap binds"
+    );
 }

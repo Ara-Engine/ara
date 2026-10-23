@@ -41,6 +41,8 @@ graph Footsteps {
   take output-clock frames (non-decreasing); triggers are sample-accurate, parameter
   changes ramp over their block, values clamp to the declared range.
   `GraphHandle::activity(label)` → `capture::GraphActivity` for `Analysis::graphs`.
+  Control frames are the voice's source clock: `at_frame` plus samples rendered, equal to
+  output frames at unit rate (pitch/Doppler resampling shifts them accordingly).
 - `AudioGraph::{to_graph, from_graph}`, `AudioAdapter` (DomainAdapter), `projection::edge_id`.
 - `commands::register`: `audiograph.text.apply`, `.rename`, `.node.add`, `.node.remove`,
   `.input.set` (node input or `output`), `.param.set`. All edits are by **name**; results
@@ -75,3 +77,5 @@ Per-voice cost: `cargo run -p ara-audio-graph --release --example graph_cost`.
   `random.pick` are generic over audio and clips.
 - Filter/EQ coefficients are recomputed every 8 samples only when modulated.
 - Never compile, resolve clips or instantiate on the audio thread.
+- Node outputs are sanitized every block (non-finite → 0), so `pow(0, -1)` or huge gains
+  never poison downstream filter state; per-sample loops are bounded for any input.

@@ -259,13 +259,17 @@ impl PreparedVoice {
         if !(8000..=192000).contains(&source.sample_rate()) {
             return Err(AudioError::Invalid("procedural source sample rate"));
         }
-        Ok(Self::new(Input::procedural(source), playback))
+        let at_frame = playback.at_frame;
+        Ok(Self::new(Input::procedural(source, at_frame), playback))
     }
     /// Supplies cooked loudness (LUFS) and sample peak, e.g. for streams. Buses with a
     /// loudness target trim the voice at installation; unknown loudness is never trimmed.
+    /// `peak: None` keeps the known peak (a resident clip's), which caps the boost.
     pub fn with_loudness(mut self, lufs: Option<f32>, peak: Option<f32>) -> Self {
         self.loudness = lufs.filter(|l| l.is_finite());
-        self.peak = peak.filter(|p| p.is_finite() && *p >= 0.0).unwrap_or(0.0);
+        if let Some(peak) = peak.filter(|p| p.is_finite() && *p >= 0.0) {
+            self.peak = peak;
+        }
         self
     }
     fn new(input: Input, playback: Playback) -> Self {
@@ -335,13 +339,8 @@ impl Voice {
             at_frame: playback.at_frame,
         };
         let rate = input.sample_rate();
-        let first = input.next(playback.at_frame);
-        let history = [
-            first,
-            first,
-            input.next(playback.at_frame),
-            input.next(playback.at_frame),
-        ];
+        let first = input.next();
+        let history = [first, first, input.next(), input.next()];
         let spatializer = playback
             .spatializer
             .unwrap_or_else(|| Box::<StereoPanner>::default());
@@ -471,7 +470,7 @@ impl Sound for Voice {
                 while self.fraction >= 1.0 {
                     self.fraction -= 1.0;
                     self.history.rotate_left(1);
-                    self.history[3] = self.input.next(self.time);
+                    self.history[3] = self.input.next();
                 }
                 if self.input.ended() || self.stop.is_some_and(|stop| self.time >= stop) {
                     self.tail = self.tail.saturating_sub(1);
