@@ -37,7 +37,7 @@ pub use debug::DebugPrimitive;
 pub use diagnostic::{Reachability, ReachabilityReason, why_unreachable};
 pub use dynamic::{LinkKind, NavAgentType, NavLinkState, NavObstacle, ObstacleMode};
 pub use hier::{
-    CellCoord, CellGrid, ClusterGraph, ClusterSummary, MAX_PORTAL, Portal, RouteScratch,
+    CellCoord, CellGrid, ClusterGraph, ClusterSummary, LANDMARKS, MIN_PORTAL, Portal, RouteScratch,
     RouteStats, Side, UNREACHABLE,
 };
 pub use input::{

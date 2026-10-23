@@ -134,8 +134,9 @@ pub struct ClusterSummary {
     pub sample_costs: Vec<f32>,
 }
 
-/// Longest portal interval before it is split (metres).
-pub const MAX_PORTAL: f32 = 32.0;
+/// Shortest portal-split length in metres; longer cells use a quarter of their
+/// width, so every border has at most about four portals per walkable interval.
+pub const MIN_PORTAL: f32 = 16.0;
 
 impl ClusterSummary {
     /// Summarises `cell` from a mesh holding only that cell's tiles (baked with
@@ -176,6 +177,7 @@ impl ClusterSummary {
             }
         }
         let climb = grid.settings.agent.climb.max(0.25) + 0.5;
+        let portal_length = (grid.cell_width() * 0.25).max(MIN_PORTAL);
         let mut portals = Vec::new();
         for (side, mut list) in edges {
             list.sort_by(|p, q| p.0.total_cmp(&q.0).then(p.1.total_cmp(&q.1)));
@@ -189,7 +191,7 @@ impl ClusterSummary {
                 }
             }
             for (a, b, y) in merged {
-                let pieces = ((b - a) / MAX_PORTAL).ceil().max(1.0) as usize;
+                let pieces = ((b - a) / portal_length).ceil().max(1.0) as usize;
                 let step = (b - a) / pieces as f32;
                 for k in 0..pieces {
                     let (from, to) = (a + step * k as f32, a + step * (k + 1) as f32);
