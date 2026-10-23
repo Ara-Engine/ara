@@ -33,8 +33,13 @@ impl Environment {
             .env_remove("ARA_DOTNET_ARTIFACTS")
             .env_remove("ARA_PLAYER")
             .env_remove("ARA_IMPORT_WORKER")
+            .env(
+                "VK_IMPLICIT_LAYER_PATH",
+                self.directory.join("empty-layers"),
+            )
             .env("PATH", std::env::join_paths(paths).unwrap_or_default())
             .env("ARA_CONFIG_DIR", self.directory.join("config"))
+            .env("GIT_CEILING_DIRECTORIES", &self.directory)
             .env("ARA_CRASH_DIR", self.directory.join("crashes"));
         command
     }
@@ -55,6 +60,7 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
             .as_secs()
     ));
     fs::create_dir(&directory)?;
+    fs::create_dir(directory.join("empty-layers"))?;
     let env = Environment {
         installed: directory.join("installed engine"),
         directory,

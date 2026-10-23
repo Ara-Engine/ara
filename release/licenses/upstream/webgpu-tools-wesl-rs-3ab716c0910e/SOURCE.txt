@@ -1,0 +1,8 @@
+Original license texts for:
+wesl 0.6.0
+wesl-macros 0.6.0
+wgsl-parse 0.6.0
+wgsl-types 0.6.0
+
+https://raw.githubusercontent.com/webgpu-tools/wesl-rs/3ab716c0910e77f30c20415c9263cfaf6994f777/LICENSE-MIT
+https://raw.githubusercontent.com/webgpu-tools/wesl-rs/3ab716c0910e77f30c20415c9263cfaf6994f777/LICENSE-APACHE

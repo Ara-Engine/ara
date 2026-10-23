@@ -18,7 +18,11 @@ pub fn run(command: &mut Command, log: &Path) -> Result<()> {
         .stderr(Stdio::from(output))
         .spawn()
         .with_context(|| format!("starting {command:?}"))?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(7200);
+    let build = std::path::Path::new(command.get_program())
+        .file_stem()
+        .is_some_and(|name| name == "cargo" || name == "dotnet");
+    let deadline =
+        std::time::Instant::now() + std::time::Duration::from_secs(if build { 7200 } else { 180 });
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;

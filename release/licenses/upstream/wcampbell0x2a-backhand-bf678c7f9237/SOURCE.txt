@@ -1,0 +1,5 @@
+Original license texts for:
+backhand 0.25.5
+
+https://raw.githubusercontent.com/wcampbell0x2a/backhand/bf678c7f923799a57d972cf695daf69d8c6ddafb/LICENSE-MIT
+https://raw.githubusercontent.com/wcampbell0x2a/backhand/bf678c7f923799a57d972cf695daf69d8c6ddafb/LICENSE-APACHE

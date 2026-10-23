@@ -1,0 +1,16 @@
+Original license texts for:
+objc2-app-kit 0.2.2
+objc2-cloud-kit 0.2.2
+objc2-contacts 0.2.2
+objc2-core-data 0.2.2
+objc2-core-image 0.2.2
+objc2-core-location 0.2.2
+objc2-link-presentation 0.2.2
+objc2-metal 0.2.2
+objc2-quartz-core 0.2.2
+objc2-symbols 0.2.2
+objc2-ui-kit 0.2.2
+objc2-uniform-type-identifiers 0.2.2
+objc2-user-notifications 0.2.2
+
+https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt

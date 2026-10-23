@@ -30,8 +30,8 @@ pub fn doctor(as_json: bool) -> bool {
     let checks = json!([
         {"name":".NET 10 SDK", "ok":sdk, "fix":"Install the x64 .NET 10 SDK: https://dotnet.microsoft.com/en-us/download/dotnet/10.0"},
         {"name":".NET 10 runtime", "ok":runtime, "fix":"The x64 .NET 10 SDK includes this runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0"},
-        {"name":"Slang shader compiler", "ok":slang, "path":tools.slangc, "fix":"Reinstall Ara (tools/slangc.exe), or install the Vulkan SDK and set VULKAN_SDK"},
-        {"name":"SPIR-V validator", "ok":validator, "path":tools.spirv_val, "fix":"Reinstall Ara (tools/spirv-val.exe), or install the Vulkan SDK and set VULKAN_SDK"}
+        {"name":"Slang shader compiler", "ok":slang, "path":tools.slangc, "fix":"Reinstall Ara's tools, or install the Vulkan SDK and set VULKAN_SDK. Missing msvcp140/vcruntime140 DLLs: install Microsoft VC++ v14 x64 from https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"},
+        {"name":"SPIR-V validator", "ok":validator, "path":tools.spirv_val, "fix":"Reinstall Ara's tools, or install the Vulkan SDK and set VULKAN_SDK. Missing msvcp140/vcruntime140 DLLs: install Microsoft VC++ v14 x64 from https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"}
     ]);
     let ok = sdk && runtime && slang && validator;
     if as_json {

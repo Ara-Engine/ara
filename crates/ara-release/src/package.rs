@@ -214,10 +214,17 @@ fn bundle_tools(root: &Path, stage: &Path, sdk: &Path) -> Result<()> {
             )?;
         }
     }
-    copy_tree(
-        &root.join("release/licenses"),
-        &stage.join("tools/licenses"),
-    )?;
+    for entry in fs::read_dir(root.join("release/licenses"))? {
+        let path = entry?.path();
+        if path.is_file() {
+            copy(
+                &path,
+                &stage
+                    .join("tools/licenses")
+                    .join(path.file_name().context("tool license filename")?),
+            )?;
+        }
+    }
     copy(
         &sdk.join("Licenses/LICENSE.txt"),
         &stage.join("tools/licenses/Vulkan-SDK.txt"),
@@ -270,6 +277,7 @@ fn bundle_dotnet(root: &Path, stage: &Path, symbols: &Path, dist: &Path) -> Resu
 fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
     run(
         Command::new(stage.join("ara.exe"))
+            .env("GIT_CEILING_DIRECTORIES", stage)
             .args(["init"])
             .arg(stage.join("templates/starter"))
             .args(["--name", "Starter"]),
@@ -335,7 +343,7 @@ pub fn notes(root: &Path, version: &str) -> Result<()> {
     )?;
     let issues = fs::read_to_string(root.join("docs/KNOWN_ISSUES.md"))?;
     let notes = format!(
-        "# Ara {version}\n\nEarly Windows alpha for testers. Unsigned; no automatic crash uploads.\n\n## System requirements\n\n- Windows 10/11 x64; 16 GB RAM.\n- Vulkan 1.3 GPU and current driver; ray tracing recommended (RTX 20-series or newer / RX 6000+).\n- x64 .NET 10 SDK and runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0\n- Slang, DXC and SPIR-V validation tools are bundled; no Vulkan SDK or Rust is needed to run the installed engine.\n\n## Installation\n\nRun the setup EXE, or extract the ZIP and run install.ps1. Versions install side by side under %LOCALAPPDATA%\\Programs\\Ara\\{version}. Connect agents with `ara hub install-mcp --client claude|codex`.\n\n## Decision highlights\n\n| ID | Decision | Date |\n|---|---|---|\n{highlights}\n\n## Merged features (first-parent history)\n\n{features}\n\n## Known issues (source document snapshot)\n\nThe following is copied from docs/KNOWN_ISSUES.md. Its installer/Hub build-order entries may precede this packaging; see the smoke report for actual installed-build results.\n\n{issues}\n"
+        "# Ara {version}\n\nEarly Windows alpha for testers. Unsigned; no automatic crash uploads.\n\n## System requirements\n\n- Windows 10/11 x64; 16 GB RAM.\n- Vulkan 1.3 GPU and current driver; ray tracing recommended (RTX 20-series or newer / RX 6000+).\n- x64 .NET 10 SDK and runtime: https://dotnet.microsoft.com/en-us/download/dotnet/10.0\n- Microsoft VC++ v14 Redistributable (x64), required by bundled SDK shader tools: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\n- Slang, DXC and SPIR-V validation tools are bundled; no Vulkan SDK or Rust is needed to run the installed engine.\n\n## Installation\n\nRun the setup EXE, or extract the ZIP and run install.ps1. Versions install side by side under %LOCALAPPDATA%\\Programs\\Ara\\{version}. Connect agents with `ara hub install-mcp --client claude|codex`.\n\n## Decision highlights\n\n| ID | Decision | Date |\n|---|---|---|\n{highlights}\n\n## Merged features (first-parent history)\n\n{features}\n\n## Known issues (source document snapshot)\n\nThe following is copied from docs/KNOWN_ISSUES.md. Its installer/Hub build-order entries may precede this packaging; see the smoke report for actual installed-build results.\n\n{issues}\n"
     );
     let dist = support::dist(root);
     fs::create_dir_all(&dist)?;

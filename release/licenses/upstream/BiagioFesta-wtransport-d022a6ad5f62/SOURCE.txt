@@ -1,0 +1,6 @@
+Original license texts for:
+wtransport 0.7.2
+wtransport-proto 0.7.2
+
+https://raw.githubusercontent.com/BiagioFesta/wtransport/d022a6ad5f6260cb526e06d8ca42d09516ce6440/LICENSE-MIT
+https://raw.githubusercontent.com/BiagioFesta/wtransport/d022a6ad5f6260cb526e06d8ca42d09516ce6440/LICENSE-APACHE

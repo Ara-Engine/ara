@@ -5,7 +5,7 @@ mod package;
 mod smoke;
 mod support;
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -36,9 +36,11 @@ enum Command {
     Symbols { directory: PathBuf },
 }
 fn main() -> Result<()> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .context("release crate must live under crates/")?
+        .to_path_buf();
     match Cli::parse().command {
         Command::Package { version } => {
             valid_version(&version)?;

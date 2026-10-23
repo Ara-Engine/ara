@@ -42,11 +42,20 @@ their package manifests, license expressions and notices are aggregated. This
 avoids redistributing a proprietary SDK or runtime installer. Doctor and setup
 print the official .NET 10 download link if missing. NativeAOT game export has
 separate developer prerequisites, outside engine startup.
+The SDK's shader-tool PE imports also require Microsoft's x64 VC++ v14 runtime
+(`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`). It is an external
+prerequisite; setup checks it before invoking native tools and links Microsoft's
+supported download page. No proprietary CRT DLL is copied out of System32 or an SDK.
 
 All Cargo metadata packages (including transitive/build/dev/other-target packages)
 are inventoried with SPDX expressions and original license/notice texts, along
 with vendored SDL3, Jolt, Recast/Detour, libopus, fonts/icons, FSR, meshoptimizer.
 The deliberately inclusive inventory does not claim every package is linked.
+When a published crate omits its license files, cached upstream notices and full
+SPDX texts supplement its metadata attribution. Exact upstream revisions are
+recorded alongside those notices. New unsupported SPDX IDs fail packaging until
+their texts are added. Every third-party package has a source-download link,
+including the unmodified MPL-licensed audio dependencies.
 
 Samples are copied when `samples/<id>/ara.project.json` exists; caches, build
 directories and evidence are excluded. `samples/assets.lock.json` is copied beside

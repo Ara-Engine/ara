@@ -4,6 +4,8 @@ Requirements: Windows 10/11 x64, 16 GB RAM, Vulkan 1.3 GPU and current driver.
 Ray tracing recommended: RTX 20-series or newer / RX 6000+.
 Install the x64 .NET 10 SDK (includes the runtime):
 https://dotnet.microsoft.com/en-us/download/dotnet/10.0
+Microsoft Visual C++ v14 Redistributable (x64), required by the SDK shader tools:
+https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 
 Run the setup EXE, or extract the portable ZIP and run:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
@@ -33,6 +35,7 @@ resources, Ara's .NET host/runtime/compile server/analyzers and agent run worker
 brand icons, open-source Slang/DXC/SPIR-V tools and original third-party notices.
 The installed tools do not need a source checkout, Rust or the Vulkan SDK.
 Not bundled: Microsoft .NET SDK/runtime/reference packs, MSVC tools, GPU drivers,
+Microsoft Visual C++ runtime installer (install the x64 prerequisite above),
 Steam Audio optional runtime, symbols. No proprietary Microsoft SDK binaries are
 redistributed. Open-source Roslyn/NuGet libraries carry their original licenses.
 

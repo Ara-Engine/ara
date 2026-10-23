@@ -2,7 +2,7 @@
 param([string]$Destination, [switch]$Silent, [switch]$RegisterOnly, [switch]$NoSystemIntegration)
 $ErrorActionPreference = 'Stop'
 $source = [IO.Path]::GetFullPath($PSScriptRoot)
-$engine = Get-Content -LiteralPath (Join-Path $source 'engine.json') -Raw | ConvertFrom-Json
+$engine = Get-Content -LiteralPath (Join-Path $source 'engine.json') -Encoding UTF8 -Raw | ConvertFrom-Json
 if ($engine.format -ne 'ara.engine/1' -or $engine.version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Invalid Ara engine manifest' }
 if (-not $RegisterOnly) {
     if (-not $Destination) { $Destination = Join-Path $env:LOCALAPPDATA ('Programs\Ara\' + $engine.version) }
@@ -26,6 +26,12 @@ if (-not $RegisterOnly) {
     $source = $Destination
 }
 $ara = Join-Path $source 'ara.exe'
+# The Vulkan SDK tools import these Microsoft CRT DLLs; do not copy system DLLs.
+foreach ($dll in @('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path ([Environment]::SystemDirectory) $dll))) {
+        throw 'Install Microsoft Visual C++ v14 Redistributable (x64), then rerun install.ps1 -RegisterOnly: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist'
+    }
+}
 & $ara hub register-engine
 if ($LASTEXITCODE -ne 0) { throw 'Hub engine registration failed; installation retained for retry' }
 & $ara doctor

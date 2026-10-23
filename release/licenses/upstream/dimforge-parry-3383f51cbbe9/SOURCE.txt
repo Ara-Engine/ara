@@ -1,0 +1,7 @@
+Original license texts for:
+parry2d 0.31.1
+parry2d-f64 0.31.1
+parry3d 0.31.1
+parry3d-f64 0.31.1
+
+https://raw.githubusercontent.com/dimforge/parry/3383f51cbbe9af70565427e7a66c605e1557c1fc/LICENSE

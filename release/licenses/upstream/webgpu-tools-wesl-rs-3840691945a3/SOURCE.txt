@@ -1,0 +1,5 @@
+Original license texts for:
+wesl-core 0.1.0
+
+https://raw.githubusercontent.com/webgpu-tools/wesl-rs/3840691945a378d433c7d8653da9cf03e5ff8a81/LICENSE-MIT
+https://raw.githubusercontent.com/webgpu-tools/wesl-rs/3840691945a378d433c7d8653da9cf03e5ff8a81/LICENSE-APACHE

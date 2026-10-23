@@ -50,6 +50,21 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 .context("package manifest")?,
         );
         let directory = manifest.parent().context("package directory")?;
+        if package["source"].is_string()
+            && let Some(expression) = package["license"].as_str()
+        {
+            for id in expression
+                .split(|c: char| !c.is_ascii_alphanumeric() && !".-+".contains(c))
+                .filter(|id| !id.is_empty() && !["AND", "OR", "WITH"].contains(id))
+            {
+                ensure!(
+                    root.join("release/licenses/spdx")
+                        .join(format!("{id}.txt"))
+                        .is_file(),
+                    "missing standard license text {id} for {name} {version}; update release/licenses/spdx"
+                );
+            }
+        }
         let mut texts = Vec::new();
         // Workspace vendors are handled once below, rather than repeated per crate.
         let candidates = if package["source"].is_null() {
@@ -97,6 +112,15 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 texts.push(String::from_utf8_lossy(&fs::read(&file)?).into_owned());
             }
         }
+        // meshoptimizer's original MIT notice is embedded in its public header.
+        if name == "meshopt" {
+            let header = fs::read_to_string(directory.join("vendor/src/meshoptimizer.h"))?;
+            let start = header.rfind("/*").context("meshoptimizer license block")?;
+            texts.push(format!(
+                "meshoptimizer original header notice\n{}",
+                &header[start..]
+            ));
+        }
         let license = package["license"]
             .as_str()
             .unwrap_or(if package["source"].is_null() {
@@ -105,10 +129,16 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 "See original license files"
             });
         inventory.push(json!({"name":name,"version":version,"license":license,"repository":package["repository"],"source":package["source"],"originalLicenseFiles":texts.len()}));
+        let source = if package["source"].is_null() {
+            "Private Ara source; all rights reserved".into()
+        } else {
+            format!("https://crates.io/api/v1/crates/{name}/{version}/download")
+        };
         sections.insert(
             format!("{name} {version}"),
             format!(
-                "SPDX: {license}\nRepository: {}\n{}",
+                "SPDX: {license}\nAuthors (Cargo metadata): {}\nRepository: {}\nSource archive: {source}\n{}",
+                package["authors"],
                 package["repository"],
                 texts.join("\n\n")
             ),
@@ -134,9 +164,15 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
         .join("\n");
     sections.insert("Recast / Detour (original source notice)".into(), header);
     for file in files(&root.join("release/licenses"))? {
+        copy(
+            &file,
+            &stage
+                .join("licenses/additional")
+                .join(file.strip_prefix(root.join("release/licenses"))?),
+        )?;
         sections.insert(
             format!(
-                "Shader tools / {}",
+                "Additional original licenses / {}",
                 file.strip_prefix(root.join("release/licenses"))?.display()
             ),
             String::from_utf8_lossy(&fs::read(&file)?).into_owned(),

@@ -1,0 +1,5 @@
+Original license texts for:
+dasp_frame 0.11.0
+
+https://raw.githubusercontent.com/rustaudio/dasp/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-MIT
+https://raw.githubusercontent.com/rustaudio/dasp/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-APACHE

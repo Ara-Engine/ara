@@ -1,0 +1,5 @@
+Original license texts for:
+avian_derive 0.2.3
+
+https://raw.githubusercontent.com/avianphysics/avian/b77518c60efb40907e83c4e0871184bee503b7de/LICENSE-MIT
+https://raw.githubusercontent.com/avianphysics/avian/b77518c60efb40907e83c4e0871184bee503b7de/LICENSE-APACHE

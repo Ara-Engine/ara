@@ -1,0 +1,6 @@
+Original license texts for:
+ndk 0.9.0
+ndk-sys 0.6.0+11769913
+
+https://raw.githubusercontent.com/rust-mobile/ndk/49bbbba16c58ff63cb8a0ad0eca5a9fb7ecaec25/LICENSE-MIT
+https://raw.githubusercontent.com/rust-mobile/ndk/49bbbba16c58ff63cb8a0ad0eca5a9fb7ecaec25/LICENSE-APACHE

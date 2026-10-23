@@ -1,0 +1,13 @@
+Original license texts for:
+symphonia 0.5.5
+symphonia-bundle-flac 0.5.5
+symphonia-codec-adpcm 0.5.5
+symphonia-codec-pcm 0.5.5
+symphonia-codec-vorbis 0.5.5
+symphonia-core 0.5.5
+symphonia-format-ogg 0.5.5
+symphonia-format-riff 0.5.5
+symphonia-metadata 0.5.5
+symphonia-utils-xiph 0.5.5
+
+https://raw.githubusercontent.com/pdeljanov/Symphonia/6d533f26150953a882a6a111ebd13f0abf7129d5/LICENSE

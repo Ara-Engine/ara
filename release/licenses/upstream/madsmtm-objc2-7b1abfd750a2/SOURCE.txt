@@ -1,0 +1,13 @@
+Original license texts for:
+objc2-audio-toolbox 0.3.2
+objc2-avf-audio 0.3.2
+objc2-core-audio 0.3.2
+objc2-core-audio-types 0.3.2
+objc2-core-foundation 0.3.2
+objc2-core-graphics 0.3.2
+objc2-io-kit 0.3.2
+objc2-io-surface 0.3.2
+objc2-metal 0.3.2
+objc2-quartz-core 0.3.2
+
+https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md
