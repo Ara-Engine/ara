@@ -728,6 +728,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-dev"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "syn 2.0.119",
+ "toml_edit",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ara-diag"
 version = "0.0.0"
 dependencies = [
@@ -11577,6 +11590,7 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 
