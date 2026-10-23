@@ -41,8 +41,9 @@ pub(crate) fn step(world: &mut World, nav: &mut NavWorld) {
 fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
     // Every stable ID must be unique, including states missing other components.
     nav.ids.clear();
-    nav.ids
-        .extend(world.query::<&NavAgentState>().iter(world).map(|s| s.id));
+    let mut ids = nav.id_query.take().unwrap_or_else(|| world.query());
+    nav.ids.extend(ids.iter(world).map(|s| s.id));
+    nav.id_query = Some(ids);
     nav.ids.sort_unstable();
     if nav.ids.windows(2).any(|pair| pair[0] == pair[1]) {
         nav.errors.push((
@@ -112,18 +113,10 @@ fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
             });
     }
 
-    // Gather avoidance input in iteration order; results do not depend on it.
-    let profiles: Vec<u32> = nav.meshes.keys().copied().collect();
-    nav.crowd_agents.clear();
-    nav.slots.clear();
+    // Errors and link waiting counts (cheap serial scan of two fields).
     nav.waiting.clear();
-    for (t, (agents, states, positions)) in views.iter().enumerate() {
-        for (r, ((agent, state), position)) in agents
-            .iter()
-            .zip(states.iter())
-            .zip(positions.iter())
-            .enumerate()
-        {
+    for (_, states, _) in views.iter() {
+        for state in states.iter() {
             match state.issue {
                 Some(NavIssue::NoMesh) => nav.errors.push((
                     state.id,
@@ -145,41 +138,68 @@ fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
             if let Some((link, _)) = state.waiting {
                 *nav.waiting.entry(link).or_default() += 1;
             }
-            let Ok(wall_index) = profiles.binary_search(&agent.profile) else {
-                continue;
-            };
-            if state.traversal.is_some() || matches!(state.issue, Some(NavIssue::InvalidAgent)) {
-                continue;
-            }
-            nav.slots.push((t as u32, r as u32));
-            nav.crowd_agents.push(ara_crowd::Agent {
-                id: state.id,
-                position: position.0,
-                velocity: state.velocity,
-                preferred: state.desired,
-                radius: agent.radius,
-                height: agent.height,
-                max_speed: agent.max_speed,
-                max_acceleration: agent.acceleration,
-                layers: 1,
-                walls: wall_index as u16,
-                obstacle: false,
-            });
         }
     }
-    let real = nav.crowd_agents.len();
+
+    // Avoidance input: one slot per agent in iteration order (results do not
+    // depend on it). Traversing, invalid or meshless agents become inert slots:
+    // no layers (nothing avoids them) and fixed (they do not move).
+    let profiles: Vec<u32> = nav.meshes.keys().copied().collect();
+    let total: usize = views.iter().map(|v| v.0.len()).sum();
+    nav.crowd_agents.clear();
+    nav.crowd_agents.resize(total, ara_crowd::Agent::default());
+    let mut rest = nav.crowd_agents.as_mut_slice();
+    for (agents, states, positions) in views.iter() {
+        let (slots, tail) = rest.split_at_mut(agents.len());
+        rest = tail;
+        slots
+            .par_iter_mut()
+            .zip(agents.par_iter())
+            .zip(states.par_iter())
+            .zip(positions.par_iter())
+            .with_min_len(512)
+            .for_each(|(((slot, agent), state), position)| {
+                let wall_index = profiles.binary_search(&agent.profile).ok();
+                let inert = wall_index.is_none()
+                    || state.traversal.is_some()
+                    || matches!(state.issue, Some(NavIssue::InvalidAgent | NavIssue::NoMesh));
+                *slot = ara_crowd::Agent {
+                    id: state.id,
+                    position: if inert { [0.0; 3] } else { position.0 },
+                    velocity: if inert { [0.0; 3] } else { state.velocity },
+                    preferred: if inert { [0.0; 3] } else { state.desired },
+                    radius: agent.radius.clamp(0.001, 10.0),
+                    height: agent.height.max(0.01),
+                    max_speed: if inert { 0.0 } else { agent.max_speed },
+                    max_acceleration: agent.acceleration.max(0.0),
+                    layers: if inert { 0 } else { 1 },
+                    walls: wall_index.map_or(ara_crowd::NO_WALLS, |i| i as u16),
+                    obstacle: inert,
+                };
+            });
+    }
     nav.crowd_agents.extend_from_slice(&nav.obstacle_discs);
     let walls: Vec<&ara_crowd::Walls> = nav.meshes.values().map(|m| m.walls()).collect();
     let dt = nav.config.fixed_dt;
-    match nav.crowd.step(&mut nav.crowd_agents, &walls, dt) {
-        Ok(_) => {
-            for (&(t, r), result) in nav.slots.iter().zip(&nav.crowd_agents[..real]) {
-                let (_, states, positions) = &mut views[t as usize];
-                positions[r as usize].0 = result.position;
-                states[r as usize].velocity = result.velocity;
-            }
-        }
-        Err(e) => nav.errors.push((0, NavError::new("crowd", e.0))),
+    if let Err(e) = nav.crowd.step(&mut nav.crowd_agents, &walls, dt) {
+        nav.errors.push((0, NavError::new("crowd", e.0)));
+        return;
+    }
+    let mut results = &nav.crowd_agents[..total];
+    for (_, states, positions) in views.iter_mut() {
+        let (chunk, tail) = results.split_at(states.len());
+        results = tail;
+        chunk
+            .par_iter()
+            .zip(states.par_iter_mut())
+            .zip(positions.par_iter_mut())
+            .with_min_len(512)
+            .for_each(|((result, state), position)| {
+                if !result.obstacle {
+                    position.0 = result.position;
+                    state.velocity = result.velocity;
+                }
+            });
     }
 }
 
@@ -201,49 +221,53 @@ pub(crate) fn effective_filter(
     filter
 }
 
+/// Whether an agent needs work this tick: `(validate_only, has_path)`. Idle
+/// agents are projected once per mesh revision (off-mesh check); moving agents
+/// replan when the corridor is missing, the mesh swapped or the filter changed.
+fn candidate(
+    agent: &NavAgent,
+    state: &NavAgentState,
+    meshes: &std::collections::BTreeMap<u32, crate::NavMesh>,
+    types: &std::collections::BTreeMap<u32, QueryFilter>,
+) -> Option<(bool, bool)> {
+    if state.traversal.is_some() || state.waiting.is_some() {
+        return None;
+    }
+    let hash = meshes.get(&agent.profile)?.content_hash();
+    if state.target.is_none() {
+        return (state.mesh != Some(hash)).then_some((true, false));
+    }
+    let stale = state.mesh != Some(hash)
+        || state.planned_filter != Some(effective_filter(agent, state, types));
+    let missing = state.path.is_none() && state.status != NavStatus::Unreachable;
+    (stale || missing).then_some((false, state.path.is_some()))
+}
+
 /// Replans within `NavConfig::replan_budget`: agents without a corridor first,
 /// then stale ones (mesh swapped, filter changed), each class by stable ID.
 fn plan(nav: &mut NavWorld, views: &mut [View<'_>]) {
     nav.wants.clear();
+    let (meshes, types) = (&nav.meshes, &nav.types);
     for (t, (agents, states, _)) in views.iter().enumerate() {
-        for (r, (agent, state)) in agents.iter().zip(states.iter()).enumerate() {
-            if state.traversal.is_some() || state.waiting.is_some() {
-                continue;
-            }
-            let Some(mesh) = nav.meshes.get(&agent.profile) else {
-                continue;
-            };
-            if state.target.is_none() {
-                // Idle agents are projected once per mesh revision (off-mesh check).
-                if state.mesh != Some(mesh.content_hash()) {
-                    nav.wants.push(Want {
-                        validate: true,
-                        has_path: false,
+        // Parallel scan; `par_extend` keeps row order, and the result is sorted below.
+        nav.wants.par_extend(
+            agents
+                .par_iter()
+                .zip(states.par_iter())
+                .enumerate()
+                .with_min_len(1024)
+                .filter_map(|(r, (agent, state))| {
+                    candidate(agent, state, meshes, types).map(|(validate, has_path)| Want {
+                        validate,
+                        has_path,
                         profile: agent.profile,
-                        avoid: None,
+                        avoid: state.avoid_link,
                         id: state.id,
                         table: t as u32,
                         row: r as u32,
-                    });
-                }
-                continue;
-            }
-            let filter = effective_filter(agent, state, &nav.types);
-            let stale =
-                state.mesh != Some(mesh.content_hash()) || state.planned_filter != Some(filter);
-            let missing = state.path.is_none() && state.status != NavStatus::Unreachable;
-            if stale || missing {
-                nav.wants.push(Want {
-                    validate: false,
-                    has_path: state.path.is_some(),
-                    profile: agent.profile,
-                    avoid: state.avoid_link,
-                    id: state.id,
-                    table: t as u32,
-                    row: r as u32,
-                });
-            }
-        }
+                    })
+                }),
+        );
     }
     nav.wants
         .sort_unstable_by_key(|w| (w.validate, w.has_path, w.id));

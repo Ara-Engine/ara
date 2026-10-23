@@ -309,7 +309,13 @@ pub struct ClusterGraph {
     positions: Vec<[f32; 3]>,
     offsets: Vec<u32>,
     edges: Vec<(u32, f32)>,
+    /// ALT landmarks: forward graph distances from each landmark (infinity when
+    /// unreachable), node-major (`node * LANDMARKS + landmark`).
+    landmarks: Vec<f32>,
 }
+
+/// Landmarks for the ALT heuristic (farthest-point selection).
+pub const LANDMARKS: usize = 8;
 
 /// Reusable A* scratch; one per querying thread.
 #[derive(Default)]
@@ -410,13 +416,69 @@ impl ClusterGraph {
         for i in 0..positions.len() {
             offsets[i + 1] += offsets[i];
         }
-        Ok(Self {
+        let mut graph = Self {
             grid,
             cells,
             positions,
             offsets,
             edges: list.into_iter().map(|(_, to, c)| (to, c)).collect(),
-        })
+            landmarks: Vec::new(),
+        };
+        graph.landmarks = graph.landmark_distances();
+        Ok(graph)
+    }
+
+    /// Dijkstra from `source` over the portal graph (infinity when unreachable).
+    fn dijkstra(&self, source: usize) -> Vec<f32> {
+        let mut dist = vec![f32::INFINITY; self.positions.len()];
+        let mut heap = BinaryHeap::new();
+        dist[source] = 0.0;
+        heap.push(Reverse((0u32, source as u32)));
+        while let Some(Reverse((bits, node))) = heap.pop() {
+            let node = node as usize;
+            if f32::from_bits(bits) > dist[node] {
+                continue;
+            }
+            for &(to, cost) in
+                &self.edges[self.offsets[node] as usize..self.offsets[node + 1] as usize]
+            {
+                let next = dist[node] + cost;
+                if next < dist[to as usize] {
+                    dist[to as usize] = next;
+                    heap.push(Reverse((next.to_bits(), to)));
+                }
+            }
+        }
+        dist
+    }
+
+    /// Farthest-point landmark selection (deterministic), then one Dijkstra each.
+    fn landmark_distances(&self) -> Vec<f32> {
+        let n = self.positions.len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let mut nearest = vec![f32::INFINITY; n];
+        let mut chosen: Vec<Vec<f32>> = Vec::new();
+        let mut next = {
+            let from_first = self.dijkstra(0);
+            far(&from_first)
+        };
+        while chosen.len() < LANDMARKS.min(n) {
+            let dist = self.dijkstra(next);
+            for (best, d) in nearest.iter_mut().zip(&dist) {
+                *best = best.min(*d);
+            }
+            chosen.push(dist);
+            next = far(&nearest);
+        }
+        let mut out = vec![f32::INFINITY; n * LANDMARKS];
+        for (l, dist) in chosen.iter().enumerate() {
+            for (v, d) in dist.iter().enumerate() {
+                out[v * LANDMARKS + l] = *d;
+            }
+        }
+        out
     }
 
     /// Cell grid the graph was built on.
@@ -464,16 +526,17 @@ impl ClusterGraph {
         };
         let n = self.positions.len();
         let (start_node, goal_node) = (n as u32, n as u32 + 1);
-        scratch.generation = scratch.generation.wrapping_add(1);
-        if scratch.generation == 0 || scratch.stamp.len() < n + 2 {
+        scratch.generation = scratch.generation.wrapping_add(2);
+        if scratch.generation < 2 || scratch.stamp.len() < n + 2 {
             scratch.stamp.clear();
             scratch.stamp.resize(n + 2, 0);
             scratch.g.resize(n + 2, 0.0);
             scratch.parent.resize(n + 2, 0);
-            scratch.generation = 1;
+            scratch.generation = 2;
         }
+        // stamp == generation: opened this query; generation + 1: closed.
+        let (open, closed) = (scratch.generation, scratch.generation + 1);
         scratch.heap.clear();
-        let generation = scratch.generation;
         let goal_count = goal_summary.portals.len();
         let start_count = start_summary.portals.len();
         let goal_cost = |node: u32| -> Option<f32> {
@@ -483,39 +546,66 @@ impl ClusterGraph {
                 .filter(|c| *c >= 0.0)
                 .map(|c| c + gd)
         };
-        let position = |node: u32| -> [f32; 3] {
+        // ALT bounds: d(L, goal) through the goal's attach edges.
+        let mut goal_lm = [f32::INFINITY; LANDMARKS];
+        if !self.landmarks.is_empty() {
+            for k in 0..goal_count as u32 {
+                if let Some(c) = goal_cost(goal_first + k) {
+                    let row = (goal_first + k) as usize * LANDMARKS;
+                    for (l, best) in goal_lm.iter_mut().enumerate() {
+                        *best = best.min(self.landmarks[row + l] + c);
+                    }
+                }
+            }
+        }
+        let heuristic = |node: u32| -> f32 {
+            if node == goal_node {
+                return 0.0;
+            }
             if node == start_node {
-                start
-            } else if node == goal_node {
-                goal
-            } else {
-                self.positions[node as usize]
+                return distance(start, goal);
+            }
+            let p = self.positions[node as usize];
+            let mut h = distance(p, goal);
+            if !self.landmarks.is_empty() {
+                let row = node as usize * LANDMARKS;
+                for (l, to_goal) in goal_lm.iter().enumerate() {
+                    let here = self.landmarks[row + l];
+                    if to_goal.is_finite() && here.is_finite() {
+                        h = h.max(to_goal - here);
+                    }
+                }
+            }
+            h
+        };
+        let relax = |scratch: &mut RouteScratch, from: u32, to: u32, cost: f32| {
+            let slot = to as usize;
+            if scratch.stamp[slot] == closed {
+                return;
+            }
+            let g = scratch.g[from as usize] + cost;
+            if scratch.stamp[slot] != open || g < scratch.g[slot] {
+                scratch.stamp[slot] = open;
+                scratch.g[slot] = g;
+                scratch.parent[slot] = from;
+                scratch
+                    .heap
+                    .push(Reverse(((g + heuristic(to)).to_bits(), to)));
             }
         };
         let mut stats = RouteStats::default();
-        let relax = |scratch: &mut RouteScratch, from: u32, to: u32, cost: f32| {
-            let g = scratch.g[from as usize] + cost;
-            let slot = to as usize;
-            if scratch.stamp[slot] != generation || g < scratch.g[slot] {
-                scratch.stamp[slot] = generation;
-                scratch.g[slot] = g;
-                scratch.parent[slot] = from;
-                let f = g + distance(position(to), goal);
-                scratch.heap.push(Reverse((f.to_bits(), to)));
-            }
-        };
-        scratch.stamp[start_node as usize] = generation;
+        scratch.stamp[start_node as usize] = open;
         scratch.g[start_node as usize] = 0.0;
         scratch
             .heap
-            .push(Reverse((distance(start, goal).to_bits(), start_node)));
+            .push(Reverse((heuristic(start_node).to_bits(), start_node)));
         let same_cell = std::ptr::eq(start_summary.as_ref(), goal_summary.as_ref());
-        while let Some(Reverse((f_bits, node))) = scratch.heap.pop() {
+        while let Some(Reverse((_, node))) = scratch.heap.pop() {
             let slot = node as usize;
-            let g = scratch.g[slot];
-            if f32::from_bits(f_bits) > g + distance(position(node), goal) + 1e-3 {
-                continue; // Stale heap entry.
+            if scratch.stamp[slot] == closed {
+                continue; // Stale duplicate.
             }
+            scratch.stamp[slot] = closed;
             stats.expanded += 1;
             if node == goal_node {
                 let mut waypoints = vec![goal];
@@ -525,11 +615,12 @@ impl ClusterGraph {
                     at = scratch.parent[at as usize];
                 }
                 waypoints.reverse();
+                let cost = scratch.g[slot];
                 return Ok((
                     Some(Route {
                         waypoints,
                         next: 0,
-                        cost: g,
+                        cost,
                     }),
                     stats,
                 ));
@@ -557,4 +648,23 @@ impl ClusterGraph {
         }
         Ok((None, stats))
     }
+}
+
+/// Index of the largest finite distance (ties: lowest index); unreachable
+/// nodes are preferred so other components also get a landmark.
+fn far(dist: &[f32]) -> usize {
+    let mut best = (0usize, -1.0f32, false);
+    for (i, d) in dist.iter().enumerate() {
+        let unreachable = !d.is_finite();
+        let better = match (unreachable, best.2) {
+            (true, false) => true,
+            (false, true) => false,
+            (true, true) => false,
+            (false, false) => *d > best.1,
+        };
+        if better {
+            best = (i, *d, unreachable);
+        }
+    }
+    best.0
 }
