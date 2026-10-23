@@ -1,0 +1,27 @@
+[package]
+name = "ara-nav"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-nav-sys = { path = "../ara-nav-sys" }
+ara-schema = { path = "../ara-schema" }
+ara-diag = { path = "../ara-diag" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+blake3 = "1.8"
+serde = { workspace = true, features = ["rc"] }
+postcard = { version = "1.1.3", default-features = false, features = ["alloc", "use-std"] }
+rayon = "1.11"
+
+[dev-dependencies]
+ara-json = { path = "../ara-json" }
+serde_json.workspace = true
+
+[[bench]]
+name = "navigation"
+harness = false
+
+[lints]
+workspace = true
