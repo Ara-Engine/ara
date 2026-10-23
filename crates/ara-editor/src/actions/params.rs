@@ -77,6 +77,10 @@ pub(super) struct EditorReport {
     pub session: String,
     /// Actionable editor error message.
     pub message: String,
+    /// What failed: `action` (default), `thumbnail`, `settings`, `transport` or `render`.
+    pub kind: Option<String>,
+    /// What it is about (`asset:@textures/a.png`, `entity:e_8b21`); default `system:editor`.
+    pub subject: Option<String>,
 }
 /// Parameters of `editor.scene.open`.
 #[derive(Schema, Deserialize)]

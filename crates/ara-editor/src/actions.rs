@@ -233,6 +233,19 @@ impl Service for EditorService {
             .collect()
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
+        let result = self.dispatch(cx, method, params);
+        // Preferences that could not be written are warnings on the bus, not stderr.
+        for failure in self.settings.take_failures() {
+            cx.log(
+                Diagnostic::warning(crate::codes::SETTINGS, failure)
+                    .subject(ara_diag::Subject::system("editor")),
+            );
+        }
+        result
+    }
+}
+impl EditorService {
+    fn dispatch(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         if method == "editor.state" {
             return Ok(json!({"state":self.navigation.state}));
         }
@@ -265,6 +278,7 @@ impl Service for EditorService {
                 target: &target,
                 clipboard_entities: false,
                 clipboard_value: false,
+                logs: crate::shell::LogView::default(),
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }
@@ -305,7 +319,24 @@ impl Service for EditorService {
         }
         if method == "editor.report" {
             let p: EditorReport = parse(params)?;
-            cx.log(crate::invalid(p.message));
+            let (code, warning) = match p.kind.as_deref().unwrap_or("action") {
+                "thumbnail" => (crate::codes::THUMBNAIL, true),
+                "settings" => (crate::codes::SETTINGS, true),
+                "transport" => (crate::codes::TRANSPORT, false),
+                "render" => (crate::codes::RENDER, false),
+                _ => (crate::codes::ACTION, false),
+            };
+            let diagnostic = if warning {
+                Diagnostic::warning(code, p.message)
+            } else {
+                Diagnostic::error(code, p.message)
+            };
+            let subject = p
+                .subject
+                .as_deref()
+                .and_then(ara_diag::Subject::parse)
+                .unwrap_or_else(|| ara_diag::Subject::system("editor"));
+            cx.log(diagnostic.subject(subject));
             return Ok(json!({"ok":true}));
         }
         if method == "editor.profile.freeze" {

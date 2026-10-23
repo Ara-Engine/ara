@@ -1201,6 +1201,144 @@ fn build() -> Vec<Spec> {
             |_, e, _| act(e, "editor.layout.show", json!({"panel": "console"})),
         )
         .when(|c| panel_open(c, "console")),
+        cmd(
+            "window.game",
+            "Game",
+            "gamepad-2",
+            "",
+            "The Game view: Play inside the editor, with resolution, stats and client selection.",
+            |_, e, _| act(e, "editor.layout.show", json!({"panel": "game"})),
+        )
+        .when(|c| panel_open(c, "game")),
+        cmd(
+            "window.problems",
+            "Problems",
+            "triangle-alert",
+            "Alt+5",
+            "Errors and warnings grouped by file, with fixes and why.",
+            |_, e, _| act(e, "editor.layout.show", json!({"panel": "problems"})),
+        )
+        .when(|c| panel_open(c, "problems")),
+        cmd(
+            "console.clear",
+            "Clear Console",
+            "trash",
+            "",
+            "Hide the messages logged so far; new ones still appear.",
+            |s, e, _| {
+                let logs = e.action("logs", json!({"limit": 1}))?;
+                s.log_view.since = logs["cursor"].as_u64().unwrap_or(0);
+                s.console_open = None;
+                Ok(())
+            },
+        ),
+        cmd(
+            "console.collapse",
+            "Collapse Repeated Messages",
+            "layers",
+            "",
+            "Show one row per code with its total count.",
+            |s, _, _| {
+                s.log_view.collapse = !s.log_view.collapse;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.collapse)),
+        cmd(
+            "console.errors",
+            "Show Errors",
+            "circle-x",
+            "",
+            "Show or hide errors in the Console.",
+            |s, _, _| {
+                s.log_view.errors = !s.log_view.errors;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.errors)),
+        cmd(
+            "console.warnings",
+            "Show Warnings",
+            "triangle-alert",
+            "",
+            "Show or hide warnings in the Console.",
+            |s, _, _| {
+                s.log_view.warnings = !s.log_view.warnings;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.warnings)),
+        cmd(
+            "console.info",
+            "Show Messages",
+            "info",
+            "",
+            "Show or hide info messages in the Console.",
+            |s, _, _| {
+                s.log_view.info = !s.log_view.info;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.info)),
+        cmd(
+            "console.select",
+            "Show Message Details",
+            "info",
+            "",
+            "Expand a Console message: explanation, subjects and fixes.",
+            |s, _, t| {
+                if let Target::Text(seq) = t
+                    && let Ok(seq) = seq.parse()
+                {
+                    s.console_open = if s.console_open == Some(seq) {
+                        None
+                    } else {
+                        Some(seq)
+                    };
+                }
+                Ok(())
+            },
+        ),
+        cmd(
+            "problems.errors",
+            "Show Error Problems",
+            "circle-x",
+            "",
+            "Show or hide errors in Problems.",
+            |s, _, _| {
+                s.log_view.problem_errors = !s.log_view.problem_errors;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.problem_errors)),
+        cmd(
+            "problems.warnings",
+            "Show Warning Problems",
+            "triangle-alert",
+            "",
+            "Show or hide warnings in Problems.",
+            |s, _, _| {
+                s.log_view.problem_warnings = !s.log_view.problem_warnings;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.problem_warnings)),
+        cmd(
+            "problems.explain",
+            "Why?",
+            "lightbulb",
+            "",
+            "Explain a problem: what it means, common causes and fixes.",
+            |s, _, t| {
+                if let Target::Text(seq) = t
+                    && let Ok(seq) = seq.parse()
+                    && !s.explained_problems.remove(&seq)
+                {
+                    s.explained_problems.insert(seq);
+                }
+                Ok(())
+            },
+        ),
         later(
             "window.history",
             "History",
@@ -1472,7 +1610,6 @@ fn build() -> Vec<Spec> {
             s.copy_text(text.clone());
             Ok(())
         }),
-        later("console.clear", "Clear", "trash", "", "Diagnostics clear when their cause is fixed; a log stream with Clear arrives with Console v2."),
         cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
         cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
         cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),

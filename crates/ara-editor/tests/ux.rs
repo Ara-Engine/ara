@@ -511,3 +511,80 @@ fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
     assert_eq!(editor.state.doc, "sc_hangar001");
     assert!(editor.state.follow.is_none());
 }
+#[test]
+fn console_logs_problems_explain_and_editor_failures_reach_the_bus() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    // An editor-side failure is a catalogued diagnostic on the bus (what `ara logs`
+    // reads), not a line on stderr.
+    editor
+        .action(
+            "editor.report",
+            json!({"message":"Thumbnail failed for crate.glb","kind":"thumbnail","subject":"asset:@models/crate.glb"}),
+        )
+        .unwrap();
+    let logs = editor
+        .action("logs", json!({"group": false, "limit": 20}))
+        .unwrap();
+    assert!(
+        logs["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["diagnostic"]["code"] == "ARA4501"),
+        "{logs}"
+    );
+    editor
+        .action("editor.layout.show", json!({"panel":"console"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let row = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| {
+            n.element.id.ends_with("-text")
+                && n.text
+                    .as_ref()
+                    .is_some_and(|t| t.value == "Thumbnail failed for crate.glb")
+        })
+        .map(|n| n.element.id.trim_end_matches("-text").to_owned())
+        .unwrap();
+    // The row links to its asset and expands into the catalog explanation.
+    assert!(shell.ui.find(&format!("{row}-source")).is_some());
+    let seq = row.trim_start_matches("log-").to_owned();
+    shell
+        .run_command(
+            &mut editor,
+            "console.select",
+            &ara_editor::shell::commands::Target::Text(seq.clone()),
+        )
+        .unwrap();
+    assert!(shell.ui.find(&format!("{row}-explain")).is_some());
+    // Warnings toggle off hides it; Clear empties the view.
+    shell
+        .run_command(&mut editor, "console.warnings", &Default::default())
+        .unwrap();
+    assert!(shell.ui.find(&row).is_none());
+    shell
+        .run_command(&mut editor, "console.warnings", &Default::default())
+        .unwrap();
+    shell
+        .run_command(&mut editor, "console.clear", &Default::default())
+        .unwrap();
+    assert!(shell.ui.find("console-empty").is_some());
+    // Problems groups the same warning and explains it on demand.
+    shell
+        .run_command(&mut editor, "window.problems", &Default::default())
+        .unwrap();
+    let problem = format!("problem-{seq}");
+    assert!(shell.ui.find(&problem).is_some());
+    shell
+        .run_command(
+            &mut editor,
+            "problems.explain",
+            &ara_editor::shell::commands::Target::Text(seq),
+        )
+        .unwrap();
+    assert!(shell.ui.find(&format!("{problem}-explain")).is_some());
+}

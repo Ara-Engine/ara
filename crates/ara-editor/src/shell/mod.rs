@@ -32,12 +32,13 @@ mod graph_panel;
 mod hierarchy;
 mod import_panel;
 mod inspector_panel;
+mod log_panels;
+pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
 mod palette;
 mod panels;
 mod profiler_panel;
-mod review_panel;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
@@ -88,6 +89,14 @@ pub struct Shell {
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
+    /// Console and Problems filters.
+    pub(crate) log_view: LogView,
+    /// Console row whose details are expanded (bus sequence number).
+    pub(crate) console_open: Option<u64>,
+    /// Problems whose "Why" explanation is expanded.
+    pub(crate) explained_problems: std::collections::BTreeSet<u64>,
+    /// Failures found while polling (thumbnails), logged by the window owner.
+    pub(crate) pending_reports: Vec<(&'static str, String)>,
     /// Agent turns whose changes the activity feed shows expanded.
     pub(crate) expanded_turns: std::collections::BTreeSet<String>,
     hierarchy_view: Option<VirtualView>,
@@ -240,6 +249,10 @@ impl Shell {
             hierarchy_tints: BTreeMap::new(),
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
+            pending_reports: Vec::new(),
+            log_view: LogView::default(),
+            console_open: None,
+            explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
@@ -854,7 +867,7 @@ impl Shell {
                     changed = true;
                 }
                 Err((key, error)) => {
-                    eprintln!("thumbnail: {error}");
+                    self.pending_reports.push(("thumbnail", error.clone()));
                     self.thumbnail_errors.insert(key, error);
                     changed = true;
                 }

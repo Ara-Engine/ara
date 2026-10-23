@@ -371,7 +371,7 @@ fn home(panel: &str) -> &'static str {
     match panel {
         "hierarchy" => "left",
         "inspector" => "right",
-        "assets" | "console" | "agents" => "bottom",
+        "assets" | "console" | "problems" | "agents" => "bottom",
         _ => "view",
     }
 }
@@ -502,7 +502,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
                 V,
                 0.5,
                 area("left", &["hierarchy"]),
-                area("bottom", &["assets", "console", "agents"]),
+                area("bottom", &["assets", "console", "problems", "agents"]),
             ),
             split(
                 H,
@@ -518,7 +518,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
                 V,
                 0.8,
                 area("view", DOCUMENTS),
-                area("bottom", &["assets", "console", "agents"]),
+                area("bottom", &["assets", "console", "problems", "agents"]),
             ),
             split(
                 V,
@@ -533,7 +533,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
             split(
                 V,
                 0.62,
-                area("bottom", &["assets", "console"]),
+                area("bottom", &["assets", "console", "problems"]),
                 area("left", &["hierarchy", "agents"]),
             ),
             split(
@@ -553,7 +553,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
                 V,
                 0.5,
                 area("left", &["hierarchy"]),
-                area("bottom", &["assets", "console", "agents"]),
+                area("bottom", &["assets", "console", "problems", "agents"]),
             ),
             split(
                 H,
@@ -574,7 +574,10 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
                 area("view", &["scene", "game", "material", "vfx", "animation"]),
                 area("right", &["inspector", "hierarchy"]),
             ),
-            area("bottom", &["profiler", "console", "assets", "agents"]),
+            area(
+                "bottom",
+                &["profiler", "console", "problems", "assets", "agents"],
+            ),
         ),
         "laptop" => split(
             H,
@@ -584,7 +587,7 @@ pub fn preset_layout(name: &str) -> Option<DockNode> {
                 H,
                 0.74,
                 area("view", DOCUMENTS),
-                area("right", &["inspector", "console", "agents"]),
+                area("right", &["inspector", "console", "problems", "agents"]),
             ),
         ),
         _ => return None,

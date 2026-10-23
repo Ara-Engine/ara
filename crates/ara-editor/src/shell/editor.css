@@ -255,3 +255,25 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .feed-why { font-size:12px; color:var(--foreground); overflow:hidden; }
 .feed-diff { padding-left:44px; padding-top:2px; padding-bottom:6px; gap:2px; flex-shrink:0; background:var(--background); }
 .feed-op { font-size:11px; font-family:JetBrains Mono; overflow:hidden; }
+
+/* Console and Problems. */
+.count-toggle { height:22px; padding-left:6px; padding-right:8px; gap:4px; border-width:0px; border-radius:var(--radius-sm); font-size:12px; }
+.segment-on { background:var(--raised); color:var(--foreground); }
+.log-row { flex-direction:row; align-items:center; gap:6px; min-height:24px; padding-right:6px; flex-shrink:0; }
+.log-row:hover { background:var(--hover-surface); }
+.log-open { background:var(--raised); }
+.log-main { flex-grow:1; flex-basis:0px; min-width:0px; flex-direction:row; align-items:center; justify-content:start; gap:8px; height:24px; padding-left:6px; background:transparent; border-width:0px; }
+.log-time { font-size:11px; font-family:JetBrains Mono; color:var(--muted-foreground); }
+.log-text { flex-grow:1; flex-shrink:1; flex-basis:0px; min-width:0px; overflow:hidden; font-size:12px; color:var(--foreground); }
+.log-count { padding-left:5px; padding-right:5px; border-radius:var(--radius-xs); background:var(--raised); font-size:10px; color:var(--muted-foreground); }
+.log-source { height:20px; padding-left:6px; padding-right:6px; border-width:0px; border-radius:var(--radius-xs); background:transparent; color:var(--accent); font-size:11px; flex-shrink:1; min-width:0px; overflow:hidden; }
+.log-source:hover { background:var(--raised); }
+.log-details { padding:8px; padding-left:30px; gap:4px; flex-shrink:0; background:var(--background); }
+.problem-group { flex-direction:row; align-items:center; gap:6px; height:26px; padding-left:8px; flex-shrink:0; background:var(--panel-header); }
+.problem-row { flex-direction:row; align-items:center; gap:8px; min-height:38px; padding-left:22px; padding-right:6px; flex-shrink:0; }
+.problem-row:hover { background:var(--hover-surface); }
+.log-why { height:22px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:var(--radius-sm); font-size:12px; }
+.chip-accent { padding:2px; padding-left:6px; padding-right:6px; border-radius:var(--radius-xs); background:var(--accent-surface); color:var(--accent); font-size:11px; }
+/* Status bar job progress. */
+.progress { width:60px; height:4px; flex-shrink:0; border-radius:2px; background:var(--raised); }
+.progress-fill { height:4px; border-radius:2px; background:var(--accent); }

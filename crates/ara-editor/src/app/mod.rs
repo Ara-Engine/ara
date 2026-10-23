@@ -331,7 +331,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     last_dpi,
                 )?;
             }
-            if shell.poll_assets() {
+            let assets_changed = shell.poll_assets();
+            for (kind, message) in std::mem::take(&mut shell.pending_reports) {
+                editor.report(kind, &message, None);
+            }
+            if assets_changed {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }

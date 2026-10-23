@@ -7,6 +7,7 @@ mod app;
 mod asset_tools;
 mod authoring;
 mod capture;
+pub mod codes;
 mod commands;
 mod editor;
 mod fixes;

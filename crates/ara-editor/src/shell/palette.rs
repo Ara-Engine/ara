@@ -34,6 +34,7 @@ impl Shell {
             "hierarchy" => "Filter  (t:Light)",
             "assets" => "Search assets  (type:mesh)",
             "console" => "Filter messages",
+            "problems" => "Filter problems",
             "settings" => "Search settings",
             "shortcuts" => "Search shortcuts",
             _ => "Search",

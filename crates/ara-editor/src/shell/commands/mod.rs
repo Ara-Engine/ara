@@ -65,6 +65,8 @@ pub(crate) struct Ctx<'a> {
     pub clipboard_entities: bool,
     /// The shell holds a copied field value.
     pub clipboard_value: bool,
+    /// Console and Problems filters (for their toggle states).
+    pub logs: crate::shell::LogView,
 }
 /// Whether a command can run now.
 #[derive(Clone, Debug, PartialEq)]
@@ -203,6 +205,7 @@ impl Shell {
             target,
             clipboard_entities: self.entity_clipboard.is_some(),
             clipboard_value: self.field_clipboard.is_some(),
+            logs: self.log_view,
         }
     }
     /// Run a registry command if it is available, then rebuild; disabled commands

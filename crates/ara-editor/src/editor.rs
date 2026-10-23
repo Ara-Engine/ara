@@ -172,7 +172,7 @@ impl Editor {
             json!({"session":session,"topics":["diagnostics","history","jobs"]}),
         )
         .map_err(EditorError::from)?;
-        Ok(Self {
+        let mut editor = Self {
             asset_updates,
             host,
             state,
@@ -192,7 +192,14 @@ impl Editor {
             extraction_revision: 0,
             queued_commands: Vec::new(),
             activity,
-        })
+        };
+        // A scene seen for the first time is framed, like `editor.scene.open` does.
+        if editor.state.camera == crate::state::Camera::default()
+            && !editor.state.scene_cameras.contains_key(&editor.state.doc)
+        {
+            editor.action("editor.frame", json!({}))?;
+        }
+        Ok(editor)
     }
     /// Push native human activity into the non-disruption boundary.
     pub fn input_active(&mut self) {}
@@ -433,8 +440,16 @@ impl Editor {
         self.sync();
         result
     }
+    /// Log an editor action failure to the diagnostics bus (Console, Problems, `ara logs`).
     pub(crate) fn report_error(&mut self, message: &str) {
-        let _ = self.action("editor.report", json!({"message":message}));
+        self.report("action", message, None);
+    }
+    /// Log an editor failure of `kind` (see `editor.report`) about an optional subject.
+    pub(crate) fn report(&mut self, kind: &str, message: &str, subject: Option<&str>) {
+        let _ = self.action(
+            "editor.report",
+            json!({"message": message, "kind": kind, "subject": subject}),
+        );
     }
     /// Fields agents changed within the activity glow, with their previous values.
     pub fn agent_fields(&self) -> BTreeMap<(String, String), Value> {
