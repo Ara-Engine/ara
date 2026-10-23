@@ -52,6 +52,11 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
   ModelVertex retains UV0/UV1; ModelMaterial retains independent slot transforms,
   emissive strength (folded once), transmission and occlusion factors/textures.
+  `Model::select` resolves source node names/indices and subtree-local primitives,
+  restoring the selected pivot while retaining rotation/scale. Geometry stays shared.
+  `MeshRenderer` emission defaults to the imported factor, with explicit enable,
+  strength, optional factor and material selectors; `Draw.emissive_factor` replaces
+  the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance.
 - `plugin::RuntimePlugin` (`Send + Sync`): seams for C# scripts (`ara-runtime-script`),
   networked play (`ara-runtime-net`), world streaming (`ara-runtime-world`), audio and
   VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,

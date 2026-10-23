@@ -99,6 +99,26 @@ Supply exactly one of `point` and `target`. Parent transforms are respected;
 parallel up/direction vectors use a deterministic upright fallback. Coincident
 targets, zero up vectors and singular parent transforms diagnose without editing.
 
+Select a source kit piece and switch a lamp's emissive material without generating
+a derived glTF:
+
+```powershell
+ara do component.add --doc levels/yard.scene --args '{"entity":"e_lamp","component":"MeshRenderer","value":{"model":"@models/kit.gltf#as_kit","node":"WallLamp","emissiveFactor":[2000,1800,1000],"emissiveMaterials":["Bulb"]}}' --why 'Use the kit lamp and light its bulb'
+ara do property.set --doc levels/yard.scene --args '{"entity":"e_lamp","path":"MeshRenderer.emissiveEnabled","value":false}' --why 'Switch the lamp off'
+```
+
+`node` selects a named source subtree or numeric node index as a string; `name:3`
+selects a numeric name. Duplicate names require an index. The selected pivot moves
+to the entity origin while source rotation/scale and descendant transforms remain.
+Omitting `node` retains the complete default scene and its authored placement.
+`primitive` optionally selects a zero-based primitive within that subtree.
+
+Imported emission is enabled by default. `emissiveFactor` replaces the source RGB
+factor for the named/indexed `emissiveMaterials` (empty targets all), then
+`emissiveStrength` multiplies emission once. `emissiveEnabled` switches it off.
+Procedural shapes retain emitted-radiance semantics. Invalid node/primitive or
+material selectors report `ARA7310`; invalid geometry selections show a placeholder.
+
 `terrain.raise`, `terrain.paint` and `foliage.exclude` accept an optional `id`.
 Use stable IDs such as `s_hill`, `s_grass` and `x_road` for reproducible builds.
 MCP's `as` binds a batch symbol in the same way as `entity.create`. Newly touched
