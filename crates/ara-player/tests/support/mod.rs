@@ -97,6 +97,17 @@ impl Agent {
     /// A host on the project at `dir` (engine schemas registered) with the play
     /// service configured by `configure`, and an agent session.
     pub fn open(dir: &Path, seed: u64, configure: impl FnOnce(&mut PlayConfig)) -> Self {
+        Self::open_with(dir, seed, configure, |_| {})
+    }
+
+    /// As [`Agent::open`], with `service` run on the play service before the host
+    /// takes it (the editor takes its embedded-surface handle there).
+    pub fn open_with(
+        dir: &Path,
+        seed: u64,
+        configure: impl FnOnce(&mut PlayConfig),
+        service: impl FnOnce(&mut PlayService),
+    ) -> Self {
         let player = PathBuf::from(env!("CARGO_BIN_EXE_ara-player"));
         let worker = import_worker(&player);
         let project = ara_play_host::open_project(dir).unwrap();
@@ -117,8 +128,9 @@ impl Agent {
         config.pool.executable = player;
         config.import_worker = worker;
         configure(&mut config);
-        host.register(Box::new(PlayService::new(dir, config)))
-            .unwrap();
+        let mut play = PlayService::new(dir, config);
+        service(&mut play);
+        host.register(Box::new(play)).unwrap();
         let mut agent = Agent {
             host,
             mcp: Adapter::new(),

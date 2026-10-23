@@ -1,47 +1,53 @@
-//! Windowed players: an SDL3 window, keyboard/mouse → action injections (the same
-//! replayable path agents use), and per-frame presentation through `ara-platform`.
+//! Windowed players: an SDL3 window, keyboard/mouse → action injections through the
+//! shared [`Mapper`] (the replayable path agents use), and per-frame presentation
+//! through `ara-platform`.
+use crate::input::{DeviceEvent, Mapper};
 use anyhow::Result;
-use ara_input::{ActionValue, Injection, PlayerId};
+use ara_input::{Injection, PlayerId};
 use ara_platform::{Event, Present, Window};
 use ara_runtime::{
     components::{Environment, MeshShape},
-    control::{JUMP, LOOK, MOVE, SPRINT},
     extract::{Draw, Geometry, RenderFrame},
 };
 use ara_runtime_render::Presenter;
 use std::{
-    collections::BTreeSet,
     path::Path,
     time::{Duration, Instant},
 };
 
-// SDL scancodes used by the default bindings.
-const W: i32 = 26;
-const A: i32 = 4;
-const S: i32 = 22;
-const D: i32 = 7;
-const UP: i32 = 82;
-const DOWN: i32 = 81;
-const LEFT: i32 = 80;
-const RIGHT: i32 = 79;
-const SPACE: i32 = 44;
-const LEFT_SHIFT: i32 = 225;
+/// SDL scancode of Escape: closes a windowed player.
 const ESCAPE: i32 = 41;
-/// Holds that last until replaced (the next change re-injects).
-const HELD: u32 = 1 << 30;
 
 /// The player's window and device-input state.
 pub struct Windowed {
     window: Window,
     present: Option<Present>,
-    keys: BTreeSet<i32>,
-    sent_move: [f32; 2],
-    sent_sprint: bool,
-    look: [f32; 2],
-    orbit: bool,
+    input: Mapper,
     frames: u32,
     frame_times: Vec<f32>,
     window_start: Instant,
+}
+
+/// A one-box frame that creates the renderer and warms its pipelines before Play.
+pub fn warm_frame() -> RenderFrame {
+    let mut warm = RenderFrame::default();
+    warm.environment = Environment::default();
+    warm.draws.push(Draw {
+        entity: 1,
+        address: "warm".into(),
+        label: "warm".into(),
+        geometry: Geometry::Shape {
+            shape: MeshShape::Box,
+            size: [1.0; 3],
+        },
+        world: glam::Mat4::IDENTITY,
+        color: [1.0; 4],
+        roughness: 0.5,
+        metallic: 0.0,
+        emissive: [0.0; 3],
+        skin: None,
+    });
+    warm
 }
 
 impl Windowed {
@@ -50,33 +56,12 @@ impl Windowed {
     pub fn open(name: &str, size: [u32; 2], cache: &Path) -> Result<(Self, Presenter)> {
         let window = Window::new(&format!("Ara | {name} | waiting for Play"), size)?;
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
-        let mut warm = RenderFrame::default();
-        warm.environment = Environment::default();
-        warm.draws.push(Draw {
-            entity: 1,
-            address: "warm".into(),
-            label: "warm".into(),
-            geometry: Geometry::Shape {
-                shape: MeshShape::Box,
-                size: [1.0; 3],
-            },
-            world: glam::Mat4::IDENTITY,
-            color: [1.0; 4],
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: [0.0; 3],
-            skin: None,
-        });
-        presenter.prepare(&warm)?;
+        presenter.prepare(&warm_frame())?;
         Ok((
             Self {
                 window,
                 present: None,
-                keys: BTreeSet::new(),
-                sent_move: [0.0; 2],
-                sent_sprint: false,
-                look: [0.0; 2],
-                orbit: false,
+                input: Mapper::default(),
                 frames: 0,
                 frame_times: Vec::new(),
                 window_start: Instant::now(),
@@ -89,7 +74,6 @@ impl Windowed {
     /// Returns true when the user closed the window (Esc or the close button).
     pub fn events(&mut self, player: PlayerId) -> Result<(bool, Vec<Injection>)> {
         let mut quit = false;
-        let mut jump = false;
         for event in self.window.poll()? {
             match event {
                 Event::Quit
@@ -102,66 +86,24 @@ impl Windowed {
                     scancode,
                     pressed,
                     repeat: false,
-                } => {
-                    if pressed {
-                        self.keys.insert(scancode);
-                        jump |= scancode == SPACE;
-                    } else {
-                        self.keys.remove(&scancode);
-                    }
+                } => self.input.apply(DeviceEvent::Key {
+                    scancode,
+                    down: pressed,
+                }),
+                Event::MouseButton { button, pressed } => {
+                    self.input.apply(DeviceEvent::MouseButton {
+                        button,
+                        down: pressed,
+                    });
                 }
-                Event::MouseButton { button: 3, pressed } => self.orbit = pressed,
-                Event::MouseMotion { delta, .. } if self.orbit => {
-                    self.look[0] += delta[0] * 0.15;
-                    self.look[1] += delta[1] * 0.1;
-                }
+                Event::MouseMotion { delta, .. } => self.input.apply(DeviceEvent::MouseMotion {
+                    dx: delta[0],
+                    dy: delta[1],
+                }),
                 _ => {}
             }
         }
-        let held = |a: i32, b: i32| self.keys.contains(&a) || self.keys.contains(&b);
-        let axis = |pos: bool, neg: bool| f32::from(u8::from(pos)) - f32::from(u8::from(neg));
-        let movement = [
-            axis(held(D, RIGHT), held(A, LEFT)),
-            axis(held(W, UP), held(S, DOWN)),
-        ];
-        let sprint = self.keys.contains(&LEFT_SHIFT);
-        let mut inputs = Vec::new();
-        if movement != self.sent_move {
-            inputs.push(Injection {
-                player,
-                action: MOVE.into(),
-                value: ActionValue::Axis2(movement),
-                hold_ticks: HELD,
-            });
-            self.sent_move = movement;
-        }
-        if sprint != self.sent_sprint {
-            inputs.push(Injection {
-                player,
-                action: SPRINT.into(),
-                value: ActionValue::Button(sprint),
-                hold_ticks: HELD,
-            });
-            self.sent_sprint = sprint;
-        }
-        if jump {
-            inputs.push(Injection {
-                player,
-                action: JUMP.into(),
-                value: ActionValue::Button(true),
-                hold_ticks: 1,
-            });
-        }
-        if self.look != [0.0; 2] {
-            let look = std::mem::take(&mut self.look);
-            inputs.push(Injection {
-                player,
-                action: LOOK.into(),
-                value: ActionValue::Axis2(look),
-                hold_ticks: 1,
-            });
-        }
-        Ok((quit, inputs))
+        Ok((quit, self.input.injections(player)))
     }
 
     /// Renders and presents one extracted frame, recreating the swapchain on resize.
@@ -228,16 +170,23 @@ impl Windowed {
 
     /// Frames per second and p95 frame time since the previous call.
     pub fn take_stats(&mut self) -> (f64, f64) {
-        let seconds = self.window_start.elapsed().as_secs_f64().max(1e-6);
-        let fps = f64::from(self.frames) / seconds;
-        let mut times = std::mem::take(&mut self.frame_times);
-        times.sort_by(f32::total_cmp);
-        let p95 = times
-            .get(((times.len() as f64 * 0.95) as usize).min(times.len().saturating_sub(1)))
-            .copied()
-            .unwrap_or(0.0);
+        let stats = frame_stats(self.frames, self.window_start, &mut self.frame_times);
         self.frames = 0;
         self.window_start = Instant::now();
-        (fps, f64::from(p95))
+        stats
     }
+}
+
+/// Frames per second since `since` and the p95 of `times` (milliseconds), which it
+/// drains.
+pub fn frame_stats(frames: u32, since: Instant, times: &mut Vec<f32>) -> (f64, f64) {
+    let seconds = since.elapsed().as_secs_f64().max(1e-6);
+    let fps = f64::from(frames) / seconds;
+    let mut times = std::mem::take(times);
+    times.sort_by(f32::total_cmp);
+    let p95 = times
+        .get(((times.len() as f64 * 0.95) as usize).min(times.len().saturating_sub(1)))
+        .copied()
+        .unwrap_or(0.0);
+    (fps, f64::from(p95))
 }
