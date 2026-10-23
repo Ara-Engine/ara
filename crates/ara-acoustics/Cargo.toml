@@ -1,0 +1,32 @@
+[package]
+name = "ara-acoustics"
+description = "Physical game acoustics: occlusion, reverb zones and portals, FDN room reverb, Steam Audio and geometric baking."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Adapter from ara-physics batch ray queries to the RayScene seam.
+physics = ["dep:ara-physics"]
+# Bevy ECS Component derives on the reflected components, matching ara-audio.
+ecs = ["dep:bevy_ecs", "ara-audio/ecs"]
+
+[dependencies]
+ara-audio = { path = "../ara-audio" }
+ara-diag = { path = "../ara-diag" }
+ara-schema = { path = "../ara-schema" }
+ara-physics = { path = "../ara-physics", optional = true }
+blake3 = "1"
+libloading = "0.9"
+rtrb = "0.4"
+bevy_ecs = { version = "0.20", default-features = false, features = ["std"], optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ara-json = { path = "../ara-json" }
+
+[lints]
+workspace = true

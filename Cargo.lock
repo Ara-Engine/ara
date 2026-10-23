@@ -430,6 +430,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-acoustics"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-json",
+ "ara-physics",
+ "ara-schema",
+ "bevy_ecs",
+ "blake3",
+ "libloading 0.9.0",
+ "rtrb",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-anim"
 version = "0.0.0"
 dependencies = [
@@ -508,6 +525,7 @@ dependencies = [
 name = "ara-audio"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "ara-opus-sys",
  "ara-profile",
@@ -526,6 +544,47 @@ dependencies = [
  "symphonia",
  "thiserror 2.0.21",
  "windows",
+]
+
+[[package]]
+name = "ara-audio-graph"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "blake3",
+ "rtrb",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-mix"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-why"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-why",
+ "serde_json",
 ]
 
 [[package]]
@@ -940,6 +999,19 @@ dependencies = [
  "ara-json",
  "ara-schema",
  "insta",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-music"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
  "serde_json",
 ]
 

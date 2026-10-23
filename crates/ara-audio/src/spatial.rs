@@ -1,9 +1,13 @@
 //! Spatial geometry is evaluated off the render path, then smoothly applied by a voice.
 
-use crate::{AudioError, AudioListener, AudioSource, Frame, Result, schema::Attenuation};
+use crate::{
+    AudioError, AudioListener, AudioSource, Frame, Result, dsp::BandSplit, schema::Attenuation,
+};
 
 /// Acoustic simulation result. Physics/Steam workers publish this at a frame boundary.
-#[derive(Debug, Clone, Copy, ara_schema::Schema, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, ara_schema::Schema, serde::Serialize, serde::Deserialize,
+)]
 #[ara(module = "audio")]
 #[serde(rename_all = "camelCase")]
 pub struct AcousticPath {
@@ -13,9 +17,18 @@ pub struct AcousticPath {
     /// Low/mid/high band transmission through occluders.
     #[ara(range(min = 0, max = 1))]
     pub transmission: [f32; 3],
-    /// Late reverberation send amplitude, consumed by the mixer bus bridge.
-    #[ara(range(min = 0, max = 1))]
+    /// Per-voice room reverb send amplitude into the bus's routed aux return. Values above
+    /// one compensate distance attenuation so the diffuse reverberant level stays physical.
+    #[ara(range(min = 0, max = 16))]
     pub reverb_send: f32,
+    /// Low/mid/high air absorption gain over the propagation distance; one is none.
+    #[ara(default = [1, 1, 1], range(min = 0, max = 1))]
+    #[serde(default = "unit_bands")]
+    pub air: [f32; 3],
+}
+
+fn unit_bands() -> [f32; 3] {
+    [1.0; 3]
 }
 
 impl Default for AcousticPath {
@@ -24,7 +37,17 @@ impl Default for AcousticPath {
             visibility: 1.0,
             transmission: [0.0; 3],
             reverb_send: 0.0,
+            air: unit_bands(),
         }
+    }
+}
+
+impl AcousticPath {
+    /// Final low/mid/high direct-path gains: air × (visibility + occluded × transmission).
+    pub fn band_gains(&self) -> [f32; 3] {
+        std::array::from_fn(|b| {
+            self.air[b] * (self.visibility + (1.0 - self.visibility) * self.transmission[b])
+        })
     }
 }
 
@@ -43,6 +66,10 @@ pub struct SpatialParameters {
     pub attenuation: f32,
     /// Doppler playback-rate multiplier, clamped to [0.25, 4].
     pub doppler: f32,
+    /// Source-listener distance in meters.
+    pub distance: f32,
+    /// Product of the source and listener cone gains (1 outside any cone effect).
+    pub cone: f32,
 }
 
 /// Computes equal-power panning, finite-range rolloff, both cones and Doppler.
@@ -113,20 +140,20 @@ pub fn evaluate(source: &AudioSource, listener: &AudioListener) -> Result<Spatia
             Attenuation::InverseSquare => (source.reference_distance / d).powi(2) * fade,
         }
     };
-    attenuation *= cone(
+    let cones = cone(
         normalize(source.forward)?,
         scale(direction, -1.0),
         source.cone_inner,
         source.cone_outer,
         source.cone_outer_gain,
-    );
-    attenuation *= cone(
+    ) * cone(
         forward,
         direction,
         listener.cone_inner,
         listener.cone_outer,
         listener.cone_outer_gain,
     );
+    attenuation *= cones;
     let speed = 343.0;
     let listener_toward = dot(listener.velocity, direction).clamp(-speed * 0.9, speed * 0.9);
     let source_away = dot(source.velocity, direction).clamp(-speed * 0.9, speed * 0.9);
@@ -142,6 +169,8 @@ pub fn evaluate(source: &AudioSource, listener: &AudioListener) -> Result<Spatia
         } else {
             1.0
         },
+        distance,
+        cone: if source.spatial { cones } else { 1.0 },
     })
 }
 
@@ -188,6 +217,8 @@ fn normalize(a: [f32; 3]) -> Result<[f32; 3]> {
 
 /// Replaceable per-voice renderer. Construction may allocate; processing must not.
 pub trait Spatializer: Send {
+    /// Called once at installation with the engine's sample rate, on the control path.
+    fn prepare(&mut self, _sample_rate: u32) {}
     /// Converts a mono quantum to stereo. Directions may change once per quantum.
     fn process(&mut self, mono: &[f32], out: &mut [Frame], direction: [f32; 3], path: AcousticPath);
     /// Renders the next tail quantum after dry input ends. True means the tail is complete.
@@ -197,18 +228,36 @@ pub trait Spatializer: Send {
     }
 }
 
-/// Equal-power stereo fallback, with smoothed occlusion and a low-pass shadow filter.
-#[derive(Default)]
+/// Equal-power stereo fallback with three-band occlusion, transmission and air absorption.
+///
+/// Clear paths take a vectorized multiply. Otherwise critically damped SVF crossovers
+/// (800 Hz and 8 kHz, `dsp::BandSplit`) split the signal into low/mid/high bands whose
+/// gains ramp linearly per quantum to `AcousticPath::band_gains`. Equal band gains sum back to the input exactly, so
+/// entering the filtered path from a clear path never clicks.
 pub struct StereoPanner {
     left: f32,
     right: f32,
-    low: f32,
+    bands: [f32; 3],
+    split: BandSplit,
     initialized: bool,
-    visibility: f32,
-    transmission: f32,
+}
+
+impl Default for StereoPanner {
+    fn default() -> Self {
+        Self {
+            left: 0.0,
+            right: 0.0,
+            bands: [1.0; 3],
+            split: BandSplit::new(48000),
+            initialized: false,
+        }
+    }
 }
 
 impl Spatializer for StereoPanner {
+    fn prepare(&mut self, sample_rate: u32) {
+        self.split = BandSplit::new(sample_rate);
+    }
     fn process(
         &mut self,
         mono: &[f32],
@@ -219,38 +268,58 @@ impl Spatializer for StereoPanner {
         let pan = direction[0].clamp(-1.0, 1.0);
         let target_l = ((1.0 - pan) * 0.5).sqrt();
         let target_r = ((1.0 + pan) * 0.5).sqrt();
+        let target_bands = path.band_gains();
         if !self.initialized {
             self.left = target_l;
             self.right = target_r;
+            self.bands = target_bands;
             self.initialized = true;
-            self.visibility = path.visibility;
-            self.transmission = path.transmission[0];
         }
         // Static clear paths need no recursive filters; LLVM vectorizes this independent loop.
-        // Keep the low-pass history current for a subsequent occlusion transition.
         if self.left == target_l
             && self.right == target_r
-            && self.visibility == 1.0
-            && path.visibility == 1.0
-            && self.transmission == path.transmission[0]
+            && self.bands == [1.0; 3]
+            && target_bands == [1.0; 3]
         {
-            for input in mono {
-                self.low += (*input - self.low) * 0.08;
-            }
             for (input, frame) in mono.iter().zip(out) {
                 *frame = Frame::new(input * target_l, input * target_r);
             }
             return;
         }
-        for (input, frame) in mono.iter().zip(out) {
-            self.left += (target_l - self.left) * 0.02;
-            self.right += (target_r - self.right) * 0.02;
-            self.low += (*input - self.low) * 0.08;
-            self.visibility += (path.visibility - self.visibility) * 0.02;
-            self.transmission += (path.transmission[0] - self.transmission) * 0.02;
-            let transmitted = self.low * self.transmission * (1.0 - self.visibility);
-            let sample = input * self.visibility + transmitted;
-            *frame = Frame::new(sample * self.left, sample * self.right);
+        // With band gains g: out = (g0-g1)·LP(800) + (g1-g2)·LP(8k) + g2·x.
+        let mix = |g: [f32; 3]| [g[0] - g[1], g[1] - g[2], g[2]];
+        if self.left == target_l && self.right == target_r && self.bands == target_bands {
+            // Steady filtered path: no ramps, two independent low-pass chains per sample.
+            let [c0, c1, c2] = mix(target_bands);
+            let (l, r) = (target_l * c2, target_r * c2);
+            let (l0, l1, r0, r1) = (target_l * c0, target_l * c1, target_r * c0, target_r * c1);
+            for (input, frame) in mono.iter().zip(out) {
+                let [low, upper] = self.split.lows(*input);
+                *frame = Frame::new(
+                    l0 * low + l1 * upper + l * input,
+                    r0 * low + r1 * upper + r * input,
+                );
+            }
+            return;
         }
+        let n = mono.len().max(1) as f32;
+        let step = |from: f32, to: f32| (to - from) / n;
+        let (dl, dr) = (step(self.left, target_l), step(self.right, target_r));
+        let (from, to) = (mix(self.bands), mix(target_bands));
+        let dc: [f32; 3] = std::array::from_fn(|b| step(from[b], to[b]));
+        let (mut l, mut r, mut c) = (self.left, self.right, from);
+        for (input, frame) in mono.iter().zip(out) {
+            l += dl;
+            r += dr;
+            for (gain, delta) in c.iter_mut().zip(dc) {
+                *gain += delta;
+            }
+            let [low, upper] = self.split.lows(*input);
+            let sample = c[0] * low + c[1] * upper + c[2] * input;
+            *frame = Frame::new(sample * l, sample * r);
+        }
+        self.left = target_l;
+        self.right = target_r;
+        self.bands = target_bands;
     }
 }

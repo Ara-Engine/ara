@@ -1,0 +1,20 @@
+graph Engine {
+  param rpm = 1200 range(700, 7000) "Engine speed from the vehicle simulation";
+  param load = 0.3 range(0, 1) "Throttle load: brighter and louder under load";
+  let revs = smooth(rpm, 0.08);
+  let rate = div(revs, 2000);
+  let idle = sample(@sfx/vehicles/engine_loop.wav, _, rate, 0, 0, 0, 1);
+  let firing = div(revs, 30);
+  let pulse = saw(firing);
+  let half = mul(firing, 0.5);
+  let sub = sine(half);
+  let harmonics = mix(pulse, sub);
+  let cutoff = map(load, 0, 1, 600, 5000);
+  let filtered = lowpass(harmonics, cutoff, 1.2);
+  let grit = saturate(filtered, 2);
+  let synth_level = map(load, 0, 1, 0.15, 0.35);
+  let synth = mul(grit, synth_level);
+  let layered = mix(idle.out, synth);
+  let level = gain(layered, -10);
+  output out = level;
+}

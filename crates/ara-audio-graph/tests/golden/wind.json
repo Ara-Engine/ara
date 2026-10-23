@@ -1,0 +1,148 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -2.272902482371676,
+      "rmsDbfs": -13.845967170956948
+    }
+  ],
+  "channelRms": [0.2030961270291308, 0.2030961270291308],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "graphs": [
+    {
+      "graph": "Wind",
+      "instance": "wind",
+      "nodes": [
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "gust",
+          "op": "noise.smooth",
+          "peak": 0.77855337,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "swell",
+          "op": "noise.smooth",
+          "peak": 0.6587447,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "air",
+          "op": "noise.pink",
+          "peak": 1.5043135,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "center",
+          "op": "map",
+          "peak": 1272.6682,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "whistle",
+          "op": "map",
+          "peak": 2.5954108,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "band",
+          "op": "bandpass",
+          "peak": 0.42709255,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "body",
+          "op": "lowpass",
+          "peak": 1.0956907,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "level",
+          "op": "map",
+          "peak": 0.9280298,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "mixed",
+          "op": "mix",
+          "peak": 1.0950694,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "shaped",
+          "op": "mul",
+          "peak": 1.0143181,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "blown",
+          "op": "mul",
+          "peak": 0.7697592,
+          "triggers": 0
+        }
+      ]
+    }
+  ],
+  "integratedLufs": -14.930037917516962,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -13.845967167149027,
+  "samplePeak": 0.7697591781616211,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0.00034375,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -18.664653287958938
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -21.332907821811688
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -25.092553832339966
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -32.11032486810166
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -48.71107290568422
+    }
+  ],
+  "truePeak": 0.7703520655632019,
+  "wavBlake3": "2fdfef51e19c1a402ae79d4eb31479b571dbc5c34b2f20ce3a36866d35412bdb"
+}

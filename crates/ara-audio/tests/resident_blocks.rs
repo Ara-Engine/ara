@@ -103,3 +103,49 @@ fn resident_blocks_match_sample_path_through_wraps_and_promotion() {
         }
     }
 }
+
+// Gain ramps stay on the contiguous path and follow the smoother sample by sample.
+#[test]
+fn gain_ramps_on_resident_blocks_are_sample_exact() {
+    let mut engine = AudioEngine::new(EngineConfig {
+        limiter: None,
+        ..Default::default()
+    })
+    .unwrap();
+    let clip = Clip::new(48000, vec![Frame::new(0.5, 0.25); 4096], 4096 * 8).unwrap();
+    let id = engine
+        .play(
+            BusId::MASTER,
+            clip,
+            Playback {
+                looping: true,
+                spatial: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    engine
+        .command(
+            id,
+            VoiceCommand::Set {
+                at_frame: 128,
+                parameters: VoiceParameters {
+                    gain: 0.0,
+                    ..Default::default()
+                },
+                ramp_frames: 256,
+            },
+        )
+        .unwrap();
+    let mut out = vec![0.0; 1024 * 2];
+    engine.render(&mut out).unwrap();
+    let step = -1.0_f32 / 256.0;
+    let mut gain = 1.0_f32;
+    for frame in 0..512 {
+        if (128..384).contains(&frame) {
+            assert_eq!(out[frame * 2], 0.5 * gain, "frame {frame}");
+            gain += step;
+        }
+    }
+    assert!(out[400 * 2..].iter().all(|s| *s == 0.0));
+}

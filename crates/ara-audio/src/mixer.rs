@@ -3,15 +3,27 @@
 use crate::{
     AudioError, Clip, Frame, Playback, QUANTUM, Result, VoiceCommand,
     effects::{Meter, PeakLimiter, TrackBuilder},
+    sends::AuxId,
     streaming::StreamReader,
-    voice::{PreparedVoice, ReadySound, VoiceControl},
+    voice::{PreparedVoice, ReadySound, VoiceControl, cull},
 };
 use kira::{
     AudioManager, AudioManagerSettings, Capacities, Tween,
     backend::{Backend, Renderer},
     track::{MainTrackBuilder, SendTrackBuilder, SendTrackHandle, SendTrackId, TrackHandle},
 };
-use std::{convert::Infallible, sync::atomic::Ordering, time::Duration};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
+    time::Duration,
+};
+
+mod routing;
+use routing::{AuxSlot, chain};
+pub use routing::{VoiceState, VoiceStatus};
 
 /// Graph-local bus handle. Bus zero is always `master`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -90,15 +102,23 @@ impl PullBackend {
     }
 }
 
-struct Bus {
-    name: String,
-    handle: TrackHandle,
-    meter: Meter,
-    gain: f32,
+pub(crate) struct Bus {
+    pub name: String,
+    pub handle: TrackHandle,
+    pub meter: Meter,
+    pub gain: f32,
+    pub parent: Option<usize>,
+    pub voice_limit: Option<usize>,
+    pub loudness: Option<f32>,
+    pub aux: Option<AuxId>,
+    /// Product of target gains from this bus to master, read by aux sends.
+    pub effective: Arc<AtomicU32>,
 }
-struct ControlledVoice {
-    id: VoiceId,
-    control: VoiceControl,
+pub(crate) struct ControlledVoice {
+    pub id: VoiceId,
+    pub bus: usize,
+    pub trim: f32,
+    pub control: VoiceControl,
 }
 
 /// A single-owner audio engine. Put it on a dedicated presentation worker in a live player.
@@ -118,6 +138,8 @@ pub struct AudioEngine {
     cache_clipped: [u64; 4],
     delivered_overloads: u64,
     sends: Vec<SendTrackHandle>,
+    pub(crate) auxes: Vec<AuxSlot>,
+    pub(crate) bus_counts: Vec<usize>,
 }
 
 impl AudioEngine {
@@ -163,6 +185,11 @@ impl AudioEngine {
             handle: root,
             meter: bus_meter,
             gain: 1.0,
+            parent: None,
+            voice_limit: None,
+            loudness: None,
+            aux: None,
+            effective: Arc::new(AtomicU32::new(1.0_f32.to_bits())),
         });
         Ok(Self {
             manager,
@@ -179,6 +206,8 @@ impl AudioEngine {
             cache_clipped: [0; 4],
             delivered_overloads: 0,
             sends: Vec::with_capacity(config.buses),
+            auxes: Vec::with_capacity(config.buses),
+            bus_counts: vec![0; config.buses],
         })
     }
 
@@ -222,10 +251,12 @@ impl AudioEngine {
         let builder = builder
             .sound_capacity(self.config.total_voices)
             .sub_track_capacity(self.config.buses);
+        let parent_index = parent.0;
         let parent = self
             .buses
-            .get_mut(parent.0)
+            .get_mut(parent_index)
             .ok_or(AudioError::UnknownHandle)?;
+        let effective = f32::from_bits(parent.effective.load(Ordering::Relaxed));
         let handle = parent
             .handle
             .add_sub_track(builder)
@@ -236,6 +267,11 @@ impl AudioEngine {
             handle,
             meter,
             gain: 1.0,
+            parent: Some(parent_index),
+            voice_limit: None,
+            loudness: None,
+            aux: None,
+            effective: Arc::new(AtomicU32::new(effective.to_bits())),
         });
         Ok(id)
     }
@@ -253,7 +289,7 @@ impl AudioEngine {
     }
     /// Adds a shared effect return. Connect a bus using TrackBuilder::with_send before add_bus.
     pub fn add_send(&mut self, builder: SendTrackBuilder) -> Result<SendTrackId> {
-        if self.sends.len() >= self.config.buses {
+        if self.sends.len() + self.auxes.len() >= self.config.buses {
             return Err(AudioError::Capacity("effect sends"));
         }
         let handle = self
@@ -336,6 +372,7 @@ impl AudioEngine {
                 },
             );
         }
+        self.refresh_effective_gains();
         Ok(())
     }
 
@@ -367,16 +404,27 @@ impl AudioEngine {
             .next_id
             .checked_add(1)
             .ok_or(AudioError::Capacity("voice IDs"))?;
+        if bus.0 >= self.buses.len() {
+            return Err(AudioError::UnknownHandle);
+        }
+        let trim = self
+            .chain(bus.0)
+            .find_map(|b| self.buses[b].loudness)
+            .map_or(1.0, |target| {
+                crate::loudness::trim(target, prepared.loudness, prepared.peak)
+            });
+        let aux = self.aux_route(bus.0);
+        prepared.sound.configure(trim, aux, self.config.sample_rate);
         prepared.sound.align_clock(self.generated);
         prepared.control.last_command = self.generated;
-        self.buses
-            .get_mut(bus.0)
-            .ok_or(AudioError::UnknownHandle)?
+        self.buses[bus.0]
             .handle
             .play(ReadySound(prepared.sound))
             .map_err(|_| AudioError::Capacity("bus voices"))?;
         self.voices.push(ControlledVoice {
             id,
+            bus: bus.0,
+            trim,
             control: prepared.control,
         });
         Ok(id)
@@ -425,6 +473,7 @@ impl AudioEngine {
         self.candidates.clear();
         for (i, v) in self.voices.iter().enumerate() {
             v.control.shared.active.store(false, Ordering::Relaxed);
+            v.control.shared.cull.store(cull::IDLE, Ordering::Relaxed);
             if !v.control.shared.finished.load(Ordering::Acquire)
                 && v.control.at_frame < self.generated + QUANTUM as u64
             {
@@ -445,17 +494,51 @@ impl AudioEngine {
                 })
                 .then(a.id.0.cmp(&b.id.0))
         };
+        if self.buses.iter().any(|b| b.voice_limit.is_some()) {
+            // Category limits need the full priority order: a voice skipped by a full bus
+            // frees its global slot for the next candidate.
+            self.candidates.sort_unstable_by(compare);
+            self.bus_counts.fill(0);
+            let mut real = 0;
+            for &i in &self.candidates {
+                let shared = &self.voices[i].control.shared;
+                let bus = self.voices[i].bus;
+                // The category limit is reported first: it is the more specific, actionable cause.
+                let state = if chain(&self.buses, bus).any(|b| {
+                    self.buses[b]
+                        .voice_limit
+                        .is_some_and(|limit| self.bus_counts[b] >= limit)
+                }) {
+                    cull::BUS_LIMIT
+                } else if real >= self.config.real_voices {
+                    cull::GLOBAL_LIMIT
+                } else {
+                    real += 1;
+                    let mut cursor = Some(bus);
+                    while let Some(b) = cursor {
+                        self.bus_counts[b] += 1;
+                        cursor = self.buses[b].parent;
+                    }
+                    shared.active.store(true, Ordering::Relaxed);
+                    cull::ACTIVE
+                };
+                shared.cull.store(state, Ordering::Relaxed);
+            }
+            return;
+        }
         // Only membership matters; Kira's fixed traversal order still defines summation.
         if self.candidates.len() > self.config.real_voices {
             self.candidates
                 .select_nth_unstable_by(self.config.real_voices, compare);
         }
-        for &i in self.candidates.iter().take(self.config.real_voices) {
-            self.voices[i]
-                .control
-                .shared
-                .active
-                .store(true, Ordering::Relaxed);
+        for (rank, &i) in self.candidates.iter().enumerate() {
+            let shared = &self.voices[i].control.shared;
+            if rank < self.config.real_voices {
+                shared.active.store(true, Ordering::Relaxed);
+                shared.cull.store(cull::ACTIVE, Ordering::Relaxed);
+            } else {
+                shared.cull.store(cull::GLOBAL_LIMIT, Ordering::Relaxed);
+            }
         }
     }
 
