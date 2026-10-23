@@ -68,15 +68,15 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
    panels and bulbs in the fidelity view, is near-black in Play (only `Light` components
    light the raster path).
 7. **ReSTIR is 2.1× slower than the plain hybrid path in a realistic interior and
-   noisier.** Hangar native 1440p: 24.1 ms with reservoirs vs 11.5 ms without;
-   `ReSTIR.Spatial.Visibility.Shade` is 10.6 ms here vs 1.6 ms in the synthetic
+   noisier.** Hangar native 1440p: 24.6 ms with reservoirs vs 11.9 ms without;
+   `ReSTIR.Spatial.Visibility.Shade` is 10.9 ms here vs 1.6 ms in the synthetic
    1000-light corridor (alpha-blended glass, real textures, 245 objects). Upscaled
-   11.9 ms (> the 8 ms budget). Visible grain on corrugated walls at EV 6 when still,
+   12.4 ms (> the 8 ms budget). Visible grain on corrugated walls at EV 6 when still,
    and under camera motion every frame is grain (`hangar-sequence.png`: only the
    settled first frame is clean; 10 ticks between frames; no strip was taken without
-   reservoirs). Other agents held the shared GPU at 93–99 % during these windows, so
-   treat the absolute numbers as pessimistic; the 2.1× ratio was the same in both runs
-   (23.6 vs 11.2 ms earlier).
+   reservoirs). The GPU is shared with other agents, so absolute numbers drift between
+   runs (Outpost upscaled measured 5.0, 8.7 and 5.4 ms); the ratio held at 2.1× in all
+   three hangar runs (23.6/11.2, 24.1/11.5, 24.6/11.9 ms).
 8. **Terrain materials stop at the renderer.** `Header.materials` is ignored; the
    landscape renderer and the windowed terrain meshes use fixed grass/rock/soil/snow
    colours, so an arid biome renders green unless soil is painted everywhere. The

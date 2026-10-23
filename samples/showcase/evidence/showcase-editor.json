@@ -26,7 +26,7 @@
           "records": 2,
           "count": 2,
           "subjects": [],
-          "latest": "session `ses_mhbmygwb` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]",
+          "latest": "session `ses_9njj90r4` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]",
           "latestSeq": 2
         }
       ]
@@ -38,12 +38,12 @@
         "count": 1,
         "id": 0,
         "origin": "engine",
-        "at": 1792776639700,
-        "firstAt": 1792776639700,
+        "at": 1792779310239,
+        "firstAt": 1792779310239,
         "diagnostic": {
           "code": "ARA1812",
           "severity": "info",
-          "message": "session `ses_e308pxy2` for `ara-editor` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
+          "message": "session `ses_3z27c7dv` for `ara-editor` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
         }
       },
       {
@@ -52,15 +52,15 @@
         "count": 1,
         "id": 1,
         "origin": "engine",
-        "at": 1792776645476,
-        "firstAt": 1792776645476,
+        "at": 1792779313237,
+        "firstAt": 1792779313237,
         "diagnostic": {
           "code": "ARA1812",
           "severity": "info",
-          "message": "session `ses_mhbmygwb` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
+          "message": "session `ses_9njj90r4` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
         }
       }
     ],
-    "text": "0 errors · 0 warnings · 2 info (2 occurrences)\ninfo ARA1812 Session approved ×2\n  session `ses_mhbmygwb` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]\ncursor 2\n"
+    "text": "0 errors · 0 warnings · 2 info (2 occurrences)\ninfo ARA1812 Session approved ×2\n  session `ses_9njj90r4` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]\ncursor 2\n"
   }
 }

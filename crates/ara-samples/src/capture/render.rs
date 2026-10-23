@@ -104,7 +104,8 @@ fn frame(camera: &CameraSpec, tick: u32, reset: bool) -> FrameInput<'_> {
     }
 }
 
-/// `nvidia-smi` utilisation/memory of the whole GPU (other agents share it).
+/// `nvidia-smi` utilisation/memory of the whole GPU: this process plus any other
+/// agents sharing it, so it shows contention only when this view is idle.
 pub fn gpu_load() -> String {
     std::process::Command::new("nvidia-smi")
         .args([
