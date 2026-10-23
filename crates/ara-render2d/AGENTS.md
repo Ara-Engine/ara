@@ -22,8 +22,9 @@ Owned Vulkan 2D render path on ara-gpu, reusing ara-render's graph, ToneMap and 
   from the extraction, no per-sprite allocation (100k sprites: 13 ms dev profile).
 - Sprites: procedural instancing (6 vertices; nine-slice 54), bindless atlases, stable
   painter sort (sorting layer, order, identity). Batches never merge across an
-  intervening sort key. Tile layers become immutable 32x32 batches, culled per chunk
-  with parallax-aware bounds.
+  intervening sort key. Tile layers become 32x32 batches culled with parallax- and
+  pivot-aware bounds, drawn back to front (iso batches are screen-aligned x+y / x-y
+  bands) so tiles taller than their cell overlap correctly.
 - Pixel mode snaps camera and pivots to art pixels, samples nearest, never jitters.
 - Color atlases are SRGB, normal atlases UNORM. Lighting and shadows run only for
   opt-in lit sprites/tiles; unlit draws skip the light loop entirely.

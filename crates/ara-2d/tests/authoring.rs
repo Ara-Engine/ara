@@ -49,7 +49,7 @@ fn map() -> Tilemap {
         region: region.into(),
         terrain,
         solid: true,
-        lit: false,
+        ..Default::default()
     };
     Tilemap {
         definitions: [

@@ -18,7 +18,8 @@ Gameplay state lives in components; everything here is canonical text (A3).
 ## Tile model
 
 - A cell is one positive tile number (`"3,-2": 1`); zero/absent is empty. Terrain,
-  solidity and lighting live on the `TileDefinition`, so maps stay one line per cell.
+  solidity, lighting and an optional drawn size (tall walls/trees) live on the
+  `TileDefinition`, so maps stay one line per cell.
 - Rules: first match wins. Masks use `GridLayout::neighbors` order: grid/iso have 8
   neighbors (E, NE, N, NW, W, SW, S, SE, counter-clockwise, +Y up); hex has 6 axial.
   A rule's output tile must keep the rule's terrain, so one pass is exact.

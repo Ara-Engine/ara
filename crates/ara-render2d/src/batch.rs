@@ -3,7 +3,7 @@
 //! only the output vectors.
 use crate::Scene2d;
 use anyhow::{Result, ensure};
-use ara_2d::tilemap;
+use ara_2d::{GridLayout, tilemap};
 use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
 
@@ -128,7 +128,7 @@ pub(crate) fn prepare(
         ranks.sort_unstable();
         for layer in &map.map.layers {
             let rank = ranks.binary_search(&layer.id.as_str()).unwrap_or(0) as u32 + 1;
-            let mut groups = BTreeMap::<[i32; 2], (Vec<Instance>, [f32; 4])>::new();
+            let mut groups = BTreeMap::<[i32; 2], (Vec<(f32, f32, Instance)>, [f32; 4])>::new();
             for (key, tile) in &layer.cells {
                 let (x, y) = tilemap::coordinate(key)?;
                 let definition = map
@@ -147,24 +147,36 @@ pub(crate) fn prepare(
                     atlas,
                     normal: map.map.normal_atlas.as_ref().map(|n| n.0.as_str()),
                     region: &definition.region,
-                    size: map.map.cell_size,
+                    size: if definition.size.contains(&0.) {
+                        map.map.cell_size
+                    } else {
+                        definition.size
+                    },
                     tint: layer.tint,
                     parallax: layer.parallax,
                     flags: u32::from(definition.lit) << 1,
                 };
-                let [sx, sy] = map.map.cell_size.map(|v| v * 0.5);
-                let ex = b[0].abs() * sx + b[1].abs() * sy;
-                let ey = b[2].abs() * sx + b[3].abs() * sy;
+                let instance = resolver.instance(&draw, map_id)?;
+                // Culling bounds of the quad [-pivot, 1 - pivot] * size under the map basis.
+                let [size, pivot] = [draw.size, [instance.size_pivot[2], instance.size_pivot[3]]];
+                let offset = [(0.5 - pivot[0]) * size[0], (0.5 - pivot[1]) * size[1]];
+                let centre = [
+                    position[0] + b[0] * offset[0] + b[1] * offset[1],
+                    position[1] + b[2] * offset[0] + b[3] * offset[1],
+                ];
+                let [hx, hy] = size.map(|v| v * 0.5);
+                let ex = b[0].abs() * hx + b[1].abs() * hy;
+                let ey = b[2].abs() * hx + b[3].abs() * hy;
                 let rect = [
-                    position[0] - ex,
-                    position[1] - ey,
-                    position[0] + ex,
-                    position[1] + ey,
+                    centre[0] - ex,
+                    centre[1] - ey,
+                    centre[0] + ex,
+                    centre[1] + ey,
                 ];
                 let (instances, bounds) = groups
-                    .entry([x.div_euclid(32), y.div_euclid(32)])
+                    .entry(depth_batch(map.map.layout, x, y))
                     .or_insert_with(|| (Vec::new(), rect));
-                instances.push(resolver.instance(&draw, map_id)?);
+                instances.push((position[1], position[0], instance));
                 *bounds = [
                     bounds[0].min(rect[0]),
                     bounds[1].min(rect[1]),
@@ -172,7 +184,13 @@ pub(crate) fn prepare(
                     bounds[3].max(rect[3]),
                 ];
             }
-            for (chunk, (instances, bounds)) in groups {
+            for (chunk, (mut instances, bounds)) in groups {
+                // Back to front: farther (higher) tiles first, then left to right.
+                instances.sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
+                let instances = instances
+                    .into_iter()
+                    .map(|(.., instance)| instance)
+                    .collect();
                 let key = (layer.sorting_layer, layer.order, map.entity, rank, chunk);
                 chunks.push((key, instances, (bounds, layer.parallax)));
             }
@@ -330,4 +348,15 @@ impl<'a> Resolver<'a> {
             basis: draw.basis,
         })
     }
+}
+/// Render batch of a cell: `[-depth band, column band]`, so ascending keys draw far
+/// bands first. Isometric bands follow screen axes (x+y depth, x-y column), keeping
+/// tall diamond art back to front across batch borders; grid and hex use rows.
+fn depth_batch(layout: GridLayout, x: i32, y: i32) -> [i32; 2] {
+    let (depth, column) = match layout {
+        GridLayout::Isometric => (i64::from(x) + i64::from(y), i64::from(x) - i64::from(y)),
+        _ => (i64::from(y), i64::from(x)),
+    };
+    // |i32 + i32| / 32 always fits in i32.
+    [-depth.div_euclid(32) as i32, column.div_euclid(32) as i32]
 }

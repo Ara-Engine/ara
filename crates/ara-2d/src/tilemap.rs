@@ -60,6 +60,10 @@ impl GridLayout {
 pub struct TileDefinition {
     /// Stable atlas region name.
     pub region: String,
+    /// Drawn size in metres around the region pivot; zero uses the cell size. Taller
+    /// tiles (walls, trees) overlap their neighbors and draw back to front.
+    #[ara(unit = Meters, range(min = 0))]
+    pub size: [f32; 2],
     /// Auto-tiling terrain group; zero opts out of rules.
     pub terrain: u32,
     /// Generate a static collider and shadow silhouette from this cell.
@@ -176,10 +180,14 @@ impl Tilemap {
             self.cell_size.iter().all(|v| v.is_finite() && *v > 0.),
             "invalid cell size"
         );
-        for k in self.definitions.keys() {
+        for (k, d) in &self.definitions {
             anyhow::ensure!(
                 k.parse::<u32>().is_ok_and(|n| n > 0 && n.to_string() == *k),
                 "tile definition keys are canonical positive numbers"
+            );
+            anyhow::ensure!(
+                d.size.iter().all(|v| v.is_finite() && *v >= 0.),
+                "tile {k} size must be finite and nonnegative"
             );
         }
         let mut ids = BTreeSet::new();

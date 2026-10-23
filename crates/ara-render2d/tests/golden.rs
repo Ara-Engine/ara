@@ -168,3 +168,55 @@ fn update_matches_a_fresh_upload_and_rejects_atlas_changes() -> Result<()> {
     renderer.gpu().assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn tall_isometric_tiles_draw_back_to_front() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (sample, _) = common::scene(
+        root,
+        Some(Path::new(env!("CARGO_BIN_EXE_ara-2d-import-worker"))),
+    )?;
+    let tall = |region: &str| ara_2d::TileDefinition {
+        region: region.into(),
+        size: [1., 1.5],
+        ..Default::default()
+    };
+    let map = ara_2d::Tilemap {
+        atlas: Some(ara_schema::AssetRef(common::ATLAS.into())),
+        layout: ara_2d::GridLayout::Isometric,
+        cell_size: [1., 0.5],
+        definitions: [("1".into(), tall("stone")), ("2".into(), tall("crate"))].into(),
+        layers: vec![ara_2d::TileLayer {
+            id: "l_iso".into(),
+            // "0,0" sorts before "1,1" as text, yet (0,0) is nearer and must win.
+            cells: [("0,0".into(), 1), ("1,1".into(), 2)].into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let scene = ara_render2d::Scene2d {
+        atlases: sample.atlases,
+        tilemaps: vec![ara_render2d::TilemapDraw {
+            entity: 1,
+            name: "Iso".into(),
+            origin: [0.; 2],
+            basis: [1., 0., 0., 1.],
+            map,
+        }],
+        ..Default::default()
+    };
+    let mut renderer = Renderer2d::new(&scene, [128, 128], root.join("../../.sn/test2d-iso"))?;
+    let camera = ara_2d::Camera2d {
+        centre: [0., 0.25],
+        zoom: 4.,
+        ..Default::default()
+    };
+    let mut request = common::request([128, 128]);
+    request.mode = ViewMode::Albedo;
+    request.marks = None;
+    let capture = renderer.capture(&camera, request)?;
+    // World (0, 0.25) lies in both quads; masonry (blue) must cover the crate (brown).
+    let [r, _, b, _] = capture.image.get_pixel(64, 64).0;
+    ensure!(b > r, "back tile drawn over the front tile: rgb {r},{b}");
+    Ok(())
+}
