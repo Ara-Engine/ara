@@ -134,6 +134,7 @@ dependencies = [
  "blake3",
  "libc",
  "notify",
+ "rayon",
  "rmp-serde",
  "serde",
  "serde_bytes",
@@ -322,11 +323,14 @@ dependencies = [
  "intel_tex_2",
  "meshopt",
  "mikktspace",
+ "rayon",
  "serde",
  "serde_json",
+ "tempfile",
  "texture2ddecoder",
  "ufbx",
  "urlencoding",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
