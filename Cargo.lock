@@ -481,6 +481,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-pathtrace"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-render",
+ "ara-render-fidelity",
+ "glam 0.30.9",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-physics"
 version = "0.0.0"
 dependencies = [
@@ -533,6 +547,21 @@ dependencies = [
  "bytemuck",
  "glam 0.30.9",
  "gltf",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "ara-render-fidelity"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-render",
+ "bytemuck",
+ "glam 0.30.9",
  "image",
  "serde",
  "serde_json",
