@@ -658,16 +658,18 @@ Fixes:
 - None needed; review and commit the updated sidecar with the cooked result.
 - If the sidecar names a newer importer than this engine has, that is `ARA7303` instead: update the engine.
 
-## ARA7310 runtime::ASSET_PLACEHOLDER: Asset missing in play, placeholder shown
+## ARA7310 runtime::ASSET_PLACEHOLDER: Model content or selector unavailable in Play
 owner: ara-runtime
 
-A model the scene references could not be loaded in the running game, so the runtime drew placeholder geometry and kept playing instead of failing. The play session continues; only that entity's visuals are wrong.
+A model could not be loaded or its node/primitive selector could not be resolved, so the runtime drew placeholder geometry and kept playing. An invalid emissive material selector reports the same warning while retaining the source material.
 
 Causes:
 - The asset's source file is missing or its import failed (see the matching `ARA7303` or `ARA21xx` diagnostic).
 - The cooked generation was removed from the cache while the player was running.
+- A node name is missing or ambiguous, a primitive index exceeds its subtree, or an emissive material selector does not exist in the source.
 
 Fixes:
+- Choose an existing source node/material name or numeric index. Use `name:3` for a numeric name; use a source node index when names are duplicated.
 - Restore or re-import the asset, then Play again (or let hot reload swap it in).
 - Point the referencing field at an asset that exists (`property.set`).
 

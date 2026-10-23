@@ -1459,6 +1459,7 @@ dependencies = [
  "clap",
  "embed-resource",
  "glam 0.34.1",
+ "image",
  "serde",
  "serde_json",
  "windows-sys 0.61.2",

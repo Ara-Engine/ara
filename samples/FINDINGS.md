@@ -92,6 +92,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     their own fence), `KHR_materials_emissive_strength`, `KHR_materials_transmission`.
     Poly Haven glTF downloads also ship colour maps as JPG with opacity in separate maps;
     nothing in the pipeline can merge them (the build does it, `kit::cutout`).
+    **Cooked data fixed (`9f2813f`):** independent texture transforms/UV selectors,
+    emissive strength, transmission and cook-time companion opacity maps. Renderer
+    consumption is tracked by the renderer workstream.
 12. **Physical sky, fog, exposure and post cannot be authored in a scene.** `Environment`
     is a 3-colour gradient plus a linear exposure; the fidelity atmosphere, height fog,
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep
@@ -112,6 +115,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     **Fixed (`27f3523`):** music/dialogue import uses bounded decode/resample staging;
     the reflected `decodedBudget` sidecar setting controls resident PCM staging.
     A 181-second import passes with a 64 KiB budget.
+    **Play fixed (`e649345`):** music and ordinary sources keep streamed imports
+    compressed, with bounded PCM queues, producer-side loops and deterministic
+    offline refills. A 181-second score imports and plays through headless MCP.
 15. **The editor viewport cannot show real content** (`*-editor.png`). It draws imported
     models with their flat `MeshRenderer.color` only: no textures and no glTF material
     factors, so all 18 showcase material balls are the same white. Terrain documents are

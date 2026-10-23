@@ -29,6 +29,8 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
   silence, clipping, pre-limiter overloads and a WAV BLAKE3 hash. `Analysis::buses`
   (per-bus/aux peak + RMS over the window) is filled by `capture_audio`;
   `occlusion` (ara-acoustics) and `graphs` (ara-audio-graph) are attached by callers.
+  `capture_audio_prepared` refills offline stream producers before each quantum;
+  decoding never moves into the allocation-free renderer.
 
 ## Audio v2 mechanisms (additive)
 
