@@ -1,0 +1,52 @@
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 20000,
+    "threads": 8,
+    "steps": 300,
+    "setup_ms": 15.6031,
+    "step_ms_all": {
+      "samples": 300,
+      "p50": 27.3797,
+      "p95": 31.8648,
+      "max": 41.8486,
+      "mean": 23.025226666666672
+    },
+    "step_ms_first_half": {
+      "samples": 150,
+      "p50": 12.0956,
+      "p95": 30.5082,
+      "max": 33.8155,
+      "mean": 17.329118666666666
+    },
+    "step_ms_second_half": {
+      "samples": 150,
+      "p50": 28.4567,
+      "p95": 32.5941,
+      "max": 41.8486,
+      "mean": 28.721334666666657
+    },
+    "active_at_end": 19999,
+    "escaped_bodies": 0,
+    "step_error_bits": 0,
+    "extract_all_ms": {
+      "samples": 30,
+      "p50": 0.4646,
+      "p95": 0.6037,
+      "max": 0.6357,
+      "mean": 0.4782400000000001
+    },
+    "snapshot_bytes": 13908260,
+    "snapshot_save_ms": 39.163700000000006,
+    "snapshot_restore_ms": 13.2827
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "scenario": "vehicle",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "speed_at_5s": 20.000132,
+    "distance_at_5s": 50.163353,
+    "lateral_drift_at_5s": 0.0,
+    "heading_change_turn_deg": -133.42554,
+    "turn_direction": "right",
+    "turn_radius_m": 38.333187,
+    "min_up_dot": 0.99982685,
+    "mean_wheels_in_contact": 4.0,
+    "pass": true,
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0039,
+      "p95": 0.0054,
+      "max": 0.0628,
+      "mean": 0.004328333333333315
+    }
+  }
+}

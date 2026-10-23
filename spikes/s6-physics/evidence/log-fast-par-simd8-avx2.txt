@@ -1,0 +1,1547 @@
+﻿{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "noop_call_ns": 1.0407100000000002,
+    "queries": {
+      "engine": "jolt",
+      "bodies": 5000,
+      "single_position_read_ns": 9.473,
+      "bulk_read_ns_per_body": 9.8444,
+      "raycast_ns": 457.02,
+      "raycast_hits": 9720,
+      "raycast_mean_distance": 24.702944,
+      "raycast_mean_normal_y": 0.7669444,
+      "sphere_cast_ns": 1406.49,
+      "sphere_cast_hits": 9740,
+      "sphere_cast_mean_distance": 24.385233
+    }
+  }
+}
+{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "single_position_read_ns": 4.3656,
+    "bulk_read_ns_per_body": 5.9372,
+    "raycast_ns": 972.69,
+    "raycast_hits": 9720,
+    "raycast_mean_distance": 24.666512,
+    "raycast_mean_normal_y": 0.76543176,
+    "sphere_cast_ns": 6700.540000000001,
+    "sphere_cast_hits": 9740,
+    "sphere_cast_mean_distance": 24.337675
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "ticks": 300,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 8,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 8,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 1.145,
+          "restore_ms": 0.4296,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ],
+      [
+        8,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 1.2343,
+          "restore_ms": 0.2855,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "ticks": 300,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 8,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 8,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 4202070,
+          "save_ms": 3.5614000000000003,
+          "restore_ms": 8.716399999999998,
+          "hash_200_uninterrupted": "24e497ff6c0df3f9",
+          "hash_200_first_pass": "24e497ff6c0df3f9",
+          "hash_200_after_restore": "24e497ff6c0df3f9",
+          "hash_200_restored_into_fresh_world": "24e497ff6c0df3f9",
+          "identical": true
+        }
+      ],
+      [
+        8,
+        {
+          "snapshot_bytes": 4202070,
+          "save_ms": 3.258,
+          "restore_ms": 17.9886,
+          "hash_200_uninterrupted": "24e497ff6c0df3f9",
+          "hash_200_first_pass": "24e497ff6c0df3f9",
+          "hash_200_after_restore": "24e497ff6c0df3f9",
+          "hash_200_restored_into_fresh_world": "24e497ff6c0df3f9",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 5000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 6.524900000000001,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 18.5747,
+      "p95": 31.2434,
+      "max": 43.1094,
+      "mean": 19.08148016666667
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 20.1128,
+      "p95": 33.4574,
+      "max": 43.1094,
+      "mean": 20.315671000000005
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 17.5527,
+      "p95": 21.7253,
+      "max": 33.7282,
+      "mean": 17.847289333333332
+    },
+    "active_at_end": 5000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0851,
+      "p95": 0.1157,
+      "max": 0.20570000000000002,
+      "mean": 0.08467833333333337
+    },
+    "snapshot_bytes": 3099318,
+    "snapshot_save_ms": 9.8223,
+    "snapshot_restore_ms": 3.032
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 5000,
+    "threads": 4,
+    "steps": 600,
+    "setup_ms": 5.3493,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 6.0764000000000005,
+      "p95": 10.3491,
+      "max": 12.2897,
+      "mean": 6.267179833333335
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 6.3224,
+      "p95": 10.846400000000001,
+      "max": 12.2897,
+      "mean": 6.447082333333332
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 5.9511,
+      "p95": 6.8962,
+      "max": 10.7758,
+      "mean": 6.087277333333335
+    },
+    "active_at_end": 5000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0804,
+      "p95": 0.1353,
+      "max": 0.17789999999999997,
+      "mean": 0.08642166666666666
+    },
+    "snapshot_bytes": 3099318,
+    "snapshot_save_ms": 6.5352,
+    "snapshot_restore_ms": 1.7371999999999999
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 5000,
+    "threads": 8,
+    "steps": 600,
+    "setup_ms": 4.209700000000001,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 5.0299000000000005,
+      "p95": 6.6505,
+      "max": 12.7215,
+      "mean": 4.879496833333334
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 5.0046,
+      "p95": 6.58,
+      "max": 12.7215,
+      "mean": 4.506041999999999
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 5.0405,
+      "p95": 6.6972000000000005,
+      "max": 10.1373,
+      "mean": 5.252951666666664
+    },
+    "active_at_end": 5000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0784,
+      "p95": 0.10110000000000001,
+      "max": 0.2196,
+      "mean": 0.08383166666666668
+    },
+    "snapshot_bytes": 3099318,
+    "snapshot_save_ms": 6.8506,
+    "snapshot_restore_ms": 1.8624
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 20000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 16.0923,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 122.39179999999999,
+      "p95": 178.8747,
+      "max": 253.37320000000003,
+      "mean": 119.86421216666675
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 127.6677,
+      "p95": 183.3646,
+      "max": 237.30870000000002,
+      "mean": 116.17862833333328
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 118.7658,
+      "p95": 170.9552,
+      "max": 253.37320000000003,
+      "mean": 123.54979599999999
+    },
+    "active_at_end": 19999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.48700000000000004,
+      "p95": 0.6618,
+      "max": 0.8361,
+      "mean": 0.5038533333333333
+    },
+    "snapshot_bytes": 13870128,
+    "snapshot_save_ms": 32.8133,
+    "snapshot_restore_ms": 9.6789
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 20000,
+    "threads": 4,
+    "steps": 600,
+    "setup_ms": 12.9207,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 34.6849,
+      "p95": 49.6461,
+      "max": 55.9221,
+      "mean": 33.94165433333333
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 35.4717,
+      "p95": 52.169599999999996,
+      "max": 55.9221,
+      "mean": 33.54645666666667
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 34.240399999999994,
+      "p95": 39.374399999999994,
+      "max": 47.5193,
+      "mean": 34.33685199999999
+    },
+    "active_at_end": 19999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.4177,
+      "p95": 0.5942000000000001,
+      "max": 0.8825999999999999,
+      "mean": 0.4626166666666666
+    },
+    "snapshot_bytes": 13870128,
+    "snapshot_save_ms": 34.3759,
+    "snapshot_restore_ms": 10.432200000000002
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 20000,
+    "threads": 8,
+    "steps": 600,
+    "setup_ms": 12.2092,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 25.0977,
+      "p95": 31.679199999999998,
+      "max": 53.239000000000004,
+      "mean": 24.070713833333343
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 25.491,
+      "p95": 31.8562,
+      "max": 37.9203,
+      "mean": 22.575159666666675
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 24.8692,
+      "p95": 30.411299999999997,
+      "max": 53.239000000000004,
+      "mean": 25.566268000000004
+    },
+    "active_at_end": 19999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.419,
+      "p95": 0.5687,
+      "max": 0.6803,
+      "mean": 0.45183999999999996
+    },
+    "snapshot_bytes": 13870128,
+    "snapshot_save_ms": 47.2435,
+    "snapshot_restore_ms": 17.7069
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 5.6885,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 11.2155,
+      "p95": 27.9469,
+      "max": 48.2855,
+      "mean": 13.592531333333342
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 13.0914,
+      "p95": 29.596500000000002,
+      "max": 48.2855,
+      "mean": 16.219142999999985
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 10.1129,
+      "p95": 16.392899999999997,
+      "max": 20.5653,
+      "mean": 10.965919666666665
+    },
+    "active_at_end": 4999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0391,
+      "p95": 0.0471,
+      "max": 0.0999,
+      "mean": 0.04030999999999999
+    },
+    "snapshot_bytes": 23112207,
+    "snapshot_save_ms": 28.6363,
+    "snapshot_restore_ms": 49.2729
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "threads": 4,
+    "steps": 600,
+    "setup_ms": 5.3335,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 3.1107,
+      "p95": 9.0616,
+      "max": 23.2057,
+      "mean": 3.989943999999994
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 4.078799999999999,
+      "p95": 10.168899999999999,
+      "max": 23.2057,
+      "mean": 5.077811666666665
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 2.8037,
+      "p95": 3.5779,
+      "max": 4.2873,
+      "mean": 2.902076333333333
+    },
+    "active_at_end": 4999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0361,
+      "p95": 0.043699999999999996,
+      "max": 0.0808,
+      "mean": 0.03778666666666667
+    },
+    "snapshot_bytes": 23112207,
+    "snapshot_save_ms": 21.488799999999998,
+    "snapshot_restore_ms": 41.4375
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "threads": 8,
+    "steps": 600,
+    "setup_ms": 4.0044,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 2.5331,
+      "p95": 6.2653,
+      "max": 22.159399999999998,
+      "mean": 3.184792333333332
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 2.7634,
+      "p95": 6.6852,
+      "max": 22.159399999999998,
+      "mean": 3.7244476666666673
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 2.4288,
+      "p95": 4.012,
+      "max": 8.745899999999999,
+      "mean": 2.6451369999999987
+    },
+    "active_at_end": 4999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.035500000000000004,
+      "p95": 0.0431,
+      "max": 0.0751,
+      "mean": 0.03684
+    },
+    "snapshot_bytes": 23112207,
+    "snapshot_save_ms": 26.472099999999998,
+    "snapshot_restore_ms": 43.1297
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 20000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 11.6305,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 93.7471,
+      "p95": 171.0709,
+      "max": 757.443,
+      "mean": 105.61038933333334
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 100.63999999999999,
+      "p95": 199.30960000000002,
+      "max": 757.443,
+      "mean": 119.14648966666665
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 88.3208,
+      "p95": 120.5281,
+      "max": 179.13989999999998,
+      "mean": 92.07428900000001
+    },
+    "active_at_end": 20000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.1622,
+      "p95": 0.3667,
+      "max": 0.43150000000000005,
+      "mean": 0.1972483333333333
+    },
+    "snapshot_bytes": 96841429,
+    "snapshot_save_ms": 116.41029999999999,
+    "snapshot_restore_ms": 204.3148
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 20000,
+    "threads": 4,
+    "steps": 600,
+    "setup_ms": 11.737499999999999,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 27.3997,
+      "p95": 53.9995,
+      "max": 607.6179999999999,
+      "mean": 33.66272899999999
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 28.745199999999997,
+      "p95": 58.8838,
+      "max": 607.6179999999999,
+      "mean": 40.289612000000005
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 26.479599999999998,
+      "p95": 33.8093,
+      "max": 37.6018,
+      "mean": 27.035845999999992
+    },
+    "active_at_end": 20000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.1401,
+      "p95": 0.1898,
+      "max": 0.3211,
+      "mean": 0.1508533333333333
+    },
+    "snapshot_bytes": 96841429,
+    "snapshot_save_ms": 117.0809,
+    "snapshot_restore_ms": 217.6805
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 20000,
+    "threads": 8,
+    "steps": 600,
+    "setup_ms": 13.3167,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 20.317999999999998,
+      "p95": 41.0578,
+      "max": 606.209,
+      "mean": 26.900553833333337
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 22.0353,
+      "p95": 49.2012,
+      "max": 606.209,
+      "mean": 32.910872
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 19.5969,
+      "p95": 29.338199999999997,
+      "max": 64.5964,
+      "mean": 20.890235666666687
+    },
+    "active_at_end": 20000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.1492,
+      "p95": 0.2539,
+      "max": 0.31789999999999996,
+      "mean": 0.16523500000000002
+    },
+    "snapshot_bytes": 96841429,
+    "snapshot_save_ms": 124.0266,
+    "snapshot_restore_ms": 193.33259999999999
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "jolt",
+    "ticks": 300,
+    "perturbed_final_hash": "b3c5579122f1921b",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 8,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 8,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 1.3857,
+          "restore_ms": 0.3679,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ],
+      [
+        8,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 1.0217,
+          "restore_ms": 0.34099999999999997,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": true,
+    "rapier_simd8": true,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": true
+  },
+  "result": {
+    "engine": "rapier",
+    "ticks": 300,
+    "perturbed_final_hash": "5bc27a65a76b0a6e",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 8,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 8,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "e2022dc5efca1365",
+          "chain_digest": "23188127461e7715",
+          "hash_at": [
+            [
+              100,
+              "433d2e23e66af30f"
+            ],
+            [
+              200,
+              "24e497ff6c0df3f9"
+            ],
+            [
+              300,
+              "e2022dc5efca1365"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 4202070,
+          "save_ms": 3.7628000000000004,
+          "restore_ms": 10.4764,
+          "hash_200_uninterrupted": "24e497ff6c0df3f9",
+          "hash_200_first_pass": "24e497ff6c0df3f9",
+          "hash_200_after_restore": "24e497ff6c0df3f9",
+          "hash_200_restored_into_fresh_world": "24e497ff6c0df3f9",
+          "identical": true
+        }
+      ],
+      [
+        8,
+        {
+          "snapshot_bytes": 4202070,
+          "save_ms": 3.4876,
+          "restore_ms": 11.425899999999999,
+          "hash_200_uninterrupted": "24e497ff6c0df3f9",
+          "hash_200_first_pass": "24e497ff6c0df3f9",
+          "hash_200_after_restore": "24e497ff6c0df3f9",
+          "hash_200_restored_into_fresh_world": "24e497ff6c0df3f9",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}

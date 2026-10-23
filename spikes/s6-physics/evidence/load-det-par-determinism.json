@@ -1,0 +1,11 @@
+﻿{
+    "flavor":  "det-par",
+    "before_pct":  82.8,
+    "runs":  [
+                 {
+                     "run":  "determinism --threads 1,4,8",
+                     "seconds":  21.7,
+                     "load_after_pct":  57.9
+                 }
+             ]
+}

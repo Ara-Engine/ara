@@ -1,0 +1,321 @@
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": true,
+    "jolt_cross_platform_deterministic": true,
+    "rapier_parallel": true,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": true,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "ticks": 300,
+    "perturbed_final_hash": "80afbf6f6714e7ae",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 4,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      },
+      {
+        "threads": 8,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 4,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      },
+      {
+        "threads": 8,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "733d83dc37e5eb89",
+          "chain_digest": "42e2cba4120121f0",
+          "hash_at": [
+            [
+              100,
+              "8b31e64727895cfe"
+            ],
+            [
+              200,
+              "ea009f0f70bd76a0"
+            ],
+            [
+              300,
+              "733d83dc37e5eb89"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 455134,
+          "save_ms": 1.1922,
+          "restore_ms": 0.4199,
+          "hash_200_uninterrupted": "ea009f0f70bd76a0",
+          "hash_200_first_pass": "ea009f0f70bd76a0",
+          "hash_200_after_restore": "ea009f0f70bd76a0",
+          "hash_200_restored_into_fresh_world": "ea009f0f70bd76a0",
+          "identical": true
+        }
+      ],
+      [
+        4,
+        {
+          "snapshot_bytes": 455134,
+          "save_ms": 1.1300999999999999,
+          "restore_ms": 0.4434,
+          "hash_200_uninterrupted": "ea009f0f70bd76a0",
+          "hash_200_first_pass": "ea009f0f70bd76a0",
+          "hash_200_after_restore": "ea009f0f70bd76a0",
+          "hash_200_restored_into_fresh_world": "ea009f0f70bd76a0",
+          "identical": true
+        }
+      ],
+      [
+        8,
+        {
+          "snapshot_bytes": 455134,
+          "save_ms": 0.9307,
+          "restore_ms": 0.312,
+          "hash_200_uninterrupted": "ea009f0f70bd76a0",
+          "hash_200_first_pass": "ea009f0f70bd76a0",
+          "hash_200_after_restore": "ea009f0f70bd76a0",
+          "hash_200_restored_into_fresh_world": "ea009f0f70bd76a0",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+146/146 files compiled for aarch64-linux-android24 in 67.3 s (4 jobs), 3.2 MB of objects (NDK 28.2.13676358 clang, JPH_CROSS_PLATFORM_DETERMINISTIC; compile only, not linked or run)

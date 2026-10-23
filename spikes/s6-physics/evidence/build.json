@@ -1,0 +1,23 @@
+﻿[
+    {
+        "probe":  "empty",
+        "clean_build_s":  2.4,
+        "touch_rebuild_s":  0.92,
+        "exe_bytes":  147968,
+        "output":  "0.5"
+    },
+    {
+        "probe":  "jolt",
+        "clean_build_s":  55.55,
+        "touch_rebuild_s":  0.72,
+        "exe_bytes":  1066496,
+        "output":  "0.45309713"
+    },
+    {
+        "probe":  "rapier",
+        "clean_build_s":  66.29,
+        "touch_rebuild_s":  1.46,
+        "exe_bytes":  2441728,
+        "output":  "0.4408114"
+    }
+]
