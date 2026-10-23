@@ -676,6 +676,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-color"
+version = "0.0.0"
+dependencies = [
+ "ara-schema",
+ "serde",
+]
+
+[[package]]
 name = "ara-components"
 version = "0.0.0"
 dependencies = [
@@ -1062,6 +1070,7 @@ dependencies = [
  "ara-schema",
  "ara-shader-cook",
  "ara-terrain",
+ "ara-texture-stream",
  "blake3",
  "bytemuck",
  "glam 0.30.9",
@@ -1294,6 +1303,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-audio",
+ "ara-color",
  "ara-gpu",
  "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
@@ -1422,12 +1432,21 @@ name = "ara-render-geo"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-asset",
+ "ara-asset-format",
+ "ara-color",
  "ara-geo",
  "ara-gpu",
+ "ara-importers",
+ "ara-platform",
  "ara-render",
+ "ara-schema",
+ "ara-texture-stream",
  "ara-vsm",
  "bytemuck",
  "glam 0.30.9",
+ "gltf",
+ "half",
  "image",
  "serde",
  "serde_json",
@@ -1687,6 +1706,20 @@ dependencies = [
  "blake3",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-texture-stream"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset-format",
+ "ara-gpu",
+ "ara-render",
+ "bytemuck",
+ "serde",
+ "serde_json",
+ "texture2ddecoder",
 ]
 
 [[package]]
