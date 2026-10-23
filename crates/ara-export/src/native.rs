@@ -33,7 +33,9 @@ pub(crate) fn compile_plugins(
                 .arg(manifest)
                 .args(["--target", target])
                 .arg("--target-dir")
-                .arg(&build);
+                .arg(&build)
+                .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
+                .env("CARGO_PROFILE_RELEASE_STRIP", "none");
             let envkey = format!(
                 "CARGO_TARGET_{}_LINKER",
                 target.to_uppercase().replace('-', "_")

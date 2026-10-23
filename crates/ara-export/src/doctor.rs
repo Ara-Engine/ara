@@ -153,11 +153,11 @@ pub fn doctor(opts: &DoctorOptions, t: &Toolchain) -> Vec<Check> {
         );
         add(
             "ARA-EXP-WIN-010",
-            std::env::var_os("ARA_WIN_SIGN").is_some(),
+            false,
             true,
-            "Optional external Authenticode signing identity",
-            "signtool sign /a /fd SHA256 dist/windows/ara-player.exe".into(),
-            json!({"note":"Authenticode is an external post-export step; no identity is claimed by the exporter"}),
+            "Optional Authenticode identity is selected by the project preset",
+            "ara-export doctor --project PROJECT --preset PRESET".into(),
+            json!({"note":"Configure windowsSigning.certificateEnv to enable verified Authenticode signing; the default is unsigned"}),
         );
     }
     if opts.platform.is_none_or(|p| p == Platform::Linux) {
@@ -365,6 +365,7 @@ pub fn doctor(opts: &DoctorOptions, t: &Toolchain) -> Vec<Check> {
             json!({"protocol":"ara.export.agent/1","arch":"arm64"}),
         );
     }
+    out.extend(crate::shipping_doctor::host(opts.platform, t));
     crate::bus::emit_checks(&out);
     out
 }
@@ -438,6 +439,7 @@ pub fn doctor_for_preset(
             },
         });
     }
+    checks.extend(crate::shipping_doctor::preset(project, preset));
     crate::bus::emit_checks(&checks[host_checks..]);
     checks
 }

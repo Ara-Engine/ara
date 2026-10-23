@@ -15,6 +15,8 @@ use serde::Deserialize;
 /// `ara-launch.json`, written by the exporter next to the template.
 #[derive(Deserialize)]
 struct Launch {
+    #[serde(default)]
+    contract: String,
     /// Pack file, relative to the root.
     pack: String,
     /// `nativeaot` or `r2r-coreclr`.
@@ -42,6 +44,9 @@ fn main() -> ExitCode {
 }
 
 fn real_main(t0: Instant) -> Result<bool, String> {
+    if ara_crash::monitor_from_args().map_err(|e| e.to_string())? {
+        return Ok(true);
+    }
     let mut root = std::env::current_exe()
         .map_err(|e| e.to_string())?
         .parent()
@@ -51,6 +56,7 @@ fn real_main(t0: Instant) -> Result<bool, String> {
     let mut bench_iters = 0;
     let mut verify = true;
     let mut mod_path = None;
+    let mut crash_probe = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or(format!("{arg} needs a value"));
@@ -61,13 +67,25 @@ fn real_main(t0: Instant) -> Result<bool, String> {
             "--bench" => bench_iters = value()?.parse().map_err(|e| format!("--bench: {e}"))?,
             "--no-verify" => verify = false,
             "--mod" => mod_path = Some(PathBuf::from(value()?)),
+            "--crash-probe" => crash_probe = Some(value()?),
             other => return Err(format!("unknown argument {other}")),
         }
     }
+    let _crash_capture = ara_export_player::shipping::start(&root)?;
+    let crash_probe = match crash_probe.as_deref() {
+        Some("native") => Some(ara_export_player::shipping::CrashProbe::Native),
+        Some("panic") => Some(ara_export_player::shipping::CrashProbe::Panic),
+        Some("managed") => Some(ara_export_player::shipping::CrashProbe::Managed),
+        Some(_) => return Err("--crash-probe expects native, panic or managed".into()),
+        None => None,
+    };
     let launch_text = std::fs::read(root.join("ara-launch.json"))
         .map_err(|e| format!("reading ara-launch.json: {e}"))?;
     let launch: Launch =
         serde_json::from_slice(&launch_text).map_err(|e| format!("ara-launch.json: {e}"))?;
+    if !launch.contract.is_empty() && launch.contract != "ara.player.conformance/1" {
+        return Err("ARA-EXP-TPL-005: this is the conformance template; runtime contract requires an integrated engine player pin".into());
+    }
     let lane = match launch.lane.as_str() {
         "nativeaot" => ScriptLane::Aot {
             lib: root.join(&launch.script),
@@ -84,6 +102,7 @@ fn real_main(t0: Instant) -> Result<bool, String> {
     let pack = std::fs::read(root.join(&launch.pack))
         .map_err(|e| format!("reading {}: {e}", launch.pack))?;
     let cfg = RunConfig {
+        crash_probe,
         pack_key: launch
             .encryption_key_env
             .as_ref()

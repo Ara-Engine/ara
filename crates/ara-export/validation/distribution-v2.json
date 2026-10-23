@@ -1,0 +1,491 @@
+{
+  "androidSigning": "disposable test upload key; no Play upload performed",
+  "crashes": [
+    {
+      "diagnostic": {
+        "code": "ARA2701",
+        "data": {
+          "crash": {
+            "buildId": "a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c",
+            "format": "ara.crash/1",
+            "kind": "native",
+            "message": "Native exception or fatal signal; symbolize the minidump for details",
+            "stack": "Operating system: Windows NT\n                  10.0.26300\nCPU: amd64\n     family 25 model 97 stepping 2\n     16 CPUs\n\nCrash reason:  EXCEPTION_ACCESS_VIOLATION\nCrash address: 0x00007ffaf2d7408a\nProcess uptime: 1 seconds\n\nThread 0 main (crashed) - tid: 85488\n 0  KERNELBASE.dll + 0xc408a\n     rax = 0x0000000000000046    rdx = 0x00007ff6251b8128\n     rcx = 0xfffffffffffffffe    rbx = 0x0000000000000000\n     rsi = 0x0000000000000001    rdi = 0x00000000c0000005\n     rbp = 0x0000000000000000    rsp = 0x000000c98a1cea70\n      r8 = 0x0000000000000001     r9 = 0x000000c98a1cdd90\n     r10 = 0x00007ff62514b8cd    r11 = 0x000002792ffb1620\n     r12 = 0x000000000000003c    r13 = 0x000000c98a1cf500\n     r14 = 0x0000000000000000    r15 = 0x0000000000000005\n     rip = 0x00007ffaf2d7408a\n    Found by: given as instruction pointer in context\n 1  KERNELBASE.dll + 0xc4089\n     rsp = 0x000000c98a1ceaa8    rip = 0x00007ffaf2d7408a\n    Found by: stack scanning\n 2  ara-player.exe!ara_crash::native_crash_probe() [lib.rs : 31 + 0x15]\n     rsp = 0x000000c98a1ceb70    rip = 0x00007ff6250a79da\n    Found by: stack scanning\n 3  ara-player.exe!ara_export_player::runtime::run() [runtime.rs : 290 + 0x12]\n     rsp = 0x000000c98a1ceba0    rip = 0x00007ff625088136\n    Found by: call frame info\n 4  ara-player.exe!<unknown in ara_export_smoke.pdb> + 0x20b11\n     rsp = 0x000000c98a1cec58    rip = 0x00007ff62518f830\n    Found by: stack scanning\n\nThread 1  - tid: 2928\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x000002792f5cf690\n     rcx = 0x000000000000009c    rbx = 0x000002792f5cfa10\n     rsi = 0x00007ffaf5a23420    rdi = 0x000002792f5cc680\n     rbp = 0x0000000000000000    rsp = 0x000000c98a4ffbf8\n      r8 = 0x0000000000000010     r9 = 0x000000c98a4ffc58\n     r10 = 0x000000000000009c    r11 = 0x000000000000009c\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x000000c98a4ffc00    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\nThread 2  - tid: 61140\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x000002792f5d0110\n     rcx = 0x000000000000009c    rbx = 0x000002792f5d0490\n     rsi = 0x00007ffaf5a23420    rdi = 0x000002792f5cc680\n     rbp = 0x0000000000000000    rsp = 0x000000c98a5ffa98\n      r8 = 0x0000000000000010     r9 = 0x000000c98a5ffaf8\n     r10 = 0x000000000000009c    r11 = 0x000000000000009c\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x000000c98a5ffaa0    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\n 2  ntdll.dll + 0x2341f\n     rsp = 0x000000c98a5ffab8    rip = 0x00007ffaf5a23420\n    Found by: stack scanning\nThread 3  - tid: 67936\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x000002792f5d0ad0\n     rcx = 0x000000000000009c    rbx = 0x000002792f5d0e50\n     rsi = 0x00007ffaf5a23420    rdi = 0x000002792f5cc680\n     rbp = 0x0000000000000000    rsp = 0x000000c98a6ff748\n      r8 = 0x0000000000000010     r9 = 0x000000c98a6ff7a8\n     r10 = 0x000000000000009c    r11 = 0x000000000000009c\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x000000c98a6ff750    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\n 2  ntdll.dll + 0x2341f\n     rsp = 0x000000c98a6ff768    rip = 0x00007ffaf5a23420\n    Found by: stack scanning\nThread 4 .NET Finalizer - tid: 14804\n 0  ntdll.dll + 0x161dd4\n     rax = 0x0000000000000004    rdx = 0x0000000000000000\n     rcx = 0x00000000000001e0    rbx = 0x00000000000001e0\n     rsi = 0x00000000ffffffff    rdi = 0x0000000000000000\n     rbp = 0x0000000000000000    rsp = 0x000000c98a7ffc28\n      r8 = 0x0000000000000000     r9 = 0x000000c98a318000\n     r10 = 0x00000000000001e0    r11 = 0x00000000000001e0\n     r12 = 0x0000000000000000    r13 = 0x0000000000000000\n     r14 = 0x0000000000000000    r15 = 0x0000000000000000\n     rip = 0x00007ffaf5b61dd4\n    Found by: given as instruction pointer in context\n 1  KERNELBASE.dll + 0x1be9e\n     rsp = 0x000000c98a7ffc30    rip = 0x00007ffaf2ccbe9f\n    Found by: stack scanning\n 2  Game.dll!Thread::Construct() [thread.cpp : 312 + 0x7]\n     rsp = 0x000000c98a7ffc50    rip = 0x00007ffa48fcc00f\n    Found by: stack scanning\n\nLoaded modules:\n0x7ff625070000 - 0x7ff6251c5fff  ara-player.exe  ???  (main)\n0x7ffa48ef0000 - 0x7ffa4910bfff  Game.dll  1.0.0.0\n0x7ffac50e0000 - 0x7ffac511afff  dbgcore.dll  6.2.26100.9549\n0x7ffac5c10000 - 0x7ffac5c17fff  wshunix.dll  6.2.26100.1\n0x7fface690000 - 0x7fface6bbfff  VCRUNTIME140.dll  14.51.36247.0\n0x7ffaefd80000 - 0x7ffaeffcbfff  dbghelp.dll  6.2.26100.9549\n0x7ffaf1850000 - 0x7ffaf186afff  kernel.appcore.dll  6.2.26100.9278\n0x7ffaf1df0000 - 0x7ffaf1e5bfff  mswsock.dll  6.2.26100.9549\n0x7ffaf2ad0000 - 0x7ffaf2af9fff  bcrypt.dll  6.2.26100.9711\n0x7ffaf2cb0000 - 0x7ffaf30b0fff  KERNELBASE.dll  6.2.26100.9711\n0x7ffaf30c0000 - 0x7ffaf316bfff  bcryptprimitives.dll  6.2.26100.9711\n0x7ffaf3310000 - 0x7ffaf3439fff  gdi32full.dll  6.2.26100.9711\n0x7ffaf3440000 - 0x7ffaf3466fff  win32u.dll  6.2.26100.9711\n0x7ffaf3500000 - 0x7ffaf35a2fff  msvcp_win.dll  6.2.26100.9711\n0x7ffaf35b0000 - 0x7ffaf36fbfff  ucrtbase.dll  6.2.26100.9711\n0x7ffaf3730000 - 0x7ffaf3808fff  oleaut32.dll  6.2.26100.9711\n0x7ffaf3810000 - 0x7ffaf383afff  gdi32.dll  6.2.26100.8328\n0x7ffaf3840000 - 0x7ffaf3bcafff  combase.dll  6.2.26100.9711\n0x7ffaf3bd0000 - 0x7ffaf3d69fff  ole32.dll  6.2.26100.9549\n0x7ffaf3e60000 - 0x7ffaf3f08fff  msvcrt.dll  7.0.26100.9711\n0x7ffaf4900000 - 0x7ffaf49bbfff  advapi32.dll  6.2.26100.9711\n0x7ffaf49d0000 - 0x7ffaf4a9afff  kernel32.dll  6.2.26100.9711\n0x7ffaf4b30000 - 0x7ffaf4c47fff  rpcrt4.dll  6.2.26100.9711\n0x7ffaf5170000 - 0x7ffaf51a0fff  imm32.dll  6.2.26100.9278\n0x7ffaf51b0000 - 0x7ffaf5386fff  user32.dll  6.2.26100.9549\n0x7ffaf5570000 - 0x7ffaf5617fff  sechost.dll  6.2.26100.9711\n0x7ffaf5620000 - 0x7ffaf56a0fff  ws2_32.dll  6.2.26100.9711\n0x7ffaf5a00000 - 0x7ffaf5c67fff  ntdll.dll  6.2.26100.9711\n\nUnloaded modules:\n\nUnimplemented streams encountered:\nStream 0x00000000 UnusedStream (Official) @ 0x00000000\nStream 0x0000000d FunctionTable (Official) @ 0x000013d0\nStream 0x00000015 SystemMemoryInfoStream (Official) @ 0x000024cc\nStream 0x00000016 ProcessVmCountersStream (Official) @ 0x000026d8\n"
+          }
+        },
+        "message": "Native crash: Native exception or fatal signal; symbolize the minidump for details",
+        "severity": "error"
+      },
+      "dumpBytes": 53169,
+      "kind": "native",
+      "recordBytes": 53169,
+      "symbolizeMs": 36
+    },
+    {
+      "diagnostic": {
+        "code": "ARA2701",
+        "data": {
+          "crash": {
+            "buildId": "a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c",
+            "format": "ara.crash/1",
+            "kind": "panic",
+            "message": "panicked at crates\\ara-export-player\\src\\runtime.rs:291:53:\nAra exported player crash probe",
+            "stack": "Operating system: Windows NT\n                  10.0.26300\nCPU: amd64\n     family 25 model 97 stepping 2\n     16 CPUs\n\nCrash reason:  unknown 0x0cca11ed\nCrash address: 0x0000000000000000\nProcess uptime: 0 seconds\n\nThread 0 main (crashed) - tid: 76936\n 0  ara-player.exe!crash_handler::windows::state::simulate_exception() [state.rs : 161 + 0x9]\n     rax = 0x0000006d654fe180    rdx = 0x0000000000000020\n     rcx = 0x0000006d654fe180    rbx = 0x0000026d61b63400\n     rsi = 0x0000006d654fe9b0    rdi = 0x0000006d654fe180\n     rbp = 0x0000006d654fdd10    rsp = 0x0000006d654fdc90\n      r8 = 0x00000000000000b0     r9 = 0x00000000000000c0\n     r10 = 0x00007fface690000    r11 = 0x00007fface6ae72b\n     r12 = 0x0000006d654fe8f0    r13 = 0x00007ff6251b8390\n     r14 = 0x000000000cca11ed    r15 = 0x0000026d61ba2bc0\n     rip = 0x00007ff6250bdb19\n    Found by: given as instruction pointer in context\n 1  ara-player.exe!crash_handler::windows::CrashHandler::simulate_exception() [windows.rs : 59 + 0x7]\n     rbx = 0x0000026d61b63400    rsi = 0x0000006d654fe9b0\n     rdi = 0x0000026d61b52370    rbp = 0x0000006d654fe800\n     rsp = 0x0000006d654fe750    r12 = 0x0000006d654fe8f0\n     r13 = 0x00007ff6251b8390    r14 = 0x0000000000000001\n     r15 = 0x0000026d61ba2bc0    rip = 0x00007ff6250bd413\n    Found by: call frame info\n 2  ara-player.exe!ara_crash::capture::native::impl$0::attach::closure$2() [capture.rs : 149 + 0xe]\n     rbx = 0x0000026d61b63400    rsi = 0x0000006d654feae8\n     rbp = 0x0000006d654fe800    rsp = 0x0000006d654fe780\n     r12 = 0x0000006d654fe8f0    r13 = 0x00007ff6251b8390\n     r14 = 0x0000000000000001    r15 = 0x0000026d61ba2bc0\n     rip = 0x00007ff6250a2203\n    Found by: call frame info\n 3  ara-player.exe!std::panic::PanicHookInfo::new() [boxed.rs : 2334]\n    Found by: inlining\n 4  ara-player.exe!std::panicking::panic_with_hook() [panicking.rs : 823 + 0x2e]\n     rbx = 0x0000000000000001    rsi = 0x0000006d654feb88\n     rdi = 0x00007ff625190ec0    rbp = 0x0000006d654feb30\n     rsp = 0x0000006d654feab0    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff625141824\n    Found by: call frame info\n 5  ara-player.exe!std::panicking::panic_handler::closure$0() [panicking.rs : 681 + 0x13]\n     rbx = 0x0000006d654ff600    rsi = 0x0000006d654ffb30\n     rdi = 0x0000000000000000    rbp = 0x0000006d654febb0\n     rsp = 0x0000006d654feb60    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff625130f64\n    Found by: call frame info\n 6  ara-player.exe!std::sys::backtrace::__rust_end_short_backtrace<std::panicking::panic_handler::closure_env$0,never$>() [backtrace.rs : 182 + 0x4]\n     rbx = 0x0000006d654ff600    rbp = 0x0000006d654febe0\n     rsp = 0x0000006d654febc0    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff62512e7af\n    Found by: call frame info\n 7  ara-player.exe!std::panicking::panic_handler() [panicking.rs : 679 + 0x10]\n     rbx = 0x0000006d654ff600    rbp = 0x0000006d654fec30\n     rsp = 0x0000006d654febf0    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff62513170e\n    Found by: call frame info\n 8  ara-player.exe!core::panicking::panic_fmt() [panicking.rs : 80 + 0x4]\n     rbx = 0x0000006d654ff600    rbp = 0x0000006d654fec90\n     rsp = 0x0000006d654fec40    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff62516eb4d\n    Found by: call frame info\n 9  ara-player.exe!ara_export_player::runtime::run() [runtime.rs : 291 + 0x25]\n     rbx = 0x0000006d654ff600    rbp = 0x0000006d654fed20\n     rsp = 0x0000006d654feca0    r12 = 0x000000000000003c\n     r13 = 0x0000006d654ff600    r14 = 0x0000000000000000\n     r15 = 0x0000000000000005    rip = 0x00007ff6250895d2\n    Found by: call frame info\n10  ara-player.exe!ara_export_smoke::real_main() [ara-export-player.rs : 127]\n    Found by: inlining\n11  ara-player.exe!ara_export_smoke::main() [ara-export-player.rs : 36 + 0x54a]\n     rbx = 0x0000000000019000    rsi = 0x0000000112e8b4c8\n     rdi = 0x000000001eb645cf    rbp = 0x0000006d654ff800\n     rsp = 0x0000006d654ff780    r12 = 0x0000000000000018\n     r13 = 0x000000000000000c    r14 = 0x0000026d61b6a620\n     r15 = 0x0000006d654ff001    rip = 0x00007ff625079a61\n    Found by: call frame info\n12  ara-player.exe!core::ops::function::FnOnce::call_once() [function.rs : 250]\n    Found by: inlining\n13  ara-player.exe!std::sys::backtrace::__rust_begin_short_backtrace<std::process::ExitCode (*)(),std::process::ExitCode>() [backtrace.rs : 166 + 0x1]\n     rbx = 0x0000026d61b534a0    rsi = 0x00007ff62516f640\n     rdi = 0x0000006d654fff10    rbp = 0x0000006d654ffec0\n     rsp = 0x0000006d654ffe20    r12 = 0x0000000000000000\n     r13 = 0x0000000000000000    r14 = 0x0000000000000000\n     r15 = 0x0000000000000000    rip = 0x00007ff625071136\n    Found by: call frame info\n14  ara-player.exe!core::ops::function::impls::impl$2::call_once() [function.rs : 287]\n    Found by: inlining\n15  ara-player.exe!std::panicking::catch_unwind::do_call() [panicking.rs : 576]\n    Found by: inlining\n16  ara-player.exe!std::panicking::catch_unwind() [panicking.rs : 544]\n    Found by: inlining\n17  ara-player.exe!std::panic::catch_unwind() [panic.rs : 359]\n    Found by: inlining\n18  ara-player.exe!std::rt::lang_start_internal::closure$0() [rt.rs : 175]\n    Found by: inlining\n19  ara-player.exe!std::panicking::catch_unwind::do_call() [panicking.rs : 576]\n    Found by: inlining\n20  ara-player.exe!std::panicking::catch_unwind() [panicking.rs : 544]\n    Found by: inlining\n21  ara-player.exe!std::panic::catch_unwind() [panic.rs : 359]\n    Found by: inlining\n22  ara-player.exe!std::rt::lang_start_internal() [rt.rs : 171 + 0x95]\n     rbx = 0x0000026d61b534a0    rbp = 0x0000006d654ffec0\n     rsp = 0x0000006d654ffe50    r12 = 0x0000000000000000\n     r13 = 0x0000000000000000    r14 = 0x0000000000000000\n     r15 = 0x0000000000000000    rip = 0x00007ff62513fdf0\n    Found by: call frame info\n23  ara-player.exe!main + 0x2b\n     rbx = 0x0000026d61b534a0    rsi = 0x0000000000000000\n     rdi = 0x0000026d61b58990    rbp = 0x0000000000000000\n     rsp = 0x0000006d654ffee0    r12 = 0x0000000000000000\n     r13 = 0x0000000000000000    r14 = 0x0000000000000000\n     r15 = 0x0000000000000000    rip = 0x00007ff62507a94c\n    Found by: call frame info\n24  ara-player.exe!invoke_main() [exe_common.inl : 78]\n    Found by: inlining\n25  ara-player.exe!__scrt_common_main_seh() [exe_common.inl : 288 + 0x21]\n     rbx = 0x0000026d61b534a0    rbp = 0x0000000000000000\n     rsp = 0x0000006d654fff20    r12 = 0x0000000000000000\n     r13 = 0x0000000000000000    r14 = 0x0000000000000000\n     r15 = 0x0000000000000000    rip = 0x00007ff625161558\n    Found by: call frame info\n26  kernel32.dll + 0x2dda6\n     rbx = 0x0000000000000000    rsi = 0x0000000000000000\n     rdi = 0x0000000000000000    rbp = 0x0000000000000000\n     rsp = 0x0000006d654fff60    r12 = 0x0000000000000000\n     r13 = 0x0000000000000000    r14 = 0x0000000000000000\n     r15 = 0x0000000000000000    rip = 0x00007ffaf49fdda7\n    Found by: call frame info\n27  ntdll.dll + 0x7ee4b\n     rsp = 0x0000006d654fff90    rip = 0x00007ffaf5a7ee4c\n    Found by: stack scanning\n\nThread 1  - tid: 33052\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x0000026d61b4f670\n     rcx = 0x0000000000000094    rbx = 0x0000026d61b4f9f0\n     rsi = 0x00007ffaf5a23420    rdi = 0x0000026d61b4c680\n     rbp = 0x0000000000000000    rsp = 0x0000006d655ff9f8\n      r8 = 0x0000000000000010     r9 = 0x0000006d655ffa58\n     r10 = 0x0000000000000094    r11 = 0x0000000000000094\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x0000006d655ffa00    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\nThread 2  - tid: 79860\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x0000026d61b51d70\n     rcx = 0x0000000000000094    rbx = 0x0000026d61b520f0\n     rsi = 0x00007ffaf5a23420    rdi = 0x0000026d61b4c680\n     rbp = 0x0000000000000000    rsp = 0x0000006d656ff588\n      r8 = 0x0000000000000010     r9 = 0x0000006d656ff5e8\n     r10 = 0x0000000000000094    r11 = 0x0000000000000094\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x0000006d656ff590    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\n 2  ntdll.dll + 0x2341f\n     rsp = 0x0000006d656ff5a8    rip = 0x00007ffaf5a23420\n    Found by: stack scanning\nThread 3  - tid: 70604\n 0  ntdll.dll + 0x165a24\n     rax = 0x00000000000001e7    rdx = 0x0000026d61b524d0\n     rcx = 0x0000000000000094    rbx = 0x0000026d61b52850\n     rsi = 0x00007ffaf5a23420    rdi = 0x0000026d61b4c680\n     rbp = 0x0000000000000000    rsp = 0x0000006d657ff8e8\n      r8 = 0x0000000000000010     r9 = 0x0000006d657ff948\n     r10 = 0x0000000000000094    r11 = 0x0000000000000094\n     r12 = 0x00007ffaf5abf960    r13 = 0x0000000000000000\n     r14 = 0x000000000000ffff    r15 = 0x00007ffaf5a88910\n     rip = 0x00007ffaf5b65a24\n    Found by: given as instruction pointer in context\n 1  ntdll.dll + 0x24d0d\n     rsp = 0x0000006d657ff8f0    rip = 0x00007ffaf5a24d0e\n    Found by: stack scanning\n 2  ntdll.dll + 0x2341f\n     rsp = 0x0000006d657ff908    rip = 0x00007ffaf5a23420\n    Found by: stack scanning\nThread 4 .NET Finalizer - tid: 38756\n 0  ntdll.dll + 0x161dd4\n     rax = 0x0000000000000004    rdx = 0x0000000000000000\n     rcx = 0x0000000000000210    rbx = 0x0000000000000210\n     rsi = 0x00000000ffffffff    rdi = 0x0000000000000000\n     rbp = 0x0000000000000000    rsp = 0x0000006d658ffd98\n      r8 = 0x0000000000000000     r9 = 0x0000006d653cc000\n     r10 = 0x0000000000000210    r11 = 0x0000000000000210\n     r12 = 0x0000000000000000    r13 = 0x0000000000000000\n     r14 = 0x0000000000000000    r15 = 0x0000000000000000\n     rip = 0x00007ffaf5b61dd4\n    Found by: given as instruction pointer in context\n 1  KERNELBASE.dll + 0x1be9e\n     rsp = 0x0000006d658ffda0    rip = 0x00007ffaf2ccbe9f\n    Found by: stack scanning\n 2  Game.dll!Thread::Construct() [thread.cpp : 312 + 0x7]\n     rsp = 0x0000006d658ffdc0    rip = 0x00007ffa48fcc00f\n    Found by: stack scanning\n\nLoaded modules:\n0x7ff625070000 - 0x7ff6251c5fff  ara-player.exe  ???  (main)\n0x7ffa48ef0000 - 0x7ffa4910bfff  Game.dll  1.0.0.0\n0x7ffac50e0000 - 0x7ffac511afff  dbgcore.dll  6.2.26100.9549\n0x7ffac5c10000 - 0x7ffac5c17fff  wshunix.dll  6.2.26100.1\n0x7fface690000 - 0x7fface6bbfff  VCRUNTIME140.dll  14.51.36247.0\n0x7ffaefd80000 - 0x7ffaeffcbfff  dbghelp.dll  6.2.26100.9549\n0x7ffaf1850000 - 0x7ffaf186afff  kernel.appcore.dll  6.2.26100.9278\n0x7ffaf1df0000 - 0x7ffaf1e5bfff  mswsock.dll  6.2.26100.9549\n0x7ffaf2ad0000 - 0x7ffaf2af9fff  bcrypt.dll  6.2.26100.9711\n0x7ffaf2cb0000 - 0x7ffaf30b0fff  KERNELBASE.dll  6.2.26100.9711\n0x7ffaf30c0000 - 0x7ffaf316bfff  bcryptprimitives.dll  6.2.26100.9711\n0x7ffaf3310000 - 0x7ffaf3439fff  gdi32full.dll  6.2.26100.9711\n0x7ffaf3440000 - 0x7ffaf3466fff  win32u.dll  6.2.26100.9711\n0x7ffaf3500000 - 0x7ffaf35a2fff  msvcp_win.dll  6.2.26100.9711\n0x7ffaf35b0000 - 0x7ffaf36fbfff  ucrtbase.dll  6.2.26100.9711\n0x7ffaf3730000 - 0x7ffaf3808fff  oleaut32.dll  6.2.26100.9711\n0x7ffaf3810000 - 0x7ffaf383afff  gdi32.dll  6.2.26100.8328\n0x7ffaf3840000 - 0x7ffaf3bcafff  combase.dll  6.2.26100.9711\n0x7ffaf3bd0000 - 0x7ffaf3d69fff  ole32.dll  6.2.26100.9549\n0x7ffaf3e60000 - 0x7ffaf3f08fff  msvcrt.dll  7.0.26100.9711\n0x7ffaf4900000 - 0x7ffaf49bbfff  advapi32.dll  6.2.26100.9711\n0x7ffaf49d0000 - 0x7ffaf4a9afff  kernel32.dll  6.2.26100.9711\n0x7ffaf4b30000 - 0x7ffaf4c47fff  rpcrt4.dll  6.2.26100.9711\n0x7ffaf5170000 - 0x7ffaf51a0fff  imm32.dll  6.2.26100.9278\n0x7ffaf51b0000 - 0x7ffaf5386fff  user32.dll  6.2.26100.9549\n0x7ffaf5570000 - 0x7ffaf5617fff  sechost.dll  6.2.26100.9711\n0x7ffaf5620000 - 0x7ffaf56a0fff  ws2_32.dll  6.2.26100.9711\n0x7ffaf5a00000 - 0x7ffaf5c67fff  ntdll.dll  6.2.26100.9711\n\nUnloaded modules:\n\nUnimplemented streams encountered:\nStream 0x00000000 UnusedStream (Official) @ 0x00000000\nStream 0x0000000d FunctionTable (Official) @ 0x000013d0\nStream 0x00000015 SystemMemoryInfoStream (Official) @ 0x000024cc\nStream 0x00000016 ProcessVmCountersStream (Official) @ 0x000026d8\n"
+          }
+        },
+        "message": "Panic crash: panicked at crates\\ara-export-player\\src\\runtime.rs:291:53:\nAra exported player crash probe",
+        "severity": "error"
+      },
+      "dumpBytes": 51441,
+      "kind": "panic",
+      "recordBytes": 548,
+      "symbolizeMs": 37
+    },
+    {
+      "diagnostic": {
+        "code": "ARA2701",
+        "data": {
+          "crash": {
+            "buildId": "a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c",
+            "format": "ara.crash/1",
+            "kind": "managed",
+            "message": "Ara managed unhandled exception probe",
+            "stack": "System.InvalidOperationException: Ara managed unhandled exception probe\r\n   at Ara.Shipping.CrashCapture.ThrowProbe() + 0x2b\r\n   at System.Threading.Thread.StartThread(IntPtr) + 0x11f\r\n   at System.Threading.Thread.ThreadEntryPoint(IntPtr) + 0x1a"
+          }
+        },
+        "message": "Managed crash: Ara managed unhandled exception probe",
+        "severity": "error"
+      },
+      "dumpBytes": null,
+      "kind": "managed",
+      "recordBytes": 367,
+      "symbolizeMs": 0
+    }
+  ],
+  "exports": [
+    {
+      "artifacts": {
+        "build/ara-crash.json": 189,
+        "build/ara-launch.json": 198,
+        "build/ara-player.exe": 1336320,
+        "build/game.arapack": 102400,
+        "build/game/Game.dll": 2146816,
+        "distribution.json": 1293,
+        "game.zip": 1699211,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578.zip": 8295497,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/index.json": 1282,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/raw/x64/runtime/ara_export_smoke.exe": 1336320,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/raw/x64/runtime/ara_export_smoke.pdb": 7802880,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/raw/x64/scripts/Game.dll": 2146816,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/raw/x64/scripts/Game.pdb": 9957376,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/store/Game.pdb/96FEBAF393B74EE6A783C225F39D4BBF1/Game.sym": 2758391,
+        "symbols/fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578/store/ara_export_smoke.pdb/6E32DD7435644AA785AB75E1058E49621/ara_export_smoke.sym": 3941994
+      },
+      "build_id": "fde6176af81e896441cb4e033a9e02dfd56c31a9bed83a3158829b5525ff3578",
+      "config": "release",
+      "elapsed_ms": 79176,
+      "format": "ara.export.report/1",
+      "lane": "nativeAot",
+      "pack_id": "66c2234ed64dc6212b0c001ac11424c98f18bbfcb4a582261c3e01dfe992068d",
+      "platform": "windows",
+      "signing": "unsigned",
+      "stages_ms": {
+        "assemble": 10,
+        "code-sign": 0,
+        "distribution": 73,
+        "native": 0,
+        "pack": 9,
+        "resolve": 0,
+        "script": 77400,
+        "symbols": 1254,
+        "template": 7,
+        "verify": 402
+      },
+      "template_contract": "ara.player.conformance/1",
+      "verify": {
+        "evidence": {
+          "bench": null,
+          "checksum_cs": "0x825f3722a803f55c",
+          "checksum_rust": "0x825f3722a803f55c",
+          "entities": 100000,
+          "fault_contained": true,
+          "lane": "nativeaot",
+          "mod_status": null,
+          "pack_bytes": 102400,
+          "pack_id": "66c2234ed64dc6212b0c001ac11424c98f18bbfcb4a582261c3e01dfe992068d",
+          "platform": "windows-x86_64",
+          "startup": {
+            "content_ms": 60.644000000000005,
+            "first_cs_call_ms": 73.6985,
+            "pack_open_ms": 57.681999999999995,
+            "script_load_ms": 9.5747,
+            "spawn_ms": 62.401199999999996,
+            "spawn_to_first_cs_call_ms": null
+          },
+          "template_contract": "ara.player.conformance/1",
+          "texture": "validated 5 packed demo files; main levels/demo.scene; conformance simulation only",
+          "tick": {
+            "cs_mean_ms": 0.29229,
+            "cs_min_ms": 0.1721,
+            "cs_ns_per_entity": 1.721,
+            "rust_ns_per_entity": 1.344
+          },
+          "ticks": 120,
+          "verified": true
+        },
+        "logs": "verify.log",
+        "method": "desktop_smoke",
+        "passed": true,
+        "perf": {
+          "cs_mean_ms": 0.29229,
+          "cs_min_ms": 0.1721,
+          "cs_ns_per_entity": 1.721,
+          "rust_ns_per_entity": 1.344
+        },
+        "runtime_executed": true,
+        "screenshot": null,
+        "unavailable": [
+          "ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template",
+          "ARA-EXP-BRG-015: GPU timing hook requires ara-render"
+        ]
+      }
+    },
+    {
+      "artifacts": {
+        "build/ara-crash.json": 189,
+        "build/ara-launch.json": 198,
+        "build/ara-player.exe": 1385472,
+        "build/game.arapack": 102400,
+        "build/game/Game.dll": 2146816,
+        "distribution.json": 1456,
+        "game-setup.exe": 2136568,
+        "game.zip": 1720249,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c.zip": 8429975,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/index.json": 1282,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/raw/x64/runtime/ara_export_smoke.exe": 1385472,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/raw/x64/runtime/ara_export_smoke.pdb": 8015872,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/raw/x64/scripts/Game.dll": 2146816,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/raw/x64/scripts/Game.pdb": 9965568,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/store/Game.pdb/5B9C99D976414F83B10EB5CED1F47C2A1/Game.sym": 2758391,
+        "symbols/a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c/store/ara_export_smoke.pdb/5374FE52B43F442EAC490676E61F258E1/ara_export_smoke.sym": 4086779
+      },
+      "build_id": "a783ebd0a5c5d8b94a558636de918de65b846496ff936fc0bff9f4be02d5fc4c",
+      "config": "release",
+      "elapsed_ms": 14562,
+      "format": "ara.export.report/1",
+      "lane": "nativeAot",
+      "pack_id": "66c2234ed64dc6212b0c001ac11424c98f18bbfcb4a582261c3e01dfe992068d",
+      "platform": "windows",
+      "signing": "unsigned",
+      "stages_ms": {
+        "assemble": 2,
+        "code-sign": 0,
+        "distribution": 164,
+        "native": 0,
+        "pack": 31,
+        "resolve": 0,
+        "script": 13238,
+        "symbols": 837,
+        "template": 55,
+        "verify": 223
+      },
+      "template_contract": "ara.player.conformance/1",
+      "verify": {
+        "evidence": {
+          "bench": null,
+          "checksum_cs": "0x825f3722a803f55c",
+          "checksum_rust": "0x825f3722a803f55c",
+          "entities": 100000,
+          "fault_contained": true,
+          "lane": "nativeaot",
+          "mod_status": null,
+          "pack_bytes": 102400,
+          "pack_id": "66c2234ed64dc6212b0c001ac11424c98f18bbfcb4a582261c3e01dfe992068d",
+          "platform": "windows-x86_64",
+          "startup": {
+            "content_ms": 33.5069,
+            "first_cs_call_ms": 44.3015,
+            "pack_open_ms": 31.735100000000003,
+            "script_load_ms": 8.432200000000002,
+            "spawn_ms": 34.7695,
+            "spawn_to_first_cs_call_ms": null
+          },
+          "template_contract": "ara.player.conformance/1",
+          "texture": "validated 5 packed demo files; main levels/demo.scene; conformance simulation only",
+          "tick": {
+            "cs_mean_ms": 0.18692500000000004,
+            "cs_min_ms": 0.148,
+            "cs_ns_per_entity": 1.48,
+            "rust_ns_per_entity": 1.184
+          },
+          "ticks": 120,
+          "verified": true
+        },
+        "logs": "verify.log",
+        "method": "desktop_smoke",
+        "passed": true,
+        "perf": {
+          "cs_mean_ms": 0.18692500000000004,
+          "cs_min_ms": 0.148,
+          "cs_ns_per_entity": 1.48,
+          "rust_ns_per_entity": 1.184
+        },
+        "runtime_executed": true,
+        "screenshot": null,
+        "unavailable": [
+          "ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template",
+          "ARA-EXP-BRG-015: GPU timing hook requires ara-render"
+        ]
+      }
+    },
+    {
+      "artifacts": {
+        "build/ara-crash.json": 189,
+        "build/ara-launch.json": 197,
+        "build/ara-player": 3120392,
+        "build/game.arapack": 102400,
+        "build/game/Game.so": 4189744,
+        "distribution.json": 1283,
+        "game.tar.gz": 2656263,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e.zip": 12404368,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e/index.json": 899,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e/raw/x64/runtime/ara-player": 24818088,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e/raw/x64/scripts/Game.so": 10726488,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e/store/Game.so/3FB1093CB73CAF96F111C8C4E5F48A470/Game.so.sym": 4112489,
+        "symbols/9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e/store/ara-player/428CB7D82A4DEC8F6131257917F8407C0/ara-player.sym": 9760239
+      },
+      "build_id": "9fadd137bc0f941ea3d74059edd6aac1c96e6751bb5668f741de31b00e5a869e",
+      "config": "release",
+      "elapsed_ms": 10759,
+      "format": "ara.export.report/1",
+      "lane": "nativeAot",
+      "pack_id": "704819b80c5cf7862020a1b573af3f818d8b1ac2b00ad4928821925cfef10f39",
+      "platform": "linux",
+      "signing": "unsigned",
+      "stages_ms": {
+        "assemble": 11,
+        "distribution": 95,
+        "native": 0,
+        "pack": 5,
+        "resolve": 0,
+        "script": 9019,
+        "symbols": 1580,
+        "template": 24,
+        "verify": 12
+      },
+      "template_contract": "ara.player.conformance/1",
+      "verify": {
+        "evidence": [
+          {
+            "file": "ara-player",
+            "glibc_versions": [
+              "2.2.5",
+              "2.3",
+              "2.3.4",
+              "2.9",
+              "2.10",
+              "2.14",
+              "2.15",
+              "2.16",
+              "2.17",
+              "2.18",
+              "2.25",
+              "2.28",
+              "2.29",
+              "2.30"
+            ]
+          },
+          {
+            "file": "Game.so",
+            "glibc_versions": [
+              "2.2.5",
+              "2.29",
+              "2.3",
+              "2.3.2",
+              "2.3.4",
+              "2.4",
+              "2.6",
+              "2.9",
+              "2.10",
+              "2.14",
+              "2.16",
+              "2.17",
+              "2.3.3",
+              "2.12"
+            ]
+          }
+        ],
+        "logs": "verify.log",
+        "method": "static_elf",
+        "passed": true,
+        "perf": null,
+        "runtime_executed": false,
+        "screenshot": null,
+        "unavailable": [
+          "Linux smoke launch was not requested; static ELF architecture, load segments and glibc requirements verified without starting WSL"
+        ]
+      }
+    },
+    {
+      "artifacts": {
+        "build/ara-crash.json": 189,
+        "build/ara-launch.json": 197,
+        "build/ara-player": 3120392,
+        "build/game.arapack": 102400,
+        "build/game/Game.so": 4189744,
+        "distribution.json": 1284,
+        "game.AppImage": 3553784,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9.zip": 12404372,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9/index.json": 899,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9/raw/x64/runtime/ara-player": 24818088,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9/raw/x64/scripts/Game.so": 10726488,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9/store/Game.so/F7982BFB00660DCF1220796F9D75CA920/Game.so.sym": 4112489,
+        "symbols/7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9/store/ara-player/428CB7D82A4DEC8F6131257917F8407C0/ara-player.sym": 9760239
+      },
+      "build_id": "7912a95aececdb610055779f486a115c90fd84010ef155f6e5d592aae4004ea9",
+      "config": "release",
+      "elapsed_ms": 10644,
+      "format": "ara.export.report/1",
+      "lane": "nativeAot",
+      "pack_id": "704819b80c5cf7862020a1b573af3f818d8b1ac2b00ad4928821925cfef10f39",
+      "platform": "linux",
+      "signing": "unsigned",
+      "stages_ms": {
+        "assemble": 8,
+        "distribution": 305,
+        "native": 0,
+        "pack": 5,
+        "resolve": 0,
+        "script": 8505,
+        "symbols": 1788,
+        "template": 10,
+        "verify": 11
+      },
+      "template_contract": "ara.player.conformance/1",
+      "verify": {
+        "evidence": [
+          {
+            "file": "ara-player",
+            "glibc_versions": [
+              "2.2.5",
+              "2.3",
+              "2.3.4",
+              "2.9",
+              "2.10",
+              "2.14",
+              "2.15",
+              "2.16",
+              "2.17",
+              "2.18",
+              "2.25",
+              "2.28",
+              "2.29",
+              "2.30"
+            ]
+          },
+          {
+            "file": "Game.so",
+            "glibc_versions": [
+              "2.2.5",
+              "2.29",
+              "2.3",
+              "2.3.2",
+              "2.3.4",
+              "2.4",
+              "2.6",
+              "2.9",
+              "2.10",
+              "2.14",
+              "2.16",
+              "2.17",
+              "2.3.3",
+              "2.12"
+            ]
+          }
+        ],
+        "logs": "verify.log",
+        "method": "static_elf",
+        "passed": true,
+        "perf": null,
+        "runtime_executed": false,
+        "screenshot": null,
+        "unavailable": [
+          "Linux smoke launch was not requested; static ELF architecture, load segments and glibc requirements verified without starting WSL"
+        ]
+      }
+    },
+    {
+      "artifacts": {
+        "build/ara-crash.json": 189,
+        "build/ara-launch.json": 197,
+        "build/game.arapack": 102400,
+        "build/lib/arm64-v8a/libara_export_player.so": 1669632,
+        "build/lib/arm64-v8a/libgame.so": 3954472,
+        "build/lib/x86_64/libara_export_player.so": 1679744,
+        "build/lib/x86_64/libgame.so": 4099256,
+        "distribution.json": 1852,
+        "game.aab": 3986327,
+        "game.apk": 11547403,
+        "game.apk.idsig": 99730,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44.zip": 18813743,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/index.json": 1762,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/raw/arm64-v8a/runtime/libara_export_player.so": 19956648,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/raw/arm64-v8a/scripts/Game.so": 6345384,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/raw/x86_64/runtime/libara_export_player.so": 19336480,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/raw/x86_64/scripts/Game.so": 6711456,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/store/Game.so/0303CB1EA3245F7316195FB3FEB252BB0/Game.so.sym": 3137072,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/store/Game.so/A9AF80E95DE7507B4225F6F44C8339180/Game.so.sym": 3722992,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/store/libara_export_player.so/0EDD53E265C7A7886A65666D2FB0A1000/libara_export_player.so.sym": 5049102,
+        "symbols/d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44/store/libara_export_player.so/BECF1F9B76F078B76386310380D841000/libara_export_player.so.sym": 5238009
+      },
+      "build_id": "d1a645528af3ecd5dc219f8ab096be9709ec3df4e3c0c2e1d01c0a41d61bce44",
+      "config": "release",
+      "elapsed_ms": 34624,
+      "format": "ara.export.report/1",
+      "lane": "nativeAot",
+      "pack_id": "52099846116177a55b79e8d1a036dc23a90afdeff8387cd72577286918ac0ae4",
+      "platform": "android",
+      "signing": "android-upload",
+      "stages_ms": {
+        "assemble": 19,
+        "distribution": 0,
+        "native": 0,
+        "pack": 8,
+        "package-sign": 6810,
+        "resolve": 0,
+        "script": 24920,
+        "symbols": 2623,
+        "template": 193,
+        "verify": 28
+      },
+      "template_contract": "ara.player.conformance/1",
+      "verify": {
+        "evidence": {
+          "aab_signature": "verified",
+          "abis": [
+            "arm64-v8a",
+            "x86_64"
+          ],
+          "apk_signature": "verified",
+          "elf_alignment": 16384,
+          "target_api": 36,
+          "zip_alignment": 16384
+        },
+        "logs": "verify.log",
+        "method": "android_structure",
+        "passed": true,
+        "perf": null,
+        "runtime_executed": false,
+        "screenshot": null,
+        "unavailable": [
+          "ARA-EXP-AND-009: no device requested; pass --device SERIAL (and --allow-emulator for an existing emulator)"
+        ]
+      }
+    }
+  ],
+  "format": "ara.distribution.validation/1",
+  "linuxExecution": "static ELF and embedded SquashFS verification only",
+  "project": "crates/ara-player/demo (packed content)",
+  "template": "ara.player.conformance/1",
+  "windowsSigning": "unsigned; certificate was not provided"
+}

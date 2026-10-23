@@ -61,6 +61,13 @@ pub fn desktop(dist: &Path) -> Result<VerifyReport> {
         Duration::from_secs(30),
     )?;
     let result = runtime_result(&output)?;
+    let launch: Value = serde_json::from_slice(&std::fs::read(dist.join("ara-launch.json"))?)?;
+    if let Some(contract) = launch.get("contract") {
+        ensure!(
+            result.get("template_contract") == Some(contract),
+            "ARA-EXP-TPL-005: player result does not match the selected template contract"
+        );
+    }
     Ok(VerifyReport { method:"desktop_smoke".into(),passed:true,runtime_executed:true,logs:"verify.log".into(),screenshot:None,perf:result.get("tick").cloned().unwrap_or(Value::Null),evidence:result,unavailable:vec!["ARA-EXP-BRG-010: renderer capture hook not installed in the headless conformance template".into(),"ARA-EXP-BRG-015: GPU timing hook requires ara-render".into()] })
 }
 

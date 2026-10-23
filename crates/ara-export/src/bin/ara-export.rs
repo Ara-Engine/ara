@@ -59,6 +59,36 @@ enum Cmd {
         config: ara_export::preset::Configuration,
         #[arg(long)]
         file: PathBuf,
+        #[arg(long)]
+        symbols: Option<PathBuf>,
+    },
+    /// Creates a generic shipping preset from an existing platform/template preset.
+    Preset {
+        #[arg(long)]
+        kind: ara_export::preset::PackageFormat,
+        #[arg(long)]
+        base: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Produces a pin for an installer stub, AppImage runtime or debug file.
+    ArtifactPin {
+        #[arg(long)]
+        file: PathBuf,
+    },
+    /// Processes a native dump or Rust/managed crash record locally.
+    Crash {
+        #[command(subcommand)]
+        command: CrashCommand,
+    },
+}
+#[derive(Subcommand)]
+enum CrashCommand {
+    /// Symbolizes with local build-matched symbols, and emits a host diagnostic.
+    Symbolize {
+        dump: PathBuf,
+        #[arg(long)]
+        symbols: PathBuf,
     },
 }
 fn main() -> ExitCode {
@@ -120,7 +150,14 @@ fn run() -> Result<bool> {
             device,
             allow_emulator,
         } => {
-            let preset = ExportPreset::from_text(&std::fs::read_to_string(preset)?)?;
+            let preset_path = if preset.is_file() {
+                preset
+            } else {
+                project
+                    .join("presets")
+                    .join(format!("{}.export.json", preset.to_string_lossy()))
+            };
+            let preset = ExportPreset::from_text(&std::fs::read_to_string(preset_path)?)?;
             let cache = cache.unwrap_or_else(|| project.join(".sn/export-cache"));
             let request = ExportRequest {
                 project,
@@ -156,6 +193,7 @@ fn run() -> Result<bool> {
             arch,
             config,
             file,
+            symbols,
         } => {
             let file = file.canonicalize()?;
             let pin = ara_export::preset::TemplatePin {
@@ -164,10 +202,53 @@ fn run() -> Result<bool> {
                 config,
                 hash: blake3::hash(&std::fs::read(&file)?).to_hex().to_string(),
                 source: file.to_string_lossy().into_owned(),
+                symbols: symbols
+                    .map(|path| -> Result<_> {
+                        let path = path.canonicalize()?;
+                        Ok(ara_export::preset::ArtifactPin {
+                            hash: blake3::hash(&std::fs::read(&path)?).to_hex().to_string(),
+                            source: path.to_string_lossy().into_owned(),
+                        })
+                    })
+                    .transpose()?,
             };
             println!(
                 "{}",
                 ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(pin)?))
+            );
+            Ok(true)
+        }
+        Cmd::Preset { kind, base, output } => {
+            let mut preset = ExportPreset::from_text(&std::fs::read_to_string(base)?)?;
+            preset.packaging = kind;
+            let text = preset.to_text()?;
+            if let Some(parent) = output.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(output, text)?;
+            Ok(true)
+        }
+        Cmd::ArtifactPin { file } => {
+            let file = file.canonicalize()?;
+            let pin = ara_export::preset::ArtifactPin {
+                hash: blake3::hash(&std::fs::read(&file)?).to_hex().to_string(),
+                source: file.to_string_lossy().into_owned(),
+            };
+            println!(
+                "{}",
+                ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(pin)?))
+            );
+            Ok(true)
+        }
+        Cmd::Crash {
+            command: CrashCommand::Symbolize { dump, symbols },
+        } => {
+            let report = ara_crash::symbols::symbolize(&dump, &symbols)?;
+            println!(
+                "{}",
+                ara_json::to_canonical_string(&ara_json::sort_keys(
+                    &serde_json::json!({"report":report,"diagnostic":report.diagnostic()})
+                ))
             );
             Ok(true)
         }
