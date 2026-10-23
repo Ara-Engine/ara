@@ -52,8 +52,8 @@ The four-stop light-step test measures the probe field itself over 24 frames,
 against a 48-frame target, and requires 90% response within 12 frames.
 
 `measurements/` contains canonical JSON: per-case reference/convergence errors,
-sequence errors, probe step response, the baked probe field, device/driver identity,
-and pass timing distributions. `gpu-timings-before.json` records the original
+sequence errors, probe step response, device/driver identity,
+and pass timing distributions. Generated probe bakes stay in ignored `.sn/`. `gpu-timings-before.json` records the original
 global-read denoiser; the current pass uses a cooperative shared-memory halo.
 
 `Timings` uses 60 samples after 12 warmup frames at 2560x1440 and 1707x960 ->
@@ -176,33 +176,33 @@ streaming integration described in the fidelity README. DLSS's SDK seam remains.
 
 | Scene | Relative RMSE, before -> after | Native / upscaled p95, ms |
 |---|---:|---:|
-| Sponza | 27.12% -> 7.28% | 15.32 / 7.30 -> 9.33 / 4.60 |
-| outdoor_day (new) | 3.94% | 4.52 / 2.22 |
-| night_interior (new) | 4.91% | 6.23 / 2.81 |
+| Sponza | 27.12% -> 7.28% | 15.32 / 7.30 -> 8.87 / 3.90 |
+| outdoor_day (new) | 3.94% | 4.61 / 2.26 |
+| night_interior (new) | 4.91% | 6.91 / 2.80 |
 
 Sponza 2048 ->4096 reference residual: 1.00%; daylight 0.11%; night 1.46%.
 The legacy gates remain: glossy 6.99% ->6.47%, thin wall 9.64% ->9.04%, furnace
-0.65% ->0.62%. The diagnostic frame is 6.30 /2.84 ms p95 (native /upscaled).
+0.65% ->0.62%. The diagnostic frame is 6.44 /2.81 ms p95 (native /upscaled).
 
 | Sponza pass p50, ms | Native before -> after | Upscaled before -> after |
 |---|---:|---:|
-| Bloom.Horizontal | 0.211 -> 0.208 | 0.097 -> 0.097 |
+| Bloom.Horizontal | 0.211 -> 0.208 | 0.097 -> 0.096 |
 | Bloom.Vertical | 0.108 -> 0.108 | 0.052 -> 0.051 |
-| DDGI.Trace.Relocate.Classify.Integrate | 0.160 -> 0.142 | 0.157 -> 0.145 |
-| Exposure.EV100.Meter.Adapt | 0.004 -> 0.025 | 0.005 -> 0.026 |
-| Output.SDR | 0.046 -> 0.051 | 0.000 -> 0.000 |
-| Post.Atmosphere.Lens.ToneMap.LUT | 0.301 -> 0.308 | 0.094 -> 0.099 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.160 -> 0.142 | 0.157 -> 0.143 |
+| Exposure.EV100.Meter.Adapt | 0.004 -> 0.024 | 0.005 -> 0.026 |
+| Output.SDR | 0.046 -> 0.057 | 0.000 -> 0.000 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.301 -> 0.308 | 0.094 -> 0.100 |
 | RT.Disocclusion.Repair | 1.224 -> 0.000 | 0.693 -> 0.000 |
-| RT.Reflections.SoftShadows.DDGI | 6.821 -> 2.740 | 3.100 -> 1.280 |
-| SVGF.Atrous.1 | 0.496 -> 0.480 | 0.223 -> 0.219 |
+| RT.Reflections.SoftShadows.DDGI | 6.821 -> 2.732 | 3.100 -> 1.275 |
+| SVGF.Atrous.1 | 0.496 -> 0.481 | 0.223 -> 0.219 |
 | SVGF.Atrous.2 | 0.541 -> 0.546 | 0.258 -> 0.258 |
-| SVGF.Atrous.4 | 0.591 -> 0.668 | 0.263 -> 0.296 |
-| SVGF.Reproject.Reject.Outlier.Moments | 0.891 -> 0.871 | 0.387 -> 0.370 |
-| Upscale.FSR1.EASU | 0.000 -> 0.000 | 0.289 -> 0.174 |
+| SVGF.Atrous.4 | 0.591 -> 0.667 | 0.263 -> 0.296 |
+| SVGF.Reproject.Reject.Outlier.Moments | 0.891 -> 0.868 | 0.387 -> 0.372 |
+| Upscale.FSR1.EASU | 0.000 -> 0.000 | 0.289 -> 0.178 |
 | Upscale.FSR1.RCAS | 0.000 -> 0.000 | 0.058 -> 0.063 |
 | Upscale.TAAU.Resolve | 1.034 -> 0.580 | 0.000 -> 0.000 |
 | Viewport.Ready | 0.000 -> 0.000 | 0.000 -> 0.000 |
-| Visibility.Motion | 2.224 -> 1.635 | 1.008 -> 0.763 |
+| Visibility.Motion | 2.224 -> 1.631 | 1.008 -> 0.759 |
 
 Each JSON also includes per-pass p95. Total p95 is measured from frame sums, not
 the sum of individual pass percentiles. Static pixel-area accumulation removes
@@ -215,12 +215,13 @@ baked fallback, moving-light/time-of-day/disocclusion sheets and Sponza pan shee
 **This does not yet pass for an Unreal 5 Lumen screenshot.** Sponza still has no
 authored normal/height maps or full PBR material conversion. At 640x360, the fixed
 corridor crop [170,235]..[430,350] has 27.17% relative RMSE and 17.39% lower mean
-luminance than the reference, despite 7.29% whole-image error. Bright architecture
+luminance than the reference, despite 7.28% whole-image error. Bright architecture
 dominates the global energy denominator. Lighting-reset sequences show visible
 low-sample mottling, and the daylight alpha canopies are procedural stand-ins.
 These limitations are visible in the committed captures; passing the numerical
 gates is not visual parity.
 
 The landscape fixture adds two existing local path dependencies. Per task file
-ownership, the generated root Cargo.lock membership edges are left for the parent
-to refresh when integrating; no root manifest or root source file is committed.
+ownership, the parent checkpoint supplied the generated Cargo.lock membership
+edges. This follow-up changes no root files. Generated probe bakes are written to
+ignored `.sn/baked-interior.json`; the fixture passes them to the fallback in memory.
