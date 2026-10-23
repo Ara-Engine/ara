@@ -193,8 +193,9 @@ impl Explainer for Reload {
             .iter()
             .max_by_key(|(_, v)| v.1)
             .map(|(k, _)| k.clone());
-        let mut reasons: Vec<(String, (u32, u64, Vec<&Record>))> = by_reason.into_iter().collect();
-        reasons.sort_by(|a, b| b.1.1.cmp(&a.1.1));
+        // Newest reason first.
+        let mut reasons: Vec<_> = by_reason.into_iter().collect();
+        reasons.sort_by_key(|(_, (_, newest, _))| std::cmp::Reverse(*newest));
         for (key, (count, _, rs)) in reasons {
             let (what, todo) = reason(&key);
             let likelihood = if Some(&key) == latest.as_ref() {

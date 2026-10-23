@@ -111,23 +111,21 @@ impl Explainer for Frame {
             .iter()
             .filter_map(|m| Some((m["key"].as_str()?, m["time"]["p95"].as_u64()?)))
             .collect();
-        top.sort_by(|a, b| b.1.cmp(&a.1));
-        if slow {
-            if let Some((key, t)) = top.first() {
-                let mut c = Cause::new(
-                    codes::FRAME_OVER_BUDGET,
-                    Likelihood::High,
-                    format!(
-                        "`{key}` takes {} at p95, the most of any scope ({}% of the budget)",
-                        ms(*t),
-                        t * 100 / budget.max(1)
-                    ),
-                );
-                for (k, v) in top.iter().skip(1).take(4) {
-                    c = c.evidence(format!("next: {k} {}", ms(*v)));
-                }
-                f.cause(c);
+        top.sort_by_key(|m| std::cmp::Reverse(m.1));
+        if slow && let Some((key, t)) = top.first() {
+            let mut c = Cause::new(
+                codes::FRAME_OVER_BUDGET,
+                Likelihood::High,
+                format!(
+                    "`{key}` takes {} at p95, the most of any scope ({}% of the budget)",
+                    ms(*t),
+                    t * 100 / budget.max(1)
+                ),
+            );
+            for (k, v) in top.iter().skip(1).take(4) {
+                c = c.evidence(format!("next: {k} {}", ms(*v)));
             }
+            f.cause(c);
         }
         let hitches: Vec<&Value> = s["hitches"]
             .as_array()

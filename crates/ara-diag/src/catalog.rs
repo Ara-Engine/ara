@@ -120,11 +120,10 @@ fn catalog() -> &'static Catalog {
 
 /// Parses one catalog file.
 fn parse(file: &str, text: &'static str, docs: &mut Vec<CodeDoc>, problems: &mut Vec<String>) {
-    let mut sections = text.split("\n## ").skip(1).peekable();
     if text.starts_with("## ") {
         problems.push(format!("{file}: start with a `#` title, not an entry"));
     }
-    while let Some(section) = sections.next() {
+    for section in text.split("\n## ").skip(1) {
         let section = section.trim_end();
         match entry(section) {
             Ok(doc) => docs.push(doc),

@@ -362,7 +362,7 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                     )),
                 );
             }
-            if field == "scale" && v.iter().any(|x| *x == 0.0) {
+            if field == "scale" && v.contains(&0.0) {
                 ok = false;
                 let axes: Vec<&str> = ["x", "y", "z"]
                     .iter()

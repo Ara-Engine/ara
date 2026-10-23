@@ -71,7 +71,9 @@ pub fn summarize(records: &[&Record], top_subjects: usize) -> Summary {
         occurrences: 0,
         groups: Vec::new(),
     };
-    let mut groups: BTreeMap<(Code, u8), (Vec<&Record>, BTreeMap<String, u32>)> = BTreeMap::new();
+    // Per (code, severity): its records and how often each subject occurs.
+    type Bucket<'r> = (Vec<&'r Record>, BTreeMap<String, u32>);
+    let mut groups: BTreeMap<(Code, u8), Bucket<'_>> = BTreeMap::new();
     for r in records {
         let d = &r.diagnostic;
         match d.severity {
