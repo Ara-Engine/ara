@@ -210,6 +210,10 @@ pub struct Diagnostic {
     /// follows them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subjects: Vec<Subject>,
+    /// Structured facts for tools and explainers (a reload's level and reason, a
+    /// frame's contributors). Not part of the dedup key; keep it small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Box<Value>>,
     /// Suggested fixes, best first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fixes: Vec<Fix>,
@@ -224,6 +228,7 @@ impl Diagnostic {
             message: message.into(),
             location: Box::default(),
             subjects: Vec::new(),
+            data: None,
             fixes: Vec::new(),
         }
     }
@@ -311,6 +316,12 @@ impl Diagnostic {
         if !self.subjects.contains(&subject) {
             self.subjects.push(subject);
         }
+        self
+    }
+
+    /// Attaches structured facts (`data`).
+    pub fn data(mut self, data: Value) -> Self {
+        self.data = Some(Box::new(data));
         self
     }
 

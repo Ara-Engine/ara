@@ -1379,6 +1379,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-why"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-material",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-world"
 version = "0.0.0"
 dependencies = [
