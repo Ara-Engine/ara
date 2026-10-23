@@ -75,10 +75,11 @@ public static unsafe class Host
     }
 
     /// <summary>
-    /// Sends a module descriptor and returns the host's response (JSON). Only valid while
-    /// the host is inside <c>load_modules</c> or <c>tick_boundary</c>.
+    /// Sends module descriptors (a JSON array, dependencies first) and returns the host's
+    /// response (JSON); the host registers all of them or none. Only valid while the host
+    /// is inside <c>load_modules</c> or <c>tick_boundary</c>.
     /// </summary>
-    internal static byte[] RegisterModule(ReadOnlySpan<byte> descriptor)
+    internal static byte[] RegisterModules(ReadOnlySpan<byte> descriptor)
     {
         var buf = new byte[64 * 1024];
         while (true)
@@ -86,7 +87,7 @@ public static unsafe class Host
             int n;
             fixed (byte* d = descriptor)
             fixed (byte* o = buf)
-                n = s_init.Api.RegisterModule(s_init.Ctx, d, (uint)descriptor.Length, o, (uint)buf.Length);
+                n = s_init.Api.RegisterModules(s_init.Ctx, d, (uint)descriptor.Length, o, (uint)buf.Length);
             if (n >= 0) return buf.AsSpan(0, n).ToArray();
             buf = new byte[-n];
         }

@@ -19,6 +19,7 @@ internal static unsafe class Exports
         api->RunBehaviours = &RunBehaviours;
         api->RunCommand = &RunCommand;
         api->SetHeat = &SetHeat;
+        api->RequestCompile = &RequestCompile;
         api->Diag = &DiagCounter;
         api->Shutdown = &Shutdown;
     }
@@ -66,6 +67,13 @@ internal static unsafe class Exports
     static int SetHeat(uint module, uint hot)
     {
         try { return ScriptRuntime.Loader?.SetHeat(module, hot != 0) ?? -1; }
+        catch (Exception e) { Report(e); return 99; }
+    }
+
+    [UnmanagedCallersOnly]
+    static int RequestCompile(byte* json, uint len)
+    {
+        try { return ScriptRuntime.Loader?.RequestCompile(Encoding.UTF8.GetString(json, (int)len)) ?? -1; }
         catch (Exception e) { Report(e); return 99; }
     }
 

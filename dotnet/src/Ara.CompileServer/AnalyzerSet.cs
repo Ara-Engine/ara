@@ -15,7 +15,7 @@ internal sealed class AnalyzerSet : IAnalysis
         [new UnityAnalyzer(), new StateAnalyzer(), new DeterminismAnalyzer(), new AllocationAnalyzer(), new AotAnalyzer()];
 
     /// <inheritdoc/>
-    public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees)
+    public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile)
     {
         var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([]), onAnalyzerException: null,
             concurrentAnalysis: true, logAnalyzerExecutionTime: false);
