@@ -285,6 +285,136 @@ Fixes:
 - Increase query capacity before concluding that a truncated search proves disconnection.
 - Leave a successful informational result unchanged.
 
+## ARA7101 ai::NO_PATH: NPC cannot reach its move target
+owner: ara-ai
+
+A running AI agent reported that navigation cannot take it where its behaviour wants to go. The report carries the active state path, task statuses and the navigation issue as JSON evidence, with the entity as subject.
+
+Causes:
+- The goal is in a disconnected region, outside the baked surface, or behind areas the agent's filter forbids.
+- The agent itself is off the navmesh, its profile has no published mesh, or its dimensions exceed the bake clearance.
+- A `moveTo` task failed because its target expression was unset or unreachable.
+
+Fixes:
+- Run `ara why` on the agent to see the navigation issue, then fix NavMeshSurface bounds, area costs/masks or add the missing link.
+- Bake a mesh for the agent's NavAgentType profile, or reduce NavAgent radius/height to fit it.
+- Make the behaviour handle failure with `on failed -> <State>`.
+
+## ARA7102 ai::BLOCKED: NPC is blocked
+owner: ara-ai
+
+A running AI agent wants to move but cannot progress: it is waiting at a closed door or absent elevator, gave up waiting and is routing around it, or has stalled against obstacles or a dense crowd and is replanning.
+
+Causes:
+- A `NavLinkState` is closed (or locked) on the agent's route.
+- A dynamic obstacle or other agents block the corridor.
+
+Fixes:
+- Open the link (`NavLinkState.open`), or react to `NavLinkState.waiting` in the door/elevator controller.
+- Move the obstacle, use `ObstacleMode::Carve` so paths avoid it, or widen the passage.
+
+## ARA7110 ai::SYNTAX: Behaviour text does not parse
+owner: ara-ai
+
+Behaviour DSL text, a stored expression or a blackboard override could not be parsed. The diagnostic carries the line and column; `behavior.text.apply` rejects the edit without changing the document.
+
+Causes:
+- A missing `;`, brace or parenthesis, an unterminated string or an unexpected character.
+- A keyword used as a name, or an override without `name = value`.
+
+Fixes:
+- Correct the text at the reported line and column and apply it again.
+- Rename variables or states that collide with keywords.
+
+## ARA7111 ai::NAME: Unknown or duplicate behaviour name
+owner: ara-ai
+
+A behaviour refers to a variable, query or function that does not exist, or declares a name twice. Edits are still saved so they can be repaired interactively; the program does not compile until fixed.
+
+Causes:
+- A misspelled variable or built-in function (the message suggests the closest name).
+- Two variables, states or queries with the same name.
+
+Fixes:
+- Use the suggested name or declare the variable.
+- Rename one of the duplicates with `behavior.rename`.
+
+## ARA7112 ai::TYPE: Behaviour type mismatch
+owner: ara-ai
+
+An expression, action, task argument or override has the wrong type, such as a float where a position is expected or a non-boolean condition.
+
+Causes:
+- A condition (`when`, `on`, `filter`) that is not boolean, or a score that is not a float.
+- Assigning a value of another type to a variable, or a non-constant override.
+
+Fixes:
+- Convert with built-ins such as `position(...)`, comparisons or `remap(...)`.
+- Make overrides constants of the variable's type (`route = [vec3(0, 0, 4)]`).
+
+## ARA7113 ai::TARGET: Unknown transition target or call
+owner: ara-ai
+
+A transition targets a state that does not exist, or a task or generator call is unknown or has invalid arguments.
+
+Causes:
+- A misspelled or removed target state.
+- A task other than moveTo, patrol, wait, face, act, find or wander, or a generator other than ring, grid or cover.
+- Missing required arguments or unknown named arguments.
+
+Fixes:
+- Use an existing state name (the message suggests the closest one) or add the state.
+- Call a supported task or generator with the arguments listed in the message.
+
+## ARA7114 ai::PLAIN_RENAME: Plain-text rename lost an identity
+owner: ara-ai
+
+A text edit deleted a variable, query or state while a new one of the same kind appeared, so the old graph identity and layout were dropped. The warning carries an undoable `behavior.rename` fix that restores the original identity.
+
+Causes:
+- A name was changed by editing text instead of using `behavior.rename`.
+
+Fixes:
+- Apply the attached `behavior.rename` fix to keep the original identity and canvas position.
+
+## ARA7115 ai::STUCK: State tree is stuck
+owner: ara-ai
+
+A running brain has stayed in one leaf state longer than the configured stuck time while its finishing tasks completed or a task failed, and no transition fired. Evidence lists the active states, tasks and the transitions it is waiting on.
+
+Causes:
+- The state has no `on done` / `on failed` transition, or its conditions can never become true.
+- A task failed and nothing handles the failure.
+
+Fixes:
+- Add `on done -> <State>` or `on failed -> <State>`, or fix the transition conditions listed in the evidence.
+
+## ARA7116 ai::UNSEEN: Perception never fired
+owner: ara-ai
+
+A running brain has waited longer than the stuck time in a state whose transitions or child conditions read perception, and no candidate was seen. Evidence includes the latest sight checks (occluded, outside the cone, out of range).
+
+Causes:
+- The target is outside the Perceiver's range or field of view, or line of sight is blocked.
+- The Stimulus has visibility 0 or another kind than the behaviour asks for.
+
+Fixes:
+- Adjust Perceiver range/FOV/eye height or the NPC's facing.
+- Check Stimulus kind and visibility, and the line-of-sight geometry.
+
+## ARA7117 ai::NO_BEHAVIOR: Brain has no behaviour
+owner: ara-ai
+
+An entity's Brain has no behaviour assigned, references an asset that does not resolve, or runs a program key the AI world has not loaded.
+
+Causes:
+- `Brain.behavior` is empty or points at a moved or deleted behaviour asset.
+- The host did not compile and publish the behaviour before Play.
+
+Fixes:
+- Set `Brain.behavior` to an existing behaviour graph asset.
+- Load the behaviour into `AiWorld` (compile it) before starting the session.
+
 ## ARA7300 play::PLAY: Player call failed
 owner: ara-play-host
 

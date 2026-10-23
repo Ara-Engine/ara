@@ -452,7 +452,7 @@ fn run_task(
             let fire = match every {
                 Some(e) => {
                     let period = (env.eval(*e, &s.vars).float() / dt).round().max(1.0) as u32;
-                    ticks % period == 0
+                    ticks.is_multiple_of(period)
                 }
                 None => ticks == 0,
             };

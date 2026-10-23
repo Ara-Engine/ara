@@ -189,6 +189,28 @@ pub fn diagnose(
         };
         return Some(Diagnostic::warning(code, message).data(evidence));
     }
+    // A failed moveTo means its target was unreachable (or unset): no path, even
+    // though the cleared move intent no longer carries a navigation issue.
+    let mut index = 0;
+    for &s in &brain.active {
+        for t in &program.states[s as usize].tasks {
+            let failed = brain
+                .tasks
+                .get(index)
+                .is_some_and(|t| t.status == TaskStatus::Failed);
+            if failed && matches!(t, crate::Task::MoveTo { .. }) {
+                let state = &program.states[s as usize].name;
+                return Some(
+                    Diagnostic::warning(
+                        codes::NO_PATH,
+                        format!("could not reach its moveTo target in state `{state}` (unreachable or unset)"),
+                    )
+                    .data(evidence),
+                );
+            }
+            index += 1;
+        }
+    }
     let ticks = brain.ticks.last().copied().unwrap_or(0);
     if ticks < stuck {
         return None;
@@ -208,6 +230,18 @@ pub fn diagnose(
             .zip(own)
             .all(|(t, s)| !t.finishes() || s.status != TaskStatus::Running);
     let failed = own.iter().any(|s| s.status == TaskStatus::Failed);
+    // Waiting on senses that never fired is more specific than "stuck".
+    if perceptive(program, leaf)
+        && perception.is_some_and(|p| !p.checks.iter().any(|(_, o)| *o == SightOutcome::Seen))
+    {
+        return Some(
+            Diagnostic::info(
+                codes::UNSEEN,
+                format!("has waited {seconds:.0} s in `{name}` for a perception trigger that never fired"),
+            )
+            .data(evidence),
+        );
+    }
     if failed || finished {
         let what = if failed {
             "a task failed"
@@ -218,17 +252,6 @@ pub fn diagnose(
             Diagnostic::warning(
                 codes::STUCK,
                 format!("state tree is stuck in `{name}` for {seconds:.0} s: {what} but no transition fired"),
-            )
-            .data(evidence),
-        );
-    }
-    if perceptive(program, leaf)
-        && perception.is_some_and(|p| !p.checks.iter().any(|(_, o)| *o == SightOutcome::Seen))
-    {
-        return Some(
-            Diagnostic::info(
-                codes::UNSEEN,
-                format!("has waited {seconds:.0} s in `{name}` for a perception trigger that never fired"),
             )
             .data(evidence),
         );

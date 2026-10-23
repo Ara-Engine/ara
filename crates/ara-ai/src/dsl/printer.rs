@@ -55,11 +55,11 @@ fn state(out: &mut String, s: &State, depth: usize) {
         let _ = write!(out, " when {}", expr(w));
     }
     match s.select {
-        Select::First { every } if every == 0.0 => {}
+        Select::First { every: 0.0 } => {}
         Select::First { every } => {
             let _ = write!(out, " select first every {}", number(f64::from(every)));
         }
-        Select::Utility { every } if every == 0.0 => out.push_str(" select utility"),
+        Select::Utility { every: 0.0 } => out.push_str(" select utility"),
         Select::Utility { every } => {
             let _ = write!(out, " select utility every {}", number(f64::from(every)));
         }

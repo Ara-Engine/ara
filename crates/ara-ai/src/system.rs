@@ -192,6 +192,9 @@ pub fn perceive(world: &mut World) {
     with_sight(world, |world, los| ara_perception::sense(world, los));
 }
 
+/// Trace events and problems from one parallel chunk of brains.
+type ChunkResult = (Vec<TraceEvent>, Vec<(u64, Diagnostic)>);
+
 type Row<'w> = (
     Mut<'w, BrainState>,
     &'w PerceptionPose,
@@ -248,7 +251,7 @@ pub fn think(world: &mut World) {
     let programs = &ai.programs;
     let poses = &ai.poses;
     let nav_ref = nav.as_ref();
-    let results: Vec<(Vec<TraceEvent>, Vec<(u64, Diagnostic)>)> = rows
+    let results: Vec<ChunkResult> = rows
         .par_chunks_mut(32)
         .map(|chunk| {
             let mut trace = Vec::new();
