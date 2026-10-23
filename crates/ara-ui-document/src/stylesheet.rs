@@ -55,6 +55,8 @@ pub const PROPERTIES: &[&str] = &[
     "background",
     "color",
     "font-size",
+    "font-family",
+    "text-align",
     "white-space",
     "border-color",
     "border-width",

@@ -2,6 +2,7 @@
 mod capture;
 mod controller;
 mod verify;
+mod viewport;
 use crate::{
     Editor,
     gpu::NativeUi,
@@ -38,6 +39,10 @@ pub struct Options {
     pub sample: bool,
     /// Screenshots and measurement directory.
     pub output: PathBuf,
+    /// Requested native content extent in pixels.
+    pub size: [u32; 2],
+    /// Optional explicit DPI for reproducible monitor-scale verification.
+    pub dpi: Option<f32>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -47,6 +52,8 @@ impl Default for Options {
             verify: false,
             sample: false,
             output: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence"),
+            size: [1440, 900],
+            dpi: None,
         }
     }
 }
@@ -70,10 +77,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
-    let window = Window::new(&title, [1440, 900])?;
+    let window = Window::new(&title, options.size)?;
     let mut native = Native::attach(&title)?;
     let mut clipboard = OsClipboard;
-    let dpi = native.dpi();
+    let dpi = options.dpi.unwrap_or_else(|| native.dpi());
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
     let mut shell = Shell::new(&mut editor, logical)?;
@@ -86,7 +93,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     });
     let mut renderer = Renderer::new(
         view.scene(editor.host.root(), &editor.state, None)?,
-        extent(viewport),
+        extent_scaled(viewport, dpi),
         &window.extensions()?,
         editor.host.root().join(".ara/gpu"),
     )?;
@@ -94,6 +101,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
+    crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
+    let mut icon_state = (editor.state.light, dpi);
     ui_renderer.image(
         overlay::viewport_image(),
         Image {
@@ -104,6 +113,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     )?;
     // SAFETY: Both native owners are retained until explicit idle/destroy after the loop, including errors.
     let mut present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+    let mut scene_view = viewport::SceneView::default();
     let mut verification = options
         .verify
         .then(|| verify::Verification::new(&options.output));
@@ -139,7 +149,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut quit = false;
             for event in events {
                 match controller.event(
-                    event,
+                    native.logical_event(event, options.dpi.unwrap_or_else(|| native.dpi())),
                     &mut editor,
                     &mut shell,
                     &renderer,
@@ -241,13 +251,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
             }
             if let Some(verification) = &mut verification {
-                dirty |= verification.step(
+                let changed = verification.step(
                     &mut editor,
                     &mut shell,
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
                 )?;
+                if changed {
+                    icon_state = (!editor.state.light, last_dpi);
+                }
+                dirty |= changed;
                 scene_dirty |= dirty;
             }
             let physical = window.size()?;
@@ -255,7 +269,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
-            let dpi = native.dpi();
+            let dpi = options.dpi.unwrap_or_else(|| native.dpi());
             if physical != last_physical || dpi != last_dpi {
                 // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
                 unsafe {
@@ -271,12 +285,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
                 scene_dirty = true;
             }
+            if frames > 0 && frames.is_multiple_of(144) {
+                shell.frame_timing(
+                    1000. / interval.max(0.1),
+                    render_samples.last().copied().unwrap_or(0.),
+                )?;
+            }
             let work = shell.frame()?;
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
+            if scene_view.needs_frame(editor.state.quality) {
+                dirty = true;
+                scene_dirty = true;
+            }
             if dirty {
                 let render_start = Instant::now();
                 if let Some(rect) = shell.viewport() {
-                    renderer.resize(extent(rect))?;
+                    renderer.resize(extent_scaled(rect, dpi))?;
                     if scene_dirty {
                         if editor.gesture.is_some() || preview_present {
                             renderer.update_geometry(view.scene(
@@ -286,20 +310,48 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             )?)?;
                             preview_present = editor.gesture.is_some();
                         }
-                        renderer.render(&editor.state.camera.spec(), 0.0015)?;
+                        scene_view.render(&mut renderer, &editor, &view, 1)?;
                     }
-                    attach(&mut gpu, &renderer)?;
+                    scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     let mut changed = review_tints(&editor);
                     for id in view.ghosts().keys() {
                         changed.insert(crate::world::render_id(id), "destructive-foreground");
                     }
-                    gpu.overlays(
-                        rect,
-                        overlay::ENTITY_IMAGE,
-                        overlay::build(&view, &editor.state, rect, &renderer, &changed)?,
-                    );
+                    let mut overlays =
+                        overlay::build(&view, &editor.state, rect, &renderer, &changed)?;
+                    if rect.contains(shell.pointer[0], shell.pointer[1])
+                        && !editor.state.palette
+                        && !shell.context
+                        && shell
+                            .ui
+                            .hit_test(shell.pointer[0], shell.pointer[1])
+                            .is_none()
+                    {
+                        let c = shell
+                            .ui
+                            .sheet
+                            .color_token("--muted-foreground")
+                            .ok_or("hover token")?;
+                        overlays.push(crate::gpu::Overlay::Hover {
+                            uv: [
+                                (shell.pointer[0] - rect.x) / rect.w,
+                                (shell.pointer[1] - rect.y) / rect.h,
+                            ],
+                            color: [
+                                f32::from(c.0) / 255.,
+                                f32::from(c.1) / 255.,
+                                f32::from(c.2) / 255.,
+                                0.65,
+                            ],
+                        });
+                    }
+                    gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);
                 } else {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
+                }
+                if icon_state != (editor.state.light, dpi) {
+                    crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
+                    icon_state = (editor.state.light, dpi);
                 }
                 ui_renderer.render(
                     &mut gpu,
@@ -314,7 +366,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     present.display(renderer.gpu().context(), image, size)?;
                 }
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
-                    native.update(&shell.ui, &shell.input)?;
+                    native.update(&shell.ui, &shell.input, dpi)?;
                     last_ui = shell.version;
                 }
                 render_samples.push(render_start.elapsed().as_secs_f64() * 1000.);
@@ -382,6 +434,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         Ok(())
     })();
+    scene_view.destroy(&mut renderer)?;
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
     unsafe {
         renderer.gpu().context().device.device_wait_idle()?;
@@ -389,8 +442,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     }
     result
 }
-fn extent(rect: ara_ui::paint::Box2) -> [u32; 2] {
-    [rect.w.round().max(1.) as u32, rect.h.round().max(1.) as u32]
+fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
+    [
+        (rect.w * dpi).round().max(1.) as u32,
+        (rect.h * dpi).round().max(1.) as u32,
+    ]
 }
 fn set_camera(
     editor: &mut Editor,

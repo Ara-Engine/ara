@@ -103,9 +103,18 @@ pub struct Renderer {
     /// Clip arena referenced by submitted batches.
     pub clips: Vec<Clip>,
     images: BTreeMap<u32, Image>,
+    raster_scale: f32,
     dirty_images: Vec<u32>,
 }
 impl Renderer {
+    /// Rasterize hinted glyphs at the physical pixel density without changing logical layout.
+    pub fn set_raster_scale(&mut self, scale: f32) -> Result<()> {
+        if !scale.is_finite() || !(0.5..=8.).contains(&scale) {
+            return Err("invalid raster scale".into());
+        }
+        self.raster_scale = scale;
+        Ok(())
+    }
     /// Invalidate device-owned textures after loss or when attaching a new adapter instance.
     pub fn device_lost(&mut self) {
         self.atlas.reset();
@@ -267,12 +276,17 @@ impl Renderer {
                         .get(glyphs.clone())
                         .ok_or("ARA7051: invalid glyph arena range")?;
                     for g in glyphs {
-                        if let Some(entry) = self.atlas.glyph(font, g.id, *size, mode)? {
+                        let scale = if mode == TextMode::Raster {
+                            self.raster_scale.max(1.)
+                        } else {
+                            1.
+                        };
+                        if let Some(entry) = self.atlas.glyph(font, g.id, *size * scale, mode)? {
                             instance.rect = [
-                                origin[0] + g.x + t[0] + entry.offset[0],
-                                origin[1] + g.y + t[1] + entry.offset[1],
-                                entry.size[0],
-                                entry.size[1],
+                                origin[0] + g.x + t[0] + entry.offset[0] / scale,
+                                origin[1] + g.y + t[1] + entry.offset[1] / scale,
+                                entry.size[0] / scale,
+                                entry.size[1] / scale,
                             ];
                             instance.uv = entry.uv;
                             instance.color = color_array(*color);

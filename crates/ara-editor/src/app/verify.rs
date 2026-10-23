@@ -151,6 +151,16 @@ impl Verification {
             10 => {
                 std::fs::create_dir_all(&self.output)?;
                 gpu_cpu(&self.output, renderer)?;
+                editor.action("editor.palette", json!({"open":true}))?;
+                editor.action("editor.search", json!({"panel":"palette","query":"fr"}))?;
+                shell.rebuild(editor)?;
+                self.screenshot("palette-dark", editor, shell, gpu, ui_renderer, renderer)?;
+                editor.action("editor.theme", json!({"light":true}))?;
+                shell.rebuild(editor)?;
+                self.screenshot("palette-light", editor, shell, gpu, ui_renderer, renderer)?;
+                editor.action("editor.theme", json!({"light":false}))?;
+                editor.action("editor.palette", json!({"open":false}))?;
+                shell.rebuild(editor)?;
             }
             11 => {
                 let mut mcp = ara_mcp::Adapter::new();
@@ -213,11 +223,13 @@ impl Verification {
         ui_renderer: &mut UiRenderer,
         renderer: &mut Renderer,
     ) -> ara_ui::Result<()> {
+        shell.settle_transitions();
         shell.frame()?;
+        let mut scene_view = super::viewport::SceneView::default();
         let view = editor.view()?;
         renderer.update_geometry(view.scene(editor.host.root(), &editor.state, None)?)?;
         if let Some(rect) = shell.viewport() {
-            renderer.resize(extent(rect))?;
+            renderer.resize(extent_scaled(rect, gpu.dpi()))?;
             let capture = renderer.capture(&CaptureRequest {
                 camera: editor.state.camera.spec(),
                 size: renderer.size(),
@@ -233,7 +245,8 @@ impl Verification {
                 std::fs::create_dir_all(&self.output)?;
                 capture.write(&self.output.join("viewport.png"))?;
             }
-            attach(gpu, renderer)?;
+            scene_view.render(renderer, editor, &view, 64)?;
+            scene_view.attach(gpu, renderer, editor.state.quality)?;
             let changed = review_tints(editor);
             gpu.overlays(
                 rect,
@@ -241,6 +254,7 @@ impl Verification {
                 overlay::build(&view, &editor.state, rect, renderer, &changed)?,
             );
         }
+        crate::shell::icons::install(ui_renderer, editor.state.light, gpu.dpi())?;
         ui_renderer.render(
             gpu,
             &shell.ui.display,
@@ -255,6 +269,7 @@ impl Verification {
             self.output.join(format!("{name}.layout.json")),
             ara_json::to_canonical_string(&shell.ui.inspect()),
         )?;
+        scene_view.destroy(renderer)?;
         Ok(())
     }
 }

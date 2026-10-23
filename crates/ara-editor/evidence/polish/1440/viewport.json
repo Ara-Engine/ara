@@ -1,0 +1,146 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      17838367899900859231,
+      "Salvage crate"
+    ],
+    [
+      2,
+      8440788526309578730,
+      "Bulkhead"
+    ],
+    [
+      3,
+      5179007960648596173,
+      "Signal tower"
+    ],
+    [
+      4,
+      2478193915100428572,
+      "Outpost floor"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        5.2007012367248535,
+        4.394183158874512,
+        7.60184383392334
+      ],
+      "target": [
+        0.0,
+        0.5,
+        0.0
+      ],
+      "vertical_fov": 0.8726646304130554
+    },
+    "deterministic": true,
+    "exposure": 0.001500000013038516,
+    "marks": 100,
+    "mode": "lit",
+    "seed": 7,
+    "settle_frames": 1,
+    "size": [
+      856,
+      534
+    ],
+    "tick": 0
+  },
+  "scene_hash": "30ff05ea38fddf701cfae3ba60bff9f7860e51fab8551d78c1615dda3501cd47",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.011712,
+      "pass": "ShadowAtlas.4Cascades",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.077056,
+      "pass": "GBuffer",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.004384,
+      "pass": "TiledLightCull",
+      "queue": "Compute"
+    },
+    {
+      "milliseconds": 0.066688,
+      "pass": "DeferredLighting",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.002112,
+      "pass": "ForwardTransparency",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.015392,
+      "pass": "TemporalResolve",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.022432,
+      "pass": "Exposure.ACESFitted.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.153888,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.00288,
+      "pass": "HostReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "TileOwnershipReturn",
+      "queue": "Compute"
+    }
+  ]
+}

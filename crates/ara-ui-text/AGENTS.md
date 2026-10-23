@@ -26,3 +26,6 @@ Gotchas:
 
 Tests: `CARGO_BUILD_JOBS=4 cargo test -p ara-ui-text`.
 Run targeted Clippy `--all-targets -- -D warnings` and rustfmt check before completion.
+
+Text.family is an optional explicit family list; a changed family invalidates
+shaping through ara-ui. Hosts register all faces explicitly, including monospace.

@@ -39,6 +39,14 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
         "color" => c.color = Color::parse(v)?,
         "border-color" => c.border_color = Color::parse(v)?,
         "font-size" => c.font_size = scalar(v)?,
+        "font-family" => c.font_family = Some(v.to_owned()),
+        "text-align" => {
+            c.text_end = match v {
+                "left" => false,
+                "right" => true,
+                _ => return Err("text-align must be left or right".into()),
+            }
+        }
         "white-space" => {
             c.wrap_text = match v {
                 "normal" => true,

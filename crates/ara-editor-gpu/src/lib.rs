@@ -38,6 +38,24 @@ pub enum Overlay {
         /// Semantic token colour, in sRGB numeric space.
         color: [f32; 4],
     },
+    /// Analytic antialiased ground grid, faded by distance and occluded by scene IDs.
+    Grid {
+        /// Camera position and yaw, in world metres/radians.
+        camera: [f32; 4],
+        /// Pitch, vertical-FOV tangent, grid spacing and fade distance.
+        parameters: [f32; 4],
+        /// Semantic minor-grid tint.
+        color: [f32; 4],
+        /// Semantic X/Z axis tints.
+        axes: [[f32; 4]; 2],
+    },
+    /// GPU-only hover lookup; no CPU ID-buffer readback per pointer event.
+    Hover {
+        /// Normalized pointer position in the viewport.
+        uv: [f32; 2],
+        /// Subtle semantic hover tint.
+        color: [f32; 4],
+    },
     /// Silhouette from the real entity-ID texture.
     Outline {
         /// Compact render index, one-based.
@@ -121,6 +139,10 @@ impl NativeUi {
             rgba: &[255; 4],
         })?;
         Ok(ui)
+    }
+    /// Current logical-to-physical pixel density.
+    pub fn dpi(&self) -> f32 {
+        self.dpi
     }
     /// Set the logical-to-physical scale when moving between monitors.
     pub fn set_dpi(&mut self, dpi: f32) -> Result<()> {
@@ -295,10 +317,14 @@ impl UiGpu for NativeUi {
             mask_offset: offset,
             mask_count: (self.masks.len() as u32 - offset) / 2,
         });
+        // Scene decoration belongs immediately after the viewport image in painter order.
+        // Later native controls, palettes and tooltips must occlude it.
+        if batch.texture == (ara_ui::source::stable_id("editor-viewport") as u32 & 0x7fff_ffff) {
+            self.append_overlays()?;
+        }
         Ok(())
     }
     fn end(&mut self) -> ara_ui::Result<()> {
-        self.append_overlays()?;
         self.submit().map_err(Into::into)
     }
 }

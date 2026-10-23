@@ -54,7 +54,7 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
         serde_json::from_str(&std::fs::read_to_string(output.join("interactions.json")).unwrap())
             .unwrap();
     assert_eq!(evidence["verified"], true);
-    for theme in ["ara-dark", "ara-light"] {
+    for theme in ["ara-dark", "ara-light", "palette-dark", "palette-light"] {
         let golden = image::open(
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/goldens/{theme}.png")),
         )

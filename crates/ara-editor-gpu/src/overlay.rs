@@ -16,7 +16,43 @@ impl NativeUi {
             },
         };
         for overlay in &self.overlays {
+            if let Overlay::Grid {
+                camera,
+                parameters,
+                color,
+                axes,
+            } = overlay
+            {
+                let texture = self
+                    .outline_texture
+                    .and_then(|id| self.external.get(&id))
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("grid ID texture missing"))?;
+                self.draws.push(Draw {
+                    first: self.instances.len() as u32,
+                    count: 1,
+                    texture,
+                    mode: 7,
+                    scissor,
+                    mask_offset: 0,
+                    mask_count: 0,
+                });
+                self.instances.push(Instance {
+                    rect: [rect.x, rect.y, rect.w, rect.h],
+                    uv: *camera,
+                    color: *color,
+                    params: *parameters,
+                });
+                self.instances.push(Instance {
+                    rect: axes[0],
+                    uv: axes[1],
+                    color: [0.; 4],
+                    params: [0.; 4],
+                });
+                continue;
+            }
             let (instance, mode, texture) = match overlay {
+                Overlay::Grid { .. } => unreachable!("grid handled above"),
                 Overlay::Line {
                     from,
                     to,
@@ -38,6 +74,17 @@ impl NativeUi {
                         0,
                     )
                 }
+                Overlay::Hover { uv, color } => (
+                    Instance {
+                        rect: [rect.x, rect.y, rect.w, rect.h],
+                        uv: [0., 0., 1., 1.],
+                        color: *color,
+                        params: [uv[0], uv[1], 0., 1.],
+                    },
+                    5,
+                    self.outline_texture
+                        .ok_or_else(|| anyhow::anyhow!("hover texture missing"))?,
+                ),
                 Overlay::Outline { index, color } => (
                     Instance {
                         rect: [rect.x, rect.y, rect.w, rect.h],

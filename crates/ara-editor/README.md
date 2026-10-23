@@ -1,4 +1,4 @@
-# Ara editor v0
+# Ara editor v1
 
 `ara-editor` is the native Ara UI shell and the project's in-process Engine
 Protocol authority. `ara-editor-gpu` implements the shared UI instance ABI on the
@@ -60,7 +60,7 @@ with CpuGpu, captures both semantic themes and checks Vulkan validation.
 diffs, viewport marks and raw timings. Golden comparison tolerance is 1-SSIM ≤
 0.005; GPU/CPU glyph comparison tolerance is 0.01.
 
-Release timings on the RTX 4070 SUPER at 1440×900 with the four-entity scene:
+Before visual polish (v0), release timings on the RTX 4070 SUPER at 1440×900 with the four-entity scene:
 idle active time p50 0.016 ms / p95 0.033 ms; warm camera command through completed
 presentation p50 1.37 ms / p95 1.69 ms (maximum 4.29 ms). Event-loop intervals are
 p50 6.51 ms / p95 6.69 ms, supporting the 144 Hz target. These are 5,000 idle and
@@ -76,6 +76,58 @@ and the [window message queue](https://learn.microsoft.com/en-us/windows/win32/a
 so input wakes the loop immediately. `evidence/timings-coarse-wait.json` preserves
 the release measurement before this fix: its message timeout rounded waits to a
 15.48 ms median despite only 0.027 ms of active idle work.
+
+## Visual polish v1
+
+The native shell uses bundled Inter and JetBrains Mono, Lucide SVGs, D18 radius
+and color tokens, icon tool groups, a centered Play pill, searchable input fields,
+axis chips with coalesced scrubbing, inline hierarchy rename, component fold and
+options controls, asset preview tiles, selection bars and semantic change badges.
+Scene and bottom tabs have active indicators. Agents turns have compact cards,
+avatars, a reason, entity/field diffs and review actions. Ctrl+K opens a centered
+fuzzy palette with highlighted matches, groups and right-aligned shortcuts.
+
+Hover/press feedback and palette opening settle in 140 ms. `editor.preferences`
+exposes `reduceMotion` and the `quality` toggle through the same protocol as the
+native controls. Fidelity uses ara-render-fidelity on the renderer's existing
+device, with bounded temporal settling. Raster stays available. The GPU draws an
+antialiased, distance-faded ground grid, axis lines, silhouettes and hover IDs.
+The view cube selects canonical camera orientations. No CPU viewport bridge is
+introduced. Glyph atlases, Scene targets, SDL input/IME and Windows UIA geometry
+all follow the selected display scale.
+
+Reproduce the full capture and timing matrix on a scratch project:
+
+```powershell
+./crates/ara-editor/verify-polish.ps1 -Project <scratch-project>
+```
+
+Evidence is in `evidence/polish/1440` and `evidence/polish/2560`: dark/light Scene,
+dark/light palette, Agents review, interaction results, raw timing samples and
+CPU/GPU glyph comparisons. `evidence/polish/comparison.html` is a self-contained
+before/after comparison with theme switching. Native Scene and palette goldens
+are in `tests/goldens`; all four compare at 1-SSIM 0 in the reviewed run.
+
+Release measurements on 2026-10-23, RTX 4070 SUPER, fidelity enabled:
+
+| Capture / scale | Idle active p95 | Camera command to present p50 / p95 | Idle interval p95 |
+|---|---:|---:|---:|
+| 1440x900 / 1x | 0.0314 ms | 2.4883 / 3.9517 ms | 6.6320 ms |
+| 2560x1440 / 2x | 0.0364 ms | 3.6986 / 3.9100 ms | 6.6208 ms |
+
+Each size has 5,000 idle and 240 warm camera samples; both active p95 values fit
+the 6.94 ms / 144 Hz budget. Measurements are elapsed wall time around active
+work, excluding idle wait, and include scheduling delays. The 2x run retains one
+117.84 ms idle outlier; the 1x maximum is 0.934 ms. Raw samples are preserved,
+including that outlier. The 100k hierarchy retains 181 nodes: initial model build
+617.8 ms, scroll to the last row 0.461 ms, with no idle paint work.
+
+Visual review: every final Scene, palette and review capture was opened at both
+sizes. The result is acceptable for v1: dense, calm, rounded, legible and consistent
+with T3 Code's default design language. Review caught and corrected overlay
+ordering, offscreen swatch painting, a clipped view cube/card, row icon spacing,
+and DPI coordinate mismatches. The 2x capture explicitly uses `--dpi 2` so its
+raster scale is reproducible independently of the current monitor setting.
 
 ## Integration boundaries
 

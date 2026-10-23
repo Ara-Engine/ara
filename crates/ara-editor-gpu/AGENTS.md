@@ -25,3 +25,7 @@ nested clips, alpha, and complete editor screenshots with both semantic themes.
 
 Set CARGO_BUILD_JOBS=2. Run cargo check/clippy/test -p ara-editor-gpu plus the
 editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
+
+Scene overlays are inserted immediately after the viewport image, before later
+UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
+The grid uses derivatives for antialiasing and distance fade, with theme axis tints.

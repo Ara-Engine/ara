@@ -33,6 +33,7 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 41 {
+            self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             self.context = false;
             self.pick_field = None;

@@ -1,6 +1,7 @@
 //! Editor-only SDL clipboard, IME, monitor scale and Windows accessibility adapters.
 #[cfg(windows)]
 mod accessibility;
+mod coordinates;
 #[cfg(windows)]
 mod pacing;
 use ara_ui::{
@@ -131,7 +132,14 @@ impl Native {
         // SAFETY: Live main-thread SDL window. SDL updates scale as it crosses monitor boundaries.
         unsafe { SDL_GetWindowDisplayScale(self.window).max(0.25) }
     }
-    pub fn update(&mut self, ui: &Ui, input: &InputState) -> anyhow::Result<()> {
+    /// Convert SDL window coordinates to the same logical units used by UI layout.
+    pub fn logical_event(&self, event: ara_platform::Event, dpi: f32) -> ara_platform::Event {
+        // SAFETY: Live main-thread window; SDL defines density as pixels per window unit.
+        let density = unsafe { SDL_GetWindowPixelDensity(self.window).max(0.25) };
+        coordinates::logical_event(event, density, dpi)
+    }
+    /// Refresh native IME and accessibility geometry at the current display scale.
+    pub fn update(&mut self, ui: &Ui, input: &InputState, dpi: f32) -> anyhow::Result<()> {
         let field = input
             .focused()
             .and_then(|id| ui.by_id(id))
@@ -149,17 +157,18 @@ impl Native {
             }
             if let Some(i) = field {
                 let r = ui.nodes[i].rect;
+                let scale = dpi / SDL_GetWindowPixelDensity(self.window).max(0.25);
                 let area = sdl3_sys::rect::SDL_Rect {
-                    x: r.x as i32,
-                    y: r.y as i32,
-                    w: r.w as i32,
-                    h: r.h as i32,
+                    x: (r.x * scale) as i32,
+                    y: (r.y * scale) as i32,
+                    w: (r.w * scale) as i32,
+                    h: (r.h * scale) as i32,
                 };
                 SDL_SetTextInputArea(self.window, &area, 0);
             }
         }
         #[cfg(windows)]
-        self.accessibility.update(ui, input.focused());
+        self.accessibility.update(ui, input.focused(), dpi);
         Ok(())
     }
     pub fn input(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<bool> {

@@ -22,6 +22,7 @@ ara-ops = { path = "../ara-ops" }
 ara-platform = { path = "../ara-platform" }
 ara-proto = { path = "../ara-proto" }
 ara-render = { path = "../ara-render" }
+ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-rpc = { path = "../ara-rpc" }
 ara-schema = { path = "../ara-schema" }
 ara-ui = { path = "../ara-ui" }
@@ -30,6 +31,7 @@ ara-ui-text = { path = "../ara-ui-text" }
 anyhow = "1"
 glam = { version = "0.30", features = ["serde", "bytemuck"] }
 gltf = "1.4"
+resvg = { version = "0.45", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

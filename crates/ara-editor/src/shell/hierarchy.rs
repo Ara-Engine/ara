@@ -75,6 +75,13 @@ impl Shell {
             .map(|id| (*id, 0usize))
             .collect();
         self.hierarchy.items.clear();
+        self.hierarchy_style.clear();
+        self.selected_rows = editor
+            .state
+            .selection
+            .iter()
+            .map(|s| crate::world::render_id(s))
+            .collect();
         self.hierarchy_entities.clear();
         let query = editor
             .state
@@ -92,36 +99,28 @@ impl Shell {
             );
             if matches {
                 let key = crate::world::render_id(id);
-                let badge = if e.source.0.as_str() != editor.state.doc {
-                    " P"
-                } else {
-                    ""
-                };
-                let modified = if changed_entities.contains(id.as_str()) {
-                    " *"
-                } else {
-                    ""
-                };
-                let selected = if editor.state.selection.contains(id) {
-                    "> "
-                } else {
-                    "  "
-                };
-                let text = format!(
-                    "{}{}{}{}{}{}",
-                    "  ".repeat(depth.min(32)),
-                    selected,
-                    name,
-                    badge,
-                    modified,
-                    if editor.state.locked.contains(id) {
-                        " [L]"
-                    } else if editor.state.hidden.contains(id) {
-                        " [H]"
-                    } else {
-                        ""
-                    }
+                self.hierarchy_style.insert(
+                    key,
+                    polish::RowStyle {
+                        depth,
+                        prefab: e.source.0.as_str() != editor.state.doc,
+                        changed: changed_entities.contains(id.as_str()),
+                        icon: if e.record.contains_key("Light") {
+                            "lightbulb"
+                        } else if e.record.contains_key("Camera") {
+                            "camera"
+                        } else if e.record.contains_key("MeshRenderer") {
+                            "box"
+                        } else {
+                            "layers"
+                        },
+                        children: children.contains_key(&Some(id.as_str())),
+                        collapsed: editor.state.collapsed.contains(id),
+                        locked: editor.state.locked.contains(id),
+                        hidden: editor.state.hidden.contains(id),
+                    },
                 );
+                let text = name.to_owned();
                 self.hierarchy.items.push((key, text));
                 self.hierarchy_entities.insert(key, id.clone());
             }
@@ -157,19 +156,33 @@ impl Shell {
                 .id
                 .rsplit_once("key-")
                 .and_then(|(_, s)| s.parse::<u64>().ok());
-            let class = key
+            let selected = key.is_some_and(|k| self.selected_rows.contains(&k));
+            let class = if selected {
+                "virtual-row row-selected"
+            } else {
+                "virtual-row"
+            };
+            let node = &mut self.ui.nodes[*index];
+            if node.element.attrs.get("class").map(String::as_str) != Some(class) {
+                node.element.attrs.insert("class".into(), class.into());
+                node.dirty.style = true;
+            }
+            let depth = key
+                .and_then(|k| self.hierarchy_style.get(&k))
+                .map_or(0, |s| s.depth);
+            let tint = key
                 .and_then(|k| self.hierarchy_tints.get(&k))
-                .map(|t| match *t {
-                    "success-foreground" => "success",
-                    "destructive-foreground" => "destructive",
-                    _ => "warning",
-                })
-                .unwrap_or("");
+                .copied()
+                .unwrap_or("foreground");
             for position in 0..self.ui.nodes[*index].element.children.len() {
                 let child = self.ui.nodes[*index].element.children[position];
                 let node = &mut self.ui.nodes[child];
-                if node.element.attrs.get("class").map(String::as_str) != Some(class) {
-                    node.element.attrs.insert("class".into(), class.into());
+                let style = format!(
+                    "height:26px; width:100%; padding:4px; padding-left:{}px; overflow:hidden; font-size:12px; color:var(--{tint})",
+                    48 + depth.min(32) * 14
+                );
+                if node.element.attrs.get("style") != Some(&style) {
+                    node.element.attrs.insert("style".into(), style);
                     node.dirty.style = true;
                 }
             }

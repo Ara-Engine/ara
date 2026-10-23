@@ -66,6 +66,21 @@ impl Shell {
                     continue;
                 };
                 match binding {
+                    Binding::ComponentCollapse(name) => {
+                        if !self.collapsed_components.remove(name) {
+                            self.collapsed_components.insert(name.clone());
+                        }
+                        rebuild = true;
+                    }
+                    Binding::ComponentMenu(name) => {
+                        self.component_menu = if self.component_menu.as_ref() == Some(name) {
+                            None
+                        } else {
+                            Some(name.clone())
+                        };
+                        rebuild = true;
+                    }
+                    Binding::Scrub(_, _) => {}
                     Binding::ColorPicker(path) => {
                         self.color_picker = if self.color_picker.as_ref() == Some(path) {
                             None
@@ -101,6 +116,22 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::Select(entity) => {
+                        let key = crate::world::render_id(entity);
+                        let chevron = self.hierarchy_style.get(&key).is_some_and(|s| {
+                            s.children
+                                && self.ui.by_id(action.node).is_some_and(|i| {
+                                    self.pointer[0]
+                                        < self.ui.nodes[i].rect.x
+                                            + 24.
+                                            + s.depth.min(32) as f32 * 14.
+                                })
+                        });
+                        if chevron {
+                            editor.action("editor.collapse",json!({"entity":entity,"enabled":!editor.state.collapsed.contains(entity)}))?;
+                            rebuild = true;
+                            continue;
+                        }
+
                         if let Some(path) = self.pick_field.take() {
                             editor.apply(
                                 crate::inspector::edit_commands(
