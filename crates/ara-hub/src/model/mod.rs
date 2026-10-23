@@ -321,6 +321,15 @@ impl List {
             List::Activity => Call::Activity,
         }
     }
+    fn noun(self) -> &'static str {
+        match self {
+            List::Projects => "projects",
+            List::Status => "project status",
+            List::Templates => "templates",
+            List::Engines => "engine builds",
+            List::Activity => "agent activity",
+        }
+    }
     fn of(call: &Call) -> Option<Self> {
         Self::ALL.into_iter().find(|list| list.call() == *call)
     }
@@ -546,6 +555,12 @@ impl Hub {
             }
             Intent::AddExisting => self.effects.push(Effect::Pick(Pick::Register)),
             Intent::Register(path) | Intent::Picked(Pick::Register, path) => {
+                // A dropped `ara.project.json` (or any file) means its folder.
+                let path = if path.is_file() {
+                    path.parent().map_or(path.clone(), PathBuf::from)
+                } else {
+                    path
+                };
                 self.send(Call::Register { path });
             }
             Intent::Picked(Pick::Destination, path) => {
@@ -698,7 +713,7 @@ impl Hub {
             match result {
                 Ok(value) => self.loaded_list(list, &value),
                 Err(error) => {
-                    let title = format!("Couldn't refresh {}", call.method());
+                    let title = format!("Couldn't refresh {}", list.noun());
                     self.notice(title, Some(&error));
                 }
             }

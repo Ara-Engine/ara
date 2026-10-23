@@ -303,6 +303,14 @@ fn interactive(
                         InputEvent::PointerUp(at)
                     };
                     app.pointer(event).map_err(err)?;
+                    // Clicking away from an inline rename saves it, as in Explorer.
+                    if pressed
+                        && hub.rename.is_some()
+                        && hub.focus.is_none()
+                        && app.focused() != Some("rename-field")
+                    {
+                        intents.push(crate::model::Intent::RenameCommit);
+                    }
                 }
                 Event::MouseButton { .. } => {}
                 Event::Wheel(delta) => {

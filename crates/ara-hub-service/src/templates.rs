@@ -137,7 +137,7 @@ fn describe(id: &str, root: &Path, marker: &Path, lock: Option<&Lock>) -> Templa
         .and_then(|main| Path::new(main).file_stem())
         .map(|stem| stem.to_string_lossy().into_owned());
     let thumbnail = std::iter::once(root.join("thumbnail.png"))
-        .chain(main.map(|stem| root.join(format!("evidence/{stem}-player.png"))))
+        .chain(main.map(|stem| root.join("evidence").join(format!("{stem}-player.png"))))
         .find(|path| path.is_file());
     let name = text("name").unwrap_or_else(|| id.to_owned());
     Template {

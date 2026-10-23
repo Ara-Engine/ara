@@ -82,7 +82,8 @@ routes; clients reconnect. There is no second editor authority for one project.
 Process startup errors point to `.ara/hub-process.log`; Hub startup to
 `hub-start.log`. Daemons start without a console window on Windows; Hub auto-start uses
 CreateProcessW without handle inheritance to preserve captured CLI/MCP EOF.
-Templates must not contain symlinks; `.ara`, `.git`, `target` and `evidence` are skipped.
+A project's root `thumbnail.png` becomes its card preview on register; `hub.create`
+copies the template's preview there. Templates must not contain symlinks; `.ara`, `.git`, `target` and `evidence` are skipped.
 A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation

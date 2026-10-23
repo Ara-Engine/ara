@@ -300,6 +300,18 @@ impl Hub {
                 }
                 fs::create_dir(&path).map_err(io_error)?;
                 self.config.templates.instantiate(&template, &path)?;
+                // Keep the template's preview as the new project's (`thumbnail.png`).
+                if let Some(preview) = self
+                    .config
+                    .templates
+                    .list()?
+                    .into_iter()
+                    .find(|t| t.id == template)
+                    .and_then(|t| t.thumbnail)
+                    && !path.join("thumbnail.png").exists()
+                {
+                    fs::copy(preview, path.join("thumbnail.png")).map_err(io_error)?;
+                }
                 let marker_path = path.join("ara.project.json");
                 let mut marker: Value =
                     serde_json::from_slice(&fs::read(&marker_path).map_err(io_error)?)

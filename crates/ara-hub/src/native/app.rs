@@ -149,7 +149,8 @@ impl App {
             .collect()
     }
 
-    fn focused(&self) -> Option<&str> {
+    /// Authored ID of the focused control.
+    pub fn focused(&self) -> Option<&str> {
         self.input
             .focused()
             .and_then(|id| self.ui.by_id(id))

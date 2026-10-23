@@ -245,6 +245,26 @@ fn templates_read_their_marker_and_report_unfetched_sample_art() {
         "fetched art completes the sample"
     );
 
+    // A project created from it keeps the preview as its own `thumbnail.png`.
+    let mut config = config(&root.join("config"));
+    config.templates = Box::new(DirectoryTemplates(
+        sample.parent().expect("templates").into(),
+    ));
+    let mut hub = Hub::open(config).expect("Hub");
+    let created = hub
+        .call(
+            "hub.create",
+            json!({"template":"outpost","name":"Dusk","path":root.join("Dusk")}),
+        )
+        .expect("create from sample");
+    assert!(root.join("Dusk/thumbnail.png").is_file());
+    assert!(
+        created["thumbnail"]
+            .as_str()
+            .is_some_and(|p| p.ends_with("thumbnail.png"))
+    );
+    drop(hub);
+
     // Evidence is capture output; a new project never copies it.
     let destination = root.join("copy");
     fs::create_dir(&destination).expect("destination");
