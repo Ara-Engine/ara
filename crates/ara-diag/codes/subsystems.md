@@ -188,6 +188,151 @@ Fixes:
 - For future renames, use `material.rename` with `from` and `to` so identity, connections, layout and overrides survive.
 - If deletion and creation were intentional, keep the new identity and disregard the rename suggestion.
 
+## ARA3400 audio::NOT_LOADED: Audio source not loaded
+owner: ara-audio
+
+The source's clip (or procedural graph) is missing, does not resolve, or has not been prepared by the loader, so no voice can play it.
+
+Causes:
+- `AudioSource.clip` is unset or points at a moved or deleted asset.
+- The import or cook of the clip failed, or the streaming worker has not prebuffered it yet.
+
+Fixes:
+- Set `AudioSource.clip` to an existing `@path#id` audio asset; `ara why @path` explains asset resolution.
+- Check the importer diagnostics for the clip and re-import it.
+
+## ARA3401 audio::OUT_OF_RANGE: Listener beyond max distance
+owner: ara-audio
+
+The listener is at or beyond the source's `AudioSource.maxDistance`, where distance attenuation is zero.
+
+Causes:
+- `maxDistance` is too small for where the sound must be heard.
+- The listener or source position is not where the scene expects (wrong transform or camera).
+
+Fixes:
+- Raise `AudioSource.maxDistance` (the fix proposes 1.25× the current distance).
+- Move the source or check the listener's camera transform.
+
+## ARA3402 audio::OCCLUDED: Direct path occluded
+owner: ara-audio
+
+Geometry blocks most of the direct path between source and listener; only material transmission (and any portal path) reaches the listener. Informational: occlusion is usually intended.
+
+Causes:
+- A wall, door or terrain is between the source and the listener; the occlusion trace names the blockers and their materials.
+- A closed `AcousticPortal` (`open = 0`) cuts the path between zones.
+
+Fixes:
+- Open the portal (`AcousticPortal.open`) or move the source if it should be audible.
+- Use a more transmissive `AcousticSurface` material, or disable `AcousticSource.occlusion` for non-diegetic sounds.
+
+## ARA3403 audio::BUS_MUTED: Bus muted
+owner: ara-audio
+
+The source's bus, or a bus between it and master, has zero gain because of a mute, a mix state or a manual gain change.
+
+Causes:
+- `AudioBus.mute` is set, or `gainDb` is -96 dB or lower.
+- The active `AudioMixState` lowers the bus to silence.
+
+Fixes:
+- Unmute the bus or raise its gain in the mixer document.
+- Switch to a mix state that keeps the bus audible.
+
+## ARA3404 audio::VOICE_LIMITED: Voice virtualized by the voice budget
+owner: ara-audio
+
+The voice keeps its position but renders silently because higher-priority (then louder, then older) voices fill the engine's real-voice budget or its bus category limit.
+
+Causes:
+- Too many voices play at once for `EngineConfig::real_voices`.
+- The bus's `AudioBus.voiceLimit` caps the category (for example footsteps).
+
+Fixes:
+- Raise `AudioSource.priority` for sounds that must be heard.
+- Raise the category `voiceLimit` or reduce simultaneous voices.
+
+## ARA3405 audio::SILENT_SOURCE: Source gain is zero
+owner: ara-audio
+
+The source itself produces no level: its gain is zero, or its cone or distance curve attenuates it completely.
+
+Causes:
+- `AudioSource.gain` is 0.
+- `coneOuterGain` is 0 and the listener is outside the source cone, or a custom distance curve reaches 0.
+
+Fixes:
+- Set `AudioSource.gain` above zero.
+- Widen the cone or raise `coneOuterGain` / the distance curve.
+
+## ARA3406 audio::GRAPH: Audio graph error
+owner: ara-audio-graph
+
+A procedural audio graph failed to parse, check or compile. Messages name the node and input; text errors carry line and column.
+
+Causes:
+- Unknown operation or name, a type mismatch (trigger into audio), a missing required input or a non-literal `seed`/`max`.
+- A cycle without a `delay` node, or missing `output out` / `left` + `right`.
+- A referenced clip failed to load at compile time.
+
+Fixes:
+- Apply the suggestion in the message (`did you mean`), or fix the input with `audiograph.input.set`.
+- Edit the text with `audiograph.text.apply`; names keep their identity.
+
+## ARA3407 audio::MIXER: Invalid mixer document
+owner: ara-audio-mix
+
+A mixer document cannot be built: bus names, outputs, ducking sources, numbers or state targets are invalid.
+
+Causes:
+- Duplicate or empty bus names, an unknown `output` bus, or a bus that ducks by itself or an unknown bus.
+- Outputs or duck sources form a cycle; a mix state names an unknown bus; the initial state does not exist.
+
+Fixes:
+- Correct the named record with `property.set`; every bus must reach `master`.
+- Remove the cycle or the unknown reference.
+
+## ARA3408 audio::MUSIC: Invalid music document
+owner: ara-music
+
+A music document cannot be played: segments, tempo maps, stems, transitions or stingers are invalid.
+
+Causes:
+- A tempo map that does not start at bar 0, is unordered or leaves 20-400 BPM.
+- A stem or stinger without a clip, or references to unknown segments.
+
+Fixes:
+- Correct the named segment, transition or stinger record.
+- Point `next`, `to`, `from` and `bridge` at existing segment names.
+
+## ARA3409 audio::ACOUSTICS: Invalid acoustics data
+owner: ara-acoustics
+
+Acoustic geometry, zones, portals or cooked cell data are invalid.
+
+Causes:
+- A reverb zone with an empty or duplicate name, non-unit rotation or nonpositive extent; a portal naming an unknown zone.
+- A cooked acoustic cell with a bad checksum, version or nonfinite probe.
+- A Steam Audio bake failed (missing runtime or native error).
+
+Fixes:
+- Correct the zone or portal component; portals use zone names (`""` is outdoors).
+- Re-cook the cell; install Steam Audio with `crates/ara-audio/tools/fetch_runtime.ps1` or bake with the geometric baker.
+
+## ARA3410 audio::NOT_PLAYING: No voice playing
+owner: ara-audio
+
+The source is loaded and audible in principle, but no voice is playing for it.
+
+Causes:
+- The sound was never started, was stopped, or a one-shot already finished.
+- A procedural graph ended through its `done` output.
+
+Fixes:
+- Start the sound from gameplay (or `audio.play` for presentation checks) and ask again while it plays.
+- Loop the clip (`AudioSource.looping`) if it should keep playing.
+
 ## ARA3600 terrain_vfx::INVALID: Invalid terrain or VFX operation
 owner: ara-terrain, ara-vfx
 
