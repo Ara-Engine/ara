@@ -207,6 +207,8 @@ codes! {
     FLUSH_FAILED = 1911,
     /// Project types (`*.types.json`) changed on disk; restart the daemon to load them.
     TYPES_CHANGED = 1912,
+    /// A Hub project template is missing pinned files (sample art not fetched yet).
+    TEMPLATE_INCOMPLETE = 1913,
 
     /// Diagnostics were dropped because an emitting thread's bus ring was full.
     DIAG_DROPPED = 2001,

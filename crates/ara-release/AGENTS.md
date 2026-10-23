@@ -25,6 +25,11 @@ prerequisite; only open-source Roslyn/NuGet dependencies are redistributed.
 PDBs stay in a separate symbols ZIP with binary hashes; never inside the portable
 archive. The symbols command converts these PDBs through ara-crash when needed.
 
+`ara-hub.exe` ships when `crates/ara-hub` exists; the installer's Hub shortcut
+starts it directly, it registers the installed build on first run, and smoke
+captures every Hub page from the installed binary. Packaged samples get their
+`thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
+
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.
 Smoke must clear VULKAN_SDK and use installed resources. Keep exact command logs

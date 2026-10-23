@@ -4,8 +4,9 @@ mod lifecycle;
 mod transport;
 use crate::{
     DirectoryTemplates, EngineBuild, ProjectEntry, Registry, TemplateSource, invalid, io_error,
-    now, registry::write_json,
+    now, registry::write_json, templates::Layered,
 };
+use ara_diag::{Diagnostic, codes};
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
 use serde::Deserialize;
@@ -84,6 +85,7 @@ struct Params {
     #[serde(default, deserialize_with = "thumbnail")]
     thumbnail: Option<Option<PathBuf>>,
     engine_version: Option<String>,
+    dry_run: Option<bool>,
 }
 
 fn thumbnail<'de, D: serde::Deserializer<'de>>(
@@ -101,7 +103,7 @@ fn required<T>(value: Option<T>, name: &str) -> Result<T, RpcError> {
 
 impl Hub {
     /// Lock the user registry. A second service for the same user fails without changing it.
-    pub fn open(config: HubConfig) -> Result<Self, RpcError> {
+    pub fn open(mut config: HubConfig) -> Result<Self, RpcError> {
         fs::create_dir_all(&config.directory).map_err(io_error)?;
         let lock = File::create(config.directory.join("hub.lock")).map_err(io_error)?;
         lock.try_lock().map_err(|e| {
@@ -124,6 +126,8 @@ impl Hub {
             *engine = config.engine.clone();
         }
         registry.save(&config.directory)?;
+        config.templates =
+            Layered::with_checkout_samples(config.templates, &config.engine.executable);
         Ok(Self {
             config,
             registry,
@@ -290,22 +294,9 @@ impl Hub {
                 Ok(json!({"removed":entry.id}))
             }
             "hub.create" => {
-                let name = required(p.name, "name")?;
-                self.registry.check_name(&name, None)?;
-                let path = required(p.path, "path")?;
-                let version = p
-                    .engine_version
-                    .unwrap_or_else(|| self.config.engine.version.clone());
-                self.registry.engine(&version)?;
-                let template = required(p.template, "template")?;
-                if !self
-                    .config
-                    .templates
-                    .list()?
-                    .iter()
-                    .any(|t| t.id == template)
-                {
-                    return Err(invalid(format!("no template `{template}`")));
+                let (template, name, path, version) = self.check_create(&p)?;
+                if p.dry_run == Some(true) {
+                    return Ok(json!({"valid":true,"path":path}));
                 }
                 fs::create_dir(&path).map_err(io_error)?;
                 self.config.templates.instantiate(&template, &path)?;
@@ -381,6 +372,70 @@ impl Hub {
                 message: format!("unknown Hub method `{method}`"),
                 data: None,
             }),
+        }
+    }
+}
+impl Hub {
+    /// Validate `hub.create` (also its `dryRun`), reporting every problem at once.
+    /// Each diagnostic's `location.path` names the field (`name`, `path`,
+    /// `template`, `engineVersion`) so the Hub form can show it inline.
+    fn check_create(&self, p: &Params) -> Result<(String, String, PathBuf, String), RpcError> {
+        let field = |path: &str, message: String| {
+            Diagnostic::error(codes::INVALID_PARAMS, message).path(path)
+        };
+        let mut problems = Vec::new();
+        let name = p.name.as_deref().map(str::trim).unwrap_or_default();
+        if name.is_empty() {
+            problems.push(field("name", "Give the project a name".into()));
+        } else if self.registry.check_name(name, None).is_err() {
+            problems.push(field(
+                "name",
+                format!("A project named `{name}` is already registered; choose another name"),
+            ));
+        }
+        match &p.path {
+            None => problems.push(field("path", "Choose where to create the project".into())),
+            Some(path) if path.exists() => problems.push(field(
+                "path",
+                format!("`{}` already exists; choose a new folder", path.display()),
+            )),
+            Some(path) if !path.parent().is_some_and(Path::is_dir) => problems.push(field(
+                "path",
+                format!(
+                    "The folder `{}` does not exist",
+                    path.parent().unwrap_or(path).display()
+                ),
+            )),
+            Some(_) => {}
+        }
+        let version = p
+            .engine_version
+            .clone()
+            .unwrap_or_else(|| self.config.engine.version.clone());
+        if self.registry.engine(&version).is_err() {
+            problems.push(field(
+                "engineVersion",
+                format!("Engine `{version}` is not installed"),
+            ));
+        }
+        let template = p.template.clone().unwrap_or_default();
+        match self
+            .config
+            .templates
+            .list()?
+            .into_iter()
+            .find(|t| t.id == template)
+        {
+            None => problems.push(field("template", format!("No template `{template}`"))),
+            Some(found) => {
+                if let Some(error) = found.incomplete() {
+                    problems.extend(error.diagnostics());
+                }
+            }
+        }
+        match (problems.is_empty(), &p.path) {
+            (true, Some(path)) => Ok((template, name.to_owned(), path.clone(), version)),
+            _ => Err(RpcError::from_diagnostics(problems)),
         }
     }
 }
