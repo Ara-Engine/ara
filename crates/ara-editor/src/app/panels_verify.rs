@@ -1,6 +1,7 @@
 //! Bounded native authoring route: real imports, UI drags, captures and 500-node navigation.
 use super::*;
 use ara_platform::Event;
+use std::collections::BTreeMap;
 
 pub(super) struct Verification {
     phase: u32,
@@ -13,6 +14,7 @@ pub(super) struct Verification {
     output: PathBuf,
     pixels: [u32; 2],
     pub samples: Vec<f64>,
+    stage_samples: Vec<[f64; 5]>,
     bench_frames: u32,
     interactions: Vec<&'static str>,
 }
@@ -120,6 +122,7 @@ impl Verification {
             output: output.into(),
             pixels,
             samples: Vec::new(),
+            stage_samples: Vec::new(),
             bench_frames: 0,
             interactions: Vec::new(),
         })
@@ -130,10 +133,18 @@ impl Verification {
     pub fn benchmarking(&self) -> bool {
         self.phase == 13
     }
-    pub fn record(&mut self, ms: f64) {
+    pub fn record(&mut self, ms: f64, cumulative: [f64; 4]) {
         if self.phase == 13 {
             if self.bench_frames >= 120 {
                 self.samples.push(ms);
+                let [control, paint, gpu, present] = cumulative;
+                self.stage_samples.push([
+                    control,
+                    paint - control,
+                    gpu - paint,
+                    present - gpu,
+                    ms - present,
+                ]);
             }
             self.bench_frames += 1;
         }
@@ -397,7 +408,8 @@ impl Verification {
                 self.next();
             }
             12 => {
-                if self.age < 180 {
+                // Warm samples start after this graph's shader, rather than a last-good image, is ready.
+                if self.age < 180 || !shell.preview_ready("material") {
                     return Ok(false);
                 }
                 let rect = shell
@@ -427,10 +439,28 @@ impl Verification {
                     self.capture_pair("graph-500", editor, shell, gpu, ui, renderer)?;
                     let timings = statistics(&self.samples);
                     let passed = timings["p95"].as_f64().is_some_and(|value| value < 4.);
+                    let stages = [
+                        "input",
+                        "paint",
+                        "compileUploadSubmit",
+                        "present",
+                        "accessibility",
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, name)| {
+                        let values = self
+                            .stage_samples
+                            .iter()
+                            .map(|s| s[index])
+                            .collect::<Vec<_>>();
+                        (name, statistics(&values))
+                    })
+                    .collect::<BTreeMap<_, _>>();
                     std::fs::write(
                         self.output.join("panel-interactions.json"),
                         ara_json::to_canonical_string(
-                            &json!({"verified":true,"flow":self.interactions,"graphNodes":500,"panZoomInputToPresentMs":timings,"panZoomBudgetMs":4,"panZoomBudgetPassed":passed,"profile":if cfg!(debug_assertions){"dev"}else{"release"},"samplesMs":self.samples}),
+                            &json!({"verified":true,"flow":self.interactions,"graphNodes":500,"panZoomInputToPresentMs":timings,"panZoomBudgetMs":4,"panZoomBudgetPassed":passed,"profile":if cfg!(debug_assertions){"dev"}else{"release"},"stagesMs":stages,"stageSamplesMs":self.stage_samples,"samplesMs":self.samples}),
                         ),
                     )?;
                     if !passed && !cfg!(debug_assertions) {
@@ -581,6 +611,7 @@ impl Verification {
             json!({"zoom":0.85,"pan":[36,48],"selection":[from.node]}),
         )?;
         shell.rebuild(editor)?;
+        shell.key(editor, 9, true, clipboard)?;
         self.interactions
             .push("UI search added node; sockets connected; keyboard undo restored graph");
         Ok(())

@@ -90,6 +90,7 @@ impl Shell {
             let key =
                 self.thumbnails
                     .request_live(path, source.into_bytes(), editor.state.preview_plane);
+            self.material_preview_key = Some(key.clone());
             let preview_identity = format!("{doc}:{}", editor.state.preview_plane);
             if self.thumbnail_slots.contains_key(&key) {
                 self.material_previews
@@ -116,7 +117,12 @@ impl Shell {
             };
             self.asset_thumbnail(&asset, out, "material-live-preview", 140.);
         }
-        out.push_str("<panel id='material-preview-controls' style='gap:8px;flex-grow:1;flex-basis:0px;min-width:0px'><text id='material-preview-heading' class='heading' text='Live preview' /><text id='material-preview-state' class='badge' style='white-space:normal' text='Checked surface preview' />");
+        let preview_status = if self.preview_ready("material") {
+            "Checked surface preview"
+        } else {
+            "Updating preview…"
+        };
+        out.push_str(&format!("<panel id='material-preview-controls' style='gap:8px;flex-grow:1;flex-basis:0px;min-width:0px'><text id='material-preview-heading' class='heading' text='Live preview' /><text id='material-preview-state' class='badge' style='white-space:normal' text='{preview_status}' />"));
         out.push_str(&self.bind_button(
             "preview-sphere",
             "Sphere",
@@ -182,6 +188,7 @@ impl Shell {
                 "small",
             ));
             for (id, label, kind) in [
+                ("graph-frame", "Frame  F", "frame"),
                 ("graph-comment", "Comment", "comment"),
                 ("graph-group", "Group", "group"),
                 ("graph-reroute", "Reroute", "reroute"),

@@ -257,6 +257,22 @@ impl Canvas {
             .filter(|n| self.node_rect(n, rect).intersects(rect))
             .count()
     }
+    /// Frame all cards with a gutter and room for the minimap at the canvas bottom.
+    pub fn framed(&self, rect: Box2) -> Camera {
+        let bounds = self.bounds();
+        let width = (rect.w - 48.).max(1.);
+        let height = (rect.h - 136.).max(1.);
+        let zoom = (width / bounds.w.max(1.))
+            .min(height / bounds.h.max(1.))
+            .clamp(0.15, 0.9);
+        Camera {
+            zoom,
+            pan: [
+                24. + (width - bounds.w * zoom) * 0.5 - bounds.x * zoom,
+                24. + (height - bounds.h * zoom) * 0.5 - bounds.y * zoom,
+            ],
+        }
+    }
     fn node_rect(&self, node: &NodeView, rect: Box2) -> Box2 {
         let position = if let Some(interaction::Drag::Nodes {
             positions, start, ..

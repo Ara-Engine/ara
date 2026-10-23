@@ -67,7 +67,14 @@ impl Shell {
                     .drafts
                     .get(&format!("@material|{doc}|{id}"))
                     .cloned()
-                    .unwrap_or_else(|| panels::display(&value));
+                    .unwrap_or_else(|| {
+                        panels::display(
+                            value
+                                .as_array()
+                                .filter(|v| v.len() == 1)
+                                .map_or(&value, |v| &v[0]),
+                        )
+                    });
                 out.push_str(&format!("<text id='{key}-label' class='field-label' text='Default value' /><field id='{key}' class='number' text='{}' action='Dispatch' label='Typed numeric lanes, boolean or texture value' />",escape(&draft)));
             }
             for (i, (port, socket)) in node.ports.iter().enumerate() {

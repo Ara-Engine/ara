@@ -427,7 +427,15 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     camera_samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }
                 if let (Some(start), Some(suite)) = (graph_start, &mut panel_verification) {
-                    suite.record(start.elapsed().as_secs_f64() * 1000.);
+                    suite.record(
+                        start.elapsed().as_secs_f64() * 1000.,
+                        [
+                            graph_control.unwrap_or(0.),
+                            graph_paint.unwrap_or(0.),
+                            graph_gpu.unwrap_or(0.),
+                            graph_present.unwrap_or(0.),
+                        ],
+                    );
                     if suite.benchmarking()
                         && !suite.samples.is_empty()
                         && suite.samples.len().is_multiple_of(200)

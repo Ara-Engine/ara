@@ -59,6 +59,18 @@ impl Shell {
         editor: &mut Editor,
         kind: &str,
     ) -> ara_ui::Result<()> {
+        if kind == "frame" {
+            if let (Some(canvas), Some(rect)) = (&self.canvas, self.graph_rect()) {
+                let camera = canvas.framed(rect);
+                editor.action(
+                    "editor.canvas",
+                    json!({"pan":camera.pan,"zoom":camera.zoom}),
+                )?;
+                self.apply_canvas_view(editor);
+                self.dirty_canvas();
+            }
+            return Ok(());
+        }
         let (Some(canvas), Some(doc)) = (&self.canvas, &self.canvas_doc) else {
             return Ok(());
         };

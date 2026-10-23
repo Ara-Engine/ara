@@ -100,6 +100,10 @@ impl Shell {
             }
             return Ok(true);
         }
+        if !field && scancode == 9 && self.ui.find("graph-canvas").is_some() {
+            self.edit_graph_layout(editor, "frame")?;
+            return Ok(true);
+        }
         if field {
             let edit = match (scancode, ctrl) {
                 (4, true) => Some(EditEvent::SelectAll),

@@ -68,6 +68,7 @@ pub struct Shell {
     thumbnail_next: usize,
     thumbnail_errors: BTreeMap<String, String>,
     material_previews: BTreeMap<String, String>,
+    material_preview_key: Option<String>,
     material_sources: BTreeMap<String, String>,
     thumbnail_uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
     asset_grid_extent: f32,
@@ -180,6 +181,7 @@ impl Shell {
             thumbnail_next: 0,
             thumbnail_errors: BTreeMap::new(),
             material_previews: BTreeMap::new(),
+            material_preview_key: None,
             material_sources: BTreeMap::new(),
             thumbnail_uploads: Vec::new(),
             asset_grid_extent: 0.,
@@ -223,6 +225,7 @@ impl Shell {
     }
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
         let focus = self.input.focused();
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -416,6 +419,12 @@ impl Shell {
         }
 
         self.ui.frame(&mut self.text)?;
+        if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
+            && editor.state.canvas == crate::graph::Camera::default()
+        {
+            self.edit_graph_layout(editor, "frame")?;
+            self.ui.frame(&mut self.text)?;
+        }
         let canvas_modal = editor.state.canvas_add
             && !editor.state.palette
             && self.ui.find("node-palette").is_some();
@@ -684,7 +693,9 @@ impl Shell {
         if panel == "vfx" {
             self.vfx_ready
         } else if panel == "material" {
-            self.ui.find("material-live-preview-thumbnail").is_some()
+            self.material_preview_key
+                .as_ref()
+                .is_some_and(|key| self.thumbnail_slots.contains_key(key))
         } else {
             true
         }
