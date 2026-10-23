@@ -1,0 +1,40 @@
+[ok  ] dotnet.sdk: .NET SDK 10.0.202
+[ok  ] rust.toolchain: Rust 1.99.1 installed (D17 pin)
+[ok  ] windows.msvc: MSVC C++ build tools present
+[ok  ] windows.vswhere_path: vswhere.exe not on PATH (raw `dotnet publish -p:PublishAot=true` fails with MSB3073); ara export prepends it
+[ok  ] windows.ilcompiler: ILCompiler win-x64 10.0.6 cached (offline export ready)
+[WARN] windows.signing: no Authenticode identity configured; Windows exports will be unsigned (SmartScreen warns on direct downloads; Steam does not require signing) (ARA-EXP-WIN-010)
+         fix (env): ARA_WIN_SIGN=azure:<account>/<profile>  (Azure Artifact Signing, ~$10/mo)
+         fix (command): "C:\Program Files (x86)\Windows Kits/10/bin\10.0.26100.0\x64/signtool.exe" sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib Azure.CodeSigning.Dlib.dll /dmdf metadata.json dist\windows-aot\ara-player.exe dist\windows-aot\game\Game.dll
+         fix (doc): https://learn.microsoft.com/windows/apps/package-and-deploy/code-signing-options
+[ok  ] linux.wsl: WSL Ubuntu-24.04 (Stopped)
+[ok  ] linux.dotnet: .NET SDK 10.0.202 in WSL
+[ok  ] linux.clang: clang + zlib headers in WSL (NativeAOT link prerequisites)
+[ok  ] linux.rust: rustc 1.99.1 (58cf8f9c3 2026-10-13)
+[ok  ] linux.zig: zig present: aot-cross and r2r lanes build on Windows against glibc 2.31
+[WARN] linux.glibc: the WSL lane (`--lane aot`) links against glibc 2.39; Steam Runtime 3 (sniper) has 2.31, so its binaries do not start there (aot-cross and r2r are pinned to 2.31) (ARA-EXP-LNX-010)
+         fix (doc): Build Linux templates in the sniper SDK container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk
+         fix (doc): Or link against a glibc 2.31 sysroot (zig cc -target x86_64-linux-gnu.2.31)
+[ok  ] linux.r2r_cross: linux-x64 runtime pack 10.0.6 cached: R2R exports to Linux run on Windows
+[ok  ] android.sdk: SDK at D:\Android\sdk
+[ok  ] android.ndk: NDK 28.2.13676358
+[ok  ] android.build_tools: aapt2, zipalign, apksigner present
+[ok  ] android.platform: android-36 platform
+[ok  ] android.java: Java 17 (apksigner, bundletool)
+[ok  ] android.bundletool: bundletool present (AAB lane)
+[WARN] android.signing: no upload keystore; exports are signed with a generated debug key (fine for sideload, not for Play) (ARA-EXP-AND-007)
+         fix (env): ARA_ANDROID_KEYSTORE=<path.jks>;ARA_ANDROID_KEY_ALIAS=<alias>
+[ok  ] android.rust_targets: aarch64-linux-android, x86_64-linux-android
+[ok  ] android.ilcompiler: NativeAOT runtime pack linux-bionic-arm64 10.0.6 cached
+[WARN] android.adb: adb on PATH (Version 36.0.2-14143358) differs from the SDK's (Version 37.0.1-15733141); the emulator and tools restart each other's server (ARA-EXP-AND-012)
+         fix (env): PATH=<put D:\Android\sdk\platform-tools first>
+result: {
+  "errors": 0,
+  "platforms": [
+    "windows",
+    "linux",
+    "android"
+  ],
+  "ready": true,
+  "warnings": 4
+}

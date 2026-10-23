@@ -1,0 +1,31 @@
+﻿{
+    "flavor":  "det-par",
+    "before_pct":  59.1,
+    "runs":  [
+                 {
+                     "run":  "character",
+                     "seconds":  0.7,
+                     "load_after_pct":  60.9
+                 },
+                 {
+                     "run":  "stacking",
+                     "seconds":  0.3,
+                     "load_after_pct":  65.9
+                 },
+                 {
+                     "run":  "vehicle",
+                     "seconds":  0.1,
+                     "load_after_pct":  48.5
+                 },
+                 {
+                     "run":  "determinism --threads 1,4,8",
+                     "seconds":  15.3,
+                     "load_after_pct":  27.6
+                 },
+                 {
+                     "run":  "scale --count 5000,20000 --threads 1,8",
+                     "seconds":  201.2,
+                     "load_after_pct":  40.7
+                 }
+             ]
+}

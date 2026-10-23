@@ -414,7 +414,7 @@ expression: out
         "idempotent": false,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_8b21",
@@ -433,7 +433,7 @@ expression: out
         "idempotent": false,
         "destructive": true
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_8b21",
@@ -449,7 +449,7 @@ expression: out
         "idempotent": false,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "id": "$crate",
@@ -475,7 +475,7 @@ expression: out
         "idempotent": false,
         "destructive": true
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entities": [
@@ -507,7 +507,7 @@ expression: out
         "idempotent": true,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_8b21",
@@ -527,7 +527,7 @@ expression: out
         "idempotent": false,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "prefab": "@prefabs/crate.prefab",
@@ -544,7 +544,7 @@ expression: out
         "idempotent": true,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_4f9a/e_m4tz",
@@ -563,7 +563,7 @@ expression: out
         "idempotent": true,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_4f9a/e_m4tz",
@@ -580,7 +580,7 @@ expression: out
         "idempotent": true,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entity": "e_8b21",
@@ -602,7 +602,7 @@ expression: out
         "idempotent": true,
         "destructive": false
       },
-      "scope": "edit",
+      "scope": "edit:scene",
       "examples": [
         {
           "entities": [

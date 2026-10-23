@@ -1,0 +1,90 @@
+{
+  "name": "muzzle_flash",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "flash",
+      "capacity": 256,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "burst",
+            "module": {
+              "op": "burst",
+              "tick": 0,
+              "count": 96
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 0.11999999731779099,
+              "size": 0.30000001192092896,
+              "color": [15, 5, 0.5, 0.699999988079071]
+            }
+          },
+          {
+            "name": "cone",
+            "module": {
+              "op": "cone",
+              "origin": [0, 0.5, 0],
+              "height": 0.800000011920929,
+              "radius": 0.30000001192092896
+            }
+          },
+          {
+            "name": "speed",
+            "module": {
+              "op": "velocity",
+              "value": [0, 1, 0],
+              "spread": [0.6000000238418579, 1, 0.6000000238418579]
+            }
+          }
+        ],
+        "update": [],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15000000596046448,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "atlas",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 80
+            }
+          },
+          {
+            "name": "light",
+            "module": {
+              "op": "light",
+              "color": [1, 0.44999998807907104, 0.07999999821186066],
+              "lumens": 900,
+              "radius": 3
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

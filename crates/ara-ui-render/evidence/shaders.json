@@ -1,0 +1,9 @@
+{
+  "source": "shaders/ui.slang",
+  "sha256": "2c8c01c672159e4f0e3b5ab0ef72a3ae2afdbefddc54c3e0e65b4b998e395af1",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "validation": "SPIR-V vertexMain and fragmentMain validated with spirv-val --target-env vulkan1.3; both entry points also compile to DXIL SM6.6",
+  "instance_stride": 64,
+  "push_constant_bytes": 32,
+  "commands": "shaders/compile.ps1"
+}

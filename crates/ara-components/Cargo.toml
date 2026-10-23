@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 ara-schema.workspace = true
+bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
+serde.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -1,0 +1,99 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:26:20.7601937Z",
+                        "cpuPercent":  37,
+                        "freeKiB":  5580520,
+                        "processes":  [
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  86048,
+                                              "PercentProcessorTime":  127
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  36972,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "claude#3",
+                                              "IDProcess":  63100,
+                                              "PercentProcessorTime":  44
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#1",
+                                              "IDProcess":  85552,
+                                              "PercentProcessorTime":  22
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:26:22.6693363Z",
+                        "cpuPercent":  32,
+                        "freeKiB":  6074752,
+                        "processes":  [
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  112
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  36972,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  58684,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  38
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "relay_win#2",
+                                              "IDProcess":  40460,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "NVDisplay.Container",
+                                              "IDProcess":  3220,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}

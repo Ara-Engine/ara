@@ -1,0 +1,1117 @@
+﻿{
+  "scenario": "character",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "lanes": [
+      {
+        "lane": "slope_35deg_climb",
+        "pass": true,
+        "expected": "walk up 8 m of 35 deg slope to the landing at y = 4.589",
+        "measured": "final y = 4.589",
+        "final_feet": [
+          -22.0,
+          4.5886116,
+          9.41822
+        ]
+      },
+      {
+        "lane": "slope_35deg_idle",
+        "pass": true,
+        "expected": "stop half-way up the 35 deg slope and stand still for 4 s",
+        "measured": "stopped at y = 1.853, slid 0.0000 m while idle",
+        "final_feet": [
+          -16.0,
+          1.853278,
+          2.5458596
+        ]
+      },
+      {
+        "lane": "slope_50deg_control",
+        "pass": true,
+        "expected": "blocked: a 50 deg slope exceeds the 45 deg limit",
+        "measured": "max y = 0.000",
+        "final_feet": [
+          -10.0,
+          -8.4456836e-8,
+          -0.14921807
+        ]
+      },
+      {
+        "lane": "stairs_0.3m",
+        "pass": true,
+        "expected": "climb 6 x 0.3 m steps (0.4 m treads) to y = 1.80",
+        "measured": "final y = 1.800",
+        "final_feet": [
+          -4.0,
+          1.8000002,
+          5.6423097
+        ]
+      },
+      {
+        "lane": "moving_platform_horizontal",
+        "pass": true,
+        "expected": "stand on a platform moving +/-3 m along Z (up to 4.7 m/s) for 6 s",
+        "measured": "max drift vs platform = 0.000 m, max |feet - top| = 0.000 m",
+        "final_feet": [
+          2.0,
+          1.1,
+          5.530693
+        ]
+      },
+      {
+        "lane": "moving_platform_vertical",
+        "pass": true,
+        "expected": "same, plus +/-0.5 m vertical bob (up to 1.05 m/s)",
+        "measured": "max drift vs platform = 0.117 m, max |feet - top| = 0.017 m",
+        "final_feet": [
+          6.0,
+          1.1000006,
+          5.663925
+        ]
+      },
+      {
+        "lane": "wall_slide",
+        "pass": true,
+        "expected": "walk 45 deg into a wall for 3 s: no penetration, slide along it",
+        "measured": "max capsule penetration = 0.0000 m, slide along wall = 6.36 m",
+        "final_feet": [
+          19.36391,
+          1.4901884e-8,
+          3.43
+        ]
+      }
+    ],
+    "update_us_per_character": {
+      "samples": 360,
+      "p50": 1.4285714285714286,
+      "p95": 2.9285714285714284,
+      "max": 28.88571428571429,
+      "mean": 1.7687301587301574
+    }
+  }
+}
+{
+  "scenario": "character",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "lanes": [
+      {
+        "lane": "slope_35deg_climb",
+        "pass": true,
+        "expected": "walk up 8 m of 35 deg slope to the landing at y = 4.589",
+        "measured": "final y = 4.608",
+        "final_feet": [
+          -22.00011,
+          4.608467,
+          9.397262
+        ]
+      },
+      {
+        "lane": "slope_35deg_idle",
+        "pass": true,
+        "expected": "stop half-way up the 35 deg slope and stand still for 4 s",
+        "measured": "stopped at y = 1.801, slid 0.0097 m while idle",
+        "final_feet": [
+          -16.172953,
+          1.7916921,
+          2.429177
+        ]
+      },
+      {
+        "lane": "slope_50deg_control",
+        "pass": true,
+        "expected": "blocked: a 50 deg slope exceeds the 45 deg limit",
+        "measured": "max y = 0.026",
+        "final_feet": [
+          -10.0715,
+          0.026049793,
+          -0.14427099
+        ]
+      },
+      {
+        "lane": "stairs_0.3m",
+        "pass": true,
+        "expected": "climb 6 x 0.3 m steps (0.4 m treads) to y = 1.80",
+        "measured": "final y = 1.820",
+        "final_feet": [
+          -4.0383377,
+          1.8201002,
+          3.4277444
+        ]
+      },
+      {
+        "lane": "moving_platform_horizontal",
+        "pass": false,
+        "expected": "stand on a platform moving +/-3 m along Z (up to 4.7 m/s) for 6 s",
+        "measured": "max drift vs platform = 3.578 m, max |feet - top| = 1.080 m",
+        "final_feet": [
+          2.000083,
+          0.021649163,
+          4.1787825
+        ]
+      },
+      {
+        "lane": "moving_platform_vertical",
+        "pass": false,
+        "expected": "same, plus +/-0.5 m vertical bob (up to 1.05 m/s)",
+        "measured": "max drift vs platform = 5.772 m, max |feet - top| = 1.580 m",
+        "final_feet": [
+          5.881286,
+          0.020066114,
+          10.335946
+        ]
+      },
+      {
+        "lane": "wall_slide",
+        "pass": true,
+        "expected": "walk 45 deg into a wall for 3 s: no penetration, slide along it",
+        "measured": "max capsule penetration = 0.0000 m, slide along wall = 6.26 m",
+        "final_feet": [
+          19.260212,
+          0.020099152,
+          3.4299276
+        ]
+      }
+    ],
+    "update_us_per_character": {
+      "samples": 360,
+      "p50": 10.22857142857143,
+      "p95": 23.45714285714286,
+      "max": 51.51428571428571,
+      "mean": 12.361230158730157
+    }
+  }
+}
+{
+  "scenario": "stacking",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "solver_iterations": null,
+    "pyramid_boxes": 385,
+    "tower_boxes": 20,
+    "pyramid_max_lean_10s": 0.0006210032,
+    "pyramid_max_sag_10s": 0.0024909973,
+    "tower_max_lean_10s": 14.831443,
+    "tower_top_height_10s": 9.5420065,
+    "standing_10s": false,
+    "all_asleep_at_s": 13.166667,
+    "active_at_10s": 20,
+    "step_ms_first_second": {
+      "samples": 60,
+      "p50": 0.06999999999999999,
+      "p95": 2.5383,
+      "max": 3.0331,
+      "mean": 1.09859
+    },
+    "step_ms": {
+      "samples": 790,
+      "p50": 0.0383,
+      "p95": 0.0937,
+      "max": 3.0331,
+      "mean": 0.12213658227848102
+    }
+  }
+}
+{
+  "scenario": "stacking",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "solver_iterations": 15,
+    "pyramid_boxes": 385,
+    "tower_boxes": 20,
+    "pyramid_max_lean_10s": 0.00035347437,
+    "pyramid_max_sag_10s": 0.00121212,
+    "tower_max_lean_10s": 0.017302336,
+    "tower_top_height_10s": 19.45838,
+    "standing_10s": true,
+    "all_asleep_at_s": 0.8333334,
+    "active_at_10s": 0,
+    "step_ms_first_second": {
+      "samples": 60,
+      "p50": 0.1405,
+      "p95": 3.2261,
+      "max": 5.5754,
+      "mean": 1.4439233333333337
+    },
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0005,
+      "p95": 0.1405,
+      "max": 5.5754,
+      "mean": 0.1449756666666667
+    }
+  }
+}
+{
+  "scenario": "stacking",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "solver_iterations": null,
+    "pyramid_boxes": 385,
+    "tower_boxes": 20,
+    "pyramid_max_lean_10s": 0.0005346238,
+    "pyramid_max_sag_10s": 0.0023622513,
+    "tower_max_lean_10s": 0.009612201,
+    "tower_top_height_10s": 19.395224,
+    "standing_10s": true,
+    "all_asleep_at_s": 0.8166667,
+    "active_at_10s": 0,
+    "step_ms_first_second": {
+      "samples": 60,
+      "p50": 0.13090000000000002,
+      "p95": 1.8732,
+      "max": 6.4308000000000005,
+      "mean": 0.83041
+    },
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.00019999999999999998,
+      "p95": 0.13090000000000002,
+      "max": 6.4308000000000005,
+      "mean": 0.08325199999999999
+    }
+  }
+}
+{
+  "scenario": "vehicle",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "speed_at_5s": 17.333141,
+    "distance_at_5s": 48.320545,
+    "lateral_drift_at_5s": 0.013700444,
+    "heading_change_turn_deg": -96.5762,
+    "turn_direction": "right",
+    "turn_radius_m": 48.571327,
+    "min_up_dot": 0.99969816,
+    "mean_wheels_in_contact": 4.0,
+    "pass": true,
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0044,
+      "p95": 0.007,
+      "max": 0.0596,
+      "mean": 0.005107499999999973
+    }
+  }
+}
+{
+  "scenario": "vehicle",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "speed_at_5s": 20.000132,
+    "distance_at_5s": 50.163353,
+    "lateral_drift_at_5s": 0.0,
+    "heading_change_turn_deg": -133.42554,
+    "turn_direction": "right",
+    "turn_radius_m": 38.333187,
+    "min_up_dot": 0.99982685,
+    "mean_wheels_in_contact": 4.0,
+    "pass": true,
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0039,
+      "p95": 0.0054,
+      "max": 0.0628,
+      "mean": 0.004328333333333315
+    }
+  }
+}
+{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "noop_call_ns": 1.098995,
+    "queries": {
+      "engine": "jolt",
+      "bodies": 5000,
+      "single_position_read_ns": 8.8065,
+      "bulk_read_ns_per_body": 10.8473,
+      "raycast_ns": 552.24,
+      "raycast_hits": 9720,
+      "raycast_mean_distance": 24.702944,
+      "raycast_mean_normal_y": 0.7669444,
+      "sphere_cast_ns": 1758.29,
+      "sphere_cast_hits": 9740,
+      "sphere_cast_mean_distance": 24.385233
+    }
+  }
+}
+{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "single_position_read_ns": 3.5702,
+    "bulk_read_ns_per_body": 6.4923,
+    "raycast_ns": 829.48,
+    "raycast_hits": 9720,
+    "raycast_mean_distance": 24.666714,
+    "raycast_mean_normal_y": 0.7592875,
+    "sphere_cast_ns": 7266.499999999998,
+    "sphere_cast_hits": 9740,
+    "sphere_cast_mean_distance": 24.3334
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "ticks": 300,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 0.9032,
+          "restore_ms": 0.2924,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "ticks": 300,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 4192640,
+          "save_ms": 3.3144,
+          "restore_ms": 8.5612,
+          "hash_200_uninterrupted": "cd2ddee7a00583c8",
+          "hash_200_first_pass": "cd2ddee7a00583c8",
+          "hash_200_after_restore": "cd2ddee7a00583c8",
+          "hash_200_restored_into_fresh_world": "cd2ddee7a00583c8",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 5000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 5.1471,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 19.6697,
+      "p95": 29.186,
+      "max": 60.108799999999995,
+      "mean": 19.329084499999983
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 19.7363,
+      "p95": 31.112299999999998,
+      "max": 60.108799999999995,
+      "mean": 18.919378000000012
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 19.6431,
+      "p95": 22.5827,
+      "max": 25.8628,
+      "mean": 19.738791000000003
+    },
+    "active_at_end": 5000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.08789999999999999,
+      "p95": 0.1087,
+      "max": 0.2163,
+      "mean": 0.08827333333333333
+    },
+    "snapshot_bytes": 3099318,
+    "snapshot_save_ms": 9.9089,
+    "snapshot_restore_ms": 2.6329000000000002
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "bodies": 20000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 15.1328,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 131.5624,
+      "p95": 177.85039999999998,
+      "max": 257.5487,
+      "mean": 129.13965466666667
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 130.9543,
+      "p95": 193.8306,
+      "max": 257.5487,
+      "mean": 124.71122933333335
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 131.8357,
+      "p95": 151.9773,
+      "max": 176.34369999999998,
+      "mean": 133.56808
+    },
+    "active_at_end": 19999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.6231,
+      "p95": 0.8782,
+      "max": 1.1506999999999998,
+      "mean": 0.6401116666666665
+    },
+    "snapshot_bytes": 13870128,
+    "snapshot_save_ms": 47.6157,
+    "snapshot_restore_ms": 11.1348
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 14.7574,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 16.6853,
+      "p95": 35.814899999999994,
+      "max": 44.4577,
+      "mean": 18.920349833333336
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 19.6202,
+      "p95": 37.3545,
+      "max": 44.4577,
+      "mean": 22.28230433333334
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 15.3801,
+      "p95": 20.4793,
+      "max": 23.0159,
+      "mean": 15.558395333333332
+    },
+    "active_at_end": 4999,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.0423,
+      "p95": 0.0727,
+      "max": 0.1048,
+      "mean": 0.04645166666666667
+    },
+    "snapshot_bytes": 23052741,
+    "snapshot_save_ms": 33.097300000000004,
+    "snapshot_restore_ms": 58.802800000000005
+  }
+}
+{
+  "scenario": "scale",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 20000,
+    "threads": 1,
+    "steps": 600,
+    "setup_ms": 13.832699999999999,
+    "step_ms_all": {
+      "samples": 600,
+      "p50": 119.0773,
+      "p95": 188.33939999999998,
+      "max": 961.8679,
+      "mean": 131.13938500000012
+    },
+    "step_ms_first_half": {
+      "samples": 300,
+      "p50": 121.6752,
+      "p95": 197.5618,
+      "max": 961.8679,
+      "mean": 140.34492566666657
+    },
+    "step_ms_second_half": {
+      "samples": 300,
+      "p50": 118.11869999999999,
+      "p95": 158.0083,
+      "max": 190.9479,
+      "mean": 121.93384433333335
+    },
+    "active_at_end": 20000,
+    "escaped_bodies": 0,
+    "extract_all_ms": {
+      "samples": 60,
+      "p50": 0.2183,
+      "p95": 0.47709999999999997,
+      "max": 0.9466,
+      "mean": 0.254535
+    },
+    "snapshot_bytes": 96476181,
+    "snapshot_save_ms": 162.9528,
+    "snapshot_restore_ms": 263.0196
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "ticks": 300,
+    "perturbed_final_hash": "b3c5579122f1921b",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "a271e62571316e34",
+          "chain_digest": "55e83f85e63e0682",
+          "hash_at": [
+            [
+              100,
+              "39de47e0c6829081"
+            ],
+            [
+              200,
+              "c33fbbb531a96b34"
+            ],
+            [
+              300,
+              "a271e62571316e34"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 455322,
+          "save_ms": 0.9771000000000001,
+          "restore_ms": 0.2838,
+          "hash_200_uninterrupted": "c33fbbb531a96b34",
+          "hash_200_first_pass": "c33fbbb531a96b34",
+          "hash_200_after_restore": "c33fbbb531a96b34",
+          "hash_200_restored_into_fresh_world": "c33fbbb531a96b34",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "ticks": 300,
+    "perturbed_final_hash": "842115d7bffa9268",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 4192640,
+          "save_ms": 3.6087,
+          "restore_ms": 6.3567,
+          "hash_200_uninterrupted": "cd2ddee7a00583c8",
+          "hash_200_first_pass": "cd2ddee7a00583c8",
+          "hash_200_after_restore": "cd2ddee7a00583c8",
+          "hash_200_restored_into_fresh_world": "cd2ddee7a00583c8",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "ara-opus-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "ara_opus"
+
+[build-dependencies]
+cc = "1"
+
+[lints]
+workspace = true

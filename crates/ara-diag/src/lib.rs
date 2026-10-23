@@ -140,6 +140,18 @@ pub enum FixAction {
         /// Command parameters.
         params: Value,
     },
+    /// Call an Engine Protocol method (`session.begin`).
+    Call {
+        /// Method name.
+        method: String,
+        /// Method parameters.
+        params: Value,
+    },
+    /// Run an `ara` command line: `["init"]` means `ara init`.
+    Cli {
+        /// Arguments after `ara`.
+        args: Vec<String>,
+    },
 }
 
 /// One problem (or note) reported by any subsystem.
@@ -270,6 +282,23 @@ pub fn did_you_mean<'a>(
         .map(|(_, c)| c)
 }
 
+/// Every candidate tied for the closest within the [`did_you_mean`] distance, in
+/// order. More than one means the guess is ambiguous: offer each, apply none.
+pub fn nearest<'a>(input: &str, candidates: impl IntoIterator<Item = &'a str>) -> Vec<&'a str> {
+    let limit = (input.chars().count() / 3).max(1);
+    let scored: Vec<(usize, &str)> = candidates
+        .into_iter()
+        .map(|c| (edit_distance(&input.to_lowercase(), &c.to_lowercase()), c))
+        .filter(|(d, _)| *d <= limit)
+        .collect();
+    let best = scored.iter().map(|(d, _)| *d).min();
+    scored
+        .into_iter()
+        .filter(|(d, _)| Some(*d) == best)
+        .map(|(_, c)| c)
+        .collect()
+}
+
 /// Levenshtein distance over chars.
 fn edit_distance(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
@@ -295,6 +324,17 @@ mod tests {
         assert_eq!(did_you_mean("positon", fields), Some("position"));
         assert_eq!(did_you_mean("Scale", fields), Some("scale"));
         assert_eq!(did_you_mean("velocity", fields), None);
+    }
+
+    #[test]
+    fn ties_are_all_nearest() {
+        let prefabs = ["p/crate.prefab", "p/lamp.prefab", "p/door.prefab"];
+        assert_eq!(
+            nearest("p/lantern.prefab", prefabs),
+            ["p/crate.prefab", "p/lamp.prefab"]
+        );
+        assert_eq!(nearest("p/lmap.prefab", prefabs), ["p/lamp.prefab"]);
+        assert!(nearest("p/vehicle_wheel.prefab", prefabs).is_empty());
     }
 
     #[test]

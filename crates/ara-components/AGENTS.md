@@ -1,11 +1,13 @@
 # ara-components
 
-Schemas of the built-in engine components. Today: `Transform` (position in m,
+Schemas and ECS types of the built-in engine components. Today: `Transform` (position in m,
 rotation as XYZ Euler degrees, scale), with replication policy.
 
 ## Public API
 
 - `Transform { position, rotation, scale }` (`Default` is identity).
+- Built-ins derive Ara `Schema`, Bevy 0.20 `Component` and Serde; omitted JSON
+  fields materialize the same defaults as the schema. No runtime registry is required.
 - `register(&mut SchemaDb)`.
 
 ## Rules

@@ -1,0 +1,100 @@
+{
+  "scenario": "character",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "lanes": [
+      {
+        "lane": "slope_35deg_climb",
+        "pass": true,
+        "expected": "walk up 8 m of 35 deg slope to the landing at y = 4.589",
+        "measured": "final y = 4.589",
+        "final_feet": [
+          -22.0,
+          4.5886116,
+          9.41822
+        ]
+      },
+      {
+        "lane": "slope_35deg_idle",
+        "pass": true,
+        "expected": "stop half-way up the 35 deg slope and stand still for 4 s",
+        "measured": "stopped at y = 1.853, slid 0.0000 m while idle",
+        "final_feet": [
+          -16.0,
+          1.853278,
+          2.5458596
+        ]
+      },
+      {
+        "lane": "slope_50deg_control",
+        "pass": true,
+        "expected": "blocked: a 50 deg slope exceeds the 45 deg limit",
+        "measured": "max y = 0.000",
+        "final_feet": [
+          -10.0,
+          -8.4456836e-8,
+          -0.14921807
+        ]
+      },
+      {
+        "lane": "stairs_0.3m",
+        "pass": true,
+        "expected": "climb 6 x 0.3 m steps (0.4 m treads) to y = 1.80",
+        "measured": "final y = 1.800",
+        "final_feet": [
+          -4.0,
+          1.8000002,
+          5.6423097
+        ]
+      },
+      {
+        "lane": "moving_platform_horizontal",
+        "pass": true,
+        "expected": "stand on a platform moving +/-3 m along Z (up to 4.7 m/s) for 6 s",
+        "measured": "max drift vs platform = 0.000 m, max |feet - top| = 0.000 m",
+        "final_feet": [
+          2.0,
+          1.1,
+          5.530693
+        ]
+      },
+      {
+        "lane": "moving_platform_vertical",
+        "pass": true,
+        "expected": "same, plus +/-0.5 m vertical bob (up to 1.05 m/s)",
+        "measured": "max drift vs platform = 0.117 m, max |feet - top| = 0.017 m",
+        "final_feet": [
+          6.0,
+          1.1000006,
+          5.663925
+        ]
+      },
+      {
+        "lane": "wall_slide",
+        "pass": true,
+        "expected": "walk 45 deg into a wall for 3 s: no penetration, slide along it",
+        "measured": "max capsule penetration = 0.0000 m, slide along wall = 6.36 m",
+        "final_feet": [
+          19.36391,
+          1.4901884e-8,
+          3.43
+        ]
+      }
+    ],
+    "update_us_per_character": {
+      "samples": 360,
+      "p50": 1.4285714285714286,
+      "p95": 2.9285714285714284,
+      "max": 28.88571428571429,
+      "mean": 1.7687301587301574
+    }
+  }
+}

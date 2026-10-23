@@ -1,0 +1,10 @@
+﻿{
+    "cpu":  "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "cores":  8,
+    "threads":  16,
+    "ram_bytes":  33410686976,
+    "os":  "Microsoft Windows 11 Pro 10.0.26300",
+    "rustc":  "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "jolt_rev":  "e77f175595e64cb44218cc9d9d56fc365ad0e36a",
+    "rapier":  "0.36.1"
+}

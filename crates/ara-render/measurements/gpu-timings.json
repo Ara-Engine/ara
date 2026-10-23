@@ -1,0 +1,97 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "frames_in_flight": 1,
+  "passes": {
+    "CaptureReadback": {
+      "p50_ms": 0.277568,
+      "p95_ms": 0.278176,
+      "samples": 120
+    },
+    "DeferredLighting": {
+      "p50_ms": 0.174528,
+      "p95_ms": 0.188864,
+      "samples": 120
+    },
+    "Exposure.ACESFitted.SDR": {
+      "p50_ms": 0.058368,
+      "p95_ms": 0.062432,
+      "samples": 120
+    },
+    "ForwardTransparency": {
+      "p50_ms": 0.026112,
+      "p95_ms": 0.02784,
+      "samples": 120
+    },
+    "GBuffer": {
+      "p50_ms": 0.144192,
+      "p95_ms": 0.149728,
+      "samples": 120
+    },
+    "HostReadback": {
+      "p50_ms": 0.002816,
+      "p95_ms": 0.003072,
+      "samples": 120
+    },
+    "ShadowAtlas.4Cascades": {
+      "p50_ms": 0.029344,
+      "p95_ms": 0.035744,
+      "samples": 120
+    },
+    "TemporalResolve": {
+      "p50_ms": 0.10384,
+      "p95_ms": 0.109888,
+      "samples": 120
+    },
+    "TileOwnershipReturn": {
+      "p50_ms": 6.4e-05,
+      "p95_ms": 6.4e-05,
+      "samples": 120
+    },
+    "TiledLightCull": {
+      "p50_ms": 0.00784,
+      "p95_ms": 0.018336,
+      "samples": 120
+    }
+  },
+  "size": [
+    1280,
+    720
+  ],
+  "taa": true
+}

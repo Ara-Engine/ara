@@ -1,0 +1,7 @@
+{
+  "compression": { "uncompressedGlob": ["assets/**.arapack"] },
+  "optimizations": {
+    "splitsConfig": { "splitDimension": [{ "value": "ABI", "negate": false }] },
+    "uncompressNativeLibraries": { "enabled": true }
+  }
+}

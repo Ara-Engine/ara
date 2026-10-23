@@ -6,9 +6,12 @@
 //! [`register`].
 
 use ara_schema::{Schema, SchemaDb};
+use bevy_ecs::prelude::Component;
+use serde::{Deserialize, Serialize};
 
 /// Position, rotation and scale of an entity relative to its parent.
-#[derive(Debug, Clone, Copy, PartialEq, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Schema, Component, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 #[ara(component, module = "core")]
 pub struct Transform {
     /// Position relative to the parent.

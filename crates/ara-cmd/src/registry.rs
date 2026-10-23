@@ -48,7 +48,8 @@ pub struct Info {
     pub params: String,
     /// Behaviour hints.
     pub hints: Hints,
-    /// Capability scope a session needs (`edit`, `read`).
+    /// Capability scope a session needs (`edit:scene`, `read`; see the Engine
+    /// Protocol scope vocabulary).
     pub scope: &'static str,
     /// Example params.
     pub examples: Vec<Value>,
@@ -65,8 +66,8 @@ pub trait Command: 'static {
     const NAME: &'static str;
     /// One line on what it does.
     const SUMMARY: &'static str;
-    /// Capability scope required.
-    const SCOPE: &'static str = "edit";
+    /// Capability scope required. Scene and prefab edits need `edit:scene`.
+    const SCOPE: &'static str = "edit:scene";
     /// Behaviour hints.
     const HINTS: Hints = Hints {
         idempotent: false,
@@ -106,8 +107,8 @@ pub trait Job: 'static {
     const NAME: &'static str;
     /// One line on what it does.
     const SUMMARY: &'static str;
-    /// Capability scope required.
-    const SCOPE: &'static str = "edit";
+    /// Capability scope required. Scene and prefab edits need `edit:scene`.
+    const SCOPE: &'static str = "edit:scene";
     /// Behaviour hints.
     const HINTS: Hints = Hints {
         idempotent: false,
@@ -292,8 +293,9 @@ impl Registry {
     }
 
     /// Runs a batch as one transaction: every call in order, symbols (`$c1`) bound by
-    /// earlier calls substituted into later ones, then commit (or, for a dry run,
-    /// check and roll back). Fails as a whole with located diagnostics.
+    /// earlier calls substituted into later ones and name selectors (`name:Crate`)
+    /// resolved against the staged document, then commit (or, for a dry run, check
+    /// and roll back). Fails as a whole with located diagnostics.
     pub fn apply(
         &self,
         store: &mut Store,
@@ -361,6 +363,16 @@ impl Registry {
             }
             let mut params = call.params.clone();
             substitute(&mut params, &symbols);
+            let entities = ReadCtx::new(staged.store(), &doc, &symbols)
+                .map_err(|d| one(at(d)))?
+                .resolved();
+            crate::select::resolve(
+                staged.store().schema(),
+                &entry.info.params,
+                &mut params,
+                &entities,
+            )
+            .map_err(|d| one(at(d)))?;
             let problems: Vec<Diagnostic> =
                 validate_params(staged.store().schema(), &entry.info, &params)
                     .into_iter()
@@ -540,7 +552,7 @@ impl Batch {
 pub struct Session {
     /// Recorded as the transaction author.
     pub author: Author,
-    /// Granted scopes: exact (`edit`), prefixed (`edit:*`) or everything (`*`).
+    /// Granted scopes: exact (`edit:scene`), prefixed (`edit:*`) or everything (`*`).
     pub scopes: Vec<String>,
 }
 

@@ -1,0 +1,121 @@
+{
+  "label": "baseline-repro",
+  "agent": "codex:gpt-6-luna",
+  "suite": "v0",
+  "started": "2026-10-23T01:51:43Z",
+  "engine": "09cc127+dirty",
+  "results": [
+    {
+      "task": "component-remove-rigidbody",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel has no RigidBody",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "Barrel keeps its Collider",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 11,
+      "toolCalls": {
+        "shell": 11
+      },
+      "wallMs": 32802,
+      "tokens": {
+        "input": 16371,
+        "cacheRead": 202624,
+        "cacheWrite": 0,
+        "output": 884
+      },
+      "codes": {
+        "ARA1105": 1,
+        "ARA1602": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "Removed the `RigidBody` from **Barrel** (`e_brl001`) in [outpost.scene](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-component-remove-rigidbody-32676-1ad2c688-1/proj/levels/outpost.scene). Its collider remains. `ara check` passed with no errors or warnings.\n\nThe change is recorded as transaction `tx_yg634sy8` and is awaiting human review."
+    },
+    {
+      "task": "hierarchy-radio-to-bench",
+      "area": "hierarchy",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`Radio` is a child of Workbench",
+          "ok": true,
+          "detail": "parent is Some(\"e_bench1\")"
+        },
+        {
+          "what": "Radio is the Workbench's first child",
+          "ok": true,
+          "detail": "first child Some(\"Radio\")"
+        },
+        {
+          "what": "Radio local position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_docs": 2,
+        "ara_inspect": 1,
+        "ara_schema": 1,
+        "ara_session": 1,
+        "shell": 2
+      },
+      "wallMs": 28076,
+      "tokens": {
+        "input": 29584,
+        "cacheRead": 276224,
+        "cacheWrite": 0,
+        "output": 749
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Moved the Radio from the Shelf to the Workbench. It’s now the Workbench’s first child at local position `(0, 1, 0)`. The change is recorded as transaction `tx_067srkj9` and is awaiting human review."
+    }
+  ]
+}

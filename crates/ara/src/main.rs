@@ -1,38 +1,62 @@
-//! `ara`: the Ara command-line tool.
+//! `ara`: the Ara command-line tool and daemon.
 //!
-//! Every engine workflow gets a subcommand here. The kernel set works offline on
-//! project files:
-//! - `ara fmt <files>`: rewrite documents canonically (repairs references);
-//! - `ara check [files]`: schema, reference and prefab validation (`--json`);
-//! - `ara schema`: dump the Schema DB (`--json` for `reflection.json`, `--out` for
-//!   JSON Schemas);
-//! - `ara merge <base> <ours> <theirs>`: semantic three-way merge (git merge driver).
+//! - Files, offline: `fmt`, `check [--fix]`, `schema`, `merge` (git merge driver),
+//!   `resolve` (settle merge conflicts), `docs --llms`, `init`.
+//! - Engine: `serve` (the project daemon), `mcp` (MCP over stdio).
+//! - Protocol commands, through the daemon when it runs, else in-process: `do`,
+//!   `query`, `inspect`, `history`, `undo`, `redo`, `review`, `accept`, `revert`,
+//!   `logs`. Each runs in its own session attributed to `--author` (default human).
 //!
+//! Every command takes `--json`. The project root is `--root`, else the nearest
+//! ancestor with `ara.project.json`; without one, commands fail with ARA1901.
+//! Protocol commands are attributed to `--author`, else `ARA_AUTHOR`, else the agent
+//! running the CLI (Codex, Claude Code), else `human`.
 //! Exit codes: 0 success, 1 problems found (errors, conflicts, unformatted files),
 //! 2 the command could not run.
 
 mod commands;
+mod engine;
 mod project;
+mod relaxed;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use ara_diag::{Diagnostic, codes};
 use clap::{Parser, Subcommand};
+use serde_json::{Value, json};
+
+use commands::protocol::{self, Call};
 
 /// Ara command-line tool.
 #[derive(Parser)]
 #[command(name = "ara", version, about)]
 struct Cli {
-    /// Project root (default: nearest ancestor with `ara.project.json`, else the
-    /// current directory).
+    /// Project root (default: the nearest ancestor with `ara.project.json`).
     #[arg(long, global = true)]
     root: Option<PathBuf>,
+    /// Print results as JSON.
+    #[arg(long, global = true)]
+    json: bool,
+    /// Who protocol commands are attributed to: `human` or `agent:<name>` (default:
+    /// `ARA_AUTHOR`, else the agent running this CLI, else `human`).
+    #[arg(long, global = true)]
+    author: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
+    /// Create a project: ara.project.json, AGENTS.md, .gitattributes, .gitignore,
+    /// .mcp.json and a starter scene.
+    Init {
+        /// Directory (default: the current one).
+        dir: Option<PathBuf>,
+        /// Project name (default: the directory name).
+        #[arg(long)]
+        name: Option<String>,
+    },
     /// Rewrite documents in canonical form, repairing references.
     Fmt {
         /// Only report files that would change.
@@ -44,26 +68,24 @@ enum Command {
     },
     /// Validate documents against the schema, references and prefabs.
     Check {
-        /// Print diagnostics as JSON.
+        /// Apply every diagnostic's fix when it has exactly one (renames, values),
+        /// then check again.
         #[arg(long)]
-        json: bool,
+        fix: bool,
         /// Documents to check (default: every project document).
         files: Vec<PathBuf>,
     },
-    /// Show the Schema DB: types, document kinds and commands.
+    /// Show the Schema DB: types, document kinds and commands; with names, each one's
+    /// fields, units and defaults (`ara schema Light entity.create`).
     Schema {
-        /// Print `reflection.json`.
-        #[arg(long)]
-        json: bool,
+        /// Types, commands or methods to describe.
+        names: Vec<String>,
         /// Write `reflection.json` and JSON Schemas into this directory.
         #[arg(long)]
         out: Option<PathBuf>,
     },
     /// Three-way merge of a document; writes the result over `ours` (git: `%O %A %B`).
     Merge {
-        /// Print conflicts as JSON.
-        #[arg(long)]
-        json: bool,
         /// Write the result here instead of over `ours`.
         #[arg(short, long)]
         output: Option<PathBuf>,
@@ -74,34 +96,371 @@ enum Command {
         /// Their version.
         theirs: PathBuf,
     },
+    /// Settle the conflicts `ara merge` left in a document: `ara resolve levels/a.scene --pick e_b2:name=theirs` (or `--ours` / `--theirs` for all).
+    Resolve {
+        /// The conflicted document.
+        file: PathBuf,
+        /// Keep our side of every conflict not picked.
+        #[arg(long, conflicts_with = "theirs")]
+        ours: bool,
+        /// Keep their side of every conflict not picked.
+        #[arg(long)]
+        theirs: bool,
+        /// One conflict: `<record>:<path>=ours|theirs|base` (`<record>=…` for a whole
+        /// record). Repeatable.
+        #[arg(long = "pick")]
+        picks: Vec<String>,
+    },
+    /// Generate docs for this engine version: llms.txt, llms-full.txt, per-type pages.
+    Docs {
+        /// The llms.txt format (the only one so far).
+        #[arg(long, required = true)]
+        llms: bool,
+        /// Output directory (default: `.ara/docs`).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Run the project daemon (Engine Protocol on WebSocket, MCP at /mcp).
+    Serve {
+        /// Port on 127.0.0.1 (default: any free one, written to `.ara/daemon.json`).
+        #[arg(long)]
+        port: Option<u16>,
+        /// Also serve the Engine Protocol on stdin/stdout.
+        #[arg(long)]
+        stdio: bool,
+    },
+    /// Serve MCP on stdio (uses the daemon, or becomes it).
+    Mcp,
+    /// Run one command as a transaction: `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500 --why "Dimmer crate light"`.
+    Do {
+        /// Command name (`entity.create`; list them with `ara schema`). Without one,
+        /// `--args` is a whole batch: `{commands: [{cmd, args, as}], why, doc}`.
+        command: Option<String>,
+        /// Document to edit (default: the one holding the entities the arguments
+        /// name, else the project's main scene). `outpost` is enough.
+        #[arg(long)]
+        doc: Option<String>,
+        /// Arguments: a JSON object, `@file.json`, or `-` for stdin. Quotes are
+        /// optional (`{entity: e_8b21, value: [1, 0, 0, 1]}`), so shells that strip
+        /// them (PowerShell) are fine.
+        #[arg(long)]
+        args: Option<String>,
+        /// One argument: `key=value`. Values are JSON (`[0,1,0]`, `true`) or text; a
+        /// list may skip quotes (`entities=[e_1,e_2]`); `a.b=1` nests. Repeatable.
+        #[arg(long = "param", short = 'p')]
+        params: Vec<String>,
+        /// Symbolic ID for the record the command creates (`$crate`).
+        #[arg(long = "as")]
+        symbol: Option<String>,
+        /// Why, in a sentence, shown in review (required for agents).
+        #[arg(long)]
+        why: Option<String>,
+        /// Show the diff without applying.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Find entities: `ara query "Light name:Lamp*"`.
+    Query {
+        /// Compact query (`Light`, `!Light`, `name:Crate*`, `Light.intensity>500`, ...).
+        q: Option<String>,
+        /// Only this document.
+        #[arg(long)]
+        doc: Option<String>,
+        /// Field paths to show, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        fields: Vec<String>,
+        /// Page size.
+        #[arg(long)]
+        limit: Option<u32>,
+        /// Cursor from the previous page.
+        #[arg(long)]
+        cursor: Option<String>,
+    },
+    /// Show a document's hierarchy, or entities in full.
+    Inspect {
+        /// Document (default: the one holding `entities`, else the main scene).
+        #[arg(long)]
+        doc: Option<String>,
+        /// Entities to show in full: IDs or names (`e_8b21`, `name:Crate`, `Crate`).
+        entities: Vec<String>,
+        /// Hierarchy depth.
+        #[arg(long)]
+        depth: Option<u32>,
+    },
+    /// List transactions, newest first.
+    History {
+        /// Only this document.
+        #[arg(long)]
+        doc: Option<String>,
+        /// Only transactions by this author (`human`, `agent:claude`).
+        #[arg(long = "by")]
+        by: Option<String>,
+        /// How many.
+        #[arg(long)]
+        limit: Option<u32>,
+    },
+    /// Undo `--author`'s latest transaction, or the given one.
+    Undo {
+        /// Transaction (`tx_...`).
+        txn: Option<String>,
+    },
+    /// Redo `--author`'s most recently undone transaction.
+    Redo,
+    /// List agent changes awaiting review.
+    Review,
+    /// Accept agent changes: a transaction, an entity's changes, or `--all`.
+    Accept {
+        /// Transaction (`tx_...`).
+        txn: Option<String>,
+        /// Only this entity's changes.
+        #[arg(long)]
+        entity: Option<String>,
+        /// Every unreviewed transaction.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Revert agent changes: a transaction or an entity's changes.
+    Revert {
+        /// Transaction (`tx_...`).
+        txn: Option<String>,
+        /// Only this entity's changes.
+        #[arg(long)]
+        entity: Option<String>,
+    },
+    /// Show diagnostics from the engine's log.
+    Logs {
+        /// Only entries after this cursor.
+        #[arg(long)]
+        since: Option<u64>,
+        /// Only these codes (`ARA1101`). Repeatable.
+        #[arg(long = "code")]
+        codes: Vec<String>,
+        /// Minimum severity: error, warning, info.
+        #[arg(long)]
+        severity: Option<String>,
+        /// Only entries about this entity.
+        #[arg(long)]
+        entity: Option<String>,
+        /// How many.
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 }
 
-fn main() -> ExitCode {
-    let cli = Cli::parse();
-    let project = match project::Project::open(cli.root.as_deref()) {
-        Ok(p) => p,
-        Err(msg) => {
-            eprintln!("error: {msg}");
-            return ExitCode::from(2);
+/// Drops `null` fields so optional params stay absent.
+fn params(v: Value) -> Value {
+    match v {
+        Value::Object(o) => Value::Object(o.into_iter().filter(|(_, v)| !v.is_null()).collect()),
+        other => other,
+    }
+}
+
+/// Who protocol commands are attributed to without `--author`: `ARA_AUTHOR`, else
+/// the agent CLI whose shell runs us (Codex first: it may run inside Claude Code),
+/// else `human`.
+fn default_author() -> String {
+    let set = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
+    if let Ok(a) = std::env::var("ARA_AUTHOR")
+        && !a.is_empty()
+    {
+        a
+    } else if set("CODEX_THREAD_ID") {
+        "agent:codex".into()
+    } else if set("CLAUDECODE") {
+        "agent:claude-code".into()
+    } else {
+        "human".into()
+    }
+}
+
+/// The protocol call for a protocol command; `None` for file and engine commands.
+fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
+    let summary = protocol::pretty;
+    Some(Ok(match command {
+        Command::Do {
+            command,
+            doc,
+            args,
+            params: kv,
+            symbol,
+            why,
+            dry_run,
+        } => {
+            let parsed = match protocol::args(args.as_deref(), &kv) {
+                Ok(a) => a,
+                Err(d) => return Some(Err(d)),
+            };
+            let batch = match command {
+                Some(cmd) => protocol::Batch {
+                    commands: json!([params(json!({ "cmd": cmd, "args": parsed, "as": symbol }))]),
+                    doc: None,
+                    why: None,
+                },
+                None => match protocol::batch(parsed) {
+                    Ok(b) => b,
+                    Err(d) => return Some(Err(d)),
+                },
+            };
+            Call {
+                method: "cmd.apply",
+                params: params(json!({
+                    "doc": doc.or(batch.doc),
+                    "why": why.or(batch.why),
+                    "dryRun": dry_run,
+                    "commands": batch.commands,
+                })),
+                summary: protocol::applied,
+            }
         }
-    };
-    let result = match cli.command {
-        Command::Fmt { check, files } => commands::fmt(&project, &files, check),
-        Command::Check { json, files } => commands::check(&project, &files, json),
-        Command::Schema { json, out } => commands::schema(&project, json, out.as_deref()),
+        Command::Query {
+            q,
+            doc,
+            fields,
+            limit,
+            cursor,
+        } => Call {
+            method: "query",
+            params: params(json!({
+                "q": q, "doc": doc, "limit": limit, "cursor": cursor,
+                "fields": (!fields.is_empty()).then_some(fields),
+            })),
+            summary,
+        },
+        Command::Inspect {
+            doc,
+            entities,
+            depth,
+        } => Call {
+            method: "inspect",
+            params: params(json!({
+                "doc": doc, "depth": depth,
+                "entities": (!entities.is_empty()).then_some(entities),
+            })),
+            summary,
+        },
+        Command::History { doc, by, limit } => Call {
+            method: "history.list",
+            params: params(json!({ "doc": doc, "author": by, "limit": limit })),
+            summary,
+        },
+        Command::Undo { txn } => Call {
+            method: "history.undo",
+            params: params(json!({ "txn": txn })),
+            summary: protocol::undone,
+        },
+        Command::Redo => Call {
+            method: "history.redo",
+            params: json!({}),
+            summary: protocol::undone,
+        },
+        Command::Review => Call {
+            method: "review.list",
+            params: json!({}),
+            summary,
+        },
+        Command::Accept { txn, entity, all } => Call {
+            method: "review.accept",
+            params: params(json!({ "txn": txn, "entity": entity, "all": all.then_some(true) })),
+            summary: protocol::reviewed,
+        },
+        Command::Revert { txn, entity } => Call {
+            method: "review.revert",
+            params: params(json!({ "txn": txn, "entity": entity })),
+            summary: protocol::reviewed,
+        },
+        Command::Logs {
+            since,
+            codes,
+            severity,
+            entity,
+            limit,
+        } => Call {
+            method: "logs",
+            params: params(json!({
+                "since": since, "severity": severity, "entity": entity, "limit": limit,
+                "codes": (!codes.is_empty()).then_some(codes),
+            })),
+            summary,
+        },
+        _ => return None,
+    }))
+}
+
+fn run(cli: Cli) -> Result<bool, Diagnostic> {
+    let json = cli.json;
+    let root_flag = cli.root.as_deref();
+    let open = |files: &[PathBuf]| project::open(root_flag, files);
+    let io = |msg: String| Diagnostic::error(codes::IO, msg);
+    match cli.command {
+        Command::Init { dir, name } => {
+            commands::init(dir.as_deref(), name.as_deref(), json).map_err(io)
+        }
+        Command::Fmt { check, files } => {
+            commands::fmt(&open(&files)?, &files, check, json).map_err(io)
+        }
+        Command::Check { fix, files } => {
+            commands::check(&open(&files)?, &files, fix, json).map_err(io)
+        }
+        Command::Resolve {
+            file,
+            ours,
+            theirs,
+            picks,
+        } => {
+            let all = if ours {
+                Some("ours")
+            } else {
+                theirs.then_some("theirs")
+            };
+            let project = open(std::slice::from_ref(&file))?;
+            commands::resolve(&project, &file, all, &picks, json).map_err(io)
+        }
+        Command::Schema { names, out } => {
+            commands::schema(&open(&[])?, &names, json, out.as_deref()).map_err(io)
+        }
         Command::Merge {
-            json,
             output,
             base,
             ours,
             theirs,
-        } => commands::merge(&project, [&base, &ours, &theirs], output.as_deref(), json),
-    };
-    match result {
+        } => {
+            let files = [base, ours, theirs];
+            let project = open(&files)?;
+            let [base, ours, theirs] = &files;
+            commands::merge(&project, [base, ours, theirs], output.as_deref(), json).map_err(io)
+        }
+        Command::Docs { llms: _, out } => {
+            commands::docs(&open(&[])?, out.as_deref(), json).map_err(io)
+        }
+        Command::Serve { port, stdio } => {
+            commands::serve(&project::root(root_flag, &[])?, port, stdio, json).map_err(io)
+        }
+        Command::Mcp => commands::mcp(&project::root(root_flag, &[])?).map_err(io),
+        other => {
+            let root = project::root(root_flag, &[])?;
+            match protocol_call(other) {
+                Some(Ok(call)) => {
+                    let author = cli.author.unwrap_or_else(default_author);
+                    protocol::run(&root, &author, json, call).map_err(io)
+                }
+                Some(Err(diags)) => {
+                    engine::print_diags(&diags, json);
+                    Ok(false)
+                }
+                None => Err(io("not a protocol command".into())),
+            }
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    let json = cli.json;
+    match run(cli) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(1),
-        Err(msg) => {
-            eprintln!("error: {msg}");
+        Err(d) => {
+            engine::print_diags(&[d], json);
             ExitCode::from(2)
         }
     }

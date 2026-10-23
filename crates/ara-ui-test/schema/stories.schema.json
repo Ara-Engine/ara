@@ -1,0 +1,433 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ara://schema/stories/1",
+  "title": "stories",
+  "description": "Reproducible native UI component stories, fixture models and semantic recipes.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "id",
+    "records"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "ara://schema/stories/1"
+    },
+    "id": {
+      "description": "Project-unique asset ID of this document.",
+      "type": "string",
+      "pattern": "^us_[0-9a-z]{1,24}$"
+    },
+    "versions": {
+      "description": "Stored version of each type newer than version 1.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "records": {
+      "description": "Records keyed by ID. The ID prefix selects the record type.",
+      "type": "object",
+      "patternProperties": {
+        "^st_[0-9a-z]{1,24}$": {
+          "$ref": "#/$defs/Story"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "InputMode": {
+      "description": "Input device used by a story's activation recipe.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "mouse",
+          "description": "Primary pointer hover, press and release."
+        },
+        {
+          "const": "keyboard",
+          "description": "Focus followed by keyboard activation."
+        },
+        {
+          "const": "gamepad",
+          "description": "Focus followed by controller confirmation."
+        }
+      ]
+    },
+    "Locale": {
+      "description": "An explicit translation pack with optional pseudo expansion and layout mirroring.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Locale identifier, for example `en`, `ar` or `qps-ploc`.",
+          "default": ""
+        },
+        "rtl": {
+          "type": "boolean",
+          "description": "Mirror layout boxes while preserving glyph direction and logical reading order.",
+          "default": false
+        },
+        "pseudo": {
+          "type": "boolean",
+          "description": "Apply accent substitution and 35 percent expansion after resolving messages.",
+          "default": false
+        },
+        "messages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Translation keys and complete localized strings.",
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "Query": {
+      "description": "A visible semantic query; ambiguity is an error rather than an arbitrary first match.",
+      "type": "object",
+      "properties": {
+        "by": {
+          "$ref": "#/$defs/QueryBy",
+          "description": "Semantic attribute to match.",
+          "default": "role"
+        },
+        "value": {
+          "type": "string",
+          "description": "Exact role, localized label/text or test ID.",
+          "default": ""
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional accessible name, used to distinguish controls with the same role.",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "QueryBy": {
+      "description": "Supported Testing Library-style selectors.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "role",
+          "description": "Accessible role, using names such as `button`, `textbox`, `checkbox` and `dialog`."
+        },
+        {
+          "const": "label",
+          "description": "Accessible localized name."
+        },
+        {
+          "const": "text",
+          "description": "Exact currently displayed localized text."
+        },
+        {
+          "const": "testId",
+          "description": "Explicit `test-id` attribute, falling back to the stable authored ID."
+        }
+      ]
+    },
+    "StepKind": {
+      "description": "Operations supported by the data-only story test runner.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "visible",
+          "description": "Require exactly one visible semantic match."
+        },
+        {
+          "const": "focus",
+          "description": "Focus a target through the native scope manager."
+        },
+        {
+          "const": "focused",
+          "description": "Require that the target owns native focus."
+        },
+        {
+          "const": "activate",
+          "description": "Activate via the view's pointer, keyboard or controller mode."
+        },
+        {
+          "const": "text",
+          "description": "Insert text through the native text editing seam."
+        },
+        {
+          "const": "value",
+          "description": "Assert a committed native control value."
+        },
+        {
+          "const": "visibleText",
+          "description": "Assert current visible text, resolving `loc:key` expectations."
+        },
+        {
+          "const": "state",
+          "description": "Assert selector states from a `{ \"hover\": true }` object on the queried control."
+        },
+        {
+          "const": "action",
+          "description": "Require a named emitted gameplay action."
+        },
+        {
+          "const": "advance",
+          "description": "Advance the deterministic UI clock by `value` milliseconds."
+        }
+      ]
+    },
+    "Story": {
+      "description": "An isolated component example, serialized as an `st_` record.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable example name.",
+          "default": ""
+        },
+        "component": {
+          "type": "string",
+          "description": "Component or screen being demonstrated, using `@path#id` for external assets.",
+          "default": ""
+        },
+        "markup": {
+          "type": "string",
+          "description": "Original native markup, including optional component templates.",
+          "default": ""
+        },
+        "stylesheet": {
+          "type": "string",
+          "description": "Token-only stylesheet appended to Ara's standard theme rules.",
+          "default": ""
+        },
+        "fixtureType": {
+          "type": "string",
+          "description": "Registered schema type of the fixture model.",
+          "default": ""
+        },
+        "fixture": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Immutable model values used to initialize `bind` destinations.",
+          "default": {}
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Locale"
+          },
+          "description": "Explicit locale packs; every `loc:key` must be present.",
+          "default": []
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryView"
+          },
+          "description": "Representative captures, with all dimensions explicit rather than an implicit host default.",
+          "default": []
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
+          },
+          "description": "Deterministic translation tracks sampled at each view's animation time.",
+          "default": []
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryImage"
+          },
+          "description": "Self-contained decoded image fixtures; production hosts can supply their own resources.",
+          "default": []
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryStep"
+          },
+          "description": "Reproducible semantic interactions and assertions, executed after the initial capture.",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "StoryImage": {
+      "description": "Decoded RGBA8 image fixture, resolved by the same source handle as runtime images.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Image `src` string, normally an `@path#id` reference.",
+          "default": ""
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Source bitmap width.",
+          "default": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Source bitmap height.",
+          "default": 0
+        },
+        "rgba": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Straight-alpha RGBA8 pixels in row order.",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "StoryStep": {
+      "description": "One declarative action or assertion in a component story.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/StepKind",
+          "description": "Operation to execute through the production input seam.",
+          "default": "visible"
+        },
+        "query": {
+          "$ref": "#/$defs/Query",
+          "description": "Target control; unused by time and named-action assertions.",
+          "default": {}
+        },
+        "value": {
+          "description": "Expected value, inserted text, action name or elapsed milliseconds, according to kind.",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "StoryView": {
+      "description": "One fixed native preview configuration; dimensions are logical pixels and DPI is pixels/inch.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Logical viewport width.",
+          "default": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Logical viewport height.",
+          "default": 0
+        },
+        "dpi": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Physical scale; 96 means one physical pixel per logical pixel.",
+          "default": 0
+        },
+        "locale": {
+          "type": "string",
+          "description": "Locale pack identifier from the story.",
+          "default": ""
+        },
+        "input": {
+          "$ref": "#/$defs/InputMode",
+          "description": "Device used by semantic activation steps and action prompts.",
+          "default": "mouse"
+        },
+        "theme": {
+          "$ref": "#/$defs/Theme",
+          "description": "Semantic Ara palette.",
+          "default": "dark"
+        },
+        "timeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Absolute deterministic UI animation time, in milliseconds.",
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Theme": {
+      "description": "Ara's D18 semantic theme selection.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "dark",
+          "description": "T3 Code's dark palette."
+        },
+        {
+          "const": "light",
+          "description": "T3 Code's light palette."
+        }
+      ]
+    },
+    "Transition": {
+      "description": "A deterministic paint translation; never changes gameplay state or the wall clock.",
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "Stable compiled node identity.",
+          "default": ""
+        },
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Translation at the start time, in logical pixels.",
+          "default": [0, 0]
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Translation at the end time, in logical pixels.",
+          "default": [0, 0]
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Absolute start time in milliseconds.",
+          "default": 0
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Duration in milliseconds; zero is an immediate change.",
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

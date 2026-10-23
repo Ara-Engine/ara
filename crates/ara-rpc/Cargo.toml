@@ -1,0 +1,17 @@
+[package]
+name = "ara-rpc"
+description = "Engine Protocol transports: the localhost WebSocket/HTTP server, stdio, the client and the daemon file."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-proto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tungstenite.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,38 @@
+{
+  "scenario": "stacking",
+  "flavor": {
+    "deterministic_build": true,
+    "jolt_cross_platform_deterministic": true,
+    "rapier_parallel": true,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": true,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "solver_iterations": 15,
+    "pyramid_boxes": 385,
+    "tower_boxes": 20,
+    "pyramid_max_lean_10s": 0.00035568865,
+    "pyramid_max_sag_10s": 0.00121212,
+    "tower_max_lean_10s": 0.017302282,
+    "tower_top_height_10s": 19.458384,
+    "standing_10s": true,
+    "all_asleep_at_s": 0.8333334,
+    "active_at_10s": 0,
+    "step_ms_first_second": {
+      "samples": 60,
+      "p50": 0.1661,
+      "p95": 3.3051999999999997,
+      "max": 3.7785,
+      "mean": 1.5614733333333333
+    },
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0007999999999999999,
+      "p95": 0.1661,
+      "max": 3.7785,
+      "mean": 0.157103
+    }
+  }
+}

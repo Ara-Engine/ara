@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2",
+  "stages": [
+    {
+      "dxil": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/hybridRasterMain.dxil",
+      "dxil_hash": "07fc344eabfd6dacaa13ae1268e6247ab53f9df19e76f64773a1856ef6291575",
+      "source_entry": "hybridRasterMain",
+      "spirv": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/hybridRasterMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "530ace984d9692eb7b0661bdf0f1de1f7d40de77f9a7d8d1e8d4866362f8b104",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

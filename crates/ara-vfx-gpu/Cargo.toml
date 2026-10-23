@@ -1,0 +1,26 @@
+[package]
+name = "ara-vfx-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-vfx = { path = "../ara-vfx" }
+ara-gpu = { path = "../ara-gpu" }
+ara-render = { path = "../ara-render" }
+ara-material = { path = "../ara-material" }
+ara-json = { path = "../ara-json" }
+anyhow = "1"
+bytemuck = { version = "1.24", features = ["derive"] }
+glam = { version = "0.30", features = ["bytemuck", "serde"] }
+serde.workspace = true
+serde_json.workspace = true
+blake3 = "1"
+
+[dev-dependencies]
+ara-shader-cook = { path = "../ara-shader-cook" }
+image = { version = "0.25", default-features = false, features = ["png"] }

@@ -1,18 +1,20 @@
 [package]
 name = "ara"
-description = "Ara command-line tool: the single entry point for humans and agents."
+description = "Ara command-line tool and daemon: the single entry point for humans and agents."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-ara-cmd.workspace = true
-ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
+ara-host.workspace = true
 ara-json.workspace = true
+ara-mcp.workspace = true
 ara-merge.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
 ara-schema.workspace = true
 clap.workspace = true
 serde_json.workspace = true

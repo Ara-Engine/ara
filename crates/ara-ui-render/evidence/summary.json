@@ -1,0 +1,140 @@
+{
+  "method": "200 warmups, 5000 wall-clock samples, update only; excludes CPU rasterization, PNG and inspection; shared machine, no outlier removal",
+  "workloads": [
+    {
+      "workload": "inspector/full invalidate",
+      "p50_ms": 0.19269999999999998,
+      "p95_ms": 0.32,
+      "p99_ms": 0.3881,
+      "max_ms": 1.2333,
+      "budget_ms": 1,
+      "pass": false,
+      "last_work": {
+        "restyled": 26,
+        "layout_passes": 1,
+        "shaped": 17,
+        "paint_nodes": 26
+      }
+    },
+    {
+      "workload": "inspector/incremental",
+      "p50_ms": 0.0265,
+      "p95_ms": 0.0306,
+      "p99_ms": 0.0517,
+      "max_ms": 0.3503,
+      "budget_ms": 1,
+      "pass": true,
+      "last_work": {
+        "restyled": 1,
+        "layout_passes": 1,
+        "shaped": 1,
+        "paint_nodes": 26
+      }
+    },
+    {
+      "workload": "tree100k/full invalidate",
+      "p50_ms": 0.2747,
+      "p95_ms": 0.3966,
+      "p99_ms": 0.5096,
+      "max_ms": 1.6582000000000001,
+      "budget_ms": 2,
+      "pass": true,
+      "last_work": {
+        "restyled": 44,
+        "layout_passes": 1,
+        "shaped": 22,
+        "paint_nodes": 44
+      }
+    },
+    {
+      "workload": "tree100k/seven-row scroll",
+      "p50_ms": 0.1359,
+      "p95_ms": 0.19010000000000002,
+      "p99_ms": 0.2309,
+      "max_ms": 1.0455,
+      "budget_ms": 2,
+      "pass": true,
+      "last_work": {
+        "restyled": 7,
+        "layout_passes": 1,
+        "shaped": 7,
+        "paint_nodes": 44
+      }
+    },
+    {
+      "workload": "widgets/toggle + slider",
+      "p50_ms": 0.0063,
+      "p95_ms": 0.0103,
+      "p99_ms": 0.0118,
+      "max_ms": 0.0253,
+      "budget_ms": 1,
+      "pass": true,
+      "last_work": {
+        "restyled": 0,
+        "layout_passes": 0,
+        "shaped": 0,
+        "paint_nodes": 26
+      }
+    },
+    {
+      "workload": "text-input/edit + selection",
+      "p50_ms": 0.0305,
+      "p95_ms": 0.0553,
+      "p99_ms": 0.06609999999999999,
+      "max_ms": 1.0343,
+      "budget_ms": 1,
+      "pass": false,
+      "last_work": {
+        "restyled": 0,
+        "layout_passes": 1,
+        "shaped": 1,
+        "paint_nodes": 26
+      }
+    },
+    {
+      "workload": "table10k/seven-row scroll",
+      "p50_ms": 0.22340000000000002,
+      "p95_ms": 0.2847,
+      "p99_ms": 0.3203,
+      "max_ms": 1.6684,
+      "budget_ms": 2,
+      "pass": true,
+      "last_work": {
+        "restyled": 7,
+        "layout_passes": 1,
+        "shaped": 14,
+        "paint_nodes": 55
+      }
+    },
+    {
+      "workload": "pause/health + hover",
+      "p50_ms": 0.022500000000000003,
+      "p95_ms": 0.032799999999999996,
+      "p99_ms": 0.0422,
+      "max_ms": 0.09119999999999999,
+      "budget_ms": 1,
+      "pass": true,
+      "last_work": {
+        "restyled": 1,
+        "layout_passes": 1,
+        "shaped": 1,
+        "paint_nodes": 11
+      }
+    },
+    {
+      "workload": "HUD/health + hover",
+      "p50_ms": 0.0123,
+      "p95_ms": 0.0174,
+      "p99_ms": 0.0244,
+      "max_ms": 0.0402,
+      "budget_ms": 1,
+      "pass": true,
+      "last_work": {
+        "restyled": 1,
+        "layout_passes": 1,
+        "shaped": 1,
+        "paint_nodes": 3
+      }
+    }
+  ]
+}

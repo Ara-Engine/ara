@@ -1,0 +1,29 @@
+[
+  {
+    "capture_stride": 4,
+    "frames": 12,
+    "maximum_residual": 0.0,
+    "mean_residual": 0.0,
+    "reset_residual": 0.001596304365367406,
+    "scene": "moving_emissive",
+    "simulation_frames": 48
+  },
+  {
+    "capture_stride": 4,
+    "frames": 12,
+    "maximum_residual": 0.0,
+    "mean_residual": 0.0,
+    "reset_residual": 0.0011126442346486593,
+    "scene": "time_of_day",
+    "simulation_frames": 48
+  },
+  {
+    "capture_stride": 4,
+    "frames": 12,
+    "maximum_residual": 0.026507112648977833,
+    "mean_residual": 0.02162289915966119,
+    "reset_residual": 0.0005181150649561057,
+    "scene": "disocclusion",
+    "simulation_frames": 48
+  }
+]

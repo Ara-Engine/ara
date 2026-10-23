@@ -21,6 +21,10 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - Undo: `undo(txn, by)` (selective, e.g. review revert), `undo_last(author)`,
   `redo_last(author)`.
 - `subscribe() -> mpsc::Receiver<Transaction>`.
+- `restore(txn, apply)`: put a journaled transaction back into history after a
+  restart (same ID and revisions); `apply` re-applies its ops first.
+- `load_doc(path, doc)` / `unload_doc(id)`: a document file appeared or was
+  deleted. Not edits: no ops are recorded.
 
 ## Semantics
 
@@ -44,12 +48,13 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - Commit-time validation is a full check of each touched document (O(document)),
   twice per transaction (baseline + after). Fine for authoring sizes; make it
   incremental before huge levels.
-- History is unbounded in memory; there is no journal on disk yet.
-- Review state (accepted/unreviewed) is not tracked yet; `reverts` and
-  `reverted_by` cover "reverted".
+- History is unbounded in memory. The on-disk journal, review state
+  (applied/accepted/reverted) and checkpoints live in `ara-host`, which drives
+  `restore` on startup.
+- `restore` does not rebuild redo stacks.
 
 ## Testing
 
 `cargo test -p ara-ops`: atomicity, attribution and streaming, idempotency, stale
-bases, undo conflicts and cancellation, per-author stacks, and a property test that
+bases, undo conflicts and cancellation, per-author stacks, journal restore, and a property test that
 undoing everything restores the start and redoing everything restores the end.

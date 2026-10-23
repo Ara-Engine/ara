@@ -1,0 +1,123 @@
+{
+  "scenario": "determinism",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "ticks": 300,
+    "perturbed_final_hash": "842115d7bffa9268",
+    "perturbation_detected": true,
+    "same_process": [
+      {
+        "threads": 1,
+        "run_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "run_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "identical": true,
+        "first_divergent_tick": null
+      }
+    ],
+    "thread_count_invariant": true,
+    "cross_process": [
+      {
+        "threads": 1,
+        "child_a": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "child_b": {
+          "ticks": 300,
+          "final_hash": "b4d3a4a39d885ad3",
+          "chain_digest": "95ef054531cec183",
+          "hash_at": [
+            [
+              100,
+              "de438261894b5d8f"
+            ],
+            [
+              200,
+              "cd2ddee7a00583c8"
+            ],
+            [
+              300,
+              "b4d3a4a39d885ad3"
+            ]
+          ]
+        },
+        "children_identical": true,
+        "identical_to_in_process": true
+      }
+    ],
+    "snapshot_restore": [
+      [
+        1,
+        {
+          "snapshot_bytes": 4192640,
+          "save_ms": 3.6087,
+          "restore_ms": 6.3567,
+          "hash_200_uninterrupted": "cd2ddee7a00583c8",
+          "hash_200_first_pass": "cd2ddee7a00583c8",
+          "hash_200_after_restore": "cd2ddee7a00583c8",
+          "hash_200_restored_into_fresh_world": "cd2ddee7a00583c8",
+          "identical": true
+        }
+      ]
+    ]
+  }
+}

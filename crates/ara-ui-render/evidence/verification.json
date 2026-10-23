@@ -1,0 +1,22 @@
+{
+  "check": true,
+  "tests": 19,
+  "golden_images": 9,
+  "clippy_all_targets_warnings_denied": true,
+  "rustfmt_check": true,
+  "visual_review": [
+    "inspector",
+    "inspector-light",
+    "dock",
+    "virtual-tree-100k",
+    "virtual-table",
+    "text-input",
+    "arabic-bidi",
+    "pause",
+    "world"
+  ],
+  "fonts": "Pinned OFL fonts; no platform-installed font dependency",
+  "gpu_adapter": "Host UiGpu implementation pending ara-gpu merge",
+  "platform": "OS IME, clipboard and AccessKit adapters supplied by host",
+  "latency": "All incremental p95 measurements meet their budgets; text-input maximum 1.0343 ms exceeds 1 ms in this shared-machine run; all raw samples retained"
+}

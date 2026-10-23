@@ -1,0 +1,5 @@
+﻿rep 1 done, CPU load 69.5 %
+rep 2 done, CPU load 66.4 %
+rep 3 done, CPU load 73.8 %
+rep 4 done, CPU load 89.8 %
+rep 5 done, CPU load 40.6 %

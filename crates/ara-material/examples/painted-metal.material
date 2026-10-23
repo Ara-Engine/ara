@@ -1,0 +1,13 @@
+material PaintedMetal : surface budget 1 {
+  param paint : TextureColor = @textures/paint.png#tx_paint001;
+  param normalMap : TextureNormal = flat_normal;
+  param roughness : float = 0.35;
+  let uv0 : vec2 = uv();
+  let tint : ColorLinear = sampleColor(paint, uv0);
+  let metallic : float = 1;
+  let tangentNormal : vec3 = sampleNormal(normalMap, uv0);
+  output baseColor = tint;
+  output metallic = metallic;
+  output roughness = roughness;
+  output normal = tangentNormal;
+}

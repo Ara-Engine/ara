@@ -1,0 +1,18 @@
+[package]
+name = "ara-jolt-sys"
+description = "Pinned, vendored Jolt 5.6 and Ara's exception-contained C ABI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "ara_jolt"
+
+[features]
+default = ["cross-platform-deterministic"]
+cross-platform-deterministic = []
+
+[build-dependencies]
+cc = { version = "1.2", features = ["parallel"] }
+
+[lints]
+workspace = true

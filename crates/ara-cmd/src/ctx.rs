@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ara_diag::{Diagnostic, codes};
+use ara_diag::{Diagnostic, FixAction, codes};
 use ara_doc::prefab::{ResolvedEntity, resolve};
 use ara_doc::{
     AssetId, Document, Edit, OrderKey, Record, RecordId, Workspace, field, key_between, order_key,
@@ -131,9 +131,7 @@ impl<'a> ReadCtx<'a> {
             None => (addr, None),
         };
         let id = RecordId::parse(head).map_err(|msg| Diagnostic::error(codes::INVALID_ID, msg))?;
-        let rec = self.doc.record(head).ok_or_else(|| {
-            Diagnostic::error(codes::RECORD_NOT_FOUND, format!("no entity `{head}`")).record(head)
-        })?;
+        let rec = self.doc.record(head).ok_or_else(|| self.missing(head))?;
         if prefab_of(rec).is_none() {
             return match inner {
                 Some(_) => Err(Diagnostic::error(
@@ -143,7 +141,15 @@ impl<'a> ReadCtx<'a> {
                 None => Ok(Target::Plain(id)),
             };
         }
-        if inner.is_some() && !self.resolved().contains_key(addr) {
+        // `instance/<prefab root ID>` names the instance itself (it *is* the root).
+        let inner = match (inner, self.prefab_root(rec)) {
+            (Some(i), Some(root)) if i == root => None,
+            (Some(i), Some(root)) => Some(i.strip_prefix(&format!("{root}/")).unwrap_or(i)),
+            (i, _) => i,
+        };
+        if let Some(i) = inner
+            && !self.resolved().contains_key(&format!("{head}/{i}"))
+        {
             return Err(Diagnostic::error(
                 codes::RECORD_NOT_FOUND,
                 format!("no entity `{addr}` in the prefab instance"),
@@ -153,6 +159,39 @@ impl<'a> ReadCtx<'a> {
             instance: id,
             inner: inner.map(str::to_owned),
         })
+    }
+
+    /// The root record ID of the prefab an instance record instantiates.
+    fn prefab_root(&self, instance: &Record) -> Option<String> {
+        let prefab = self.workspace().find(prefab_of(instance)?)?;
+        let doc = self.workspace().doc(prefab.as_str())?;
+        doc.children(None).first().map(|id| id.to_string())
+    }
+
+    /// `ARA1204` for an ID this document lacks; when another loaded document has it,
+    /// a fix that edits that document instead.
+    fn missing(&self, head: &str) -> Diagnostic {
+        let mut d = Diagnostic::error(
+            codes::RECORD_NOT_FOUND,
+            format!("no entity `{head}` in this document"),
+        )
+        .record(head);
+        let elsewhere = self
+            .workspace()
+            .docs()
+            .find(|(_, doc)| doc.id != self.doc.id && doc.record(head).is_some());
+        if let Some((path, _)) = elsewhere {
+            d.message = format!("no entity `{head}` in this document; it is in `{path}`");
+            d = d.with_fix(
+                format!("Edit `{path}` instead"),
+                FixAction::Set {
+                    record: None,
+                    path: "doc".into(),
+                    value: path.into(),
+                },
+            );
+        }
+        d
     }
 
     /// The document with prefab instances expanded (see [`ara_doc::prefab`]).

@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ara://schema/type/CaptureReport",
+  "title": "CaptureReport",
+  "description": "Versioned evidence for one PNG, independent of protocol or filesystem transport.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Report contract version; currently 1.",
+      "default": 0
+    },
+    "view": {
+      "$ref": "#/$defs/StoryView",
+      "description": "Complete size, DPI, locale, input, theme and clock configuration.",
+      "default": {}
+    },
+    "story": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Story/component name, or absent for a plain document capture.",
+      "default": null
+    },
+    "fixtureType": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Registered fixture schema type, or absent for a plain document.",
+      "default": null
+    },
+    "pixels": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "description": "Actual physical PNG width and height.",
+      "default": []
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/NodeReport"
+      },
+      "description": "All retained nodes, including hidden nodes explicitly marked invisible.",
+      "default": []
+    },
+    "focusGraph": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FocusLink"
+      },
+      "description": "Visible, enabled tab and directional navigation links.",
+      "default": []
+    },
+    "batches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BatchReport"
+      },
+      "description": "Actual renderer batches, in painter order, including their break causes.",
+      "default": []
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/UiDiagnostic"
+      },
+      "description": "Actionable overflow, clipping, font, contrast and touch-target diagnostics.",
+      "default": []
+    },
+    "work": {
+      "description": "Retained runtime's restyle/layout/shaping/paint work counters.",
+      "default": null
+    },
+    "commands": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Display-list command count before renderer batching.",
+      "default": 0
+    },
+    "glyphs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Positioned glyph count.",
+      "default": 0
+    },
+    "focused": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Focused stable authored identity, if an input scope exists.",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "BatchReport": {
+      "description": "The actual CPU adapter's renderer batch boundary, after atlas allocation and DPI scaling.",
+      "type": "object",
+      "properties": {
+        "pipeline": {
+          "type": "string",
+          "description": "Native shader pipeline name.",
+          "default": ""
+        },
+        "texture": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Atlas/image resource handle.",
+          "default": 0
+        },
+        "clip": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Clip-chain arena index.",
+          "default": 0
+        },
+        "first": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "First instance offset.",
+          "default": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Number of instances in this batch.",
+          "default": 0
+        },
+        "cause": {
+          "type": "string",
+          "description": "Actual break reason: first draw, clip, pipeline or atlas/image change.",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "ComputedStyle": {
+      "description": "Computed paint/style values alongside the layout that produced the box.",
+      "type": "object",
+      "properties": {
+        "background": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Straight-alpha sRGB background channels.",
+          "default": []
+        },
+        "foreground": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Straight-alpha sRGB text channels.",
+          "default": []
+        },
+        "borderColor": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "description": "Straight-alpha sRGB border channels.",
+          "default": []
+        },
+        "fontSize": {
+          "type": "number",
+          "description": "Logical font size.",
+          "default": 0
+        },
+        "radius": {
+          "type": "number",
+          "description": "Corner radius in logical pixels.",
+          "default": 0
+        },
+        "borderWidth": {
+          "type": "number",
+          "description": "Border width in logical pixels.",
+          "default": 0
+        },
+        "display": {
+          "type": "string",
+          "description": "Actual Taffy display mode.",
+          "default": ""
+        },
+        "flexDirection": {
+          "type": "string",
+          "description": "Actual Taffy flex direction.",
+          "default": ""
+        },
+        "clips": {
+          "type": "boolean",
+          "description": "Whether this node clips its contents.",
+          "default": false
+        },
+        "padding": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Resolved top/right/bottom/left padding.",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "FocusLink": {
+      "description": "One directed native focus graph vertex.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Source control identity.",
+          "default": ""
+        },
+        "tab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Next tab control; wraps inside the active surface.",
+          "default": null
+        },
+        "left": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Left neighbor, respecting explicit author overrides.",
+          "default": null
+        },
+        "right": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Right neighbor.",
+          "default": null
+        },
+        "up": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Up neighbor.",
+          "default": null
+        },
+        "down": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Down neighbor.",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "InputMode": {
+      "description": "Input device used by a story's activation recipe.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "mouse",
+          "description": "Primary pointer hover, press and release."
+        },
+        {
+          "const": "keyboard",
+          "description": "Focus followed by keyboard activation."
+        },
+        {
+          "const": "gamepad",
+          "description": "Focus followed by controller confirmation."
+        }
+      ]
+    },
+    "NodeReport": {
+      "description": "One semantic retained node, its measured geometry and resolved style evidence.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Compiled stable authored identity.",
+          "default": ""
+        },
+        "tag": {
+          "type": "string",
+          "description": "Source tag.",
+          "default": ""
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Parent authored identity, or absent for the root.",
+          "default": null
+        },
+        "role": {
+          "type": "string",
+          "description": "Accessible Testing Library role.",
+          "default": ""
+        },
+        "label": {
+          "type": "string",
+          "description": "Resolved localized accessible name.",
+          "default": ""
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the node intersects the viewport and its ancestor clips.",
+          "default": false
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current display text, including visual-only IME preedit.",
+          "default": null
+        },
+        "value": {
+          "description": "Committed native widget value; null for valueless nodes.",
+          "default": null
+        },
+        "bounds": {
+          "$ref": "#/$defs/Rect",
+          "description": "Computed box in logical viewport pixels, after animation and RTL.",
+          "default": {}
+        },
+        "clip": {
+          "$ref": "#/$defs/Rect",
+          "description": "Intersected ancestor clip bounds.",
+          "default": {}
+        },
+        "textBounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Measured text content bounds, before clipping.",
+          "default": null
+        },
+        "style": {
+          "$ref": "#/$defs/ComputedStyle",
+          "description": "Resolved native style properties.",
+          "default": {}
+        },
+        "provenance": {
+          "type": "array",
+          "items": {},
+          "description": "Source declarations in cascade order: selector, property, value, source spans and inline overrides.",
+          "default": []
+        },
+        "shaping": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native shaping coverage, bidi directions and original UTF-8 clusters.",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rect": {
+      "description": "A logical-pixel rectangle; DPI scaling applies only to the PNG/render stream.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Horizontal coordinate.",
+          "default": 0
+        },
+        "y": {
+          "type": "number",
+          "description": "Vertical coordinate.",
+          "default": 0
+        },
+        "w": {
+          "type": "number",
+          "description": "Width.",
+          "default": 0
+        },
+        "h": {
+          "type": "number",
+          "description": "Height.",
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "StoryView": {
+      "description": "One fixed native preview configuration; dimensions are logical pixels and DPI is pixels/inch.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Logical viewport width.",
+          "default": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Logical viewport height.",
+          "default": 0
+        },
+        "dpi": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Physical scale; 96 means one physical pixel per logical pixel.",
+          "default": 0
+        },
+        "locale": {
+          "type": "string",
+          "description": "Locale pack identifier from the story.",
+          "default": ""
+        },
+        "input": {
+          "$ref": "#/$defs/InputMode",
+          "description": "Device used by semantic activation steps and action prompts.",
+          "default": "mouse"
+        },
+        "theme": {
+          "$ref": "#/$defs/Theme",
+          "description": "Semantic Ara palette.",
+          "default": "dark"
+        },
+        "timeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Absolute deterministic UI animation time, in milliseconds.",
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Theme": {
+      "description": "Ara's D18 semantic theme selection.",
+      "type": "string",
+      "oneOf": [
+        {
+          "const": "dark",
+          "description": "T3 Code's dark palette."
+        },
+        {
+          "const": "light",
+          "description": "T3 Code's light palette."
+        }
+      ]
+    },
+    "UiDiagnostic": {
+      "description": "Stable machine-readable diagnosis with an actionable fix and optional numeric evidence.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Stable code ARA7100..ARA7106.",
+          "default": ""
+        },
+        "node": {
+          "type": "string",
+          "description": "Source node identity.",
+          "default": ""
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable finding, including locale context where relevant.",
+          "default": ""
+        },
+        "suggestedFix": {
+          "type": "string",
+          "description": "Suggested source/model/font fix; never silently shrinks accessibility text.",
+          "default": ""
+        },
+        "measured": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Measured ratio, minimum dimension or glyph count when meaningful.",
+          "default": null
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required minimum where applicable.",
+          "default": null
+        },
+        "uncertain": {
+          "type": "boolean",
+          "description": "True when image/transparency/coverage prevents a defensible contrast ratio.",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

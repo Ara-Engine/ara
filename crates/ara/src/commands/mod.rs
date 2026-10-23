@@ -2,14 +2,24 @@
 //! it found problems (exit 1) and `Err` when it could not run (exit 2).
 
 mod check;
+mod docs;
+mod edit;
 mod fmt;
+mod init;
 mod merge;
+pub mod protocol;
+mod resolve;
 mod schema;
+mod serve;
 
 pub use check::check;
+pub use docs::docs;
 pub use fmt::fmt;
+pub use init::init;
 pub use merge::merge;
+pub use resolve::resolve;
 pub use schema::schema;
+pub use serve::{mcp, serve};
 
 use ara_diag::{Diagnostic, Severity};
 use serde_json::{Value, json};

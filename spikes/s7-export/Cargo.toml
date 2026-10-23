@@ -1,0 +1,50 @@
+[package]
+name = "s7-export"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Throwaway M0 spike: deliberately outside the Ara workspace.
+[workspace]
+
+# The runtime template core. `cdylib` is the Android NativeActivity library (libara_runtime.so).
+[lib]
+name = "ara_runtime"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+# Host-side tools (pack writer, doctor, export driver). The shipped runtime template never enables it.
+tools = ["dep:zstd", "dep:anyhow"]
+
+[dependencies]
+blake3 = { version = "1.8", default-features = false, features = ["std", "pure"] }
+libloading = "0.8"
+ruzstd = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = { version = "1", optional = true }
+zstd = { version = "0.13", optional = true, default-features = false }
+
+# The desktop runtime template (A6: `ara-player`).
+[[bin]]
+name = "ara-player"
+path = "src/bin/ara-player.rs"
+
+# Spike tooling: `pack`, `doctor`, `export`, `bench-start`.
+[[bin]]
+name = "ara-s7"
+path = "src/bin/ara-s7/main.rs"
+required-features = ["tools"]
+
+# Linker shim: `zig cc` pinned to glibc 2.31, for Linux exports from Windows.
+[[bin]]
+name = "zigcc"
+path = "src/bin/zigcc.rs"
+required-features = ["tools"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

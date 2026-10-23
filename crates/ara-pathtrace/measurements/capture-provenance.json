@@ -1,0 +1,62 @@
+{
+  "camera": {
+    "kind": "look_at",
+    "position": [
+      0.0,
+      1.600000023841858,
+      6.5
+    ],
+    "target": [
+      0.0,
+      1.2000000476837158,
+      -0.4000000059604645
+    ],
+    "vertical_fov": 0.8999999761581421
+  },
+  "display_size": [
+    320,
+    180
+  ],
+  "exposure_ev100": {
+    "furnace": 0,
+    "other_scenes": 3
+  },
+  "golden_ssim_tolerance": 0.005,
+  "hybrid_settle_frames": 96,
+  "hybrid_ticks": [
+    0,
+    95
+  ],
+  "reference_bounces": 12,
+  "reference_samples": 4096,
+  "render_size": [
+    320,
+    180
+  ],
+  "sampling": "integer hash of pixel and sample/tick; no wall clock",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "key": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2",
+    "stages": [
+      {
+        "dxil": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/primaryMain.dxil",
+        "dxil_hash": "9429a944ddb759c853784a59901e298501b91329549eeee991466b240094effd",
+        "source_entry": "primaryMain",
+        "spirv": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/primaryMain.spv",
+        "spirv_entry": "main",
+        "spirv_hash": "72369fa4fda45d5e09c60c2c436e07ef6a5cb59069a917e695d34a2fb50c945b",
+        "stage": "compute"
+      }
+    ],
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    },
+    "version": 1
+  }
+}

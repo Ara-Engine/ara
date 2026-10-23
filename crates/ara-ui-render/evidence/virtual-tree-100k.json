@@ -1,0 +1,6515 @@
+{
+  "ui": {
+    "viewport": [480, 560],
+    "nodes": [
+      {
+        "id": "hierarchy",
+        "stable_id": 15326412671148072936,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "ui",
+            "property": "width",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "height",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 1
+          }
+        ]
+      },
+      {
+        "id": "title",
+        "stable_id": 15722393318163439657,
+        "box": {
+          "x": 12,
+          "y": 12,
+          "w": 456,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "Hierarchy",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 9,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [43]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [75]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [92]
+            }
+          ]
+        },
+        "provenance": []
+      },
+      {
+        "id": "count",
+        "stable_id": 12818901015042040436,
+        "box": {
+          "x": 12,
+          "y": 40,
+          "w": 456,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": {
+          "text": "100,000 entities · keyed virtual tree",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 37,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [15]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [121]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [78]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 26,
+                "end": 27
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 27,
+                "end": 28
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 28,
+                "end": 29
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 29,
+                "end": 30
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 30,
+                "end": 31
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 31,
+                "end": 32
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 32,
+                "end": 33
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 33,
+                "end": 34
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 34,
+                "end": 35
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 35,
+                "end": 36
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 36,
+                "end": 37
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 37,
+                "end": 38
+              },
+              "rtl": false,
+              "glyphs": [72]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "viewport",
+        "stable_id": 6242388329548298371,
+        "box": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 480,
+          "h": 560
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "scroll",
+            "property": "overflow",
+            "authored": "hidden",
+            "resolved": "hidden",
+            "byte": 1509
+          },
+          {
+            "local": "height:468px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50000",
+        "stable_id": 9507222169495691741,
+        "box": {
+          "x": 12,
+          "y": 54,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:0px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50000/0",
+        "stable_id": 5637351094446126130,
+        "box": {
+          "x": 13,
+          "y": 55,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "v Sector 050000",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [89]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [19]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50001",
+        "stable_id": 9507221069984063530,
+        "box": {
+          "x": 12,
+          "y": 80,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50001/0",
+        "stable_id": 4957704474317520445,
+        "box": {
+          "x": 27,
+          "y": 81,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050001",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [20]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50002",
+        "stable_id": 9507219970472435319,
+        "box": {
+          "x": 12,
+          "y": 106,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50002/0",
+        "stable_id": 4339384214751901096,
+        "box": {
+          "x": 27,
+          "y": 107,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050002",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [21]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50003",
+        "stable_id": 9507218870960807108,
+        "box": {
+          "x": 12,
+          "y": 132,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50003/0",
+        "stable_id": 3782144025144548819,
+        "box": {
+          "x": 27,
+          "y": 133,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050003",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [22]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50004",
+        "stable_id": 9507217771449178897,
+        "box": {
+          "x": 12,
+          "y": 158,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50004/0",
+        "stable_id": 3163718212462621214,
+        "box": {
+          "x": 27,
+          "y": 159,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050004",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [23]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50005",
+        "stable_id": 9507216671937550686,
+        "box": {
+          "x": 12,
+          "y": 184,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50005/0",
+        "stable_id": 2514717180429457321,
+        "box": {
+          "x": 27,
+          "y": 185,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050005",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [24]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50006",
+        "stable_id": 9507215572425922475,
+        "box": {
+          "x": 12,
+          "y": 210,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50006/0",
+        "stable_id": 1835070560300851636,
+        "box": {
+          "x": 27,
+          "y": 211,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050006",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [25]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50007",
+        "stable_id": 9507214472914294264,
+        "box": {
+          "x": 12,
+          "y": 236,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50007/0",
+        "stable_id": 1216609563246821279,
+        "box": {
+          "x": 27,
+          "y": 237,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050007",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [26]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50008",
+        "stable_id": 9507213373402666053,
+        "box": {
+          "x": 12,
+          "y": 262,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50008/0",
+        "stable_id": 659404558011571754,
+        "box": {
+          "x": 27,
+          "y": 263,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050008",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [27]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50009",
+        "stable_id": 9507212273891037842,
+        "box": {
+          "x": 12,
+          "y": 288,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50009/0",
+        "stable_id": 40943560957541397,
+        "box": {
+          "x": 27,
+          "y": 289,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050009",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [28]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50010",
+        "stable_id": 9506230410007234644,
+        "box": {
+          "x": 12,
+          "y": 314,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50010/0",
+        "stable_id": 11047159370899914307,
+        "box": {
+          "x": 27,
+          "y": 315,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050010",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [19]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50011",
+        "stable_id": 9506231509518862855,
+        "box": {
+          "x": 12,
+          "y": 340,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50011/0",
+        "stable_id": 11665479630465533656,
+        "box": {
+          "x": 27,
+          "y": 341,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050011",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [20]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50012",
+        "stable_id": 9506232609030491066,
+        "box": {
+          "x": 12,
+          "y": 366,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50012/0",
+        "stable_id": 12222719820072885933,
+        "box": {
+          "x": 27,
+          "y": 367,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050012",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [21]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50013",
+        "stable_id": 9506233708542119277,
+        "box": {
+          "x": 12,
+          "y": 392,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50013/0",
+        "stable_id": 12841145632754813538,
+        "box": {
+          "x": 27,
+          "y": 393,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050013",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [22]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50014",
+        "stable_id": 9506226011960721800,
+        "box": {
+          "x": 12,
+          "y": 418,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50014/0",
+        "stable_id": 8542845716448864847,
+        "box": {
+          "x": 27,
+          "y": 419,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050014",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [23]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50015",
+        "stable_id": 9506227111472350011,
+        "box": {
+          "x": 12,
+          "y": 444,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50015/0",
+        "stable_id": 9099945168567806116,
+        "box": {
+          "x": 27,
+          "y": 445,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050015",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [24]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50016",
+        "stable_id": 9506228210983978222,
+        "box": {
+          "x": 12,
+          "y": 470,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50016/0",
+        "stable_id": 9718370981249733721,
+        "box": {
+          "x": 27,
+          "y": 471,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050016",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [25]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50017",
+        "stable_id": 9506229310495606433,
+        "box": {
+          "x": 12,
+          "y": 496,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50017/0",
+        "stable_id": 10367512750771308622,
+        "box": {
+          "x": 27,
+          "y": 497,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050017",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [26]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50018",
+        "stable_id": 9506221613914208956,
+        "box": {
+          "x": 12,
+          "y": 522,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50018/0",
+        "stable_id": 5977311254551137307,
+        "box": {
+          "x": 27,
+          "y": 523,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050018",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [27]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50019",
+        "stable_id": 9506222713425837167,
+        "box": {
+          "x": 12,
+          "y": 548,
+          "w": 456,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "virtual-row",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "padding",
+            "authored": "3px",
+            "resolved": "3px",
+            "byte": 1447
+          },
+          {
+            "selector": "virtual-row",
+            "property": "border-radius",
+            "authored": "0px",
+            "resolved": "0px",
+            "byte": 1447
+          },
+          {
+            "local": "height:26px; flex-direction:row; gap:0px; padding:0px; padding-left:14px"
+          }
+        ]
+      },
+      {
+        "id": "viewport/key-50019/0",
+        "stable_id": 6595737067233064912,
+        "box": {
+          "x": 27,
+          "y": 549,
+          "w": 420,
+          "h": 26
+        },
+        "clip": {
+          "x": 12,
+          "y": 67,
+          "w": 456,
+          "h": 468
+        },
+        "warnings": [
+          "overflow-parent"
+        ],
+        "text": {
+          "text": "  Entity 050019",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 15,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [24]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [28]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "width:420px; height:26px; padding:3px; overflow:hidden; font-size:13px"
+          }
+        ]
+      }
+    ],
+    "focus_graph": [
+      {
+        "id": "viewport/key-50000",
+        "tab": "viewport/key-50001",
+        "left": null,
+        "right": null,
+        "up": null,
+        "down": "viewport/key-50001"
+      },
+      {
+        "id": "viewport/key-50001",
+        "tab": "viewport/key-50002",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50000",
+        "down": "viewport/key-50002"
+      },
+      {
+        "id": "viewport/key-50002",
+        "tab": "viewport/key-50003",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50001",
+        "down": "viewport/key-50003"
+      },
+      {
+        "id": "viewport/key-50003",
+        "tab": "viewport/key-50004",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50002",
+        "down": "viewport/key-50004"
+      },
+      {
+        "id": "viewport/key-50004",
+        "tab": "viewport/key-50005",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50003",
+        "down": "viewport/key-50005"
+      },
+      {
+        "id": "viewport/key-50005",
+        "tab": "viewport/key-50006",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50004",
+        "down": "viewport/key-50006"
+      },
+      {
+        "id": "viewport/key-50006",
+        "tab": "viewport/key-50007",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50005",
+        "down": "viewport/key-50007"
+      },
+      {
+        "id": "viewport/key-50007",
+        "tab": "viewport/key-50008",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50006",
+        "down": "viewport/key-50008"
+      },
+      {
+        "id": "viewport/key-50008",
+        "tab": "viewport/key-50009",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50007",
+        "down": "viewport/key-50009"
+      },
+      {
+        "id": "viewport/key-50009",
+        "tab": "viewport/key-50010",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50008",
+        "down": "viewport/key-50010"
+      },
+      {
+        "id": "viewport/key-50010",
+        "tab": "viewport/key-50011",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50009",
+        "down": "viewport/key-50011"
+      },
+      {
+        "id": "viewport/key-50011",
+        "tab": "viewport/key-50012",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50010",
+        "down": "viewport/key-50012"
+      },
+      {
+        "id": "viewport/key-50012",
+        "tab": "viewport/key-50013",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50011",
+        "down": "viewport/key-50013"
+      },
+      {
+        "id": "viewport/key-50013",
+        "tab": "viewport/key-50014",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50012",
+        "down": "viewport/key-50014"
+      },
+      {
+        "id": "viewport/key-50014",
+        "tab": "viewport/key-50015",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50013",
+        "down": "viewport/key-50015"
+      },
+      {
+        "id": "viewport/key-50015",
+        "tab": "viewport/key-50016",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50014",
+        "down": "viewport/key-50016"
+      },
+      {
+        "id": "viewport/key-50016",
+        "tab": "viewport/key-50017",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50015",
+        "down": "viewport/key-50017"
+      },
+      {
+        "id": "viewport/key-50017",
+        "tab": "viewport/key-50018",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50016",
+        "down": "viewport/key-50018"
+      },
+      {
+        "id": "viewport/key-50018",
+        "tab": "viewport/key-50000",
+        "left": null,
+        "right": null,
+        "up": "viewport/key-50017",
+        "down": null
+      }
+    ],
+    "batch_breaks": [
+      {
+        "command": 1,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 3,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 4,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 7,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 9,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 10,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 11,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 14,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 16,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 17,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 18,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 21,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 23,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 24,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 25,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 28,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 30,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 31,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 32,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 35,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 37,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 38,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 39,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 42,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 44,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 45,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 46,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 49,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 51,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 52,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 53,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 56,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 58,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 59,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 60,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 63,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 65,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 66,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 67,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 70,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 72,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 73,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 74,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 77,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 79,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 80,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 81,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 84,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 86,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 87,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 88,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 91,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 93,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 94,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 95,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 98,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 100,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 101,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 102,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 105,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 107,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 108,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 109,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 112,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 114,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 115,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 116,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 119,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 121,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 122,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 123,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 126,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 128,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 129,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 130,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 133,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 135,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 136,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 137,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 138,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 139,
+        "cause": "clip barrier"
+      },
+      {
+        "command": 140,
+        "cause": "transform barrier"
+      },
+      {
+        "command": 141,
+        "cause": "clip barrier"
+      }
+    ],
+    "commands": 142,
+    "glyphs": 331
+  },
+  "batches": [
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 0,
+        "end": 1
+      },
+      "break_cause": "first draw"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 1,
+        "end": 42
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 42,
+        "end": 44
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 2,
+      "instances": {
+        "start": 44,
+        "end": 57
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 57,
+        "end": 59
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 3,
+      "instances": {
+        "start": 59,
+        "end": 71
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 71,
+        "end": 73
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 4,
+      "instances": {
+        "start": 73,
+        "end": 85
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 85,
+        "end": 87
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 5,
+      "instances": {
+        "start": 87,
+        "end": 99
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 99,
+        "end": 101
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 6,
+      "instances": {
+        "start": 101,
+        "end": 113
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 113,
+        "end": 115
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 7,
+      "instances": {
+        "start": 115,
+        "end": 127
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 127,
+        "end": 129
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 8,
+      "instances": {
+        "start": 129,
+        "end": 141
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 141,
+        "end": 143
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 9,
+      "instances": {
+        "start": 143,
+        "end": 155
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 155,
+        "end": 157
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 10,
+      "instances": {
+        "start": 157,
+        "end": 169
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 169,
+        "end": 171
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 11,
+      "instances": {
+        "start": 171,
+        "end": 183
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 183,
+        "end": 185
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 12,
+      "instances": {
+        "start": 185,
+        "end": 197
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 197,
+        "end": 199
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 13,
+      "instances": {
+        "start": 199,
+        "end": 211
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 211,
+        "end": 213
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 14,
+      "instances": {
+        "start": 213,
+        "end": 225
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 225,
+        "end": 227
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 15,
+      "instances": {
+        "start": 227,
+        "end": 239
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 239,
+        "end": 241
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 16,
+      "instances": {
+        "start": 241,
+        "end": 253
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 253,
+        "end": 255
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 17,
+      "instances": {
+        "start": 255,
+        "end": 267
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 267,
+        "end": 269
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 18,
+      "instances": {
+        "start": 269,
+        "end": 281
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 281,
+        "end": 283
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 19,
+      "instances": {
+        "start": 283,
+        "end": 295
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 1,
+      "instances": {
+        "start": 295,
+        "end": 297
+      },
+      "break_cause": "clip change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 20,
+      "instances": {
+        "start": 297,
+        "end": 309
+      },
+      "break_cause": "clip change"
+    }
+  ],
+  "atlas_bytes": 4194304
+}

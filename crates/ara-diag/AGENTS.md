@@ -10,9 +10,12 @@ a message, a structured location and machine-applicable fixes. Leaf crate (serde
     `.record()`, `.path()`, `.line_col()`, `.command()`, `.within(&base)`, `.with_fix()`.
   - `Display` renders rustc-style text; serde gives the JSON agents read.
 - `Location { file, doc, record, path, line, column, command }`: all optional.
-- `Fix { title, action: FixAction }`, `FixAction::{Set, Remove, Rename, Command}`.
+- `Fix { title, action: FixAction }`, `FixAction::{Set, Remove, Rename, Command, Call, Cli}`
+  (`Call` = an Engine Protocol method, `Cli` = an `ara` command line).
 - `codes::*`: the catalog. `codes::ALL` lists `(Code, NAME, description)`.
-- `has_errors(&[Diagnostic])`, `did_you_mean(input, candidates)`.
+- `has_errors(&[Diagnostic])`, `did_you_mean(input, candidates)` (closest, ties
+  by name), `nearest(input, candidates)` (every tied candidate: an ambiguous guess
+  becomes several fixes, never one).
 
 ## Code ranges
 
@@ -27,6 +30,8 @@ a message, a structured location and machine-applicable fixes. Leaf crate (serde
 | 1500 | transactions and undo |
 | 1600 | commands |
 | 1700 | merge |
+| 1800 | Engine Protocol, sessions, scopes, queries, jobs |
+| 1900 | projects, daemon, journal, persistence, external edits |
 
 ## Rules
 

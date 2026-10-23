@@ -1,0 +1,24 @@
+{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "rapier",
+    "bodies": 5000,
+    "single_position_read_ns": 3.5702,
+    "bulk_read_ns_per_body": 6.4923,
+    "raycast_ns": 829.48,
+    "raycast_hits": 9720,
+    "raycast_mean_distance": 24.666714,
+    "raycast_mean_normal_y": 0.7592875,
+    "sphere_cast_ns": 7266.499999999998,
+    "sphere_cast_hits": 9740,
+    "sphere_cast_mean_distance": 24.3334
+  }
+}

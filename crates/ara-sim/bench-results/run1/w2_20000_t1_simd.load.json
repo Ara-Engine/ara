@@ -1,0 +1,193 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:24:19.5129086Z",
+                        "cpuPercent":  27,
+                        "freeKiB":  8278368,
+                        "processes":  [
+                                          {
+                                              "Name":  "bash#1",
+                                              "IDProcess":  33176,
+                                              "PercentProcessorTime":  59
+                                          },
+                                          {
+                                              "Name":  "powershell#1",
+                                              "IDProcess":  36588,
+                                              "PercentProcessorTime":  55
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  45
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  36
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  32
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  22
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  9
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#1",
+                                              "IDProcess":  85552,
+                                              "PercentProcessorTime":  9
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:24:21.6036059Z",
+                        "cpuPercent":  35,
+                        "freeKiB":  8106068,
+                        "processes":  [
+                                          {
+                                              "Name":  "link#1",
+                                              "IDProcess":  13752,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  79668,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "link",
+                                              "IDProcess":  69732,
+                                              "PercentProcessorTime":  90
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  58
+                                          },
+                                          {
+                                              "Name":  "bash#2",
+                                              "IDProcess":  10800,
+                                              "PercentProcessorTime":  36
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  31
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  22
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  22
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:24:23.4051755Z",
+                        "cpuPercent":  24,
+                        "freeKiB":  7572788,
+                        "processes":  [
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  79668,
+                                              "PercentProcessorTime":  104
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  41
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  36
+                                          },
+                                          {
+                                              "Name":  "cargo",
+                                              "IDProcess":  57452,
+                                              "PercentProcessorTime":  31
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  31
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  22
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:24:25.1963283Z",
+                        "cpuPercent":  26,
+                        "freeKiB":  8043892,
+                        "processes":  [
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  64
+                                          },
+                                          {
+                                              "Name":  "bash#1",
+                                              "IDProcess":  33176,
+                                              "PercentProcessorTime":  55
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  41
+                                          },
+                                          {
+                                              "Name":  "git",
+                                              "IDProcess":  81612,
+                                              "PercentProcessorTime":  41
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  32
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  23
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}

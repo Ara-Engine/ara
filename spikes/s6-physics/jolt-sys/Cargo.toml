@@ -1,0 +1,14 @@
+[package]
+name = "ara-jolt-sys"
+version = "0.1.0"
+edition = "2024"
+publish = false
+links = "ara_jolt"
+description = "Raw FFI to Ara's C shim over vendored Jolt Physics (S6 spike)."
+
+[features]
+# Compiles Jolt with JPH_CROSS_PLATFORM_DETERMINISTIC (/fp:precise, no FMA).
+cross-platform-deterministic = []
+
+[build-dependencies]
+cc = { version = "1.2", features = ["parallel"] }

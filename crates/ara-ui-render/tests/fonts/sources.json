@@ -1,0 +1,37 @@
+[
+  {
+    "file": "NotoSansKR.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/45e3d5269e4a17d823f6d84470bc084dc5ae46f6/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf",
+    "source_sha256": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
+    "subset_sha256": "b1733d4d020d20b7cc582206d429808feac9238f5b855f2b3fdd0199197a0743",
+    "purpose": "Test-only corpus subset; full font packs are host-supplied"
+  },
+  {
+    "file": "NotoEmoji.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/45e3d5269e4a17d823f6d84470bc084dc5ae46f6/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
+    "source_sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
+    "subset_sha256": "6c307ecc0705f1ea635c87c41f855e37f73ed2259e7d7d2a25796f0169a867fa",
+    "purpose": "Test-only corpus subset; full font packs are host-supplied"
+  },
+  {
+    "file": "NotoSansSC.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/45e3d5269e4a17d823f6d84470bc084dc5ae46f6/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf",
+    "source_sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+    "subset_sha256": "e65f9d9af3201f90b053e5fa2d969ee4eee03547e35f82751f3c0b581b9451f9",
+    "purpose": "Test-only corpus subset; full font packs are host-supplied"
+  },
+  {
+    "file": "NotoSansJP.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/45e3d5269e4a17d823f6d84470bc084dc5ae46f6/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+    "source_sha256": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
+    "subset_sha256": "821f9c6a88e0047e425a40a3779c23b8e1dc42e3e615fec90d2e0c5a34dc2bf0",
+    "purpose": "Test-only corpus subset; full font packs are host-supplied"
+  },
+  {
+    "file": "NotoColorEmoji.ttf",
+    "source": "https://raw.githubusercontent.com/googlefonts/noto-emoji/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/fonts/NotoColorEmoji.ttf",
+    "source_sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44",
+    "subset_sha256": "b977be611f5975cb3de4d39d245d6470971622fc1e93508ea66f6149ca6cd2f3",
+    "purpose": "Test-only licensed CBDT color emoji corpus subset"
+  }
+]

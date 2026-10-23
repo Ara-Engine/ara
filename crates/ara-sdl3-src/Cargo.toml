@@ -1,0 +1,16 @@
+[package]
+name = "ara-sdl3-src"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "ara_sdl3"
+
+[dependencies]
+sdl3-sys = { version = "0.7.2", default-features = false, features = ["no-link"] }
+
+[build-dependencies]
+cc = { version = "1.2", features = ["parallel"] }
+
+[lints]
+workspace = true

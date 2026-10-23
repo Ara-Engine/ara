@@ -1,0 +1,841 @@
+---
+source: crates/ara-mcp/tests/mcp.rs
+expression: pretty
+---
+[
+  {
+    "name": "ara_query",
+    "title": "Query entities",
+    "description": "Find entities (or documents) without dumping scenes. Compact syntax in `q`: space-separated terms that must all hold: `Light` (has the component), `!Light`, `name:Crate*`, a bare word (`radio`: names containing it), `parent:e_1c0d`, `under:e_1c0d`, `prefab:crate`, `depth<=1`, comparisons such as `Light.intensity>500` or `Transform.position.y<=0`. Or the JSON form in `filter`. Paginated (`limit`, `cursor`); returns entity handles (`e_8b21`; `e_4f9a/e_m4tz` inside prefab instances) with one scene-to-text line each. `fields` returns chosen values.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "q": {
+          "description": "Compact query: space-separated terms that must all hold. `Light` (has the component), `!Light` (lacks it), `name:Crate*`, a bare word (`radio`: names containing it), `parent:e_1c0d`, `under:e_1c0d`, `prefab:crate`, `depth<=1`, `e_8b21` (an ID), field comparisons such as `Light.intensity>500`, `Light.kind=spot`, `Transform.position.y<=0`.",
+          "type": "string"
+        },
+        "filter": {
+          "description": "The same conditions as JSON; combined with `q`.",
+          "$ref": "#/$defs/Filter"
+        },
+        "doc": {
+          "description": "Document (asset ID, path or `@path#id`); default: every scene and prefab.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Search entities (default) or documents.",
+          "$ref": "#/$defs/QueryKind"
+        },
+        "fields": {
+          "description": "Field paths to return per entity (`Light.intensity`), effective values.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "detail": {
+          "description": "Per-item detail: `summary` (default), `handles` or `full`.",
+          "$ref": "#/$defs/Detail"
+        },
+        "limit": {
+          "description": "Page size (default 50, max 500).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "cursor": {
+          "description": "`next` from the previous page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "Compare": {
+          "description": "A field comparison in a query filter.",
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Field path on the entity (`Light.intensity`, `Transform.position.y`, `name`).",
+              "default": ""
+            },
+            "op": {
+              "$ref": "#/$defs/CompareOp",
+              "description": "Comparison operator.",
+              "default": "eq"
+            },
+            "value": {
+              "description": "Value to compare the effective (default-filled) field value with.",
+              "default": null
+            }
+          },
+          "additionalProperties": false
+        },
+        "CompareOp": {
+          "description": "A comparison operator.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "eq",
+              "description": "Equal (numbers compare numerically)."
+            },
+            {
+              "const": "ne",
+              "description": "Not equal."
+            },
+            {
+              "const": "gt",
+              "description": "Greater than."
+            },
+            {
+              "const": "ge",
+              "description": "Greater than or equal."
+            },
+            {
+              "const": "lt",
+              "description": "Less than."
+            },
+            {
+              "const": "le",
+              "description": "Less than or equal."
+            }
+          ]
+        },
+        "Detail": {
+          "description": "What a query returns per item.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "summary",
+              "description": "Address, name, components and position (the default)."
+            },
+            {
+              "const": "handles",
+              "description": "Only handles."
+            },
+            {
+              "const": "full",
+              "description": "Everything stored on the entity."
+            }
+          ]
+        },
+        "Filter": {
+          "description": "The JSON form of a query: every set condition must hold. The compact `q` syntax parses into this.",
+          "type": "object",
+          "properties": {
+            "has": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Components the entity must have (`[\"Light\"]`).",
+              "default": []
+            },
+            "lacks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Components the entity must not have.",
+              "default": []
+            },
+            "name": {
+              "description": "Name glob, case-insensitive (`Crate*`).",
+              "type": "string"
+            },
+            "parent": {
+              "description": "Only direct children of this entity.",
+              "type": "string"
+            },
+            "under": {
+              "description": "Only descendants of this entity.",
+              "type": "string"
+            },
+            "prefab": {
+              "description": "Only prefab instances whose prefab path contains this text.",
+              "type": "string"
+            },
+            "maxDepth": {
+              "description": "Only entities at most this deep (roots are depth 0).",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only these entity IDs or addresses.",
+              "default": []
+            },
+            "where": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Compare"
+              },
+              "description": "Field comparisons.",
+              "default": []
+            }
+          },
+          "additionalProperties": false
+        },
+        "QueryKind": {
+          "description": "What `query` searches.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "entities",
+              "description": "Entities (prefab instances expanded)."
+            },
+            {
+              "const": "documents",
+              "description": "Documents and imported assets of the project."
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Query entities",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_inspect",
+    "title": "Inspect a document",
+    "description": "Read a document as token-tuned text: the hierarchy summary (default; `depth`, paginated with `cursor`), or with `entities` every component field with its unit (defaults filled in). `format: \"json\"` for structured output. Y-up, meters, degrees.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "doc": {
+          "description": "Document: a path (`levels/outpost.scene`, or just `outpost`), asset ID or `@path#id`. Default: the document holding `entities`, else the project's main scene.",
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "entities": {
+          "description": "Entities to show in full: IDs, addresses (`e_4f9a/e_m4tz`) or name selectors (`name:Crate`, `name:Gate/DoorLamp`). Absent: a summary of the document's hierarchy.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "depth": {
+          "description": "Hierarchy depth of the summary (default 2).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "format": {
+          "description": "`text` (default) or `json`.",
+          "$ref": "#/$defs/Format"
+        },
+        "limit": {
+          "description": "Summary page size (default 100).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "cursor": {
+          "description": "`next` from the previous summary page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "Format": {
+          "description": "Output format of `inspect`.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "text",
+              "description": "Token-tuned text (the default)."
+            },
+            {
+              "const": "json",
+              "description": "Structured JSON."
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Inspect a document",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_schema",
+    "title": "Search the schema",
+    "description": "The tool-search layer: find and describe components, value types, enums, commands, queries, jobs and protocol methods. `search` by words, `list` by kind, `describe` for JSON Schemas, units and examples. Look a command up here before using it in ara_apply.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "describe",
+            "search"
+          ],
+          "description": "What to do. `list`: List components, types, commands, queries, jobs and methods (names and one-line summaries). `describe`: Full description of types, commands or methods, with JSON Schemas and examples. `search`: Search components, fields, commands and methods by words in their names and docs."
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "kind": {
+          "$ref": "#/$defs/SchemaKind",
+          "description": "Only this kind of entry. (not for: describe)"
+        },
+        "module": {
+          "type": "string",
+          "description": "Only types of this module (`core`, `render`). (for: list)"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Type, command or method names (`Transform`, `entity.create`, `cmd.apply`). (for: describe)"
+        },
+        "name": {
+          "type": "string",
+          "description": "One name; the same as `names: [name]`. (for: describe)"
+        },
+        "query": {
+          "type": "string",
+          "description": "Words to look for in names and docs (`light intensity`). (for: search)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Maximum results (default 10). (for: search)"
+        }
+      },
+      "required": [
+        "action",
+        "session"
+      ],
+      "$defs": {
+        "SchemaKind": {
+          "description": "What `schema.list` and `schema.search` look through.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "component",
+              "description": "Entity components."
+            },
+            {
+              "const": "record",
+              "description": "Document record types."
+            },
+            {
+              "const": "struct",
+              "description": "Value structs nested in components."
+            },
+            {
+              "const": "enum",
+              "description": "Enums."
+            },
+            {
+              "const": "params",
+              "description": "Command params types."
+            },
+            {
+              "const": "command",
+              "description": "Commands (edits)."
+            },
+            {
+              "const": "query",
+              "description": "Queries (reads)."
+            },
+            {
+              "const": "job",
+              "description": "Jobs (long-running work)."
+            },
+            {
+              "const": "method",
+              "description": "Engine Protocol methods."
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Search the schema",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_apply",
+    "title": "Apply commands",
+    "description": "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CallSpec"
+          },
+          "description": "Calls, run in order as one atomic transaction."
+        },
+        "doc": {
+          "description": "Document to edit: a path (`levels/outpost.scene`, or just `outpost`), asset ID or `@path#id`. Default: the one document holding every entity the commands address, else the project's main scene.",
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "why": {
+          "description": "Why, in a sentence; shown in review next to the change. Required for agent sessions (except dry runs).",
+          "type": "string"
+        },
+        "dryRun": {
+          "description": "Validate and return the diff without applying anything.",
+          "type": "boolean"
+        },
+        "base": {
+          "description": "Revision the batch was planned against; fails if later edits touched the same fields.",
+          "type": "integer"
+        },
+        "idempotencyKey": {
+          "description": "Retrying with the same key returns the first result instead of applying twice.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commands",
+        "session"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "CallSpec": {
+          "description": "One call in an `ara_apply` / `cmd.apply` batch.",
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "description": "Command name (`entity.create`); find them with `schema.search`.",
+              "default": ""
+            },
+            "args": {
+              "description": "Command arguments, per the command's params schema (`schema.describe`)."
+            },
+            "as": {
+              "description": "Symbolic ID (`$crate`; the `$` may be left out) for the record this call creates; later calls may use it as `$crate` anywhere an entity is expected. The result maps it to the real ID. Asset args may skip the `@`. Entity args also take IDs (`e_8b21`) and name selectors (`name:Crate`, `name:Floor/Crate`).",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "annotations": {
+      "title": "Apply commands",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_run",
+    "title": "Run code",
+    "description": "Run C# against the typed engine SDK inside a transaction (code mode). Edits still become commands, so they stay reviewable and revertible. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from ara_session `begin`."
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Run code",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_capture",
+    "title": "Capture images",
+    "description": "Render images of a scene: camera specs (frame entities, angles, existing cameras), debug view modes, numbered marks with a pixel-to-entity legend, deterministic settling and golden-image comparison. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from ara_session `begin`."
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Capture images",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_play",
+    "title": "Control play",
+    "description": "Control play worlds: start, stop, pause, step N ticks with action-level input, watch expressions, `until` conditions, record and replay. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from ara_session `begin`."
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Control play",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_test",
+    "title": "Run tests",
+    "description": "Run unit, play and golden tests; structured results with captures and replay handles for failures. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from ara_session `begin`."
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Run tests",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_logs",
+    "title": "Read diagnostics",
+    "description": "Diagnostics from every subsystem (stable ARA#### codes, locations, machine-applicable fixes), de-duplicated with counts. Pass the returned `cursor` as `since` to see only what is new; filter by `codes`, `severity` or `entity`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "since": {
+          "description": "Only entries newer than this cursor (`cursor` of a previous call).",
+          "type": "integer"
+        },
+        "codes": {
+          "description": "Only these codes (`ARA1101`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "severity": {
+          "description": "Minimum severity (default `info`).",
+          "$ref": "#/$defs/SeverityParam"
+        },
+        "entity": {
+          "description": "Only entries about this entity (record ID or address prefix).",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum entries (default 50).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "SeverityParam": {
+          "description": "A diagnostic severity.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "error",
+              "description": "Errors only."
+            },
+            {
+              "const": "warning",
+              "description": "Warnings and errors."
+            },
+            {
+              "const": "info",
+              "description": "Everything."
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read diagnostics",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_session",
+    "title": "Session, history and review",
+    "description": "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "begin",
+            "status",
+            "diff",
+            "checkpoint",
+            "rollback",
+            "end",
+            "history",
+            "undo",
+            "redo",
+            "review",
+            "revert"
+          ],
+          "description": "What to do. `begin`: Begin a session: returns the handle every other call takes, and the scopes granted. `status`: The session's scopes, turns, unreviewed changes, checkpoints and unsaved documents. `diff`: What the session changed since a checkpoint, per entity, with was → now per field. `checkpoint`: Mark the current revision to roll back to. Agent turns get one automatically. `rollback`: Undo every transaction of this session after a checkpoint, all or nothing. `end`: End the session; its handle stops working. `history`: Transactions newest first: author, why, revision, review status and touched entities. `undo`: Undo the author's latest transaction, or a given one, as a new transaction. `redo`: Redo the author's most recently undone transaction. `review`: Agent transactions by review status (default: unreviewed), with per-entity status. `revert`: Revert agent changes per transaction or per entity (inverse ops, conflict-checked)."
+        },
+        "client": {
+          "type": "string",
+          "description": "Who is connecting: `claude-code`, `codex`, `editor`, `ara-cli`. (for: begin)"
+        },
+        "author": {
+          "type": "string",
+          "description": "Transaction author: `human` or `agent:<name>`. Defaults to `agent:<client>`. / Only this author (`human`, `agent:claude`). (for: begin, history)"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Scopes to request: `read`, `edit:scene`, `edit:assets`, `edit:code`, `play`, `run`, `import`, `bake`, `build`, `generate:$`, `fs:outside-project`, `net`. Defaults to everything the approval policy allows. The policy may grant fewer. (for: begin)"
+        },
+        "label": {
+          "type": "string",
+          "description": "Short description of the work, shown in review. / What the checkpoint marks. (for: begin, checkpoint)"
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`. (not for: begin)"
+        },
+        "checkpoint": {
+          "type": "string",
+          "description": "Show changes since this checkpoint (`cp_...`); default: the session's start. (for: diff)"
+        },
+        "to": {
+          "type": "string",
+          "description": "Checkpoint (`cp_...`) to return to. Every later transaction of this session is undone, all or nothing. Agent sessions get one checkpoint per turn. (for: rollback)"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Only transactions touching this document. (for: history)"
+        },
+        "since": {
+          "type": "integer",
+          "description": "Only transactions after this revision. (for: history)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Maximum transactions, newest first (default 20). / Maximum transactions, newest first (default 50). (for: history, review)"
+        },
+        "txn": {
+          "type": "string",
+          "description": "Transaction to undo (`tx_...`); default: the session author's latest. / Transaction (`tx_...`). With `entity`, only that entity's changes in it. (for: undo, revert)"
+        },
+        "status": {
+          "$ref": "#/$defs/ReviewStatus",
+          "description": "Only transactions with this status (default: `applied`). (for: review)"
+        },
+        "entity": {
+          "type": "string",
+          "description": "Entity (`e_8b21`, or `sc_arena001/e_8b21` to name the document). Without `txn`: its changes in every unreviewed transaction. (for: revert)"
+        },
+        "all": {
+          "type": "boolean",
+          "description": "Every unreviewed transaction. (for: revert)"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "$defs": {
+        "ReviewStatus": {
+          "description": "Review state of a transaction or entity.",
+          "type": "string",
+          "oneOf": [
+            {
+              "const": "applied",
+              "description": "Applied live, not reviewed yet."
+            },
+            {
+              "const": "accepted",
+              "description": "Kept by a reviewer."
+            },
+            {
+              "const": "reverted",
+              "description": "Undone."
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "title": "Session, history and review",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_docs",
+    "title": "Search the docs",
+    "description": "Search this engine version's generated docs: conventions (axes, units, IDs, references), commands, components and error codes. The same pages as llms.txt.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Words to look for (`prefab override`)."
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "limit": {
+          "description": "Maximum results (default 5).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "full": {
+          "description": "Return each page's full markdown, not just a snippet.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "query",
+        "session"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Search the docs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "ara_jobs",
+    "title": "Jobs",
+    "description": "Long-running work (import, bake, build, generate): `start` a job on a document, then `status` (progress, result), `list` or `cancel`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "status",
+            "start",
+            "cancel"
+          ],
+          "description": "What to do. `list`: Every job of this host run with status and progress. `status`: One job's status, progress, result or diagnostics. `start`: Start a registered job on a document; progress streams on the `jobs` topic. `cancel`: Cancel a running job."
+        },
+        "session": {
+          "type": "string",
+          "description": "Session handle from `session.begin`."
+        },
+        "job": {
+          "type": "string",
+          "description": "Job ID (`jb_...`). / Job name from the registry (`schema.list {kind: \"job\"}`). (not for: list)"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Document the job works on. (for: start)"
+        },
+        "args": {
+          "description": "Job arguments, per its params schema. (for: start)"
+        },
+        "why": {
+          "type": "string",
+          "description": "Why, shown in review. (for: start)"
+        }
+      },
+      "required": [
+        "action",
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Jobs",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  }
+]

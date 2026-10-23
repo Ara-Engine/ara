@@ -1,0 +1,146 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:24:26.1647479Z",
+                        "cpuPercent":  25,
+                        "freeKiB":  8006536,
+                        "processes":  [
+                                          {
+                                              "Name":  "claude#4",
+                                              "IDProcess":  83436,
+                                              "PercentProcessorTime":  83
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  55
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  50
+                                          },
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  46
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "bash#1",
+                                              "IDProcess":  33176,
+                                              "PercentProcessorTime":  18
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  18
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:24:28.0195893Z",
+                        "cpuPercent":  46,
+                        "freeKiB":  7794684,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  223
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  34952,
+                                              "PercentProcessorTime":  77
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  45
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  41
+                                          },
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  31
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  27
+                                          },
+                                          {
+                                              "Name":  "powershell#2",
+                                              "IDProcess":  55848,
+                                              "PercentProcessorTime":  22
+                                          },
+                                          {
+                                              "Name":  "SearchIndexer",
+                                              "IDProcess":  13784,
+                                              "PercentProcessorTime":  22
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:24:29.0408671Z",
+                        "cpuPercent":  36,
+                        "freeKiB":  7351728,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  149
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  34952,
+                                              "PercentProcessorTime":  119
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  2856,
+                                              "PercentProcessorTime":  97
+                                          },
+                                          {
+                                              "Name":  "goldens-578163efecbb2714",
+                                              "IDProcess":  101508,
+                                              "PercentProcessorTime":  97
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  83
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  52
+                                          },
+                                          {
+                                              "Name":  "clippy-driver",
+                                              "IDProcess":  60972,
+                                              "PercentProcessorTime":  35
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  26
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}
