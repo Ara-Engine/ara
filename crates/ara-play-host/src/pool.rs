@@ -3,7 +3,7 @@
 //! taken. Faults are classified from the exit code, the stderr crash line and the
 //! 250 ms heartbeat (a 1 s silence is a hang; the player is killed).
 use ara_play::{
-    CRASH_PREFIX, CrashReport, HELLO, Hello, PROTOCOL, STATUS, Status, TOKEN_ENV,
+    BUSY, Busy, CRASH_PREFIX, CrashReport, HELLO, Hello, PROTOCOL, STATUS, Status, TOKEN_ENV,
     link::{Link, Message, error},
 };
 use serde_json::{Value, json};
@@ -32,6 +32,8 @@ pub struct Player {
     pub seen: Instant,
     /// Latest status heartbeat.
     pub status: Option<Status>,
+    /// Silence allowed until this instant (announced long work).
+    pub grace: Instant,
 }
 
 impl Drop for Player {
@@ -47,11 +49,20 @@ impl Player {
     /// Handles a non-response message (heartbeats); anything arriving counts as alive.
     pub fn observe(&mut self, message: &Message) {
         self.seen = Instant::now();
-        if let Message::Notification { method, params } = message
-            && method == STATUS
-        {
-            self.status = serde_json::from_value(params.clone()).ok();
+        if let Message::Notification { method, params } = message {
+            if method == STATUS {
+                self.status = serde_json::from_value(params.clone()).ok();
+            } else if method == BUSY
+                && let Ok(busy) = serde_json::from_value::<Busy>(params.clone())
+            {
+                self.grace = Instant::now() + Duration::from_millis(busy.max_ms.min(300_000));
+            }
         }
+    }
+
+    /// Silent past the watchdog and past any announced grace.
+    fn hung(&self) -> bool {
+        self.seen.elapsed() > WATCHDOG && Instant::now() > self.grace
     }
 
     /// Calls a player method, keeping heartbeats flowing. A dead or silent player
@@ -71,7 +82,9 @@ impl Player {
         loop {
             match self.link.wait(Duration::from_millis(20)) {
                 Ok(Some(Message::Response { id: got, result })) if got == id => {
+                    // The announced long work belonged to this request.
                     self.seen = Instant::now();
+                    self.grace = self.seen;
                     return Ok(result);
                 }
                 Ok(Some(message)) => self.observe(&message),
@@ -79,7 +92,7 @@ impl Player {
                 Err(_) => return Err(self.closed()),
             }
             // Busy players keep heartbeating between tick chunks; silence is a hang.
-            if self.seen.elapsed() > WATCHDOG {
+            if self.hung() {
                 let _ = self.child.kill();
                 let _ = self.child.wait();
                 return Err(unresponsive(self));
@@ -119,7 +132,7 @@ impl Player {
         if let Some(fault) = self.fault() {
             return Some(fault);
         }
-        if self.seen.elapsed() > WATCHDOG {
+        if self.hung() {
             let _ = self.child.kill();
             let _ = self.child.wait();
             return Some(unresponsive(self));
@@ -402,6 +415,7 @@ impl Pool {
             log: spawn.log,
             seen: Instant::now(),
             status: None,
+            grace: Instant::now(),
         })
     }
 

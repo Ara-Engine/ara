@@ -414,5 +414,5 @@ pub fn read_path(session: &ara_sim::Session, path: &str) -> Result<Option<Value>
             None => return Ok(None),
         }
     }
-    Ok(Some(current))
+    Ok(Some(ara_runtime::live::tidy(current)))
 }

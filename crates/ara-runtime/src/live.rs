@@ -127,7 +127,7 @@ impl Runtime {
                                 out.push(Change {
                                     entity: address.into(),
                                     path: format!("{name}.{}", field.name),
-                                    value: Some(wf.clone()),
+                                    value: Some(tidy(wf.clone())),
                                     prev: s.get(&field.name).cloned(),
                                     driven: driven_component || driven_field(name, &field.name),
                                 });
@@ -137,7 +137,7 @@ impl Runtime {
                     _ => out.push(Change {
                         entity: address.into(),
                         path: name.into(),
-                        value: world.clone(),
+                        value: world.clone().map(tidy),
                         prev: stored.clone(),
                         driven: driven_component,
                     }),
@@ -145,6 +145,32 @@ impl Runtime {
             }
         }
         Ok(out)
+    }
+}
+
+/// World values are f32s widened to JSON (`0.2` reads back as `0.20000000298…`).
+/// Numbers that are exact f32 values are rewritten to their shortest f32 decimal so
+/// kept edits and reports carry the authored precision; integers and genuine f64s
+/// are unchanged.
+pub fn tidy(value: Value) -> Value {
+    match value {
+        Value::Number(n) if !n.is_i64() && !n.is_u64() => {
+            let Some(x) = n.as_f64() else {
+                return Value::Number(n);
+            };
+            let f = x as f32;
+            if f64::from(f) != x || !f.is_finite() {
+                return Value::Number(n);
+            }
+            f.to_string()
+                .parse::<f64>()
+                .ok()
+                .and_then(serde_json::Number::from_f64)
+                .map_or(Value::Number(n), Value::Number)
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(tidy).collect()),
+        Value::Object(map) => Value::Object(map.into_iter().map(|(k, v)| (k, tidy(v))).collect()),
+        other => other,
     }
 }
 
@@ -189,4 +215,17 @@ pub fn set_edit(
         path: path.parse().map_err(RuntimeError)?,
         value,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tidy;
+    use serde_json::json;
+
+    #[test]
+    fn f32_noise_is_tidied_but_real_values_are_kept() {
+        let widened = json!([f64::from(0.2f32), 1.0, 3, f64::from(-0.75f32)]);
+        assert_eq!(tidy(widened), json!([0.2, 1.0, 3, -0.75]));
+        assert_eq!(tidy(json!(0.1)), json!(0.1), "a genuine f64 is untouched");
+    }
 }

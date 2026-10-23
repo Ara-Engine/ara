@@ -31,7 +31,8 @@ fn copy(from: &Path, to: &Path) {
 
 /// The import worker next to the player binary, built on demand.
 fn import_worker(player: &Path) -> PathBuf {
-    let worker = player.with_file_name(format!("ara-import-worker{}", std::env::consts::EXE_SUFFIX));
+    let worker =
+        player.with_file_name(format!("ara-import-worker{}", std::env::consts::EXE_SUFFIX));
     if !worker.exists() {
         let status = std::process::Command::new(env!("CARGO"))
             .args(["build", "-p", "ara-import-worker"])
@@ -51,8 +52,16 @@ struct Agent {
 
 impl Agent {
     fn tool(&mut self, name: &str, args: Value) -> Value {
+        let shown = args.to_string();
+        let t = Instant::now();
         let result = self.raw(name, args);
-        assert_eq!(result["isError"], json!(false), "{name}: {}", result["content"]);
+        assert_eq!(
+            result["isError"],
+            json!(false),
+            "{name} {shown} after {:?}: {}",
+            t.elapsed(),
+            result["content"]
+        );
         result["structuredContent"].clone()
     }
     fn raw(&mut self, name: &str, mut args: Value) -> Value {
@@ -72,7 +81,10 @@ impl Agent {
     fn until(&mut self, what: &str, mut ready: impl FnMut(&mut Self) -> bool) {
         let start = Instant::now();
         while !ready(self) {
-            assert!(start.elapsed() < Duration::from_secs(120), "timed out waiting for {what}");
+            assert!(
+                start.elapsed() < Duration::from_secs(120),
+                "timed out waiting for {what}"
+            );
             self.host.tick();
             std::thread::sleep(Duration::from_millis(5));
         }
@@ -96,18 +108,36 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let worker = import_worker(&player);
     let dir = std::env::temp_dir().join(format!("ara-scenario-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    copy(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")), &dir);
+    copy(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")),
+        &dir,
+    );
     let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
 
     let mut project = Project::open(&dir).unwrap();
     ara_play_host::register_engine_schemas(&mut project.db);
-    let mut host = Host::open(project, HostConfig { seed: Some(7), ..Default::default() }).unwrap();
+    let mut host = Host::open(
+        project,
+        HostConfig {
+            seed: Some(7),
+            ..Default::default()
+        },
+    )
+    .unwrap();
     let mut config = PlayConfig::for_project(&dir);
     config.pool.executable = player;
     config.import_worker = worker;
-    host.register(Box::new(PlayService::new(&dir, config))).unwrap();
-    let mut agent = Agent { host, mcp: Adapter::new(), session: String::new() };
-    let begun = agent.tool("ara_session", json!({"action": "begin", "client": "scenario", "author": "agent:scenario"}));
+    host.register(Box::new(PlayService::new(&dir, config)))
+        .unwrap();
+    let mut agent = Agent {
+        host,
+        mcp: Adapter::new(),
+        session: String::new(),
+    };
+    let begun = agent.tool(
+        "ara_session",
+        json!({"action": "begin", "client": "scenario", "author": "agent:scenario"}),
+    );
     agent.session = begun["session"].as_str().unwrap().to_owned();
 
     // Warm the pool; a first Play also cooks the Fox (out of process) into the cache.
@@ -124,32 +154,59 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let boot_ms = start.elapsed().as_secs_f64() * 1000.0;
     let id = world["world"].clone();
     assert_eq!(world["transport"], json!("shm"));
-    assert!(boot_ms < 1000.0, "Play → first tick from the pool took {boot_ms:.1} ms");
+    assert!(
+        boot_ms < 1000.0,
+        "Play → first tick from the pool took {boot_ms:.1} ms"
+    );
 
     // 2–3. Move for 120 ticks; the Fox walked forward and stands on the ground.
-    let before = agent.play("read", json!({"world": id, "paths": ["e_fox.Transform.position.z"]}));
-    let stepped = agent.play("step", json!({"world": id, "ticks": 120,
-        "inputs": [{"action": "Move", "value": [0, 1], "holdTicks": 120}]}));
+    let before = agent.play(
+        "read",
+        json!({"world": id, "paths": ["e_fox.Transform.position.z"]}),
+    );
+    let stepped = agent.play(
+        "step",
+        json!({"world": id, "ticks": 120,
+        "inputs": [{"action": "Move", "value": [0, 1], "holdTicks": 120}]}),
+    );
     let after = agent.play("read", json!({"world": id,
         "paths": ["e_fox.Transform.position.z", "e_fox.CharacterMotion.grounded", "e_bot1.Wanderer.goals"]}));
-    let z0 = before["values"]["e_fox.Transform.position.z"].as_f64().unwrap();
-    let z1 = after["values"]["e_fox.Transform.position.z"].as_f64().unwrap();
+    let z0 = before["values"]["e_fox.Transform.position.z"]
+        .as_f64()
+        .unwrap();
+    let z1 = after["values"]["e_fox.Transform.position.z"]
+        .as_f64()
+        .unwrap();
     assert!(z1 - z0 > 1.0, "the Fox moved {:.2} m", z1 - z0);
-    assert_eq!(after["values"]["e_fox.CharacterMotion.grounded"], json!(true));
+    assert_eq!(
+        after["values"]["e_fox.CharacterMotion.grounded"],
+        json!(true)
+    );
 
     // 4. Labelled capture.
-    let shot = agent.play("capture", json!({"world": id, "path": captures.join("scenario-walked.png").to_string_lossy()}));
+    let shot = agent.play(
+        "capture",
+        json!({"world": id, "path": captures.join("scenario-walked.png").to_string_lossy()}),
+    );
     let marks = shot["marks"].as_array().unwrap();
-    assert!(marks.iter().any(|m| m["label"].as_str().unwrap().contains("Fox (e_fox)")), "{marks:?}");
+    assert!(
+        marks
+            .iter()
+            .any(|m| m["label"].as_str().unwrap().contains("Fox (e_fox)")),
+        "{marks:?}"
+    );
 
     // Live patch round trips while running (applied at the next tick, acked after it).
     let mut patch_ms = Vec::new();
     for i in 0..20 {
         let t = Instant::now();
-        let r = agent.play("patch", json!({"world": id,
-            "sets": [{"entity": "e_lamp2", "path": "Light.intensity", "value": 2000 + i * 25}]}));
+        let r = agent.play(
+            "patch",
+            json!({"world": id,
+            "sets": [{"entity": "e_lamp2", "path": "Light.intensity", "value": 2000 + i * 25}]}),
+        );
         patch_ms.push(t.elapsed().as_secs_f64() * 1000.0);
-        assert_eq!(r["readBack"][0], json!(2000 + i * 25));
+        assert_eq!(r["readBack"][0].as_f64(), Some(f64::from(2000 + i * 25)));
     }
     let patch_p95 = percentile(&mut patch_ms.clone(), 0.95);
     assert!(patch_p95 < 50.0, "live patch p95 {patch_p95:.1} ms");
@@ -159,15 +216,32 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let colour = json!([0.2, 0.4, 1.0, 1.0]);
     let patched = agent.play("patch", json!({"world": id, "sets": [{"entity": "e_lamp1", "path": "Light.color", "value": colour}]}));
     assert_eq!(patched["readBack"][0], colour);
-    let kept = agent.play("keep", json!({"world": id, "paths": ["Light.color"], "why": "Bluer lamp from play"}));
+    let kept = agent.play(
+        "keep",
+        json!({"world": id, "paths": ["Light.color"], "why": "Bluer lamp from play"}),
+    );
     assert_eq!(kept["kept"].as_array().unwrap().len(), 1, "{kept}");
     assert!(kept["transaction"]["txn"].is_string(), "{kept}");
 
     // 8. The edit world's scene document now holds the kept colour (unreviewed agent edit).
-    let doc = agent.host.store().workspace().docs().find(|(_, d)| d.id.as_str() == "sc_outpost1").unwrap().1.clone();
+    let doc = agent
+        .host
+        .store()
+        .workspace()
+        .docs()
+        .find(|(_, d)| d.id.as_str() == "sc_outpost1")
+        .unwrap()
+        .1
+        .clone();
     assert_eq!(doc.record("e_lamp1").unwrap()["Light"]["color"], colour);
-    let review = agent.tool("ara_session", json!({"action": "status", "session": agent.session}));
-    let after_capture = agent.play("capture", json!({"world": id, "path": captures.join("scenario-relit.png").to_string_lossy()}));
+    let review = agent.tool(
+        "ara_session",
+        json!({"action": "status", "session": agent.session}),
+    );
+    let after_capture = agent.play(
+        "capture",
+        json!({"world": id, "path": captures.join("scenario-relit.png").to_string_lossy()}),
+    );
     agent.play("stop", json!({"world": id}));
 
     // Determinism: the same seed and inputs in two separate players → equal hashes.
@@ -195,7 +269,10 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     // Host + 2 clients: three processes, clients handshake with the server.
     agent.pool_ready();
     let t = Instant::now();
-    let multi = agent.play("start", json!({"mode": "host", "clients": 2, "startPaused": true}));
+    let multi = agent.play(
+        "start",
+        json!({"mode": "host", "clients": 2, "startPaused": true}),
+    );
     let multi_ms = t.elapsed().as_secs_f64() * 1000.0;
     let players = multi["players"].as_array().unwrap();
     assert_eq!(players.len(), 3);
@@ -208,11 +285,20 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
         agent.pool_ready();
         let w = agent.play("start", json!({"startPaused": true}))["world"].clone();
         let t = Instant::now();
-        let crashed = agent.raw("ara_play", json!({"action": "crash", "world": w, "kind": kind}));
+        let crashed = agent.raw(
+            "ara_play",
+            json!({"action": "crash", "world": w, "kind": kind}),
+        );
         let detected_ms = t.elapsed().as_secs_f64() * 1000.0;
         assert_eq!(crashed["isError"], json!(true), "{kind}");
         let status = agent.play("status", json!({}));
-        let fault = status["worlds"].as_array().unwrap().iter().find(|x| x["world"] == w).unwrap()["fault"].clone();
+        let fault = status["worlds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|x| x["world"] == w)
+            .unwrap()["fault"]
+            .clone();
         let expected = match kind {
             "panic" => "player_panicked",
             "access" => "player_crashed",
@@ -231,19 +317,124 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let summary = json!({
         "firstPlayIncludingImportMs": first_play_ms,
         "bootFromPoolMs": boot_ms,
+        "ownerPrepareMs": world["prepareMs"],
+        "ownerLaunchMs": world["bootMs"],
         "playerStartedMs": world["players"][0]["started"],
         "snapshotBytes": world["snapshotBytes"],
         "step120": {"tick": stepped["tick"], "foxMovedM": z1 - z0},
         "patchRoundTripMs": {"p50": percentile(&mut patch_ms.clone(), 0.5), "p95": patch_p95, "max": percentile(&mut patch_ms, 1.0)},
         "captureMarks": marks.len(),
         "keptTransaction": kept["transaction"]["txn"],
-        "unreviewed": review,
+        "unreviewedAgentTransactions": review["unreviewed"],
         "relitCaptureHash": after_capture["hash"],
         "determinismHash": test["runs"][0]["hash"],
         "hostPlus2Ms": multi_ms,
         "crashes": crashes,
     });
-    println!("SCENARIO {}", serde_json::to_string_pretty(&summary).unwrap());
+    println!(
+        "SCENARIO {}",
+        serde_json::to_string_pretty(&summary).unwrap()
+    );
+    drop(agent);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The same demo in an SDL3 window, driven over MCP: a warm windowed player from the
+/// pool, real-time play with injected movement, frame times from heartbeats and a
+/// labelled capture. Ignored by default because it opens a window:
+/// `cargo test -p ara-player --test scenario -- --ignored --nocapture`.
+#[test]
+#[ignore = "opens a window; run explicitly with --ignored"]
+fn agent_plays_the_demo_in_a_window() {
+    let player = PathBuf::from(env!("CARGO_BIN_EXE_ara-player"));
+    let worker = import_worker(&player);
+    let dir = std::env::temp_dir().join(format!("ara-window-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")),
+        &dir,
+    );
+    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let mut project = Project::open(&dir).unwrap();
+    ara_play_host::register_engine_schemas(&mut project.db);
+    let mut host = Host::open(
+        project,
+        HostConfig {
+            seed: Some(9),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut config = PlayConfig::for_project(&dir);
+    config.pool.executable = player;
+    config.import_worker = worker;
+    config.pool.windowed = 1;
+    config.pool.headless = 0;
+    host.register(Box::new(PlayService::new(&dir, config)))
+        .unwrap();
+    let mut agent = Agent {
+        host,
+        mcp: Adapter::new(),
+        session: String::new(),
+    };
+    let begun = agent.tool(
+        "ara_session",
+        json!({"action": "begin", "client": "scenario", "author": "agent:scenario"}),
+    );
+    agent.session = begun["session"].as_str().unwrap().to_owned();
+    agent.until("a warm window", |a| {
+        a.play("status", json!({}))["pool"]["windowed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 1
+    });
+
+    let t = Instant::now();
+    let world = agent.play("start", json!({"window": true, "seed": 9}));
+    let boot_ms = t.elapsed().as_secs_f64() * 1000.0;
+    let id = world["world"].clone();
+    agent.play(
+        "input",
+        json!({"world": id, "inputs": [
+            {"action": "Move", "value": [0.3, 1], "holdTicks": 150},
+            {"action": "Sprint", "value": true, "holdTicks": 90, "afterTicks": 60}
+        ]}),
+    );
+    let started = Instant::now();
+    let mut status = Value::Null;
+    while started.elapsed() < Duration::from_secs(4) {
+        agent.host.tick();
+        std::thread::sleep(Duration::from_millis(20));
+        let s = agent.play("status", json!({}));
+        if let Some(w) = s["worlds"].as_array().and_then(|w| w.first()) {
+            status = w["players"][0]["status"].clone();
+        }
+    }
+    let read = agent.play("read", json!({"world": id, "paths": ["e_fox.Transform.position.z", "e_fox.CharacterMotion.grounded"]}));
+    assert!(
+        read["values"]["e_fox.Transform.position.z"]
+            .as_f64()
+            .unwrap()
+            > 1.0,
+        "{read}"
+    );
+    let shot = agent.play(
+        "capture",
+        json!({"world": id, "path": captures.join("window.png").to_string_lossy()}),
+    );
+    assert!(!shot["marks"].as_array().unwrap().is_empty());
+    agent.play("stop", json!({"world": id}));
+    println!(
+        "WINDOW {}",
+        serde_json::to_string_pretty(&json!({
+            "bootFromPoolMs": boot_ms,
+            "started": world["players"][0]["started"],
+            "status": status,
+            "tick": read["tick"],
+            "fox": read["values"],
+        }))
+        .unwrap()
+    );
     drop(agent);
     let _ = std::fs::remove_dir_all(&dir);
 }

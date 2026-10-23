@@ -6,6 +6,7 @@
 #![warn(missing_docs)]
 
 pub mod assets;
+pub mod params;
 pub mod pool;
 mod spec;
 
@@ -13,9 +14,9 @@ use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, params::ApplyParams, params::CallSpec, parse};
 use ara_play::{PlayScene, Role, SnapshotRef, Start, method, shm::Section};
 use ara_proto::Scope;
-use ara_schema::{Schema, SchemaDb};
+use ara_schema::SchemaDb;
+use params::*;
 use pool::{Player, Pool, PoolConfig};
-use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -754,211 +755,6 @@ fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
         }
     }
 }
-
-macro_rules! params {
-    ($(#[$doc:meta])* $name:ident { $($(#[$fdoc:meta])* $field:ident : $ty:ty),* $(,)? }) => {
-        $(#[$doc])*
-        #[derive(Debug, Schema, Deserialize)]
-        #[ara(params)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        pub struct $name {
-            /// Session handle from `session.begin`.
-            pub session: String,
-            $($(#[$fdoc])* pub $field: $ty,)*
-        }
-    };
-}
-
-params!(
-    /// Params of `play.start`.
-    PlayStartParams {
-        /// Scene path or asset ID; default: the project's main scene.
-        scene: Option<String>,
-        /// `local` (default), `host` (Listen) or `dedicated`.
-        mode: Option<String>,
-        /// Additional client processes for `host`/`dedicated` (max 16).
-        clients: Option<u32>,
-        /// Open windows (SDL3) for local/host/client players; headless otherwise.
-        window: Option<bool>,
-        /// Start paused at tick 0 (step explicitly); default runs at the fixed rate.
-        start_paused: Option<bool>,
-        /// Session seed for every deterministic random stream (default 0).
-        seed: Option<u64>,
-        /// Fixed tick rate in Hz (default 60; must divide 48000).
-        tick_hz: Option<u32>,
-        /// Push newly imported asset generations into this world while it plays.
-        hot_reload: Option<bool>,
-    }
-);
-params!(
-    /// Params of methods addressing one world.
-    WorldParams {
-        /// World ID from `play.start` (`play:1`).
-        world: String,
-    }
-);
-params!(
-    /// Params of `play.step`.
-    PlayStepParams {
-        /// World ID.
-        world: String,
-        /// Fixed ticks to run as fast as possible.
-        ticks: u32,
-        /// Action injections `{action, value, holdTicks, afterTicks, player}` relative to the first tick.
-        inputs: Option<Vec<Value>>,
-    }
-);
-params!(
-    /// Params of `play.input`.
-    PlayInputParams {
-        /// World ID.
-        world: String,
-        /// Action injections `{action, value, holdTicks, afterTicks, player}` for the next tick.
-        inputs: Vec<Value>,
-    }
-);
-params!(
-    /// Params of `play.inspect`.
-    PlayInspectParams {
-        /// World ID.
-        world: String,
-        /// Entity address (`e_fox`).
-        entity: String,
-        /// Components to read; all present when absent.
-        components: Option<Vec<String>>,
-    }
-);
-params!(
-    /// Params of `play.read`.
-    PlayReadParams {
-        /// World ID.
-        world: String,
-        /// `entity.Component.field` paths (`e_fox.Transform.position.z`).
-        paths: Vec<String>,
-    }
-);
-params!(
-    /// Params of `play.patch`: live edits applied at the next tick boundary.
-    PlayPatchParams {
-        /// World ID.
-        world: String,
-        /// Edits `{entity, path, value}` (`{"entity":"e_lamp1","path":"Light.color","value":[1,0,0,1]}`).
-        sets: Vec<Value>,
-    }
-);
-params!(
-    /// Params of `play.capture`.
-    PlayCaptureParams {
-        /// World ID.
-        world: String,
-        /// PNG to write (also `.marks.png` and `.legend.json`); state hash only when absent.
-        path: Option<String>,
-        /// Width in pixels (default 1280).
-        width: Option<u32>,
-        /// Height in pixels (default 720).
-        height: Option<u32>,
-        /// Maximum numbered marks (default 40; 0 disables).
-        marks: Option<u32>,
-    }
-);
-params!(
-    /// Params of `play.watch`.
-    PlayWatchParams {
-        /// World ID.
-        world: String,
-        /// `entity.Component.field` paths sampled by step/until.
-        paths: Vec<String>,
-        /// Sampling interval in ticks (default 1).
-        every: Option<u32>,
-    }
-);
-params!(
-    /// Params of `play.until`.
-    PlayUntilParams {
-        /// World ID.
-        world: String,
-        /// `entity.Component.field` path.
-        path: String,
-        /// `eq`, `ne`, `gt`, `ge`, `lt` or `le`.
-        compare: String,
-        /// Right-hand value.
-        value: Value,
-        /// Tick budget.
-        max_ticks: u32,
-        /// Action injections relative to the first tick.
-        inputs: Option<Vec<Value>>,
-    }
-);
-params!(
-    /// Params of `play.timescale`.
-    PlayTimescaleParams {
-        /// World ID.
-        world: String,
-        /// Host-time multiplier in [0, 1000]; the fixed dt never changes.
-        value: f64,
-    }
-);
-params!(
-    /// Params of `play.recording` and `play.replay`.
-    PlayFileParams {
-        /// World ID.
-        world: String,
-        /// Replay file path.
-        path: String,
-    }
-);
-params!(
-    /// Params of `play.keep`.
-    PlayKeepParams {
-        /// World ID.
-        world: String,
-        /// Only these entities.
-        entities: Option<Vec<String>>,
-        /// Only paths starting with one of these (`Light.color`).
-        paths: Option<Vec<String>>,
-        /// Also keep values runtime systems write every tick (poses, velocities).
-        include_driven: Option<bool>,
-        /// Why, shown in review.
-        why: Option<String>,
-    }
-);
-params!(
-    /// Params of `play.debug.crash` (fault-isolation tests).
-    PlayCrashParams {
-        /// World ID.
-        world: String,
-        /// `panic`, `access` or `hang`.
-        kind: String,
-    }
-);
-params!(
-    /// Params of `play.pool`.
-    PlayPoolParams {
-        /// Idle headless players to keep warm.
-        headless: Option<u32>,
-        /// Idle windowed players to keep warm.
-        windowed: Option<u32>,
-    }
-);
-params!(
-    /// Params of `play.status`.
-    PlayStatusParams {}
-);
-params!(
-    /// Params of `test.run`: a playtest in a fresh headless player.
-    TestRunParams {
-        /// Scene path or asset ID; default: the project's main scene.
-        scene: Option<String>,
-        /// Session seed.
-        seed: Option<u64>,
-        /// Fixed tick rate in Hz.
-        tick_hz: Option<u32>,
-        /// Steps `{do: input|step|until|expect|patch|watch|capture|hash, …}` run in order.
-        steps: Vec<Value>,
-        /// Run twice in separate processes and require equal final state hashes.
-        determinism: Option<bool>,
-    }
-);
 
 impl Service for PlayService {
     fn name(&self) -> &'static str {

@@ -402,6 +402,9 @@ impl Player {
             }
             method::CAPTURE => {
                 let params: ara_play::CaptureParams = parse(params)?;
+                if params.path.is_some() {
+                    busy(link, "gpu")?;
+                }
                 if params.path.is_some() && self.presenter.is_none() {
                     // Headless players create a GPU device on their first image.
                     self.presenter =
@@ -443,6 +446,7 @@ impl Player {
             self.world.is_none(),
             "players are single-use; this one already plays"
         );
+        busy(&mut self.link, "build")?;
         let decode = Instant::now();
         let scene = match &start.snapshot {
             ara_play::SnapshotRef::Shm { section, len } => {
@@ -469,6 +473,20 @@ impl Player {
         self.world = Some(world);
         Ok(started)
     }
+}
+
+/// Announces known-long silent work (device creation, world build) to the owner's
+/// watchdog; a hang past the deadline is still reported.
+fn busy(link: &mut Link, what: &str) -> Result<()> {
+    link.notify(
+        ara_play::BUSY,
+        &ara_play::Busy {
+            what: what.into(),
+            max_ms: 60_000,
+        },
+    )?;
+    link.flush()?;
+    Ok(())
 }
 
 /// Client roles complete a UDP hello/welcome with their server before reporting

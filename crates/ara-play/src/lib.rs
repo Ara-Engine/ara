@@ -24,6 +24,9 @@ pub const PROTOCOL: &str = "ara-play/1";
 pub const HELLO: &str = "player.hello";
 /// Player → owner notification every 250 ms; also the liveness signal ([`Status`]).
 pub const STATUS: &str = "play.status";
+/// Player → owner notification before known-long work (GPU device creation, world
+/// build): the owner's hang watchdog allows silence until the deadline ([`Busy`]).
+pub const BUSY: &str = "play.busy";
 /// Prefix of the single structured crash line a player writes to stderr.
 pub const CRASH_PREFIX: &str = "ARA_PLAYER_CRASH ";
 /// Environment variable carrying the per-session token (never the command line).
@@ -431,6 +434,16 @@ pub struct Status {
     pub frame_ms_p95: f64,
     /// A subsystem fault that paused the world.
     pub fault: Option<String>,
+}
+
+/// `play.busy` notification.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Busy {
+    /// What the player is doing (`gpu`, `build`).
+    pub what: String,
+    /// Longest expected silence in milliseconds; still a hang past it.
+    pub max_ms: u64,
 }
 
 /// The single machine-readable crash line.
