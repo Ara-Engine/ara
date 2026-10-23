@@ -34,7 +34,7 @@ fn missing_model_keeps_simulation_and_placeholder_alive() {
         runtime
             .asset_errors()
             .iter()
-            .any(|e| e.contains("ARA7303") && e.contains("as_fox"))
+            .any(|e| e.contains("ARA7310") && e.contains("as_fox"))
     );
     runtime.step(2, &[]).unwrap();
     let mut frame = RenderFrame::default();

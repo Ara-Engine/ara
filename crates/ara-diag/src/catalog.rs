@@ -323,8 +323,6 @@ mod tests {
 
     #[test]
     fn lookup_takes_any_name() {
-        assert_eq!(lookup("play::ASSETS"), get(codes::PLAY_ASSETS));
-        assert_eq!(lookup("ASSETS"), get(codes::PLAY_ASSETS));
         let doc = lookup("ara1302").expect("by number");
         assert_eq!(doc.name, "UNRESOLVED_REF");
         assert_eq!(lookup("1302"), Some(doc));

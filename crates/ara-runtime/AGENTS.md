@@ -46,7 +46,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   (`NavStreamer` assembled at the boundary, swaps recorded with their tick).
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
-- Missing/broken model generations produce `asset_errors()` (`ARA7303`) and magenta
+- Missing/broken model generations produce `asset_errors()` (`ARA7310`) and magenta
   shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
