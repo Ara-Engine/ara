@@ -74,6 +74,16 @@ impl Renderer2d {
     pub fn render(&mut self, camera: &Camera2d, exposure: f32) -> Result<()> {
         self.render_mode(camera, exposure, ViewMode::Lit)
     }
+    /// Renders the window output entirely on the GPU, without capture readbacks.
+    /// The output remains in CopySource state for native presentation.
+    pub fn present(&mut self, camera: &Camera2d, exposure: f32) -> Result<()> {
+        self.render_frame(camera, exposure, ViewMode::Lit, false)
+    }
+
+    /// Current target dimensions; a resized view stages a new renderer.
+    pub fn size(&self) -> [u32; 2] {
+        self.size
+    }
     /// Returns the same PNG, marks, picking and provenance contract as the 3D renderer.
     pub fn capture(&mut self, camera: &Camera2d, mut request: CaptureRequest) -> Result<Capture> {
         ensure!(

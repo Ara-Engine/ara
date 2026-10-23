@@ -15,6 +15,9 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   (`ara_runtime::engine`) for a host before `Host::open`; clashes become diagnostics.
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
   checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
+  `Pool::with_scripts` passes module settings for pre-warm before the ready hello.
+  Local crash artifacts go beside player logs in `crashes/`; a clean window close
+  stops and reaps the whole Play world without reporting a crash.
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
   (imports in worker processes, non-progressive); `pins` waits for published
   generations, which are always persisted final-preset cooks players can load.

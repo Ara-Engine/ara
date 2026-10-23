@@ -3,7 +3,10 @@
 //! only at a tick boundary (D20), and a failed reload keeps the last good model.
 use crate::{Result, RuntimeError, model::Model};
 use ara_asset::{CacheBackend, CachedImport, Digest, FileCache};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 /// Read access to published cooked generations. The edit-world owner pins which
 /// generation is live; players never run importers.
@@ -52,6 +55,7 @@ impl AssetSource for MemoryAssets {
 #[derive(Default, Clone)]
 pub struct Models {
     models: BTreeMap<String, Arc<Model>>,
+    wanted: BTreeSet<String>,
 }
 
 impl Models {
@@ -62,6 +66,7 @@ impl Models {
     /// Decodes `asset` from `source` unless that exact generation is already loaded.
     /// Returns whether a new generation was installed.
     pub fn load(&mut self, source: &dyn AssetSource, asset: &str) -> Result<bool> {
+        self.wanted.insert(asset.to_owned());
         let (digest, cached) = source
             .load(asset)?
             .ok_or_else(|| RuntimeError(format!("asset {asset} has no published generation")))?;
@@ -74,7 +79,7 @@ impl Models {
     }
     /// Every loaded asset ID.
     pub fn ids(&self) -> impl Iterator<Item = &str> {
-        self.models.keys().map(String::as_str)
+        self.wanted.iter().map(String::as_str)
     }
 }
 

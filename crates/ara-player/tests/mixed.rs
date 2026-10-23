@@ -75,7 +75,8 @@ fn add_sound(dir: &Path) {
 fn agent_plays_a_scene_mixing_3d_vfx_and_audio() {
     let dir = demo_copy("mixed");
     add_sound(&dir);
-    let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
+    let captures =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     let mut agent = Agent::open(&dir, 13, |_| {});
     agent.tool(
         "ara_apply",

@@ -42,6 +42,18 @@ fn agent_hot_reloads_csharp_gameplay_while_playing() {
         "Outpost.types.json is stale; regenerate with ARA_UPDATE_DEMO=1"
     );
     agent.play("stop", json!({"world": warm["world"]}));
+    agent.pool_ready();
+    let t = Instant::now();
+    let timed = agent.play("start", json!({}));
+    let play_to_first_tick_ms = t.elapsed().as_secs_f64() * 1000.0;
+    assert_eq!(timed["players"][0]["started"]["tick"], json!(1), "{timed}");
+    if std::env::var_os("ARA_BENCH_PLAYER").is_none() {
+        assert!(
+            play_to_first_tick_ms <= 500.0,
+            "Play to first C# tick: {play_to_first_tick_ms:.1} ms; {timed}"
+        );
+    }
+    agent.play("stop", json!({"world": timed["world"]}));
     drop(agent);
 
     // 2. Reopened, the host validates C# components; the agent adds them.
@@ -178,6 +190,7 @@ fn agent_hot_reloads_csharp_gameplay_while_playing() {
         "CSHARP {}",
         serde_json::to_string_pretty(&json!({
             "firstPlayWithDotnetMs": first_ms,
+            "playToFirstCsharpTickMs": play_to_first_tick_ms,
             "bootFromPoolWithModulesMs": boot_ms,
             "hotReload": {"saveToVisibleMs": reload_ms, "level": reload["level"]},
             "restartKeepingStateMs": restart_ms,

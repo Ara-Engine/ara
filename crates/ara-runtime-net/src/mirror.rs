@@ -61,12 +61,13 @@ pub struct NetMirror {
     player: PlayerId,
     hz: u32,
     entities: BTreeMap<NetId, Entity>,
-    baselines: BTreeMap<NetId, Baseline>,
+    baselines: BTreeMap<(NetId, String), Baseline>,
     motors: BTreeMap<NetId, NetMotor>,
     presented: u64,
     interval: Duration,
     created: Instant,
     join_ms: Option<f64>,
+    script_components: Vec<String>,
 }
 
 impl NetMirror {
@@ -79,6 +80,7 @@ impl NetMirror {
         token: JoinToken,
     ) -> Result<Self> {
         let hz = runtime.hz();
+        let script_components = ara_runtime_script::component_names(runtime.world());
         let world = runtime.play_mut().session_mut().world_mut();
         let avatar = world
             .query::<(&Identity, &PlayerControl)>()
@@ -91,7 +93,7 @@ impl NetMirror {
             camera.player = player;
         }
         let policies = PolicyRegistry::new(runtime.play().session().schema().clone())?;
-        let client = Client::<Locomotion>::new(
+        let mut client = Client::<Locomotion>::new(
             policies,
             ClientConfig {
                 player: PlayerId(player),
@@ -101,6 +103,7 @@ impl NetMirror {
             },
             token,
         )?;
+        client.action_codec(super::locomotion::codec());
         Ok(Self {
             client,
             player: PlayerId(player),
@@ -112,14 +115,14 @@ impl NetMirror {
             interval: Duration::from_secs_f64(1.0 / f64::from(hz.min(30))),
             created: Instant::now(),
             join_ms: None,
+            script_components,
         })
     }
 
-    /// The owner's input, `after` ticks past its next predicted tick. Only `Move` (the
-    /// predicted action) is networked; other actions are dropped.
+    /// Queues movement, orbit, sprint and jump for the owner's next predicted tick.
     pub fn input(&mut self, after: u64, inputs: Vec<Injection>) -> Result<()> {
         let tick = self.client.status().predicted_tick + 1 + after;
-        for mut input in inputs.into_iter().filter(|i| i.action == MOVE) {
+        for mut input in inputs {
             input.player = self.player;
             self.client.inject(tick, input)?;
         }
@@ -198,6 +201,15 @@ impl NetMirror {
         let spawns = self.client.spawns();
         let world = runtime.play_mut().session_mut().world_mut();
         if spawns.iter().any(|s| !self.entities.contains_key(&s.id)) {
+            for spawn in &spawns {
+                if !world
+                    .query::<&Identity>()
+                    .iter(world)
+                    .any(|id| id.0 == spawn.identity)
+                {
+                    world.spawn((Identity(spawn.identity.clone()), Transform::default()));
+                }
+            }
             let by_identity: BTreeMap<String, Entity> = world
                 .query::<(Entity, &Identity)>()
                 .iter(world)
@@ -213,11 +225,38 @@ impl NetMirror {
             let Some(&entity) = self.entities.get(&spawn.id) else {
                 continue;
             };
+            for name in &self.script_components {
+                if let Some(current) = self.client.component(spawn.id, name)? {
+                    let baseline =
+                        self.baselines
+                            .entry((spawn.id, name.clone()))
+                            .or_insert(Baseline {
+                                current: current.clone(),
+                                arrived: now - self.interval,
+                            });
+                    if baseline.current != current {
+                        baseline.current = current;
+                        baseline.arrived = now;
+                    }
+                    let alpha = ((now - baseline.arrived).as_secs_f32()
+                        / self.interval.as_secs_f32())
+                    .min(1.0);
+                    let value = self
+                        .client
+                        .sample_component(spawn.id, name, alpha)?
+                        .unwrap_or_else(|| baseline.current.clone());
+                    ara_runtime_script::apply_replica(world, entity, name, &value)
+                        .map_err(|e| NetError(e.0))?;
+                }
+            }
             if let Some(current) = self.client.component(spawn.id, "Transform")? {
-                let baseline = self.baselines.entry(spawn.id).or_insert(Baseline {
-                    current: current.clone(),
-                    arrived: now - self.interval,
-                });
+                let baseline = self
+                    .baselines
+                    .entry((spawn.id, "Transform".into()))
+                    .or_insert(Baseline {
+                        current: current.clone(),
+                        arrived: now - self.interval,
+                    });
                 if baseline.current != current {
                     baseline.current = current;
                     baseline.arrived = now;
@@ -243,18 +282,35 @@ impl NetMirror {
                     entity,
                     [
                         (motor.x - previous.x) as f32 * rate,
-                        0.0,
+                        (motor.y - previous.y) as f32 * rate,
                         (motor.z - previous.z) as f32 * rate,
                     ],
                 );
                 let [x, z] = motor.ground();
                 if let Some(mut transform) = world.get_mut::<Transform>(entity) {
                     transform.position[0] = x;
+                    transform.position[1] = motor.y as f32 / 1000.0;
                     transform.position[2] = z;
                     transform.rotation = [0.0, motor.yaw(), 0.0];
                 }
                 if let Some(mut control) = world.get_mut::<PlayerControl>(entity) {
                     control.yaw = motor.yaw();
+                }
+                if spawn.owner == Some(self.player) {
+                    for mut rig in world.query::<&mut FollowCamera>().iter_mut(world) {
+                        if rig.player == self.player.0 {
+                            rig.yaw = motor.camera_yaw as f32 / 1000.0;
+                            rig.pitch = motor.camera_pitch as f32 / 1000.0;
+                        }
+                    }
+                }
+                if let Some(mut motion) = world.get_mut::<CharacterMotion>(entity) {
+                    motion.grounded = motor.grounded;
+                } else {
+                    world.entity_mut(entity).insert(CharacterMotion {
+                        grounded: motor.grounded,
+                        ..Default::default()
+                    });
                 }
             }
         }

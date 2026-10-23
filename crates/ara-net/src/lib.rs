@@ -2,7 +2,9 @@
 //!
 //! Gameplay implements [`ara_sim::SimulationFeature`] and declares Ara schemas;
 //! backend registration, encryption, prediction and replication remain private.
+mod actions;
 mod bounds;
+pub use actions::{ActionCodec, ExpandedActions};
 mod conditions;
 mod intent;
 mod launch;

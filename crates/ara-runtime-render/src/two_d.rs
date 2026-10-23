@@ -2,13 +2,16 @@
 //! ara-render2d (sprites, flipbooks, tilemaps, 2D lights and shadows) from an
 //! immutable fixed-tick extraction (`Scene2d::extract`).
 use anyhow::{Context, Result};
-use ara_2d::{Camera2d, Sprite, Tilemap};
+use ara_2d::{Atlas, Camera2d, Flipbook, Sprite, SpriteRegion, Tilemap};
 use ara_render::capture::{Capture, CaptureRequest, ViewMode};
 use ara_render2d::{AtlasImage, Renderer2d, Scene2d};
 use ara_runtime::assets::{AssetSource, asset_id};
 use ara_schema::AssetRef;
 use bevy_ecs::world::World;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 
 /// The world's 2D camera, when it is a 2D scene.
 pub fn camera(world: &mut World) -> Option<Camera2d> {
@@ -37,23 +40,72 @@ pub fn atlases(
         add(&tilemap.normal_atlas, true);
     }
     let mut out = BTreeMap::new();
+    let mut regions = BTreeSet::new();
+    for sprite in world.query::<&Sprite>().iter(world) {
+        regions.insert(sprite.region.clone());
+    }
+    for clip in world.query::<&Flipbook>().iter(world) {
+        regions.extend(clip.frames.iter().map(|f| f.region.clone()));
+    }
+    for map in world.query::<&Tilemap>().iter(world) {
+        regions.extend(map.definitions.values().map(|d| d.region.clone()));
+    }
     for (key, (reference, linear)) in wanted {
-        let id = asset_id(&reference).map_err(|e| anyhow::anyhow!(e.0))?;
-        let (_, cached) = assets
-            .load(id)
-            .map_err(|e| anyhow::anyhow!(e.0))?
-            .with_context(|| format!("atlas {key} is not imported"))?;
-        let artifact = |name: &str| {
-            cached
-                .output
-                .artifacts
-                .iter()
-                .find(|a| a.name == name)
-                .map(|a| a.bytes.as_slice())
-                .with_context(|| format!("atlas {key} has no {name}"))
+        let loaded = (|| -> Result<AtlasImage> {
+            let id = asset_id(&reference).map_err(|e| anyhow::anyhow!(e.0))?;
+            let (_, cached) = assets
+                .load(id)
+                .map_err(|e| anyhow::anyhow!(e.0))?
+                .with_context(|| format!("atlas {key} is not imported"))?;
+            let artifact = |name: &str| {
+                cached
+                    .output
+                    .artifacts
+                    .iter()
+                    .find(|a| a.name == name)
+                    .map(|a| a.bytes.as_slice())
+                    .with_context(|| format!("atlas {key} has no {name}"))
+            };
+            let atlas = serde_json::from_slice(artifact("atlas.json")?)?;
+            AtlasImage::from_cooked(atlas, artifact("atlas.rgba")?, linear)
+        })();
+        let image = match loaded {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!("ARA7303: {error:#}; using a placeholder atlas");
+                AtlasImage {
+                    atlas: Atlas {
+                        width: 16,
+                        height: 16,
+                        regions: regions
+                            .iter()
+                            .map(|name| {
+                                (
+                                    name.clone(),
+                                    SpriteRegion {
+                                        width: 16,
+                                        height: 16,
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .collect(),
+                    },
+                    rgba: (0..16 * 16)
+                        .flat_map(|i| {
+                            if linear {
+                                [128, 128, 255, 255]
+                            } else if (i / 16 / 4 + i % 16 / 4) % 2 == 0 {
+                                [255, 0, 255, 255]
+                            } else {
+                                [32, 0, 32, 255]
+                            }
+                        })
+                        .collect(),
+                    linear,
+                }
+            }
         };
-        let atlas = serde_json::from_slice(artifact("atlas.json")?)?;
-        let image = AtlasImage::from_cooked(atlas, artifact("atlas.rgba")?, linear)?;
         out.insert(key, image);
     }
     Ok(out)
@@ -63,6 +115,8 @@ pub fn atlases(
 pub struct Presenter2d {
     renderer: Option<Renderer2d>,
     cache: PathBuf,
+    atlases: BTreeMap<String, AtlasImage>,
+    camera: Option<Camera2d>,
 }
 
 impl Presenter2d {
@@ -71,7 +125,52 @@ impl Presenter2d {
         Self {
             renderer: None,
             cache: cache.into(),
+            atlases: BTreeMap::new(),
+            camera: None,
         }
+    }
+
+    /// Publishes atlas generations once at a frame boundary.
+    pub fn set_atlases(&mut self, atlases: BTreeMap<String, AtlasImage>) {
+        self.atlases = atlases;
+    }
+
+    /// The window renderer and its native presentation device.
+    pub fn renderer(&self) -> Option<&Renderer2d> {
+        self.renderer.as_ref()
+    }
+
+    /// Extracts and uploads the current 2D world; the atlas map moves through the
+    /// extraction and back instead of copying texture pixels every frame.
+    pub fn prepare(
+        &mut self,
+        world: &mut World,
+        tick: u64,
+        size: [u32; 2],
+        extensions: &[std::ffi::CString],
+    ) -> Result<()> {
+        self.camera = Some(camera(world).context("the world has no Camera2d")?);
+        let mut scene = Scene2d::extract(world, std::mem::take(&mut self.atlases), tick)?;
+        let result = if self.renderer.as_ref().is_none_or(|r| r.size() != size) {
+            Renderer2d::with_extensions(&scene, size, &self.cache, extensions).map(|r| {
+                self.renderer = Some(r);
+            })
+        } else {
+            self.renderer
+                .as_mut()
+                .context("2D renderer missing")?
+                .update(&scene)
+        };
+        self.atlases = std::mem::take(&mut scene.atlases);
+        result
+    }
+
+    /// Draws the prepared view to its native output without capture readback.
+    pub fn present(&mut self) -> Result<()> {
+        self.renderer
+            .as_mut()
+            .context("2D renderer missing")?
+            .present(self.camera.as_ref().context("2D camera missing")?, 1.0)
     }
 
     /// A deterministic capture of the world at `tick` through its `Camera2d`.
@@ -86,6 +185,9 @@ impl Presenter2d {
     ) -> Result<Capture> {
         let camera = camera(world).context("the world has no Camera2d")?;
         let scene = Scene2d::extract(world, atlases, tick)?;
+        if self.renderer.as_ref().is_some_and(|r| r.size() != size) {
+            self.renderer = None;
+        }
         let renderer = match &mut self.renderer {
             Some(renderer) => {
                 renderer.update(&scene)?;
@@ -110,5 +212,35 @@ impl Presenter2d {
                 marks,
             },
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn missing_atlas_keeps_sprite_and_flipbook_regions_drawable() {
+        let mut world = World::new();
+        world.spawn((
+            Sprite {
+                atlas: Some(AssetRef("@missing.png#as_missing1".into())),
+                region: "idle".into(),
+                ..Default::default()
+            },
+            Flipbook {
+                frames: vec![ara_2d::FlipbookFrame {
+                    region: "walk".into(),
+                    ticks: 1,
+                }],
+                ..Default::default()
+            },
+        ));
+        let images = atlases(&mut world, &ara_runtime::assets::MemoryAssets::default())
+            .expect("placeholder atlas");
+        let image = &images["@missing.png#as_missing1"];
+        assert!(
+            image.atlas.regions.contains_key("idle") && image.atlas.regions.contains_key("walk")
+        );
+        assert_eq!(image.rgba.len(), 16 * 16 * 4);
     }
 }

@@ -51,7 +51,7 @@ struct Owner {
     origin: Option<u32>,
     ready: bool,
     limit: Option<u64>,
-    inputs: BTreeMap<u64, Injection>,
+    inputs: BTreeMap<(u64, String), Injection>,
     source: Option<fn(u64, PlayerId) -> Option<ActionValue>>,
     last_checked: BTreeMap<NetId, u32>,
     status: ClientStatus,
@@ -155,11 +155,29 @@ impl<F: SimulationFeature> Client<F> {
     pub fn input_source(&mut self, source: fn(u64, PlayerId) -> Option<ActionValue>) {
         self.app.world_mut().resource_mut::<Owner>().source = Some(source);
     }
+    /// Installs a shared multi-action codec before the client starts polling.
+    pub fn action_codec(&mut self, codec: crate::ActionCodec<F::Input>) {
+        self.app.insert_resource(codec);
+    }
     /// Queues bounded headless/device action injection at an explicit game tick.
     pub fn inject(&mut self, tick: u64, input: Injection) -> Result<()> {
+        let codec = self
+            .app
+            .world()
+            .get_resource::<crate::ActionCodec<F::Input>>();
+        if let Some(codec) = codec {
+            if !codec.names.contains(&input.action.as_str()) {
+                return Err(NetError("undeclared predicted action".into()));
+            }
+            (codec.sample)(&BTreeMap::from([(input.action.clone(), input.value)]))?;
+        } else {
+            if input.action != F::ACTION {
+                return Err(NetError("undeclared predicted action".into()));
+            }
+            F::input(Some(input.value))?;
+        }
         let mut owner = self.app.world_mut().resource_mut::<Owner>();
         if input.player != owner.player
-            || input.action != F::ACTION
             || input.hold_ticks == 0
             || tick.checked_add(u64::from(input.hold_ticks)).is_none()
             || owner.inputs.len() >= 2048
@@ -168,8 +186,7 @@ impl<F: SimulationFeature> Client<F> {
         {
             return Err(NetError("invalid/bounded client action injection".into()));
         }
-        F::input(Some(input.value))?;
-        owner.inputs.insert(tick, input);
+        owner.inputs.insert((tick, input.action.clone()), input);
         Ok(())
     }
     /// Sends only a typed intent. There is no editor-op/state-write message route.

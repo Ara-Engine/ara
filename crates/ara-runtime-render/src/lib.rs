@@ -5,12 +5,14 @@
 //! edits) and otherwise streams per-frame motion: moved or skinned meshes are
 //! re-transformed on the CPU into world space (`Renderer::update_mesh`), lights and the
 //! sun are rewritten in place. Captures are deterministic and carry numbered marks.
-//! Presented frames draw the resident terrain chunks as meshes ([`terrain_mesh`]);
-//! captures composite ara-landscape terrain and foliage instead.
+//! Presented frames merge landscape/foliage depth with the scene on the GPU, draw
+//! persistent particles, then tone map. Captures can read that exact output path.
 #![warn(missing_docs)]
 
+mod composite;
 pub mod geometry;
 pub mod landscape;
+mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
 pub mod vfx;
@@ -55,7 +57,7 @@ pub struct Presenter {
     effects: vfx::Effects,
     landscapes: landscape::Landscapes,
     terrain: terrain_mesh::TerrainMeshes,
-    /// Whether this frame draws terrain chunks as meshes (presented frames).
+    /// Whether to use terrain mesh fallback instead of the landscape renderer.
     draw_terrain: bool,
     size: [u32; 2],
     extensions: Vec<CString>,
@@ -71,6 +73,8 @@ pub struct Presenter {
     sun: ([f32; 3], [f32; 3]),
     scratch: Vec<Vertex>,
     stats: PresentStats,
+    composite: Option<composite::Composite>,
+    output: Option<ara_gpu::Image>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -131,12 +135,20 @@ impl Presenter {
             sun: ([0.0; 3], [0.0; 3]),
             scratch: Vec::new(),
             stats: PresentStats::default(),
+            composite: None,
+            output: None,
         }
     }
 
     /// The renderer, once the first frame was presented.
     pub fn renderer(&self) -> Option<&Renderer> {
         self.renderer.as_ref()
+    }
+
+    /// Final GPU-composited window image, in CopySource state.
+    pub fn output(&self) -> Option<ara_gpu::Image> {
+        self.output
+            .or_else(|| self.renderer.as_ref().map(Renderer::output))
     }
 
     /// Cost of the last `present`/`prepare`.
@@ -184,7 +196,7 @@ impl Presenter {
                         self.size,
                         &self.extensions,
                         &self.cache,
-                    )?);
+                    ).context("ARA_GPU_BACKEND: cannot initialize rendering; run `ara doctor` to check the Vulkan loader and GPU driver")?);
                 }
             }
             std::mem::swap(&mut self.layout, &mut self.next_layout);
@@ -195,10 +207,9 @@ impl Presenter {
         Ok(())
     }
 
-    /// Prepares and renders `frame` to the presenter's output image, terrain chunks
-    /// drawn as meshes.
+    /// Renders the scene, landscape/foliage and particles to one GPU window image.
     pub fn present(&mut self, frame: &RenderFrame) -> Result<()> {
-        self.draw_terrain = true;
+        self.draw_terrain = frame.terrain.is_none();
         self.prepare(frame)?;
         let camera = camera(frame)?;
         let exposure = frame.environment.exposure;
@@ -208,6 +219,43 @@ impl Presenter {
             .as_mut()
             .context("renderer missing after prepare")?;
         renderer.render(&camera, exposure)?;
+        let terrain = self.landscapes.present(renderer, frame, &camera)?;
+        let (image, sampled_index, state) = renderer.feature_color();
+        let mut color = ara_vfx_gpu::SceneColor {
+            image,
+            sampled_index,
+            state,
+        };
+        let (image, sampled_index, state) = renderer.feature_depth();
+        let mut depth = ara_vfx_gpu::SceneDepth {
+            image,
+            sampled_index,
+            state,
+        };
+        if terrain.is_some() || !frame.effects.is_empty() {
+            if self
+                .composite
+                .as_ref()
+                .is_none_or(|c| c.size != renderer.size())
+            {
+                if let Some(old) = self.composite.take() {
+                    old.retire(renderer.gpu_mut())?;
+                }
+                let size = renderer.size();
+                self.composite = Some(composite::Composite::new(renderer.gpu_mut(), size)?);
+            }
+            let composite = self.composite.as_mut().context("compositor initialized")?;
+            if let Some(terrain) = terrain {
+                (color, depth) =
+                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure)?;
+            }
+            color = self
+                .effects
+                .present(renderer, frame, &camera, color, depth)?;
+            self.output = Some(composite.finish(renderer.gpu_mut(), color, exposure)?);
+        } else {
+            self.output = Some(renderer.output());
+        }
         self.stats.render = started.elapsed();
         Ok(())
     }
@@ -254,8 +302,7 @@ impl Presenter {
         Ok(capture)
     }
 
-    /// A deterministic capture of what presented (windowed) frames draw: terrain
-    /// chunks as meshes, without the landscape and VFX composites.
+    /// Captures the window presentation path, including landscape/foliage and VFX.
     pub fn capture_presented(
         &mut self,
         frame: &RenderFrame,
@@ -280,8 +327,17 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("renderer missing after prepare")?;
-        let capture = renderer.capture(&request)?;
-        renderer.resize(self.size)?;
+        let mut capture = renderer.capture(&request)?;
+        let original_size = self.size;
+        self.size = size;
+        self.present(frame)?;
+        let output = self.output.context("composited output missing")?;
+        readback::replace(
+            self.renderer.as_mut().context("renderer missing")?,
+            output,
+            &mut capture,
+        )?;
+        self.resize(original_size)?;
         Ok(capture)
     }
 

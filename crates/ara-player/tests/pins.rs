@@ -46,3 +46,22 @@ fn first_pins_are_persisted_final_generations() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_missing_asset_reports_a_code_and_keeps_play_running() {
+    use serde_json::json;
+    let dir = support::demo_copy("missing-source");
+    std::fs::remove_file(dir.join("assets/fox/Fox.glb")).unwrap();
+    let mut agent = support::Agent::open(&dir, 9, |_| {});
+    agent.pool_ready();
+    let world = agent.play("start", json!({"startPaused":true}));
+    assert!(
+        world["notes"]
+            .as_array()
+            .is_some_and(|notes| notes.iter().any(|n| n["code"] == "ARA7303")),
+        "{world}"
+    );
+    let stepped = agent.play("step", json!({"world":world["world"],"ticks":2}));
+    assert_eq!(stepped["tick"], json!(2));
+    agent.play("stop", json!({"world":world["world"]}));
+}
