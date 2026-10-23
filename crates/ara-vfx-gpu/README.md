@@ -130,3 +130,20 @@ stage medians, including the 1440p background and tone mapper, are about
 1.2–1.3 ms. The workload uses 0.003 m sprites distributed across an 8×5×2 m box;
 this measures simulation and geometry throughput with low fill cost. Raw reports
 retain the quality-cap and prefix-scan measurements before and after the change.
+
+Final measurements after merging main through `b7c63d3` (2026-10-23), in ms:
+
+| Stage, median | Graphics queue | Dedicated compute |
+|---|---:|---:|
+| Update | 0.275456 | 0.272384 |
+| Compact scan | 0.089088 | 0.088064 |
+| Compact prefix | 0.017408 | 0.017408 |
+| Compact scatter | 0.065536 | 0.065536 |
+| Draw | 0.559104 | 0.559200 |
+| Tone map | 0.100352 | 0.099328 |
+| Sum of all stage medians | 1.240608 | 1.231872 |
+
+The raw report includes every stage and its p95. Both runs retain and draw all
+1,000,000 particles. The same merged source passed 21 tests, including the six
+unchanged goldens and CPU/GPU state comparisons, plus check, clippy with warnings
+denied and formatting checks for both VFX crates and the two integration crates.
