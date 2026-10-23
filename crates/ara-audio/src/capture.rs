@@ -88,9 +88,9 @@ pub struct NodeActivity {
     pub op: String,
     /// Quanta rendered.
     pub blocks: u64,
-    /// Quanta whose output exceeded -80 dBFS (or carried a trigger).
+    /// Quanta whose output exceeded -80 dBFS, carried a trigger, or switched clips.
     pub active_blocks: u64,
-    /// Highest absolute output sample.
+    /// Highest absolute output sample (audio outputs only).
     pub peak: f32,
     /// Trigger pulses emitted.
     pub triggers: u64,

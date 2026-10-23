@@ -71,3 +71,14 @@ impl Clip {
         Ok(self.with_loudness(lufs))
     }
 }
+
+impl std::fmt::Debug for Clip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Clip")
+            .field("sample_rate", &self.sample_rate)
+            .field("frames", &self.frames.len())
+            .field("peak", &self.peak)
+            .field("loudness", &self.loudness)
+            .finish()
+    }
+}

@@ -1,0 +1,188 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -2.6698975506953286,
+      "rmsDbfs": -26.049569693655926
+    }
+  ],
+  "channelRms": [0.04983351354094602, 0.04983351354094602],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "graphs": [
+    {
+      "graph": "Rifle",
+      "instance": "rifle",
+      "nodes": [
+        {
+          "activeBlocks": 188,
+          "blocks": 751,
+          "node": "crack",
+          "op": "sample",
+          "peak": 0.76,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 46,
+          "blocks": 751,
+          "node": "punch",
+          "op": "ad",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "thump",
+          "op": "sine",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 46,
+          "blocks": 751,
+          "node": "low",
+          "op": "mul",
+          "peak": 0.9345957,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "hiss",
+          "op": "noise.white",
+          "peak": 0.99996185,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 16,
+          "blocks": 751,
+          "node": "snap_env",
+          "op": "ad",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 16,
+          "blocks": 751,
+          "node": "snap",
+          "op": "mul",
+          "peak": 0.971017,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 188,
+          "blocks": 751,
+          "node": "body",
+          "op": "mix",
+          "peak": 2.32544,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "tail_time",
+          "op": "map",
+          "peak": 0.32,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "tail_feedback",
+          "op": "map",
+          "peak": 0.45,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 459,
+          "blocks": 751,
+          "node": "tail",
+          "op": "delay",
+          "peak": 2.32544,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 459,
+          "blocks": 751,
+          "node": "dark_tail",
+          "op": "lowpass",
+          "peak": 1.821557,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "tail_level",
+          "op": "map",
+          "peak": 0.5,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 432,
+          "blocks": 751,
+          "node": "tail_out",
+          "op": "mul",
+          "peak": 0.9107785,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 543,
+          "blocks": 751,
+          "node": "shot",
+          "op": "mix",
+          "peak": 2.32544,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 516,
+          "blocks": 751,
+          "node": "level",
+          "op": "gain",
+          "peak": 0.73536867,
+          "triggers": 0
+        }
+      ]
+    }
+  ],
+  "integratedLufs": -22.68146970087171,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -26.049569831272464,
+  "samplePeak": 0.7353686690330505,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0.35058333333333336,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -27.505575128541714
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -49.55645372305373
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -28.379192708060007
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -41.3733045043182
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -37.44041414505554
+    }
+  ],
+  "truePeak": 0.7616912722587585,
+  "wavBlake3": "fe9f282e3ee04dccc9a3ec1ea1e752c26d9f3cc6389f08db454213af0edc4974"
+}
