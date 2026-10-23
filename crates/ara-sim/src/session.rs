@@ -137,8 +137,9 @@ impl Session {
             self.schedule
                 .configure_sets(Order(index).after(Order(index - 1)));
         }
-        self.schedule
-            .add_systems(IntoSystem::into_system(system).in_set(Order(index)));
+        self.schedule.add_systems(
+            IntoSystem::into_system(system).with_name(name.to_owned()).in_set(Order(index)),
+        );
         self.systems.push(name.into());
         Ok(())
     }
@@ -288,6 +289,8 @@ impl Session {
     /// Executes exactly one fixed boundary, independently of a host clock.
     /// A handler/patch failure faults the session; restore a checkpoint before continuing.
     pub fn step(&mut self) -> Result<TickRecord> {
+        #[cfg(feature = "profiling")]
+        let _profile = ara_profile::scope("sim.tick");
         if let Some(error) = &self.fault {
             return Err(SimError(format!(
                 "session is faulted; restore a checkpoint: {error}"

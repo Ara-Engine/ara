@@ -5,7 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+profiling = ["dep:ara-profile"]
+
 [dependencies]
+ara-profile = { path = "../ara-profile", optional = true }
 rayon = "1.11"
 ara-asset-format = { path = "../ara-asset-format" }
 ara-doc = { path = "../ara-doc" }

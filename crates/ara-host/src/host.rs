@@ -67,6 +67,8 @@ impl Default for HostConfig {
 
 /// Everything the services work on. Crate-private; services see it through [`Cx`].
 pub(crate) struct State {
+    pub(crate) profiler: ara_profile::Profiler,
+    pub(crate) profile_attached: bool,
     pub(crate) root: PathBuf,
     pub(crate) name: String,
     pub(crate) type_files: Vec<(PathBuf, Option<std::time::SystemTime>)>,
@@ -178,6 +180,9 @@ impl Host {
             })
             .collect();
         let mut st = State {
+            profiler: ara_profile::Profiler::new(ara_profile::Config::default())
+                .map_err(|e| Diagnostic::error(codes::INVALID_PARAMS, e))?,
+            profile_attached: false,
             root,
             name,
             type_files,
@@ -215,6 +220,7 @@ impl Host {
             routes: BTreeMap::new(),
         };
         host.register(Box::new(crate::core::Core))?;
+        host.register(Box::new(crate::profile::ProfileService))?;
         Ok(host)
     }
 
@@ -357,6 +363,9 @@ impl Host {
 
     /// Periodic work: external-edit checks, debounced flushes, service ticks.
     pub fn tick(&mut self) {
+        let profiling = self.st.profiler.is_recording()
+            && self.st.profiler.begin_frame().is_ok();
+        let span = profiling.then(|| ara_profile::scope("host.tick"));
         self.st.watch();
         self.st.drain();
         self.st.flush(false);
@@ -369,7 +378,16 @@ impl Host {
             service.tick(&mut cx);
         }
         self.st.drain();
+        drop(span);
+        if profiling {
+            let _ = self.st.profiler.end_frame(Default::default(), Default::default());
+        }
     }
+
+    /// Frame-inspector integration: register render/simulation/worker endpoints,
+    /// begin/end presentation frames, and attach delayed GPU results by frame ID.
+    /// Host ticks make their own frames only when no presentation frame is open.
+    pub fn profiler(&mut self) -> &mut ara_profile::Profiler { &mut self.st.profiler }
 
     /// Writes every document with unsaved changes now.
     pub fn flush(&mut self) {
@@ -399,6 +417,7 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        if self.st.profile_attached { ara_profile::ThreadRegistration::detach(); }
         if !self.st.killed {
             self.flush();
         }

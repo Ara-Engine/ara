@@ -6,7 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+profiling = ["dep:ara-profile", "bevy_ecs/trace"]
+
 [dependencies]
+ara-profile = { path = "../ara-profile", optional = true }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }
 ara-doc = { path = "../ara-doc" }
