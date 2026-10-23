@@ -337,7 +337,7 @@ impl Session {
         activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
     ) -> Result<TickRecord> {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("sim.tick");
+        ara_profile::scope!("sim.tick");
         if let Some(error) = &self.fault {
             return Err(SimError(format!(
                 "session is faulted; restore a checkpoint: {error}"

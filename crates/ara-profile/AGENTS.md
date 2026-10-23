@@ -9,7 +9,10 @@ No gameplay state. No implicit subscriber, allocator, worker or viewer startup.
 - `register_thread(name)` then move the endpoint to its worker and `attach()` once.
   `ThreadRegistration::detach()` only after scopes exit; never share a producer.
 - `start` / `stop`, `begin_frame` -> `FrameToken`, `end_frame(Counters, Memory)`.
-- `scope("static.name")`: native RAII interval. No allocation or locks on entry/exit.
+- `scope!("static.name")`: lexical scope with static callsite metadata. Compiles
+  away without `instrumentation`; subsystem `profiling` features opt in.
+- `callsite!` / `scope_at`: same backend with an explicit guard lifetime.
+- `scope("static.name")`: explicit native-only guard, including in Tracy builds.
 - `ProfileLayer`: composable tracing subscriber layer, including Bevy's `name` field.
   Tracing span creation/name registration is a cold path; reuse spans in hot loops.
 - `FrameToken::in_scope`: registered worker work retains its originating frame.
@@ -29,11 +32,21 @@ No gameplay state. No implicit subscriber, allocator, worker or viewer startup.
 
 ## Features / cost
 
-Default: recording runtime-disabled. Subsystem `profiling` features default off,
-so shipping builds have no subsystem marker code. Native producers use a bounded
-SPSC ring and fixed nesting stack, never an `Arc<Mutex<_>>` around frame state.
+Default: scope macros compile away. Subsystem `profiling` features default off.
+With instrumentation compiled in, the stopped path checks one global relaxed
+atomic before any TLS access. Native producers use a bounded SPSC ring and fixed
+nesting stack, never an `Arc<Mutex<_>>` around frame state.
 Labels are interned on first observation. Warm native recording, GPU/job imports
 and frame collection reuse allocated storage (covered by the allocation test).
+Scope edges only update TLS-owned cursors and records, with no ring atomics.
+`FrameToken::in_scope`, collection and detach publish batches. Workers with custom
+loops must call `ThreadRegistration::flush()` at frame/job boundaries. Full local
+buffers drop records until publication; losses remain explicit and bounded.
+
+Invariant x86-64 TSC ticks replace per-edge reference-clock calls; frequency is
+calibrated once per frame and conversion happens during collection. Cold setup
+uses a 2 ms reference interval. Reads use compiler barriers, not CPU instruction
+serialization, matching Tracy's counter style. Other CPUs use the monotonic clock.
 
 `allocation`: executable installs `CountingAllocator<System>` explicitly with
 `#[global_allocator]`. Counts requested bytes, reallocations and live requested
@@ -43,6 +56,10 @@ Per-scope attribution is thread-local requested bytes, including/excluding child
 `tracy`: links tracy-client's vendored C++ through cc; never CMake. Zones and frame
 marks are emitted even without a viewer. Shipping omits this feature. Trace/viewer
 startup and Tracy's own storage are outside the native allocation-free guarantee.
+It selects Tracy instead of native recording for scope macros and ProfileLayer.
+Literal sites cache `SpanLocation` once and use `Client::span`; dynamic tracing
+aliases use a static adapter zone with alias text. Agent CPU summaries use native
+mode; the explicit native-only `scope` function remains available in either mode.
 
 ## Semantics
 

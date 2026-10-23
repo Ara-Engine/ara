@@ -5,7 +5,7 @@ fn main() {
 
 #[divan::bench]
 fn unattached_scope() {
-    let _span = ara_profile::scope(std::hint::black_box("bench.scope"));
+    ara_profile::scope!("bench.scope");
 }
 
 #[divan::bench]

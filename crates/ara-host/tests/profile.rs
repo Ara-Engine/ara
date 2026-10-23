@@ -59,12 +59,13 @@ fn typed_profile_service_round_trips_through_engine_protocol() {
         json!({"session":session,"topN":100,"limit":0}),
     );
     assert_eq!(summary["result"]["frames"], 3);
-    assert!(
+    assert_eq!(
         summary["result"]["metrics"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|m| m["key"] == "cpu/host.tick")
+            .any(|m| m["key"] == "cpu/host.tick"),
+        ara_profile::scope_backend() == "native"
     );
     let baseline = summary["result"].to_string();
     let compared = rpc(

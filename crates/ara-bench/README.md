@@ -11,7 +11,7 @@ profiler.register_thread("presentation").attach()?; // setup only
 profiler.start();
 let frame = profiler.begin_frame()?;
 {
-    let _span = ara_profile::scope("extract");
+    ara_profile::scope!("extract");
     // Extract ECS state and submit render work.
 }
 // Keep frame.id() with the GPU submission/readback.
@@ -21,10 +21,12 @@ profiler.end_frame(counters, memory)?;
 
 Register each task-pool worker during setup. Move a `ThreadRegistration` onto
 that worker and attach it once. Move the copyable `FrameToken` with queued work,
-then call `token.in_scope(|| { let _span = scope("job.name"); ... })` there.
+then call `token.in_scope(|| { ara_profile::scope!("job.name"); ... })` there.
 Workers never lock frame history, allocate records, wait for the host or publish
 authoring mutations. Collect at presentation boundaries; late data updates the
 original frame while retained. Stop producers before saving a complete capture.
+Records and cursors stay local until the frame/job boundary. Custom worker loops
+without `FrameToken::in_scope` must call `ThreadRegistration::flush()` there.
 
 Enable subsystem features such as `ara-sim/profiling`, `ara-render/profiling`,
 `ara-anim/profiling`, `ara-physics/profiling`, `ara-nav/profiling`,
@@ -38,8 +40,8 @@ subscriber. Attach each executing worker before recording starts.
 also back the generated `ara_profile` MCP tool. Parameters carry the session;
 summary parameters are `topN`, `limit`, `maxBytes`; compare accepts baseline/current
 JSON strings plus `relative` and `absoluteNs`. No service path opens arbitrary files.
-Build the CLI/daemon with `--features ara-profile/allocation` to enable its installed
-counting allocator. Other engine executables choose their own global allocator and
+Build the CLI/daemon with `--features ara-profile/instrumentation,ara-profile/allocation`
+for native CPU scopes and its installed counting allocator. Other executables choose their own global allocator and
 can wrap it in `CountingAllocator`; the feature remains off in ordinary builds.
 
 `ImportJob::record_profile` and `BakeJob::record_profile` attach job-manager samples
@@ -62,7 +64,7 @@ path relative to that project, a seed and run settings:
 
 ```powershell
 $env:CARGO_BUILD_JOBS = '2'
-cargo run -p ara-bench --release --features allocation --example scenario -- script.json result.araprof
+cargo run -p ara-bench --release --features scenario,allocation --example scenario -- script.json result.araprof
 cargo run -p ara -- profile compare result.a.json result.b.json
 ```
 
@@ -91,7 +93,7 @@ Resolve label indices through `Profile::labels` and CPU thread IDs through
 Durations do not imply absolute clock alignment or a cross-queue critical path.
 VRAM categories/counters come from their owning subsystems at `end_frame`.
 
-## Overhead measurements
+## Original overhead measurements
 
 Run `cargo run -p ara-bench --release --example overhead`, then repeat with
 `--features tracy` and `--features allocation`. Each output records paired median
@@ -120,6 +122,47 @@ in `src/dbghelp.rs`. This run measures explicit zones, without call stacks.
 The machine is shared, so retain the raw round samples and load alongside results
 instead of treating these medians as isolated-machine limits.
 
+## Overhead after the hot-path pass
+
+Same machine/toolchain, 21 paired AB/BA rounds. The longer disabled loops now use
+100 million iterations per round so even compiled-out scopes produce a real OS
+load sample. Recording uses 16,000 scopes per round; every run validates record
+counts and fails on data loss. Negative added costs are measurement noise from
+subtracting pipelined empty-loop throughput, not negative execution time.
+
+| Mode / raw samples | Runtime-disabled added cost | Recording | Native collection / span | Background CPU |
+| --- | ---: | ---: | ---: | ---: |
+| [Shipping, feature off](measurements/overhead-v2/shipping.json) | ~0 ns | 0 ns | N/A | 23.22% |
+| [Native static sites](measurements/overhead-v2/native.json) | ~0 ns (-0.04 raw) | 19.84 ns | 10.62 ns | 25.51% |
+| [Counting allocator](measurements/overhead-v2/allocation.json) | 0.03 ns | 22.19 ns | 10.92 ns | 46.83% |
+| [Tracy static sites](measurements/overhead-v2/tracy.json) | 0.07 ns | 21.60 ns | N/A | 30.99% |
+
+Shipping omits `ara-profile/instrumentation`; `scope!` expands to nothing. With
+instrumentation compiled in, the first branch is one relaxed global atomic load,
+before any TLS/ring/clock access. The isolated [atomic-gate step](measurements/overhead-v2/atomic-gate.json)
+measured 0.45 ns added cost. Native recording uses invariant TSC ticks, calibrated
+against the reference clock once per frame; collection converts to nanoseconds.
+The non-invariant/non-x86 fallback keeps the monotonic reference clock. TSC reads
+bound compiler reordering without CPU instruction-serialization fences, as Tracy
+does. Ring cursors/records are TLS-owned; publication atomics occur at boundaries.
+
+Tracy's direct `Client::span` control measured **19.75 ns**, beside the wrapper's
+**21.60 ns**; the public Rust/C API on this machine costs more than the 2-10 ns
+estimate. Each literal callsite initializes `SpanLocation` once and emits fast
+static zones. Tracy replaces native recording, verified by zero native records.
+No viewer was attached; zone emission was enabled. `ProfileLayer` also selects
+one backend, using zone text for dynamic tracing aliases. The explicit `scope`
+function is native-only for callers who need that backend directly.
+
+Incremental samples are retained: [fresh baseline](measurements/overhead-v2/baseline-native.json)
+77.14 ns, [atomic gate](measurements/overhead-v2/atomic-gate.json) 74.46 ns,
+[TSC](measurements/overhead-v2/tsc-clock.json) 22.13 ns,
+[local batches/guards](measurements/overhead-v2/local-ring.json) 19.02 ns, and
+[static sites](measurements/overhead-v2/static-callsites.json) 19.71 ns.
+A [metadata-cache experiment](measurements/overhead-v2/metadata-cache.json)
+measured 28.84 ns under 65.39% background load and was reverted; it did not
+establish an improvement. These shared-machine samples are not isolated estimates.
+
 ## Local validation
 
 `./crates/ara-bench/run.ps1 -Mode Gate` runs profiler allocation/GPU/Tracy tests,
@@ -127,7 +170,8 @@ the real Vulkan correlation test, tests for every instrumented subsystem and the
 host/CLI, strict Clippy across all targets, and formatting checks. It scopes its
 environment and always uses two Cargo jobs. Pass `-TargetDir` to reuse a cache.
 
-The fixture scene `ara-host/tests/fixtures/project/levels/arena.scene`, seed 1,
+Before this overhead pass, the fixture scene
+`ara-host/tests/fixtures/project/levels/arena.scene`, seed 1,
 completed four AB/BA rounds of 120 measured ticks after eight warmup ticks per
 variant. The 960-frame binary capture and canonical summaries had no dropped
 records or hitches. CPU frame p50/p95/p99 were 500/1500/3600 ns; both measured

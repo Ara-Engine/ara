@@ -104,6 +104,7 @@ fn ring_overflow_is_bounded_and_explicit() {
 }
 
 #[test]
+#[cfg(not(feature = "tracy"))]
 fn tracing_uses_dynamic_system_names_and_excludes_suspension() {
     let (mut p, _attached) = profiler(1, 32);
     let subscriber = tracing_subscriber::registry().with(ProfileLayer);
@@ -219,8 +220,13 @@ fn concurrent_ring_publication_loses_only_counted_records() {
         let _attached = Attached;
         token
             .in_scope(|| {
-                for _ in 0..10000 {
-                    let _s = scope("worker");
+                for i in 0..10000 {
+                    {
+                        let _s = scope("worker");
+                    }
+                    if i % 32 == 31 {
+                        ThreadRegistration::flush();
+                    }
                 }
             })
             .unwrap();
@@ -234,4 +240,62 @@ fn concurrent_ring_publication_loses_only_counted_records() {
     end(&mut p);
     let frame = &p.profile().frames[0];
     assert_eq!(frame.spans.len() as u64 + frame.dropped, 10000);
+}
+
+#[test]
+fn macro_selects_exactly_one_backend() {
+    let (mut p, _attached) = profiler(1, 32);
+    p.begin_frame().unwrap();
+    {
+        ara_profile::scope!("literal.site");
+        std::hint::black_box(1);
+    }
+    end(&mut p);
+    let frame = &p.profile().frames[0];
+    if scope_backend() == "native" {
+        assert_eq!(frame.spans.len(), 1);
+        assert_eq!(
+            p.profile().labels[frame.spans[0].label as usize],
+            "literal.site"
+        );
+    } else {
+        assert!(frame.spans.is_empty());
+    }
+}
+
+#[test]
+fn stale_guard_cannot_finish_a_new_capture_scope() {
+    let (mut older, attached) = profiler(1, 32);
+    older.begin_frame().unwrap();
+    let stale = scope("stale");
+    older.stop();
+    drop(attached);
+    let (mut current, _attached) = profiler(1, 32);
+    current.begin_frame().unwrap();
+    let live = scope("live");
+    drop(stale);
+    drop(live);
+    end(&mut current);
+    assert_eq!(current.profile().frames[0].spans.len(), 1);
+    assert_eq!(current.profile().frames[0].dropped, 0);
+    assert_eq!(
+        current.profile().labels[current.profile().frames[0].spans[0].label as usize],
+        "live"
+    );
+}
+
+#[cfg(feature = "tracy")]
+#[test]
+fn tracy_adapter_does_not_also_record_native_spans() {
+    let (mut p, _attached) = profiler(1, 32);
+    let subscriber = tracing_subscriber::registry().with(ProfileLayer);
+    tracing::subscriber::with_default(subscriber, || {
+        p.begin_frame().unwrap();
+        let span = tracing::info_span!("system", name = "movement");
+        {
+            let _entered = span.enter();
+        }
+        end(&mut p);
+    });
+    assert!(p.profile().frames[0].spans.is_empty());
 }

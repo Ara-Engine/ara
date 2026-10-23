@@ -377,20 +377,21 @@ impl Host {
     /// Periodic work: external-edit checks, debounced flushes, service ticks.
     pub fn tick(&mut self) {
         let profiling = self.st.profiler.is_recording() && self.st.profiler.begin_frame().is_ok();
-        let span = profiling.then(|| ara_profile::scope("host.tick"));
-        self.st.watch();
-        self.st.drain();
-        self.st.flush(false);
-        for service in &mut self.services {
-            let mut cx = Cx {
-                st: &mut self.st,
-                conn: ConnId::LOCAL,
-                session: None,
-            };
-            service.tick(&mut cx);
+        {
+            ara_profile::scope!("host.tick");
+            self.st.watch();
+            self.st.drain();
+            self.st.flush(false);
+            for service in &mut self.services {
+                let mut cx = Cx {
+                    st: &mut self.st,
+                    conn: ConnId::LOCAL,
+                    session: None,
+                };
+                service.tick(&mut cx);
+            }
+            self.st.drain();
         }
-        self.st.drain();
-        drop(span);
         if profiling {
             let _ = self
                 .st

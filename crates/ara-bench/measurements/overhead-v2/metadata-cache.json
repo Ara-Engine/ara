@@ -1,0 +1,216 @@
+{
+  "rounds": 21,
+  "disabled_iterations": 100000000,
+  "enabled_iterations": 16000,
+  "baseline_ns": 0.467916,
+  "disabled_added_ns": -0.015390000000000015,
+  "enabled_added_ns": 28.8375,
+  "collection_ns_per_span": 16.1625,
+  "tracy": false,
+  "allocation": false,
+  "load": {
+    "total_cpu": 0.71261474609375,
+    "process_cpu": 0.05871369643627158,
+    "background_cpu": 0.6539010496574784
+  },
+  "clock": "invariant-tsc",
+  "backend": "native",
+  "native_records_per_round": 16000,
+  "tracy_direct_ns": null,
+  "tracy_connected": false,
+  "samples": [
+    {
+      "round": 0,
+      "enabled_baseline_ns": 0.3875,
+      "enabled_added_ns": 38.387499999999996,
+      "collection_ns_per_span": 18.48125,
+      "disabled_baseline_ns": 0.590707,
+      "disabled_added_ns": -0.274155,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 1,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 35.44375,
+      "collection_ns_per_span": 21.46875,
+      "disabled_baseline_ns": 0.253823,
+      "disabled_added_ns": 0.050088999999999995,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 2,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 21.8375,
+      "collection_ns_per_span": 12.31875,
+      "disabled_baseline_ns": 0.579165,
+      "disabled_added_ns": -0.25818800000000003,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 3,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 19.606250000000003,
+      "collection_ns_per_span": 10.9125,
+      "disabled_baseline_ns": 0.228815,
+      "disabled_added_ns": 0.040195000000000036,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 4,
+      "enabled_baseline_ns": 0.4,
+      "enabled_added_ns": 31.39375,
+      "collection_ns_per_span": 35.7625,
+      "disabled_baseline_ns": 0.467916,
+      "disabled_added_ns": 0.060441999999999996,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 5,
+      "enabled_baseline_ns": 0.425,
+      "enabled_added_ns": 33.862500000000004,
+      "collection_ns_per_span": 18.825,
+      "disabled_baseline_ns": 0.568506,
+      "disabled_added_ns": 0.003402000000000016,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 6,
+      "enabled_baseline_ns": 0.38125,
+      "enabled_added_ns": 38.418749999999996,
+      "collection_ns_per_span": 20.65,
+      "disabled_baseline_ns": 1.002137,
+      "disabled_added_ns": -0.503646,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 7,
+      "enabled_baseline_ns": 0.3625,
+      "enabled_added_ns": 36.1875,
+      "collection_ns_per_span": 20.81875,
+      "disabled_baseline_ns": 0.397177,
+      "disabled_added_ns": 0.06949,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 8,
+      "enabled_baseline_ns": 0.45625,
+      "enabled_added_ns": 35.581250000000004,
+      "collection_ns_per_span": 22.24375,
+      "disabled_baseline_ns": 0.81276,
+      "disabled_added_ns": -0.38458600000000004,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 9,
+      "enabled_baseline_ns": 0.33125,
+      "enabled_added_ns": 29.525,
+      "collection_ns_per_span": 16.925,
+      "disabled_baseline_ns": 0.384233,
+      "disabled_added_ns": 0.11329500000000003,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 10,
+      "enabled_baseline_ns": 0.41875,
+      "enabled_added_ns": 34.231249999999996,
+      "collection_ns_per_span": 21.0875,
+      "disabled_baseline_ns": 0.674336,
+      "disabled_added_ns": -0.26853400000000005,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 11,
+      "enabled_baseline_ns": 0.3125,
+      "enabled_added_ns": 27.54375,
+      "collection_ns_per_span": 16.1625,
+      "disabled_baseline_ns": 0.320496,
+      "disabled_added_ns": -0.015390000000000015,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 12,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 19.01875,
+      "collection_ns_per_span": 10.85625,
+      "disabled_baseline_ns": 0.512644,
+      "disabled_added_ns": -0.213354,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 13,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 18.90625,
+      "collection_ns_per_span": 10.74375,
+      "disabled_baseline_ns": 0.210141,
+      "disabled_added_ns": 0.012491000000000002,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 14,
+      "enabled_baseline_ns": 0.34375,
+      "enabled_added_ns": 30.125,
+      "collection_ns_per_span": 17.95,
+      "disabled_baseline_ns": 0.469467,
+      "disabled_added_ns": -0.17846,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 15,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 18.925,
+      "collection_ns_per_span": 10.5125,
+      "disabled_baseline_ns": 0.207548,
+      "disabled_added_ns": 0.06398999999999999,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 16,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 28.8375,
+      "collection_ns_per_span": 15.61875,
+      "disabled_baseline_ns": 0.443262,
+      "disabled_added_ns": -0.217441,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 17,
+      "enabled_baseline_ns": 0.275,
+      "enabled_added_ns": 24.375,
+      "collection_ns_per_span": 12.95625,
+      "disabled_baseline_ns": 0.230231,
+      "disabled_added_ns": 0.014549000000000006,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 18,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 20.26875,
+      "collection_ns_per_span": 11.35625,
+      "disabled_baseline_ns": 0.475419,
+      "disabled_added_ns": -0.20391499999999996,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 19,
+      "enabled_baseline_ns": 0.20625,
+      "enabled_added_ns": 19.4875,
+      "collection_ns_per_span": 11.38125,
+      "disabled_baseline_ns": 0.228553,
+      "disabled_added_ns": 0.094441,
+      "tracy_direct_ns": null
+    },
+    {
+      "round": 20,
+      "enabled_baseline_ns": 0.2125,
+      "enabled_added_ns": 19.125,
+      "collection_ns_per_span": 10.94375,
+      "disabled_baseline_ns": 0.528235,
+      "disabled_added_ns": -0.161491,
+      "tracy_direct_ns": null
+    }
+  ],
+  "platform": "windows",
+  "architecture": "x86_64",
+  "logical_cpus": 16,
+  "note": "Release build, 21 paired AB/BA differences. Static scopes select one backend. Shipping expands to nothing; runtime-disabled scopes use one relaxed load; native ticks convert at collection; Tracy uses cached source locations, without a viewer or native double recording."
+}

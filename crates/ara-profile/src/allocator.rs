@@ -29,8 +29,16 @@ impl AllocationSample {
     }
 }
 
+#[inline(always)]
 pub(crate) fn local_bytes() -> u64 {
-    LOCAL.try_with(Cell::get).unwrap_or(0)
+    #[cfg(feature = "allocation")]
+    {
+        LOCAL.try_with(Cell::get).unwrap_or(0)
+    }
+    #[cfg(not(feature = "allocation"))]
+    {
+        0
+    }
 }
 
 /// Live requested heap bytes. Install `CountingAllocator<System>` in the dev executable.

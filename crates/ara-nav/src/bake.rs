@@ -25,7 +25,7 @@ impl Baker {
         previous: Option<&BakeArtifact>,
     ) -> Result<BakeArtifact, NavError> {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("jobs.nav.bake");
+        ara_profile::scope!("jobs.nav.bake");
         input.validate()?;
         let mut stats = BakeStats::default();
         if let Some(old) = previous {

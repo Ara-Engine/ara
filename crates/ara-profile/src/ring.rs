@@ -8,29 +8,33 @@ use std::{
         Arc,
         atomic::{AtomicU64, AtomicUsize, Ordering},
     },
-    time::Instant,
 };
 
 pub(crate) struct Control {
     pub id: u64,
+    #[cfg(not(feature = "tracy"))]
     pub names: std::sync::Mutex<Names>,
     pub enabled: std::sync::atomic::AtomicBool,
     pub frame: AtomicU64,
-    pub origin: Instant,
+    pub clock: crate::clock::Clock,
 }
 #[derive(Default)]
+#[cfg(not(feature = "tracy"))]
 pub(crate) struct Names {
     pub values: Vec<String>,
     pub ids: std::collections::BTreeMap<String, u32>,
 }
 impl Control {
     pub fn now(&self) -> u64 {
-        self.origin.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+        self.clock.now()
     }
 }
 #[derive(Clone, Copy)]
 pub(crate) enum Name {
     Static(&'static str),
+    #[cfg(not(feature = "tracy"))]
+    Callsite(&'static crate::Callsite),
+    #[cfg(not(feature = "tracy"))]
     Registered(u32),
 }
 #[derive(Clone, Copy)]
@@ -70,18 +74,6 @@ impl Ring {
             dropped: AtomicU64::new(0),
         }
     }
-    fn push(&self, span: RawSpan) {
-        let write = self.write.load(Ordering::Relaxed);
-        if write.wrapping_sub(self.read.load(Ordering::Acquire)) >= self.slots.len() {
-            self.dropped.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        // SAFETY: this is the sole producer's unpublished slot, not held by the reader.
-        unsafe {
-            (*self.slots[write & (self.slots.len() - 1)].get()).write(span);
-        }
-        self.write.store(write.wrapping_add(1), Ordering::Release);
-    }
     pub fn pop(&self) -> Option<RawSpan> {
         let read = self.read.load(Ordering::Relaxed);
         if read == self.write.load(Ordering::Acquire) {
@@ -104,8 +96,6 @@ struct Active {
     children: u64,
     allocated: u64,
     child_allocated: u64,
-    #[cfg(feature = "tracy")]
-    _tracy: Option<tracy_client::Span>,
 }
 pub(crate) struct Producer {
     pub control: Arc<Control>,
@@ -113,24 +103,73 @@ pub(crate) struct Producer {
     stack: [Option<Active>; 128],
     depth: usize,
     next: u64,
+    write: usize,
+    published: usize,
+    cached_read: usize,
+    dropped: u64,
     pub frame_override: Option<u64>,
 }
 impl Producer {
     pub fn new(control: Arc<Control>, ring: Arc<Ring>) -> Self {
+        let write = ring.write.load(Ordering::Relaxed);
+        let cached_read = ring.read.load(Ordering::Acquire);
         Self {
             control,
             ring,
             stack: std::array::from_fn(|_| None),
             depth: 0,
             next: 0,
+            write,
+            published: write,
+            cached_read,
+            dropped: 0,
             frame_override: None,
         }
+    }
+    #[inline(always)]
+    fn push(&mut self, span: RawSpan) {
+        if self.write.wrapping_sub(self.cached_read) >= self.ring.slots.len() {
+            self.dropped += 1;
+            return;
+        }
+        // SAFETY: cached_read was acquired at the previous publication boundary.
+        // This sole producer owns every slot up to capacity beyond that cursor.
+        // No consumer can see this new slot until publish's release store.
+        unsafe {
+            (*self.ring.slots[self.write & (self.ring.slots.len() - 1)].get()).write(span);
+        }
+        self.write = self.write.wrapping_add(1);
+    }
+    /// Batch handoff only at frame/job boundaries, never at a normal scope edge.
+    pub fn publish(&mut self) {
+        if self.write != self.published {
+            self.ring.write.store(self.write, Ordering::Release);
+            self.published = self.write;
+        }
+        if self.dropped != 0 {
+            self.ring.dropped.fetch_add(self.dropped, Ordering::Relaxed);
+            self.dropped = 0;
+        }
+        self.cached_read = self.ring.read.load(Ordering::Acquire);
+    }
+}
+impl Drop for Producer {
+    fn drop(&mut self) {
+        self.publish();
     }
 }
 thread_local! { pub(crate) static PRODUCER: RefCell<Option<Producer>> = const { RefCell::new(None) }; }
 
-pub(crate) fn begin(name: Name, display: &str) -> Option<u64> {
-    #[cfg(not(feature = "tracy"))]
+pub(crate) fn mark_dropped() {
+    PRODUCER.with_borrow_mut(|p| {
+        if let Some(p) = p {
+            p.dropped += 1;
+        }
+    });
+}
+
+#[inline]
+pub(crate) fn begin(name: Name, display: &str) -> Option<(u64, u64)> {
     let _ = display;
     PRODUCER.with_borrow_mut(|slot| {
         let p = slot.as_mut()?;
@@ -144,7 +183,7 @@ pub(crate) fn begin(name: Name, display: &str) -> Option<u64> {
             return None;
         }
         if p.depth == p.stack.len() {
-            p.ring.dropped.fetch_add(1, Ordering::Relaxed);
+            p.dropped += 1;
             return None;
         }
         p.next = p.next.checked_add(1)?;
@@ -165,19 +204,17 @@ pub(crate) fn begin(name: Name, display: &str) -> Option<u64> {
             id: p.next,
             parent,
             tree_parent,
-            start: p.control.now(),
+            start: p.control.clock.read(),
             children: 0,
             allocated: local_bytes(),
             child_allocated: 0,
-            #[cfg(feature = "tracy")]
-            _tracy: tracy_client::Client::running()
-                .map(|c| c.span_alloc(Some(display), "Ara scope", file!(), line!(), 0)),
         });
         p.depth += 1;
-        Some(p.next)
+        Some((p.control.id, p.next))
     })
 }
-pub(crate) fn end(id: u64) {
+#[inline]
+pub(crate) fn end(owner: u64, id: u64) {
     let _ = PRODUCER.try_with(|slot| {
         let Ok(mut slot) = slot.try_borrow_mut() else {
             return;
@@ -185,16 +222,26 @@ pub(crate) fn end(id: u64) {
         let Some(p) = slot.as_mut() else {
             return;
         };
-        let Some(i) = p.stack[..p.depth]
+        if p.control.id != owner {
+            return;
+        }
+        let Some(top) = p.depth.checked_sub(1) else {
+            return;
+        };
+        let i = if p.stack[top].as_ref().is_some_and(|s| s.id == id) {
+            top
+        } else if let Some(i) = p.stack[..p.depth]
             .iter()
             .position(|s| s.as_ref().is_some_and(|s| s.id == id))
-        else {
+        {
+            i
+        } else {
             return;
         };
         // Explicitly dropped guards may exit out of order. Their children keep
         // their original parent, but the malformed nesting is marked incomplete.
         if i + 1 != p.depth {
-            p.ring.dropped.fetch_add(1, Ordering::Relaxed);
+            p.dropped += 1;
         }
         let Some(active) = p.stack[i].take() else {
             return;
@@ -202,17 +249,31 @@ pub(crate) fn end(id: u64) {
         while p.depth > 0 && p.stack[p.depth - 1].is_none() {
             p.depth -= 1;
         }
-        let duration = p.control.now().saturating_sub(active.start);
-        let allocated = local_bytes().wrapping_sub(active.allocated);
-        if let Some(parent) = p.stack[..p.depth]
-            .iter_mut()
-            .flatten()
-            .find(|s| s.id == active.parent)
-        {
-            parent.children = parent.children.saturating_add(duration);
-            parent.child_allocated = parent.child_allocated.saturating_add(allocated);
+        let after = p.control.clock.read();
+        if after < active.start {
+            p.dropped += 1;
         }
-        p.ring.push(RawSpan {
+        let duration = after.saturating_sub(active.start);
+        let allocated = local_bytes().wrapping_sub(active.allocated);
+        if active.parent != 0 {
+            let parent = if p.depth > 0
+                && p.stack[p.depth - 1]
+                    .as_ref()
+                    .is_some_and(|s| s.id == active.parent)
+            {
+                p.stack[p.depth - 1].as_mut()
+            } else {
+                p.stack[..p.depth]
+                    .iter_mut()
+                    .flatten()
+                    .find(|s| s.id == active.parent)
+            };
+            if let Some(parent) = parent {
+                parent.children = parent.children.saturating_add(duration);
+                parent.child_allocated = parent.child_allocated.saturating_add(allocated);
+            }
+        }
+        p.push(RawSpan {
             frame: active.frame,
             name: active.name,
             id,
@@ -229,18 +290,32 @@ pub(crate) fn end(id: u64) {
 /// Thread-bound RAII scope; dropping completes the CPU span on its entering thread.
 #[must_use]
 pub struct SpanGuard {
-    id: Option<u64>,
+    id: u64,
     owner: u64,
     _thread: PhantomData<Rc<()>>,
 }
 impl SpanGuard {
+    #[cfg(not(feature = "tracy"))]
+    #[inline]
+    pub(crate) fn at(site: &'static crate::Callsite) -> Self {
+        let (owner, id) = begin(Name::Callsite(site), site.name()).unwrap_or((0, 0));
+        Self {
+            id,
+            owner,
+            _thread: PhantomData,
+        }
+    }
+    #[inline(always)]
+    pub(crate) const fn inactive() -> Self {
+        Self {
+            id: 0,
+            owner: 0,
+            _thread: PhantomData,
+        }
+    }
+    #[inline]
     pub(crate) fn new(name: &'static str) -> Self {
-        let id = begin(Name::Static(name), name);
-        let owner = if id.is_some() {
-            PRODUCER.with_borrow(|p| p.as_ref().map_or(0, |p| p.control.id))
-        } else {
-            0
-        };
+        let (owner, id) = begin(Name::Static(name), name).unwrap_or((0, 0));
         Self {
             id,
             owner,
@@ -249,17 +324,10 @@ impl SpanGuard {
     }
 }
 impl Drop for SpanGuard {
+    #[inline]
     fn drop(&mut self) {
-        if let Some(id) = self.id
-            && PRODUCER
-                .try_with(|p| {
-                    p.borrow()
-                        .as_ref()
-                        .is_some_and(|p| p.control.id == self.owner)
-                })
-                .unwrap_or(false)
-        {
-            end(id);
+        if self.id != 0 {
+            end(self.owner, self.id);
         }
     }
 }

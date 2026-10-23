@@ -83,6 +83,7 @@ fn paired_rounds_reverse_order_reset_and_correlate_ranges() {
 }
 
 #[test]
+#[cfg(feature = "scenario")]
 fn simulation_reports_the_registered_system_name() {
     use tracing_subscriber::prelude::*;
     let mut profiler = Profiler::new(Config {
@@ -116,11 +117,12 @@ fn simulation_reports_the_registered_system_name() {
             .end_frame(Default::default(), Default::default())
             .unwrap();
     });
-    assert!(
+    assert_eq!(
         profiler.profile().frames[0]
             .spans
             .iter()
-            .any(|span| profiler.profile().labels[span.label as usize] == "movement")
+            .any(|span| profiler.profile().labels[span.label as usize] == "movement"),
+        ara_profile::scope_backend() != "tracy"
     );
     ThreadRegistration::detach();
 }

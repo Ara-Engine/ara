@@ -63,7 +63,7 @@ impl BakeJob {
     /// tick-boundary action, respecting Play and agent-approval policy.
     pub fn poll(&mut self) -> JobPoll {
         #[cfg(feature = "profiling")]
-        let _profile = ara_profile::scope("jobs.nav.poll");
+        ara_profile::scope!("jobs.nav.poll");
         if self.finished {
             return JobPoll::Finished;
         }
