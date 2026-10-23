@@ -80,7 +80,9 @@ public sealed class ModuleGenerator : IIncrementalGenerator
                 }
                 types[def.Name] = def.Json;
             }
-            spc.AddSource("AraModule.g.cs", Emit.Module(mod.Name, data, sys, behs, cmds, types, native, mod.Linked.ToList()));
+            var declares = data.Count + sys.Length + behs.Length + cmds.Length > 0;
+            if (declares || native)
+                spc.AddSource("AraModule.g.cs", Emit.Module(mod.Name, declares, data, sys, behs, cmds, types, native, mod.Linked.ToList()));
         });
     }
 

@@ -6,6 +6,7 @@
 //! - [`ScriptHost`]: the runtime attached to a bevy `World`: C# components registered
 //!   back into the Schema DB, systems scheduled from their read/write sets, behaviours,
 //!   commands as undoable steps, and hot reload at tick boundaries.
+//! - [`run`]: the `ara_run` supervisor: agent scripts in a limited worker process.
 //! - [`codes`]: the host's diagnostic codes (`ARA0900`–`ARA0999`).
 
 pub mod abi;
@@ -16,6 +17,7 @@ pub mod csgen;
 mod ecs;
 mod host;
 mod module;
+pub mod run;
 pub mod value;
 
 pub use boost::register_tick_thread;
