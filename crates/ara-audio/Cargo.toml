@@ -12,7 +12,7 @@ ecs = ["dep:bevy_ecs"]
 [dependencies]
 ara-schema = { path = "../ara-schema" }
 ara-json = { path = "../ara-json" }
-kira = { version = "=0.12.5", default-features = false }
+kira = { version = "0.12.5", default-features = false }
 sdl3-sys = { version = "0.7.2", default-features = false, features = ["no-link"] }
 libloading = "0.9"
 symphonia = { version = "0.5.5", default-features = false, features = ["wav", "pcm", "adpcm", "flac", "vorbis", "ogg"] }
