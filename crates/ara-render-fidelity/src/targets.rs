@@ -18,7 +18,9 @@ pub(crate) const POST: usize = 16;
 pub(crate) const UPSCALED: usize = 17;
 pub(crate) const OUTPUT: usize = 18;
 pub(crate) const DISPLAY_HISTORY0: usize = 19;
-pub(crate) const COUNT: usize = 21;
+pub(crate) const DIRECT: usize = 21;
+pub(crate) const DIRECT_HISTORY0: usize = 22;
+pub(crate) const COUNT: usize = 24;
 
 pub(crate) struct Targets {
     pub images: Vec<Image>,
@@ -27,7 +29,12 @@ pub(crate) struct Targets {
     pub states: Vec<State>,
 }
 impl Targets {
-    pub fn new(gpu: &mut VulkanDevice, render: [u32; 2], display: [u32; 2]) -> Result<Self> {
+    pub fn new(
+        gpu: &mut VulkanDevice,
+        render: [u32; 2],
+        display: [u32; 2],
+        reference: bool,
+    ) -> Result<Self> {
         let mut t = Self {
             images: Vec::new(),
             sampled: [0; 24],
@@ -35,12 +42,18 @@ impl Targets {
             states: Vec::new(),
         };
         for i in 0..COUNT {
-            let size = if i >= UPSCALED { display } else { render };
+            let size = if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
+                display
+            } else {
+                render
+            };
             let image = gpu.create_image(
                 size[0],
                 size[1],
                 if i == OUTPUT {
                     vk::Format::R8G8B8A8_UNORM
+                } else if !reference && matches!(i, 2 | 3 | 7 | 8 | 9 | 13..=17 | 19..=23) {
+                    vk::Format::R16G16B16A16_SFLOAT
                 } else {
                     vk::Format::R32G32B32A32_SFLOAT
                 },

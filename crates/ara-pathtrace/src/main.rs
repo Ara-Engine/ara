@@ -3,7 +3,9 @@ use ara_gpu::vulkan::VulkanDevice;
 use ara_pathtrace::{Reference, scenes};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::Path;
+mod content;
 mod lag;
+mod quality;
 mod verification;
 
 fn main() -> Result<()> {
@@ -13,6 +15,9 @@ fn main() -> Result<()> {
     let mut gpu = VulkanDevice::new(&[], root.join(".sn/pipeline-cache"))?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "smoke".into());
     match command.as_str() {
+        "sequences" => verification::sequences(&mut gpu, root)?,
+        "quality" => quality::run(&mut gpu, root)?,
+        "content" => content::run(&mut gpu, root)?,
         "capture" => verification::captures(&mut gpu, root)?,
         "timings" => verification::timings(&mut gpu, root)?,
         "smoke" => {
@@ -58,7 +63,7 @@ fn main() -> Result<()> {
             reference.destroy(&mut gpu)?;
             println!("RT hybrid, baked Raster, reference: validation and sync validation clean");
         }
-        _ => anyhow::bail!("Usage: ara-pathtrace [smoke|capture|timings]"),
+        _ => anyhow::bail!("Usage: ara-pathtrace [smoke|capture|timings|quality|content]"),
     }
     gpu.assert_clean()?;
     Ok(())
