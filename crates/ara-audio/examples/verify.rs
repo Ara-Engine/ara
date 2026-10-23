@@ -88,6 +88,33 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn output(sdl: &Path) -> Result<(Box<dyn DeviceBackend>, serde_json::Value)> {
+    let selected = std::env::var("ARA_AUDIO_BACKEND").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "wasapi".into()
+        } else {
+            "sdl".into()
+        }
+    });
+    #[cfg(windows)]
+    if selected == "wasapi" {
+        let backend = ara_audio::wasapi::WasapiBackend::open(
+            48000,
+            ara_audio::wasapi::WasapiOptions::default(),
+        )?;
+        let details = serde_json::json!({"driver":"IAudioClient3 RAW GameEffects", "hardwareFrames":backend.period_frames()?,"capacityFrames":backend.capacity_frames()?,"reportedLatencyMs":backend.reported_latency_ms()?,"device":backend.endpoint_id()?});
+        return Ok((Box::new(backend), details));
+    }
+    if selected != "sdl" {
+        return Err(AudioError::Invalid(
+            "ARA_AUDIO_BACKEND must be sdl or wasapi (Windows)",
+        ));
+    }
+    let backend = SdlBackend::open(sdl, 48000)?;
+    let details = serde_json::json!({"driver":backend.driver()?,"hardwareFrames":backend.format().buffer_frames,"device":backend.name()?});
+    Ok((Box::new(backend), details))
+}
+
 #[cfg(windows)]
 fn latency(sdl: &Path) -> Result<()> {
     #[link(name = "kernel32")]
@@ -110,11 +137,22 @@ fn latency(sdl: &Path) -> Result<()> {
         .collect();
     let clip = Clip::new(48000, frames, 768 * 8)?;
     let mut e = AudioEngine::new(EngineConfig::default())?;
-    let mut backend = SdlBackend::open(sdl, 48000)?;
+    let (mut backend, details) = output(sdl)?;
+    let count = std::env::var("ARA_AUDIO_LATENCY_TRIALS")
+        .map_or(Ok(8), |v| v.parse::<usize>())
+        .map_err(|_| AudioError::Invalid("latency trial count"))?;
+    if !(8..=128).contains(&count) {
+        return Err(AudioError::Invalid("latency trial count must be 8..128"));
+    }
     let start = Instant::now();
-    let mut trials = Vec::with_capacity(8);
-    while start.elapsed() < Duration::from_secs(3) {
-        if trials.len() < 8 && start.elapsed().as_secs_f64() >= 0.5 + trials.len() as f64 * 0.25 {
+    let mut trials = Vec::with_capacity(count);
+    let mut scheduled = Vec::with_capacity(count);
+    let mut first_submit_ms = Vec::with_capacity(count);
+    let mut cached_frames = Vec::with_capacity(count);
+    let mut queued_frames = Vec::with_capacity(count);
+    while start.elapsed().as_secs_f64() < count as f64 * 0.25 + 1.0 {
+        if trials.len() < count && start.elapsed().as_secs_f64() >= 0.5 + trials.len() as f64 * 0.25
+        {
             let mut counter = 0;
             // SAFETY: output points to writable i64 for the shared WASAPI timestamp clock.
             if unsafe { QueryPerformanceCounter(&mut counter) } == 0 {
@@ -130,11 +168,41 @@ fn latency(sdl: &Path) -> Result<()> {
                 },
             )?;
             trials.push((counter as f64 / frequency as f64 * 10000000.0) as u64);
+            scheduled.push(e.next_frame());
+            first_submit_ms.push(None);
+            cached_frames.push(e.next_frame() - e.delivered_frames());
+            queued_frames.push(backend.queued_frames()?);
         }
-        pump(&mut e, &mut backend, QUANTUM * 2)?;
+        pump(&mut e, backend.as_mut(), QUANTUM * 2)?;
+        if scheduled
+            .iter()
+            .zip(&first_submit_ms)
+            .any(|(&frame, submitted)| submitted.is_none() && e.delivered_frames() > frame)
+        {
+            let mut counter = 0;
+            // SAFETY: writable QPC output on the same clock as command and loopback timestamps.
+            if unsafe { QueryPerformanceCounter(&mut counter) } == 0 {
+                return Err(AudioError::Backend("QPC counter".into()));
+            }
+            let now = counter as f64 / frequency as f64 * 10000000.0;
+            for ((&frame, submitted), &command) in
+                scheduled.iter().zip(&mut first_submit_ms).zip(&trials)
+            {
+                if submitted.is_none() && e.delivered_frames() > frame {
+                    *submitted = Some((now - command as f64) / 10000.0);
+                }
+            }
+        }
         std::thread::sleep(Duration::from_millis(1));
     }
-    let value = serde_json::json!({"commandQpc100ns":trials,"device":backend.name()?,"submittedFrames":e.delivered_frames(),"latencyEstimate":backend.latency()?});
+    let mut value = details;
+    value["commandQpc100ns"] = serde_json::json!(trials);
+    value["submittedFrames"] = serde_json::json!(e.delivered_frames());
+    value["commandToFirstSubmitMs"] = serde_json::json!(first_submit_ms);
+    value["cachedFramesAtCommand"] = serde_json::json!(cached_frames);
+    value["queuedFramesAtCommand"] = serde_json::json!(queued_frames);
+    value["latencyEstimate"] =
+        serde_json::to_value(backend.latency()?).map_err(|e| AudioError::Backend(e.to_string()))?;
     println!(
         "{}",
         ara_json::to_canonical_string(&ara_json::sort_keys(&value))
@@ -315,15 +383,14 @@ fn device(directory: &Path, sdl: &Path, steam: Option<&SteamAudio>) -> Result<()
             ..Default::default()
         },
     )?;
-    let mut backend = SdlBackend::open(sdl, 48000)?;
-    let name = backend.name()?;
+    let (mut backend, mut value) = output(sdl)?;
     let start = Instant::now();
     let mut max_queue = 0;
     let mut recovered = false;
     let mut max_pump_ms = 0.0_f64;
     while start.elapsed() < Duration::from_secs(3) {
         let before = Instant::now();
-        pump(&mut engine, &mut backend, QUANTUM * 2)?;
+        pump(&mut engine, backend.as_mut(), QUANTUM * 2)?;
         max_pump_ms = max_pump_ms.max(before.elapsed().as_secs_f64() * 1000.0);
         max_queue = max_queue.max(backend.queued_frames()?);
         if !recovered && start.elapsed() > Duration::from_millis(1500) {
@@ -333,10 +400,12 @@ fn device(directory: &Path, sdl: &Path, steam: Option<&SteamAudio>) -> Result<()
         std::thread::sleep(Duration::from_millis(1));
     }
     let latency = backend.latency()?;
-    let format = backend.format();
-    let value = serde_json::json!({"device":name,"driver":"SDL3 default playback (real device)","deviceRate":format.sample_rate,"deviceBufferFrames":format.buffer_frames,
+    let measurement = serde_json::json!({"deviceRate":backend.sample_rate(),
         "submittedFrames":engine.delivered_frames(),"maxQueuedFrames":max_queue,"latencyEstimate":latency,"maxPumpMs":max_pump_ms,"reopenSucceeded":recovered,
-        "note":"Queue + reported hardware-buffer estimate; acoustic end-to-end latency needs an independent loopback recording."});
+        "note":"Known queue + period estimate; independent loopback.json measures command to output mix."});
+    if let (Some(details), Some(measurement)) = (value.as_object_mut(), measurement.as_object()) {
+        details.extend(measurement.clone());
+    }
     let json = ara_json::to_canonical_string(&ara_json::sort_keys(&value));
     std::fs::write(directory.join("device.json"), &json)?;
     println!("{json}");

@@ -131,6 +131,9 @@ impl DeviceBackend for FakeDevice {
         self.frames += s.len() / 2;
         Ok(())
     }
+    fn maximum_queue_frames(&self) -> usize {
+        1056
+    }
     fn queued_frames(&self) -> Result<usize> {
         Ok(self.frames)
     }
@@ -152,6 +155,9 @@ fn device_period_sets_a_safe_watermark_and_loss_preserves_graph() {
         lost: false,
         frames: 0,
     };
+    assert!(pump(&mut engine, &mut sink, 2048).is_err());
+    assert_eq!(engine.next_frame(), 0);
+    assert_eq!(sink.frames, 0);
     pump(&mut engine, &mut sink, 256).unwrap();
     assert_eq!(sink.frames, 608);
     let frame = engine.next_frame();

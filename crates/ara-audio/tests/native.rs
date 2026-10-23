@@ -2,7 +2,7 @@
 use ara_audio::{capture::capture_audio, spatial::AcousticPath, steam::SteamAudio, *};
 
 #[test]
-#[ignore = "requires pinned Steam Audio runtime; run tools/fetch_runtime.py first"]
+#[ignore = "requires pinned Steam Audio runtime; run tools/fetch_runtime.ps1 first"]
 fn measured_hrtf_has_direction_occlusion_and_a_repeatable_render() {
     let path = std::env::var_os("ARA_STEAM_AUDIO_LIBRARY")
         .map(std::path::PathBuf::from)

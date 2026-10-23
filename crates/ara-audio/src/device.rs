@@ -42,9 +42,9 @@ pub enum DeviceEvent {
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Latency {
-    /// Input frames currently queued in SDL, in engine-rate frames.
+    /// Input frames currently queued in the backend, in engine-rate frames.
     pub queued_frames: usize,
-    /// Known queue + SDL period duration in milliseconds; hidden driver buffers make this a lower-bound estimate.
+    /// Known queue + device period duration; hidden processing makes this a lower-bound estimate.
     pub estimated_output_ms: f64,
 }
 /// Audio output seam. Device IO and recovery run outside the mixer callback.
@@ -54,6 +54,10 @@ pub trait DeviceBackend {
     /// Smallest safe input watermark, including a quantum of refill headroom.
     fn minimum_queue_frames(&self) -> usize {
         0
+    }
+    /// Largest input watermark the device can hold. Checked before advancing the mixer.
+    fn maximum_queue_frames(&self) -> usize {
+        self.sample_rate() as usize
     }
     /// Checks device availability without consuming the platform's event queue.
     fn poll(&mut self) -> Result<DeviceEvent>;
@@ -160,6 +164,11 @@ pub fn pump(
         return Ok(event);
     }
     let target_frames = target_frames.max(backend.minimum_queue_frames());
+    if target_frames > backend.maximum_queue_frames() {
+        return Err(AudioError::Invalid(
+            "device watermark exceeds native capacity",
+        ));
+    }
     let missing = target_frames.saturating_sub(backend.queued_frames()?);
     render_to(engine, backend, missing)?;
     Ok(event)
@@ -181,6 +190,8 @@ type GetDevice = unsafe extern "C" fn(*mut SDL_AudioStream) -> SDL_AudioDeviceID
 type Format = unsafe extern "C" fn(SDL_AudioDeviceID, *mut SDL_AudioSpec, *mut c_int) -> bool;
 type Name = unsafe extern "C" fn(SDL_AudioDeviceID) -> *const c_char;
 type GetError = unsafe extern "C" fn() -> *const c_char;
+type SetHint = unsafe extern "C" fn(*const c_char, *const c_char) -> bool;
+type Driver = unsafe extern "C" fn() -> *const c_char;
 
 struct SdlApi {
     init: Init,
@@ -194,6 +205,8 @@ struct SdlApi {
     format: Format,
     name: Name,
     error: GetError,
+    hint: SetHint,
+    driver: Driver,
     _library: Library,
 }
 impl SdlApi {
@@ -213,6 +226,8 @@ impl SdlApi {
             format: symbol(&library, b"SDL_GetAudioDeviceFormat\0")?,
             name: symbol(&library, b"SDL_GetAudioDeviceName\0")?,
             error: symbol(&library, b"SDL_GetError\0")?,
+            hint: symbol(&library, b"SDL_SetHint\0")?,
+            driver: symbol(&library, b"SDL_GetCurrentAudioDriver\0")?,
             _library: library,
         })
     }
@@ -246,6 +261,11 @@ impl SdlBackend {
             return Err(AudioError::Invalid("SDL sample rate"));
         }
         let api = SdlApi::load(library_path.as_ref())?;
+        // SAFETY: static NUL-terminated hint strings. Environment overrides remain authoritative.
+        // SDL's WASAPI backend negotiates IAudioClient3's nearest supported engine period.
+        unsafe {
+            (api.hint)(c"SDL_AUDIO_DEVICE_SAMPLE_FRAMES".as_ptr(), c"128".as_ptr());
+        }
         // SAFETY: balanced by this backend's Drop; only the audio subsystem is initialized.
         if !unsafe { (api.init)(SDL_INIT_AUDIO) } {
             return Err(api.error());
@@ -267,6 +287,18 @@ impl SdlBackend {
     /// Current hardware format (not the f32 stereo stream's input format).
     pub fn format(&self) -> DeviceFormat {
         self.format
+    }
+    /// Active SDL driver name, for distinguishing WASAPI from fallback device paths.
+    pub fn driver(&self) -> Result<String> {
+        // SAFETY: SDL retains the driver name while the initialized subsystem is owned here.
+        let name = unsafe { (self.api.driver)() };
+        if name.is_null() {
+            return Err(self.api.error());
+        }
+        // SAFETY: non-null SDL-owned NUL-terminated name.
+        Ok(unsafe { CStr::from_ptr(name) }
+            .to_string_lossy()
+            .into_owned())
     }
     /// Copies the selected output name for diagnostics, outside the callback.
     pub fn name(&self) -> Result<String> {

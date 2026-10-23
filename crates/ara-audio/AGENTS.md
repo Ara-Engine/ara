@@ -14,6 +14,9 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
   Optional `ecs` derives Bevy 0.20 Component on source/listener for direct insertion.
 - `DeviceBackend`, `SdlBackend`, `OfflineBackend`, `pump`, `render_to`: shared
   renderer; sink IO and recovery run on a dedicated presentation worker.
+- Windows `WasapiBackend`: IAudioClient3 RAW GameEffects, MMCSS worker, bounded
+  one-period submission, default-change/loss detection and explicit recovery.
+  Construct/drop on the same worker; unsupported mix formats diagnose SDL fallback.
 - `SteamAudio`: explicit trusted library path; built-in measured HRTF or SOFA;
   one independent DSP state per voice. `AcousticScene` is a geometry-worker seam.
 - `MediaDecoder`, `OpusDecoder`, `PackSlice`, `StreamBudget`: incremental media,
@@ -25,29 +28,27 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
 
 ## Gates
 
-Always set `CARGO_BUILD_JOBS=2`. CMake 4.4+ and MSVC build bundled libopus here.
-The local ignored `runtime/tools` venv contains CMake for this checkout.
-On a fresh Windows worktree, reproduce that tool environment with:
+Always set `CARGO_BUILD_JOBS=2`. `ara-opus-sys` builds committed libopus 1.5.2
+with `cc`; only Rust and the C compiler are required for this track's build.
+SDL uses no-link bindings; Steam Audio loads only at explicit runtime setup.
+The clean-environment gate strips CMake/Python from PATH:
 
 ```powershell
-python -m venv crates/ara-audio/runtime/tools
-crates/ara-audio/runtime/tools/Scripts/python.exe -m pip install cmake==4.4.4
-$env:PATH = (Resolve-Path crates/ara-audio/runtime/tools/Scripts).Path + ';' + $env:PATH
-$env:CARGO_BUILD_JOBS = '2'
+powershell -NoProfile -File crates/ara-audio/tools/check_clean.ps1
 ```
 
 ```
 cargo check -p ara-audio
 cargo test -p ara-audio
-cargo clippy -p ara-audio --all-targets -- -D warnings
-cargo fmt -p ara-audio --check
+cargo clippy -p ara-audio -p ara-opus-sys --all-targets -- -D warnings
+cargo fmt -p ara-audio -p ara-opus-sys --check
 cargo check -p ara-audio --features ecs
 ```
 
 Explicit native checks (no device is opened by ordinary tests):
 
 ```
-python crates/ara-audio/tools/fetch_runtime.py --platform windows-x64
+powershell -NoProfile -File crates/ara-audio/tools/fetch_runtime.ps1
 cargo test -p ara-audio --test native -- --ignored
 cargo run -p ara-audio --release --example verify -- offline
 cargo run -p ara-audio --release --example verify -- bench
@@ -56,6 +57,9 @@ cargo run -p ara-audio --release --example verify -- device
 
 `tools/loopback.py` needs soundcard 0.4.6 + numpy and takes the absolute/relative
 path to the compiled `verify.exe`. It records only the default output loopback.
+Python is an optional measurement tool, never a Cargo build dependency.
+The verifier selects WASAPI on Windows; `ARA_AUDIO_BACKEND=sdl` selects SDL.
+`ARA_AUDIO_LATENCY_TRIALS=32` requests a longer QPC/MLS loopback measurement.
 See README for actual measured latency versus the much smaller queue estimate.
 
 ## Gotchas
@@ -65,7 +69,7 @@ See README for actual measured latency versus the much smaller queue estimate.
 - Streaming workers lower their Windows priority; other hosts should set their
   corresponding loader priority when integrating. Drop worker guards off audio/UI.
 - Kira owns the graph/DSP lifecycle; Ara owns voice policy and the sample clock.
-  Preserve this seam; no second device stack, no cpal, no global SDL_Quit.
+  Preserve this seam; Windows low latency and SDL share DeviceBackend; no cpal or global SDL_Quit.
 - SDL watermark must cover a whole hardware period plus one DSP quantum.
 - SDL queue latency is a lower bound, not a measured output latency guarantee.
 - Zero bus/send gain uses Kira's **finite** silence value, never negative infinity.

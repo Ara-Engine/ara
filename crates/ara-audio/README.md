@@ -80,8 +80,46 @@ Primary APIs reviewed: [Kira backend/renderer](https://docs.rs/kira/0.12.5/kira/
     renders the same fixed quanta as SDL, with no worker/device timing dependency.
     WAV/JSON jobs may run on agents without pausing or replacing human playback.
 
-The parent integration should refresh the root Cargo.lock once for the merged
-tracks; this track owns and commits only this crate.
+## Compiler-only native build
+
+`ara-opus-sys` replaces opus/opusic-sys. It commits the portable floating-point
+libopus **1.5.2** C sources and compiles them with `cc`, following S6's owned-shim
+pattern. Two fixed-signature C wrappers cover the variadic bitrate/lookahead
+controls. Its README records the release archive hash and retained BSD notices.
+Cargo uses no CMake, Python, generated bindings, assembler or native downloads.
+Opus allocations remain on importer/decoder workers, outside render. Importer
+version 2 invalidates v1 cache entries because the codec pin/configuration changed.
+
+`sdl3-sys` has default features disabled and `no-link`; it builds no SDL and
+downloads nothing. SDL/Steam DLLs are loaded only from an explicit trusted runtime
+path. Windows WASAPI calls system DLLs via generated Rust bindings. Neither SDL
+nor Steam Audio is needed for `cargo check --workspace` or normal audio tests.
+`tools/check_clean.ps1` strips CMake/Python from PATH and runs both gates in a
+separate target directory. The initial fresh build reproduced the CMake failure;
+the same target then compiled the replacement using MSVC alone.
+
+Optional setup uses `tools/fetch_runtime.ps1`, which verifies pinned archive hashes
+and preserves licenses/headers. `tools/loopback.py` is an optional measurement
+tool, never a build dependency.
+The root workspace manifest is unchanged; Cargo.lock records the new dependencies.
+
+## Windows low-latency output
+
+Choose `wasapi::WasapiBackend::open(rate, WasapiOptions::default())` on the audio
+worker for Windows 10+. It uses IAudioClient3 shared RAW GameEffects and MMCSS Pro
+Audio, with one negotiated period queued. No extra pull ring is inserted. The
+128-frame mixer cache is unchanged. The backend is thread-affine and balances
+COM/MMCSS teardown after its interfaces. It detects client loss/default changes;
+`recover` reopens output while the engine retains its presentation voices.
+`pump` rejects watermarks larger than native capacity before advancing the mixer.
+
+The fast path requires a matching stereo f32 endpoint mix; unsupported formats,
+RAW or IAudioClient3 return diagnostics. The platform adapter can select SDL for
+conversion or other platforms. SDL still requests 128 frames and reports the
+negotiated result. This keeps A9's SDL platform layer and A11's Kira graph; the
+explicit Windows audio specialization follows this performance pass's brief.
+The verifier uses WASAPI on Windows; set `ARA_AUDIO_BACKEND=sdl` for comparison.
+No user/system audio settings or exclusive-mode ownership are changed.
 
 ## Spatial status
 
@@ -107,7 +145,7 @@ occlusion, and repeatable output.
 Room reverb currently uses Kira's algorithmic send. This is the permitted spatial
 seam for this pass; Steam's measured dataset is the real HRTF path. No claim is
 made that reflection geometry has been integrated or that a synthetic panner is
-an HRTF. SDK archives are pinned by SHA-256 in `tools/fetch_runtime.py`, which
+an HRTF. SDK archives are pinned by SHA-256 in `tools/fetch_runtime.ps1`, which
 extracts Windows/Linux/macOS/Android/iOS native artifacts. SDL packaging outside
 Windows belongs to ara-platform. Only Windows was executed here; iOS static
 linking and Android library packaging still need the export/platform adapters.
@@ -130,17 +168,18 @@ meters and final limiting, with 32 warmup and 256 measured quanta. Scheduler and
 other parallel engine tracks contribute timing variance. They are not a universal
 device-performance guarantee. Exact final values are in the evidence JSON.
 
-- Baseline before the command/position hot-path change: 1,000 audible stereo
-  spatial voices averaged **1.4195 ms**; full bilinear HRTF averaged **6.8018 ms**.
-- Final means: **1.4359 ms** for 1,000 audible stereo spatial voices,
-  **8.0541 ms** for 1,000 full-HRTF voices, and **1.7584 ms** for 128 HRTF + 872
-  virtual voices (budgeted p95 **2.0477 ms**). Timing variance is substantial under
-  concurrent engine-track builds; these are observations, not an isolated causal
-  speedup claim. Final CPU, allocation, latency, device and spatial measurements are
-  recorded in `evidence/benchmark.json`, `loopback.json`, `device.json` and
-  `spatial.json`. Full 1,000-voice HRTF exceeds the 2.667-ms deadline. The default
-  audible budget is 128; remaining voices advance virtually, skipping native DSP.
-  The budgeted case is measured as well; scheduler outliers still occur.
+- Original means: **1.4359 ms** for 1,000 panned voices and **1.7584 ms** for
+  128 HRTF + 872 virtual. This pass's fresh baseline was **1.4714 / 1.9157 ms**.
+- Final means: **0.3659 / 0.5149 ms**, with p95 **0.4361 / 0.6895 ms**.
+  Unit-rate resident blocks skip cubic interpolation and constant smoothing,
+  retain identical look-ahead history, and use independent block multiply loops
+  amenable to LLVM vectorization. Virtual resident voices advance in constant
+  work; priority membership uses linear selection instead of sorting every voice.
+  Loop seams, short loops, promotion and later rate changes compare exactly with
+  the sample path. The original offline and native HRTF goldens are unchanged.
+  Full 1,000-voice bilinear HRTF still averages **4.6731 ms**, beyond the deadline;
+  the default real-voice budget remains 128. No HRTF interpolation quality was cut.
+  These measurements include scheduler variance on a shared development PC.
 - Every measured render quantum had **zero allocations and zero deallocations**
   through Rust and the supplied Steam allocation callbacks, including a separate
   prepared-install/first-render/fade/stop/tail probe. SDL/OS C allocator
@@ -149,17 +188,25 @@ device-performance guarantee. Exact final values are in the evidence JSON.
 - Real output: **Speakers (BlackShark V3 - Game)**, 48 kHz, 480-frame hardware
   period. Playback was independently captured through output-only WASAPI loopback;
   explicit stream destruction/reopen also succeeded with ongoing voices.
-- Eight MLS bursts measured **82.51 / 83.28 ms p50/p95 command → Windows output mix**, with
-  correlation essentially 1.0. The queue + SDL hardware-buffer estimate is only
-  **22.67 ms** and misses hidden driver/SDL buffering. The loopback probe uses
-  WASAPI packet QPC timestamps, not Python record-call timing. It excludes DAC,
-  wireless transport and acoustic propagation. Sample-frame and raw/game-role
-  hints did not materially improve this device's result; low-latency platform
-  tuning remains an integration target, not a solved claim.
+- Original loopback was **82.51 / 83.28 ms p50/p95**; this pass's fresh baseline
+  was **92.57 / 93.67 ms**. SDL's 128-frame hint still negotiated 480 frames;
+  RAW alone through SDL did not improve it. Its pinned WASAPI source disables
+  stream-role selection. Direct ordinary shared IAudioClient3 measured
+  **70.05 / 71.45 ms**. RAW GameEffects on that same endpoint measured
+  **25.28 / 26.93 ms**, across **32 MLS bursts**, correlation 1.0 and valid QPC
+  packets. A capture with a discontinuity is rejected and rerun, never included.
+- Breakdown: driver period **480 frames / 10 ms** (min/default/max all 480),
+  native capacity **1,056 / 22 ms**, submission watermark **480 / 10 ms**,
+  mixer quantum **128 / 2.667 ms**, cached frames at command **0–96 / 0–2 ms**.
+  Command-to-first-submission is recorded per trial (about **1.5–4.7 ms**).
+  Queue + period estimates only **20 ms**; the actual **26.93 ms p95** includes
+  refill phase/cache and remaining OS/endpoint processing. These overlapping
+  measurements must not be added as independent p95 terms. Driver-reported stream
+  latency is zero here. QPC loopback excludes DAC, wireless and acoustic propagation.
 - The spatial door demo is a two-second left/right render with measured HRTFs:
   **-19.03 LUFS**, **0.898 sample/true peak**, no clipping. Its spectrum and WAV
-  hash are preserved in the evidence. All **26 tests**, including the explicit
-  native HRTF golden, passed; check, clippy with denied warnings and fmt passed.
+  hash are preserved in the evidence. Focused native, codec/buffer-boundary,
+  block/reference, schema, streaming and effect tests cover the changed paths.
 
 ## Native and fixture provenance
 
@@ -168,8 +215,8 @@ notices (including its HRTF/FFT dependencies) that must ship with an export.
 The downloader preserves `steamaudio/THIRDPARTY.md` and API headers. See
 [Steam Audio source/license](https://github.com/ValveSoftware/steam-audio/tree/v4.8.1).
 SDL3 is zlib; its runtime archive's LICENSE.txt is preserved. Rust dependencies
-remain Cargo dependencies, not copied source. Symphonia/Opus codec support uses
-their upstream implementations; no Flax/Unity/Unreal source was transcribed.
+remain Cargo dependencies except the explicitly vendored BSD libopus sources in
+`ara-opus-sys`. No Flax/Unity/Unreal source was transcribed.
 
 `tests/fixtures/tone.flac` and `tone.ogg` are Ara-generated 2,400-frame procedural
 stereo sawtooths (no external recording), encoded with ffmpeg FLAC/libvorbis and

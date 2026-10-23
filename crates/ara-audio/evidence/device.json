@@ -1,15 +1,17 @@
 {
-  "device": "Speakers (BlackShark V3 - Game)",
-  "deviceBufferFrames": 480,
+  "capacityFrames": 1056,
+  "device": "{0.0.0.00000000}.{74d7e156-bf79-4d0b-9bf8-0c55e731d69e}",
   "deviceRate": 48000,
-  "driver": "SDL3 default playback (real device)",
+  "driver": "IAudioClient3 RAW GameEffects",
+  "hardwareFrames": 480,
   "latencyEstimate": {
-    "estimatedOutputMs": 22.666666666666668,
-    "queuedFrames": 608
+    "estimatedOutputMs": 20,
+    "queuedFrames": 480
   },
-  "maxPumpMs": 0.1623,
-  "maxQueuedFrames": 608,
-  "note": "Queue + reported hardware-buffer estimate; acoustic end-to-end latency needs an independent loopback recording.",
+  "maxPumpMs": 2.9283,
+  "maxQueuedFrames": 480,
+  "note": "Known queue + period estimate; independent loopback.json measures command to output mix.",
   "reopenSucceeded": true,
-  "submittedFrames": 140896
+  "reportedLatencyMs": 0,
+  "submittedFrames": 142080
 }

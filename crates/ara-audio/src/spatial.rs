@@ -226,6 +226,22 @@ impl Spatializer for StereoPanner {
             self.visibility = path.visibility;
             self.transmission = path.transmission[0];
         }
+        // Static clear paths need no recursive filters; LLVM vectorizes this independent loop.
+        // Keep the low-pass history current for a subsequent occlusion transition.
+        if self.left == target_l
+            && self.right == target_r
+            && self.visibility == 1.0
+            && path.visibility == 1.0
+            && self.transmission == path.transmission[0]
+        {
+            for input in mono {
+                self.low += (*input - self.low) * 0.08;
+            }
+            for (input, frame) in mono.iter().zip(out) {
+                *frame = Frame::new(input * target_l, input * target_r);
+            }
+            return;
+        }
         for (input, frame) in mono.iter().zip(out) {
             self.left += (target_l - self.left) * 0.02;
             self.right += (target_r - self.right) * 0.02;

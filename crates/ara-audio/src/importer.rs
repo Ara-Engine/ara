@@ -88,7 +88,8 @@ impl Importer for AudioImporter {
         "ara.audio"
     }
     fn version(&self) -> u32 {
-        1
+        // Codec pin/configuration changed; derived-data keys must not reuse v1 Opus cooks.
+        2
     }
     fn extensions(&self) -> &'static [&'static str] {
         &["wav", "flac", "ogg", "vorbis", "opus"]
@@ -204,12 +205,9 @@ fn opus_ogg(frames: &[Frame], bitrate: i32) -> Result<Vec<u8>> {
     if !(6000..=512000).contains(&bitrate) {
         return Err(AudioError::Invalid("Opus bitrate"));
     }
-    let err = |e: opus::Error| AudioError::Codec(e.to_string());
-    let mut encoder =
-        opus::Encoder::new(48000, opus::Channels::Stereo, opus::Application::Audio).map_err(err)?;
-    encoder
-        .set_bitrate(opus::Bitrate::Bits(bitrate))
-        .map_err(err)?;
+    let err = |e: ara_opus_sys::Error| AudioError::Codec(e.to_string());
+    let mut encoder = ara_opus_sys::Encoder::new(48000, 2).map_err(err)?;
+    encoder.set_bitrate(bitrate).map_err(err)?;
     let skip = encoder.get_lookahead().map_err(err)? as u16;
     let mut head = b"OpusHead".to_vec();
     head.extend([1, 2]);

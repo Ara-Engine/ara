@@ -18,6 +18,8 @@ use std::{
     },
 };
 
+mod resident;
+
 /// Immutable resident audio. Cloning a clip shares its samples on the control path.
 #[derive(Clone)]
 pub struct Clip {
@@ -455,6 +457,9 @@ impl Sound for Voice {
             self.virtual_gain.set(target, 64);
         }
         self.apply_commands();
+        if self.resident_block(out, dt, target) {
+            return;
+        }
         let spatial = self.parameters;
         let draining = self.dry_ended;
         self.mono.fill(0.0);

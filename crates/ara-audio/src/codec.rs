@@ -211,7 +211,7 @@ fn wav_fact(source: &mut dyn MediaSource) -> Result<Option<u64>> {
 /// Ogg Opus decoder supporting mapping family zero, header gain, pre-skip and end trim.
 pub struct OpusDecoder<R: Read + Seek + Send> {
     reader: ogg::PacketReader<R>,
-    decoder: opus::Decoder,
+    decoder: ara_opus_sys::Decoder,
     channels: usize,
     serial: u32,
     gain: f32,
@@ -246,15 +246,7 @@ impl<R: Read + Seek + Send> OpusDecoder<R> {
         if tags.stream_serial() != serial || !tags.data.starts_with(b"OpusTags") {
             return Err(AudioError::Codec("missing OpusTags".into()));
         }
-        let decoder = opus::Decoder::new(
-            48000,
-            if channels == 1 {
-                opus::Channels::Mono
-            } else {
-                opus::Channels::Stereo
-            },
-        )
-        .map_err(codec_error)?;
+        let decoder = ara_opus_sys::Decoder::new(48000, channels as u8).map_err(codec_error)?;
         Ok(Self {
             reader,
             decoder,
@@ -285,7 +277,7 @@ impl<R: Read + Seek + Send> OpusDecoder<R> {
         }
         let frames = self
             .decoder
-            .decode_float(&packet.data, &mut self.buffer, false)
+            .decode_float(&packet.data, &mut self.buffer)
             .map_err(codec_error)?;
         let start = self.decoded;
         self.decoded += frames as u64;

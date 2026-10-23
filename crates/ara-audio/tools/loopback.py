@@ -5,6 +5,7 @@ Run after `cargo run -p ara-audio --release --example verify -- offline`:
 Uses WASAPI's QPC packet timestamps, not Python record-call timing. Captures output only.
 """
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -25,7 +26,7 @@ def main():
     chunks, times = [], []
     with loopback.recorder(samplerate=48000, channels=2, blocksize=480) as recorder:
         process = subprocess.Popen([str(executable), "latency"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        deadline = time.monotonic() + 6
+        deadline = time.monotonic() + int(os.environ.get("ARA_AUDIO_LATENCY_TRIALS", "8")) * 0.25 + 5
         while time.monotonic() < deadline:
             if recorder._capture_available_frames() == 0:
                 if process.poll() is not None:
@@ -79,6 +80,7 @@ def main():
         latencies.append(float((sample_qpc[index] - command) / 10000))
         quality.append(float(correlation[index]))
     report.update({"method": "WASAPI loopback packet QPC timestamp + 768-frame MLS correlation",
+                   "loopbackDevice": speaker.name,
                    "latencyMs": latencies, "p50Ms": float(np.median(latencies)),
                    "p95Ms": float(np.percentile(latencies, 95)), "correlations": quality,
                    "capturedPeak": float(np.max(np.abs(data))),

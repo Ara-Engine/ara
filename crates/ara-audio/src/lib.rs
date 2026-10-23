@@ -18,6 +18,8 @@ pub mod steam;
 mod steam_alloc;
 pub mod streaming;
 mod voice;
+#[cfg(windows)]
+pub mod wasapi;
 
 pub use kira::Frame;
 pub use mixer::{AudioEngine, BusId, EngineConfig, Snapshot, VoiceId};

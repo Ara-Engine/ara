@@ -431,7 +431,8 @@ impl AudioEngine {
                 self.candidates.push(i);
             }
         }
-        self.candidates.sort_unstable_by(|&a, &b| {
+        let compare = |a: &usize, b: &usize| {
+            let (a, b) = (*a, *b);
             let a = &self.voices[a];
             let b = &self.voices[b];
             b.control
@@ -443,7 +444,12 @@ impl AudioEngine {
                     )
                 })
                 .then(a.id.0.cmp(&b.id.0))
-        });
+        };
+        // Only membership matters; Kira's fixed traversal order still defines summation.
+        if self.candidates.len() > self.config.real_voices {
+            self.candidates
+                .select_nth_unstable_by(self.config.real_voices, compare);
+        }
         for &i in self.candidates.iter().take(self.config.real_voices) {
             self.voices[i]
                 .control
