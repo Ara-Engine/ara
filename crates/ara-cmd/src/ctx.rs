@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ara_diag::{Diagnostic, codes};
+use ara_diag::{Diagnostic, FixAction, codes};
 use ara_doc::prefab::{ResolvedEntity, resolve};
 use ara_doc::{
     AssetId, Document, Edit, OrderKey, Record, RecordId, Workspace, field, key_between, order_key,
@@ -131,9 +131,7 @@ impl<'a> ReadCtx<'a> {
             None => (addr, None),
         };
         let id = RecordId::parse(head).map_err(|msg| Diagnostic::error(codes::INVALID_ID, msg))?;
-        let rec = self.doc.record(head).ok_or_else(|| {
-            Diagnostic::error(codes::RECORD_NOT_FOUND, format!("no entity `{head}`")).record(head)
-        })?;
+        let rec = self.doc.record(head).ok_or_else(|| self.missing(head))?;
         if prefab_of(rec).is_none() {
             return match inner {
                 Some(_) => Err(Diagnostic::error(
@@ -153,6 +151,32 @@ impl<'a> ReadCtx<'a> {
             instance: id,
             inner: inner.map(str::to_owned),
         })
+    }
+
+    /// `ARA1204` for an ID this document lacks; when another loaded document has it,
+    /// a fix that edits that document instead.
+    fn missing(&self, head: &str) -> Diagnostic {
+        let mut d = Diagnostic::error(
+            codes::RECORD_NOT_FOUND,
+            format!("no entity `{head}` in this document"),
+        )
+        .record(head);
+        let elsewhere = self
+            .workspace()
+            .docs()
+            .find(|(_, doc)| doc.id != self.doc.id && doc.record(head).is_some());
+        if let Some((path, _)) = elsewhere {
+            d.message = format!("no entity `{head}` in this document; it is in `{path}`");
+            d = d.with_fix(
+                format!("Edit `{path}` instead"),
+                FixAction::Set {
+                    record: None,
+                    path: "doc".into(),
+                    value: path.into(),
+                },
+            );
+        }
+        d
     }
 
     /// The document with prefab instances expanded (see [`ara_doc::prefab`]).

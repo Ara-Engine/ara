@@ -225,9 +225,10 @@ pub struct QueryParams {
     /// Session handle from `session.begin`.
     pub session: String,
     /// Compact query: space-separated terms that must all hold. `Light` (has the
-    /// component), `!Light` (lacks it), `name:Crate*`, `parent:e_1c0d`, `under:e_1c0d`,
-    /// `prefab:crate`, `depth<=1`, `e_8b21` (an ID), field comparisons such as
-    /// `Light.intensity>500`, `Light.kind=spot`, `Transform.position.y<=0`.
+    /// component), `!Light` (lacks it), `name:Crate*`, a bare word (`radio`: names
+    /// containing it), `parent:e_1c0d`, `under:e_1c0d`, `prefab:crate`, `depth<=1`,
+    /// `e_8b21` (an ID), field comparisons such as `Light.intensity>500`,
+    /// `Light.kind=spot`, `Transform.position.y<=0`.
     pub q: Option<String>,
     /// The same conditions as JSON; combined with `q`.
     pub filter: Option<Filter>,
@@ -261,12 +262,15 @@ pub enum Format {
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InspectParams {
-    /// Document (asset ID, path or `@path#id`).
-    pub doc: String,
+    /// Document: a path (`levels/outpost.scene`, or just `outpost`), asset ID or
+    /// `@path#id`. Default: the document holding `entities`, else the project's main
+    /// scene.
+    pub doc: Option<String>,
     /// Session handle from `session.begin`.
     pub session: String,
-    /// Entities to show in full (IDs or addresses such as `e_4f9a/e_m4tz`). Absent:
-    /// a summary of the document's hierarchy.
+    /// Entities to show in full: IDs, addresses (`e_4f9a/e_m4tz`) or name selectors
+    /// (`name:Crate`, `name:Gate/DoorLamp`). Absent: a summary of the document's
+    /// hierarchy.
     pub entities: Option<Vec<String>>,
     /// Hierarchy depth of the summary (default 2).
     pub depth: Option<u32>,
@@ -287,7 +291,9 @@ pub struct CallSpec {
     /// Command arguments, per the command's params schema (`schema.describe`).
     pub args: Option<Value>,
     /// Symbolic ID (`$crate`) for the record this call creates; later calls may use
-    /// it anywhere an entity is expected. The result maps it to the real ID.
+    /// it anywhere an entity is expected. The result maps it to the real ID. Entity
+    /// args also take IDs (`e_8b21`) and name selectors (`name:Crate`,
+    /// `name:Floor/Crate`).
     #[ara(rename = "as")]
     #[serde(rename = "as")]
     pub symbol: Option<String>,
@@ -300,11 +306,14 @@ pub struct CallSpec {
 pub struct ApplyParams {
     /// Calls, run in order as one atomic transaction.
     pub commands: Vec<CallSpec>,
-    /// Document to edit (asset ID, path or `@path#id`).
-    pub doc: String,
+    /// Document to edit: a path (`levels/outpost.scene`, or just `outpost`), asset ID
+    /// or `@path#id`. Default: the one document holding every entity the commands
+    /// address, else the project's main scene.
+    pub doc: Option<String>,
     /// Session handle from `session.begin`.
     pub session: String,
-    /// Why, in a sentence; shown in review next to the change.
+    /// Why, in a sentence; shown in review next to the change. Required for agent
+    /// sessions (except dry runs).
     pub why: Option<String>,
     /// Validate and return the diff without applying anything.
     pub dry_run: Option<bool>,

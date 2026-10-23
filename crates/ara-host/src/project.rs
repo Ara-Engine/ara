@@ -131,18 +131,35 @@ impl Project {
             .is_some_and(|e| self.db.kinds().any(|k| k.extension == e))
     }
 
-    /// The project name from `ara.project.json`, else the root directory's name.
-    pub fn name(&self) -> String {
+    /// A string field of `ara.project.json`.
+    fn marker_field(&self, key: &str) -> Option<String> {
         fs::read_to_string(self.root.join(MARKER))
             .ok()
             .and_then(|t| ara_json::parse(&t).ok())
-            .and_then(|v| v.get("name").and_then(Value::as_str).map(str::to_owned))
-            .unwrap_or_else(|| {
-                self.root
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            })
+            .and_then(|v| v.get(key).and_then(Value::as_str).map(str::to_owned))
+    }
+
+    /// The project's main scene: `main` in `ara.project.json` (`ara init` writes
+    /// `levels/main.scene`), else `levels/main.scene` if it exists. Calls that name no
+    /// document default to it.
+    pub fn main_scene(&self) -> Option<String> {
+        self.marker_field("main").or_else(|| {
+            let starter = "levels/main.scene";
+            self.root
+                .join(starter)
+                .is_file()
+                .then(|| starter.to_owned())
+        })
+    }
+
+    /// The project name from `ara.project.json`, else the root directory's name.
+    pub fn name(&self) -> String {
+        self.marker_field("name").unwrap_or_else(|| {
+            self.root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
     }
 
     fn load_types(&mut self, file: &Path) {

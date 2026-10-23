@@ -2,12 +2,15 @@
 //! `query`, `inspect`, `history`, `undo`, `redo`, `review`, `accept`, `revert`,
 //! `logs`. They use the daemon when it runs, else an in-process host.
 
+use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 use ara_diag::{Diagnostic, codes};
 use serde_json::{Map, Value, json};
 
 use crate::engine::{Engine, print, print_diags};
+use crate::relaxed;
 
 /// A protocol call: method, params and how to summarize a result without `text`.
 pub struct Call {
@@ -35,23 +38,51 @@ pub fn run(root: &Path, author: &str, json: bool, call: Call) -> Result<bool, St
     ))
 }
 
-/// `--args <json>` plus `--param k=v` pairs (`a.b=1` nests; values parse as JSON,
-/// else they are strings).
+/// The text `--args` names: itself, `@file`, or `-` (stdin).
+fn args_text(base: &str) -> Result<String, String> {
+    if base == "-" {
+        let mut text = String::new();
+        std::io::stdin()
+            .read_to_string(&mut text)
+            .map_err(|e| format!("cannot read `--args` from stdin: {e}"))?;
+        return Ok(text);
+    }
+    match base.strip_prefix('@') {
+        Some(file) => {
+            fs::read_to_string(file).map_err(|e| format!("cannot read `--args {base}`: {e}"))
+        }
+        None => Ok(base.to_owned()),
+    }
+}
+
+/// `--args` plus `--param k=v` pairs (`a.b=1` nests). Both read strict JSON, else
+/// [`relaxed`] JSON (unquoted keys and words, for shells that strip quotes); a
+/// `--param` value that is neither is text.
 pub fn args(base: Option<&str>, params: &[String]) -> Result<Value, Vec<Diagnostic>> {
     let bad = |msg: String| vec![Diagnostic::error(codes::INVALID_PARAMS, msg)];
     let mut obj: Map<String, Value> = match base {
         None => Map::new(),
-        Some(text) => match serde_json::from_str(text) {
-            Ok(Value::Object(o)) => o,
-            Ok(_) => return Err(bad("`--args` must be a JSON object".into())),
-            Err(e) => return Err(bad(format!("`--args` is not JSON: {e}"))),
-        },
+        Some(base) => {
+            let text = args_text(base).map_err(bad)?;
+            let parsed = serde_json::from_str(&text).or_else(|_| relaxed::parse(&text));
+            match parsed {
+                Ok(Value::Object(o)) => o,
+                Ok(_) => return Err(bad("`--args` must be an object: `{entity: e_8b21}`".into())),
+                Err(e) => {
+                    return Err(bad(format!(
+                        "`--args` is not an object ({e}); write `{{entity: e_8b21, value: [1, 0, 0, 1]}}` (quotes optional), pass `--args @file.json`, or use `-p key=value`"
+                    )));
+                }
+            }
+        }
     };
     for p in params {
         let Some((key, raw)) = p.split_once('=') else {
             return Err(bad(format!("`--param {p}`: expected `key=value`")));
         };
-        let value = serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_owned()));
+        let value = serde_json::from_str(raw)
+            .or_else(|_| relaxed::parse(raw))
+            .unwrap_or_else(|_| Value::String(raw.to_owned()));
         let mut parts: Vec<&str> = key.split('.').collect();
         let last = parts.pop().unwrap_or(key);
         let mut cur = &mut obj;

@@ -160,3 +160,67 @@ fn merge_writes_the_result_over_ours_and_reports_conflicts() {
 fn ara_json_parse(text: &str) -> serde_json::Value {
     serde_json::from_str(text).expect("valid JSON output")
 }
+
+/// Runs `ara --root <root> <args>` in a scratch project; returns (exit code, stdout).
+fn ara_at(root: &Path, args: &[&str]) -> (i32, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("ara runs");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+    )
+}
+
+#[test]
+fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
+    let merge = fixtures().join("merge");
+    let root = scratch("resolve");
+    fs::write(root.join("ara.project.json"), "{ \"name\": \"r\" }\n").expect("marker");
+    fs::create_dir_all(root.join("levels")).expect("levels");
+    let conf = root.join("levels/conf.scene");
+    let input = |n: &str| merge.join(n).to_string_lossy().into_owned();
+    let (code, _) = ara_at(
+        &root,
+        &[
+            "merge",
+            "-o",
+            path(&conf),
+            &input("base.scene"),
+            &input("ours.scene"),
+            &input("theirs.scene"),
+        ],
+    );
+    assert_eq!(code, 1, "one conflict");
+
+    let (code, out) = ara_at(&root, &["check", "--json"]);
+    assert_eq!(code, 1);
+    let fixes = &ara_json_parse(&out)["diagnostics"][0]["fixes"];
+    assert_eq!(
+        fixes[1]["args"],
+        serde_json::json!(["resolve", "levels/conf.scene", "--pick", "e_b2:name=theirs"])
+    );
+    let (code, out) = ara_at(
+        &root,
+        &["resolve", "levels/conf.scene", "--pick", "e_b2:name=theirs"],
+    );
+    assert_eq!(code, 0, "{out}");
+    let text = fs::read_to_string(&conf).expect("resolved");
+    assert!(
+        !text.contains("$conflicts") && text.contains("Barrel (theirs)"),
+        "{text}"
+    );
+
+    fs::write(&conf, text.replace("\"order\": \"a1\"", "\"ordr\": \"a1\"")).expect("typo");
+    let (code, out) = ara_at(&root, &["check", "--fix"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("fixed levels/conf.scene: Rename `ordr` to `order`"),
+        "{out}"
+    );
+    assert_eq!(fs::read_to_string(&conf).expect("fixed"), text);
+}

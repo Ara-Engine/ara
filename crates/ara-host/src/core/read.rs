@@ -14,20 +14,11 @@ use crate::params::*;
 use crate::query;
 use crate::text;
 use crate::tree::Tree;
+use ara_cmd::select;
 
 type R = Result<Value, Vec<Diagnostic>>;
 
-/// A loaded document by asset ID, path or `@path#id`, with a did-you-mean.
-pub(crate) fn find_doc(st: &State, key: &str) -> Result<AssetId, Vec<Diagnostic>> {
-    let ws = st.store.workspace();
-    ws.find(key).cloned().ok_or_else(|| {
-        let mut msg = format!("no document `{key}` is loaded");
-        if let Some(near) = did_you_mean(key, ws.docs().map(|(p, _)| p)) {
-            msg.push_str(&format!("; did you mean `{near}`?"));
-        }
-        vec![Diagnostic::error(codes::DOC_NOT_FOUND, msg)]
-    })
-}
+pub(crate) use super::pick::find_doc;
 
 fn offset(cursor: Option<&str>) -> Result<usize, Vec<Diagnostic>> {
     match cursor {
@@ -367,29 +358,63 @@ pub(super) fn query(st: &mut State, p: QueryParams) -> R {
     )
 }
 
+/// The address an `inspect` entity names: an address, or a name selector (`name:Crate`,
+/// also a bare name) matching exactly one entity.
+fn inspect_target(tree: &Tree, key: &str) -> Result<String, Diagnostic> {
+    if tree.get(key).is_some() {
+        return Ok(key.to_owned());
+    }
+    let names = key.strip_prefix(select::NAME_PREFIX).unwrap_or(key);
+    let hits = select::by_names(&tree.entities, names);
+    let fix = |d: Diagnostic, addr: &String| {
+        let title = format!("Use `{addr}` ({})", select::describe(&tree.entities, addr));
+        d.with_fix(
+            title,
+            ara_diag::FixAction::Set {
+                record: None,
+                path: "entities".into(),
+                value: json!([addr]),
+            },
+        )
+    };
+    match hits.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => {
+            let mut msg = format!("no entity `{key}` in `{}`", tree.path);
+            if let Some(near) = did_you_mean(key, tree.entities.keys().map(String::as_str)) {
+                msg.push_str(&format!("; did you mean `{near}`?"));
+            }
+            Err(Diagnostic::error(codes::RECORD_NOT_FOUND, msg).record(key))
+        }
+        many => Err(many.iter().fold(
+            Diagnostic::error(
+                codes::AMBIGUOUS_ENTITY,
+                format!("`{key}` matches {} entities in `{}`", many.len(), tree.path),
+            ),
+            fix,
+        )),
+    }
+}
+
 pub(super) fn inspect(st: &mut State, p: InspectParams) -> R {
-    let id = find_doc(st, &p.doc)?;
+    let refs = p.entities.clone().unwrap_or_default();
+    let id = super::pick::pick(st, p.doc.as_deref(), &refs)?;
     let db = st.store.schema();
     let ws = st.store.workspace();
     let tree = Tree::build(ws, db, &id).ok_or_else(|| {
         vec![Diagnostic::error(
             codes::DOC_NOT_FOUND,
-            format!("`{}` is not loaded", p.doc),
+            format!("`{id}` is not loaded"),
         )]
     })?;
     let format = p.format.unwrap_or_default();
     if let Some(list) = &p.entities {
         let mut out_text = String::new();
         let mut out = Vec::new();
-        for addr in list {
+        for key in list {
+            let addr = &inspect_target(&tree, key).map_err(|d| vec![d])?;
             let Some(e) = tree.get(addr) else {
-                let mut msg = format!("no entity `{addr}` in `{}`", tree.path);
-                if let Some(near) = did_you_mean(addr, tree.entities.keys().map(String::as_str)) {
-                    msg.push_str(&format!("; did you mean `{near}`?"));
-                }
-                return Err(vec![
-                    Diagnostic::error(codes::RECORD_NOT_FOUND, msg).record(addr.as_str()),
-                ]);
+                continue;
             };
             if format == Format::Text {
                 out_text.push_str(&text::details(ws, db, &tree, addr).unwrap_or_default());

@@ -56,6 +56,9 @@ enum Cmd {
         /// Keep each attempt's temp project.
         #[arg(long)]
         keep: bool,
+        /// Merge into an existing `results.json` of the same label (re-run some tasks).
+        #[arg(long)]
+        merge: bool,
     },
     /// Run every reference solution against its verifier (no agents).
     Selftest {
@@ -126,6 +129,26 @@ fn build_ara() -> Result<PathBuf, String> {
         .ok_or_else(|| format!("no ara binary next to `{}`", exe.display()))
 }
 
+/// `fresh` merged over the run already in `path`: re-run tasks replace their old
+/// results; the order follows the suite.
+fn merged(path: &Path, fresh: RunResult, suite: &str) -> Result<RunResult, String> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Ok(fresh);
+    };
+    let mut old: RunResult =
+        serde_json::from_str(&text).map_err(|e| format!("`{}`: {e}", path.display()))?;
+    old.results.retain(|r| fresh.result(&r.task).is_none());
+    old.results.extend(fresh.results);
+    let order: Vec<&str> = tasks_of(suite, &[])?.iter().map(|t| t.id).collect();
+    old.results.sort_by_key(|r| {
+        order
+            .iter()
+            .position(|id| *id == r.task)
+            .unwrap_or(usize::MAX)
+    });
+    Ok(old)
+}
+
 fn write(path: &Path, text: &str) -> Result<(), String> {
     if let Some(d) = path.parent() {
         fs::create_dir_all(d).map_err(|e| e.to_string())?;
@@ -155,6 +178,7 @@ fn run(cmd: Cmd) -> Result<bool, String> {
             out,
             ara,
             keep,
+            merge,
         } => {
             let tasks = tasks_of(&suite, &tasks)?;
             let agents: Vec<AgentSpec> =
@@ -164,6 +188,12 @@ fn run(cmd: Cmd) -> Result<bool, String> {
                 None => build_ara()?,
             };
             let ara = fs::canonicalize(&ara).map_err(|e| format!("`{}`: {e}", ara.display()))?;
+            if ara.file_stem().is_none_or(|s| s != "ara") {
+                return Err(format!(
+                    "`{}`: agents run `ara` from its directory, so the binary must be named `ara`",
+                    ara.display()
+                ));
+            }
             let base = out.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("results"));
             let mut all_passed = true;
             // Agents run one after the other; tasks within an agent run `jobs` at once.
@@ -178,7 +208,10 @@ fn run(cmd: Cmd) -> Result<bool, String> {
                     label: label.clone(),
                     suite: suite.clone(),
                 };
-                let result = runner::run(&tasks, agent, &opts);
+                let mut result = runner::run(&tasks, agent, &opts);
+                if merge {
+                    result = merged(&dir.join("results.json"), result, &suite)?;
+                }
                 let json = serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?;
                 write(&dir.join("results.json"), &(json + "\n"))?;
                 write(&dir.join("report.md"), &report::run(&result))?;

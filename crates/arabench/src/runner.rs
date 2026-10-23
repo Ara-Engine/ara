@@ -87,7 +87,14 @@ fn engine_version() -> String {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let git = |args: &[&str]| crate::solve::git(&repo, args).map(|s| s.trim().to_owned());
     let head = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|_| "unknown".into());
-    let dirty = git(&["status", "--porcelain", "--", "crates"]).is_ok_and(|s| !s.is_empty());
+    let dirty = git(&[
+        "status",
+        "--porcelain",
+        "--",
+        "crates",
+        ":!crates/arabench/results",
+    ])
+    .is_ok_and(|s| !s.is_empty());
     if dirty { format!("{head}+dirty") } else { head }
 }
 

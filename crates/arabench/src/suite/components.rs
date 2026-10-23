@@ -29,10 +29,11 @@ pub const BEACON_LIGHT: Task = Task {
         );
         num_is(c, "intensity is 1500 lm", b.num("Light.intensity"), 1500.0);
         num_is(c, "range is 8 m", b.num("Light.range"), 8.0);
+        // Colors are linear: sRGB orange (1, 0.5, 0) is about (1, 0.21, 0).
         let color = b.vec("Light.color").unwrap_or_default();
         let orange = color.len() >= 3
             && color[0] >= 0.8
-            && (0.25..=0.75).contains(&color[1])
+            && (0.1..=0.75).contains(&color[1])
             && color[2] <= 0.3;
         c.check("the light is orange", orange, format!("color {color:?}"));
         with_why(c, w, OUTPOST, &[b.addr]);

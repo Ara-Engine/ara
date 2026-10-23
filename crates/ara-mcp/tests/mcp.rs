@@ -25,6 +25,7 @@ impl Endpoint for Fake {
         self.calls.push((method.to_owned(), params.clone()));
         match method {
             "rpc.discover" => Ok(json!({ "methods": self.catalog })),
+            "session.begin" => Ok(json!({ "session": "ses_fake", "echo": params })),
             m if m.starts_with("play") => Err(RpcError::from(Diagnostic::error(
                 codes::SERVICE_UNAVAILABLE,
                 format!("`{m}` is not available yet"),
@@ -177,4 +178,46 @@ fn versions_are_checked_per_request_and_legacy_clients_still_work() {
         a.handle_http(&mut ep, &|_| None, note.to_string().as_bytes()),
         (202, None)
     );
+}
+
+#[test]
+fn per_connection_adapters_make_the_session_optional() {
+    let (mut a, mut ep) = (Adapter::per_connection(), Fake::new());
+    let init = json!({ "protocolVersion": "2025-11-25", "clientInfo": { "name": "Claude Code", "version": "2" } });
+    a.handle(&mut ep, request("initialize", init))
+        .expect("initialized");
+    let r = a
+        .handle(&mut ep, request("tools/list", json!({})))
+        .expect("a response");
+    let apply = r["result"]["tools"]
+        .as_array()
+        .and_then(|t| t.iter().find(|t| t["name"] == "ara_apply"))
+        .expect("ara_apply")
+        .clone();
+    assert!(
+        !apply["inputSchema"]["required"]
+            .as_array()
+            .expect("required")
+            .contains(&json!("session"))
+    );
+
+    // The first call without a session begins one, named after the client; later
+    // calls reuse it, and a session the client begins replaces it.
+    for (name, args) in [
+        ("ara_query", json!({ "q": "Light" })),
+        ("ara_logs", json!({})),
+    ] {
+        let legacy = request("tools/call", json!({ "name": name, "arguments": args }));
+        a.handle(&mut ep, legacy).expect("a response");
+    }
+    let begun: Vec<&(String, Value)> = ep
+        .calls
+        .iter()
+        .filter(|(m, _)| m == "session.begin")
+        .collect();
+    assert_eq!(begun.len(), 1);
+    assert_eq!(begun[0].1["client"], "claude-code");
+    let query = ep.calls.iter().find(|(m, _)| m == "query").expect("query");
+    let logs = ep.calls.iter().find(|(m, _)| m == "logs").expect("logs");
+    assert_eq!(query.1["session"], logs.1["session"]);
 }

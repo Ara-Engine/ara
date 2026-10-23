@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use ara_diag::{Diagnostic, FixAction, Location, codes};
+use ara_diag::{Diagnostic, FixAction, Location, codes, nearest};
 use ara_schema::grammar::{format_ref, parse_ref};
 use ara_schema::{FieldPath, SchemaDb, Shape, TypeDesc, ValueType};
 use serde_json::Value;
@@ -47,6 +47,36 @@ impl AssetIndex {
     /// Document kind of an asset, if it is a document.
     pub fn kind_of(&self, id: &str) -> Option<&str> {
         self.by_id.get(id).and_then(|(_, k)| k.as_deref())
+    }
+
+    /// The known assets closest to a reference that does not resolve (by path, else
+    /// by ID), of `kind` when given, as full `@path#id`s; several when tied.
+    pub fn closest(&self, text: &str, kind: Option<&str>) -> Vec<String> {
+        let Ok(parts) = parse_ref(text) else {
+            return Vec::new();
+        };
+        let fits = |id: &str| kind.is_none_or(|k| self.kind_of(id) == Some(k));
+        let ids: Vec<&str> = match (parts.path, parts.id) {
+            (Some(path), _) => {
+                let paths = self
+                    .by_path
+                    .iter()
+                    .filter(|(_, id)| fits(id))
+                    .map(|(p, _)| p.as_str());
+                nearest(path, paths)
+                    .into_iter()
+                    .filter_map(|p| self.id_of(p))
+                    .collect()
+            }
+            (None, Some(id)) => nearest(
+                id,
+                self.by_id.keys().map(String::as_str).filter(|i| fits(i)),
+            ),
+            (None, None) => Vec::new(),
+        };
+        ids.into_iter()
+            .filter_map(|id| Some(format_ref(self.path_of(id)?, id)))
+            .collect()
     }
 
     /// Forgets an asset (its file was deleted).
@@ -188,7 +218,29 @@ impl Walker<'_> {
                         }
                         *s = canonical;
                     }
-                    Err(d) => self.out.push(d.path(path).within(self.base)),
+                    Err(mut d) => {
+                        let near = if d.code == codes::UNRESOLVED_REF {
+                            self.index.closest(s, kind.as_deref())
+                        } else {
+                            Vec::new()
+                        };
+                        if !near.is_empty() {
+                            let list: Vec<String> = near.iter().map(|n| format!("`{n}`")).collect();
+                            d.message
+                                .push_str(&format!("; did you mean {}?", list.join(" or ")));
+                        }
+                        for n in near {
+                            d = d.with_fix(
+                                format!("Use `{n}`"),
+                                FixAction::Set {
+                                    record: self.base.record.clone(),
+                                    path: path.to_owned(),
+                                    value: Value::from(n),
+                                },
+                            );
+                        }
+                        self.out.push(d.path(path).within(self.base));
+                    }
                 }
             }
             (ValueType::Option(inner), v) => self.value(inner, v, path),
@@ -286,5 +338,24 @@ mod tests {
                 .code,
             codes::INVALID_REF
         );
+    }
+
+    #[test]
+    fn broken_references_suggest_the_closest_asset_of_their_kind() {
+        let ix = index();
+        let near = |s: &str, k: Option<&str>| ix.closest(s, k);
+        assert_eq!(
+            near("@prefabs/rilfe.prefab#pf_gone0000", Some("prefab")),
+            ["@prefabs/rifle.prefab#pf_rifle001"]
+        );
+        assert!(
+            near("@meshes/crate.glb", Some("prefab")).is_empty(),
+            "wrong kind"
+        );
+        assert_eq!(
+            near("@#ms_crate002", None),
+            ["@meshes/crate.glb#ms_crate001"]
+        );
+        assert!(near("@far/away.bin", None).is_empty());
     }
 }

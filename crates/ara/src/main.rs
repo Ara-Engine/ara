@@ -1,7 +1,7 @@
 //! `ara`: the Ara command-line tool and daemon.
 //!
-//! - Files, offline: `fmt`, `check`, `schema`, `merge` (git merge driver),
-//!   `docs --llms`, `init`.
+//! - Files, offline: `fmt`, `check [--fix]`, `schema`, `merge` (git merge driver),
+//!   `resolve` (settle merge conflicts), `docs --llms`, `init`.
 //! - Engine: `serve` (the project daemon), `mcp` (MCP over stdio).
 //! - Protocol commands, through the daemon when it runs, else in-process: `do`,
 //!   `query`, `inspect`, `history`, `undo`, `redo`, `review`, `accept`, `revert`,
@@ -9,12 +9,15 @@
 //!
 //! Every command takes `--json`. The project root is `--root`, else the nearest
 //! ancestor with `ara.project.json`; without one, commands fail with ARA1901.
+//! Protocol commands are attributed to `--author`, else `ARA_AUTHOR`, else the agent
+//! running the CLI (Codex, Claude Code), else `human`.
 //! Exit codes: 0 success, 1 problems found (errors, conflicts, unformatted files),
 //! 2 the command could not run.
 
 mod commands;
 mod engine;
 mod project;
+mod relaxed;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -35,9 +38,10 @@ struct Cli {
     /// Print results as JSON.
     #[arg(long, global = true)]
     json: bool,
-    /// Who protocol commands are attributed to: `human` or `agent:<name>`.
-    #[arg(long, global = true, default_value = "human")]
-    author: String,
+    /// Who protocol commands are attributed to: `human` or `agent:<name>` (default:
+    /// `ARA_AUTHOR`, else the agent running this CLI, else `human`).
+    #[arg(long, global = true)]
+    author: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -64,6 +68,10 @@ enum Command {
     },
     /// Validate documents against the schema, references and prefabs.
     Check {
+        /// Apply every diagnostic's fix when it has exactly one (renames, values),
+        /// then check again.
+        #[arg(long)]
+        fix: bool,
         /// Documents to check (default: every project document).
         files: Vec<PathBuf>,
     },
@@ -85,6 +93,21 @@ enum Command {
         /// Their version.
         theirs: PathBuf,
     },
+    /// Settle the conflicts `ara merge` left in a document: `ara resolve levels/a.scene --pick e_b2:name=theirs` (or `--ours` / `--theirs` for all).
+    Resolve {
+        /// The conflicted document.
+        file: PathBuf,
+        /// Keep our side of every conflict not picked.
+        #[arg(long, conflicts_with = "theirs")]
+        ours: bool,
+        /// Keep their side of every conflict not picked.
+        #[arg(long)]
+        theirs: bool,
+        /// One conflict: `<record>:<path>=ours|theirs|base` (`<record>=…` for a whole
+        /// record). Repeatable.
+        #[arg(long = "pick")]
+        picks: Vec<String>,
+    },
     /// Generate docs for this engine version: llms.txt, llms-full.txt, per-type pages.
     Docs {
         /// The llms.txt format (the only one so far).
@@ -105,23 +128,27 @@ enum Command {
     },
     /// Serve MCP on stdio (uses the daemon, or becomes it).
     Mcp,
-    /// Run one command as a transaction: `ara do entity.create --doc levels/a.scene --param name=Crate`.
+    /// Run one command as a transaction: `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500 --why "Dimmer crate light"`.
     Do {
         /// Command name (`entity.create`; list them with `ara schema`).
         command: String,
-        /// Document to edit.
+        /// Document to edit (default: the one holding the entities the arguments
+        /// name, else the project's main scene). `outpost` is enough.
         #[arg(long)]
-        doc: String,
-        /// Arguments as a JSON object.
+        doc: Option<String>,
+        /// Arguments: a JSON object, `@file.json`, or `-` for stdin. Quotes are
+        /// optional (`{entity: e_8b21, value: [1, 0, 0, 1]}`), so shells that strip
+        /// them (PowerShell) are fine.
         #[arg(long)]
         args: Option<String>,
-        /// One argument: `key=value` (JSON value or string; `a.b=1` nests). Repeatable.
+        /// One argument: `key=value`. Values are JSON (`[0,1,0]`, `true`) or text; a
+        /// list may skip quotes (`entities=[e_1,e_2]`); `a.b=1` nests. Repeatable.
         #[arg(long = "param", short = 'p')]
         params: Vec<String>,
         /// Symbolic ID for the record the command creates (`$crate`).
         #[arg(long = "as")]
         symbol: Option<String>,
-        /// Why, shown in review.
+        /// Why, in a sentence, shown in review (required for agents).
         #[arg(long)]
         why: Option<String>,
         /// Show the diff without applying.
@@ -147,10 +174,10 @@ enum Command {
     },
     /// Show a document's hierarchy, or entities in full.
     Inspect {
-        /// Document.
+        /// Document (default: the one holding `entities`, else the main scene).
         #[arg(long)]
-        doc: String,
-        /// Entities to show in full.
+        doc: Option<String>,
+        /// Entities to show in full: IDs or names (`e_8b21`, `name:Crate`, `Crate`).
         entities: Vec<String>,
         /// Hierarchy depth.
         #[arg(long)]
@@ -221,6 +248,24 @@ fn params(v: Value) -> Value {
     match v {
         Value::Object(o) => Value::Object(o.into_iter().filter(|(_, v)| !v.is_null()).collect()),
         other => other,
+    }
+}
+
+/// Who protocol commands are attributed to without `--author`: `ARA_AUTHOR`, else
+/// the agent CLI whose shell runs us (Codex first: it may run inside Claude Code),
+/// else `human`.
+fn default_author() -> String {
+    let set = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
+    if let Ok(a) = std::env::var("ARA_AUTHOR")
+        && !a.is_empty()
+    {
+        a
+    } else if set("CODEX_THREAD_ID") {
+        "agent:codex".into()
+    } else if set("CLAUDECODE") {
+        "agent:claude-code".into()
+    } else {
+        "human".into()
     }
 }
 
@@ -339,7 +384,23 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
         Command::Fmt { check, files } => {
             commands::fmt(&open(&files)?, &files, check, json).map_err(io)
         }
-        Command::Check { files } => commands::check(&open(&files)?, &files, json).map_err(io),
+        Command::Check { fix, files } => {
+            commands::check(&open(&files)?, &files, fix, json).map_err(io)
+        }
+        Command::Resolve {
+            file,
+            ours,
+            theirs,
+            picks,
+        } => {
+            let all = if ours {
+                Some("ours")
+            } else {
+                theirs.then_some("theirs")
+            };
+            let project = open(std::slice::from_ref(&file))?;
+            commands::resolve(&project, &file, all, &picks, json).map_err(io)
+        }
         Command::Schema { out } => commands::schema(&open(&[])?, json, out.as_deref()).map_err(io),
         Command::Merge {
             output,
@@ -362,7 +423,10 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
         other => {
             let root = project::root(root_flag, &[])?;
             match protocol_call(other) {
-                Some(Ok(call)) => protocol::run(&root, &cli.author, json, call).map_err(io),
+                Some(Ok(call)) => {
+                    let author = cli.author.unwrap_or_else(default_author);
+                    protocol::run(&root, &author, json, call).map_err(io)
+                }
                 Some(Err(diags)) => {
                     engine::print_diags(&diags, json);
                     Ok(false)

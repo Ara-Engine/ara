@@ -392,3 +392,97 @@ fn jobs_report_progress_and_commit_once() {
     );
     assert_eq!(store.history().len(), 1);
 }
+
+#[test]
+fn name_selectors_resolve_and_bare_names_get_fixes() {
+    let (mut store, reg) = setup();
+    let made = reg
+        .apply(
+            &mut store,
+            &Batch::new(
+                "sc_level001",
+                [
+                    ("entity.create", json!({ "id": "$floor", "name": "Floor" })),
+                    (
+                        "entity.create",
+                        json!({ "id": "$crate", "name": "Crate", "parent": "$floor" }),
+                    ),
+                    ("entity.create", json!({ "name": "Barrel" })),
+                    ("entity.create", json!({ "name": "Barrel" })),
+                    (
+                        "prefab.instantiate",
+                        json!({ "id": "$box", "prefab": "@prefabs/crate.prefab", "name": "Box" }),
+                    ),
+                ],
+            ),
+            &Session::human(),
+        )
+        .expect("setup batch");
+    let crate_id = made.symbols["$crate"].clone();
+    let lid = format!("{}/e_lid1", made.symbols["$box"]);
+
+    let set = |entity: &str| {
+        (
+            "property.set",
+            json!({ "entity": entity, "path": "name", "value": "Renamed" }),
+        )
+    };
+    for (selector, want) in [
+        ("name:Crate", &crate_id),
+        ("name:Floor/Crate", &crate_id),
+        ("name:Box/Lid", &lid),
+    ] {
+        let r = reg
+            .apply(
+                &mut store,
+                &Batch::new("sc_level001", [set(selector)]),
+                &Session::human(),
+            )
+            .unwrap_or_else(|d| panic!("{selector}: {d:#?}"));
+        assert_eq!(r.outputs[0]["entity"], json!(want), "{selector}");
+        store.undo_last(&Author::Human).expect("undo");
+    }
+
+    let fail = |store: &mut Store, entity: &str| {
+        reg.apply(
+            store,
+            &Batch::new("sc_level001", [set(entity)]),
+            &Session::human(),
+        )
+        .expect_err("fails")
+        .remove(0)
+    };
+    let d = fail(&mut store, "Crate");
+    assert_eq!(
+        (d.code, d.location.path.as_deref()),
+        (codes::TYPE_MISMATCH, Some("params.entity"))
+    );
+    assert!(
+        d.message
+            .contains(&format!("did you mean `{crate_id}` (Crate, under Floor)?")),
+        "{}",
+        d.message
+    );
+    assert_eq!(
+        serde_json::to_value(&d.fixes[0]).expect("fix"),
+        json!({ "title": format!("Use `{crate_id}` (Crate, under Floor)"), "action": "set", "path": "params.entity", "value": crate_id })
+    );
+    let d = fail(&mut store, "name:Barrel");
+    assert_eq!((d.code, d.fixes.len()), (codes::AMBIGUOUS_ENTITY, 2));
+    let d = fail(&mut store, "name:Crat");
+    assert_eq!(d.code, codes::RECORD_NOT_FOUND);
+    assert!(
+        d.message.contains("did you mean `name:Crate`?") && d.fixes.len() == 1,
+        "{d:#?}"
+    );
+    let d = fail(&mut store, "e_crt1");
+    assert!(
+        d.message.contains("it is in `prefabs/crate.prefab`"),
+        "{}",
+        d.message
+    );
+    assert_eq!(
+        serde_json::to_value(&d.fixes[0].action).expect("fix")["path"],
+        json!("doc")
+    );
+}

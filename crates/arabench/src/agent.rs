@@ -137,6 +137,19 @@ impl AgentSpec {
                 c
             }
         };
+        // Markers of whatever agent launched arabench would make `ara` attribute the
+        // benchmarked agent's CLI edits to it; the agent under test sets its own.
+        for (key, _) in std::env::vars_os() {
+            let k = key.to_string_lossy();
+            let inherited = k == "CLAUDECODE"
+                || k == "AI_AGENT"
+                || k == "ARA_AUTHOR"
+                || k.starts_with("CLAUDE_CODE_")
+                || (k.starts_with("CODEX_") && k != "CODEX_HOME");
+            if inherited {
+                cmd.env_remove(&key);
+            }
+        }
         let path = std::env::var_os("PATH").unwrap_or_default();
         let mut dirs = vec![ara_dir.to_path_buf()];
         dirs.extend(std::env::split_paths(&path));

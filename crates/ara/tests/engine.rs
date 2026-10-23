@@ -20,9 +20,20 @@ fn scratch(name: &str) -> PathBuf {
 
 /// Runs `ara <args>` in `cwd`; returns (exit code, stdout, stderr).
 fn ara_in(cwd: &Path, args: &[&str]) -> (i32, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_ara"))
+    ara_env(cwd, args, &[])
+}
+
+/// [`ara_in`] with extra environment; agent markers of the shell running the tests
+/// are cleared so the default author is `human`.
+fn ara_env(cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_ara"));
+    for key in ["CLAUDECODE", "CODEX_THREAD_ID", "ARA_AUTHOR"] {
+        cmd.env_remove(key);
+    }
+    let out = cmd
         .current_dir(cwd)
         .args(args)
+        .envs(env.iter().copied())
         .output()
         .expect("ara runs");
     (
@@ -478,4 +489,58 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
         !root.join(".ara/daemon.json").exists(),
         "removed on a clean exit"
     );
+}
+
+#[test]
+fn agent_shells_are_attributed_and_args_survive_stripped_quotes() {
+    let root = scratch("agent-cli");
+    ara_in(&root, &["init"]);
+    let codex = [("CODEX_THREAD_ID", "thread-1")];
+
+    // No `--doc` (the only scene), no `--author` (Codex's shell), no `--why`.
+    let (code, out, _) = ara_env(
+        &root,
+        &["do", "entity.create", "-p", "name=Crate", "--json"],
+        &codex,
+    );
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(json_of(&out)["diagnostics"][0]["code"], "ARA1610");
+
+    // JSON as PowerShell 5.1 delivers it: quotes stripped.
+    let (code, out, err) = ara_env(
+        &root,
+        &[
+            "do",
+            "entity.create",
+            "--args",
+            "{name: Crate, components: {Transform: {position: [1, 2, 3]}}}",
+            "--why",
+            "a crate",
+        ],
+        &codex,
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(
+        out.starts_with("applied tx_") && out.contains(" Crate"),
+        "{out}"
+    );
+    let (code, out, err) = ara_env(
+        &root,
+        &[
+            "do",
+            "transform.set",
+            "-p",
+            "entities=[name:Crate]",
+            "-p",
+            "position=[0,1,0]",
+            "--why",
+            "lift it",
+        ],
+        &codex,
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    let (_, out, _) = ara_in(&root, &["review", "--json"]);
+    assert_eq!(json_of(&out)["items"][0]["author"], "agent:codex");
+    let (_, out, _) = ara_in(&root, &["inspect", "Crate"]);
+    assert!(out.contains("Crate pos(0,1,0)"), "{out}");
 }
