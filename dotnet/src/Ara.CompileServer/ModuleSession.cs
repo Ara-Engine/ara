@@ -1,327 +1,199 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using Ara.Hosting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Emit;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Ara.CompileServer;
 
-/// <summary>Where a session's messages go (the host pipe, or a test).</summary>
+/// <summary>Where compile-server messages go (the host pipe, or a test).</summary>
 internal interface IMessageSink
 {
     /// <summary>Sends one message.</summary>
     void Send(MessageKind kind, byte[] payload);
 }
 
-/// <summary>Extra diagnostics run on every build (the Ara analyzers).</summary>
+/// <summary>Extra diagnostics run on every build (the Ara analyzers and the API allowlist).</summary>
 internal interface IAnalysis
 {
-    /// <summary>Analyzer diagnostics for <paramref name="trees"/> of <paramref name="compilation"/>.</summary>
-    ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees);
+    /// <summary>Analyzer diagnostics for <paramref name="trees"/> of <paramref name="compilation"/> under an API profile.</summary>
+    ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile);
+}
+
+/// <summary>What a compile needs from outside its module.</summary>
+internal interface ICompileContext
+{
+    /// <summary>The host runtime can apply EnC deltas.</summary>
+    bool Enc { get; }
+    /// <summary>The host runtime's EnC capabilities (they gate L2).</summary>
+    EncCapabilities Caps { get; }
+    /// <summary>The state a referenced module is compiled against: prepared in the current cascade, or committed.</summary>
+    ModuleState? Dependency(string name);
+    /// <summary>True if another module references <paramref name="module"/> (its surface hash is needed).</summary>
+    bool HasDependents(ModuleSession module);
 }
 
 /// <summary>
-/// One watched module: its retained compilation (what the running generation was built
-/// from), the generator driver, the EnC baseline, the module's heat and its file watcher.
-/// All work runs on the session's worker thread, one item at a time.
+/// One module: its committed <see cref="ModuleState"/> (what the running generation was built
+/// from), the generator driver and the latest text on disk. Compiles return an
+/// <see cref="Outcome"/>; the <see cref="Coordinator"/> commits them (all modules of a
+/// cascade, or none). Called only from the coordinator's worker thread.
 /// </summary>
 /// <remarks>
 /// Heat (R10 D1): modules start cold (optimized). The first edit to a cold module is one
-/// L3 rebuild as Debug IL that makes it hot; after that body-only edits take L1.
-/// <see cref="SetHeat"/> recompiles optimized again ("cool all" / perf play).
+/// L3 rebuild as Debug IL that makes it hot; after that body edits take L1 and additive
+/// edits L2. A full rebuild can switch heat back ("cool all" / perf play).
 /// </remarks>
-internal sealed class ModuleSession : IDisposable
+internal sealed class ModuleSession
 {
     /// <summary>Soft size cap (R10: about 5k lines).</summary>
     internal const int SoftCapLines = 5000;
     /// <summary>Past this, L3 reloads miss their latency target.</summary>
     internal const int HardCapLines = 8000;
-    const double SettleMs = 1.0;
 
-    readonly IMessageSink _out;
+    internal readonly uint Slot;
+    internal readonly string Name;
+    internal readonly string Dir;
+    internal readonly string Profile;
+    /// <summary>Names of the modules this one references.</summary>
+    internal readonly IReadOnlyList<string> References;
     readonly IAnalysis? _analysis;
-    readonly uint _slot;
-    readonly string _name;
-    readonly string _dir;
-    readonly bool _enc;
     readonly ModuleCompiler _compiler;
-    readonly BlockingCollection<Action> _work = [];
-    readonly BlockingCollection<(string Path, long Ticks)> _events = [];
-    readonly CancellationTokenSource _stop = new();
-    readonly Thread _worker;
-    readonly Thread _eventPump;
-    FileSystemWatcher? _watcher;
-
-    // Applied state: exactly what the running generation was built from.
-    Dictionary<string, SyntaxTree> _trees = new(StringComparer.OrdinalIgnoreCase);
-    Dictionary<string, string> _texts = new(StringComparer.OrdinalIgnoreCase);
-    CSharpCompilation _user = null!;
-    Compilation _final = null!;
-    ImmutableDictionary<string, string> _generated = ImmutableDictionary<string, string>.Empty;
-    EmitBaseline? _baseline;
-    GeneratorDriver _driver = ModuleCompiler.Driver();
-    bool _hot;
-    /// <summary>A build has succeeded: <see cref="_final"/> and the baseline exist.</summary>
-    bool _built;
-    uint _generation;
-    int _sizeLevel;
+    readonly bool _startHot;
     readonly SyntaxTree _usings = ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
+    GeneratorDriver _driver = ModuleCompiler.Driver();
+    ModuleState? _state;
+    int _sizeLevel;
 
-    // Latest text on disk; differs from _texts while the module has compile errors.
-    readonly Dictionary<string, string> _disk = new(StringComparer.OrdinalIgnoreCase);
+    // Latest text on disk; differs from the state's texts while the module has compile errors.
+    readonly Dictionary<string, string> _disk = new(ModuleState.Paths);
 
-    internal ModuleSession(IMessageSink output, uint slot, string name, string dir, bool hot, bool enc,
-        IEnumerable<string> references, IAnalysis? analysis)
+    internal ModuleSession(uint slot, string name, string dir, bool hot, IEnumerable<string> assemblies,
+        IReadOnlyList<string> references, string profile, IAnalysis? analysis)
     {
-        _out = output;
-        _slot = slot;
-        _name = name;
-        _dir = Path.GetFullPath(dir);
-        _enc = enc;
-        _hot = hot && enc;
+        Slot = slot;
+        Name = name;
+        Dir = Path.GetFullPath(dir);
+        _startHot = hot;
+        References = references;
+        Profile = profile;
         _analysis = analysis;
-        _compiler = new ModuleCompiler(name, references);
-        _worker = new Thread(Work) { Name = $"ara-compile:{name}", IsBackground = true };
-        _eventPump = new Thread(Pump) { Name = $"ara-watch:{name}", IsBackground = true };
+        _compiler = new ModuleCompiler(name, assemblies);
+    }
+
+    /// <summary>The committed state (null until the first successful build).</summary>
+    internal ModuleState? State => _state;
+
+    /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
+    internal void Commit(Outcome o)
+    {
+        if (o.Next is { } next) _state = next;
     }
 
     /// <summary>
-    /// Starts watching (first, so no save is missed), builds the first image, then warms
-    /// the L1/L3 paths. Edits made meanwhile queue behind the warm-up.
+    /// After a referenced module committed new code without a cascade (an L1/L2 delta), points
+    /// this module's compilations at it so the next edit sees its new members.
     /// </summary>
-    internal void Start(bool watch)
+    internal void Rebind(string name, ModuleState dep)
     {
-        _worker.Start();
-        _work.Add(() =>
+        if (_state is not { } s || !s.DepRefs.TryGetValue(name, out var old)) return;
+        var now = dep.Reference;
+        if (ReferenceEquals(old, now)) return;
+        _state = s with
         {
-            if (watch) StartWatching();
-            if (LoadAndBuild()) Prewarm();
-        });
+            User = s.User.ReplaceReference(old, now),
+            Final = s.Final.ReplaceReference(old, now),
+            DepRefs = s.DepRefs.SetItem(name, now),
+        };
     }
 
-    /// <summary>Recompiles hot (Debug IL, EnC) or cold (optimized), at L3 cost.</summary>
-    internal void SetHeat(bool hot) => _work.Add(() =>
+    internal IEnumerable<string> SourceFiles() =>
+        Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p));
+
+    internal bool IsIgnored(string path)
     {
-        hot &= _enc;
-        if (hot == _hot) return;
-        _hot = hot;
-        _user = _user.WithOptions(ModuleCompiler.Options(hot));
-        BuildFull(AbiConst.ReloadL3, Escalation.Requested, Stopwatch.GetTimestamp(), analyze: []);
-    });
-
-    /// <summary>Sends a full image of the applied state (the host could not apply a delta).</summary>
-    internal void Rebuild(uint escalation) =>
-        _work.Add(() => BuildFull(AbiConst.ReloadL3, (Escalation)escalation, Stopwatch.GetTimestamp(), analyze: []));
-
-    /// <summary>Queues a change set as if the watcher had reported it (tests, tools).</summary>
-    internal void Change(IEnumerable<string> paths)
-    {
-        var list = paths.ToList();
-        var t = Stopwatch.GetTimestamp();
-        _work.Add(() => OnChange(list, t));
-    }
-
-    /// <summary>Lets the session's queued work drain (tests).</summary>
-    internal void WaitIdle()
-    {
-        using var done = new ManualResetEventSlim();
-        _work.Add(done.Set);
-        done.Wait(_stop.Token);
-    }
-
-    void Work()
-    {
-        try
-        {
-            foreach (var item in _work.GetConsumingEnumerable(_stop.Token))
-            {
-                try { item(); }
-                catch (Exception e) { Log(2, $"module `{_name}`: {e}"); }
-                finally { CompileState(false); }
-            }
-        }
-        catch (OperationCanceledException) { }
-    }
-
-    void Log(uint level, string text) => _out.Send(MessageKind.Log, new Protocol.Writer().U32(level).Str(text).ToArray());
-
-    bool _compiling;
-
-    void CompileState(bool active)
-    {
-        if (_compiling == active) return;
-        _compiling = active;
-        _out.Send(MessageKind.CompileState, new Protocol.Writer().Bool(active).ToArray());
-    }
-
-    static ulong Micros(long since) => (ulong)Math.Max(0, Stopwatch.GetElapsedTime(since).Ticks / 10);
-
-    IEnumerable<string> SourceFiles() =>
-        Directory.EnumerateFiles(_dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p));
-
-    bool IsIgnored(string path)
-    {
-        var rel = Path.GetRelativePath(_dir, path).Replace('\\', '/');
+        var rel = Path.GetRelativePath(Dir, path).Replace('\\', '/');
         return rel.StartsWith("bin/", StringComparison.OrdinalIgnoreCase) || rel.StartsWith("obj/", StringComparison.OrdinalIgnoreCase)
             || rel.Contains("/bin/", StringComparison.OrdinalIgnoreCase) || rel.Contains("/obj/", StringComparison.OrdinalIgnoreCase);
     }
 
-    bool LoadAndBuild()
+    (ImmutableDictionary<string, MetadataReference> Refs, ImmutableDictionary<string, string?> Surfaces) Dependencies(ICompileContext ctx)
     {
-        var t0 = Stopwatch.GetTimestamp();
-        CompileState(true);
+        var refs = ImmutableDictionary.CreateBuilder<string, MetadataReference>();
+        var surfaces = ImmutableDictionary.CreateBuilder<string, string?>();
+        foreach (var name in References)
+        {
+            var dep = ctx.Dependency(name) ?? throw new InvalidOperationException($"module `{Name}` references `{name}`, which has not built");
+            refs[name] = dep.Reference;
+            surfaces[name] = dep.Surface;
+        }
+        return (refs.ToImmutable(), surfaces.ToImmutable());
+    }
+
+    /// <summary>Reads every file and builds the first image (generation 0).</summary>
+    internal Outcome Initial(ICompileContext ctx, CancellationToken ct = default)
+    {
+        var p = new Phases(0, Stopwatch.GetTimestamp());
+        var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
+        var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         foreach (var path in SourceFiles())
         {
             var full = Path.GetFullPath(path);
             var text = File.ReadAllText(full);
             _disk[full] = text;
-            _texts[full] = text;
-            _trees[full] = ModuleCompiler.Parse(full, text);
+            texts[full] = text;
+            trees[full] = ModuleCompiler.Parse(full, text);
         }
-        _user = _compiler.Create([.. _trees.Values, _usings], _hot);
-        return BuildFull(AbiConst.ReloadInitial, Escalation.None, t0);
+        var hot = _startHot && ctx.Enc;
+        var (refs, surfaces) = Dependencies(ctx);
+        var user = _compiler.Create([.. trees.Values, _usings], hot, refs.Values);
+        var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
+            null, hot, 0, null, surfaces, refs);
+        p.Parse = p.Mark();
+        var kind = _state is null ? AbiConst.ReloadInitial : AbiConst.ReloadL3;
+        return Build(user, start, kind, _state is null ? Escalation.None : Escalation.Requested, p, [.. trees.Values], null, ctx, true, ct);
     }
 
-    /// <summary>Runs the generator over a user compilation.</summary>
-    (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, string> Generated) Generate(CSharpCompilation user)
+    /// <summary>A full image of the committed state, hot or cold (heat change, or the host asked for one).</summary>
+    internal Outcome Full(Escalation escalation, bool? hot, ICompileContext ctx, CancellationToken ct = default)
     {
-        _driver = _driver.RunGeneratorsAndUpdateCompilation(user, out var final, out var diags);
-        var generated = _driver.GetRunResult().Results
-            .SelectMany(r => r.GeneratedSources)
-            .ToImmutableDictionary(s => s.HintName, s => s.SourceText.ToString());
-        return (final, diags, generated);
-    }
-
-    /// <summary>Errors and Ara diagnostics of a build: generator, compiler (from emit) and analyzers.</summary>
-    List<Diagnostic> Problems(Compilation final, ImmutableArray<Diagnostic> generator, ImmutableArray<Diagnostic> emit, IReadOnlyCollection<SyntaxTree> changed)
-    {
-        var list = generator.Concat(emit).Where(Diagnostics.Reportable).ToList();
-        if (_analysis is not null && list.All(d => d.Severity != DiagnosticSeverity.Error))
-            list.AddRange(_analysis.Analyze(final, changed).Where(Diagnostics.Reportable));
-        return list;
-    }
-
-    /// <summary>Per-phase timings of one reload, logged at info level.</summary>
-    sealed class Phases(string what)
-    {
-        long _t = Stopwatch.GetTimestamp();
-        readonly List<string> _parts = [];
-
-        public void Mark(string phase)
-        {
-            var now = Stopwatch.GetTimestamp();
-            _parts.Add($"{phase} {Stopwatch.GetElapsedTime(_t, now).TotalMilliseconds:F1}");
-            _t = now;
-        }
-
-        public override string ToString() => $"{what}: {string.Join(", ", _parts)} ms";
+        if (_state is not { } s) return Initial(ctx, ct);
+        var h = (hot ?? s.Hot) && ctx.Enc;
+        var user = h == s.Hot ? s.User : s.User.WithOptions(ModuleCompiler.Options(h));
+        return Build(user, s with { Hot = h }, AbiConst.ReloadL3, escalation, new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
     }
 
     /// <summary>
-    /// Emits the applied state (plus any pending heat) as a full image and sends it.
-    /// <paramref name="analyze"/> are the trees to run the analyzers on (null: all);
-    /// <paramref name="generated"/> reuses a generator run for the same compilation.
+    /// A referenced module got a new generation: relink (reload this module's image and deltas
+    /// against it) when every dependency kept the surface this code was compiled against,
+    /// otherwise rebuild against the new code (L3, <see cref="Escalation.Dependency"/>).
     /// </summary>
-    bool BuildFull(uint kind, Escalation escalation, long t0, IReadOnlyCollection<SyntaxTree>? analyze = null,
-        (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, string> Generated)? generated = null,
-        Phases? phases = null)
+    internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default)
     {
-        CompileState(true);
-        phases ??= new Phases($"module `{_name}` full build");
-        var (final, genDiags, gen) = generated ?? Generate(_user);
-        phases.Mark("generate");
-        var (image, errors) = genDiags.Any(d => d.Severity == DiagnosticSeverity.Error) ? (null, []) : ModuleCompiler.Emit(final);
-        phases.Mark("emit");
-        var problems = Problems(final, genDiags, errors, analyze ?? [.. _trees.Values]);
-        phases.Mark("analyze");
-        SendDiagnostics(problems, t0);
-        if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return false;
-        _final = final;
-        _built = true;
-        _generated = gen;
-        _baseline = _hot ? ModuleCompiler.Baseline(final, image) : null;
-        phases.Mark("baseline");
-        if (kind != AbiConst.ReloadInitial) _generation++;
-        CheckSize();
-        _out.Send(MessageKind.Image, new Protocol.Writer()
-            .U32(_slot).U32(_generation).Bool(_hot).U32(kind).U32((uint)escalation).U64(Micros(t0))
-            .Bytes(image.Pe).Bytes(image.Pdb).ToArray());
-        phases.Mark($"send ({(image.Pe.Length + image.Pdb.Length) / 1024} KB)");
-        Log(0, phases.ToString());
-        return true;
-    }
-
-    void SendDiagnostics(List<Diagnostic> problems, long t0, params (string Code, string Severity, string Message)[] extra)
-    {
-        if (problems.Count == 0 && extra.Length == 0) return;
-        var errors = (uint)problems.Count(d => d.Severity == DiagnosticSeverity.Error);
-        var json = Diagnostics.Array(w =>
+        var s = _state ?? throw new InvalidOperationException($"module `{Name}` has not built");
+        var (refs, surfaces) = Dependencies(ctx);
+        var user = s.User;
+        var final = s.Final;
+        foreach (var (name, now) in refs)
         {
-            foreach (var d in problems.Take(50)) Diagnostics.Write(w, d);
-            foreach (var (code, sev, msg) in extra) Diagnostics.Write(w, code, sev, msg, _dir);
-        });
-        _out.Send(MessageKind.Diagnostics, new Protocol.Writer().U32(_slot).U32(errors).Str(json).U64(Micros(t0)).ToArray());
-    }
-
-    /// <summary>Reports the module once each time it crosses the soft cap (info) or 8k lines (warning).</summary>
-    void CheckSize()
-    {
-        var lines = _texts.Values.Sum(t => t.Count(c => c == '\n'));
-        var level = lines > HardCapLines ? 2 : lines > SoftCapLines ? 1 : 0;
-        if (level == _sizeLevel) return;
-        _sizeLevel = level;
-        if (level == 0) return;
-        SendDiagnostics([], Stopwatch.GetTimestamp(), level == 2
-            ? (Diagnostics.ModuleTooLarge, "warning", $"module `{_name}` has {lines} lines; L3 reloads will miss their target past {HardCapLines}; split it into smaller modules")
-            : (Diagnostics.ModuleLarge, "info", $"module `{_name}` has {lines} lines, past the soft cap of {SoftCapLines}; consider splitting it"));
-    }
-
-    void StartWatching()
-    {
-        _eventPump.Start();
-        _watcher = new FileSystemWatcher(_dir, "*.cs")
-        {
-            IncludeSubdirectories = true,
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-            InternalBufferSize = 64 * 1024,
-        };
-        FileSystemEventHandler on = (_, e) => _events.Add((e.FullPath, Stopwatch.GetTimestamp()));
-        _watcher.Changed += on;
-        _watcher.Created += on;
-        _watcher.Deleted += on;
-        _watcher.Renamed += (_, e) =>
-        {
-            var t = Stopwatch.GetTimestamp();
-            _events.Add((e.OldFullPath, t));
-            _events.Add((e.FullPath, t));
-        };
-        _watcher.EnableRaisingEvents = true;
-    }
-
-    /// <summary>Coalesces file events (a truncate+write pair reads once) and queues one change set.</summary>
-    void Pump()
-    {
-        var settle = (long)(SettleMs * Stopwatch.Frequency / 1000);
-        try
-        {
-            while (!_stop.IsCancellationRequested)
-            {
-                var first = _events.Take(_stop.Token);
-                var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { first.Path };
-                // Spin, don't sleep: Windows timed waits round up to the 15.6 ms timer tick (S2 finding 8).
-                var until = Stopwatch.GetTimestamp() + settle;
-                while (Stopwatch.GetTimestamp() < until)
-                {
-                    if (_events.TryTake(out var e)) { paths.Add(e.Path); until = Stopwatch.GetTimestamp() + settle; }
-                    else Thread.Yield();
-                }
-                _work.Add(() => OnChange(paths, first.Ticks));
-            }
+            if (!s.DepRefs.TryGetValue(name, out var old)) continue;
+            user = user.ReplaceReference(old, now);
+            final = final.ReplaceReference(old, now);
         }
-        catch (OperationCanceledException) { }
+        var same = References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
+        if (same)
+        {
+            return new Outcome(this, OutcomeKind.Relink)
+            {
+                ReloadKind = AbiConst.ReloadL3,
+                Escalation = Escalation.Relink,
+                Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1 },
+            };
+        }
+        return Build(user, s with { DepRefs = refs }, AbiConst.ReloadL3, Escalation.Dependency,
+            new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
     }
 
     static string? ReadWithRetry(string path)
@@ -334,153 +206,222 @@ internal sealed class ModuleSession : IDisposable
         }
     }
 
-    /// <summary>Classifies and compiles one change set: an L1 delta, an L3 image, or diagnostics.</summary>
-    internal void OnChange(IEnumerable<string> paths, long tEvent)
+    /// <summary>
+    /// Classifies and compiles one change set: an L1/L2 delta, an L3 image, nothing (a
+    /// trivia-only change), or errors (the last good state stays committed).
+    /// </summary>
+    internal Outcome Compile(IEnumerable<string> paths, long tEvent, ICompileContext ctx, CancellationToken ct = default)
     {
-        var phases = new Phases($"module `{_name}` edit");
-        foreach (var p in paths)
+        var p = new Phases(tEvent, Stopwatch.GetTimestamp());
+        if (_state is not { } s) return Initial(ctx, ct);
+        foreach (var path in paths)
         {
-            if (!p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || IsIgnored(p)) continue;
-            var full = Path.GetFullPath(p);
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || IsIgnored(path)) continue;
+            var full = Path.GetFullPath(path);
             if (ReadWithRetry(full) is { } text) _disk[full] = text;
             else _disk.Remove(full);
         }
         var changes = new List<FileChange>();
-        var nextTrees = new Dictionary<string, SyntaxTree>(_trees, StringComparer.OrdinalIgnoreCase);
-        var nextTexts = new Dictionary<string, string>(_texts, StringComparer.OrdinalIgnoreCase);
-        foreach (var path in _disk.Keys.Union(_texts.Keys).ToList())
+        var trees = s.Trees.ToBuilder();
+        var texts = s.Texts.ToBuilder();
+        foreach (var path in _disk.Keys.Union(s.Texts.Keys, ModuleState.Paths).ToList())
         {
-            var had = _texts.TryGetValue(path, out var oldText);
+            var had = s.Texts.TryGetValue(path, out var oldText);
             var has = _disk.TryGetValue(path, out var newText);
             if (had && has && oldText == newText) continue;
-            var oldTree = had ? _trees[path] : null;
+            var oldTree = had ? s.Trees[path] : null;
             var newTree = has ? ModuleCompiler.Parse(path, newText!) : null;
             changes.Add(new FileChange(path, oldTree, newTree));
-            if (newTree is null) { nextTrees.Remove(path); nextTexts.Remove(path); }
-            else { nextTrees[path] = newTree; nextTexts[path] = newText!; }
+            if (newTree is null) { trees.Remove(path); texts.Remove(path); }
+            else { trees[path] = newTree; texts[path] = newText!; }
         }
-        if (changes.Count == 0) return;
-        CompileState(true);
-        phases.Mark("read+parse");
-        var next = _user;
-        foreach (var c in changes)
-        {
-            next = (c.Old, c.New) switch
-            {
-                ({ } o, { } n) => next.ReplaceSyntaxTree(o, n),
-                (null, { } n) => next.AddSyntaxTrees(n),
-                ({ } o, null) => next.RemoveSyntaxTrees(o),
-                _ => next,
-            };
-        }
-        var changedTrees = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
+        if (changes.Count == 0) return new Outcome(this, OutcomeKind.None);
+        var next = s.User;
+        foreach (var c in changes) next = Apply(next, c);
+        var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
+        var nextState = s with { User = next, Trees = trees.ToImmutable(), Texts = texts.ToImmutable() };
 
-        // Body-only edits cannot change the generator's output (it reads declarations,
-        // attributes and doc comments only), so L1 skips the generator and keeps the
-        // generated trees: the edited user trees are swapped into the last final compilation.
-        var escalation = !_enc || !_hot ? Escalation.Cold : !_built ? Escalation.Requested : Escalation.None;
-        List<BodyEdit> bodyEdits = [];
-        if (escalation == Escalation.None) (escalation, bodyEdits) = EditClassifier.Classify(changes);
-        if (escalation == Escalation.None && EditClassifier.DocsChanged(changes)) escalation = Escalation.Generated;
-        phases.Mark("classify");
-        if (escalation == Escalation.None)
+        var escalation = !ctx.Enc || !s.Hot ? Escalation.Cold : Escalation.None;
+        var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;
+        if (cls is not null) escalation = cls.Escalation;
+        p.Parse = p.Mark();
+        (Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, SourceText>)? reuse = null;
+        if (escalation == Escalation.None && cls is not null)
         {
-            var final = _final;
-            foreach (var c in changes) final = final.ReplaceSyntaxTree(c.Old!, c.New!);
-            if (bodyEdits.Count == 0)
+            // The generator reads declarations, attributes and doc comments only. Body edits keep
+            // its output; for inserts and doc edits it runs, and any change in its output is L3.
+            if (cls.Additive || EditClassifier.DocsChanged(changes))
             {
-                Adopt(next, final, _generated, nextTrees, nextTexts); // trivia-only change
-                return;
+                var g = Generate(next, ct);
+                p.Generate = p.Mark();
+                if (g.Diags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(g.Final, g.Diags, [], changed));
+                if (!Same(g.Generated, s.Generated)) (escalation, reuse) = (Escalation.Generated, g);
             }
-            var edits = EditClassifier.ToSemanticEdits(bodyEdits, _final, final);
+        }
+        if (escalation == Escalation.None && cls is not null)
+        {
+            var final = s.Final;
+            foreach (var c in changes) final = Apply(final, c);
+            nextState = nextState with { Final = final };
+            if (cls.Bodies.Count == 0 && !cls.Additive)
+                return new Outcome(this, OutcomeKind.None) { Next = nextState }; // trivia or doc comments only
             ModuleDelta? delta = null;
             ImmutableArray<Diagnostic> errors = [];
-            try { (delta, errors) = ModuleCompiler.EmitDelta(final, _baseline!, edits); }
-            catch (Exception e) { Log(1, $"EmitDifference threw, taking L3: {e.Message}"); }
-            phases.Mark("emit delta");
-            var problems = Problems(final, [], errors, changedTrees);
-            phases.Mark("analyze");
-            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error))
+            try
             {
-                SendDiagnostics(problems, tEvent);
-                return; // a compile error in an edited body: the last good code keeps running
+                var (edits, added) = EditClassifier.ToSemanticEdits(cls, s.Final, final);
+                (delta, errors) = ModuleCompiler.EmitDelta(final, s.Baseline!, edits, added, ct);
             }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                Trace.WriteLine($"module `{Name}`: EmitDifference threw, taking L3: {e.Message}");
+            }
+            p.Emit = p.Mark();
+            var problems = Problems(final, [], errors, changed);
+            p.Analyze = p.Mark();
+            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
             {
-                SendDiagnostics(problems, tEvent);
-                Adopt(next, final, _generated, nextTrees, nextTexts);
-                _baseline = delta.Next;
-                _out.Send(MessageKind.Delta, new Protocol.Writer()
-                    .U32(_slot).U32(_generation).U32((uint)edits.Count).U64(Micros(tEvent))
-                    .Bytes(delta.Metadata).Bytes(delta.Il).Bytes(delta.Pdb).ToArray());
-                phases.Mark("send");
-                Log(0, "L1 " + phases);
-                return;
+                var (_, surfaces) = Dependencies(ctx);
+                return new Outcome(this, OutcomeKind.Delta)
+                {
+                    ReloadKind = cls.Additive ? AbiConst.ReloadL2 : AbiConst.ReloadL1,
+                    Delta = delta,
+                    Changed = cls.Bodies.Count + cls.Inserts.Count,
+                    Problems = problems,
+                    Timing = p,
+                    Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces },
+                };
             }
             escalation = Escalation.EmitFailed;
         }
 
-        // L3: run the generator over the new user compilation.
-        var (genFinal, genDiags, generated) = Generate(next);
-        phases.Mark("generate");
-        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error))
+        // L3. A cold module's first edit makes it hot (when the host has EnC).
+        if (escalation == Escalation.Cold && ctx.Enc && !s.Hot)
         {
-            SendDiagnostics(Problems(genFinal, genDiags, [], changedTrees), tEvent);
-            return;
-        }
-
-        // A cold module's first edit makes it hot (when the host has EnC).
-        var previous = (_user, _trees, _texts, _hot);
-        var reuse = ((Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, string>)?)(genFinal, genDiags, generated);
-        if (escalation == Escalation.Cold && _enc && !_hot)
-        {
-            _hot = true;
             next = next.WithOptions(ModuleCompiler.Options(true));
-            reuse = null; // new options: run the generator for the Debug-IL compilation
+            nextState = nextState with { User = next, Hot = true };
+            reuse = null; // new options: the generator runs for the Debug-IL compilation
         }
-        (_user, _trees, _texts) = (next, nextTrees, nextTexts);
-        if (!BuildFull(AbiConst.ReloadL3, escalation, tEvent, changedTrees, reuse, phases))
-            (_user, _trees, _texts, _hot) = previous; // the errors were sent; the last good state stays applied
+        return Build(next, nextState, AbiConst.ReloadL3, escalation, p, changed, reuse, ctx, false, ct);
     }
 
-    bool SameGenerated(ImmutableDictionary<string, string> generated) =>
-        generated.Count == _generated.Count && generated.All(kv => _generated.TryGetValue(kv.Key, out var v) && v == kv.Value);
-
-    void Adopt(CSharpCompilation user, Compilation final, ImmutableDictionary<string, string> generated,
-        Dictionary<string, SyntaxTree> trees, Dictionary<string, string> texts)
+    static TComp Apply<TComp>(TComp c, FileChange change) where TComp : Compilation => (change.Old, change.New) switch
     {
-        (_user, _final, _generated, _trees, _texts) = (user, final, generated, trees, texts);
+        ({ } o, { } n) => (TComp)c.ReplaceSyntaxTree(o, n),
+        (null, { } n) => (TComp)c.AddSyntaxTrees(n),
+        ({ } o, null) => (TComp)c.RemoveSyntaxTrees(o),
+        _ => c,
+    };
+
+    /// <summary>Same generated output: the driver hands back the same text objects for cached outputs, so most compare by reference.</summary>
+    static bool Same(ImmutableDictionary<string, SourceText> a, ImmutableDictionary<string, SourceText> b) =>
+        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && (ReferenceEquals(v, kv.Value) || v.ContentEquals(kv.Value)));
+
+    Outcome Errors(Phases p, List<Diagnostic> problems) =>
+        new(this, OutcomeKind.Errors) { Problems = problems, Timing = p };
+
+    /// <summary>Runs the generator over a user compilation.</summary>
+    (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated) Generate(CSharpCompilation user, CancellationToken ct)
+    {
+        _driver = _driver.RunGeneratorsAndUpdateCompilation(user, out var final, out var diags, ct);
+        var generated = _driver.GetRunResult().Results
+            .SelectMany(r => r.GeneratedSources)
+            .ToImmutableDictionary(s => s.HintName, s => s.SourceText);
+        return (final, diags, generated);
+    }
+
+    /// <summary>Errors and Ara diagnostics: generator, compiler (from emit) and analyzers (skipped when there are errors).</summary>
+    List<Diagnostic> Problems(Compilation final, ImmutableArray<Diagnostic> generator, ImmutableArray<Diagnostic> emit,
+        IReadOnlyCollection<SyntaxTree> changed, Task<ImmutableArray<Diagnostic>>? analysis = null)
+    {
+        var list = generator.Concat(emit).Where(Diagnostics.Reportable).ToList();
+        if (list.All(d => d.Severity != DiagnosticSeverity.Error))
+        {
+            if (analysis is not null) list.AddRange(analysis.GetAwaiter().GetResult().Where(Diagnostics.Reportable));
+            else if (_analysis is not null && changed.Count > 0) list.AddRange(_analysis.Analyze(final, changed, Profile).Where(Diagnostics.Reportable));
+        }
+        return list;
     }
 
     /// <summary>
-    /// Runs each reload path once without sending anything (S2: the first EmitDifference
-    /// costs ~150 ms cold, a second full emit ~200 ms), so the first real edit is warm.
+    /// Generator (unless reused), full emit and analyzers (in parallel with the emit, over
+    /// <paramref name="analyze"/>), then the EnC baseline. <paramref name="start"/> is the next
+    /// state without its compilations, image facts and generation.
     /// </summary>
-    void Prewarm()
+    Outcome Build(CSharpCompilation user, ModuleState start, uint kind, Escalation escalation, Phases p,
+        IReadOnlyCollection<SyntaxTree> analyze,
+        (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated)? reuse,
+        ICompileContext ctx, bool surface, CancellationToken ct)
     {
-        var t0 = Stopwatch.GetTimestamp();
-        var pick = _trees.FirstOrDefault(kv => kv.Value.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.Body is not null && !m.Body.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>().Any()));
+        var (final, genDiags, generated) = reuse ?? Generate(user, ct);
+        p.Generate += p.Mark();
+        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze));
+        var analysis = _analysis is not null && analyze.Count > 0 ? Task.Run(() => _analysis.Analyze(final, analyze, Profile), ct) : null;
+        var (image, errors) = ModuleCompiler.Emit(final, ct);
+        p.Emit = p.Mark();
+        var problems = Problems(final, genDiags, errors, analyze, analysis);
+        p.Analyze = p.Mark();
+        if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
+        var o = new Outcome(this, OutcomeKind.Image)
+        {
+            ReloadKind = kind,
+            Escalation = escalation,
+            Image = image,
+            Problems = problems,
+            Timing = p,
+            Next = start with
+            {
+                User = user,
+                Final = final,
+                Generated = generated,
+                Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
+                Generation = kind == AbiConst.ReloadInitial ? 0 : (_state?.Generation ?? 0) + 1,
+                Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,
+                DepSurfaces = Dependencies(ctx).Surfaces,
+            },
+        };
+        CheckSize(o, start.Texts);
+        return o;
+    }
+
+    /// <summary>Reports the module once each time it crosses the soft cap (info) or 8k lines (warning).</summary>
+    void CheckSize(Outcome o, ImmutableDictionary<string, string> texts)
+    {
+        var lines = texts.Values.Sum(t => t.Count(c => c == '\n'));
+        var level = lines > HardCapLines ? 2 : lines > SoftCapLines ? 1 : 0;
+        if (level == _sizeLevel) return;
+        _sizeLevel = level;
+        if (level == 2)
+            o.Extra.Add((Diagnostics.ModuleTooLarge, "warning", $"module `{Name}` has {lines} lines; L3 reloads will miss their target past {HardCapLines}; split it into smaller modules"));
+        else if (level == 1)
+            o.Extra.Add((Diagnostics.ModuleLarge, "info", $"module `{Name}` has {lines} lines, past the soft cap of {SoftCapLines}; consider splitting it"));
+    }
+
+    /// <summary>
+    /// Runs the delta and full-image paths once without sending anything (S2: the first
+    /// EmitDifference costs ~150 ms cold, a second full emit ~200 ms), so the first real edit is warm.
+    /// </summary>
+    internal void Prewarm(ICompileContext ctx)
+    {
+        if (_state is not { } s) return;
+        var pick = s.Trees.FirstOrDefault(kv => kv.Value.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Any(m => m.Body is not null && !m.Body.DescendantNodes().OfType<AnonymousFunctionExpressionSyntax>().Any()));
         if (pick.Value is not { } tree) return;
         var method = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First(m => m.Body is not null);
         var edited = ModuleCompiler.Parse(pick.Key, tree.GetRoot().ReplaceNode(method.Body!, method.Body!.AddStatements(SyntaxFactory.EmptyStatement())).ToFullString());
-        var (esc, edits) = EditClassifier.Classify([new FileChange(pick.Key, tree, edited)]);
-        var next = _user.ReplaceSyntaxTree(tree, edited);
+        var change = new FileChange(pick.Key, tree, edited);
+        var cls = EditClassifier.Classify([change], ctx.Caps);
+        var next = s.User.ReplaceSyntaxTree(tree, edited);
         var warm = _driver;
-        if (_hot && _baseline is not null && esc == Escalation.None)
+        if (s.Hot && s.Baseline is not null && cls.Escalation == Escalation.None)
         {
-            var (final, _, _) = Generate(next);
-            ModuleCompiler.EmitDelta(final, _baseline, EditClassifier.ToSemanticEdits(edits, _final, final));
+            var final = s.Final.ReplaceSyntaxTree(tree, edited);
+            var (edits, added) = EditClassifier.ToSemanticEdits(cls, s.Final, final);
+            ModuleCompiler.EmitDelta(final, s.Baseline, edits, added);
         }
-        var (debugFinal, _, _) = Generate(next.WithOptions(ModuleCompiler.Options(true)));
+        var (debugFinal, _, _) = Generate(next.WithOptions(ModuleCompiler.Options(true)), default);
         ModuleCompiler.Emit(debugFinal);
         _driver = warm;
-        Log(0, $"module `{_name}`: prewarmed in {Stopwatch.GetElapsedTime(t0).TotalMilliseconds:F0} ms");
-    }
-
-    /// <summary>Stops watching and the worker.</summary>
-    public void Dispose()
-    {
-        _stop.Cancel();
-        _watcher?.Dispose();
     }
 }

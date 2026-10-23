@@ -1,0 +1,204 @@
+[
+  {
+    "archive_sha256": "da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c",
+    "asset_policy": "local benchmark; original copyright.txt retained; no redistributed model files",
+    "async_overlap": false,
+    "attribution": "Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections",
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        -11.0,
+        1.7000000476837158,
+        0.0
+      ],
+      "target": [
+        5.0,
+        3.0,
+        0.0
+      ],
+      "vertical_fov": 1.0499999523162842
+    },
+    "display_size": [
+      2560,
+      1440
+    ],
+    "frames": 60,
+    "instances": 25,
+    "material_conversion": "OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported",
+    "materials": 25,
+    "p50": 14.604768,
+    "p95": 15.323167999999999,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.21056,
+        "p95": 0.212832
+      },
+      "Bloom.Vertical": {
+        "p50": 0.10848,
+        "p95": 0.110368
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.159776,
+        "p95": 0.182048
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.00368,
+        "p95": 0.00416
+      },
+      "Output.SDR": {
+        "p50": 0.04592,
+        "p95": 0.046624
+      },
+      "Post.Atmosphere.Lens.ACES.LUT": {
+        "p50": 0.301184,
+        "p95": 0.308416
+      },
+      "RT.Disocclusion.Repair": {
+        "p50": 1.223648,
+        "p95": 1.302848
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 6.821376,
+        "p95": 7.49312
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.496416,
+        "p95": 0.515968
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.541376,
+        "p95": 0.553984
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.590656,
+        "p95": 0.597248
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.891136,
+        "p95": 0.926656
+      },
+      "Upscale.TAAU.Resolve": {
+        "p50": 1.034208,
+        "p95": 1.049344
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000128
+      },
+      "Visibility.Motion": {
+        "p50": 2.224032,
+        "p95": 2.250016
+      }
+    },
+    "render_size": [
+      2560,
+      1440
+    ],
+    "scene_hash": "2b9b176b7d424e3b6c92a79d316ed0e936364eeadf5903e77924a8a0bb6831c0",
+    "source": "https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip",
+    "textures": 26,
+    "triangle_count": 262267,
+    "warmup": 48
+  },
+  {
+    "archive_sha256": "da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c",
+    "asset_policy": "local benchmark; original copyright.txt retained; no redistributed model files",
+    "async_overlap": false,
+    "attribution": "Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections",
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        -11.0,
+        1.7000000476837158,
+        0.0
+      ],
+      "target": [
+        5.0,
+        3.0,
+        0.0
+      ],
+      "vertical_fov": 1.0499999523162842
+    },
+    "display_size": [
+      2560,
+      1440
+    ],
+    "frames": 60,
+    "instances": 25,
+    "material_conversion": "OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported",
+    "materials": 25,
+    "p50": 6.674144,
+    "p95": 7.3016000000000005,
+    "passes": {
+      "Bloom.Horizontal": {
+        "p50": 0.09744,
+        "p95": 0.10192
+      },
+      "Bloom.Vertical": {
+        "p50": 0.051808,
+        "p95": 0.052288
+      },
+      "DDGI.Trace.Relocate.Classify.Integrate": {
+        "p50": 0.15728,
+        "p95": 0.174624
+      },
+      "Exposure.EV100.Meter.Adapt": {
+        "p50": 0.004896,
+        "p95": 0.005344
+      },
+      "Post.Atmosphere.Lens.ACES.LUT": {
+        "p50": 0.094016,
+        "p95": 0.100576
+      },
+      "RT.Disocclusion.Repair": {
+        "p50": 0.692896,
+        "p95": 0.730688
+      },
+      "RT.Reflections.SoftShadows.DDGI": {
+        "p50": 3.099904,
+        "p95": 3.734784
+      },
+      "SVGF.Atrous.1": {
+        "p50": 0.223328,
+        "p95": 0.231232
+      },
+      "SVGF.Atrous.2": {
+        "p50": 0.2584,
+        "p95": 0.28032
+      },
+      "SVGF.Atrous.4": {
+        "p50": 0.2632,
+        "p95": 0.26704
+      },
+      "SVGF.Reproject.Reject.Outlier.Moments": {
+        "p50": 0.386688,
+        "p95": 0.428832
+      },
+      "Upscale.FSR1.EASU": {
+        "p50": 0.289344,
+        "p95": 0.290752
+      },
+      "Upscale.FSR1.RCAS": {
+        "p50": 0.058464,
+        "p95": 0.05936
+      },
+      "Viewport.Ready": {
+        "p50": 0.000096,
+        "p95": 0.000096
+      },
+      "Visibility.Motion": {
+        "p50": 1.00784,
+        "p95": 1.011744
+      }
+    },
+    "render_size": [
+      1707,
+      960
+    ],
+    "scene_hash": "2b9b176b7d424e3b6c92a79d316ed0e936364eeadf5903e77924a8a0bb6831c0",
+    "source": "https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip",
+    "textures": 26,
+    "triangle_count": 262267,
+    "warmup": 48
+  }
+]

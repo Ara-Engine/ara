@@ -29,6 +29,10 @@ public static class AraCodes
     /// </summary>
     public const string CompileServer = "ARA0904";
     /// <summary>
+    /// The runtime rejected an EnC delta (L1/L2); the edit is rebuilt as a full module (L3).
+    /// </summary>
+    public const string DeltaRejected = "ARA0905";
+    /// <summary>
     /// A C# system threw; it is disabled until the next reload.
     /// </summary>
     public const string SystemFault = "ARA0910";
@@ -52,6 +56,26 @@ public static class AraCodes
     /// The .NET runtime or the script runtime could not be started.
     /// </summary>
     public const string RuntimeStart = "ARA0922";
+    /// <summary>
+    /// Modules reference each other in a cycle; none of the modules in it load.
+    /// </summary>
+    public const string ModuleCycle = "ARA0923";
+    /// <summary>
+    /// A module references a module that is not loaded (<c>references</c> in <c>ara.module.toml</c>).
+    /// </summary>
+    public const string UnknownModule = "ARA0924";
+    /// <summary>
+    /// A module could not be rebuilt against a changed dependency; every module in the cascade keeps its last good version.
+    /// </summary>
+    public const string DependencyFailed = "ARA0925";
+    /// <summary>
+    /// The change cannot be applied in this process (L4): restart the play process from a snapshot.
+    /// </summary>
+    public const string RestartRequired = "ARA0926";
+    /// <summary>
+    /// A retired module generation is still alive after unloading (something pins its ALC).
+    /// </summary>
+    public const string GenerationLeaked = "ARA0927";
     /// <summary>
     /// A component type is not blittable, so C# cannot view it in place.
     /// </summary>

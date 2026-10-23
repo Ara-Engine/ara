@@ -33,6 +33,11 @@ project, IO, lock held for over 10 s); with `--json` the diagnostics are printed
 `{"ok": false, "diagnostics": [...]}`.
 
 ## Project root
+`ara profile compare baseline.json current.json` runs without a project or daemon.
+It prints a p95 delta table (`--json` for structured output); exit 1 means a
+regression, missing metrics or incomplete capture. Thresholds are `--relative`
+(default 0.05) and `--absolute-ns` (default 1000).
+
 
 `--root`, else the nearest ancestor of the current directory with
 `ara.project.json`, else (file commands) the nearest one above the first file.

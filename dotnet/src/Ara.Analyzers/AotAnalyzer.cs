@@ -15,7 +15,7 @@ namespace Ara.Analyzers;
 public sealed class AotAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>Banned methods as <c>Type.Method</c> (any overload).</summary>
-    static readonly ImmutableHashSet<string> BannedMethods = ImmutableHashSet.Create(
+    internal static readonly ImmutableHashSet<string> BannedMethods = ImmutableHashSet.Create(
         "System.Reflection.Assembly.Load", "System.Reflection.Assembly.LoadFrom", "System.Reflection.Assembly.LoadFile",
         "System.Reflection.Assembly.UnsafeLoadFrom", "System.Type.GetType", "System.Type.MakeGenericType",
         "System.Type.GetMethod", "System.Type.GetMethods", "System.Type.GetProperty", "System.Type.GetField",
@@ -40,6 +40,17 @@ public sealed class AotAnalyzer : DiagnosticAnalyzer
     }
 
     static string Name(ITypeSymbol t) => t.ContainingNamespace.ToDisplayString() + "." + t.MetadataName;
+
+    /// <summary>True if ARA0400 already reports a call to <paramref name="m"/> (the API allowlist then stays quiet).</summary>
+    internal static bool Covers(IMethodSymbol m)
+    {
+        var type = m.ContainingType;
+        var ns = type.ContainingNamespace.ToDisplayString();
+        return BannedMethods.Contains(Name(type.OriginalDefinition) + "." + m.Name)
+            || (Name(type) == "System.Activator" && m.Name == "CreateInstance" && !m.IsGenericMethod)
+            || ns.StartsWith("System.Reflection.Emit", System.StringComparison.Ordinal)
+            || Name(type) == "System.Runtime.Loader.AssemblyLoadContext";
+    }
 
     static void Check(OperationAnalysisContext c)
     {

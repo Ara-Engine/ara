@@ -49,7 +49,8 @@ pub fn captures(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let scene_hash = view.scene_hash().to_owned();
         if name == "glossy_interior" {
             let baked = view.bake_snapshot(gpu)?;
-            write_json(&root.join("measurements/baked-interior.json"), &baked)?;
+            std::fs::create_dir_all(root.join(".sn"))?;
+            write_json(&root.join(".sn/baked-interior.json"), &baked)?;
             let mut raster = s;
             raster.tier = Tier::Raster;
             let mut fallback = FidelityView::new(gpu, &scene, raster, Some(&baked))?;
@@ -128,6 +129,12 @@ pub fn sequences(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut view = FidelityView::new(gpu, &scenes::scene(name, 0), settings(size, size), None)?;
         let mut fresh_view =
             FidelityView::new(gpu, &scenes::scene(name, 0), settings(size, size), None)?;
+        if name == "disocclusion" {
+            view.set_transport_stride(4)?;
+            view.set_gather_events(1)?;
+            fresh_view.set_transport_stride(4)?;
+            fresh_view.set_gather_events(1)?;
+        }
         for tick in 0..48 {
             view.render(gpu, &input(&camera, tick, false))?;
             fresh_view.render(gpu, &input(&camera, tick, false))?;

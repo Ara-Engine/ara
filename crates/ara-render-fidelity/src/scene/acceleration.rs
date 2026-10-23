@@ -22,7 +22,11 @@ impl GpuScene {
                 geometry: g.blas,
                 transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
                 custom_index: self.ids[&g.entity],
-                mask: self.masks.get(&g.entity).copied().unwrap_or(255),
+                mask: if self.masks.get(&g.entity).copied().unwrap_or(255) == 0 {
+                    0
+                } else {
+                    g.ray_mask
+                },
             })
             .collect();
         let tlas = gpu.create_acceleration_structure(&AccelerationDesc::Instances(instances))?;
@@ -70,7 +74,13 @@ impl GpuScene {
                 .position(|g| g.entity == mesh.entity && g.hash == hash)
             {
                 stats.reused_blas += 1;
-                next.push(self.geometry[at]);
+                let mut geometry = self.geometry[at];
+                geometry.ray_mask = if scene.materials[mesh.material].flags[0] == 0 {
+                    1
+                } else {
+                    2
+                };
+                next.push(geometry);
                 continue;
             }
             stats.rebuilt_blas += 1;
@@ -115,15 +125,20 @@ impl GpuScene {
                 hash,
                 topology_hash,
                 blas,
+                ray_mask: if scene.materials[mesh.material].flags[0] == 0 {
+                    1
+                } else {
+                    2
+                },
                 buffers: [vertices, indices],
             });
         }
         if self.tlas.is_some()
             && next.len() == self.geometry.len()
             && next.iter().all(|g| {
-                self.geometry
-                    .iter()
-                    .any(|old| old.entity == g.entity && old.blas == g.blas)
+                self.geometry.iter().any(|old| {
+                    old.entity == g.entity && old.blas == g.blas && old.ray_mask == g.ray_mask
+                })
             })
         {
             self.acceleration_update = stats;
@@ -136,7 +151,11 @@ impl GpuScene {
                 geometry: g.blas,
                 transform: [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.],
                 custom_index: self.ids[&g.entity],
-                mask: self.masks.get(&g.entity).copied().unwrap_or(255),
+                mask: if self.masks.get(&g.entity).copied().unwrap_or(255) == 0 {
+                    0
+                } else {
+                    g.ray_mask
+                },
             })
             .collect();
         let tlas = gpu.create_acceleration_structure(&AccelerationDesc::Instances(instances))?;

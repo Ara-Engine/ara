@@ -1,0 +1,97 @@
+{
+  "frames_in_flight": 1,
+  "instances_per_draw": 100000,
+  "method": "Vulkan timestamps, 8 warm-up + 120 measured frames",
+  "profile": "dev opt-level=1, dependencies=3",
+  "runs": [
+    {
+      "cpu_update_p50_ms": 13.0852,
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 100000,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.279488,
+          "p95_ms": 0.284672,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.032768,
+          "p95_ms": 0.033792,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000288,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 0.131808,
+          "p95_ms": 0.132864,
+          "samples": 120
+        }
+      },
+      "workload": "100k unlit sprites, 2.5px"
+    },
+    {
+      "cpu_update_p50_ms": 15.1004,
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 100000,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.278112,
+          "p95_ms": 0.281312,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.03072,
+          "p95_ms": 0.033792,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000288,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 1.429728,
+          "p95_ms": 1.588928,
+          "samples": 120
+        }
+      },
+      "workload": "100k unlit sprites, 14px, ~21x overdraw"
+    },
+    {
+      "device": "NVIDIA GeForce RTX 4070 SUPER",
+      "instances": 282,
+      "passes": {
+        "CaptureReadback": {
+          "p50_ms": 0.27936,
+          "p95_ms": 0.281568,
+          "samples": 120
+        },
+        "Exposure.ACESFitted.SDR": {
+          "p50_ms": 0.029696,
+          "p95_ms": 0.031744,
+          "samples": 120
+        },
+        "HostReadback": {
+          "p50_ms": 0.000064,
+          "p95_ms": 0.000064,
+          "samples": 120
+        },
+        "Sprites.TileChunks.Bindless": {
+          "p50_ms": 0.081696,
+          "p95_ms": 0.082944,
+          "samples": 120
+        }
+      },
+      "workload": "platformer sample, 3 lights, 22 shadow edges"
+    }
+  ],
+  "size": [
+    1280,
+    720
+  ],
+  "uploads": "immutable device-local instances; frame constants only per frame",
+  "vertices_per_instance": 6
+}

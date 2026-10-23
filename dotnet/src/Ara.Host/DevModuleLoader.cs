@@ -10,26 +10,42 @@ namespace Ara.Hosting;
 /// The dev-build module loader. Each module generation lives in its own collectible
 /// ALC; images and EnC deltas come from the out-of-process compile server (or, without
 /// one, from a prebuilt assembly). Everything is staged off the tick thread (ALC load,
-/// registration delegate, pre-JIT) and applied by the runtime at the next tick boundary;
-/// the previous generation's ALC is unloaded once the new one is installed.
+/// EnC chain, registration delegate, pre-JIT) and applied by the runtime at the next tick
+/// boundary; the previous generation's ALC is unloaded once the new one is installed.
 /// </summary>
+/// <remarks>
+/// A module that references another resolves it to that module's latest staged generation,
+/// fixed when its own ALC is created. A <see cref="MessageKind.Reload"/> carrying several
+/// modules (a dependency cascade) is staged and swapped as one update. A relink entry (no
+/// image) reloads the module's last image and re-applies its EnC deltas, in order.
+/// </remarks>
 public sealed class DevModuleLoader : IModuleLoader
 {
-    sealed class Module(uint slot, string name, string dir)
+    sealed class Module(uint slot, string name, IReadOnlyList<string> references)
     {
         public readonly uint Slot = slot;
         public readonly string Name = name;
-        public readonly string Dir = dir;
-        public bool Hot;
+        public readonly IReadOnlyList<string> References = references;
+        // Installed (tick thread, under the loader lock).
         public ModuleLoadContext? Alc;
         public Assembly? Asm;
         public uint Generation;
-        public readonly ManualResetEventSlim Staged = new(false);
+        // Staged view (compile-client thread): the image and the deltas the server built on.
+        public byte[] Pe = [];
+        public byte[] Pdb = [];
+        public readonly List<(byte[] Md, byte[] Il, byte[] Pdb)> Chain = [];
+        public Assembly? Staged;
+        public readonly ManualResetEventSlim Ready = new(false);
         public bool Failed;
     }
 
+    sealed record Retired(WeakReference Alc, uint Slot, string Name, int Gen2)
+    {
+        public bool Reported;
+    }
+
     readonly List<Module> _modules = [];
-    readonly List<WeakReference> _retired = [];
+    readonly List<Retired> _retired = [];
     readonly object _lock = new();
     int _created;
     CompileClient? _client;
@@ -43,7 +59,7 @@ public sealed class DevModuleLoader : IModuleLoader
     /// <inheritdoc/>
     public int AlcsAlive
     {
-        get { lock (_lock) return _retired.Count(w => w.IsAlive); }
+        get { lock (_lock) return _retired.Count(r => r.Alc.IsAlive); }
     }
 
     /// <inheritdoc/>
@@ -61,23 +77,29 @@ public sealed class DevModuleLoader : IModuleLoader
             var hot = spec.TryGetProperty("hot", out var h) && h.GetBoolean();
             var watch = spec.TryGetProperty("watch", out var w) && w.GetBoolean();
             var assembly = spec.TryGetProperty("assembly", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString() : null;
+            var refs = spec.TryGetProperty("references", out var r) ? r.EnumerateArray().Select(x => x.GetString() ?? "").ToList() : [];
+            var profile = spec.TryGetProperty("profile", out var p) ? p.GetString() ?? "gameplay" : "gameplay";
             Module m;
             lock (_lock)
             {
-                m = new Module((uint)_modules.Count, name, dir) { Hot = hot };
+                m = new Module((uint)_modules.Count, name, refs);
                 _modules.Add(m);
             }
             if (assembly is not null && !watch)
             {
-                var pdbPath = Path.ChangeExtension(assembly, ".pdb");
+                // Modules arrive in dependency order: what this one references is staged (or failed) first.
+                foreach (var dep in refs.Select(Find)) dep?.Ready.Wait(TimeSpan.FromMinutes(3));
                 var report = new ReloadReport { Kind = AbiConst.ReloadInitial, TReceived = Host.Now() };
                 try
                 {
-                    Stage(m, File.ReadAllBytes(assembly), File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : [], 0, hot, report);
+                    var pdbPath = Path.ChangeExtension(assembly, ".pdb");
+                    Stage([(m, File.ReadAllBytes(assembly), File.Exists(pdbPath) ? File.ReadAllBytes(pdbPath) : [], 0, hot, report)]);
                 }
                 catch (Exception e)
                 {
                     Diag.Report(AraCodes.LoadFailed, "error", $"module `{name}`: cannot load `{assembly}`: {e.Message}");
+                    m.Failed = true;
+                    m.Ready.Set();
                     rc = 1;
                 }
                 continue;
@@ -85,13 +107,15 @@ public sealed class DevModuleLoader : IModuleLoader
             if (server is null)
             {
                 Diag.Report(AraCodes.LoadFailed, "error", $"module `{name}` has no prebuilt assembly and no compile server is configured");
+                m.Failed = true;
+                m.Ready.Set();
                 rc = 1;
                 continue;
             }
             try
             {
                 _client ??= new CompileClient(server, this);
-                _client.Watch(m.Slot, name, dir, hot);
+                _client.Watch(m.Slot, name, dir, hot, refs, profile, watch);
                 waiting.Add(m);
             }
             catch (Exception e)
@@ -102,7 +126,7 @@ public sealed class DevModuleLoader : IModuleLoader
         }
         foreach (var m in waiting)
         {
-            if (!m.Staged.Wait(TimeSpan.FromMinutes(3)))
+            if (!m.Ready.Wait(TimeSpan.FromMinutes(3)))
             {
                 Diag.Report(AraCodes.CompileServer, "error", $"module `{m.Name}`: the compile server sent no image within 3 minutes");
                 rc = 1;
@@ -117,74 +141,158 @@ public sealed class DevModuleLoader : IModuleLoader
         lock (_lock) return slot < _modules.Count ? _modules[(int)slot] : null;
     }
 
-    /// <summary>
-    /// Loads an image into a fresh collectible ALC, resolves its generated
-    /// <c>Register</c> and pre-JITs its entry points (compile-client thread), then queues
-    /// the swap for the next tick boundary.
-    /// </summary>
-    void Stage(Module m, byte[] pe, byte[] pdb, uint generation, bool hot, ReloadReport report)
+    Module? Find(string name)
     {
-        var alc = new ModuleLoadContext($"{m.Name}#{generation}");
-        Interlocked.Increment(ref _created);
-        Action<ModuleBuilder> register;
+        lock (_lock) return _modules.FirstOrDefault(m => m.Name == name);
+    }
+
+    /// <summary>
+    /// Loads each image (or relinks: the module's last image plus its deltas) into a fresh
+    /// collectible ALC, resolving referenced modules to their staged generations, runs the
+    /// generated <c>Register</c> and pre-JITs the entry points (compile-client thread), then
+    /// queues one swap for the next tick boundary. If any module fails, none is staged.
+    /// </summary>
+    void Stage(IReadOnlyList<(Module M, byte[] Pe, byte[] Pdb, uint Generation, bool Hot, ReloadReport Report)> batch)
+    {
+        Dictionary<string, Assembly> view;
+        lock (_lock) view = _modules.Where(m => m.Staged is not null).ToDictionary(m => m.Name, m => m.Staged!);
+        var staged = new List<(Module M, ModuleLoadContext Alc, Assembly Asm, ModuleSwap Swap, bool Relink, byte[] Pe, byte[] Pdb)>();
         try
         {
-            var t0 = Host.Now();
-            var asm = pdb.Length > 0 ? alc.LoadFromStream(new MemoryStream(pe), new MemoryStream(pdb)) : alc.LoadFromStream(new MemoryStream(pe));
-            var t1 = Host.Now();
-            var attr = asm.GetCustomAttribute<AraModuleAttribute>()
-                ?? throw new InvalidOperationException("the assembly has no [AraModule]; is Ara.Generators referenced?");
-            register = attr.Entry.GetMethod("Register", [typeof(ModuleBuilder)])?.CreateDelegate<Action<ModuleBuilder>>()
-                ?? throw new InvalidOperationException($"{attr.Entry} has no Register(ModuleBuilder)");
-            Prepare(asm, attr.Entry);
-            var t2 = Host.Now();
-            var builder = new ModuleBuilder();
-            register(builder);
-            report.TStaged = Host.Now();
-            Host.Log(0, $"module `{m.Name}` generation {generation} staged: load {(t1 - t0) / 1e6:F1} ms, pre-JIT {(t2 - t1) / 1e6:F1} ms, register {(report.TStaged - t2) / 1e6:F1} ms ({pe.Length / 1024} KB PE)");
-            report.Bytes = (ulong)(pe.Length + pdb.Length);
-            ScriptRuntime.Enqueue(new SwapUpdate
+            foreach (var (m, pe, pdb, generation, hot, r) in batch)
             {
-                Slot = m.Slot,
-                Name = m.Name,
-                Module = builder,
-                Hot = hot,
-                Report = report,
-                Installed = () =>
+                var report = r;
+                var relink = pe.Length == 0;
+                var (image, symbols) = relink ? (m.Pe, m.Pdb) : (pe, pdb);
+                if (image.Length == 0) throw new InvalidOperationException($"module `{m.Name}` has no image to relink");
+                var alc = new ModuleLoadContext($"{m.Name}#{generation}", Closure(m).Where(view.ContainsKey).ToDictionary(n => n, n => view[n]));
+                Interlocked.Increment(ref _created);
+                staged.Add((m, alc, null!, null!, relink, image, symbols));
+                var t0 = Host.Now();
+                var asm = symbols.Length > 0 ? alc.LoadFromStream(new MemoryStream(image), new MemoryStream(symbols)) : alc.LoadFromStream(new MemoryStream(image));
+                if (relink)
+                    foreach (var (md, il, dpdb) in m.Chain) MetadataUpdater.ApplyUpdate(asm, md, il, dpdb);
+                var t1 = Host.Now();
+                var attr = asm.GetCustomAttribute<AraModuleAttribute>()
+                    ?? throw new InvalidOperationException("the assembly has no [AraModule]; is Ara.Generators referenced?");
+                var register = attr.Entry.GetMethod("Register", [typeof(ModuleBuilder)])?.CreateDelegate<Action<ModuleBuilder>>()
+                    ?? throw new InvalidOperationException($"{attr.Entry} has no Register(ModuleBuilder)");
+                Prepare(asm, attr.Entry);
+                var t2 = Host.Now();
+                var builder = new ModuleBuilder();
+                register(builder);
+                report.TStaged = Host.Now();
+                report.LoadUs = Micros(t1 - t0);
+                report.PrejitUs = Micros(t2 - t1);
+                report.RegisterUs = Micros(report.TStaged - t2);
+                report.Bytes = (ulong)(relink ? 0 : image.Length + symbols.Length);
+                view[m.Name] = asm;
+                var swap = new ModuleSwap
                 {
-                    lock (_lock)
-                    {
-                        var old = m.Alc;
-                        (m.Alc, m.Asm, m.Generation, m.Hot) = (alc, asm, generation, hot);
-                        if (old is not null)
-                        {
-                            old.Unload();
-                            _retired.Add(new WeakReference(old));
-                        }
-                    }
-                },
-                Rejected = _ =>
-                {
-                    lock (_lock)
-                    {
-                        alc.Unload();
-                        _retired.Add(new WeakReference(alc));
-                    }
-                },
-            });
+                    Slot = m.Slot,
+                    Name = m.Name,
+                    Module = builder,
+                    Hot = hot,
+                    Report = report,
+                    Installed = () => Install(m, alc, asm, generation),
+                    Rejected = _ => Reject(m, alc),
+                };
+                staged[^1] = (m, alc, asm, swap, relink, image, symbols);
+                Host.Log(0, $"module `{m.Name}` generation {generation} staged{(relink ? " (relink)" : "")}: load {(t1 - t0) / 1e6:F1} ms, pre-JIT {(t2 - t1) / 1e6:F1} ms, register {(report.TStaged - t2) / 1e6:F1} ms ({image.Length / 1024} KB PE)");
+            }
         }
         catch
         {
-            alc.Unload();
-            lock (_lock) _retired.Add(new WeakReference(alc));
-            m.Failed = true;
-            m.Staged.Set();
+            lock (_lock)
+                foreach (var s in staged)
+                {
+                    s.Alc.Unload();
+                    _retired.Add(new Retired(new WeakReference(s.Alc), s.M.Slot, s.M.Name, GC.CollectionCount(2)) { Reported = true });
+                }
+            foreach (var (m, _, _, _, _, _) in batch)
+            {
+                m.Failed |= !m.Ready.IsSet;
+                m.Ready.Set();
+            }
             throw;
         }
-        m.Staged.Set();
+        lock (_lock)
+            foreach (var s in staged)
+            {
+                s.M.Staged = s.Asm;
+                if (!s.Relink)
+                {
+                    (s.M.Pe, s.M.Pdb) = (s.Pe, s.Pdb);
+                    s.M.Chain.Clear();
+                }
+            }
+        ScriptRuntime.Enqueue(new SwapUpdate { Modules = [.. staged.Select(s => s.Swap)] });
+        foreach (var s in staged) s.M.Ready.Set();
+        CheckLeaks();
     }
 
-    /// <summary>JITs the generated entry points now, so the first tick on new code does not pay for it.</summary>
+    /// <summary>The names of every module <paramref name="m"/> references, directly or through another module.</summary>
+    HashSet<string> Closure(Module m)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>(m.References);
+        while (stack.TryPop(out var n))
+            if (names.Add(n) && Find(n) is { } dep)
+                foreach (var r in dep.References) stack.Push(r);
+        return names;
+    }
+
+    static uint Micros(ulong ns) => (uint)Math.Min(uint.MaxValue, ns / 1000);
+
+    /// <summary>Tick thread: the new generation is live; unload the previous one.</summary>
+    void Install(Module m, ModuleLoadContext alc, Assembly asm, uint generation)
+    {
+        lock (_lock)
+        {
+            var old = m.Alc;
+            (m.Alc, m.Asm, m.Generation) = (alc, asm, generation);
+            if (old is not null)
+            {
+                old.Unload();
+                _retired.Add(new Retired(new WeakReference(old), m.Slot, m.Name, GC.CollectionCount(2)));
+            }
+        }
+    }
+
+    /// <summary>Tick thread: registration refused the generation; modules staged later keep their view of it.</summary>
+    void Reject(Module m, ModuleLoadContext alc)
+    {
+        lock (_lock)
+        {
+            alc.Unload();
+            _retired.Add(new Retired(new WeakReference(alc), m.Slot, m.Name, GC.CollectionCount(2)) { Reported = true });
+            m.Staged = m.Asm;
+        }
+    }
+
+    /// <summary>
+    /// A retired generation still alive after two full collections is pinned (a static
+    /// subscription, a cache holding its types): report it once, with an L4 restart request.
+    /// Only natural collections are counted; nothing is forced on the game's behalf.
+    /// </summary>
+    void CheckLeaks()
+    {
+        var gen2 = GC.CollectionCount(2);
+        List<Retired> leaked;
+        lock (_lock)
+        {
+            leaked = _retired.Where(r => !r.Reported && gen2 >= r.Gen2 + 2 && r.Alc.IsAlive).ToList();
+            foreach (var r in leaked) r.Reported = true;
+            _retired.RemoveAll(r => r.Reported && !r.Alc.IsAlive);
+        }
+        foreach (var r in leaked)
+        {
+            Diag.Report(AraCodes.GenerationLeaked, "warning",
+                $"module `{r.Name}`: a retired generation is still alive after two full collections; something pins its types (static events, caches). Restart the play process (L4) to reclaim it");
+            ScriptRuntime.Enqueue(new ErrorUpdate { Slot = r.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
+        }
+    }
+
     /// <summary>
     /// JITs the generated entry points, layouts and registration lambdas in parallel, so
     /// neither <c>Register</c> nor the first tick on new code pays for them.
@@ -202,32 +310,62 @@ public sealed class DevModuleLoader : IModuleLoader
             m => RuntimeHelpers.PrepareMethod(m.MethodHandle));
     }
 
-    internal void OnImage(uint slot, uint generation, bool hot, uint kind, uint escalation, ulong serverUs, byte[] pe, byte[] pdb)
+    /// <summary>A <see cref="MessageKind.Reload"/>: stage every module of it as one swap.</summary>
+    internal void OnReload(Protocol.Reader r)
     {
-        if (Find(slot) is not { } m) return;
-        var report = new ReloadReport { Kind = kind, Escalation = escalation, ServerUs = serverUs, TReceived = Host.Now() };
-        try { Stage(m, pe, pdb, generation, hot, report); }
-        catch (Exception e) { Diag.Report(AraCodes.LoadFailed, "error", $"module `{m.Name}`: {e.Message} (the last good code keeps running)"); }
+        var transfer = r.Since();
+        var received = Host.Now();
+        var count = r.U32();
+        var batch = new List<(Module, byte[], byte[], uint, bool, ReloadReport)>();
+        for (int i = 0; i < count; i++)
+        {
+            var (slot, generation, hot, kind, escalation, origin, t, pe, pdb) =
+                (r.U32(), r.U32(), r.Bool(), r.U32(), r.U32(), r.U32(), r.Timing(), r.Bytes(), r.Bytes());
+            if (Find(slot) is not { } m) return;
+            batch.Add((m, pe, pdb, generation, hot, Report(kind, escalation, origin, t, transfer, received)));
+        }
+        try { Stage(batch); }
+        catch (Exception e)
+        {
+            var names = string.Join(", ", batch.Select(b => $"`{b.Item1.Name}`"));
+            Diag.Report(AraCodes.LoadFailed, "error", $"module {names}: {e.Message} (the last good code keeps running)");
+        }
     }
 
-    internal void OnDelta(uint slot, uint generation, uint changed, ulong serverUs, byte[] md, byte[] il, byte[] pdb)
+    static ReloadReport Report(uint kind, uint escalation, uint origin, CompileTiming t, uint transfer, ulong received) => new()
     {
+        Kind = kind,
+        Escalation = escalation,
+        Origin = origin,
+        ServerUs = t.ServerUs,
+        DetectUs = t.DetectUs,
+        ParseUs = t.ParseUs,
+        GenerateUs = t.GenerateUs,
+        EmitUs = t.EmitUs,
+        AnalyzeUs = t.AnalyzeUs,
+        TransferUs = transfer,
+        TReceived = received,
+    };
+
+    /// <summary>A <see cref="MessageKind.Delta"/>: queue it for the tick boundary.</summary>
+    internal void OnDelta(Protocol.Reader r)
+    {
+        var transfer = r.Since();
+        var received = Host.Now();
+        var (slot, generation, kind, changed, origin, t, md, il, pdb) =
+            (r.U32(), r.U32(), r.U32(), r.U32(), r.U32(), r.Timing(), r.Bytes(), r.Bytes(), r.Bytes());
         if (Find(slot) is not { } m) return;
+        m.Chain.Add((md, il, pdb));
         if (Debugger.IsAttached)
         {
             // The runtime refuses ApplyUpdate with a debugger attached (R10 finding 1.2): take L3.
             _client?.Rebuild(slot, AbiConst.EscDebugger);
             return;
         }
-        var report = new ReloadReport
-        {
-            Kind = AbiConst.ReloadL1,
-            ChangedMembers = changed,
-            ServerUs = serverUs,
-            TReceived = Host.Now(),
-            Bytes = (ulong)(md.Length + il.Length + pdb.Length),
-        };
-        report.TStaged = report.TReceived;
+        var report = Report(kind, 0, origin, t, transfer, received);
+        report.ChangedMembers = changed;
+        report.Bytes = (ulong)(md.Length + il.Length + pdb.Length);
+        report.TStaged = received;
         ScriptRuntime.Enqueue(new DeltaUpdate
         {
             Slot = slot,
@@ -243,27 +381,40 @@ public sealed class DevModuleLoader : IModuleLoader
                 }
                 MetadataUpdater.ApplyUpdate(asm, md, il, pdb);
             },
-            Failed = _ => _client?.Rebuild(slot, AbiConst.EscRequested),
+            Failed = _ => _client?.Rebuild(slot, AbiConst.EscRuntimeRejected),
         });
     }
 
-    internal void OnDiagnostics(uint slot, uint errors, string json, ulong serverUs)
+    /// <summary>A <see cref="MessageKind.Diagnostics"/>: report them; errors record a failed reload.</summary>
+    internal void OnDiagnostics(Protocol.Reader r)
     {
+        var (slot, errors, json, serverUs, origin) = (r.U32(), r.U32(), r.Str(), r.U64(), r.U32());
         using (var doc = JsonDocument.Parse(json))
             foreach (var d in doc.RootElement.EnumerateArray())
                 Host.Diagnostic(System.Text.Encoding.UTF8.GetBytes(d.GetRawText()));
         if (errors == 0 || Find(slot) is not { } m) return;
-        if (!m.Staged.IsSet)
+        if (!m.Ready.IsSet)
         {
             m.Failed = true;
-            m.Staged.Set();
+            m.Ready.Set();
             return;
         }
         ScriptRuntime.Enqueue(new ErrorUpdate
         {
             Slot = slot,
-            Report = new ReloadReport { Kind = AbiConst.ReloadError, ErrorCount = errors, ServerUs = serverUs, TReceived = Host.Now(), TStaged = Host.Now() },
+            Report = new ReloadReport { Kind = AbiConst.ReloadError, ErrorCount = errors, ServerUs = serverUs, Origin = origin, TReceived = Host.Now(), TStaged = Host.Now() },
         });
+    }
+
+    /// <summary>A <see cref="MessageKind.Restart"/> (L4): report it; every affected module records an L4 report.</summary>
+    internal void OnRestart(Protocol.Reader r)
+    {
+        var (slot, reason) = (r.U32(), r.Str());
+        Diag.Report(AraCodes.RestartRequired, "error", reason);
+        List<Module> affected;
+        lock (_lock) affected = _modules.Where(m => slot == uint.MaxValue || m.Slot == slot).ToList();
+        foreach (var m in affected)
+            ScriptRuntime.Enqueue(new ErrorUpdate { Slot = m.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
     }
 
     /// <inheritdoc/>
@@ -271,6 +422,18 @@ public sealed class DevModuleLoader : IModuleLoader
     {
         if (_client is null || Find(slot) is null) return -1;
         _client.SetHeat(slot, hot);
+        return 0;
+    }
+
+    /// <inheritdoc/>
+    public int RequestCompile(string json)
+    {
+        if (_client is null) return -1;
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (Find(root.GetProperty("module").GetString() ?? "") is not { } m) return -2;
+        var paths = root.GetProperty("paths").EnumerateArray().Select(p => p.GetString() ?? "").Where(p => p.Length > 0).ToList();
+        _client.Change(m.Slot, paths, root.GetProperty("origin").GetUInt32());
         return 0;
     }
 
@@ -286,9 +449,9 @@ public sealed class DevModuleLoader : IModuleLoader
                 if (m.Alc is { } alc)
                 {
                     alc.Unload();
-                    _retired.Add(new WeakReference(alc));
+                    _retired.Add(new Retired(new WeakReference(alc), m.Slot, m.Name, 0));
                 }
-                (m.Alc, m.Asm) = (null, null);
+                (m.Alc, m.Asm, m.Staged) = (null, null, null);
             }
             _modules.Clear();
         }

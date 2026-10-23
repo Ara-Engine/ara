@@ -24,13 +24,29 @@ impl ProbeVolume {
             "Invalid probe bounds"
         );
         let extent = (max - min).max(Vec3::ONE);
-        let counts = [10, 6, 10];
-        let spacing = extent / Vec3::new(8., 4., 8.);
-        Ok(Self {
+        ensure!(extent.is_finite(), "Probe bounds overflow");
+        // Keep small diagnostic volumes stable while bounding spacing in real scenes.
+        let minimum = [10, 6, 10];
+        let mut counts = std::array::from_fn(|i| {
+            ((extent[i] / 1.5).ceil().min(62.) as u32 + 2).clamp(minimum[i], 64)
+        });
+        while counts.iter().map(|n| *n as usize).product::<usize>() > 32768 {
+            let axis = (0..3).max_by_key(|i| counts[*i]).expect("Three probe axes");
+            counts[axis] -= 1;
+        }
+        let spacing = extent
+            / Vec3::new(
+                (counts[0] - 2) as f32,
+                (counts[1] - 2) as f32,
+                (counts[2] - 2) as f32,
+            );
+        let volume = Self {
             origin: min - spacing * 0.5,
             spacing,
             counts,
-        })
+        };
+        volume.validate()?;
+        Ok(volume)
     }
     /// Validate imported baked data before GPU upload.
     pub fn validate(&self) -> Result<()> {
@@ -100,6 +116,9 @@ mod tests {
         let v = ProbeVolume::automatic(Vec3::ZERO, Vec3::splat(10.)).unwrap();
         v.validate().unwrap();
         assert!(v.origin.cmplt(Vec3::ZERO).all());
+        let large = ProbeVolume::automatic(Vec3::ZERO, Vec3::splat(1e20)).unwrap();
+        assert!(large.len() <= 32768);
+        assert!(ProbeVolume::automatic(Vec3::splat(-f32::MAX), Vec3::splat(f32::MAX)).is_err());
         let bake = BakedProbes {
             version: 1,
             volume: v,

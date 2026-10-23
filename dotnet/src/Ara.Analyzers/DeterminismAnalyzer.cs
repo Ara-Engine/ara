@@ -53,6 +53,15 @@ public sealed class DeterminismAnalyzer : DiagnosticAnalyzer
     static void Report(OperationAnalysisContext c, Location at, string what) =>
         c.ReportDiagnostic(Diagnostic.Create(Rules.NonDeterminism, at, what));
 
+    /// <summary>True if ARA0200 reports a use of <paramref name="type"/> (or its member) in [Simulation] code; the API allowlist then stays quiet there.</summary>
+    internal static bool Covers(ITypeSymbol type, string member)
+    {
+        var typeName = type.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
+        var metadata = type.ContainingNamespace.ToDisplayString() + "." + type.MetadataName;
+        return BannedMembers.Contains(typeName + "." + member) || BannedTypes.Contains(metadata)
+            || BannedNamespaces.Any(n => InNamespace(type.ContainingNamespace, n));
+    }
+
     static bool InNamespace(INamespaceSymbol? ns, string name)
     {
         for (var n = ns; n is not null && !n.IsGlobalNamespace; n = n.ContainingNamespace)

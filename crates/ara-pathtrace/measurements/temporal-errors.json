@@ -4,7 +4,7 @@
     "frames": 12,
     "maximum_residual": 0.0,
     "mean_residual": 0.0,
-    "reset_residual": 0.001596304365367406,
+    "reset_residual": 0.0011208746873235182,
     "scene": "moving_emissive",
     "simulation_frames": 48
   },
@@ -13,16 +13,16 @@
     "frames": 12,
     "maximum_residual": 0.0,
     "mean_residual": 0.0,
-    "reset_residual": 0.0011126442346486593,
+    "reset_residual": 0.0011754619543291162,
     "scene": "time_of_day",
     "simulation_frames": 48
   },
   {
     "capture_stride": 4,
     "frames": 12,
-    "maximum_residual": 0.026507112648977833,
-    "mean_residual": 0.02162289915966119,
-    "reset_residual": 0.0005181150649561057,
+    "maximum_residual": 0.024485362772556057,
+    "mean_residual": 0.02019293174786015,
+    "reset_residual": 0.0008378520132333497,
     "scene": "disocclusion",
     "simulation_frames": 48
   }

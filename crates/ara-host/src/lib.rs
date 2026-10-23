@@ -20,6 +20,7 @@ pub mod jobs;
 pub mod journal;
 pub mod logs;
 pub mod params;
+mod profile;
 pub mod project;
 pub mod query;
 pub mod review;

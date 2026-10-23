@@ -3,6 +3,7 @@ mod edit;
 mod frame;
 mod hash;
 mod passes;
+pub mod post;
 mod transfer;
 mod upload;
 use crate::{
@@ -212,6 +213,8 @@ impl Renderer {
     }
     /// Render live with TAA jitter and camera reprojection at a locked physical exposure.
     pub fn render(&mut self, camera: &CameraSpec, exposure: f32) -> Result<()> {
+        #[cfg(feature = "profiling")]
+        let _profile = ara_profile::scope("render.frame");
         self.render_frame(camera, exposure, false, crate::capture::ViewMode::Lit)?;
         Ok(())
     }

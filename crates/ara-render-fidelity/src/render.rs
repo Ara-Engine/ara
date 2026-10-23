@@ -75,9 +75,18 @@ impl FidelityView {
         let reset = input.reset || !self.history;
         let rt = self.settings.tier == Tier::Rt;
         let reference = matches!(self.settings.mode, Mode::Reference { .. });
+        let emitters = self.scene.has_emitters;
         add(
             "Visibility.Motion",
-            if rt { "primary" } else { "primary_raster" },
+            if rt {
+                if emitters {
+                    "primary_emissive"
+                } else {
+                    "primary"
+                }
+            } else {
+                "primary_raster"
+            },
             0,
             dispatch,
             [
@@ -95,7 +104,7 @@ impl FidelityView {
         if rt && !reference {
             add(
                 "DDGI.Trace.Relocate.Classify.Integrate",
-                "ddgi",
+                if emitters { "ddgi_emissive" } else { "ddgi" },
                 0,
                 [self.volume.len() as u32, 1, 1],
                 vec![
@@ -122,19 +131,31 @@ impl FidelityView {
                 "RT.Reflections.SoftShadows.DDGI"
             },
             if reference {
-                "reference"
+                if emitters {
+                    "reference_emissive"
+                } else {
+                    "reference"
+                }
             } else if rt {
-                "hybrid"
+                if emitters {
+                    "hybrid_emissive"
+                } else {
+                    "hybrid"
+                }
             } else {
                 "hybrid_raster"
             },
             if !reference && !reset && !input.lighting_changed {
-                1
+                if self.transport_stride == 4 { 3 } else { 1 }
             } else {
                 0
             },
             if !reference && !reset && !input.lighting_changed {
-                [render[0].div_ceil(16), render[1].div_ceil(8), 1]
+                [
+                    render[0].div_ceil(8 * self.transport_stride),
+                    render[1].div_ceil(8),
+                    1,
+                ]
             } else {
                 dispatch
             },
@@ -151,12 +172,24 @@ impl FidelityView {
             .chain(transport_history)
             .collect(),
         )?;
-        if !reference && !reset && !input.lighting_changed {
+        if !reference && !reset && !input.lighting_changed && frame.transport[3] == 0 {
             add(
                 "RT.Disocclusion.Repair",
-                if rt { "hybrid" } else { "hybrid_raster" },
-                2,
-                [render[0].div_ceil(16), render[1].div_ceil(8), 1],
+                if rt {
+                    if emitters {
+                        "hybrid_emissive"
+                    } else {
+                        "hybrid"
+                    }
+                } else {
+                    "hybrid_raster"
+                },
+                if self.transport_stride == 4 { 4 } else { 2 },
+                [
+                    render[0].div_ceil(if self.transport_stride == 4 { 8 } else { 16 }),
+                    render[1].div_ceil(8),
+                    1,
+                ],
                 vec![
                     (ids[RAW], Access::Storage),
                     (ids[DIRECT], Access::ShaderRead),
@@ -266,7 +299,7 @@ impl FidelityView {
             ],
         )?;
         add(
-            "Post.Atmosphere.Lens.ACES.LUT",
+            "Post.Atmosphere.Lens.ToneMap.LUT",
             "post",
             0,
             dispatch,
