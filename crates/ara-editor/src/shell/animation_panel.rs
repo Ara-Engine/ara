@@ -288,6 +288,11 @@ impl Shell {
                 .ok_or("controller missing")?,
         )?;
         out.push_str("<scroll id='animation-inspector' class='body'><text id='animation-inspector-title' class='heading' text='Controller' />");
+        if self.annotation_inspector(editor, out) {
+            out.push_str("</scroll>");
+            return Ok(());
+        }
+
         if let Some(id) = editor
             .state
             .resource_item

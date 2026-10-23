@@ -30,6 +30,7 @@ pub trait EditWorldView {
 pub struct DocumentView {
     entities: Resolved,
     ghosts: BTreeMap<String, ara_doc::Record>,
+    imports: BTreeMap<String, ara_asset::ImportSettings>,
 }
 impl DocumentView {
     /// Resolve a scene once per committed document revision.
@@ -37,6 +38,18 @@ impl DocumentView {
         Ok(Self {
             entities: resolve(store, doc)?,
             ghosts: BTreeMap::new(),
+            imports: store
+                .workspace()
+                .docs()
+                .filter(|(_, d)| d.kind == "import")
+                .filter_map(|(_, d)| {
+                    let path = store.workspace().index().path_of(d.id.as_str())?;
+                    let settings =
+                        serde_json::from_value(Value::Object(d.record("i_settings")?.clone()))
+                            .ok()?;
+                    Some((path.to_owned(), settings))
+                })
+                .collect(),
         })
     }
     pub(crate) fn ghost(&mut self, id: String, record: ara_doc::Record) {
@@ -203,13 +216,42 @@ impl EditWorldView for DocumentView {
                 let mut mesh = if let Some(reference) = mesh_ref {
                     let reference =
                         ara_schema::grammar::parse_ref(reference).map_err(anyhow::Error::msg)?;
-                    let path = crate::commands::project_path(
-                        root,
-                        reference
-                            .path
-                            .ok_or_else(|| anyhow::anyhow!("mesh reference needs a path"))?,
-                    )?;
-                    gltf::load(&path, render_id(id), name.to_owned(), material)?
+                    let relative = reference
+                        .path
+                        .ok_or_else(|| anyhow::anyhow!("mesh reference needs a path"))?;
+                    let path = crate::commands::project_path(root, relative)?;
+                    if path
+                        .extension()
+                        .is_some_and(|s| s.eq_ignore_ascii_case("fbx"))
+                    {
+                        let meshes = self.imports.get(relative).and_then(|settings| {
+                            crate::asset_tools::cooked_mesh::cached(root, relative, settings)
+                                .ok()
+                                .flatten()
+                        });
+                        if let Some(meshes) = meshes {
+                            let mut combined = Mesh {
+                                entity: render_id(id),
+                                name: name.to_owned(),
+                                vertices: Vec::new(),
+                                indices: Vec::new(),
+                                material,
+                            };
+                            for mesh in meshes {
+                                let offset = combined.vertices.len() as u32;
+                                combined.vertices.extend(mesh.vertices);
+                                combined
+                                    .indices
+                                    .extend(mesh.indices.iter().map(|i| i + offset));
+                            }
+                            combined
+                        } else {
+                            cube(render_id(id), name.to_owned(), material)
+                        }
+                    } else {
+                        gltf::load(&path, render_id(id), name.to_owned(), material)
+                            .unwrap_or_else(|_| cube(render_id(id), name.to_owned(), material))
+                    }
                 } else {
                     cube(render_id(id), name.to_owned(), material)
                 };

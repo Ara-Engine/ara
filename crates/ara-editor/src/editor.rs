@@ -32,6 +32,7 @@ impl From<RpcError> for EditorError {
 
 /// One editor process owns the project lock, authority, navigation and review policy.
 pub struct Editor {
+    asset_updates: Receiver<()>,
     /// Shared engine host. UI content mutations go through this protocol endpoint.
     pub host: Host,
     /// Current native view snapshot, updated by editor action notifications.
@@ -89,8 +90,11 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        host.register(Box::new(crate::asset_tools::AssetService::new()))
-            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let (asset_changed, asset_updates) = mpsc::channel();
+        host.register(Box::new(crate::asset_tools::AssetService::new(
+            asset_changed,
+        )))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
@@ -147,6 +151,7 @@ impl Editor {
         )
         .map_err(EditorError::from)?;
         Ok(Self {
+            asset_updates,
             host,
             state,
             session,
@@ -203,6 +208,10 @@ impl Editor {
     /// Refresh navigation snapshots without cloning unchanged frame state.
     pub fn sync(&mut self) -> bool {
         let mut changed = false;
+        for _ in self.asset_updates.try_iter().take(32) {
+            self.extraction_revision += 1;
+            changed = true;
+        }
         while let Ok(state) = self.updates.try_recv() {
             if self.state.doc != state.doc
                 || self.state.hidden != state.hidden

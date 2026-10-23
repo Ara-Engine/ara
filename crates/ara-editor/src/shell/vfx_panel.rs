@@ -92,7 +92,16 @@ impl Shell {
         ));
         out.push_str("</panel>");
         if self.vfx_ready {
-            out.push_str("<image id='vfx-live-image' src='vfx-live-preview' style='width:100%;flex-grow:1;flex-basis:0px' label='Live GPU particle preview' />");
+            let size = self
+                .ui
+                .find("vfx-preview-area")
+                .map(|i| {
+                    let r = self.ui.nodes[i].rect;
+                    (r.w - 24.).min(r.h - 100.)
+                })
+                .unwrap_or(320.)
+                .max(96.);
+            out.push_str(&format!("<panel id='vfx-live-frame' style='flex-grow:1;flex-basis:0px;align-items:center;justify-content:center;overflow:hidden'><image id='vfx-live-image' src='vfx-live-preview' style='width:{size}px;height:{size}px' label='Live GPU particle preview' /></panel>"));
         } else {
             out.push_str("<panel id='vfx-preview-loading' style='flex-grow:1;align-items:center;justify-content:center'><text id='vfx-preview-loading-title' class='muted' text='Preparing effect preview...' /></panel>");
         }

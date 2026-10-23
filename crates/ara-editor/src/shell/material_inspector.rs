@@ -7,6 +7,10 @@ impl Shell {
         out: &mut String,
     ) -> ara_ui::Result<()> {
         out.push_str("<scroll id='material-inspector' class='body'><text id='material-inspector-title' class='heading' text='Node properties' />");
+        if self.annotation_inspector(editor, out) {
+            out.push_str("</scroll>");
+            return Ok(());
+        }
         let Some(doc) = self.resource_for(editor, "material") else {
             out.push_str("</scroll>");
             return Ok(());

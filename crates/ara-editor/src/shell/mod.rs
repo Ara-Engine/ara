@@ -11,6 +11,7 @@ mod scrub;
 use drag::Drag;
 mod animation_panel;
 mod assets_panel;
+mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
@@ -115,6 +116,7 @@ pub(crate) enum Binding {
     Asset(assets::Asset),
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
+    ImportChoice(String, String, Value),
     ResourceCreate(String),
     ResourceText(String, String),
     ResourceApply,
@@ -125,6 +127,7 @@ pub(crate) enum Binding {
     AnimationField(String, String, String),
     VfxField(String, String, String),
     MaterialValue(String, String),
+    GraphLabel(String, String),
     Fix(ara_diag::Diagnostic, usize),
     Approve(String),
     Reject(String),

@@ -56,7 +56,7 @@ impl VfxStream {
                                 .as_mut()
                                 .ok_or_else(|| anyhow::anyhow!("preview device missing"))?;
                             let replacement =
-                                ara_vfx_gpu::GpuSystem::new(device, &effect, &cooked, [384, 384])?;
+                                ara_vfx_gpu::GpuSystem::new(device, &effect, &cooked, [768, 768])?;
                             if let Some(old) = system.replace(replacement) {
                                 old.retire(device)?;
                             }
@@ -86,7 +86,7 @@ impl VfxStream {
                         }
                         system.render(device, &view)?;
                         let image =
-                            image::RgbaImage::from_raw(384, 384, system.read_output(device)?)
+                            image::RgbaImage::from_raw(768, 768, system.read_output(device)?)
                                 .ok_or_else(|| anyhow::anyhow!("invalid preview pixels"))?;
                         device.context().assert_clean()?;
                         Ok(image)

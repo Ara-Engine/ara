@@ -1,4 +1,4 @@
-param([string]$ScratchRoot=(Join-Path $env:TEMP ('ara-editor-panels-'+[guid]::NewGuid().ToString('N'))))
+param([switch]$Dev,[string]$ScratchRoot=(Join-Path $env:TEMP ('ara-editor-panels-'+[guid]::NewGuid().ToString('N'))))
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $previous=@{}
@@ -12,12 +12,13 @@ try {
     $env:VK_LAYER_PATH=Join-Path $env:VULKAN_SDK 'Bin'
     $env:VK_IMPLICIT_LAYER_PATH=Join-Path $PSScriptRoot 'evidence/empty-vulkan-layers'
     New-Item -ItemType Directory -Force $env:VK_IMPLICIT_LAYER_PATH | Out-Null
-    cargo build -p ara-editor
+    if($Dev){cargo build -p ara-editor}else{cargo build --release -p ara-editor}
     if($LASTEXITCODE -ne 0){throw 'editor build failed'}
     # A separate executable allows checks to link while the desktop route is running.
     New-Item -ItemType Directory -Force $ScratchRoot | Out-Null
     $executable=Join-Path $ScratchRoot 'ara-editor.exe'
-    Copy-Item -LiteralPath 'target/debug/ara-editor.exe' -Destination $executable
+    $profile=if($Dev){'debug'}else{'release'}
+    Copy-Item -LiteralPath "target/$profile/ara-editor.exe" -Destination $executable
     foreach($view in @(@('1440x900','1','1440'),@('2560x1440','2','2560'))) {
         $project=Join-Path $ScratchRoot $view[2]
         $ErrorActionPreference='Continue'

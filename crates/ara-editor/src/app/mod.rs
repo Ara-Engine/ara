@@ -359,6 +359,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty |= dirty;
             }
             if let Some(suite) = &mut panel_verification {
+                let was_finished = suite.finished();
                 graph_start = suite.benchmarking().then(Instant::now);
                 let changed = suite.step(
                     &mut editor,
@@ -369,6 +370,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 )?;
                 dirty |= changed;
                 scene_dirty |= changed;
+                if !was_finished && suite.finished() {
+                    idle_samples.clear();
+                    wall_samples.clear();
+                }
             }
             drop(authority_scope);
             let physical = window.size()?;
@@ -503,7 +508,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 if let (Some(start), Some(suite)) = (graph_start, &mut panel_verification) {
                     suite.record(start.elapsed().as_secs_f64() * 1000.);
-                    if !suite.samples.is_empty() && suite.samples.len().is_multiple_of(200) {
+                    if suite.benchmarking()
+                        && !suite.samples.is_empty()
+                        && suite.samples.len().is_multiple_of(200)
+                    {
                         eprintln!(
                             "graph cumulative ms: control={graph_control:?} paint={graph_paint:?} gpu={graph_gpu:?} present={graph_present:?} native={:.3}; {} batches / {} instances",
                             start.elapsed().as_secs_f64() * 1000.,

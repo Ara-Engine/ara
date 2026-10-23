@@ -108,7 +108,7 @@ impl Shell {
             );
             out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:104px;height:108px' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8+(n%columns)*112,8.+(n/columns) as f32*116.-self.asset_offset,escape(&asset.path),escape(&asset.path)));
             self.asset_thumbnail(asset, out, &id, 68.);
-            out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' /></button>",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(&asset.kind)));
+            out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' /></button>",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
         }
         out.push_str("</panel></panel>");
     }
@@ -128,12 +128,21 @@ impl Shell {
             if !asset.path.starts_with("live:")
                 && matches!(
                     asset.kind.as_str(),
-                    "png" | "jpg" | "jpeg" | "glb" | "gltf" | "material" | "graph"
+                    "png"
+                        | "jpg"
+                        | "jpeg"
+                        | "hdr"
+                        | "exr"
+                        | "glb"
+                        | "gltf"
+                        | "fbx"
+                        | "material"
+                        | "graph"
                 )
             {
                 self.thumbnails.request(&asset.path);
             }
-            out.push_str(&format!("<panel id='{id}-placeholder' style='width:{size}px;height:{size}px;align-items:center;justify-content:center;background:var(--background);border-radius:var(--radius-sm)'>{}</panel>",icons::icon(id,match asset.kind.as_str(){"png"|"jpg"=>"file-image","glb"|"gltf"=>"package","graph"|"material"=>"layers",_=>"file"})));
+            out.push_str(&format!("<panel id='{id}-placeholder' style='width:{size}px;height:{size}px;align-items:center;justify-content:center;background:var(--background);border-radius:var(--radius-sm)'>{}</panel>",icons::icon(id,match asset.kind.as_str(){"png"|"jpg"=>"file-image","glb"|"gltf"|"fbx"=>"package","graph"|"material"=>"layers",_=>"file"})));
         }
     }
 }
@@ -143,10 +152,11 @@ fn matches_query(asset: &assets::Asset, query: &str) -> bool {
             match kind {
                 "mesh" => matches!(asset.kind.as_str(), "gltf" | "glb" | "fbx"),
                 "texture" => matches!(asset.kind.as_str(), "png" | "jpg" | "jpeg" | "hdr" | "exr"),
-                "material" => matches!(
-                    asset.kind.as_str(),
-                    "material" | "graph" | "materialinstance"
-                ),
+                "material" => {
+                    matches!(asset.kind.as_str(), "material" | "materialinstance")
+                        || asset.domain.as_deref() == Some("material")
+                }
+                "vfx" => asset.domain.as_deref() == Some("vfx"),
                 _ => asset.kind.eq_ignore_ascii_case(kind),
             }
         } else {

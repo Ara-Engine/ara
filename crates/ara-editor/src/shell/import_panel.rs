@@ -19,6 +19,7 @@ impl Shell {
                 kind: path.rsplit('.').next().unwrap_or("file").into(),
                 uses: Vec::new(),
                 stamp: 0,
+                domain: None,
             });
         out.push_str("<scroll id='import-inspector' class='body'>");
         let mut preview_asset = asset.clone();
@@ -56,11 +57,35 @@ impl Shell {
             } else {
                 ara_json::to_value(&ara_importers::MeshSettings::default())?
             };
+            let db = editor.host.store().schema();
+            let metadata = db
+                .get(if settings.importer == "ara.texture" {
+                    "TextureSettings"
+                } else {
+                    "MeshSettings"
+                })
+                .and_then(|ty| {
+                    if let ara_schema::Shape::Struct { fields, .. } = &ty.shape {
+                        Some(fields)
+                    } else {
+                        None
+                    }
+                });
             if let Some(fields) = defaults.as_object() {
                 for (key, default) in fields {
                     let value = settings.settings.get(key).unwrap_or(default);
                     let id = format!("import-setting-{key}");
-                    out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' />",escape(key)));
+                    let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
+                    let help = desc.map(|f| f.doc.as_str()).unwrap_or("");
+                    let label = match key.as_str() {
+                        "lodCount" => "LOD count",
+                        "lodError" => "LOD error",
+                        "flipNormalY" => "Flip normal Y",
+                        "maskChannel" => "Mask channel",
+                        "maxDimension" => "Maximum dimension",
+                        _ => key,
+                    };
+                    out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' description='{}' />",escape(label),escape(help)));
                     self.bindings.insert(
                         ara_ui::source::stable_id(&id),
                         Binding::ImportField(doc.id.to_string(), key.clone()),
@@ -69,12 +94,34 @@ impl Shell {
                         out.push_str(&format!(
                             "<toggle id='{id}' checked='{v}' text='Enabled' action='Dispatch' />"
                         ));
+                    } else if let Some(crate::inspector::Widget::Enum { options }) =
+                        desc.map(|d| crate::inspector::widget(db, d))
+                    {
+                        out.push_str(&format!("<panel id='{id}-options' style='gap:4px'>"));
+                        for (n, option) in options.iter().enumerate() {
+                            out.push_str(&self.bind_button(
+                                &format!("{id}-option-{n}"),
+                                option,
+                                Binding::ImportChoice(
+                                    doc.id.to_string(),
+                                    key.clone(),
+                                    json!(option),
+                                ),
+                                if value == option {
+                                    "small selected"
+                                } else {
+                                    "small quiet"
+                                },
+                            ));
+                        }
+                        out.push_str("</panel>");
                     } else {
-                        out.push_str(&format!(
-                            "<field id='{id}' text='{}' action='Dispatch' label='{}' />",
-                            escape(&panels::display(value)),
-                            escape(key)
-                        ));
+                        let draft = self
+                            .drafts
+                            .get(&format!("@import|{}|{key}", doc.id))
+                            .cloned()
+                            .unwrap_or_else(|| panels::display(value));
+                        out.push_str(&format!("<field id='{id}' class='{}' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(label),escape(help)));
                     }
                     out.push_str("</panel>");
                 }

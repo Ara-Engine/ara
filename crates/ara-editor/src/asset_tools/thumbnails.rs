@@ -144,6 +144,7 @@ fn make(
     } else {
         let mut scene = preview_scene();
         match extension {
+            "fbx" => scene.meshes = super::cooked_mesh::load(root, path)?,
             "glb" | "gltf" => {
                 scene
                     .meshes
@@ -176,6 +177,16 @@ fn make(
             }
             _ => anyhow::bail!("no thumbnail decoder for {extension}"),
         }
+        let mut min = Vec3::splat(f32::INFINITY);
+        let mut max = Vec3::splat(f32::NEG_INFINITY);
+        for vertex in scene.meshes.iter().flat_map(|mesh| &mesh.vertices) {
+            min = min.min(vertex.position.into());
+            max = max.max(vertex.position.into());
+        }
+        anyhow::ensure!(
+            min.is_finite() && max.is_finite(),
+            "thumbnail mesh is empty"
+        );
         if let Some(renderer) = renderer {
             renderer.update_geometry(scene)?;
         } else {
@@ -189,20 +200,6 @@ fn make(
         let renderer = renderer
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("thumbnail renderer missing"))?;
-        let mut min = Vec3::splat(f32::INFINITY);
-        let mut max = Vec3::splat(f32::NEG_INFINITY);
-        // Geometry bounds are provided by the renderer's stable extraction metadata.
-        // Mesh source bounds are cheap to read on this worker, never in a UI frame.
-        if matches!(extension, "glb" | "gltf") {
-            let mesh = crate::world::gltf::load(&source, 1, path.into(), 0)?;
-            for vertex in &mesh.vertices {
-                min = min.min(vertex.position.into());
-                max = max.max(vertex.position.into());
-            }
-        } else {
-            min = Vec3::splat(-1.);
-            max = Vec3::ONE;
-        }
         renderer
             .capture(&CaptureRequest {
                 camera: CameraSpec::FrameBounds {

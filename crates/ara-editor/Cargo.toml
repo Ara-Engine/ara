@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 ara-asset = { path = "../ara-asset" }
+ara-asset-format = { path = "../ara-asset-format" }
 ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
 ara-material = { path = "../ara-material" }
@@ -38,6 +39,7 @@ ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 anyhow = "1"
+bytemuck = "1.24"
 glam = { version = "0.30", features = ["serde", "bytemuck"] }
 gltf = "1.4"
 parley = { version = "0.12", default-features = false, features = ["std", "complex-scripts"] }

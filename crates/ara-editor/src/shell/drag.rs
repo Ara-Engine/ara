@@ -128,7 +128,8 @@ impl Shell {
                 }
             }
             Drag::Asset { asset, .. } => {
-                let Some(reference) = asset.reference else {
+                let reference = asset.current_reference(editor.host.store().workspace());
+                let Some(reference) = reference else {
                     return Err(
                         "Mesh/prefab needs a stable asset ID from its document or import sidecar"
                             .into(),

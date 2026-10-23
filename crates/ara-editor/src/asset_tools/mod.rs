@@ -1,5 +1,6 @@
 //! Import settings are commands; native importers run only in disposable workers.
 mod commands;
+pub(crate) mod cooked_mesh;
 mod material_preview;
 pub(crate) mod thumbnails;
 mod vfx_preview;
@@ -107,11 +108,13 @@ struct Job {
 /// Authority-side import job service. IO, hashing and native code never run in tick.
 pub(crate) struct AssetService {
     jobs: BTreeMap<String, Job>,
+    changed: mpsc::Sender<()>,
 }
 impl AssetService {
-    pub fn new() -> Self {
+    pub fn new(changed: mpsc::Sender<()>) -> Self {
         Self {
             jobs: BTreeMap::new(),
+            changed,
         }
     }
 }
@@ -245,6 +248,9 @@ impl Service for AssetService {
                     }
                 };
                 cache.store(key, &output)?;
+                if source.importer == "ara.fbx" {
+                    cooked_mesh::publish(&root, &source, key)?;
+                }
                 Ok(
                     json!({"source":source.path,"key":key,"artifacts":output.artifacts.iter().map(|a|json!({"name":a.name,"bytes":a.bytes.len()})).collect::<Vec<_>>()}),
                 )
@@ -264,6 +270,9 @@ impl Service for AssetService {
                 match event {
                     Event::Progress(f, m) => cx.job_progress(id, f, &m),
                     Event::Complete(result) => {
+                        if result.is_ok() {
+                            let _ = self.changed.send(());
+                        }
                         cx.finish_job(id, result.map_err(|e| vec![crate::invalid(e)]));
                         return false;
                     }

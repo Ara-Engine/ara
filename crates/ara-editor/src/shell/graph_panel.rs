@@ -81,6 +81,7 @@ impl Shell {
                 kind: "graph".into(),
                 uses: Vec::new(),
                 stamp: 0,
+                domain: None,
             };
             self.asset_thumbnail(&asset, out, "material-live-preview", 140.);
         }

@@ -66,6 +66,12 @@ impl Shell {
                     continue;
                 };
                 match binding {
+                    Binding::GraphLabel(doc, key) => {
+                        self.drafts.insert(
+                            format!("@graph-label|{doc}|{key}"),
+                            action.value.as_str().unwrap_or("").into(),
+                        );
+                    }
                     Binding::MaterialValue(doc, node) => {
                         self.drafts.insert(
                             format!("@material|{doc}|{node}"),
@@ -148,6 +154,12 @@ impl Shell {
                         }
                         rebuild = true;
                     }
+                    Binding::ImportChoice(doc, key, value) => {
+                        self.drafts
+                            .insert(format!("@import|{doc}|{key}"), value.to_string());
+                        self.commit_import_fields(editor)?;
+                        rebuild = true;
+                    }
                     Binding::ImportField(doc, key) => {
                         self.drafts.insert(
                             format!("@import|{doc}|{key}"),
@@ -157,6 +169,10 @@ impl Shell {
                                 .map(str::to_owned)
                                 .unwrap_or_else(|| action.value.to_string()),
                         );
+                        if action.value.is_boolean() {
+                            self.commit_import_fields(editor)?;
+                            rebuild = true;
+                        }
                     }
                     Binding::Scrub(_, _) => {}
                     Binding::ColorPicker(path) => {
@@ -300,7 +316,8 @@ impl Shell {
                         editor.action("editor.workspace", json!({"asset":asset.path}))?;
                         rebuild = true;
                         if let Some(path) = self.pick_field.take()
-                            && let Some(reference) = &asset.reference
+                            && let Some(reference) =
+                                asset.current_reference(editor.host.store().workspace())
                         {
                             editor.apply(
                                 crate::inspector::edit_commands(
@@ -367,6 +384,10 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.commit_graph_labels(editor)? && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         let material_keys = self
             .drafts
             .keys()

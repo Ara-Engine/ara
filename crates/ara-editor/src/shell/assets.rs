@@ -8,8 +8,19 @@ pub(crate) struct Asset {
     pub path: String,
     pub reference: Option<String>,
     pub kind: String,
+    pub domain: Option<String>,
     pub uses: Vec<String>,
     pub stamp: u64,
+}
+impl Asset {
+    /// Prefer the authority's current index when a recent import predates the browser scan.
+    pub fn current_reference(&self, workspace: &ara_doc::Workspace) -> Option<String> {
+        workspace
+            .index()
+            .id_of(&self.path)
+            .map(|id| format!("@{}#{id}", self.path))
+            .or_else(|| self.reference.clone())
+    }
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
@@ -82,6 +93,13 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             if relative.ends_with(".import.json") {
                 continue;
             }
+            let document = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| ara_json::parse(&text).ok());
+            let domain = document
+                .as_ref()
+                .and_then(|v| v["records"]["g_meta"]["domain"].as_str())
+                .map(str::to_owned);
             let id = if matches!(
                 kind.as_str(),
                 "scene" | "prefab" | "graph" | "animation" | "materialinstance"
@@ -102,9 +120,8 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                 stamp: stamp(&path),
                 path: relative,
                 kind,
-                uses: std::fs::read_to_string(&path)
-                    .ok()
-                    .and_then(|s| ara_json::parse(&s).ok())
+                domain,
+                uses: document
                     .map(|v| {
                         let mut refs = Vec::new();
                         references(&v, &mut refs);

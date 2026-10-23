@@ -91,6 +91,7 @@ impl Verification {
         editor.action("editor.preferences", json!({"reduceMotion":true}))?;
         editor.action("editor.theme", json!({"light":false}))?;
         editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.workspace", json!({"playing":true,"compare":false}))?;
         let material = resource(editor, "material")?;
         let vfx = resource(editor, "vfx")?;
         let animation = resource(editor, "animation")?;
@@ -406,12 +407,17 @@ impl Verification {
                         },
                     )?;
                     self.capture_pair("graph-500", editor, shell, gpu, ui, renderer)?;
+                    let timings = statistics(&self.samples);
+                    let passed = timings["p95"].as_f64().is_some_and(|value| value < 4.);
                     std::fs::write(
                         self.output.join("panel-interactions.json"),
                         ara_json::to_canonical_string(
-                            &json!({"verified":true,"flow":self.interactions,"graphNodes":500,"panZoomInputToPresentMs":statistics(&self.samples),"samplesMs":self.samples}),
+                            &json!({"verified":true,"flow":self.interactions,"graphNodes":500,"panZoomInputToPresentMs":timings,"panZoomBudgetMs":4,"panZoomBudgetPassed":passed,"profile":if cfg!(debug_assertions){"dev"}else{"release"},"samplesMs":self.samples}),
                         ),
                     )?;
+                    if !passed && !cfg!(debug_assertions) {
+                        return Err("500-node pan/zoom p95 exceeded the 4 ms release budget".into());
+                    }
                     self.next();
                     return Ok(true);
                 }
