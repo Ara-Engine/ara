@@ -230,7 +230,14 @@ fn cross_process_hashes_match() {
     let exe = std::env::current_exe().expect("test executable path");
     let run = || {
         let output = std::process::Command::new(&exe)
-            .args(["--exact", "cross_process_child", "--ignored", "--nocapture"])
+            // Keep the hash line independent of libtest's serial output prefix.
+            .args([
+                "--exact",
+                "cross_process_child",
+                "--ignored",
+                "--nocapture",
+                "--quiet",
+            ])
             .env("ARA_PHYSICS_PROBE", "1")
             .output()
             .expect("spawn isolated physics probe");

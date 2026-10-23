@@ -142,8 +142,8 @@ measured medians 2.203 → 2.231 ns/call without an armed hook and 2.224 → 2.1
 with one. Sample ranges overlap on this shared machine. The normal movement
 kernel is unchanged.
 
-Serial test execution exposed a collaboration demo startup hang: libtest prefixes
-the child readiness line with its test name. Its authority helper now uses quiet
-harness output so the readiness protocol works with one test thread, too.
+Serial test execution exposed a collaboration demo startup hang and a missing
+physics probe hash: libtest prefixes child output with its test name. Both child
+helpers now use quiet harness output so their protocols work with one test thread.
 The runtime and play host now share the existing ARA7303 asset diagnostic constant
 in ara-diag, removing a duplicate definition while preserving its code and meaning.
