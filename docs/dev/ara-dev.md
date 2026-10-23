@@ -167,3 +167,5 @@ The compile-queue integration fixture uses explicit origins and stable source
 files rather than depending on filesystem watcher timing relative to the agent
 quiet window. It retains exact reload order, origin and changed-member assertions;
 the compile server's queue unit test covers human preemption of pending agent work.
+The reload fixture waits for its expected analyzer diagnostic as well as the error
+report, so an earlier error notification cannot satisfy the next edit's assertion.
