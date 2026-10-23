@@ -201,6 +201,8 @@ pub struct SdlBackend {
 }
 impl SdlBackend {
     /// Opens stereo f32 output. SDL follows default-device migrations and performs rate conversion.
+    /// Coordinate subsystem initialization and Drop with the main-thread platform owner;
+    /// SDL subsystem lifecycle calls are not thread-safe.
     pub fn open(sample_rate: u32) -> Result<Self> {
         if !(8000..=192000).contains(&sample_rate) {
             return Err(AudioError::Invalid("SDL sample rate"));

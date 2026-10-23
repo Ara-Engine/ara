@@ -27,13 +27,15 @@ The Vulkan headers bundled with SDL use Apache-2.0; its full text is also there.
 
 ## Wayland protocol declarations
 
-SDL's committed wayland-protocols XML files carry their own MIT-style notices.
+SDL's upstream wayland-protocols XML files carry their own MIT-style notices.
 vendor/wayland-generated contains client-header and private-code output from
 Wayland's `wayland-scanner` 1.22.0, preserving the XML copyright notices.
 Regeneration is a maintainer-only step, never a Cargo build dependency:
+download/extract the SDL source archive identified above, then set `SDL_UPSTREAM`
+to that extracted SDL3-3.4.18 directory and run from this crate:
 
 ```sh
-for xml in vendor/SDL3-3.4.18/wayland-protocols/*.xml; do
+for xml in "$SDL_UPSTREAM"/wayland-protocols/*.xml; do
   name=$(basename "$xml" .xml)
   wayland-scanner client-header "$xml" "vendor/wayland-generated/$name-client-protocol.h"
   wayland-scanner private-code "$xml" "vendor/wayland-generated/$name-protocol.c"

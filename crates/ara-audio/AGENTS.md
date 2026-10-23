@@ -74,6 +74,8 @@ The fetch helper is only for optional Steam Audio; SDL requires no setup.
 - Kira owns the graph/DSP lifecycle; Ara owns voice policy and the sample clock.
   Preserve this seam; Windows low latency and SDL share DeviceBackend; no cpal or global SDL_Quit.
 - SDL watermark must cover a whole hardware period plus one DSP quantum.
+- Serialize SDL subsystem owner initialization/teardown with the main-thread
+  platform host; subsystem lifecycle calls are not thread-safe.
 - SDL queue latency is a lower bound, not a measured output latency guarantee.
 - Zero bus/send gain uses Kira's **finite** silence value, never negative infinity.
 - Goldens are same-platform/native-version evidence, not cross-platform netcode.
