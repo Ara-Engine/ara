@@ -113,8 +113,11 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         manifest["size"] == serde_json::json!(SIZE)
             && manifest["camera"] == serde_json::to_value(&camera)?
             && manifest["reference_samples"] == 4096
-            && manifest["bounces"] == 12,
-        "Reference camera or sample contract differs"
+            && manifest["bounces"] == 12
+            && manifest["convergence"]["relative_rmse"]
+                .as_f64()
+                .is_some_and(|r| (0.0..0.03).contains(&r)),
+        "Reference camera, sample or convergence contract differs"
     );
     let error = metrics::radiance(&data, &ground)?;
     anyhow::ensure!(

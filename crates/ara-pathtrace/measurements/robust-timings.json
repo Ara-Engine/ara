@@ -2,6 +2,8 @@
   {
     "async_overlap": false,
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "budget_ms": 10.0,
+    "budget_passed": true,
     "display_size": [
       2560,
       1440
@@ -13,64 +15,64 @@
       "target_ev100": 11.990133285522461
     },
     "frames": 60,
-    "p50": 4.453119999999999,
-    "p95": 4.607872000000001,
+    "p50": 4.470912,
+    "p95": 5.02944,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.206048,
-        "p95": 0.206592
+        "p50": 0.206368,
+        "p95": 0.206976
       },
       "Bloom.Vertical": {
-        "p50": 0.106592,
-        "p95": 0.107136
+        "p50": 0.106784,
+        "p95": 0.10736
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.239552,
-        "p95": 0.257248
+        "p50": 0.238432,
+        "p95": 0.25632
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.023392,
-        "p95": 0.024128
+        "p50": 0.02368,
+        "p95": 0.02448
       },
       "Output.SDR": {
-        "p50": 0.035744,
-        "p95": 0.036512
+        "p50": 0.035808,
+        "p95": 0.037088
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.212256,
-        "p95": 0.241792
+        "p50": 0.214336,
+        "p95": 0.241536
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.626432,
-        "p95": 0.632352
+        "p50": 0.628,
+        "p95": 0.634272
       },
       "SVGF.Atrous.1": {
-        "p50": 0.38656,
-        "p95": 0.392
+        "p50": 0.388224,
+        "p95": 0.396256
       },
       "SVGF.Atrous.2": {
-        "p50": 0.415104,
-        "p95": 0.423104
+        "p50": 0.416768,
+        "p95": 0.433184
       },
       "SVGF.Atrous.4": {
-        "p50": 0.564576,
-        "p95": 0.568672
+        "p50": 0.562784,
+        "p95": 0.568384
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "p50": 0.667136,
-        "p95": 0.707264
+        "p50": 0.6712,
+        "p95": 0.9856
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.334976,
-        "p95": 0.36208
+        "p50": 0.339168,
+        "p95": 0.37632
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.633312,
-        "p95": 0.713664
+        "p50": 0.633728,
+        "p95": 0.668512
       }
     },
     "render_size": [
@@ -85,6 +87,8 @@
   {
     "async_overlap": false,
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "budget_ms": 5.0,
+    "budget_passed": true,
     "display_size": [
       2560,
       1440
@@ -96,64 +100,64 @@
       "target_ev100": 11.989847183227539
     },
     "frames": 60,
-    "p50": 2.1878080000000004,
-    "p95": 2.258528,
+    "p50": 2.210496,
+    "p95": 2.9025600000000003,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.094368,
-        "p95": 0.095136
+        "p50": 0.094816,
+        "p95": 0.100288
       },
       "Bloom.Vertical": {
-        "p50": 0.049984,
-        "p95": 0.0504
+        "p50": 0.050144,
+        "p95": 0.055136
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.241248,
-        "p95": 0.26624
+        "p50": 0.242784,
+        "p95": 0.47264
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.024096,
-        "p95": 0.02448
+        "p50": 0.02416,
+        "p95": 0.024832
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.057664,
-        "p95": 0.058208
+        "p50": 0.057984,
+        "p95": 0.155456
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.304576,
-        "p95": 0.309056
+        "p50": 0.304448,
+        "p95": 0.533728
       },
       "SVGF.Atrous.1": {
-        "p50": 0.173856,
-        "p95": 0.17872
+        "p50": 0.175296,
+        "p95": 0.361472
       },
       "SVGF.Atrous.2": {
-        "p50": 0.200096,
-        "p95": 0.214528
+        "p50": 0.200928,
+        "p95": 0.214944
       },
       "SVGF.Atrous.4": {
-        "p50": 0.248032,
-        "p95": 0.251168
+        "p50": 0.249696,
+        "p95": 0.457248
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "p50": 0.299424,
-        "p95": 0.347456
+        "p50": 0.299552,
+        "p95": 0.347072
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.161664,
-        "p95": 0.164704
+        "p50": 0.160864,
+        "p95": 0.165472
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.049888,
-        "p95": 0.050848
+        "p50": 0.049984,
+        "p95": 0.067104
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000096
+        "p95": 0.000128
       },
       "Visibility.Motion": {
-        "p50": 0.27744,
-        "p95": 0.320192
+        "p50": 0.280672,
+        "p95": 0.360832
       }
     },
     "render_size": [
@@ -168,6 +172,8 @@
   {
     "async_overlap": false,
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "budget_ms": 10.0,
+    "budget_passed": true,
     "display_size": [
       2560,
       1440
@@ -179,64 +185,64 @@
       "target_ev100": 4.1039934158325195
     },
     "frames": 60,
-    "p50": 6.168416000000001,
-    "p95": 6.906048000000002,
+    "p50": 6.206368000000001,
+    "p95": 6.808896,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.208128,
-        "p95": 0.209696
+        "p50": 0.209824,
+        "p95": 0.212928
       },
       "Bloom.Vertical": {
-        "p50": 0.108416,
-        "p95": 0.109152
+        "p50": 0.109152,
+        "p95": 0.113248
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.04928,
-        "p95": 0.051872
+        "p50": 0.049792,
+        "p95": 0.052288
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.024608,
-        "p95": 0.025312
+        "p50": 0.024704,
+        "p95": 0.025664
       },
       "Output.SDR": {
-        "p50": 0.042048,
-        "p95": 0.043168
+        "p50": 0.042304,
+        "p95": 0.043136
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.274848,
-        "p95": 0.293408
+        "p50": 0.273824,
+        "p95": 0.292576
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 1.652896,
-        "p95": 1.985728
+        "p50": 1.662176,
+        "p95": 1.682432
       },
       "SVGF.Atrous.1": {
-        "p50": 0.454624,
-        "p95": 0.491904
+        "p50": 0.454208,
+        "p95": 0.476864
       },
       "SVGF.Atrous.2": {
-        "p50": 0.512544,
-        "p95": 0.532
+        "p50": 0.511456,
+        "p95": 0.52752
       },
       "SVGF.Atrous.4": {
-        "p50": 0.640576,
-        "p95": 0.651456
+        "p50": 0.643232,
+        "p95": 0.65408
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "p50": 0.90768,
-        "p95": 0.964832
+        "p50": 0.914528,
+        "p95": 1.000832
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.494432,
-        "p95": 0.520608
+        "p50": 0.494496,
+        "p95": 0.530976
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000128
+        "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.776352,
-        "p95": 0.838624
+        "p50": 0.779584,
+        "p95": 0.843648
       }
     },
     "render_size": [
@@ -251,6 +257,8 @@
   {
     "async_overlap": false,
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
+    "budget_ms": 5.0,
+    "budget_passed": true,
     "display_size": [
       2560,
       1440
@@ -262,64 +270,64 @@
       "target_ev100": 4.105108261108398
     },
     "frames": 60,
-    "p50": 2.7441600000000004,
-    "p95": 2.8016319999999992,
+    "p50": 2.764512,
+    "p95": 2.8623360000000004,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.09632,
-        "p95": 0.096896
+        "p50": 0.096736,
+        "p95": 0.097568
       },
       "Bloom.Vertical": {
-        "p50": 0.051456,
-        "p95": 0.054784
+        "p50": 0.051744,
+        "p95": 0.054368
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.048576,
-        "p95": 0.0504
+        "p50": 0.048992,
+        "p95": 0.0512
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.025536,
+        "p50": 0.025632,
         "p95": 0.026144
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.074784,
-        "p95": 0.077568
+        "p50": 0.075104,
+        "p95": 0.077536
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.761536,
-        "p95": 0.76528
+        "p50": 0.762336,
+        "p95": 0.764544
       },
       "SVGF.Atrous.1": {
-        "p50": 0.204416,
-        "p95": 0.206048
+        "p50": 0.205088,
+        "p95": 0.227904
       },
       "SVGF.Atrous.2": {
-        "p50": 0.242016,
-        "p95": 0.263744
+        "p50": 0.24208,
+        "p95": 0.267552
       },
       "SVGF.Atrous.4": {
-        "p50": 0.28288,
-        "p95": 0.287424
+        "p50": 0.282976,
+        "p95": 0.289888
       },
       "SVGF.Reproject.Reject.Outlier.Moments": {
-        "p50": 0.400096,
-        "p95": 0.454016
+        "p50": 0.400352,
+        "p95": 0.452704
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.158976,
-        "p95": 0.160128
+        "p50": 0.159808,
+        "p95": 0.160576
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.04944,
-        "p95": 0.050336
+        "p50": 0.049696,
+        "p95": 0.050368
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000128
+        "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.34672,
-        "p95": 0.357984
+        "p50": 0.35008,
+        "p95": 0.388352
       }
     },
     "render_size": [

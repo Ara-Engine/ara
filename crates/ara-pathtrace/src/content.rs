@@ -165,6 +165,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         load(&path).context("Fetch the local Sponza benchmark with fetch-sponza.ps1 first")?;
     let camera = camera();
     let mut report = Vec::new();
+    let mut budgets_passed = true;
     for render in [[2560, 1440], [1707, 960]] {
         let mut s = settings(render, [2560, 1440]);
         s.post = PostSettings {
@@ -200,6 +201,8 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         totals.sort_by(f64::total_cmp);
         let p50 = totals[120];
         let p95 = totals[227];
+        let budget = if render[1] == 1440 { 10. } else { 5. };
+        budgets_passed &= p95 <= budget;
         println!("Sponza {}p: p50 {p50:.3} ms, p95 {p95:.3} ms", render[1]);
         let passes = passes
             .into_iter()
@@ -208,11 +211,15 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 (name, serde_json::json!({"p50":times[120],"p95":times[227]}))
             })
             .collect::<BTreeMap<_, _>>();
-        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks"}));
+        report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored vertex normals; height maps not imported","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"budget_ms":budget,"budget_passed":p95<=budget,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks"}));
         view.destroy(gpu)?;
     }
     write_json(&root.join("measurements/sponza-timings.json"), &report)?;
     gpu.assert_clean()?;
+    ensure!(
+        budgets_passed,
+        "Sponza p95 budget failed; see sponza-timings.json"
+    );
     Ok(())
 }
 

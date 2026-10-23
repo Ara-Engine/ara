@@ -94,6 +94,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 /// Measure complete native/upscaled frames; new fixtures have no historical baseline.
 pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let mut report = Vec::new();
+    let mut budgets_passed = true;
     for (name, scene, camera, ev) in cases()? {
         for render in [[2560, 1440], [1707, 960]] {
             let mut s = settings(render, [2560, 1440]);
@@ -129,6 +130,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             view.capture(gpu)?
                 .save(root.join(format!("captures/{name}-{}p.png", render[1])))?;
             totals.sort_by(f64::total_cmp);
+            budgets_passed &= totals[56] <= if render[1] == 1440 { 10. } else { 5. };
             let passes = passes
                 .into_iter()
                 .map(|(name, mut times)| {
@@ -140,7 +142,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 "{name} {}p: p50 {:.3}, p95 {:.3} ms",
                 render[1], totals[30], totals[56]
             );
-            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
+            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
             view.destroy(gpu)?;
         }
     }
@@ -150,5 +152,9 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         &gpu.diagnostics(),
     )?;
     gpu.assert_clean()?;
+    anyhow::ensure!(
+        budgets_passed,
+        "Robust scene p95 budget failed; see robust-timings.json"
+    );
     Ok(())
 }

@@ -162,7 +162,8 @@ five 12 cm emissive ceiling panels, zero environment/sun/analytic lights. Both h
 Their fixed-exposure goldens are checked in `cargo test`; no historical before
 measurement exists for these new fixtures. Robust timing JSON records per-pass
 p50/p95 after 96 warmup frames. Sponza uses 240 samples after 96 warmup frames.
-All runs use two Cargo jobs and API/synchronization validation. The shared GPU/CPU
+`Content` and `Robust-Timings` enforce <=10 /5 ms p95 and retain the measured
+report even on failure. All runs use two Cargo jobs and API/synchronization validation. The shared GPU/CPU
 have approximately ten agents, with no exclusive access or controlled clocks;
 Sponza telemetry records nvidia-smi before/after each run. GPU-work sums are not
 application frame latency, and extensive camera motion/reset frames cost more.
@@ -176,33 +177,33 @@ streaming integration described in the fidelity README. DLSS's SDK seam remains.
 
 | Scene | Relative RMSE, before -> after | Native / upscaled p95, ms |
 |---|---:|---:|
-| Sponza | 27.12% -> 7.28% | 15.32 / 7.30 -> 8.87 / 3.90 |
-| outdoor_day (new) | 3.94% | 4.61 / 2.26 |
-| night_interior (new) | 4.91% | 6.91 / 2.80 |
+| Sponza | 27.12% -> 7.28% | 15.32 / 7.30 -> 8.99 / 3.93 |
+| outdoor_day (new) | 3.94% | 5.03 / 2.90 |
+| night_interior (new) | 4.91% | 6.81 / 2.86 |
 
 Sponza 2048 ->4096 reference residual: 1.00%; daylight 0.11%; night 1.46%.
 The legacy gates remain: glossy 6.99% ->6.47%, thin wall 9.64% ->9.04%, furnace
-0.65% ->0.62%. The diagnostic frame is 6.44 /2.81 ms p95 (native /upscaled).
+0.65% ->0.62%. The diagnostic frame is 6.44 /2.82 ms p95 (native /upscaled).
 
 | Sponza pass p50, ms | Native before -> after | Upscaled before -> after |
 |---|---:|---:|
 | Bloom.Horizontal | 0.211 -> 0.208 | 0.097 -> 0.096 |
 | Bloom.Vertical | 0.108 -> 0.108 | 0.052 -> 0.051 |
-| DDGI.Trace.Relocate.Classify.Integrate | 0.160 -> 0.142 | 0.157 -> 0.143 |
-| Exposure.EV100.Meter.Adapt | 0.004 -> 0.024 | 0.005 -> 0.026 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.160 -> 0.141 | 0.157 -> 0.143 |
+| Exposure.EV100.Meter.Adapt | 0.004 -> 0.025 | 0.005 -> 0.026 |
 | Output.SDR | 0.046 -> 0.057 | 0.000 -> 0.000 |
-| Post.Atmosphere.Lens.ToneMap.LUT | 0.301 -> 0.308 | 0.094 -> 0.100 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.301 -> 0.310 | 0.094 -> 0.100 |
 | RT.Disocclusion.Repair | 1.224 -> 0.000 | 0.693 -> 0.000 |
-| RT.Reflections.SoftShadows.DDGI | 6.821 -> 2.732 | 3.100 -> 1.275 |
+| RT.Reflections.SoftShadows.DDGI | 6.821 -> 2.733 | 3.100 -> 1.277 |
 | SVGF.Atrous.1 | 0.496 -> 0.481 | 0.223 -> 0.219 |
 | SVGF.Atrous.2 | 0.541 -> 0.546 | 0.258 -> 0.258 |
-| SVGF.Atrous.4 | 0.591 -> 0.667 | 0.263 -> 0.296 |
-| SVGF.Reproject.Reject.Outlier.Moments | 0.891 -> 0.868 | 0.387 -> 0.372 |
+| SVGF.Atrous.4 | 0.591 -> 0.668 | 0.263 -> 0.296 |
+| SVGF.Reproject.Reject.Outlier.Moments | 0.891 -> 0.868 | 0.387 -> 0.369 |
 | Upscale.FSR1.EASU | 0.000 -> 0.000 | 0.289 -> 0.178 |
 | Upscale.FSR1.RCAS | 0.000 -> 0.000 | 0.058 -> 0.063 |
 | Upscale.TAAU.Resolve | 1.034 -> 0.580 | 0.000 -> 0.000 |
 | Viewport.Ready | 0.000 -> 0.000 | 0.000 -> 0.000 |
-| Visibility.Motion | 2.224 -> 1.631 | 1.008 -> 0.759 |
+| Visibility.Motion | 2.224 -> 1.629 | 1.008 -> 0.762 |
 
 Each JSON also includes per-pass p95. Total p95 is measured from frame sums, not
 the sum of individual pass percentiles. Static pixel-area accumulation removes
@@ -225,3 +226,8 @@ The landscape fixture adds two existing local path dependencies. Per task file
 ownership, the parent checkpoint supplied the generated Cargo.lock membership
 edges. This follow-up changes no root files. Generated probe bakes are written to
 ignored `.sn/baked-interior.json`; the fixture passes them to the fallback in memory.
+
+The final detached verification run reaccumulated the three 4096-spp references,
+passed strict display goldens, RMSE/temporal/budget gates, both crates' tests,
+clippy with warnings denied, rustfmt checks and all 17 SPIR-V validations.
+No capture PNG changed from checkpoint 1044f81; the result is deterministic.
