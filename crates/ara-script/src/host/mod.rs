@@ -11,6 +11,7 @@
 mod bindings;
 mod command;
 mod ctx;
+mod register;
 mod registry;
 
 use std::mem::{ManuallyDrop, MaybeUninit};
@@ -80,6 +81,16 @@ impl ScriptConfig {
             log: None,
         }
     }
+}
+
+/// Who made an edit: the human (editor, IDE, file watcher) or an agent. Agent compiles are
+/// coalesced and run behind human ones (D20).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditOrigin {
+    /// The human: compiled first, at normal priority.
+    Human,
+    /// An agent: coalesced, below the human's compiles, cancelled when a human edit arrives.
+    Agent,
 }
 
 /// The current tick, read by every C# system.
@@ -281,20 +292,25 @@ impl ScriptHost {
     }
 
     /// Loads modules (compiled by the compile server when configured, otherwise from
-    /// their prebuilt `assembly`) and registers them. Errors leave earlier modules running.
+    /// their prebuilt `assembly`) in dependency order and registers them. Modules in a
+    /// reference cycle or referencing an unknown module are refused with a diagnostic;
+    /// errors leave the other modules running.
     pub fn load_modules(
         &mut self,
         world: &mut World,
         modules: &[ModuleSpec],
     ) -> Result<(), Vec<Diagnostic>> {
+        let (order, mut refused) = crate::module::load_order(modules);
         let config = json!({
             "compileServer": self.compile_server.as_ref().map(|p| p.display().to_string()),
-            "modules": modules.iter().map(|m| json!({
+            "modules": order.iter().map(|&i| &modules[i]).map(|m| json!({
                 "name": m.name,
                 "dir": m.dir.display().to_string(),
                 "assembly": m.assembly.as_ref().map(|p| p.display().to_string()),
                 "watch": m.watch && self.compile_server.is_some(),
                 "hot": m.hot,
+                "references": m.references,
+                "profile": m.profile.as_str(),
             })).collect::<Vec<_>>(),
         })
         .to_string();
@@ -308,11 +324,12 @@ impl ScriptHost {
             }
         });
         self.rebuild(world);
-        let problems: Vec<Diagnostic> = self
+        let mut problems: Vec<Diagnostic> = self
             .take_diagnostics()
             .into_iter()
             .filter(Diagnostic::is_error)
             .collect();
+        problems.append(&mut refused);
         if rc != 0 || !problems.is_empty() {
             return Err(if problems.is_empty() {
                 vec![Diagnostic::error(
@@ -326,6 +343,33 @@ impl ScriptHost {
         Ok(())
     }
 
+    /// Asks the compile server to compile `paths` of `module` now (they changed, or are
+    /// about to). Agent edits are coalesced and compiled behind human ones; file-watcher
+    /// events on paths an agent claimed this way count as agent edits. Never blocks: the
+    /// outcome arrives as a staged reload (or diagnostics) at a later tick boundary.
+    /// Returns false if no compile server runs or the module is unknown.
+    pub fn request_compile(&self, module: &str, paths: &[PathBuf], origin: EditOrigin) -> bool {
+        let json = json!({
+            "module": module,
+            "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+            "origin": match origin {
+                EditOrigin::Human => abi::ORIGIN_HUMAN,
+                EditOrigin::Agent => abi::ORIGIN_AGENT,
+            },
+        })
+        .to_string();
+        // SAFETY: the JSON span is valid for the call; the runtime only enqueues it.
+        unsafe {
+            (self.api.request_compile)(json.as_ptr(), u32::try_from(json.len()).unwrap_or(u32::MAX))
+                == 0
+        }
+    }
+
+    /// True if a staged reload is waiting for the next [`ScriptHost::tick_boundary`].
+    pub fn pending(&self) -> bool {
+        // SAFETY: plain call into the runtime.
+        unsafe { (self.api.has_pending)() != 0 }
+    }
     /// Applies staged reloads (call between ticks). Cheap when nothing is pending.
     pub fn tick_boundary(&mut self, world: &mut World) -> Boundary {
         // SAFETY: plain call into the runtime.

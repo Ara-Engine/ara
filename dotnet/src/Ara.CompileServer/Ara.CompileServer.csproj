@@ -8,10 +8,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Ara.CompileServer</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- A compile server benefits from server-style throughput, but stays on workstation GC
-         to keep its footprint small next to the editor. -->
+    <!-- Workstation concurrent GC keeps the footprint small next to the editor. -->
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
-    <TieredPGO>true</TieredPGO>
+    <!-- No tiering: every Roslyn method is JIT-optimized on first use (the initial build and the
+         prewarm pay for it). With tiering, emit paths that run once per edit sit at tier 0 or in
+         PGO instrumentation for many edits: a 5.2k-line L3 emit took p50 167-207 / p95 226-314 ms
+         with tiering and 86-100 / 107-137 ms without (interleaved runs, 14-81% background CPU). -->
+    <TieredCompilation>false</TieredCompilation>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.3.0" />

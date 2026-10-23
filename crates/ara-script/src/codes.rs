@@ -27,6 +27,8 @@ codes! {
     MODULE_TOO_LARGE = 903,
     /// The compile server failed or exited; reloads stop until it is restarted.
     COMPILE_SERVER = 904,
+    /// The runtime rejected an EnC delta (L1/L2); the edit is rebuilt as a full module (L3).
+    DELTA_REJECTED = 905,
     /// A C# system threw; it is disabled until the next reload.
     SYSTEM_FAULT = 910,
     /// A behaviour callback threw; the behaviour type is disabled until the next reload.
@@ -39,6 +41,17 @@ codes! {
     STALE_BINDINGS = 921,
     /// The .NET runtime or the script runtime could not be started.
     RUNTIME_START = 922,
+    /// Modules reference each other in a cycle; none of the modules in it load.
+    MODULE_CYCLE = 923,
+    /// A module references a module that is not loaded (`references` in `ara.module.toml`).
+    UNKNOWN_MODULE = 924,
+    /// A module could not be rebuilt against a changed dependency; every module in the
+    /// cascade keeps its last good version.
+    DEPENDENCY_FAILED = 925,
+    /// The change cannot be applied in this process (L4): restart the play process from a snapshot.
+    RESTART_REQUIRED = 926,
+    /// A retired module generation is still alive after unloading (something pins its ALC).
+    GENERATION_LEAKED = 927,
     /// A component type is not blittable, so C# cannot view it in place.
     NOT_BLITTABLE = 930,
     /// A C# struct's layout differs from the Schema DB's canonical layout.

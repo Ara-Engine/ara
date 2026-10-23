@@ -14,7 +14,8 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 - `AraModule.g.cs`: `[assembly: AraModule]` and `Register(ModuleBuilder)` with every schema
   type (types.json JSON from attributes and XML docs), layout, system access set,
   behaviour and command. With `AraNativeEntry=true` (and `<CompilerVisibleProperty>`), the
-  NativeAOT `ara_script_init` export linking this and every referenced module.
+  NativeAOT `ara_script_init` export linking this and every referenced module, referenced
+  modules first (dependency order) so registration sees the types each one uses.
 
 ## Rules
 

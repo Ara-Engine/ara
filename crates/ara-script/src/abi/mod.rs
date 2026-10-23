@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -123,6 +123,30 @@ abi_structs! { ABI_STRUCTS;
         pub error_count: u32,
         /// 1 if the module is hot (Debug IL, EnC on).
         pub hot: u32,
+        /// Who triggered it: `ORIGIN_HUMAN` (file watcher, editor) or `ORIGIN_AGENT` (`request_compile`).
+        pub origin: u32,
+        /// Modules swapped together in this reload (a dependency cascade); 1 when alone.
+        pub cascade: u32,
+        /// Phase: file event to the compile starting (watcher settle, queueing), in µs.
+        pub detect_us: u32,
+        /// Phase: reading, parsing and classifying the changed files, in µs.
+        pub parse_us: u32,
+        /// Phase: the Ara source generator, in µs (0 when L1/L2 skipped it).
+        pub generate_us: u32,
+        /// Phase: Roslyn emit (full image or EnC delta), in µs.
+        pub emit_us: u32,
+        /// Phase: analyzers after the emit (the API allowlist and Ara rules), in µs.
+        pub analyze_us: u32,
+        /// Phase: compile server message sent to received by the host, in µs.
+        pub transfer_us: u32,
+        /// Phase: loading the image into a collectible ALC (includes the Windows AMSI scan), in µs.
+        pub load_us: u32,
+        /// Phase: pre-JIT of generated entry points, in µs.
+        pub prejit_us: u32,
+        /// Phase: the generated `Register` (declarations collected while staging), in µs.
+        pub register_us: u32,
+        /// Phase: at the tick boundary, host registration, column migration and the table swap, in µs.
+        pub apply_us: u32,
         /// Compile-server time from file event to message sent, in microseconds.
         pub server_us: u64,
         /// Host clock (ns) when the message arrived.
@@ -143,15 +167,20 @@ abi_consts! { ABI_CONSTS;
     pub const RELOAD_INITIAL: u32 = 0;
     /// `ReloadReport::kind`: an EnC body-only delta.
     pub const RELOAD_L1: u32 = 1;
+    /// `ReloadReport::kind`: an additive EnC delta (new methods, fields on classes, new types, lambdas in new members).
+    pub const RELOAD_L2: u32 = 2;
     /// `ReloadReport::kind`: a module swap into a new collectible ALC.
     pub const RELOAD_L3: u32 = 3;
+    /// `ReloadReport::kind`: the change cannot be applied in this process (engine bindings changed, a
+    /// generation leaked); the last good code keeps running until the play process restarts from a snapshot.
+    pub const RELOAD_L4: u32 = 4;
     /// `ReloadReport::kind`: the edit did not compile; the last good code keeps running.
     pub const RELOAD_ERROR: u32 = 100;
     /// Escalation: none (the edit took L1).
     pub const ESC_NONE: u32 = 0;
-    /// Escalation: a file was added, removed or renamed.
+    /// Escalation: a file was removed or renamed.
     pub const ESC_FILE_SET: u32 = 1;
-    /// Escalation: something outside a method body changed.
+    /// Escalation: a declaration changed or was removed (signatures, struct fields, attributes, virtual members).
     pub const ESC_STRUCTURAL: u32 = 2;
     /// Escalation: a changed body is an iterator or async state machine.
     pub const ESC_STATE_MACHINE: u32 = 3;
@@ -169,6 +198,18 @@ abi_consts! { ABI_CONSTS;
     pub const ESC_GENERATED: u32 = 9;
     /// Escalation: the host asked for a full image (load failure, heat change).
     pub const ESC_REQUESTED: u32 = 10;
+    /// Escalation: the runtime rejected an EnC delta (`ApplyUpdate` threw); the edit was rebuilt as L3.
+    pub const ESC_RUNTIME_REJECTED: u32 = 11;
+    /// Escalation: the runtime lacks the EnC capability the additive edit needs.
+    pub const ESC_CAPABILITY: u32 = 12;
+    /// Escalation: a referenced module changed its public surface, so this module was rebuilt against it.
+    pub const ESC_DEPENDENCY: u32 = 13;
+    /// Escalation: a referenced module got a new generation; this module's image was reloaded against it unchanged.
+    pub const ESC_RELINK: u32 = 14;
+    /// `ReloadReport::origin`: a human edit (file watcher, editor).
+    pub const ORIGIN_HUMAN: u32 = 0;
+    /// `ReloadReport::origin`: an agent edit (`request_compile` with the agent origin); coalesced and run behind human work.
+    pub const ORIGIN_AGENT: u32 = 1;
     /// `tick_boundary` bit: code changed.
     pub const BOUNDARY_RELOADED: u32 = 1;
     /// `tick_boundary` bit: systems, behaviours, commands or components changed; rebuild the schedule.
@@ -224,10 +265,10 @@ abi_table! {
         fn diagnostic(ctx: *mut c_void, json: *const u8, len: u32);
         /// Reports an applied reload (called on the tick thread).
         fn report_reload(ctx: *mut c_void, report: *const ReloadReport);
-        /// Registers a module's descriptor (UTF-8 JSON) and writes the response JSON to `out`.
-        /// Returns the bytes written, or `-needed` when `cap` is too small. Only valid during
-        /// `load_modules` and `tick_boundary`.
-        fn register_module(ctx: *mut c_void, json: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
+        /// Registers module descriptors (a UTF-8 JSON array, in dependency order) all or nothing,
+        /// and writes the response JSON to `out`. Returns the bytes written, or `-needed` when `cap`
+        /// is too small. Only valid during `load_modules` and `tick_boundary`.
+        fn register_modules(ctx: *mut c_void, json: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
         /// Pointer to `entity`'s component (script index `component`), or null. Valid in
         /// exclusive phases (behaviours, commands) until the phase ends. `write` journals it.
         fn component_ptr(ctx: *mut c_void, entity: u64, component: u32, write: u32) -> *mut u8;
@@ -261,6 +302,9 @@ abi_table! {
         fn run_command(call: *mut CommandCall) -> i32;
         /// Recompiles a module hot (1: Debug IL, EnC) or cold (0: optimized).
         fn set_heat(module: u32, hot: u32) -> i32;
+        /// Asks for a compile of changed files (UTF-8 JSON `{"module", "paths", "origin"}`). Agent edits
+        /// are coalesced and run behind human ones. Never blocks: the result arrives as a staged reload.
+        fn request_compile(json: *const u8, len: u32) -> i32;
         /// Diagnostics counters (`DIAG_*`).
         fn diag(key: u32) -> u64;
         /// Stops the compile client, unloads every module and returns the leaked-ALC count.

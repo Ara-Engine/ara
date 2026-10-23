@@ -43,7 +43,7 @@ pub(crate) struct Scope<'w> {
     pub registry: *mut Registry,
     pub journal: Option<*mut Journal>,
     pub thread: ThreadId,
-    /// `register_module` is allowed (load and tick boundary only).
+    /// `register_modules` is allowed (load and tick boundary only).
     pub register: bool,
 }
 
@@ -127,7 +127,7 @@ impl HostCtx {
             now_ns: host_now_ns,
             diagnostic: host_diagnostic,
             report_reload: host_report_reload,
-            register_module: host_register_module,
+            register_modules: host_register_modules,
             component_ptr: host_component_ptr,
             resource_ptr: host_resource_ptr,
             entity_alive: host_entity_alive,
@@ -187,7 +187,7 @@ unsafe extern "C" fn host_report_reload(c: *mut c_void, report: *const ReloadRep
     }
 }
 
-unsafe extern "C" fn host_register_module(
+unsafe extern "C" fn host_register_modules(
     c: *mut c_void,
     json: *const u8,
     len: u32,
@@ -199,14 +199,14 @@ unsafe extern "C" fn host_register_module(
     let Some(scope) = c.current().filter(|s| s.register) else {
         c.report(Diagnostic::error(
             codes::LOAD_FAILED,
-            "register_module called outside load or a tick boundary",
+            "register_modules called outside load or a tick boundary",
         ));
         return write_response(br#"{"ok":false}"#, out, cap);
     };
     // SAFETY: the scope's world cell has exclusive access (made from `&mut World`) and
     // its registry pointer is live for the scope; nothing else uses either meanwhile.
     let (world, registry) = unsafe { (scope.world.world_mut(), &mut *scope.registry) };
-    let response = match registry.register_module(world, json) {
+    let response = match registry.register_modules(world, json) {
         Ok(v) => serde_json::to_vec(&v).unwrap_or_default(),
         Err(problems) => {
             for p in problems {
