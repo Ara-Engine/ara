@@ -136,10 +136,14 @@ references and drag targets in the scene, hierarchy and inspector. Texture
 decoding, mesh cooking/rendering and material thumbnails run off the UI thread;
 the project cache retains their results. Select an asset to edit reflected import
 settings, reimport with cancellable job progress, or inspect uses/used-by links.
+Short drawers use horizontal thumbnail tiles so filenames stay visible. The grid
+reflows after initial layout, splitter changes and monitor/size changes.
 
 Material and animation editors share a culled canvas with typed ports, validated
 connections, pan/zoom, box selection, reroutes, comments, groups, a minimap and a
-search-to-add palette. Material graph and DSL edits share command/undo history;
+search-to-add palette. **Frame / F** fits the cards while leaving space for the
+minimap. Fresh default views frame after layout, preserving an explicitly
+positioned canvas camera. Material graph and DSL edits share command/undo history;
 the generated shader renders the sphere/plane preview and reports node errors
 while retaining the last good image. Animation supports states, transitions and
 blend spaces. VFX uses ordered module stacks, parameter controls and a live
@@ -162,6 +166,28 @@ It captures every panel in both themes at exact physical 1440x900 (1x) and
 2560x1440 (2x), and gates 1,000 warm 500-node pan/zoom samples at p95 below 4 ms.
 `evidence/panels/{1440,2560}` contains images, layout reports, interaction results
 and all timing samples. Verification rejects a window with the wrong extent.
+
+Final release measurements on the RTX 4070 SUPER, **measured on a shared, loaded
+host** (16 logical CPUs; other workspace builds/tests were not paused):
+
+| Physical size / scale | 500-node pan/zoom p50 / p95 | Idle CPU p95 | Idle interval p95 |
+|---|---:|---:|---:|
+| 1440x900 / 1x | 1.8368 / 3.1629 ms | 0.1257 ms | 6.6801 ms |
+| 2560x1440 / 2x | 2.1074 / 2.8820 ms | 0.1333 ms | 6.7015 ms |
+
+Each size retains 1,000 active and 1,500 idle samples. The earlier 3.1002 / 3.5037
+ms p95 pass is preserved alongside the 4.0371 and 11.2370 ms noisy runs, stage
+timings and CPU-load observations. No outliers were removed. These are shared-host
+observations, not an isolated performance guarantee; the parent will repeat the
+benchmarks together on a quiet machine after integration. See
+[`evidence/panels/README.md`](evidence/panels/README.md) for the full qualification,
+raw evidence and verification commands.
+
+All 36 final captures were visually inspected in dark/light at both sizes,
+including full-resolution HiDPI asset captions. I would accept these panels as
+v1: the layout is coherent, labels and controls are legible, and previews show
+actual engine output. The compact drawer no longer hides filenames. The
+[`capture gallery`](evidence/panels/gallery.html) compares every panel and theme.
 
 ## Integration boundaries
 

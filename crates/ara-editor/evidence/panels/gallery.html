@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}body{margin:0;color:var(--foreground,#ececee);font:13px var(--font-sans,system-ui)}
+main{display:grid;gap:16px}nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,button{font:inherit;color:inherit;background:var(--card,#121214);border:1px solid var(--border,#303034);border-radius:7px;padding:8px 10px}
+button{cursor:pointer}button[aria-pressed=true]{border-color:var(--primary,#4169ff);background:var(--accent-surface,#202637)}
+select:focus-visible,button:focus-visible{outline:2px solid var(--ring,#4169ff);outline-offset:3px}
+.spacer{flex:1}figure{margin:0;min-width:0;padding:16px;border:1px solid var(--border,#303034);border-radius:var(--radius,10px);background:var(--card,#121214)}
+figure img{width:100%;height:auto;display:block;border-radius:4px}figcaption{margin-bottom:10px;display:flex;justify-content:space-between;gap:8px}
+.shots{display:grid;gap:12px}.shots.both{grid-template-columns:1fr 1fr}.muted,small{color:var(--muted-foreground,#96969d)}
+.summary{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}.summary span{padding-right:12px;border-right:1px solid var(--border,#303034)}
+p{margin:0;line-height:1.6}code{font:12px var(--font-mono,monospace)}
+@media(max-width:520px){.shots.both{grid-template-columns:1fr}.spacer{display:none}select{max-width:100%}}
+</style>
+<main>
+<nav aria-label="Capture comparison">
+<select id="panel" aria-label="Panel">
+<option value="assets">Assets and import settings</option><option value="material" selected>Material graph and DSL</option>
+<option value="vfx">VFX stack</option><option value="animation-states">Animation states</option><option value="animation-blends">Animation blend space</option>
+<option value="profiler">Profiler timeline</option><option value="profiler-compare">Profiler comparison</option><option value="scene">Scene and axis gizmo</option><option value="graph-500">500-node navigation</option>
+</select>
+<select id="size" aria-label="Physical capture size"><option value="1440">1440 × 900 · 1×</option><option value="2560">2560 × 1440 · 2×</option></select>
+<span class="spacer"></span>
+<button type="button" data-mode="dark" aria-pressed="true">Dark</button><button type="button" data-mode="light" aria-pressed="false">Light</button><button type="button" data-mode="both" aria-pressed="false">Compare</button>
+</nav>
+<div class="shots" id="shots"></div>
+<div class="summary"><span>36 native GPU captures</span><span>Exact physical extents</span><span>Original PNGs beside this gallery</span></div>
+<p class="muted">Material and VFX previews are rendered shaders and effects. Profiler views contain recorded CPU/GPU data. The 500-node capture shows the same canvas used by the scripted pan/zoom benchmark.</p>
+</main>
+<script>
+const panels=['assets','material','vfx','animation-states','animation-blends','profiler','profiler-compare','scene','graph-500'];
+// Explicit paths also allow the thread's HTML renderer to inline local captures.
+const captures=Object.fromEntries(['1440','2560'].map(size=>[size,Object.fromEntries(panels.map(panel=>[panel,Object.fromEntries(['dark','light'].map(theme=>[theme,`${size}/${panel}-${theme}.png`]))]))]));
+let mode='dark';
+const panel=document.querySelector('#panel'),size=document.querySelector('#size'),shots=document.querySelector('#shots');
+function draw(){
+ shots.replaceChildren();shots.className=`shots ${mode}`;
+ for(const theme of mode==='both'?['dark','light']:[mode]){
+  const figure=document.createElement('figure'),caption=document.createElement('figcaption'),label=document.createElement('strong'),extent=document.createElement('small'),image=document.createElement('img');
+  label.textContent=`Ara ${theme[0].toUpperCase()+theme.slice(1)}`;extent.textContent=size.value==='1440'?'1440 × 900':'2560 × 1440';
+  caption.append(label,extent);image.src=captures[size.value][panel.value][theme];image.alt=`${panel.selectedOptions[0].text} in ${label.textContent}, ${extent.textContent}`;
+  figure.append(caption,image);shots.append(figure);
+ }
+}
+panel.onchange=draw;size.onchange=draw;
+for(const button of document.querySelectorAll('[data-mode]'))button.onclick=()=>{mode=button.dataset.mode;for(const b of document.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b===button));draw()};
+draw();
+</script></html>
