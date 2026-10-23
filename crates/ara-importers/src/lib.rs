@@ -6,6 +6,7 @@ mod gltf;
 mod mesh;
 mod texture;
 mod texture_codec;
+mod virtual_geometry;
 
 pub use fbx::FbxImporter;
 pub use gltf::GltfImporter;

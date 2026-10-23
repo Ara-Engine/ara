@@ -93,7 +93,7 @@ impl VirtualShadows {
             inputs: [
                 geometry.residency.table_slot,
                 geometry.residency.floor,
-                0,
+                u32::from(geometry.debug == DebugView::VsmPages),
                 0,
             ],
         };

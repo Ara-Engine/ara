@@ -1,0 +1,30 @@
+{
+  "available": true,
+  "color_space": "EXTENDED_SRGB_LINEAR_EXT",
+  "encoded_highlight": [
+    12.4921875,
+    12.4921875,
+    12.4921875,
+    1.0
+  ],
+  "encoded_white": [
+    2.537109375,
+    2.537109375,
+    2.537109375,
+    1.0
+  ],
+  "format": "R16G16B16A16_SFLOAT",
+  "manual_hdr_display_check": "Not established by this automated run; follow HDR.md",
+  "settings": {
+    "mode": "scRgb",
+    "paperWhite": 203.0,
+    "peakNits": 1000.0
+  },
+  "timings": [
+    {
+      "milliseconds": 0.008256,
+      "pass": "Display.ToneMapEncode",
+      "queue": "Graphics"
+    }
+  ]
+}

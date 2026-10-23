@@ -31,6 +31,9 @@ struct Frame {
     more: [u32; 4],
     params: [f32; 4],
     geometry: [u32; 4],
+    virtual_slots: [u32; 4],
+    virtual_tracking: [u32; 4],
+    virtual_layers: [u32; 4],
 }
 
 /// Explicit lighting/camera state; wind comes from a fixed presentation tick.
@@ -104,6 +107,7 @@ pub struct Landscape {
     upload_words: Vec<u32>,
     geometry: Option<Buffer>,
     geometry_slot: u32,
+    virtual_textures: Option<(ara_texture_stream::Binding, [u32; 4])>,
 }
 
 /// Public graph resource seam for integration with lighting, GI and editor captures.

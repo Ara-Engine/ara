@@ -1,0 +1,30 @@
+{
+  "available": true,
+  "color_space": "HDR10_ST2084_EXT",
+  "encoded_highlight": [
+    0.75146484375,
+    0.75146484375,
+    0.75146484375,
+    1.0
+  ],
+  "encoded_white": [
+    0.58056640625,
+    0.58056640625,
+    0.58056640625,
+    1.0
+  ],
+  "format": "A2B10G10R10_UNORM_PACK32",
+  "manual_hdr_display_check": "Not established by this automated run; follow HDR.md",
+  "settings": {
+    "mode": "hdr10",
+    "paperWhite": 203.0,
+    "peakNits": 1000.0
+  },
+  "timings": [
+    {
+      "milliseconds": 0.010272,
+      "pass": "Display.ToneMapEncode",
+      "queue": "Graphics"
+    }
+  ]
+}

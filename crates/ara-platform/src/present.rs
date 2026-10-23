@@ -1,5 +1,7 @@
+use crate::output::select_format;
 use crate::window::{Window, error};
 use anyhow::{Context, Result, ensure};
+use ara_color::{OutputMode, OutputSettings};
 use ara_gpu::vk::Handle;
 use ara_gpu::{
     vk,
@@ -17,6 +19,8 @@ pub struct Present {
     initialized: Vec<bool>,
     extent: vk::Extent2D,
     surface_loader: ash::khr::surface::Instance,
+    output: OutputSettings,
+    format: vk::SurfaceFormatKHR,
 }
 
 impl Present {
@@ -24,6 +28,19 @@ impl Present {
     /// # Safety
     /// Keep the native device and window alive until idle presentation teardown.
     pub unsafe fn new(gpu: &Gpu, window: &Window) -> Result<Self> {
+        // SAFETY: The caller retains the same native owners through teardown.
+        unsafe { Self::new_with_output(gpu, window, OutputSettings::default()) }
+    }
+    /// Creates an explicitly requested SDR, HDR10 or scRGB swapchain. HDR is
+    /// rejected when unavailable; changing modes requires swapchain recreation.
+    /// # Safety
+    /// Keep the native device and window alive until idle presentation teardown.
+    pub unsafe fn new_with_output(
+        gpu: &Gpu,
+        window: &Window,
+        output: OutputSettings,
+    ) -> Result<Self> {
+        ensure!(output.valid(), "Invalid HDR paper-white/peak luminance");
         // SAFETY: Instance and SDL window remain live; all swapchain operations are
         // serialized on the graphics queue. Surface format/usage are queried.
         unsafe {
@@ -66,12 +83,8 @@ impl Present {
             );
             let formats =
                 surface_loader.get_physical_device_surface_formats(gpu.physical, surface)?;
-            let format = formats
-                .iter()
-                .find(|f| {
-                    f.format == vk::Format::B8G8R8A8_UNORM || f.format == vk::Format::R8G8B8A8_UNORM
-                })
-                .context("No UNORM swapchain format")?;
+            let format = select_format(&formats, output.mode)
+                .with_context(|| format!("Requested {:?} output unavailable; enable Windows HDR and use an HDR display. Advertised formats: {formats:?}", output.mode))?;
             let extent = if caps.current_extent.width == u32::MAX {
                 vk::Extent2D {
                     width: window.size()?[0],
@@ -112,6 +125,22 @@ impl Present {
                 None,
             )?;
             guard.swapchain = swapchain;
+            if output.mode == OutputMode::Hdr10 && gpu.info.hdr_metadata {
+                let metadata = vk::HdrMetadataEXT::default()
+                    .display_primary_red(vk::XYColorEXT { x: 0.708, y: 0.292 })
+                    .display_primary_green(vk::XYColorEXT { x: 0.170, y: 0.797 })
+                    .display_primary_blue(vk::XYColorEXT { x: 0.131, y: 0.046 })
+                    .white_point(vk::XYColorEXT {
+                        x: 0.3127,
+                        y: 0.3290,
+                    })
+                    .max_luminance(output.peak_nits)
+                    .min_luminance(0.001)
+                    .max_content_light_level(output.peak_nits)
+                    .max_frame_average_light_level(output.paper_white);
+                ash::ext::hdr_metadata::Device::load(&gpu.instance, &gpu.device)
+                    .set_hdr_metadata(&[swapchain], &[metadata]);
+            }
             let images = loader.get_swapchain_images(swapchain)?;
             let acquire = gpu
                 .device
@@ -138,6 +167,8 @@ impl Present {
                 initialized,
                 extent,
                 surface_loader,
+                output,
+                format,
             })
         }
     }
@@ -284,6 +315,37 @@ impl Present {
     /// Source must be a completed CopySource image owned by the creating device.
     /// Keep both device and SDL window alive for the whole presentation lifetime.
     pub unsafe fn display(&mut self, gpu: &Gpu, source: vk::Image, size: [u32; 2]) -> Result<()> {
+        ensure!(
+            self.output.mode == OutputMode::Sdr,
+            "HDR requires display_encoded with matching output encoding"
+        );
+        // SAFETY: Same completed CopySource image and native owner contract.
+        unsafe { self.display_encoded(gpu, source, size, OutputMode::Sdr) }
+    }
+    /// Active display transfer and paper-white policy for the output pass.
+    pub fn output_settings(&self) -> OutputSettings {
+        self.output
+    }
+    /// Actual queried native format and color space selected for this swapchain.
+    pub fn surface_format(&self) -> vk::SurfaceFormatKHR {
+        self.format
+    }
+    /// Presents an image already encoded for the selected display. PQ is stored
+    /// as numerical UNORM/float values; scRGB remains linear and may exceed 1.
+    /// # Safety
+    /// Source must be a completed CopySource image on this device. Its format
+    /// must support native blitting and preserve the selected encoding/range.
+    pub unsafe fn display_encoded(
+        &mut self,
+        gpu: &Gpu,
+        source: vk::Image,
+        size: [u32; 2],
+        encoding: OutputMode,
+    ) -> Result<()> {
+        ensure!(
+            encoding == self.output.mode,
+            "Presentation/output encoding mismatch"
+        );
         ensure!(
             self.swapchain != vk::SwapchainKHR::null(),
             "Presentation has been destroyed"

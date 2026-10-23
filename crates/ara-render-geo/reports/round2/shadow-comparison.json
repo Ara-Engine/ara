@@ -1,0 +1,12 @@
+{
+  "covered_pixels": 15218,
+  "note": "PCF versus one hard ray on the same LOD camera surface",
+  "rt_timings": [
+    {
+      "milliseconds": 0.013568,
+      "pass": "Shadow.RT.Reference",
+      "queue": "Graphics"
+    }
+  ],
+  "visibility_mae": 0.05111636727889697
+}

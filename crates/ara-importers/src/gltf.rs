@@ -15,7 +15,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "3-gltf14-meshopt070-ispc050-tiled-f32text"
+        "4-gltf14-meshopt070-ispc050-tiled-f32text-arag1"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -64,6 +64,15 @@ impl Importer for GltfImporter {
         ctx.report(0.05, "optimize glTF geometry")?;
         let cancellation = ctx.cancellation;
         let metrics = ctx.metrics;
+        let skinned: BTreeSet<_> = gltf
+            .nodes()
+            .filter(|n| n.skin().is_some())
+            .filter_map(|n| n.mesh().map(|m| m.index()))
+            .collect();
+        let material_counts: BTreeMap<_, _> = gltf
+            .meshes()
+            .map(|m| (m.index(), m.primitives().count()))
+            .collect();
         let primitives: Vec<_> = gltf
             .meshes()
             .flat_map(|mesh| {
@@ -152,18 +161,25 @@ impl Importer for GltfImporter {
                     name: name.clone(), kind: ArtifactKind::Mesh,
                     bytes: cook_mesh(&vertices, &indices, mesh_settings)?,
                 };
+                let deformed = skinned.contains(&mesh_index)
+                    || primitive.get(&gltf::Semantic::Joints(0)).is_some()
+                    || primitive.morph_targets().next().is_some();
+                let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
+                    &name, &vertices, &indices, mesh_settings, deformed,
+                    material_counts[&mesh_index])?;
                 // Preserve all morph target deltas independently of quantized base geometry.
                 let mut targets = Vec::new();
                 for (positions, normals, tangents) in reader.read_morph_targets() {
                     targets.push(json!({"positions":positions.map(Iterator::collect::<Vec<_>>),"normals":normals.map(Iterator::collect::<Vec<_>>),"tangents":tangents.map(Iterator::collect::<Vec<_>>)}));
                 }
-                let metadata = json!({"mesh":mesh_index,"primitive":primitive.index(),"material":primitive.material().index(),"artifact":name,"morphTargets":targets});
-                Ok((artifact, metadata))
+                let metadata = json!({"mesh":mesh_index,"primitive":primitive.index(),"material":primitive.material().index(),"artifact":name,"morphTargets":targets,"virtualGeometry":virtual_metadata});
+                Ok((artifact, virtual_artifact, metadata))
         }).collect();
         drop(mesh_timer);
         let mut mesh_map = Vec::new();
-        for (artifact, metadata) in meshes? {
+        for (artifact, virtual_artifact, metadata) in meshes? {
             output.artifacts.push(artifact);
+            output.artifacts.extend(virtual_artifact);
             mesh_map.push(metadata);
         }
         let mut texture_usages: BTreeMap<(usize, u8), (TextureUsage, Vec<u8>)> = BTreeMap::new();

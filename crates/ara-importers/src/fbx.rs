@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "3-ufbx0115-meshopt070-ispc050-tiled-f32text"
+        "4-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -142,29 +142,47 @@ impl Importer for FbxImporter {
                     .extend_from_slice(&triangulated[..count]);
             }
             let vertices = Arc::new(vertices);
+            let material_count = by_material.len();
+            let deformed = !mesh.skin_deformers.is_empty() || !mesh.blend_deformers.is_empty();
             for (material, indices) in by_material {
                 if indices.is_empty() {
                     continue;
                 }
                 let name = format!("meshes/{}-{material}.mesh", mesh.element.typed_id);
-                mesh_jobs.push((name.clone(), Arc::clone(&vertices), indices));
+                mesh_jobs.push((
+                    name.clone(),
+                    Arc::clone(&vertices),
+                    indices,
+                    deformed,
+                    material_count,
+                ));
                 meshes.push(json!({"mesh":mesh.element.typed_id,"primitive":material,"artifact":name,"material":mesh.materials.get(material as usize).map(|m|m.element.typed_id),"skin":mesh.skin_deformers.first().map(|s|s.element.typed_id)}));
             }
         }
         let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
         let artifacts: Result<Vec<_>> = mesh_jobs
             .into_par_iter()
-            .map(|(name, vertices, indices)| {
+            .map(|(name, vertices, indices, deformed, materials)| {
                 cancellation.check()?;
-                Ok(Artifact {
-                    name,
+                let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
+                    &name, &vertices, &indices, settings, deformed, materials,
+                )?;
+                let artifact = Artifact {
+                    name: name.clone(),
                     kind: ArtifactKind::Mesh,
                     bytes: cook_mesh(&vertices, &indices, settings)?,
-                })
+                };
+                Ok((artifact, virtual_artifact, virtual_metadata))
             })
             .collect();
         drop(mesh_timer);
-        output.artifacts.extend(artifacts?);
+        for (metadata, (artifact, virtual_artifact, virtual_metadata)) in
+            meshes.iter_mut().zip(artifacts?)
+        {
+            metadata["virtualGeometry"] = virtual_metadata;
+            output.artifacts.push(artifact);
+            output.artifacts.extend(virtual_artifact);
+        }
         let mut skins = Vec::new();
         for skin in &scene.skin_deformers {
             let joint_index: BTreeMap<_, _> = skin

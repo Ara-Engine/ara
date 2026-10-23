@@ -51,6 +51,7 @@ mod tests {
             mesh_dispatch: [0; 4],
             task_dispatch: [0; 4],
             geometry_shader: false,
+            hdr_metadata: false,
             buffer_int64_atomics: false,
             name: String::new(),
             vendor_id: 1,

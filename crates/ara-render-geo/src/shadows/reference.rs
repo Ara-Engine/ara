@@ -79,9 +79,23 @@ impl ShadowReference {
             .enumerate()
             .map(|(index, i)| {
                 let [x, y, z, s] = i.position_scale;
+                let (sine, cosine) = f32::from_bits(i.identity[3]).sin_cos();
                 AccelerationInstance {
                     geometry: blas,
-                    transform: [s, 0.0, 0.0, x, 0.0, s, 0.0, y, 0.0, 0.0, s, z],
+                    transform: [
+                        s * cosine,
+                        0.0,
+                        s * sine,
+                        x,
+                        0.0,
+                        s,
+                        0.0,
+                        y,
+                        -s * sine,
+                        0.0,
+                        s * cosine,
+                        z,
+                    ],
                     custom_index: index as u32,
                     mask: 255,
                 }

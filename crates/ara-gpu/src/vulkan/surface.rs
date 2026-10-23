@@ -23,6 +23,8 @@ pub(super) fn format(format: Format) -> vk::Format {
         Format::Rgba8 => vk::Format::R8G8B8A8_UNORM,
         Format::Rgba8Srgb => vk::Format::R8G8B8A8_SRGB,
         Format::Rgba32Float => vk::Format::R32G32B32A32_SFLOAT,
+        Format::Rgba16Float => vk::Format::R16G16B16A16_SFLOAT,
+        Format::Rgb10A2 => vk::Format::A2B10G10R10_UNORM_PACK32,
         Format::R32Float => vk::Format::R32_SFLOAT,
         Format::Depth32Float => vk::Format::D32_SFLOAT,
     }

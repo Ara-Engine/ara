@@ -15,7 +15,9 @@ struct Frame {
     float4x4 vp; float4x4 lightVp; float4x4 inverseVp;
     float4 camera; float4 sun; float4 sunColor;
     uint4 grid; uint4 extent; uint4 indices; uint4 more; float4 params; uint4 geometry;
+    uint4 virtualSlots;uint4 virtualTracking;uint4 virtualLayers;
 };
+#include "virtual_texture.slang"
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint loadWord(uint slot,uint at){return buffers[NonUniformResourceIndex(slot)].Load(at*4);}
 uint3 sampleData(Frame f,int2 p){
@@ -106,6 +108,17 @@ float4 ara_load(uint offset){Frame f=frame();return asfloat(buffers[NonUniformRe
 float3 linearColor(float3 c){return select(c<=0.04045,c/12.92,pow((c+0.055)/1.055,2.4));}
 float3 ara_triplanar(uint index,float3 p,float3 n,float scale){
     float3 w=pow(abs(n),4);w/=max(dot(w,1),0.0001);
+    Frame f=frame();
+    if(f.virtualTracking.x!=0){
+        for(uint layer=0;layer<4;layer++)if(index==uint(asfloat(loadWord(f.more.w,layer*4))) && f.virtualLayers[layer]!=0xffffffff){
+            float4 clip=mul(f.vp,float4(p,1));uint2 pixel=uint2(float2(clip.x/clip.w*.5+.5,.5-clip.y/clip.w*.5)*float2(f.extent.xy));
+            float desired,actual;
+            float3 a=vtSample(f.virtualSlots,f.virtualTracking,f.virtualLayers[layer],p.yz*scale,ddx(p.yz*scale),ddy(p.yz*scale),pixel,desired,actual).rgb;
+            float3 b=vtSample(f.virtualSlots,f.virtualTracking,f.virtualLayers[layer],p.xz*scale,ddx(p.xz*scale),ddy(p.xz*scale),pixel,desired,actual).rgb;
+            float3 c=vtSample(f.virtualSlots,f.virtualTracking,f.virtualLayers[layer],p.xy*scale,ddx(p.xy*scale),ddy(p.xy*scale),pixel,desired,actual).rgb;
+            return a*w.x+b*w.y+c*w.z;
+        }
+    }
     float3 a=linearColor(textures[NonUniformResourceIndex(index)].Sample(samplers[0],p.yz*scale).rgb);
     float3 b=linearColor(textures[NonUniformResourceIndex(index)].Sample(samplers[0],p.xz*scale).rgb);
     float3 c=linearColor(textures[NonUniformResourceIndex(index)].Sample(samplers[0],p.xy*scale).rgb);
