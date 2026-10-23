@@ -742,6 +742,23 @@ fn calls_find_their_document_and_report_created_ids_plainly() {
     );
     assert!(text.contains("modified: e_flr1 Ground"), "{text}");
 
+    // `as` without its `$`; `schema.describe` with one `name`.
+    let r = call(
+        &mut h,
+        "cmd.apply",
+        json!({ "session": s, "why": "A marker", "commands": [
+            { "cmd": "entity.create", "as": "marker", "args": { "name": "Marker" } },
+            { "cmd": "property.set", "args": { "entity": "$marker", "path": "name", "value": "Mark" } }
+        ] }),
+    );
+    assert!(r["ids"]["$marker"].is_string(), "{r}");
+    let d = call(
+        &mut h,
+        "schema.describe",
+        json!({ "session": s, "name": "Transform" }),
+    );
+    assert_eq!(d["items"][0]["name"], "Transform");
+
     // Lenient document names, name selectors and the main-scene default for reads.
     let one = call(
         &mut h,

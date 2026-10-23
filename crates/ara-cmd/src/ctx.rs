@@ -141,7 +141,15 @@ impl<'a> ReadCtx<'a> {
                 None => Ok(Target::Plain(id)),
             };
         }
-        if inner.is_some() && !self.resolved().contains_key(addr) {
+        // `instance/<prefab root ID>` names the instance itself (it *is* the root).
+        let inner = match (inner, self.prefab_root(rec)) {
+            (Some(i), Some(root)) if i == root => None,
+            (Some(i), Some(root)) => Some(i.strip_prefix(&format!("{root}/")).unwrap_or(i)),
+            (i, _) => i,
+        };
+        if let Some(i) = inner
+            && !self.resolved().contains_key(&format!("{head}/{i}"))
+        {
             return Err(Diagnostic::error(
                 codes::RECORD_NOT_FOUND,
                 format!("no entity `{addr}` in the prefab instance"),
@@ -151,6 +159,13 @@ impl<'a> ReadCtx<'a> {
             instance: id,
             inner: inner.map(str::to_owned),
         })
+    }
+
+    /// The root record ID of the prefab an instance record instantiates.
+    fn prefab_root(&self, instance: &Record) -> Option<String> {
+        let prefab = self.workspace().find(prefab_of(instance)?)?;
+        let doc = self.workspace().doc(prefab.as_str())?;
+        doc.children(None).first().map(|id| id.to_string())
     }
 
     /// `ARA1204` for an ID this document lacks; when another loaded document has it,

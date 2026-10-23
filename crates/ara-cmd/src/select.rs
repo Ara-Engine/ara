@@ -11,10 +11,13 @@
 //! Name selectors are resolved to addresses before the params are validated, so
 //! commands only ever see addresses. A bare name (`Crate`) is still an error, but
 //! its diagnostic carries a machine-applicable fix per matching entity.
+//!
+//! Asset-typed params may leave out the `@`: `prefabs/crate.prefab` reads as
+//! `@prefabs/crate.prefab`, and a bare asset ID `pf_crate001` as `@#pf_crate001`.
 
 use ara_diag::{Diagnostic, FixAction, codes, did_you_mean};
 use ara_doc::prefab::Resolved;
-use ara_schema::grammar::is_entity_address;
+use ara_schema::grammar::{is_entity_address, split_id};
 use ara_schema::{SchemaDb, ValueType};
 use serde_json::Value;
 
@@ -208,16 +211,17 @@ fn resolve_one(entities: &Resolved, s: &mut String, path: &str) -> Result<(), Di
     }
 }
 
-/// Visits every entity-typed string of `v` (of type `ty`) with its display path.
+/// Visits every entity- and asset-typed string of `v` (of type `ty`) with its
+/// type and display path.
 fn walk(
     db: &SchemaDb,
     ty: &ValueType,
     v: &mut Value,
     path: &str,
-    f: &mut dyn FnMut(&mut String, &str) -> Result<(), Diagnostic>,
+    f: &mut Visit<'_>,
 ) -> Result<(), Diagnostic> {
     match (ty, v) {
-        (ValueType::Entity, Value::String(s)) => f(s, path),
+        (ValueType::Entity | ValueType::Asset(_), Value::String(s)) => f(ty, s, path),
         (ValueType::Option(inner), v) if !v.is_null() => walk(db, inner, v, path, f),
         (ValueType::List(item) | ValueType::Keyed(item), Value::Array(items)) => {
             for (i, it) in items.iter_mut().enumerate() {
@@ -239,12 +243,15 @@ fn walk(
     }
 }
 
+/// What [`walk`] calls per leaf: the type, the string and its display path.
+type Visit<'a> = dyn FnMut(&ValueType, &mut String, &str) -> Result<(), Diagnostic> + 'a;
+
 fn fields(
     db: &SchemaDb,
     descs: &[ara_schema::FieldDesc],
     o: &mut serde_json::Map<String, Value>,
     path: &str,
-    f: &mut dyn FnMut(&mut String, &str) -> Result<(), Diagnostic>,
+    f: &mut Visit<'_>,
 ) -> Result<(), Diagnostic> {
     for field in descs {
         if let Some(v) = o.get_mut(&field.name) {
@@ -255,7 +262,8 @@ fn fields(
 }
 
 /// Rewrites the name selectors in `params` (of params type `ty`) to addresses of
-/// `entities`; bare names fail with a fix per match.
+/// `entities` (bare names fail with a fix per match) and adds a missing `@` to
+/// asset references.
 pub fn resolve(
     db: &SchemaDb,
     ty: &str,
@@ -265,8 +273,18 @@ pub fn resolve(
     let (Some(t), Value::Object(o)) = (db.get(ty), params) else {
         return Ok(());
     };
-    fields(db, t.fields(), o, "params", &mut |s, path| {
-        resolve_one(entities, s, path)
+    fields(db, t.fields(), o, "params", &mut |ty, s, path| {
+        if matches!(ty, ValueType::Entity) {
+            return resolve_one(entities, s, path);
+        }
+        if !s.is_empty() && !s.starts_with('@') {
+            *s = if split_id(s).is_some() {
+                format!("@#{s}")
+            } else {
+                format!("@{s}")
+            };
+        }
+        Ok(())
     })
 }
 
@@ -275,8 +293,10 @@ pub fn references(db: &SchemaDb, ty: &str, params: &Value) -> Vec<String> {
     let mut out = Vec::new();
     let mut copy = params.clone();
     if let (Some(t), Value::Object(o)) = (db.get(ty), &mut copy) {
-        let _ = fields(db, t.fields(), o, "params", &mut |s, _| {
-            out.push(s.clone());
+        let _ = fields(db, t.fields(), o, "params", &mut |ty, s, _| {
+            if matches!(ty, ValueType::Entity) {
+                out.push(s.clone());
+            }
             Ok(())
         });
     }

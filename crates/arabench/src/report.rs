@@ -165,6 +165,41 @@ pub fn compare(runs: &[RunResult]) -> String {
         let _ = write!(s, " {median} |");
     }
     s.push('\n');
+    s.push_str("| Total turns |");
+    for r in runs {
+        let n: u32 = r.results.iter().map(|t| t.turns).sum();
+        let _ = write!(s, " {n} |");
+    }
+    s.push('\n');
+    s.push_str("| Agent time |");
+    for r in runs {
+        let ms: u64 = r.results.iter().map(|t| t.wall_ms).sum();
+        let _ = write!(s, " {:.0} s |", ms as f64 / 1000.0);
+    }
+    s.push('\n');
+    s.push_str("| Tokens in / out |");
+    for r in runs {
+        let (i, o) = r
+            .results
+            .iter()
+            .filter_map(|t| t.tokens)
+            .fold((0, 0), |(i, o), t| {
+                (i + t.input + t.cache_read + t.cache_write, o + t.output)
+            });
+        let _ = write!(s, " {}k / {}k |", i / 1000, o / 1000);
+    }
+    s.push('\n');
+    s.push_str("| Cost |");
+    for r in runs {
+        let cost: f64 = r.results.iter().filter_map(|t| t.cost_usd).sum();
+        let cell = if cost > 0.0 {
+            format!("${cost:.2}")
+        } else {
+            "-".into()
+        };
+        let _ = write!(s, " {cell} |");
+    }
+    s.push('\n');
     s.push_str("| Failed tool calls with ARA codes |");
     for r in runs {
         let n: u32 = r.results.iter().flat_map(|t| t.codes.values()).sum();

@@ -116,7 +116,9 @@ pub struct SchemaListParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SchemaDescribeParams {
     /// Type, command or method names (`Transform`, `entity.create`, `cmd.apply`).
-    pub names: Vec<String>,
+    pub names: Option<Vec<String>>,
+    /// One name; the same as `names: [name]`.
+    pub name: Option<String>,
     /// Session handle from `session.begin`.
     pub session: String,
 }
@@ -290,8 +292,9 @@ pub struct CallSpec {
     pub cmd: String,
     /// Command arguments, per the command's params schema (`schema.describe`).
     pub args: Option<Value>,
-    /// Symbolic ID (`$crate`) for the record this call creates; later calls may use
-    /// it anywhere an entity is expected. The result maps it to the real ID. Entity
+    /// Symbolic ID (`$crate`; the `$` may be left out) for the record this call
+    /// creates; later calls may use it as `$crate` anywhere an entity is expected.
+    /// The result maps it to the real ID. Asset args may skip the `@`. Entity
     /// args also take IDs (`e_8b21`) and name selectors (`name:Crate`,
     /// `name:Floor/Crate`).
     #[ara(rename = "as")]

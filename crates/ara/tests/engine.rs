@@ -541,6 +541,12 @@ fn agent_shells_are_attributed_and_args_survive_stripped_quotes() {
     assert_eq!(code, 0, "{out}{err}");
     let (_, out, _) = ara_in(&root, &["review", "--json"]);
     assert_eq!(json_of(&out)["items"][0]["author"], "agent:codex");
+
+    // A whole batch without a command name; `as` may skip its `$`.
+    let batch = "{why: two lamps, commands: [{command: entity.create, args: {name: Lamp}, as: a}, {cmd: entity.create, args: {name: Lamp2, parent: $a}}]}";
+    let (code, out, err) = ara_env(&root, &["do", "--args", batch], &codex);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("Lamp ($a)") && out.contains("Lamp2"), "{out}");
     let (_, out, _) = ara_in(&root, &["inspect", "Crate"]);
     assert!(out.contains("Crate pos(0,1,0)"), "{out}");
 }

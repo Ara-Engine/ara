@@ -151,7 +151,22 @@ pub(super) fn schema_describe(st: &mut State, p: SchemaDescribeParams) -> R {
     let db = st.store.schema();
     let mut items = Vec::new();
     let mut errors = Vec::new();
-    for name in &p.names {
+    let names: Vec<String> = p
+        .names
+        .unwrap_or_default()
+        .into_iter()
+        .chain(p.name)
+        .collect();
+    if names.is_empty() {
+        return Err(vec![
+            Diagnostic::error(
+                codes::MISSING_REQUIRED,
+                "give `names` (or one `name`) to describe",
+            )
+            .path("params.names"),
+        ]);
+    }
+    for name in &names {
         if let Some((t, _)) = db.lookup(name) {
             items.push(json!({
                 "name": t.name,

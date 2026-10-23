@@ -486,3 +486,40 @@ fn name_selectors_resolve_and_bare_names_get_fixes() {
         json!("doc")
     );
 }
+
+#[test]
+fn asset_params_may_skip_the_at_and_instances_answer_to_their_root_id() {
+    let (mut store, reg) = setup();
+    let r = reg
+        .apply(
+            &mut store,
+            &Batch::new(
+                "sc_level001",
+                [
+                    (
+                        "prefab.instantiate",
+                        json!({ "id": "$a", "prefab": "prefabs/crate.prefab" }),
+                    ),
+                    (
+                        "prefab.instantiate",
+                        json!({ "id": "$b", "prefab": "pf_crate001" }),
+                    ),
+                    // The prefab's root record, addressed through the instance: the instance.
+                    (
+                        "property.set",
+                        json!({ "entity": "$a/e_crt1", "path": "name", "value": "Box" }),
+                    ),
+                ],
+            ),
+            &Session::human(),
+        )
+        .unwrap_or_else(|d| panic!("{d:#?}"));
+    assert_eq!(r.outputs[2]["entity"], json!(r.symbols["$a"]));
+    let record = store
+        .workspace()
+        .doc("sc_level001")
+        .and_then(|d| d.record(&r.symbols["$b"]))
+        .cloned()
+        .expect("instance");
+    assert_eq!(record["prefab"], "@prefabs/crate.prefab#pf_crate001");
+}

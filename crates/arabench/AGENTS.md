@@ -17,7 +17,9 @@ cargo run -p arabench -- compare results/a/results.json results/b/results.json
 cargo run -p arabench -- list
 ```
 
-`run` builds `ara` first (same profile) and puts it first on the agent's `PATH`.
+`run` builds `ara` first (same profile) and puts it first on the agent's `PATH`
+(`--ara <dir>/ara.exe` pins a frozen binary; it must be named `ara`). `--merge`
+re-runs some `--task`s into an existing `results.json` of the same label.
 Output: `results/<label>-<agent>/results.json`, `report.md` and
 `transcripts/<task>.jsonl` (trimmed, failures only). `--keep` keeps each attempt's
 temp project (`<temp>/arabench/<agent>-<task>-…/proj`, transcript beside it).
@@ -83,6 +85,10 @@ Agents are `<cli>:<model>[@effort]`; Claude model names map `sonnet-5.5` →
 - `World::open` waits up to 20 s for the agent's `ara mcp` to release the lock.
 - The merge task's setup needs `git`; it uses a stand-in merge driver, then writes
   exactly what `ara merge` produces.
+- Agent markers inherited from the shell that launched arabench (`CLAUDECODE`,
+  `CLAUDE_CODE_*`, `CODEX_*`, `ARA_AUTHOR`) are removed from the agent's
+  environment, so `ara` attributes CLI edits to the agent under test.
+- Verify colors as linear (`Light.color`): sRGB orange is about (1, 0.21, 0).
 
 ## Testing
 

@@ -119,6 +119,20 @@ fn schema_dumps_the_reflection_db_and_json_schemas() {
 }
 
 #[test]
+fn schema_describes_named_types_and_commands() {
+    let (code, out) = ara("project", &["schema", "Light", "entity.create"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("# Component `Light`") && out.contains("| `intensity` | `f32` |"),
+        "{out}"
+    );
+    assert!(out.contains("entity.create"), "{out}");
+    let (code, out) = ara("project", &["schema", "Lights"]);
+    assert_eq!(code, 1);
+    assert!(out.contains("did you mean `Light`?"), "{out}");
+}
+
+#[test]
 fn merge_writes_the_result_over_ours_and_reports_conflicts() {
     let merge = fixtures().join("merge");
     let dir = scratch("merge");
@@ -216,6 +230,11 @@ fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
     );
 
     fs::write(&conf, text.replace("\"order\": \"a1\"", "\"ordr\": \"a1\"")).expect("typo");
+    let (_, out) = ara_at(&root, &["check"]);
+    assert!(
+        out.contains("hint: 1 of these have one machine-applicable fix"),
+        "{out}"
+    );
     let (code, out) = ara_at(&root, &["check", "--fix"]);
     assert_eq!(code, 0, "{out}");
     assert!(

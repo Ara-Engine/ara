@@ -75,8 +75,11 @@ enum Command {
         /// Documents to check (default: every project document).
         files: Vec<PathBuf>,
     },
-    /// Show the Schema DB: types, document kinds and commands.
+    /// Show the Schema DB: types, document kinds and commands; with names, each one's
+    /// fields, units and defaults (`ara schema Light entity.create`).
     Schema {
+        /// Types, commands or methods to describe.
+        names: Vec<String>,
         /// Write `reflection.json` and JSON Schemas into this directory.
         #[arg(long)]
         out: Option<PathBuf>,
@@ -130,8 +133,9 @@ enum Command {
     Mcp,
     /// Run one command as a transaction: `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500 --why "Dimmer crate light"`.
     Do {
-        /// Command name (`entity.create`; list them with `ara schema`).
-        command: String,
+        /// Command name (`entity.create`; list them with `ara schema`). Without one,
+        /// `--args` is a whole batch: `{commands: [{cmd, args, as}], why, doc}`.
+        command: Option<String>,
         /// Document to edit (default: the one holding the entities the arguments
         /// name, else the project's main scene). `outpost` is enough.
         #[arg(long)]
@@ -281,23 +285,33 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
             symbol,
             why,
             dry_run,
-        } => Call {
-            method: "cmd.apply",
-            params: params(json!({
-                "doc": doc,
-                "why": why,
-                "dryRun": dry_run,
-                "commands": [params(json!({
-                "cmd": command,
-                "args": match protocol::args(args.as_deref(), &kv) {
-                    Ok(a) => a,
+        } => {
+            let parsed = match protocol::args(args.as_deref(), &kv) {
+                Ok(a) => a,
+                Err(d) => return Some(Err(d)),
+            };
+            let batch = match command {
+                Some(cmd) => protocol::Batch {
+                    commands: json!([params(json!({ "cmd": cmd, "args": parsed, "as": symbol }))]),
+                    doc: None,
+                    why: None,
+                },
+                None => match protocol::batch(parsed) {
+                    Ok(b) => b,
                     Err(d) => return Some(Err(d)),
                 },
-                "as": symbol,
-            }))],
-            })),
-            summary: protocol::applied,
-        },
+            };
+            Call {
+                method: "cmd.apply",
+                params: params(json!({
+                    "doc": doc.or(batch.doc),
+                    "why": why.or(batch.why),
+                    "dryRun": dry_run,
+                    "commands": batch.commands,
+                })),
+                summary: protocol::applied,
+            }
+        }
         Command::Query {
             q,
             doc,
@@ -401,7 +415,9 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
             let project = open(std::slice::from_ref(&file))?;
             commands::resolve(&project, &file, all, &picks, json).map_err(io)
         }
-        Command::Schema { out } => commands::schema(&open(&[])?, json, out.as_deref()).map_err(io),
+        Command::Schema { names, out } => {
+            commands::schema(&open(&[])?, &names, json, out.as_deref()).map_err(io)
+        }
         Command::Merge {
             output,
             base,

@@ -103,6 +103,52 @@ pub fn args(base: Option<&str>, params: &[String]) -> Result<Value, Vec<Diagnost
     Ok(Value::Object(obj))
 }
 
+/// The calls of `ara do` without a command name.
+pub struct Batch {
+    /// `[{cmd, args, as}]`.
+    pub commands: Value,
+    /// `doc` from the batch object, if any.
+    pub doc: Option<String>,
+    /// `why` from the batch object, if any.
+    pub why: Option<String>,
+}
+
+/// Reads `{commands: [{cmd, args, as}], doc?, why?}` (each call may also say
+/// `command` / `params`, the registry's own names).
+pub fn batch(args: Value) -> Result<Batch, Vec<Diagnostic>> {
+    let bad = |msg: &str| vec![Diagnostic::error(codes::INVALID_PARAMS, msg)];
+    let usage = "without a command name, `--args` is a batch: `{commands: [{cmd: entity.create, args: {name: Crate}, as: crate}], why: <reason>}`";
+    let Value::Object(mut obj) = args else {
+        return Err(bad(usage));
+    };
+    let Some(Value::Array(calls)) = obj.remove("commands") else {
+        return Err(bad(usage));
+    };
+    let mut commands = Vec::new();
+    for call in calls {
+        let Value::Object(mut c) = call else {
+            return Err(bad(usage));
+        };
+        for (alias, name) in [("command", "cmd"), ("params", "args")] {
+            if !c.contains_key(name)
+                && let Some(v) = c.remove(alias)
+            {
+                c.insert(name.into(), v);
+            }
+        }
+        if !c.contains_key("cmd") {
+            return Err(bad(usage));
+        }
+        commands.push(Value::Object(c));
+    }
+    let text = |v: Option<Value>| v.and_then(|v| v.as_str().map(str::to_owned));
+    Ok(Batch {
+        commands: Value::Array(commands),
+        doc: text(obj.remove("doc")),
+        why: text(obj.remove("why")),
+    })
+}
+
 /// Summary of a `cmd.apply` result.
 pub fn applied(v: &Value) -> String {
     let list = |k: &str| {

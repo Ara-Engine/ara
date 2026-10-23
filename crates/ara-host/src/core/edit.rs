@@ -206,7 +206,15 @@ impl State {
         let mut problems = Vec::new();
         for (i, c) in p.commands.iter().enumerate() {
             let mut args = c.args.clone().unwrap_or_else(|| Value::Object(Map::new()));
-            if let Some(sym) = &c.symbol {
+            // `as: "crate"` means `$crate`, the name later calls use.
+            let symbol = c.symbol.as_ref().map(|s| {
+                if s.starts_with('$') {
+                    s.clone()
+                } else {
+                    format!("${s}")
+                }
+            });
+            if let Some(sym) = &symbol {
                 let at = |msg: String| {
                     Diagnostic::error(codes::INVALID_PARAMS, msg)
                         .command(i)
@@ -217,9 +225,7 @@ impl State {
                     .info(&c.cmd)
                     .and_then(|info| db.get(&info.params))
                     .is_some_and(|t| t.field("id").is_some());
-                if !sym.starts_with('$') {
-                    problems.push(at(format!("symbol `{sym}` must start with `$`")));
-                } else if !creates {
+                if !creates {
                     problems.push(at(format!(
                         "`{}` does not create a record, so `as` has nothing to name",
                         c.cmd

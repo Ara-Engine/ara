@@ -33,11 +33,20 @@ fn diagnostics(project: &Project, files: &[PathBuf]) -> (Vec<PathBuf>, Vec<Diagn
     (targets, diags)
 }
 
+/// True if `d` has exactly one fix and it edits the document (`rename`, `set`,
+/// `remove`): `--fix` applies those.
+fn one_edit(d: &Diagnostic) -> bool {
+    matches!(
+        d.fixes.as_slice(),
+        [f] if matches!(f.action, FixAction::Rename { .. } | FixAction::Set { .. } | FixAction::Remove { .. })
+    )
+}
+
 /// Applies the unambiguous fixes; returns their titles (`file: title`).
 fn apply_fixes(project: &Project, diags: &[Diagnostic]) -> Result<Vec<String>, String> {
     let mut by_file: BTreeMap<&str, Vec<&Diagnostic>> = BTreeMap::new();
     for d in diags {
-        if let (Some(file), [_]) = (d.location.file.as_deref(), d.fixes.as_slice()) {
+        if let Some(file) = d.location.file.as_deref().filter(|_| one_edit(d)) {
             by_file.entry(file).or_default().push(d);
         }
     }
@@ -90,8 +99,13 @@ pub fn check(project: &Project, files: &[PathBuf], fix: bool, json: bool) -> Res
         }
     }
     let (errors, warnings) = tally(&diags);
+    let fixable = diags
+        .iter()
+        .filter(|d| d.location.file.is_some() && one_edit(d))
+        .count();
     if json {
         let mut report = json_report(targets.len(), &diags);
+        report["fixable"] = fixable.into();
         if fix {
             report["fixed"] = fixed.into();
         }
@@ -105,6 +119,11 @@ pub fn check(project: &Project, files: &[PathBuf], fix: bool, json: bool) -> Res
             "checked {}: {errors} errors, {warnings} warnings",
             super::files(targets.len())
         );
+        if fixable > 0 && !fix {
+            println!(
+                "hint: {fixable} of these have one machine-applicable fix; `ara check --fix` applies them"
+            );
+        }
     }
     Ok(errors == 0)
 }
