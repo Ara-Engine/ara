@@ -34,7 +34,11 @@ fn main() {
     report(
         "admit, bus off (no consumer)",
         per_call(n, |i| {
-            black_box(ara_diag::emit!(warning, codes::FRAME_OVER_BUDGET, "frame {i}"));
+            black_box(ara_diag::emit!(
+                warning,
+                codes::FRAME_OVER_BUDGET,
+                "frame {i}"
+            ));
         }),
     );
 
@@ -52,7 +56,11 @@ fn main() {
     report(
         "emit! sampled out (spam past its burst)",
         per_call(n, |i| {
-            black_box(ara_diag::emit!(warning, codes::FRAME_OVER_BUDGET, "frame {i}"));
+            black_box(ara_diag::emit!(
+                warning,
+                codes::FRAME_OVER_BUDGET,
+                "frame {i}"
+            ));
         }),
     );
     drain(&mut sink);
@@ -87,7 +95,11 @@ fn main() {
     admitted(
         "emit!, admitted, formats its message",
         &mut |i| {
-            black_box(ara_diag::emit!(warning, codes::RENDER_DISABLED, "entity e_{i} is hidden"));
+            black_box(ara_diag::emit!(
+                warning,
+                codes::RENDER_DISABLED,
+                "entity e_{i} is hidden"
+            ));
         },
         &mut sink,
     );

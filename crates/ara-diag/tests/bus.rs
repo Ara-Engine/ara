@@ -38,9 +38,10 @@ fn threads_emit_into_one_store_with_origins_ticks_and_causes() {
         .map(|t| {
             std::thread::spawn(move || {
                 let _agent = (t == 0).then(|| bus::scope(Origin::Agent("codex".into())));
-                let parent = Diagnostic::error(codes::ASSET_IMPORT_FAILED, format!("import {t} failed"))
-                    .subject(Subject::asset(format!("@meshes/m{t}.glb")))
-                    .emit();
+                let parent =
+                    Diagnostic::error(codes::ASSET_IMPORT_FAILED, format!("import {t} failed"))
+                        .subject(Subject::asset(format!("@meshes/m{t}.glb")))
+                        .emit();
                 Diagnostic::warning(codes::RENDER_NO_MESH, format!("entity {t} has no mesh"))
                     .record(format!("e_ent{t}"))
                     .emit_with(Meta::caused_by(parent))
@@ -57,7 +58,10 @@ fn threads_emit_into_one_store_with_origins_ticks_and_causes() {
         ..Filter::default()
     });
     let causes = store.causes(mesh[0]);
-    assert_eq!(causes[0].diagnostic.message, "import 2 failed", "cause crosses the ring");
+    assert_eq!(
+        causes[0].diagnostic.message, "import 2 failed",
+        "cause crosses the ring"
+    );
     assert_eq!(mesh[0].tick, Some(42));
     let by_agent = store.query(&Filter {
         origin: ara_diag::store::OriginFilter::parse("agent:codex"),
@@ -92,7 +96,9 @@ fn spam_is_sampled_and_counted_not_lost() {
 
     // A new window admits a new burst; a tuned code admits less.
     bus::set_burst(codes::GPU_VALIDATION, 2);
-    let admitted = (0..10).filter(|_| bus::admit(codes::GPU_VALIDATION)).count();
+    let admitted = (0..10)
+        .filter(|_| bus::admit(codes::GPU_VALIDATION))
+        .count();
     assert_eq!(admitted, 2);
 }
 
@@ -103,7 +109,10 @@ fn a_full_ring_drops_and_reports_it() {
     let mut store = Store::default();
     std::thread::spawn(|| {
         for i in 0..bus::RING_CAPACITY + 10 {
-            bus::push(Diagnostic::info(codes::REF_FILLED, format!("n{i}")), Meta::default());
+            bus::push(
+                Diagnostic::info(codes::REF_FILLED, format!("n{i}")),
+                Meta::default(),
+            );
         }
     })
     .join()

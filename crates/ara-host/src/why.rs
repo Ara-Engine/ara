@@ -64,8 +64,14 @@ impl<'a> HostFacts<'a> {
         if let Some(t) = self.trees.borrow().get(doc) {
             return Some(std::rc::Rc::clone(t));
         }
-        let tree = std::rc::Rc::new(Tree::build(self.st.store.workspace(), self.st.store.schema(), doc)?);
-        self.trees.borrow_mut().insert(doc.clone(), std::rc::Rc::clone(&tree));
+        let tree = std::rc::Rc::new(Tree::build(
+            self.st.store.workspace(),
+            self.st.store.schema(),
+            doc,
+        )?);
+        self.trees
+            .borrow_mut()
+            .insert(doc.clone(), std::rc::Rc::clone(&tree));
         Some(tree)
     }
 
@@ -88,7 +94,11 @@ impl<'a> HostFacts<'a> {
         Some(Entity {
             doc: tree.path.clone(),
             address: addr.to_owned(),
-            name: e.record.get("name").and_then(Value::as_str).map(str::to_owned),
+            name: e
+                .record
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             parent: tree.parent(addr).map(str::to_owned),
             components,
             flags,
@@ -102,7 +112,11 @@ fn references(v: &Value, id: &str, path: &str, out: &mut Vec<String>) {
         Value::String(s) if s.ends_with(&format!("#{id}")) || s == id => out.push(path.to_owned()),
         Value::Object(o) => {
             for (k, v) in o {
-                let p = if path.is_empty() { k.clone() } else { format!("{path}.{k}") };
+                let p = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
                 references(v, id, &p, out);
             }
         }
@@ -127,11 +141,18 @@ impl Facts for HostFacts<'_> {
             None => pick(self.st, None, &[key.to_owned()])?,
         };
         let tree = self.tree(&id).ok_or_else(|| {
-            vec![Diagnostic::error(codes::DOC_NOT_FOUND, format!("`{id}` is not loaded"))]
+            vec![Diagnostic::error(
+                codes::DOC_NOT_FOUND,
+                format!("`{id}` is not loaded"),
+            )]
         })?;
         let addr = inspect_target(&tree, key).map_err(|d| vec![d])?;
-        self.entity_at(&tree, &addr)
-            .ok_or_else(|| vec![Diagnostic::error(codes::RECORD_NOT_FOUND, format!("no entity `{key}`"))])
+        self.entity_at(&tree, &addr).ok_or_else(|| {
+            vec![Diagnostic::error(
+                codes::RECORD_NOT_FOUND,
+                format!("no entity `{key}`"),
+            )]
+        })
     }
 
     fn parent(&self, e: &Entity) -> Option<Entity> {
@@ -150,7 +171,10 @@ impl Facts for HostFacts<'_> {
         };
         tree.order
             .iter()
-            .filter(|(addr, _)| tree.get(addr).is_some_and(|e| e.record.contains_key(component)))
+            .filter(|(addr, _)| {
+                tree.get(addr)
+                    .is_some_and(|e| e.record.contains_key(component))
+            })
             .filter_map(|(addr, _)| self.entity_at(&tree, addr))
             .collect()
     }
@@ -164,14 +188,20 @@ impl Facts for HostFacts<'_> {
     }
 
     fn asset(&self, reference: &str) -> Asset {
-        let text = if reference.starts_with('@') { reference.to_owned() } else { format!("@{reference}") };
+        let text = if reference.starts_with('@') {
+            reference.to_owned()
+        } else {
+            format!("@{reference}")
+        };
         let index = self.st.store.workspace().index();
         match ara_doc::refs::resolve(&text, None, index) {
             Ok((canonical, _)) => {
                 let (path, id) = canonical
                     .trim_start_matches('@')
                     .split_once('#')
-                    .map_or((canonical.clone(), String::new()), |(p, i)| (p.to_owned(), i.to_owned()));
+                    .map_or((canonical.clone(), String::new()), |(p, i)| {
+                        (p.to_owned(), i.to_owned())
+                    });
                 let kind = index.kind_of(&id).map(str::to_owned);
                 let source_exists = kind.is_none().then(|| self.st.root.join(&path).exists());
                 Asset {
@@ -195,12 +225,22 @@ impl Facts for HostFacts<'_> {
 
     fn read(&self, path: &str) -> Option<String> {
         let rel = std::path::Path::new(path);
-        let inside = rel.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-        inside.then(|| std::fs::read_to_string(self.st.root.join(rel)).ok()).flatten()
+        let inside = rel
+            .components()
+            .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+        inside
+            .then(|| std::fs::read_to_string(self.st.root.join(rel)).ok())
+            .flatten()
     }
 
     fn users(&self, id: &str, limit: usize) -> Vec<(String, String, String)> {
-        let docs: Vec<AssetId> = self.st.store.workspace().docs().map(|(_, d)| d.id.clone()).collect();
+        let docs: Vec<AssetId> = self
+            .st
+            .store
+            .workspace()
+            .docs()
+            .map(|(_, d)| d.id.clone())
+            .collect();
         let mut out = Vec::new();
         for doc in docs {
             let Some(tree) = self.tree(&doc) else {
@@ -252,7 +292,9 @@ fn profile_summary(st: &mut State) -> Option<Value> {
             max_bytes: 65_536,
         })
         .ok()?;
-    (summary.frames > 0).then(|| serde_json::to_value(summary).ok()).flatten()
+    (summary.frames > 0)
+        .then(|| serde_json::to_value(summary).ok())
+        .flatten()
 }
 
 /// The `why` service.
@@ -275,9 +317,17 @@ impl Service for WhyService {
         ]
     }
 
-    fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> Result<Value, Vec<Diagnostic>> {
+    fn call(
+        &mut self,
+        cx: &mut Cx<'_>,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Vec<Diagnostic>> {
         if method != "why" {
-            return Err(vec![Diagnostic::error(codes::UNKNOWN_METHOD, format!("why does not handle `{method}`"))]);
+            return Err(vec![Diagnostic::error(
+                codes::UNKNOWN_METHOD,
+                format!("why does not handle `{method}`"),
+            )]);
         }
         let p: WhyParams = parse(params)?;
         let st = &mut *cx.st;
@@ -288,7 +338,10 @@ impl Service for WhyService {
                 .list()
                 .into_iter()
                 .map(|(name, about, examples)| {
-                    text.push_str(&format!("- {name}: {about} e.g. `{}`\n", examples.join("`, `")));
+                    text.push_str(&format!(
+                        "- {name}: {about} e.g. `{}`\n",
+                        examples.join("`, `")
+                    ));
                     json!({ "name": name, "about": about, "examples": examples })
                 })
                 .collect();

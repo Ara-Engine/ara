@@ -45,7 +45,9 @@ fn add_camera(root: &Path) -> Result<(), String> {
 /// Whether a material source parses and checks.
 fn compiles(text: &str, id: &str) -> Result<(), String> {
     let m = ara_material::dsl::parse(text, id).map_err(|d| format!("{d:?}"))?;
-    ara_material::check(&m).map(|_| ()).map_err(|d| format!("{d:?}"))
+    ara_material::check(&m)
+        .map(|_| ())
+        .map_err(|d| format!("{d:?}"))
 }
 
 /// The radio draws with a material whose output names a parameter that does not
@@ -58,7 +60,11 @@ pub const BAD_MATERIAL: Task = Task {
     setup: Some(|root: &Path| {
         add_camera(root)?;
         write(root, RADIO_MATERIAL, BROKEN_RADIO)?;
-        write(root, "materials/radio.material.import.json", "{\n  \"id\": \"gr_radio001\"\n}\n")?;
+        write(
+            root,
+            "materials/radio.material.import.json",
+            "{\n  \"id\": \"gr_radio001\"\n}\n",
+        )?;
         patch(
             root,
             OUTPOST,
@@ -73,13 +79,20 @@ pub const BAD_MATERIAL: Task = Task {
             let material = e.get("MeshRenderer.material");
             c.check(
                 "the radio still draws with its material",
-                material.as_ref().and_then(Value::as_str).is_some_and(|m| m.contains("gr_radio001")),
+                material
+                    .as_ref()
+                    .and_then(Value::as_str)
+                    .is_some_and(|m| m.contains("gr_radio001")),
                 format!("{material:?}"),
             );
         }
         let text = w.file(RADIO_MATERIAL).unwrap_or_default();
         let result = compiles(&text, "gr_radio001");
-        c.check("the radio material compiles", result.is_ok(), result.err().unwrap_or_default());
+        c.check(
+            "the radio material compiles",
+            result.is_ok(),
+            result.err().unwrap_or_default(),
+        );
         c.check(
             "the radio material keeps its green paint",
             text.contains("linear(0.1, 0.35, 0.12)"),
@@ -104,8 +117,13 @@ pub const MISSING_MESH: Task = Task {
     fixture: Fixture::Outpost,
     setup: Some(|root: &Path| {
         add_camera(root)?;
-        fs::remove_file(root.join("meshes/generator.glb.import.json")).map_err(|e| e.to_string())?;
-        write(root, "meshes/generator_v2.glb.import.json", "{\n  \"id\": \"ms_genr0002\"\n}\n")
+        fs::remove_file(root.join("meshes/generator.glb.import.json"))
+            .map_err(|e| e.to_string())?;
+        write(
+            root,
+            "meshes/generator_v2.glb.import.json",
+            "{\n  \"id\": \"ms_genr0002\"\n}\n",
+        )
     }),
     budget: Budget::new(20, 6),
     verify: |w: &World, c: &mut Checks| {
@@ -114,7 +132,9 @@ pub const MISSING_MESH: Task = Task {
             let mesh = e.get("MeshRenderer.mesh");
             c.check(
                 "the generator draws the re-exported mesh",
-                mesh.as_ref().and_then(Value::as_str).is_some_and(|m| m.contains("ms_genr0002")),
+                mesh.as_ref()
+                    .and_then(Value::as_str)
+                    .is_some_and(|m| m.contains("ms_genr0002")),
                 format!("{mesh:?}"),
             );
         }
@@ -157,7 +177,10 @@ pub const CULLING_MASK: Task = Task {
             let layer = e.get("MeshRenderer.layer");
             c.check(
                 "the workbench is on a layer the camera draws",
-                matches!(layer.as_ref().and_then(Value::as_str), Some("default" | "props")),
+                matches!(
+                    layer.as_ref().and_then(Value::as_str),
+                    Some("default" | "props")
+                ),
                 format!("{layer:?}"),
             );
         }
@@ -200,7 +223,11 @@ pub const NAN_BARREL: Task = Task {
         let text = fs::read_to_string(root.join(OUTPOST)).map_err(|e| e.to_string())?;
         let at = text.find(barrel).ok_or("no Barrel.002")?;
         let mass = text[at..].find("\"mass\": 30").ok_or("no barrel mass")? + at;
-        let text = format!("{}\"mass\": 0{}", &text[..mass], &text[mass + "\"mass\": 30".len()..]);
+        let text = format!(
+            "{}\"mass\": 0{}",
+            &text[..mass],
+            &text[mass + "\"mass\": 30".len()..]
+        );
         fs::write(root.join(OUTPOST), text).map_err(|e| e.to_string())?;
         report_playtest(root)
     }),
@@ -209,23 +236,37 @@ pub const NAN_BARREL: Task = Task {
         clean(c, w);
         if let Some(e) = at(c, w, OUTPOST, "e_brl003") {
             let mass = e.num("RigidBody.mass");
-            c.check("Barrel.002 has a mass again", mass.is_some_and(|m| m > 0.0), format!("{mass:?}"));
+            c.check(
+                "Barrel.002 has a mass again",
+                mass.is_some_and(|m| m > 0.0),
+                format!("{mass:?}"),
+            );
         }
         for other in ["e_brl001", "e_brl002"] {
             if let Some(e) = at(c, w, OUTPOST, other) {
                 let mass = e.num("RigidBody.mass");
-                c.check(format!("{other} keeps its mass"), mass == Some(30.0), format!("{mass:?}"));
+                c.check(
+                    format!("{other} keeps its mass"),
+                    mass == Some(30.0),
+                    format!("{mass:?}"),
+                );
             }
         }
         with_why(c, w, OUTPOST, &["e_brl003"]);
     },
     solve: |s: &mut Solver| {
         let logs = s.call("logs", json!({ "severity": "error" }))?;
-        if !logs["text"].as_str().is_some_and(|t| t.contains("entity:e_brl003")) {
+        if !logs["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("entity:e_brl003"))
+        {
             return Err(format!("the playtest report is missing:\n{}", logs["text"]));
         }
         let why = s.call("why", json!({ "question": "e_brl003 not visible" }))?;
-        if !why["text"].as_str().is_some_and(|t| t.contains("zero mass")) {
+        if !why["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("zero mass"))
+        {
             return Err(format!("the cause is missing:\n{}", why["text"]));
         }
         s.apply(
@@ -242,9 +283,14 @@ fn report_playtest(root: &Path) -> Result<(), String> {
     let project = Project::open(root).map_err(|d| d.to_string())?;
     let mut host = Host::open(project, HostConfig::default()).map_err(|d| d.to_string())?;
     let call = |host: &mut Host, method: &str, params: Value| {
-        host.call(ConnId::LOCAL, method, params).map_err(|e| e.to_string())
+        host.call(ConnId::LOCAL, method, params)
+            .map_err(|e| e.to_string())
     };
-    let begun = call(&mut host, "session.begin", json!({ "client": "ara-player", "author": "human" }))?;
+    let begun = call(
+        &mut host,
+        "session.begin",
+        json!({ "client": "ara-player", "author": "human" }),
+    )?;
     let session = begun["session"].clone();
     call(
         &mut host,

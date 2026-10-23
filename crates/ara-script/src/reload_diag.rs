@@ -18,13 +18,22 @@ fn escalation(esc: u32) -> (&'static str, &'static str) {
         abi::ESC_EMIT_FAILED => ("emit_failed", "Roslyn could not emit a delta"),
         abi::ESC_COLD => ("cold", "the module was cold (optimized IL)"),
         abi::ESC_DEBUGGER => ("debugger", "a debugger is attached"),
-        abi::ESC_CLOSURE => ("closure", "a changed method contains a lambda, local function or query"),
+        abi::ESC_CLOSURE => (
+            "closure",
+            "a changed method contains a lambda, local function or query",
+        ),
         abi::ESC_CONSTRUCTOR => ("constructor", "a constructor or initializer changed"),
         abi::ESC_GENERATED => ("generated", "generated code changed"),
         abi::ESC_REQUESTED => ("requested", "the host asked for a full image"),
         abi::ESC_RUNTIME_REJECTED => ("runtime_rejected", "the runtime rejected the EnC delta"),
-        abi::ESC_CAPABILITY => ("capability", "the runtime lacks the EnC capability the edit needs"),
-        abi::ESC_DEPENDENCY => ("dependency", "a referenced module changed its public surface"),
+        abi::ESC_CAPABILITY => (
+            "capability",
+            "the runtime lacks the EnC capability the edit needs",
+        ),
+        abi::ESC_DEPENDENCY => (
+            "dependency",
+            "a referenced module changed its public surface",
+        ),
         abi::ESC_RELINK => ("relink", "a referenced module got a new generation"),
         _ => ("unknown", "an unknown escalation"),
     }
@@ -60,15 +69,22 @@ impl ReloadReport {
         let d = match self.kind {
             abi::RELOAD_ERROR => Diagnostic::error(
                 codes::COMPILE_ERROR,
-                format!("`{module}` did not reload: {} compile errors; the last good code keeps running", self.error_count),
+                format!(
+                    "`{module}` did not reload: {} compile errors; the last good code keeps running",
+                    self.error_count
+                ),
             ),
             abi::RELOAD_L4 => Diagnostic::warning(
                 codes::RESTART_REQUIRED,
-                format!("`{module}` cannot reload in this process ({words}); restart play from a snapshot"),
+                format!(
+                    "`{module}` cannot reload in this process ({words}); restart play from a snapshot"
+                ),
             ),
             abi::RELOAD_L3 if self.escalation != abi::ESC_NONE => Diagnostic::info(
                 bus_codes::RELOAD_ESCALATED,
-                format!("`{module}` reloaded at L3 (a full module swap, {total_ms:.0} ms) instead of in place: {words} ({reason})"),
+                format!(
+                    "`{module}` reloaded at L3 (a full module swap, {total_ms:.0} ms) instead of in place: {words} ({reason})"
+                ),
             ),
             _ => Diagnostic::info(
                 bus_codes::RELOAD_APPLIED,

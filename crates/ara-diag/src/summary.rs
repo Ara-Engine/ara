@@ -100,7 +100,11 @@ pub fn summarize(records: &[&Record], top_subjects: usize) -> Summary {
             title: catalog::get(code).map(|d| d.title),
             records: list.len(),
             count: list.iter().map(|r| u64::from(r.count)).sum(),
-            subjects: ranked.into_iter().take(top_subjects).map(|(s, _)| s).collect(),
+            subjects: ranked
+                .into_iter()
+                .take(top_subjects)
+                .map(|(s, _)| s)
+                .collect(),
             more_subjects: more,
             latest: newest.diagnostic.message.clone(),
             latest_seq: newest.seq,
@@ -123,9 +127,8 @@ pub fn summarize(records: &[&Record], top_subjects: usize) -> Summary {
 impl Summary {
     /// The headline: `2 errors · 1 warning · 3 info (9 occurrences)`.
     pub fn headline(&self) -> String {
-        let plural = |n: usize, one: &str, many: &str| {
-            format!("{n} {}", if n == 1 { one } else { many })
-        };
+        let plural =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
         format!(
             "{} · {} · {} info ({} occurrences)",
             plural(self.errors, "error", "errors"),
@@ -199,16 +202,19 @@ mod tests {
         let mut s = Store::default();
         for e in ["e_gen001", "e_ylamp1", "e_gen001"] {
             s.push(
-                Diagnostic::error(codes::UNRESOLVED_REF, format!("`{e}` mesh does not resolve"))
-                    .record(e)
-                    .with_fix(
-                        "Use `@meshes/generator.glb#ms_genr0001`",
-                        FixAction::Set {
-                            record: Some(e.into()),
-                            path: "MeshRenderer.mesh".into(),
-                            value: "@meshes/generator.glb#ms_genr0001".into(),
-                        },
-                    ),
+                Diagnostic::error(
+                    codes::UNRESOLVED_REF,
+                    format!("`{e}` mesh does not resolve"),
+                )
+                .record(e)
+                .with_fix(
+                    "Use `@meshes/generator.glb#ms_genr0001`",
+                    FixAction::Set {
+                        record: Some(e.into()),
+                        path: "MeshRenderer.mesh".into(),
+                        value: "@meshes/generator.glb#ms_genr0001".into(),
+                    },
+                ),
                 Meta::default(),
             );
         }
@@ -220,15 +226,29 @@ mod tests {
         }
         let records = s.query(&Filter::default());
         let summary = summarize(&records, 3);
-        assert_eq!((summary.errors, summary.info, summary.occurrences), (1 + 1, 1, 403));
+        assert_eq!(
+            (summary.errors, summary.info, summary.occurrences),
+            (1 + 1, 1, 403)
+        );
         let g = &summary.groups[0];
         assert_eq!((g.code, g.count, g.records), (codes::UNRESOLVED_REF, 3, 2));
         assert_eq!(g.subjects[0], "entity:e_gen001");
         assert!(g.fix.is_some());
         let text = summary.text(4000);
-        assert!(text.starts_with("2 errors · 0 warnings · 1 info (403 occurrences)"), "{text}");
-        assert!(text.contains("error ARA1302 Unresolved reference ×3 [entity:e_gen001 entity:e_ylamp1]"), "{text}");
-        assert!(text.contains("info ARA1304"), "the 400 notes are one group:\n{text}");
+        assert!(
+            text.starts_with("2 errors · 0 warnings · 1 info (403 occurrences)"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "error ARA1302 Unresolved reference ×3 [entity:e_gen001 entity:e_ylamp1]"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("info ARA1304"),
+            "the 400 notes are one group:\n{text}"
+        );
         let tight = summary.text(10);
         assert!(tight.contains("… 1 more group"), "{tight}");
     }

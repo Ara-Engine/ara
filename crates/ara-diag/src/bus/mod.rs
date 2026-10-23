@@ -292,7 +292,9 @@ impl Local {
                 .push(Arc::clone(&shared));
             self.shared = Some(shared);
         }
-        self.shared.as_deref().expect("the ring was just registered")
+        self.shared
+            .as_deref()
+            .expect("the ring was just registered")
     }
 
     /// The next event ID of this thread.
@@ -309,11 +311,7 @@ impl Local {
             self.counts = [(0, 0); TRACKED_CODES];
         }
         let key = u32::from(code.0) + 1;
-        let Some(entry) = self
-            .counts
-            .iter_mut()
-            .find(|(k, _)| *k == key || *k == 0)
-        else {
+        let Some(entry) = self.counts.iter_mut().find(|(k, _)| *k == key || *k == 0) else {
             return true;
         };
         entry.0 = key;

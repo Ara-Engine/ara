@@ -192,9 +192,10 @@ impl Filter {
             && self
                 .from_tick
                 .is_none_or(|t| r.tick.is_some_and(|rt| rt >= t))
-            && self.text.as_ref().is_none_or(|t| {
-                d.message.to_lowercase().contains(&t.to_lowercase())
-            })
+            && self
+                .text
+                .as_ref()
+                .is_none_or(|t| d.message.to_lowercase().contains(&t.to_lowercase()))
             && r.about(&self.subjects)
     }
 }
@@ -489,7 +490,9 @@ impl Store {
         let Some(age) = self.retention.max_age else {
             return;
         };
-        let cutoff = self.unix_ms(Instant::now()).saturating_sub(age.as_millis() as u64);
+        let cutoff = self
+            .unix_ms(Instant::now())
+            .saturating_sub(age.as_millis() as u64);
         self.clear(&Filter {
             to_ms: Some(cutoff.saturating_sub(1)),
             ..Filter::default()
@@ -545,7 +548,10 @@ impl Store {
     pub fn effects(&self, r: &Record) -> Vec<&Record> {
         self.records
             .values()
-            .filter(|e| e.cause.is_some_and(|c| self.by_id(c).is_some_and(|x| x.seq == r.seq)))
+            .filter(|e| {
+                e.cause
+                    .is_some_and(|c| self.by_id(c).is_some_and(|x| x.seq == r.seq))
+            })
             .collect()
     }
 
@@ -595,11 +601,23 @@ mod tests {
     fn repeats_are_counted_and_move_past_the_cursor() {
         let mut s = Store::default();
         s.push(warn("dangling").record("e_aa"), Meta::default());
-        s.push(Diagnostic::error(codes::IO, "disk").record("e_bb/e_cc"), Meta::default());
+        s.push(
+            Diagnostic::error(codes::IO, "disk").record("e_bb/e_cc"),
+            Meta::default(),
+        );
         let cursor = s.cursor();
-        assert!(s.query(&Filter { since: cursor, ..Filter::default() }).is_empty());
+        assert!(
+            s.query(&Filter {
+                since: cursor,
+                ..Filter::default()
+            })
+            .is_empty()
+        );
         s.push(warn("dangling").record("e_aa"), Meta::default());
-        let new = s.query(&Filter { since: cursor, ..Filter::default() });
+        let new = s.query(&Filter {
+            since: cursor,
+            ..Filter::default()
+        });
         assert_eq!((new.len(), new[0].count, new[0].first), (1, 2, 1));
         assert_eq!(s.len(), 2);
     }
@@ -615,16 +633,67 @@ mod tests {
                 ..Meta::default()
             },
         );
-        s.push(warn("dangling").record("e_bb/e_cc").file("levels/a.scene"), Meta::default());
+        s.push(
+            warn("dangling").record("e_bb/e_cc").file("levels/a.scene"),
+            Meta::default(),
+        );
         let q = |f: Filter| s.query(&f).len();
-        assert_eq!(q(Filter { subjects: vec![Subject::asset("ms_crate001")], ..Filter::default() }), 1);
-        assert_eq!(q(Filter { subjects: vec![Subject::entity("e_bb")], ..Filter::default() }), 1);
-        assert_eq!(q(Filter { subjects: vec![Subject::document("levels/a.scene")], ..Filter::default() }), 1);
-        assert_eq!(q(Filter { severity: Some(Severity::Error), ..Filter::default() }), 1);
-        assert_eq!(q(Filter { origin: OriginFilter::parse("agent:codex"), ..Filter::default() }), 1);
-        assert_eq!(q(Filter { origin: OriginFilter::parse("human"), ..Filter::default() }), 0);
-        assert_eq!(q(Filter { text: Some("DANGLING".into()), ..Filter::default() }), 1);
-        assert_eq!(q(Filter { codes: vec![codes::IO], ..Filter::default() }), 0);
+        assert_eq!(
+            q(Filter {
+                subjects: vec![Subject::asset("ms_crate001")],
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                subjects: vec![Subject::entity("e_bb")],
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                subjects: vec![Subject::document("levels/a.scene")],
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                severity: Some(Severity::Error),
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                origin: OriginFilter::parse("agent:codex"),
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                origin: OriginFilter::parse("human"),
+                ..Filter::default()
+            }),
+            0
+        );
+        assert_eq!(
+            q(Filter {
+                text: Some("DANGLING".into()),
+                ..Filter::default()
+            }),
+            1
+        );
+        assert_eq!(
+            q(Filter {
+                codes: vec![codes::IO],
+                ..Filter::default()
+            }),
+            0
+        );
     }
 
     #[test]
@@ -637,9 +706,15 @@ mod tests {
         });
         s.push(Diagnostic::error(codes::IO, "kept"), Meta::default());
         for i in 0..10 {
-            s.push(Diagnostic::info(codes::REF_FILLED, format!("note {i}")), Meta::default());
+            s.push(
+                Diagnostic::info(codes::REF_FILLED, format!("note {i}")),
+                Meta::default(),
+            );
         }
-        let errors = s.query(&Filter { severity: Some(Severity::Error), ..Filter::default() });
+        let errors = s.query(&Filter {
+            severity: Some(Severity::Error),
+            ..Filter::default()
+        });
         assert_eq!(errors.len(), 1, "info chatter never evicts errors");
         assert_eq!(s.len(), 3);
     }
@@ -648,12 +723,21 @@ mod tests {
     fn causes_link_records_and_survive_dedup() {
         let mut s = Store::default();
         let parent = s
-            .push(Diagnostic::error(codes::JSON_SYNTAX, "bad material"), Meta::default())
+            .push(
+                Diagnostic::error(codes::JSON_SYNTAX, "bad material"),
+                Meta::default(),
+            )
             .id;
         let child = s
-            .push(warn("mesh drawn without material"), Meta::caused_by(Some(parent)))
+            .push(
+                warn("mesh drawn without material"),
+                Meta::caused_by(Some(parent)),
+            )
             .seq;
-        s.push(Diagnostic::error(codes::JSON_SYNTAX, "bad material"), Meta::default());
+        s.push(
+            Diagnostic::error(codes::JSON_SYNTAX, "bad material"),
+            Meta::default(),
+        );
         let child = s.get(child).expect("child kept");
         let causes = s.causes(child);
         assert_eq!(causes.len(), 1);
@@ -669,16 +753,24 @@ mod tests {
             dropped: 3,
             sampled: vec![(codes::DANGLING_ENTITY_REF, 40)],
         });
-        let spam = s.query(&Filter { codes: vec![codes::DANGLING_ENTITY_REF], ..Filter::default() });
+        let spam = s.query(&Filter {
+            codes: vec![codes::DANGLING_ENTITY_REF],
+            ..Filter::default()
+        });
         assert_eq!((spam[0].count, spam[0].sampled), (41, 40));
-        let dropped = s.query(&Filter { codes: vec![codes::DIAG_DROPPED], ..Filter::default() });
+        let dropped = s.query(&Filter {
+            codes: vec![codes::DIAG_DROPPED],
+            ..Filter::default()
+        });
         assert!(dropped[0].diagnostic.message.starts_with("3 diagnostics"));
     }
 
     #[test]
     fn saved_records_restore_with_their_causes_and_new_ids() {
         let mut a = Store::default();
-        let parent = a.push(Diagnostic::error(codes::IO, "disk full"), Meta::default()).id;
+        let parent = a
+            .push(Diagnostic::error(codes::IO, "disk full"), Meta::default())
+            .id;
         let child = a
             .push(warn("flush failed"), Meta::caused_by(Some(parent)))
             .seq;
@@ -690,14 +782,25 @@ mod tests {
         let mut b = Store::default();
         assert_eq!(b.restore(back), 2, "one record per key; the last line wins");
         let records = b.query(&Filter::default());
-        let disk = records.iter().find(|r| r.diagnostic.code == codes::IO).expect("disk");
+        let disk = records
+            .iter()
+            .find(|r| r.diagnostic.code == codes::IO)
+            .expect("disk");
         assert_eq!(disk.count, 2);
         assert!(disk.id.0 & RESTORED != 0);
-        let flush = records.iter().find(|r| r.diagnostic.code != codes::IO).expect("flush");
+        let flush = records
+            .iter()
+            .find(|r| r.diagnostic.code != codes::IO)
+            .expect("flush");
         assert_eq!(b.causes(flush)[0].seq, disk.seq, "causal links survive");
         // A new process's events reuse low IDs; they never alias restored ones.
-        let fresh = b.push(Diagnostic::info(codes::REF_FILLED, "new"), Meta::default()).id;
-        assert!(b.by_id(fresh).is_some_and(|r| r.diagnostic.message == "new"));
+        let fresh = b
+            .push(Diagnostic::info(codes::REF_FILLED, "new"), Meta::default())
+            .id;
+        assert!(
+            b.by_id(fresh)
+                .is_some_and(|r| r.diagnostic.message == "new")
+        );
         let _ = (child, a);
     }
 
@@ -712,6 +815,9 @@ mod tests {
         });
         assert_eq!((removed, s.len()), (1, 1));
         s.push(warn("a").record("e_aa"), Meta::default());
-        assert_eq!(s.query(&Filter::default()).iter().map(|r| r.count).max(), Some(1));
+        assert_eq!(
+            s.query(&Filter::default()).iter().map(|r| r.count).max(),
+            Some(1)
+        );
     }
 }

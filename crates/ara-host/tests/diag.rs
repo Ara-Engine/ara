@@ -52,13 +52,22 @@ fn call(h: &mut Host, conn: ConnId, method: &str, params: Value) -> Value {
 }
 
 fn begin(h: &mut Host, author: &str) -> String {
-    let r = call(h, ConnId::LOCAL, "session.begin", json!({ "client": "test", "author": author }));
+    let r = call(
+        h,
+        ConnId::LOCAL,
+        "session.begin",
+        json!({ "client": "test", "author": author }),
+    );
     r["session"].as_str().expect("handle").to_owned()
 }
 
 /// Makes the host log one error per bad `inspect`: ARA1204 about `entity`.
 fn fail_inspect(h: &mut Host, s: &str, entity: &str) {
-    let _ = h.call(ConnId::LOCAL, "inspect", json!({ "session": s, "entities": [entity] }));
+    let _ = h.call(
+        ConnId::LOCAL,
+        "inspect",
+        json!({ "session": s, "entities": [entity] }),
+    );
 }
 
 #[test]
@@ -69,16 +78,40 @@ fn logs_are_grouped_budgeted_and_attributed() {
     for e in ["e_nope01", "e_nope02", "e_nope01"] {
         fail_inspect(&mut h, &agent, e);
     }
-    let r = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": agent, "codes": ["ARA1204"] }));
+    let r = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": agent, "codes": ["ARA1204"] }),
+    );
     let text = r["text"].as_str().expect("text");
-    assert!(text.starts_with("2 errors · 0 warnings · 0 info (3 occurrences)"), "{text}");
-    assert!(text.contains("error ARA1204") && text.contains("×3 [entity:e_nope01"), "{text}");
+    assert!(
+        text.starts_with("2 errors · 0 warnings · 0 info (3 occurrences)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("error ARA1204") && text.contains("×3 [entity:e_nope01"),
+        "{text}"
+    );
     assert!(text.contains("explain: ara_why ARA1204"), "{text}");
     assert_eq!(r["summary"]["groups"][0]["records"], 2);
 
-    let mine = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": agent, "origin": "agent:codex" }));
-    assert_eq!(mine["total"], 2, "errors are attributed to the calling agent");
-    let theirs = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": agent, "origin": "human" }));
+    let mine = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": agent, "origin": "agent:codex" }),
+    );
+    assert_eq!(
+        mine["total"], 2,
+        "errors are attributed to the calling agent"
+    );
+    let theirs = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": agent, "origin": "human" }),
+    );
     assert_eq!(theirs["total"], 0);
 
     let about = call(
@@ -88,14 +121,26 @@ fn logs_are_grouped_budgeted_and_attributed() {
         json!({ "session": agent, "subjects": ["entity:e_nope02"], "group": false }),
     );
     assert_eq!(about["entries"].as_array().map(Vec::len), Some(1));
-    assert!(about["text"].as_str().is_some_and(|t| t.contains("e_nope02")));
+    assert!(
+        about["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("e_nope02"))
+    );
 
     let bad = h
-        .call(ConnId::LOCAL, "logs", json!({ "session": agent, "codes": ["ARA13O2"] }))
+        .call(
+            ConnId::LOCAL,
+            "logs",
+            json!({ "session": agent, "codes": ["ARA13O2"] }),
+        )
         .expect_err("bad code");
     let d = &bad.diagnostics()[0];
     assert_eq!(d.code, codes::UNKNOWN_CODE);
-    assert!(d.message.contains("did you mean `ARA1302`?"), "{}", d.message);
+    assert!(
+        d.message.contains("did you mean `ARA1302`?"),
+        "{}",
+        d.message
+    );
 }
 
 #[test]
@@ -110,7 +155,10 @@ fn subscriptions_stream_host_logs_and_other_threads_emits() {
         "diag.subscribe",
         json!({ "session": s, "subjects": ["asset:@meshes/crate.glb"], "severity": "warning" }),
     );
-    let id = sub["subscription"].as_str().expect("subscription").to_owned();
+    let id = sub["subscription"]
+        .as_str()
+        .expect("subscription")
+        .to_owned();
 
     // Another thread (an import worker) reports on the bus; the host drains it on tick.
     std::thread::spawn(|| {
@@ -133,12 +181,21 @@ fn subscriptions_stream_host_logs_and_other_threads_emits() {
         .filter(|(c, m)| *c == conn && m["method"] == "diag.event")
         .map(|(_, m)| m["params"].clone())
         .collect();
-    assert_eq!(events.len(), 1, "only the crate import matches: {events:#?}");
+    assert_eq!(
+        events.len(),
+        1,
+        "only the crate import matches: {events:#?}"
+    );
     assert_eq!(events[0]["subscription"], id.as_str());
     assert_eq!(events[0]["record"]["diagnostic"]["code"], "ARA2101");
     assert_eq!(events[0]["record"]["origin"], "engine");
 
-    call(&mut h, conn, "diag.unsubscribe", json!({ "session": s, "subscription": id }));
+    call(
+        &mut h,
+        conn,
+        "diag.unsubscribe",
+        json!({ "session": s, "subscription": id }),
+    );
     std::thread::spawn(|| {
         Diagnostic::error(codes::ASSET_IMPORT_FAILED, "again")
             .subject(Subject::asset("@meshes/crate.glb"))
@@ -148,7 +205,9 @@ fn subscriptions_stream_host_logs_and_other_threads_emits() {
     .expect("worker");
     h.tick();
     assert!(
-        !h.drain_outbox().iter().any(|(_, m)| m["method"] == "diag.event"),
+        !h.drain_outbox()
+            .iter()
+            .any(|(_, m)| m["method"] == "diag.event"),
         "no events after unsubscribing"
     );
 }
@@ -182,12 +241,31 @@ fn other_processes_report_and_records_can_be_cleared() {
         json!({ "session": s, "subjects": ["e_crate1"], "fromTick": 100, "group": false }),
     );
     assert_eq!(nan["entries"][0]["tick"], 120);
-    let gpu = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA_GPU_VALIDATION"] }));
-    assert!(gpu["text"].as_str().is_some_and(|t| t.contains("warning ARA_GPU_VALIDATION Vulkan validation message")));
+    let gpu = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": s, "codes": ["ARA_GPU_VALIDATION"] }),
+    );
+    assert!(
+        gpu["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("warning ARA_GPU_VALIDATION Vulkan validation message"))
+    );
 
-    let cleared = call(&mut h, ConnId::LOCAL, "diag.clear", json!({ "session": s, "codes": ["ARA3304"] }));
+    let cleared = call(
+        &mut h,
+        ConnId::LOCAL,
+        "diag.clear",
+        json!({ "session": s, "codes": ["ARA3304"] }),
+    );
     assert_eq!(cleared["removed"], 1);
-    let left = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA3304"] }));
+    let left = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": s, "codes": ["ARA3304"] }),
+    );
     assert_eq!(left["total"], 0);
 }
 
@@ -204,7 +282,12 @@ fn why_explains_through_the_protocol_and_its_fixes_run() {
             { "cmd": "property.set", "args": { "entity": "e_stk2/e_c001/e_lid1", "path": "MeshRenderer.tint", "value": [0.2, 0.9, 0.2, 0] } },
         ]}),
     );
-    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }));
+    let r = call(
+        &mut h,
+        ConnId::LOCAL,
+        "why",
+        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }),
+    );
     assert_eq!(r["explainer"], "visibility");
     assert_eq!(r["causes"][0]["code"], "ARA3307", "{}", r["text"]);
     assert_eq!(r["causes"][0]["likelihood"], "high");
@@ -220,17 +303,37 @@ fn why_explains_through_the_protocol_and_its_fixes_run() {
         "cmd.apply",
         json!({ "session": s, "why": "Make the lid visible again", "commands": [{ "cmd": fix["command"], "args": fix["params"] }] }),
     );
-    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }));
+    let r = call(
+        &mut h,
+        ConnId::LOCAL,
+        "why",
+        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }),
+    );
     assert!(
-        r["causes"].as_array().is_some_and(|c| c.iter().all(|c| c["likelihood"] != "high")),
+        r["causes"]
+            .as_array()
+            .is_some_and(|c| c.iter().all(|c| c["likelihood"] != "high")),
         "{}",
         r["text"]
     );
 
-    let list = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "list": true }));
-    assert!(list["text"].as_str().is_some_and(|t| t.contains("visibility") && t.contains("reload")));
+    let list = call(
+        &mut h,
+        ConnId::LOCAL,
+        "why",
+        json!({ "session": s, "list": true }),
+    );
+    assert!(
+        list["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("visibility") && t.contains("reload"))
+    );
     let none = h
-        .call(ConnId::LOCAL, "why", json!({ "session": s, "question": "why is name:Nothing not visible" }))
+        .call(
+            ConnId::LOCAL,
+            "why",
+            json!({ "session": s, "question": "why is name:Nothing not visible" }),
+        )
         .expect_err("unknown entity");
     assert_eq!(none.diagnostics()[0].code, codes::RECORD_NOT_FOUND);
 }
@@ -244,13 +347,20 @@ fn engine_diagnostics_survive_a_restart_with_their_causes() {
         let parent = Diagnostic::error(Code(7001), "rigid body `Lamp` has zero mass")
             .subject(Subject::entity("e_lmp1"))
             .emit();
-        Diagnostic::error(codes::RENDER_NON_FINITE_TRANSFORM, "`Lamp` has a NaN position")
-            .subject(Subject::entity("e_lmp1"))
-            .emit_with(Meta::caused_by(parent));
+        Diagnostic::error(
+            codes::RENDER_NON_FINITE_TRANSFORM,
+            "`Lamp` has a NaN position",
+        )
+        .subject(Subject::entity("e_lmp1"))
+        .emit_with(Meta::caused_by(parent));
     })
     .join()
     .expect("worker");
-    let _ = h.call(ConnId::LOCAL, "inspect", json!({ "session": s, "entities": ["e_typo"] }));
+    let _ = h.call(
+        ConnId::LOCAL,
+        "inspect",
+        json!({ "session": s, "entities": ["e_typo"] }),
+    );
     h.tick();
     let root = h.root().to_path_buf();
     drop(h);
@@ -261,11 +371,29 @@ fn engine_diagnostics_survive_a_restart_with_their_causes() {
     };
     let mut h = Host::open(Project::open(&root).expect("project"), config).expect("reopen");
     let s = begin(&mut h, "human");
-    let nan = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA3304"], "group": false }));
+    let nan = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": s, "codes": ["ARA3304"], "group": false }),
+    );
     assert_eq!(nan["total"], 1, "the engine's report survived");
-    let typo = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA1204"] }));
+    let typo = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": s, "codes": ["ARA1204"] }),
+    );
     assert_eq!(typo["total"], 0, "call errors are not kept");
-    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_lmp1 not visible" }));
+    let r = call(
+        &mut h,
+        ConnId::LOCAL,
+        "why",
+        json!({ "session": s, "question": "why is e_lmp1 not visible" }),
+    );
     let text = r["text"].as_str().expect("text");
-    assert!(text.contains("caused by: error ARA7001 rigid body `Lamp` has zero mass"), "{text}");
+    assert!(
+        text.contains("caused by: error ARA7001 rigid body `Lamp` has zero mass"),
+        "{text}"
+    );
 }

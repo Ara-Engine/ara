@@ -44,7 +44,10 @@ impl From<&Error> for ara_diag::Diagnostic {
         };
         let code = ara_diag::Code::parse(name).unwrap_or(ara_diag::codes::UNKNOWN_CODE);
         let text = e.to_string();
-        let message = text.split_once(": ").map_or(text.as_str(), |(_, m)| m).to_owned();
+        let message = text
+            .split_once(": ")
+            .map_or(text.as_str(), |(_, m)| m)
+            .to_owned();
         ara_diag::Diagnostic::error(code, message)
     }
 }

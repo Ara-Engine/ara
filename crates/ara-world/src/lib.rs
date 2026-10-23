@@ -51,7 +51,10 @@ impl Error {
     pub fn diagnostics(&self) -> Vec<ara_diag::Diagnostic> {
         match self {
             Error::Transaction(diags) => diags.clone(),
-            other => vec![ara_diag::Diagnostic::error(ara_diag::codes::WORLD_INVALID, other.to_string())],
+            other => vec![ara_diag::Diagnostic::error(
+                ara_diag::codes::WORLD_INVALID,
+                other.to_string(),
+            )],
         }
     }
 }

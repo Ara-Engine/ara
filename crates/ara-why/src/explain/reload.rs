@@ -12,7 +12,9 @@ use ara_diag::{Code, Diagnostic, Subject, SubjectKind, codes};
 use serde_json::Value;
 
 use super::line;
-use crate::{Cause, Collector, Explainer, Facts, Findings, Likelihood, Question, Report, Status, Target};
+use crate::{
+    Cause, Collector, Explainer, Facts, Findings, Likelihood, Question, Report, Status, Target,
+};
 
 /// `script::COMPILE_ERROR`: the edit did not compile.
 const COMPILE_ERROR: Code = Code(900);
@@ -56,7 +58,10 @@ fn reason(key: &str) -> (&'static str, &'static str) {
             "a debugger is attached, and the runtime refuses EnC deltas then",
             "detach the debugger while iterating",
         ),
-        "file_set" => ("a file was added, removed or renamed", "expected; later body edits take L1"),
+        "file_set" => (
+            "a file was added, removed or renamed",
+            "expected; later body edits take L1",
+        ),
         "generated" => (
             "generated code changed (attributes, partial properties, registration)",
             "expected when declarations change; body-only edits take L1",
@@ -85,7 +90,10 @@ fn reason(key: &str) -> (&'static str, &'static str) {
             "a module it references got a new generation, so it was reloaded against it",
             "expected after the dependency's own L3",
         ),
-        _ => ("an escalation the explainer does not know", "read the message"),
+        _ => (
+            "an escalation the explainer does not know",
+            "read the message",
+        ),
     }
 }
 
@@ -137,7 +145,13 @@ impl Explainer for Reload {
         let subjects: Vec<Subject> = module.iter().map(|m| Subject::module(m.clone())).collect();
         let records = facts.diagnostics(&Filter {
             codes: [
-                vec![codes::RELOAD_APPLIED, codes::RELOAD_ESCALATED, COMPILE_ERROR, COMPILE_SERVER, DELTA_REJECTED],
+                vec![
+                    codes::RELOAD_APPLIED,
+                    codes::RELOAD_ESCALATED,
+                    COMPILE_ERROR,
+                    COMPILE_SERVER,
+                    DELTA_REJECTED,
+                ],
                 MODULE_LARGE.to_vec(),
                 CASCADE.to_vec(),
             ]
@@ -157,8 +171,15 @@ impl Explainer for Reload {
             .collect();
         f.check(
             "reload reports",
-            if records.is_empty() { Status::Unknown } else { Status::Ok },
-            format!("{applied} applied, {} escalated", escalations.iter().map(|r| r.count).sum::<u32>()),
+            if records.is_empty() {
+                Status::Unknown
+            } else {
+                Status::Ok
+            },
+            format!(
+                "{applied} applied, {} escalated",
+                escalations.iter().map(|r| r.count).sum::<u32>()
+            ),
         );
         // One cause per reason; the most recent reason is the likely answer.
         let mut by_reason: BTreeMap<String, (u32, u64, Vec<&Record>)> = BTreeMap::new();
@@ -168,12 +189,19 @@ impl Explainer for Reload {
             e.1 = e.1.max(r.seq);
             e.2.push(r);
         }
-        let latest = by_reason.iter().max_by_key(|(_, v)| v.1).map(|(k, _)| k.clone());
+        let latest = by_reason
+            .iter()
+            .max_by_key(|(_, v)| v.1)
+            .map(|(k, _)| k.clone());
         let mut reasons: Vec<(String, (u32, u64, Vec<&Record>))> = by_reason.into_iter().collect();
         reasons.sort_by(|a, b| b.1.1.cmp(&a.1.1));
         for (key, (count, _, rs)) in reasons {
             let (what, todo) = reason(&key);
-            let likelihood = if Some(&key) == latest.as_ref() { Likelihood::High } else { Likelihood::Medium };
+            let likelihood = if Some(&key) == latest.as_ref() {
+                Likelihood::High
+            } else {
+                Likelihood::Medium
+            };
             let mut c = Cause::new(
                 codes::RELOAD_ESCALATED,
                 likelihood,
@@ -188,7 +216,10 @@ impl Explainer for Reload {
             }
             f.cause(c);
         }
-        for r in records.iter().filter(|r| r.diagnostic.code == COMPILE_ERROR || r.diagnostic.code == COMPILE_SERVER) {
+        for r in records
+            .iter()
+            .filter(|r| r.diagnostic.code == COMPILE_ERROR || r.diagnostic.code == COMPILE_SERVER)
+        {
             f.cause(
                 Cause::new(
                     r.diagnostic.code,
@@ -198,17 +229,28 @@ impl Explainer for Reload {
                 .evidence(line(r)),
             );
         }
-        for r in records
-            .iter()
-            .filter(|r| MODULE_LARGE.contains(&r.diagnostic.code) || CASCADE.contains(&r.diagnostic.code) || r.diagnostic.code == DELTA_REJECTED)
-        {
-            f.cause(Cause::new(r.diagnostic.code, Likelihood::Medium, r.diagnostic.message.clone()).evidence(line(r)));
+        for r in records.iter().filter(|r| {
+            MODULE_LARGE.contains(&r.diagnostic.code)
+                || CASCADE.contains(&r.diagnostic.code)
+                || r.diagnostic.code == DELTA_REJECTED
+        }) {
+            f.cause(
+                Cause::new(
+                    r.diagnostic.code,
+                    Likelihood::Medium,
+                    r.diagnostic.message.clone(),
+                )
+                .evidence(line(r)),
+            );
         }
         f.collect(extra, &Target::Module(module.as_deref()), facts);
         let answer = if records.is_empty() {
             "no C# reload has been reported to this host; reports arrive from the editor or play process when a module reloads".to_owned()
         } else {
-            Report::verdict(&f, "every reload was in place (L1/L2); none fell back to L3")
+            Report::verdict(
+                &f,
+                "every reload was in place (L1/L2); none fell back to L3",
+            )
         };
         let subject = module.map(|m| format!("module `{m}`"));
         Ok(Report::new(&q.text, "reload", subject, answer, f))

@@ -36,7 +36,13 @@ pub(crate) fn inspect(facts: &dyn Facts, asset: &Asset) -> Option<MaterialStatus
         diags
             .into_iter()
             .filter(Diagnostic::is_error)
-            .map(|d| if d.location.file.is_none() { d.file(path) } else { d })
+            .map(|d| {
+                if d.location.file.is_none() {
+                    d.file(path)
+                } else {
+                    d
+                }
+            })
             .collect()
     };
     let material = match dsl::parse(&source, &id) {
@@ -65,9 +71,9 @@ pub(crate) fn inspect(facts: &dyn Facts, asset: &Asset) -> Option<MaterialStatus
         let literal_zero = |b: &Binding| matches!(&b.expr, Expr::Literal { values } if values.iter().all(|v| *v == 0.0));
         if folded.bindings.get(node).is_some_and(literal_zero) {
             zero.push((output, false));
-        } else if folded.parameters.get(node).is_some_and(|p| {
-            matches!(&p.default, ParameterValue::Numeric(v) if v.iter().all(|x| *x == 0.0))
-        }) {
+        } else if folded.parameters.get(node).is_some_and(
+            |p| matches!(&p.default, ParameterValue::Numeric(v) if v.iter().all(|x| *x == 0.0)),
+        ) {
             zero.push((output, true));
         }
     }

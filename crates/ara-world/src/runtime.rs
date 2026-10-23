@@ -182,7 +182,10 @@ impl Streaming {
                 Ok(Some(cell)) => {
                     state.in_flight = false;
                     if cell.charge > self.config.cell_reservation || cell.blob.key != state.key {
-                        cell_failed(&completion.cell, "it exceeds the runtime reservation or its key differs");
+                        cell_failed(
+                            &completion.cell,
+                            "it exceeds the runtime reservation or its key differs",
+                        );
                         state.failure =
                             Some("cell exceeds runtime reservation or key differs".into());
                         state.retiring = true;

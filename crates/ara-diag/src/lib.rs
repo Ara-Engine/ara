@@ -48,7 +48,9 @@ impl Code {
             .and_then(|n| n.parse().ok());
         match numeric {
             Some(n) => Some(Code(n)),
-            None => catalog::lookup(t).filter(|d| d.label.is_some()).map(|d| d.code),
+            None => catalog::lookup(t)
+                .filter(|d| d.label.is_some())
+                .map(|d| d.code),
         }
     }
 

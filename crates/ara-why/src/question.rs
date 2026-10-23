@@ -5,13 +5,13 @@ use ara_diag::{Code, Subject, SubjectKind, catalog};
 
 /// Words that carry no topic ("why is the … not …").
 const STOP: &[&str] = &[
-    "why", "is", "isn't", "isnt", "are", "aren't", "was", "wasn't", "the", "a", "an", "not",
-    "no", "does", "doesn't", "doesnt", "did", "didn't", "didnt", "do", "don't", "it", "its",
-    "my", "this", "that", "these", "those", "in", "on", "at", "of", "to", "for", "from", "with",
-    "so", "still", "anymore", "any", "more", "can't", "cant", "cannot", "i", "we", "me", "be",
-    "being", "been", "and", "or", "what", "when", "how", "where", "has", "have", "had",
-    "entity", "object", "thing", "about", "there", "here", "now", "all", "game", "level",
-    "scene", "world", "anymore", "after", "since", "someone", "suddenly", "up", "out", "any",
+    "why", "is", "isn't", "isnt", "are", "aren't", "was", "wasn't", "the", "a", "an", "not", "no",
+    "does", "doesn't", "doesnt", "did", "didn't", "didnt", "do", "don't", "it", "its", "my",
+    "this", "that", "these", "those", "in", "on", "at", "of", "to", "for", "from", "with", "so",
+    "still", "anymore", "any", "more", "can't", "cant", "cannot", "i", "we", "me", "be", "being",
+    "been", "and", "or", "what", "when", "how", "where", "has", "have", "had", "entity", "object",
+    "thing", "about", "there", "here", "now", "all", "game", "level", "scene", "world", "anymore",
+    "after", "since", "someone", "suddenly", "up", "out", "any",
 ];
 
 /// A parsed `ara why` question.
@@ -67,8 +67,9 @@ fn tokens(text: &str) -> Vec<String> {
 
 fn is_entity_id(t: &str) -> bool {
     t.split('/').all(|p| {
-        p.strip_prefix("e_")
-            .is_some_and(|r| !r.is_empty() && r.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        p.strip_prefix("e_").is_some_and(|r| {
+            !r.is_empty() && r.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
     })
 }
 
@@ -112,7 +113,8 @@ impl Question {
                 continue;
             }
             if t.chars().next().is_some_and(char::is_uppercase)
-                && t.chars().all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'))
+                && t.chars()
+                    .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'))
             {
                 q.names.push(t.clone());
             }
@@ -149,7 +151,11 @@ impl Question {
         };
         let words = self.other_words(stems);
         let mut out: Vec<String> = self.names.clone();
-        out.extend(words.windows(2).map(|w| format!("{}{}", title(w[0]), title(w[1]))));
+        out.extend(
+            words
+                .windows(2)
+                .map(|w| format!("{}{}", title(w[0]), title(w[1]))),
+        );
         out.extend(words.iter().map(|w| title(w)));
         let mut seen = std::collections::BTreeSet::new();
         out.retain(|c| seen.insert(c.clone()));
@@ -167,10 +173,16 @@ impl Question {
 fn code_of(t: &str) -> Option<Code> {
     let upper = t.to_uppercase();
     if upper.starts_with("ARA") {
-        return catalog::lookup(t).map(|d| d.code).or_else(|| Code::parse(t));
+        return catalog::lookup(t)
+            .map(|d| d.code)
+            .or_else(|| Code::parse(t));
     }
-    let constant = t.contains('_') && t.chars().all(|c| c.is_ascii_uppercase() || c == '_' || c == ':' || c.is_ascii_digit());
-    constant.then(|| catalog::lookup(t).map(|d| d.code)).flatten()
+    let constant = t.contains('_')
+        && t.chars()
+            .all(|c| c.is_ascii_uppercase() || c == '_' || c == ':' || c.is_ascii_digit());
+    constant
+        .then(|| catalog::lookup(t).map(|d| d.code))
+        .flatten()
 }
 
 #[cfg(test)]
@@ -200,6 +212,9 @@ mod tests {
         let q = Question::parse("why is Crate invisible");
         assert_eq!(q.names, ["Crate"]);
         let q = Question::parse("why is the gate crate not rendering in game");
-        assert_eq!(q.name_candidates(&["render"]), ["GateCrate", "Gate", "Crate"]);
+        assert_eq!(
+            q.name_candidates(&["render"]),
+            ["GateCrate", "Gate", "Crate"]
+        );
     }
 }

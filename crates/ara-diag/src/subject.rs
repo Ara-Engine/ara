@@ -142,7 +142,10 @@ impl Subject {
         let (qp, qi) = self.parts();
         let (op, oi) = other.parts();
         let ids = |a: &str, b: &str| {
-            a == b || (self.kind == SubjectKind::Entity && b.starts_with(a) && b[a.len()..].starts_with('/'))
+            a == b
+                || (self.kind == SubjectKind::Entity
+                    && b.starts_with(a)
+                    && b[a.len()..].starts_with('/'))
         };
         match (qi, oi) {
             (Some(a), Some(b)) if ids(a, b) => return true,
@@ -175,7 +178,10 @@ fn split_ref(text: &str) -> (Option<&str>, Option<&str>) {
         };
     };
     match rest.split_once('#') {
-        Some((path, id)) => ((!path.is_empty()).then_some(path), (!id.is_empty()).then_some(id)),
+        Some((path, id)) => (
+            (!path.is_empty()).then_some(path),
+            (!id.is_empty()).then_some(id),
+        ),
         None => (Some(rest), None),
     }
 }
@@ -183,8 +189,9 @@ fn split_ref(text: &str) -> (Option<&str>, Option<&str>) {
 /// `e_8b21`, or an address `e_4f9a/e_m4tz`.
 fn is_entity_id(text: &str) -> bool {
     text.split('/').all(|part| {
-        part.strip_prefix("e_")
-            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        part.strip_prefix("e_").is_some_and(|rest| {
+            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
     })
 }
 
@@ -252,7 +259,10 @@ mod tests {
         assert_eq!(s("@levels/a.scene").kind, SubjectKind::Document);
         assert_eq!(s("@meshes/crate.glb#ms_crate001").kind, SubjectKind::Asset);
         assert!(Subject::parse("Crate").is_none());
-        assert_eq!(s("entity:@levels/a.scene#e_8b21").to_string(), "entity:@levels/a.scene#e_8b21");
+        assert_eq!(
+            s("entity:@levels/a.scene#e_8b21").to_string(),
+            "entity:@levels/a.scene#e_8b21"
+        );
     }
 
     #[test]

@@ -86,7 +86,10 @@ impl CodeDoc {
         if self.label.is_some() {
             s.push_str(&format!(" (slot {})", self.code.0));
         }
-        s.push_str(&format!("\n- Constant: `{}`\n- Reported by: {}\n", self.name, self.owner));
+        s.push_str(&format!(
+            "\n- Constant: `{}`\n- Reported by: {}\n",
+            self.name, self.owner
+        ));
         if !self.aliases.is_empty() {
             s.push_str(&format!("- Also known as: {}\n", self.aliases.join(", ")));
         }
@@ -116,12 +119,7 @@ fn catalog() -> &'static Catalog {
 }
 
 /// Parses one catalog file.
-fn parse(
-    file: &str,
-    text: &'static str,
-    docs: &mut Vec<CodeDoc>,
-    problems: &mut Vec<String>,
-) {
+fn parse(file: &str, text: &'static str, docs: &mut Vec<CodeDoc>, problems: &mut Vec<String>) {
     let mut sections = text.split("\n## ").skip(1).peekable();
     if text.starts_with("## ") {
         problems.push(format!("{file}: start with a `#` title, not an entry"));
@@ -171,7 +169,11 @@ fn entry(section: &'static str) -> Result<CodeDoc, String> {
         } else if let Some(label) = line.strip_prefix("shown as:") {
             doc.label = Some(label.trim());
         } else if let Some(aliases) = line.strip_prefix("aliases:") {
-            doc.aliases = aliases.split(',').map(str::trim).filter(|a| !a.is_empty()).collect();
+            doc.aliases = aliases
+                .split(',')
+                .map(str::trim)
+                .filter(|a| !a.is_empty())
+                .collect();
         } else {
             break;
         }
@@ -275,10 +277,18 @@ mod tests {
 
     #[test]
     fn the_catalog_parses_cleanly_without_duplicates() {
-        assert!(problems().is_empty(), "catalog problems:\n{}", problems().join("\n"));
+        assert!(
+            problems().is_empty(),
+            "catalog problems:\n{}",
+            problems().join("\n")
+        );
         let docs = all();
         for pair in docs.windows(2) {
-            assert_ne!(pair[0].code, pair[1].code, "{} is documented twice", pair[0].code);
+            assert_ne!(
+                pair[0].code, pair[1].code,
+                "{} is documented twice",
+                pair[0].code
+            );
         }
         let mut names: Vec<String> = docs
             .iter()

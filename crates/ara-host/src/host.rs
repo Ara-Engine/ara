@@ -574,7 +574,10 @@ impl State {
     /// Appends changed engine diagnostics to `.ara/diagnostics.jsonl`.
     pub(crate) fn persist_diag(&mut self, now: bool) {
         if let Err(e) = self.diag_file.flush(&self.diag, now) {
-            let d = Diagnostic::warning(codes::IO, format!("cannot write `.ara/diagnostics.jsonl`: {e}"));
+            let d = Diagnostic::warning(
+                codes::IO,
+                format!("cannot write `.ara/diagnostics.jsonl`: {e}"),
+            );
             self.diag.push(d, Meta::default());
         }
     }

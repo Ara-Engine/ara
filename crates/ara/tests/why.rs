@@ -57,7 +57,17 @@ fn why_explains_and_its_fix_runs_through_ara_do() {
     let fix = &scale["fixes"][0];
     assert_eq!(fix["command"], "property.set");
     let args = serde_json::to_string(&fix["params"]).expect("args");
-    let (code, _) = ara(root, &["do", "property.set", "--args", &args, "--why", "Apply the ara why fix"]);
+    let (code, _) = ara(
+        root,
+        &[
+            "do",
+            "property.set",
+            "--args",
+            &args,
+            "--why",
+            "Apply the ara why fix",
+        ],
+    );
     assert_eq!(code, 0);
     let (_, text) = ara(root, &["why", "name:Crate not visible"]);
     assert!(!text.contains("ARA3303"), "fixed:\n{text}");
@@ -65,7 +75,10 @@ fn why_explains_and_its_fix_runs_through_ara_do() {
     let (_, text) = ara(root, &["why", "ARA1302"]);
     assert!(text.starts_with("ARA1302 "), "{text}");
     let (_, text) = ara(root, &["why", "--list"]);
-    assert!(text.contains("visibility") && text.contains("frame"), "{text}");
+    assert!(
+        text.contains("visibility") && text.contains("frame"),
+        "{text}"
+    );
     let (code, text) = ara(root, &["logs", "--all", "--code", "ARA1812"]);
     assert_eq!(code, 0);
     assert!(text.contains("info[ARA1812]"), "{text}");

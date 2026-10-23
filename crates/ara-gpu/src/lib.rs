@@ -61,7 +61,10 @@ impl From<&GpuError> for ara_diag::Diagnostic {
     fn from(e: &GpuError) -> ara_diag::Diagnostic {
         use ara_diag::codes;
         let (code, message) = match e {
-            GpuError::StaleHandle => (codes::GPU_STALE_HANDLE, "a GPU handle was used after its resource was destroyed".to_owned()),
+            GpuError::StaleHandle => (
+                codes::GPU_STALE_HANDLE,
+                "a GPU handle was used after its resource was destroyed".to_owned(),
+            ),
             GpuError::Backend(err) => (codes::GPU_BACKEND, format!("{err:#}")),
             GpuError::Contract(m) => (codes::GPU_CONTRACT, m.clone()),
         };

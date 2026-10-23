@@ -11,7 +11,9 @@ use ara_diag::store::Filter;
 use ara_diag::{Diagnostic, catalog, codes};
 
 use super::{line, runnable};
-use crate::{Cause, Collector, Explainer, Facts, Findings, Likelihood, Question, Report, Status, Target};
+use crate::{
+    Cause, Collector, Explainer, Facts, Findings, Likelihood, Question, Report, Status, Target,
+};
 
 /// Instances turned into causes.
 const MAX_INSTANCES: usize = 5;
@@ -51,7 +53,11 @@ impl Explainer for CodeExplainer {
         };
         let mut f = Findings::default();
         let mut subjects = q.subjects.clone();
-        subjects.extend(q.entities.iter().filter_map(|e| ara_diag::Subject::parse(e)));
+        subjects.extend(
+            q.entities
+                .iter()
+                .filter_map(|e| ara_diag::Subject::parse(e)),
+        );
         let records = facts.diagnostics(&Filter {
             codes: vec![code],
             subjects,
@@ -60,7 +66,11 @@ impl Explainer for CodeExplainer {
         let total: u64 = records.iter().map(|r| u64::from(r.count)).sum();
         f.check(
             "on the bus",
-            if records.is_empty() { Status::Skip } else { Status::Fail },
+            if records.is_empty() {
+                Status::Skip
+            } else {
+                Status::Fail
+            },
             if records.is_empty() {
                 "no occurrences now".to_owned()
             } else {
@@ -111,9 +121,17 @@ impl Explainer for CodeExplainer {
         }
         f.collect(extra, &Target::Code(code), facts);
         let answer = if records.is_empty() {
-            format!("{code} {}: {} Not on the bus now; its usual causes:", doc.title, doc.summary())
+            format!(
+                "{code} {}: {} Not on the bus now; its usual causes:",
+                doc.title,
+                doc.summary()
+            )
         } else {
-            format!("{code} {}: {} {total} occurrences now:", doc.title, doc.summary())
+            format!(
+                "{code} {}: {} {total} occurrences now:",
+                doc.title,
+                doc.summary()
+            )
         };
         let mut report = Report::new(&q.text, "code", None, answer, f);
         let mut page = String::from("Fixes in general:\n");

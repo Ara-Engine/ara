@@ -31,11 +31,29 @@ use crate::{
 };
 
 /// Renderer components, by exact name; any other `*Renderer` also counts.
-const RENDERERS: &[&str] = &["MeshRenderer", "SkinnedMeshRenderer", "SpriteRenderer", "Sprite"];
+const RENDERERS: &[&str] = &[
+    "MeshRenderer",
+    "SkinnedMeshRenderer",
+    "SpriteRenderer",
+    "Sprite",
+];
 /// Topic words (prefixes) of visibility questions.
 const WORDS: &[&str] = &[
-    "visib", "invisib", "see", "seen", "show", "render", "draw", "drawn", "appear", "hidden",
-    "hide", "disappear", "gone", "display", "vanish",
+    "visib",
+    "invisib",
+    "see",
+    "seen",
+    "show",
+    "render",
+    "draw",
+    "drawn",
+    "appear",
+    "hidden",
+    "hide",
+    "disappear",
+    "gone",
+    "display",
+    "vanish",
 ];
 
 /// The visibility explainer.
@@ -61,7 +79,10 @@ impl Ctx<'_> {
     }
 
     fn renderer_path(&self, field: &str) -> String {
-        let name = self.renderer.as_ref().map_or("MeshRenderer", |(n, _)| n.as_str());
+        let name = self
+            .renderer
+            .as_ref()
+            .map_or("MeshRenderer", |(n, _)| n.as_str());
         format!("{name}.{field}")
     }
 }
@@ -69,8 +90,18 @@ impl Ctx<'_> {
 /// Field names come from fixed lists; this hands back the `'static` copy.
 fn static_name(n: &str) -> &'static str {
     const ALL: &[&str] = &[
-        "mesh", "sprite", "material", "materials", "tint", "color", "layer", "enabled",
-        "visible", "maxDistance", "drawDistance", "cullDistance",
+        "mesh",
+        "sprite",
+        "material",
+        "materials",
+        "tint",
+        "color",
+        "layer",
+        "enabled",
+        "visible",
+        "maxDistance",
+        "drawDistance",
+        "cullDistance",
     ];
     ALL.iter().find(|a| **a == n).copied().unwrap_or("field")
 }
@@ -170,7 +201,13 @@ fn bus(facts: &dyn Facts, codes: &[Code], subjects: Vec<Subject>) -> Vec<Record>
 }
 
 /// A cause backed by a bus record: its message, location, tick and causal chain.
-fn from_record(code: Code, likelihood: Likelihood, title: String, r: &Record, facts: &dyn Facts) -> Cause {
+fn from_record(
+    code: Code,
+    likelihood: Likelihood,
+    title: String,
+    r: &Record,
+    facts: &dyn Facts,
+) -> Cause {
     let mut c = Cause::new(code, likelihood, title).evidence(line(r));
     for parent in facts.causes(r) {
         c = c.evidence(format!("caused by: {}", line(&parent)));
@@ -224,10 +261,19 @@ fn enabled(cx: &Ctx<'_>, f: &mut Findings) {
                 format!("Its ancestor {}", who.label())
             };
             f.cause(
-                Cause::new(codes::RENDER_DISABLED, Likelihood::High, format!("{whose} is switched off: `{path}` is {}", flip(&fix)))
-                    .evidence(format!("{} {path} = {}", who.address, flip(&fix)))
-                    .subject(Subject::entity(who.address.clone()))
-                    .fix(set(format!("Set `{path}` to {fix}"), &who.address, &path, fix)),
+                Cause::new(
+                    codes::RENDER_DISABLED,
+                    Likelihood::High,
+                    format!("{whose} is switched off: `{path}` is {}", flip(&fix)),
+                )
+                .evidence(format!("{} {path} = {}", who.address, flip(&fix)))
+                .subject(Subject::entity(who.address.clone()))
+                .fix(set(
+                    format!("Set `{path}` to {fix}"),
+                    &who.address,
+                    &path,
+                    fix,
+                )),
             );
         }
     }
@@ -249,22 +295,30 @@ fn renderer_present(cx: &Ctx<'_>, f: &mut Findings) {
             let mut c = Cause::new(
                 codes::RENDER_NO_RENDERER,
                 Likelihood::High,
-                format!("{} has no renderer component, so it has nothing to draw", cx.e.label()),
+                format!(
+                    "{} has no renderer component, so it has nothing to draw",
+                    cx.e.label()
+                ),
             )
             .evidence(format!(
                 "components: {}",
-                cx.e.components.keys().cloned().collect::<Vec<_>>().join(", ")
+                cx.e.components
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ))
             .subject(Subject::entity(cx.e.address.clone()));
             if cx.facts.has_component_type("MeshRenderer") {
-                c = c.fix(ara_diag::Fix {
-                    title: "Add a `MeshRenderer`".into(),
-                    action: ara_diag::FixAction::Command {
-                        command: "component.add".into(),
-                        params: json!({ "entity": cx.e.address, "component": "MeshRenderer" }),
-                    },
-                })
-                .advice("then set `MeshRenderer.mesh` to a mesh asset");
+                c = c
+                    .fix(ara_diag::Fix {
+                        title: "Add a `MeshRenderer`".into(),
+                        action: ara_diag::FixAction::Command {
+                            command: "component.add".into(),
+                            params: json!({ "entity": cx.e.address, "component": "MeshRenderer" }),
+                        },
+                    })
+                    .advice("then set `MeshRenderer.mesh` to a mesh asset");
             }
             f.cause(c);
         }
@@ -320,13 +374,19 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                 let note = if who.address == cx.e.address {
                     String::new()
                 } else {
-                    format!(", which flattens everything under it, including {}", cx.e.label())
+                    format!(
+                        ", which flattens everything under it, including {}",
+                        cx.e.label()
+                    )
                 };
                 f.cause(
                     Cause::new(
                         codes::RENDER_DEGENERATE_TRANSFORM,
                         Likelihood::High,
-                        format!("{whose} `Transform.scale` is 0 on {}{note}", axes.join(", ")),
+                        format!(
+                            "{whose} `Transform.scale` is 0 on {}{note}",
+                            axes.join(", ")
+                        ),
                     )
                     .evidence(format!("{} Transform.scale = {}", who.address, show3(v)))
                     .subject(Subject::entity(who.address.clone()))
@@ -342,7 +402,10 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
         world = world.then(&Affine::from_transform(t));
     }
     // NaNs written at runtime (physics, scripts) arrive on the bus.
-    let mut subjects: Vec<Subject> = lineage.iter().map(|e| Subject::entity(e.address.clone())).collect();
+    let mut subjects: Vec<Subject> = lineage
+        .iter()
+        .map(|e| Subject::entity(e.address.clone()))
+        .collect();
     subjects.dedup();
     for r in bus(cx.facts, &[codes::RENDER_NON_FINITE_TRANSFORM], subjects) {
         ok = false;
@@ -359,7 +422,11 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                 "Reset the position",
                 &cx.e.address,
                 "Transform.position",
-                math::json3(math::vec3(cx.e.get("Transform", "position")).filter(|v| v.iter().all(|x| x.is_finite())).unwrap_or([0.0; 3])),
+                math::json3(
+                    math::vec3(cx.e.get("Transform", "position"))
+                        .filter(|v| v.iter().all(|x| x.is_finite()))
+                        .unwrap_or([0.0; 3]),
+                ),
             ))
             .advice("fix what wrote the NaN (see `caused by`), or it comes back on the next play");
         f.cause(c);
@@ -369,7 +436,11 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
     } else {
         "not finite".to_owned()
     };
-    f.check("transform", if ok { Status::Ok } else { Status::Fail }, note);
+    f.check(
+        "transform",
+        if ok { Status::Ok } else { Status::Fail },
+        note,
+    );
     world
 }
 
@@ -388,7 +459,10 @@ fn mesh(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
                 format!("`{}` names no mesh", cx.renderer_path("mesh")),
             )
             .subject(Subject::entity(cx.e.address.clone()))
-            .advice(format!("set `{}` to a mesh asset (`ara_query` the meshes folder)", cx.renderer_path("mesh"))),
+            .advice(format!(
+                "set `{}` to a mesh asset (`ara_query` the meshes folder)",
+                cx.renderer_path("mesh")
+            )),
         );
         return Vec::new();
     };
@@ -404,7 +478,11 @@ fn mesh(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
     let mut ok = true;
     let records = bus(
         cx.facts,
-        &[codes::ASSET_IMPORT_FAILED, codes::ASSET_SOURCE_MISSING, codes::ASSET_WORKER_FAILED],
+        &[
+            codes::ASSET_IMPORT_FAILED,
+            codes::ASSET_SOURCE_MISSING,
+            codes::ASSET_WORKER_FAILED,
+        ],
         vec![subject.clone()],
     );
     for r in &records {
@@ -444,7 +522,10 @@ fn unresolved(cx: &Ctx<'_>, asset: &Asset, code: Code, path: &str, what: &str) -
     let mut c = Cause::new(
         code,
         Likelihood::High,
-        format!("Its {what} `{}` does not resolve to any asset", asset.reference),
+        format!(
+            "Its {what} `{}` does not resolve to any asset",
+            asset.reference
+        ),
     )
     .evidence(match &asset.problem {
         Some(d) => format!("{} {}", d.code, d.message),
@@ -492,10 +573,19 @@ fn materials(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
         subjects.push(subject.clone());
         if !asset.resolves() {
             ok = false;
-            f.cause(unresolved(cx, &asset, codes::RENDER_MATERIAL, path, "material"));
+            f.cause(unresolved(
+                cx,
+                &asset,
+                codes::RENDER_MATERIAL,
+                path,
+                "material",
+            ));
             continue;
         }
-        let name = asset.path.clone().unwrap_or_else(|| (*reference).to_owned());
+        let name = asset
+            .path
+            .clone()
+            .unwrap_or_else(|| (*reference).to_owned());
         if let Some(status) = material::inspect(cx.facts, &asset) {
             if !status.errors.is_empty() {
                 ok = false;
@@ -507,7 +597,18 @@ fn materials(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
                 .subject(subject.clone());
                 for d in status.errors.iter().take(3) {
                     c = c.evidence(format!("{} {} ({})", d.code, d.message, d.location));
-                    c.fixes.extend(d.fixes.iter().filter(|x| matches!(x.action, ara_diag::FixAction::Command { .. } | ara_diag::FixAction::Cli { .. })).cloned());
+                    c.fixes.extend(
+                        d.fixes
+                            .iter()
+                            .filter(|x| {
+                                matches!(
+                                    x.action,
+                                    ara_diag::FixAction::Command { .. }
+                                        | ara_diag::FixAction::Cli { .. }
+                                )
+                            })
+                            .cloned(),
+                    );
                 }
                 if let Some(at) = status.errors.first().map(|d| d.location.to_string()) {
                     c = c.advice(format!("fix the material source at {at}, then ask again"));
@@ -527,7 +628,11 @@ fn materials(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
             }
             for (output, from_param) in &status.zero {
                 ok = false;
-                let how = if *from_param { "a parameter that defaults to 0" } else { "a constant 0" };
+                let how = if *from_param {
+                    "a parameter that defaults to 0"
+                } else {
+                    "a constant 0"
+                };
                 f.cause(
                     Cause::new(
                         codes::RENDER_TRANSPARENT,
@@ -580,7 +685,12 @@ fn tint(cx: &Ctx<'_>, f: &mut Findings) {
             )
             .evidence(format!("{} {path} = {}", cx.e.address, value))
             .subject(Subject::entity(cx.e.address.clone()))
-            .fix(set("Make the tint opaque", &cx.e.address, &path, Value::Array(fixed))),
+            .fix(set(
+                "Make the tint opaque",
+                &cx.e.address,
+                &path,
+                Value::Array(fixed),
+            )),
         );
         f.check("tint", Status::Fail, "alpha 0");
     }
@@ -593,7 +703,9 @@ fn layer(cx: &Ctx<'_>) -> (Value, Option<String>) {
         return (v.clone(), Some(cx.renderer_path("layer")));
     }
     if let Some((name, v)) = cx.e.component(&["Layer", "RenderLayer"], None) {
-        let field = ["layer", "name", "value"].into_iter().find(|k| v.get(*k).is_some());
+        let field = ["layer", "name", "value"]
+            .into_iter()
+            .find(|k| v.get(*k).is_some());
         if let Some(k) = field {
             return (v[k].clone(), Some(format!("{name}.{k}")));
         }
@@ -611,9 +723,10 @@ fn sees(mask: Option<&Value>, layer: &Value) -> Option<bool> {
     };
     match (mask, layer) {
         (Value::Array(items), _) => {
-            let all = items
-                .iter()
-                .any(|i| i.as_str().is_some_and(|s| matches!(s, "*" | "all" | "everything")));
+            let all = items.iter().any(|i| {
+                i.as_str()
+                    .is_some_and(|s| matches!(s, "*" | "all" | "everything"))
+            });
             Some(
                 all || items.iter().any(|i| match (i, layer) {
                     (Value::String(a), Value::String(b)) => a.eq_ignore_ascii_case(b),
@@ -670,14 +783,18 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
         let cam_world = chain
             .iter()
             .chain(std::iter::once(cam))
-            .fold(Affine::IDENTITY, |w, e| w.then(&Affine::from_transform(e.components.get("Transform"))));
+            .fold(Affine::IDENTITY, |w, e| {
+                w.then(&Affine::from_transform(e.components.get("Transform")))
+            });
         let mask = cam.get("Camera", "cullingMask");
         match sees(mask, &layer) {
             Some(false) => culled.push((cam, mask.cloned().unwrap_or(Value::Null))),
             _ => seeing.push((cam, cam_world)),
         }
     }
-    let layer_text = layer.as_str().map_or_else(|| layer.to_string(), str::to_owned);
+    let layer_text = layer
+        .as_str()
+        .map_or_else(|| layer.to_string(), str::to_owned);
     if seeing.is_empty() {
         f.check("layer", Status::Fail, format!("`{layer_text}`"));
         let mut c = Cause::new(
@@ -692,10 +809,18 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
         if let (Some(path), Some((_, Value::Array(items)))) = (&layer_path, culled.first()) {
             let target = items
                 .iter()
-                .find(|i| i.as_str().is_some_and(|s| s.eq_ignore_ascii_case("default")))
+                .find(|i| {
+                    i.as_str()
+                        .is_some_and(|s| s.eq_ignore_ascii_case("default"))
+                })
                 .or_else(|| items.first());
             if let Some(target) = target {
-                c = c.fix(set(format!("Move it to layer {target}"), &cx.e.address, path, target.clone()));
+                c = c.fix(set(
+                    format!("Move it to layer {target}"),
+                    &cx.e.address,
+                    path,
+                    target.clone(),
+                ));
             }
         }
         if let Some((cam, Value::Array(items))) = culled.first() {
@@ -718,7 +843,10 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
     for (cam, cam_world) in &seeing {
         let to = math::sub(pos, cam_world.t);
         let d = math::length(to);
-        let far = cam.get("Camera", "far").and_then(Value::as_f64).unwrap_or(f64::INFINITY);
+        let far = cam
+            .get("Camera", "far")
+            .and_then(Value::as_f64)
+            .unwrap_or(f64::INFINITY);
         let forward = cam_world.vector([0.0, 0.0, -1.0]);
         if math::dot(forward, to) >= 0.0 || d < 1e-6 {
             in_front = true;
@@ -742,11 +870,26 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
             Cause::new(
                 codes::RENDER_DISTANCE_CULLED,
                 Likelihood::High,
-                format!("It is {} m from the nearest camera {}, beyond its far plane ({} m)", show(d), cam.label(), show(far)),
+                format!(
+                    "It is {} m from the nearest camera {}, beyond its far plane ({} m)",
+                    show(d),
+                    cam.label(),
+                    show(far)
+                ),
             )
-            .evidence(format!("{} at {}; Camera far = {}", cx.e.address, show3(pos), show(far)))
+            .evidence(format!(
+                "{} at {}; Camera far = {}",
+                cx.e.address,
+                show3(pos),
+                show(far)
+            ))
             .subject(Subject::entity(cx.e.address.clone()))
-            .fix(set(format!("Raise the camera's far plane to {} m", show(new_far)), &cam.address, "Camera.far", math::number(new_far))),
+            .fix(set(
+                format!("Raise the camera's far plane to {} m", show(new_far)),
+                &cam.address,
+                "Camera.far",
+                math::number(new_far),
+            )),
         );
     }
     if let Some((field, limit)) = limit
@@ -758,10 +901,19 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
             Cause::new(
                 codes::RENDER_DISTANCE_CULLED,
                 Likelihood::High,
-                format!("It is {} m from the nearest camera but `{path}` is {} m", show(d), show(limit)),
+                format!(
+                    "It is {} m from the nearest camera but `{path}` is {} m",
+                    show(d),
+                    show(limit)
+                ),
             )
             .subject(Subject::entity(cx.e.address.clone()))
-            .fix(set(format!("Raise `{path}`"), &cx.e.address, &path, math::number((d * 1.25).ceil()))),
+            .fix(set(
+                format!("Raise `{path}`"),
+                &cx.e.address,
+                &path,
+                math::number((d * 1.25).ceil()),
+            )),
         );
     }
     f.check(
@@ -787,7 +939,10 @@ fn streaming(cx: &Ctx<'_>, f: &mut Findings) {
     let records = bus(
         cx.facts,
         &[codes::WORLD_NOT_RESIDENT, codes::WORLD_CELL_FAILED],
-        vec![Subject::entity(cx.e.address.clone()), Subject::document(cx.e.doc.clone())],
+        vec![
+            Subject::entity(cx.e.address.clone()),
+            Subject::document(cx.e.doc.clone()),
+        ],
     );
     if records.is_empty() {
         f.check("streaming", Status::Skip, "no reports");
@@ -798,7 +953,11 @@ fn streaming(cx: &Ctx<'_>, f: &mut Findings) {
         let failed = r.diagnostic.code == codes::WORLD_CELL_FAILED;
         f.cause(from_record(
             r.diagnostic.code,
-            if failed { Likelihood::High } else { Likelihood::Medium },
+            if failed {
+                Likelihood::High
+            } else {
+                Likelihood::Medium
+            },
             if failed {
                 "Its world cell failed to load".to_owned()
             } else {
@@ -847,7 +1006,11 @@ fn elsewhere(cx: &Ctx<'_>, f: &mut Findings) {
             .map(|s| s.to_string())
             .collect();
         if !others.is_empty() {
-            f.related.push(format!("elsewhere: {} — ara why {} not visible", line(r), others[0]));
+            f.related.push(format!(
+                "elsewhere: {} — ara why {} not visible",
+                line(r),
+                others[0]
+            ));
         }
     }
 }

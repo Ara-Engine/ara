@@ -35,7 +35,9 @@ fn files(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
         let path = e.path();
         let name = e.file_name().to_string_lossy().into_owned();
         if path.is_dir() {
-            if !matches!(name.as_str(), "target" | "bin" | "obj" | "node_modules") && !name.starts_with('.') {
+            if !matches!(name.as_str(), "target" | "bin" | "obj" | "node_modules")
+                && !name.starts_with('.')
+            {
                 files(&path, ext, out);
             }
         } else if name.ends_with(ext) {
@@ -45,10 +47,15 @@ fn files(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
 }
 
 /// Every `<prefix><digits>` with exactly `width` digits (or any width when 0).
-fn numbers_after<'a>(text: &'a str, prefix: &'a str) -> impl Iterator<Item = (usize, &'a str)> + 'a {
+fn numbers_after<'a>(
+    text: &'a str,
+    prefix: &'a str,
+) -> impl Iterator<Item = (usize, &'a str)> + 'a {
     text.match_indices(prefix).filter_map(move |(i, _)| {
         let rest = &text[i + prefix.len()..];
-        let digits: &str = &rest[..rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len())];
+        let digits: &str = &rest[..rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len())];
         (!digits.is_empty()).then_some((i, digits))
     })
 }
@@ -62,7 +69,10 @@ fn names(text: &str, prefix: &str, out: &mut BTreeSet<String>) {
             .collect();
         let token = token.trim_end_matches(['-', '_']).to_owned();
         let complete = if prefix == "ARA-EXP-" {
-            token.rsplit('-').next().is_some_and(|n| n.len() == 3 && n.chars().all(|c| c.is_ascii_digit()))
+            token
+                .rsplit('-')
+                .next()
+                .is_some_and(|n| n.len() == 3 && n.chars().all(|c| c.is_ascii_digit()))
         } else {
             token.len() > prefix.len()
         };
@@ -86,7 +96,11 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
     let mut named: BTreeSet<String> = DYNAMIC.iter().map(|s| (*s).to_owned()).collect();
     for path in &rust {
         let text = fs::read_to_string(path).unwrap_or_default();
-        let rel = path.strip_prefix(&root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+        let rel = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
         let krate = rel.split('/').nth(1).unwrap_or_default().to_owned();
         let tests = rel.contains("/tests/") || rel.contains("/benches/");
         let mut add = |n: &str| {
@@ -119,7 +133,10 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
         let text = fs::read_to_string(path).unwrap_or_default();
         for (i, n) in numbers_after(&text, "\"ARA") {
             if n.len() == 4 && text[i + 5 + 4..].starts_with('"') {
-                numbers.entry(n.parse().unwrap_or(0)).or_default().insert("dotnet".into());
+                numbers
+                    .entry(n.parse().unwrap_or(0))
+                    .or_default()
+                    .insert("dotnet".into());
             }
         }
     }
@@ -127,7 +144,10 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
     let mut missing = Vec::new();
     for (n, crates) in &numbers {
         if catalog::get(ara_diag::Code(*n)).is_none() {
-            missing.push(format!("ARA{n:04} (defined in {})", crates.iter().cloned().collect::<Vec<_>>().join(", ")));
+            missing.push(format!(
+                "ARA{n:04} (defined in {})",
+                crates.iter().cloned().collect::<Vec<_>>().join(", ")
+            ));
         }
     }
     for name in &named {
@@ -135,7 +155,11 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
             missing.push(name.clone());
         }
     }
-    assert!(missing.is_empty(), "codes without a catalog entry in crates/ara-diag/codes/:\n{}", missing.join("\n"));
+    assert!(
+        missing.is_empty(),
+        "codes without a catalog entry in crates/ara-diag/codes/:\n{}",
+        missing.join("\n")
+    );
 
     // `ara-diag` defines the kernel and bus constants and `ara-why` refers to other
     // crates' numbers; neither counts as a second owner. C# and `ara-script` share
@@ -144,13 +168,28 @@ fn every_code_in_the_sources_is_documented_and_numbers_do_not_collide() {
         crates
             .iter()
             .filter(|c| !matches!(c.as_str(), "ara-diag" | "ara-why"))
-            .map(|c| if c == "dotnet" { "ara-script".to_owned() } else { c.clone() })
+            .map(|c| {
+                if c == "dotnet" {
+                    "ara-script".to_owned()
+                } else {
+                    c.clone()
+                }
+            })
             .collect()
     };
     let collisions: Vec<String> = numbers
         .iter()
         .filter(|(n, crates)| owners(crates).len() > 1 && !KNOWN_COLLISIONS.contains(n))
-        .map(|(n, crates)| format!("ARA{n:04}: {}", owners(crates).into_iter().collect::<Vec<_>>().join(", ")))
+        .map(|(n, crates)| {
+            format!(
+                "ARA{n:04}: {}",
+                owners(crates).into_iter().collect::<Vec<_>>().join(", ")
+            )
+        })
         .collect();
-    assert!(collisions.is_empty(), "several crates define the same code:\n{}", collisions.join("\n"));
+    assert!(
+        collisions.is_empty(),
+        "several crates define the same code:\n{}",
+        collisions.join("\n")
+    );
 }

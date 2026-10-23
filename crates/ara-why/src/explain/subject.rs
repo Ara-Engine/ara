@@ -25,7 +25,11 @@ impl Explainer for Subject {
     }
 
     fn matches(&self, q: &Question) -> u32 {
-        if q.entities.is_empty() && q.subjects.is_empty() { 0 } else { 30 }
+        if q.entities.is_empty() && q.subjects.is_empty() {
+            0
+        } else {
+            30
+        }
     }
 
     fn explain(
@@ -46,17 +50,36 @@ impl Explainer for Subject {
             ..Filter::default()
         });
         let mut f = Findings::default();
-        f.check("on the bus", Status::Ok, format!("{} records", records.len()));
-        for r in records.iter().rev().filter(|r| r.diagnostic.severity != Severity::Info).take(5) {
-            let likelihood = if r.diagnostic.is_error() { Likelihood::High } else { Likelihood::Medium };
-            let mut c = Cause::new(r.diagnostic.code, likelihood, r.diagnostic.message.clone()).evidence(line(r));
+        f.check(
+            "on the bus",
+            Status::Ok,
+            format!("{} records", records.len()),
+        );
+        for r in records
+            .iter()
+            .rev()
+            .filter(|r| r.diagnostic.severity != Severity::Info)
+            .take(5)
+        {
+            let likelihood = if r.diagnostic.is_error() {
+                Likelihood::High
+            } else {
+                Likelihood::Medium
+            };
+            let mut c = Cause::new(r.diagnostic.code, likelihood, r.diagnostic.message.clone())
+                .evidence(line(r));
             for parent in facts.causes(r) {
                 c = c.evidence(format!("caused by: {}", line(&parent)));
             }
             c.fixes = runnable(&r.diagnostic.fixes);
             f.cause(c);
         }
-        for r in records.iter().rev().filter(|r| r.diagnostic.severity == Severity::Info).take(3) {
+        for r in records
+            .iter()
+            .rev()
+            .filter(|r| r.diagnostic.severity == Severity::Info)
+            .take(3)
+        {
             f.related.push(line(r));
         }
         let topic = q.words.join(" ");
@@ -64,7 +87,11 @@ impl Explainer for Subject {
             let known = "visibility, reload, frame, code, asset";
             format!(
                 "nothing on the bus explains it{}; explainers exist for: {known}",
-                if topic.is_empty() { String::new() } else { format!(" (no explainer covers `{topic}` yet)") }
+                if topic.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (no explainer covers `{topic}` yet)")
+                }
             )
         } else {
             Report::verdict(&f, "")

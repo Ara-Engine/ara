@@ -159,7 +159,9 @@ fn unknown_code(text: &str, index: usize) -> Diagnostic {
     let names: Vec<String> = catalog::all().iter().map(|d| d.code.to_string()).collect();
     let mut d = Diagnostic::error(
         codes::UNKNOWN_CODE,
-        format!("`{text}` is not a diagnostic code; codes look like `ARA1302` or `ARA-EXP-AND-007`"),
+        format!(
+            "`{text}` is not a diagnostic code; codes look like `ARA1302` or `ARA-EXP-AND-007`"
+        ),
     )
     .path(format!("params.codes[#{index}]"));
     if let Some(near) = did_you_mean(text, names.iter().map(String::as_str)) {
@@ -200,18 +202,27 @@ fn filter(
             None => problems.push(
                 Diagnostic::error(
                     codes::INVALID_PARAMS,
-                    format!("`{o}` is not an origin; use `engine`, `human`, `agent` or `agent:<name>`"),
+                    format!(
+                        "`{o}` is not an origin; use `engine`, `human`, `agent` or `agent:<name>`"
+                    ),
                 )
                 .path("params.origin"),
             ),
         }
     }
-    if problems.is_empty() { Ok(f) } else { Err(problems) }
+    if problems.is_empty() {
+        Ok(f)
+    } else {
+        Err(problems)
+    }
 }
 
 /// What a query answers: records, a grouped summary and its text.
 fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) -> Value {
-    let all = st.diag.query(&Filter { limit: 0, ..f.clone() });
+    let all = st.diag.query(&Filter {
+        limit: 0,
+        ..f.clone()
+    });
     let cursor = st.diag.cursor();
     let limit = limit.map_or(if group { 10 } else { 50 }, |l| l.clamp(1, 1000)) as usize;
     let entries: Vec<&Record> = all[all.len().saturating_sub(limit)..].to_vec();
@@ -226,11 +237,18 @@ fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) 
     if !group {
         let mut text = String::new();
         for r in &entries {
-            let count = if r.count > 1 { format!(" ×{}", r.count) } else { String::new() };
+            let count = if r.count > 1 {
+                format!(" ×{}", r.count)
+            } else {
+                String::new()
+            };
             text.push_str(&format!("#{}{count} {}\n", r.seq, r.diagnostic));
         }
         if all.len() > entries.len() {
-            text.push_str(&format!("… {} older (raise `limit`)\n", all.len() - entries.len()));
+            text.push_str(&format!(
+                "… {} older (raise `limit`)\n",
+                all.len() - entries.len()
+            ));
         }
         text.push_str(&format!("cursor {cursor}\n"));
         return json!({ "cursor": cursor, "total": all.len(), "entries": entries, "text": text });
@@ -259,7 +277,9 @@ fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) 
 pub(crate) fn logs(st: &mut State, p: LogsParams) -> R {
     let mut subjects = p.subjects;
     if let Some(e) = p.entity {
-        subjects.get_or_insert_with(Vec::new).push(format!("entity:{e}"));
+        subjects
+            .get_or_insert_with(Vec::new)
+            .push(format!("entity:{e}"));
     }
     let mut f = filter(p.codes, p.severity, subjects, p.origin)?;
     f.since = p.since.unwrap_or(0);
@@ -290,7 +310,11 @@ fn query(st: &mut State, p: DiagQueryParams) -> R {
 }
 
 fn report(st: &mut State, origin: Origin, p: DiagReportParams) -> R {
-    let origin = if p.engine.unwrap_or(false) { Origin::Engine } else { origin };
+    let origin = if p.engine.unwrap_or(false) {
+        Origin::Engine
+    } else {
+        origin
+    };
     let mut recorded = Vec::new();
     let mut skipped = Vec::new();
     let mut ids = Vec::new();
@@ -315,11 +339,11 @@ fn report(st: &mut State, origin: Origin, p: DiagReportParams) -> R {
             Err(e) => {
                 ids.push(None);
                 skipped.push(
-                Diagnostic::warning(
-                    codes::DIAG_INVALID_REPORT,
-                    format!("reported diagnostic #{i} is not a diagnostic: {e}"),
-                )
-                .path(format!("params.diagnostics[#{i}]")),
+                    Diagnostic::warning(
+                        codes::DIAG_INVALID_REPORT,
+                        format!("reported diagnostic #{i} is not a diagnostic: {e}"),
+                    )
+                    .path(format!("params.diagnostics[#{i}]")),
                 )
             }
         }
@@ -370,7 +394,8 @@ impl Service for DiagService {
                 let _ = p.session;
                 let filter = filter(p.codes, p.severity, p.subjects, p.origin)?;
                 let id = st.token("dsub");
-                st.diag_subs.insert(id.clone(), Subscription { conn, filter });
+                st.diag_subs
+                    .insert(id.clone(), Subscription { conn, filter });
                 Ok(json!({ "subscription": id, "cursor": st.diag.cursor() }))
             }
             "diag.unsubscribe" => {
@@ -380,19 +405,26 @@ impl Service for DiagService {
                         st.diag_subs.remove(&p.subscription);
                         Ok(json!({ "unsubscribed": p.subscription }))
                     }
-                    _ => Err(vec![Diagnostic::error(
-                        codes::INVALID_PARAMS,
-                        format!("no subscription `{}` on this connection", p.subscription),
-                    )
-                    .path("params.subscription")]),
+                    _ => Err(vec![
+                        Diagnostic::error(
+                            codes::INVALID_PARAMS,
+                            format!("no subscription `{}` on this connection", p.subscription),
+                        )
+                        .path("params.subscription"),
+                    ]),
                 }
             }
             "diag.clear" => {
                 let p: DiagClearParams = parse(params)?;
                 let f = filter(p.codes, p.severity, p.subjects, p.origin)?;
                 let removed = st.diag.clear(&f);
-                if removed > 0 && let Err(e) = st.diag_file.rewrite(&st.diag) {
-                    st.log(Diagnostic::warning(codes::IO, format!("cannot rewrite `.ara/diagnostics.jsonl`: {e}")));
+                if removed > 0
+                    && let Err(e) = st.diag_file.rewrite(&st.diag)
+                {
+                    st.log(Diagnostic::warning(
+                        codes::IO,
+                        format!("cannot rewrite `.ara/diagnostics.jsonl`: {e}"),
+                    ));
                 }
                 Ok(json!({ "removed": removed, "cursor": st.diag.cursor() }))
             }
@@ -471,7 +503,10 @@ impl Persist {
                 self.lines += 1;
             }
         }
-        let mut file = fs::OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
         file.write_all(text.as_bytes())
     }
 

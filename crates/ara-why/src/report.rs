@@ -283,23 +283,38 @@ pub fn fix_line(f: &Fix) -> String {
         FixAction::Command { command, params } => {
             format!("{} — ara_apply {command} {}", f.title, compact(params))
         }
-        FixAction::Call { method, params } => format!("{} — call {method} {}", f.title, compact(params)),
+        FixAction::Call { method, params } => {
+            format!("{} — call {method} {}", f.title, compact(params))
+        }
         FixAction::Cli { args } => format!("{} — `ara {}`", f.title, args.join(" ")),
-        FixAction::Set { record, path, value } => format!(
+        FixAction::Set {
+            record,
+            path,
+            value,
+        } => format!(
             "{} — set {}{path} = {}",
             f.title,
-            record.as_deref().map(|r| format!("{r} ")).unwrap_or_default(),
+            record
+                .as_deref()
+                .map(|r| format!("{r} "))
+                .unwrap_or_default(),
             compact(value)
         ),
         FixAction::Remove { record, path } => format!(
             "{} — remove {}{path}",
             f.title,
-            record.as_deref().map(|r| format!("{r} ")).unwrap_or_default()
+            record
+                .as_deref()
+                .map(|r| format!("{r} "))
+                .unwrap_or_default()
         ),
         FixAction::Rename { record, path, to } => format!(
             "{} — rename {}{path} to {to}",
             f.title,
-            record.as_deref().map(|r| format!("{r} ")).unwrap_or_default()
+            record
+                .as_deref()
+                .map(|r| format!("{r} "))
+                .unwrap_or_default()
         ),
     }
 }

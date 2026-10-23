@@ -46,7 +46,11 @@ impl Affine {
     /// From a `Transform` component value (missing fields take their defaults).
     pub fn from_transform(v: Option<&Value>) -> Affine {
         let field = |k: &str, d: f64| vec3(v.and_then(|v| v.get(k))).unwrap_or([d; 3]);
-        Affine::from_trs(field("position", 0.0), field("rotation", 0.0), field("scale", 1.0))
+        Affine::from_trs(
+            field("position", 0.0),
+            field("rotation", 0.0),
+            field("scale", 1.0),
+        )
     }
 
     /// Applies the linear part.
@@ -80,7 +84,11 @@ impl Affine {
 
     /// True if every number is finite.
     pub fn is_finite(&self) -> bool {
-        self.cols.iter().flatten().chain(self.t.iter()).all(|x| x.is_finite())
+        self.cols
+            .iter()
+            .flatten()
+            .chain(self.t.iter())
+            .all(|x| x.is_finite())
     }
 }
 
@@ -156,9 +164,13 @@ mod tests {
         // Yaw 90° turns +X into −Z; scale 2 doubles the offset.
         assert!(close(world.t, [10.0, 0.0, -2.0]), "{:?}", world.t);
         assert!(close(world.axis_scales(), [2.0, 0.0, 2.0]));
-        let forward = Affine::from_trs([0.0; 3], [0.0, 180.0, 0.0], [1.0; 3]).vector([0.0, 0.0, -1.0]);
+        let forward =
+            Affine::from_trs([0.0; 3], [0.0, 180.0, 0.0], [1.0; 3]).vector([0.0, 0.0, -1.0]);
         assert!(close(forward, [0.0, 0.0, 1.0]));
-        assert!(!Affine::from_transform(Some(&serde_json::json!({ "position": [0, null, 0] }))).is_finite());
+        assert!(
+            !Affine::from_transform(Some(&serde_json::json!({ "position": [0, null, 0] })))
+                .is_finite()
+        );
         assert_eq!(show3([1.0, 0.25, f64::NAN]), "[1, 0.25, NaN]");
     }
 }
