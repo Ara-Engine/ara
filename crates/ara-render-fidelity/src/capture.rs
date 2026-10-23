@@ -63,11 +63,97 @@ impl FidelityView {
     /// Read full-precision filtered linear radiance before exposure and display mapping.
     /// Reference mode copies its undenoised accumulation into the same channel.
     pub fn capture_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+        self.read_hdr(gpu, FILTER0)
+    }
+    /// Read current-to-previous UV motion, previous radial depth and reactive mask.
+    /// Explicit diagnostics only; ordinary rendering never reads back motion.
+    pub fn capture_motion(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+        self.read_hdr(gpu, crate::targets::MOTION)
+    }
+    /// Read the separately accumulated direct/emissive signal for lighting diagnostics.
+    /// Subtract it from `capture_radiance` to inspect filtered indirect transport.
+    pub fn capture_direct_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+        self.capture_signal(gpu, crate::targets::DIRECT_HISTORY0 + 1 - self.slot)
+    }
+    /// Read demodulated indirect history for offline temporal diagnostics.
+    pub fn capture_incident_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+        self.capture_signal(gpu, crate::targets::HISTORY0 + 1 - self.slot)
+    }
+    fn capture_signal(&self, gpu: &mut VulkanDevice, source: usize) -> Result<Vec<[f32; 4]>> {
+        anyhow::ensure!(self.history, "Render before capture");
+        use ara_gpu::RootConstants;
+        let size = self.settings.render_size;
+        let image = gpu.create_image(
+            size[0],
+            size[1],
+            vk::Format::R32G32B32A32_SFLOAT,
+            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::TRANSFER_SRC,
+        )?;
+        let destination = gpu.storage_image(image)?.index;
+        let mut c = gpu.begin(Queue::Graphics);
+        c.barriers([
+            Barrier {
+                resource: Resource::Image(image),
+                before: Access::Undefined,
+                after: Access::Storage,
+                handoff: None,
+            },
+            Barrier {
+                resource: Resource::Image(self.targets.images[source]),
+                before: self.targets.states[source].access,
+                after: Access::ShaderRead,
+                handoff: None,
+            },
+        ]);
+        c.push(Command::Pipeline(self.pipelines["diagnostic"]));
+        c.push(Command::Constants(RootConstants {
+            words: [
+                self.frame_index,
+                0,
+                self.targets.sampled[source],
+                destination,
+                0,
+                0,
+                0,
+                0,
+            ],
+        }));
+        c.push(Command::Dispatch([
+            size[0].div_ceil(8),
+            size[1].div_ceil(8),
+            1,
+        ]));
+        c.barriers([Barrier {
+            resource: Resource::Image(self.targets.images[source]),
+            before: Access::ShaderRead,
+            after: self.targets.states[source].access,
+            handoff: None,
+        }]);
+        let p = gpu.submit(c.finish(), &[])?;
+        gpu.resolve(p)?;
+        let data = self.read_hdr_image(gpu, image, Access::Storage)?;
+        gpu.retire(Resource::Image(image))?;
+        gpu.collect()?;
+        Ok(data)
+    }
+    fn read_hdr(&self, gpu: &mut VulkanDevice, target: usize) -> Result<Vec<[f32; 4]>> {
+        self.read_hdr_image(
+            gpu,
+            self.targets.images[target],
+            self.targets.states[target].access,
+        )
+    }
+    fn read_hdr_image(
+        &self,
+        gpu: &mut VulkanDevice,
+        image: ara_gpu::Image,
+        before: Access,
+    ) -> Result<Vec<[f32; 4]>> {
         anyhow::ensure!(self.history, "Render before capture");
         let size = self.settings.render_size;
-        let image = self.targets.images[FILTER0];
+        let stride = 16;
         let b = gpu.create_buffer(
-            u64::from(size[0]) * u64::from(size[1]) * 16,
+            u64::from(size[0]) * u64::from(size[1]) * stride,
             vk::BufferUsageFlags::TRANSFER_DST,
             true,
         )?;
@@ -75,7 +161,7 @@ impl FidelityView {
         c.barriers([
             Barrier {
                 resource: Resource::Image(image),
-                before: self.targets.states[FILTER0].access,
+                before,
                 after: Access::CopySource,
                 handoff: None,
             },
@@ -100,7 +186,7 @@ impl FidelityView {
             Barrier {
                 resource: Resource::Image(image),
                 before: Access::CopySource,
-                after: self.targets.states[FILTER0].access,
+                after: before,
                 handoff: None,
             },
         ]);
@@ -110,9 +196,7 @@ impl FidelityView {
         gpu.retire(Resource::Buffer(b))?;
         gpu.collect()?;
         Ok(bytes
-            .as_chunks::<16>()
-            .0
-            .iter()
+            .chunks_exact(stride as usize)
             .map(|v| {
                 std::array::from_fn(|i| {
                     f32::from_le_bytes([v[i * 4], v[i * 4 + 1], v[i * 4 + 2], v[i * 4 + 3]])

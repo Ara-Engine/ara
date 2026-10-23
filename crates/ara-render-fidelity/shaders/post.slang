@@ -48,7 +48,10 @@ void postMain(uint3 tid:SV_DispatchThreadID){
         float other=sampleImage(f,DEPTH,uv+offset).x;float w=abs(other-depth)<max(0.1,depth*0.1)?1:0;sum+=sampleImage(f,FILTER0,uv+offset).rgb*w;total+=w;}c=sum/total;}
     c=lerp(c,pixel(f,BLOOM1,p).rgb,f.post.z);
     float3 direction=cameraRay(f,float2(p)+0.5);float3 atmosphere=sky(f,direction);
-    float transmittance=exp(-f.post.w*(depth>0?depth:500));c=c*transmittance+atmosphere*(1-transmittance);
+    if(f.display.w!=0){
+        if(depth==0)c=atmosphereEnvironment(f,direction,true);
+        else {float distance=length(pixel(f,WORLD+f.control.x,p).xyz-f.camera.xyz);float3 trans;float3 fog=sampleFroxel(f,uv,distance,trans);c=c*trans+fog;}
+    }else {float transmittance=exp(-f.post.w*(depth>0?depth:500));c=c*transmittance+atmosphere*(1-transmittance);}
     float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);c=max(c*exposure,0);
     // Narkowicz's ACES fitted curve, matching M1; an SDR fit, not a full ACES transform.
     c=f.display.x==1?neutral(c):saturate((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14));c=srgb(grading(f,c));store(f,POST,p,float4(c,1));

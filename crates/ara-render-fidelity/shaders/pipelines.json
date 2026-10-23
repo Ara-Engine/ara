@@ -41,11 +41,53 @@
       "vertex_stride": 0
     }
   },
+  "ddgi_atmosphere": {
+    "entries": {
+      "ddgiAtmosphereMain": "compute"
+    },
+    "source": "ddgi-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "ddgi_emissive": {
     "entries": {
       "ddgiEmissiveMain": "compute"
     },
     "source": "ddgi_emissive.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "ddgi_layers": {
+    "entries": {
+      "ddgiLayersMain": "compute"
+    },
+    "source": "ddgi-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "diagnostic": {
+    "entries": {
+      "diagnosticMain": "compute"
+    },
+    "source": "diagnostic.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -69,11 +111,53 @@
       "vertex_stride": 0
     }
   },
+  "fog": {
+    "entries": {
+      "fogMain": "compute"
+    },
+    "source": "fog.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "fog_raster": {
+    "entries": {
+      "fogRasterMain": "compute"
+    },
+    "source": "fog-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "hybrid": {
     "entries": {
       "hybridMain": "compute"
     },
     "source": "transport.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "hybrid_atmosphere": {
+    "entries": {
+      "hybridAtmosphereMain": "compute"
+    },
+    "source": "transport-atmosphere.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -97,11 +181,39 @@
       "vertex_stride": 0
     }
   },
+  "hybrid_layers": {
+    "entries": {
+      "hybridLayersMain": "compute"
+    },
+    "source": "transport-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "hybrid_raster": {
     "entries": {
       "hybridRasterMain": "compute"
     },
     "source": "raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "multiscatter": {
+    "entries": {
+      "multiScatterMain": "compute"
+    },
+    "source": "atmosphere.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -139,11 +251,39 @@
       "vertex_stride": 0
     }
   },
+  "primary_atmosphere": {
+    "entries": {
+      "primaryAtmosphereMain": "compute"
+    },
+    "source": "transport-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "primary_emissive": {
     "entries": {
       "primaryEmissiveMain": "compute"
     },
     "source": "transport_emissive.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "primary_layers": {
+    "entries": {
+      "primaryLayersMain": "compute"
+    },
+    "source": "transport-layers.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -181,11 +321,39 @@
       "vertex_stride": 0
     }
   },
+  "reference_atmosphere": {
+    "entries": {
+      "referenceAtmosphereMain": "compute"
+    },
+    "source": "transport-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "reference_emissive": {
     "entries": {
       "referenceEmissiveMain": "compute"
     },
     "source": "transport_emissive.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reference_layers": {
+    "entries": {
+      "referenceLayersMain": "compute"
+    },
+    "source": "transport-layers.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -209,11 +377,39 @@
       "vertex_stride": 0
     }
   },
+  "skyview": {
+    "entries": {
+      "skyViewMain": "compute"
+    },
+    "source": "atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "temporal": {
     "entries": {
       "temporalMain": "compute"
     },
     "source": "denoise.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "transmittance": {
+    "entries": {
+      "transmittanceMain": "compute"
+    },
+    "source": "atmosphere.slang",
     "state": {
       "blend": false,
       "color_formats": [],

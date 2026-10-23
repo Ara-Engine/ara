@@ -4,6 +4,31 @@ use anyhow::Result;
 use ara_render::scene::{CameraSpec, Mesh, Scene, Texture, Vertex};
 use glam::Vec3;
 
+/// Apply the bounded gather preset and the landscape's explicit local probe field.
+/// Shared by capture commands and golden tests so fixture settings cannot drift.
+pub fn configure_view(
+    gpu: &mut ara_gpu::vulkan::VulkanDevice,
+    view: &mut ara_render_fidelity::FidelityView,
+    outdoor: bool,
+) -> Result<()> {
+    // Sparse emitters need more short-range paths than the smooth daylight sky.
+    // Spend the small-room budget on two events and half-rate rather than quarter-rate rays.
+    view.set_gather_events(if outdoor { 1 } else { 2 })?;
+    view.set_transport_stride(if outdoor { 4 } else { 2 })?;
+    if outdoor {
+        view.set_atmosphere(Some(Default::default()))?;
+        view.set_probe_volume(
+            gpu,
+            ara_render_fidelity::probes::ProbeVolume {
+                origin: Vec3::new(-40., -12., -40.),
+                spacing: Vec3::splat(4.),
+                counts: [22, 16, 22],
+            },
+        )?;
+    }
+    Ok(())
+}
+
 /// Extract one actual landscape sample tile through the terrain's hole-aware mesh seam.
 /// Preparation runs offline; the hybrid renderer owns static BLASes for this snapshot.
 pub fn outdoor() -> Result<Scene> {
@@ -66,12 +91,13 @@ pub fn outdoor() -> Result<Scene> {
         material: 0,
     });
     let mut texture = Vec::new();
-    for z in 0..64 {
-        for x in 0..64 {
-            let sample = ara_landscape::sample::surface([1024. + x as f32, 960. + z as f32])
-                .ok_or_else(|| anyhow::anyhow!("Missing sample terrain surface"))?;
+    for z in 0..1024 {
+        for x in 0..1024 {
+            let sample =
+                ara_landscape::sample::surface([1024. + x as f32 / 16., 960. + z as f32 / 16.])
+                    .ok_or_else(|| anyhow::anyhow!("Missing sample terrain surface"))?;
             let rock = sample.weights[1];
-            let variation = 0.9 + 0.1 * ((x * 17 + z * 73) % 13) as f32 / 12.;
+            let variation = 0.78 + 0.22 * ((x * 1709 + z * 7307) % 137) as f32 / 136.;
             let colour =
                 Vec3::new(92., 118., 54.).lerp(Vec3::new(150., 141., 126.), rock) * variation;
             texture.extend([colour.x as u8, colour.y as u8, colour.z as u8, 255]);
@@ -79,7 +105,7 @@ pub fn outdoor() -> Result<Scene> {
     }
     scene.materials[0].textures[0] = scene.textures.len() as u32;
     scene.textures.push(Texture {
-        size: [64, 64],
+        size: [1024, 1024],
         rgba: texture,
         srgb: true,
     });
@@ -123,6 +149,7 @@ pub fn outdoor() -> Result<Scene> {
             ));
         }
     }
+    crate::vegetation::populate(&mut scene)?;
     Ok(scene)
 }
 
@@ -157,15 +184,15 @@ pub fn camera(outdoor: bool) -> CameraSpec {
                 23.,
                 ara_landscape::sample::height(1079., 1019.)
                     - ara_landscape::sample::height(1056., 992.)
-                    + 12.,
+                    + 5.,
                 27.,
             ),
             target: Vec3::new(
-                -4.,
-                ara_landscape::sample::height(1052., 987.)
+                -70.,
+                ara_landscape::sample::height(1079., 1019.)
                     - ara_landscape::sample::height(1056., 992.)
-                    + 1.,
-                -5.,
+                    + 12.,
+                -140.,
             ),
             vertical_fov: 1.0,
         }

@@ -5,6 +5,9 @@ use ara_pathtrace::{metrics, robust_scenes};
 use std::collections::BTreeMap;
 
 const SIZE: [u32; 2] = [480, 270];
+fn configure(gpu: &mut VulkanDevice, view: &mut FidelityView, name: &str) -> Result<()> {
+    robust_scenes::configure_view(gpu, view, name == "outdoor_day")
+}
 
 fn cases() -> Result<
     Vec<(
@@ -42,6 +45,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut s = settings(SIZE, SIZE);
         s.post = post;
         let mut view = FidelityView::new(gpu, &scene, s, None)?;
+        configure(gpu, &mut view, name)?;
         for tick in 0..256 {
             let mut frame = input(&camera, tick, false);
             frame.deterministic = false;
@@ -51,8 +55,12 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let hdr = view.capture_radiance(gpu)?;
         hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
         let hash = view.scene_hash().to_owned();
+        let revision = view.shader_revision().to_owned();
         view.destroy(gpu)?;
         let mut reference = Reference::new(gpu, &scene, SIZE, 4096, 12, post)?;
+        if name == "outdoor_day" {
+            reference.set_atmosphere(Some(Default::default()))?;
+        }
         let mut half = Vec::new();
         for batch in 0..512 {
             reference.step(gpu, &camera, false)?;
@@ -69,6 +77,10 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         large::side_by_side(&hybrid, &reference_image)
             .save(root.join(format!("captures/{name}-side-by-side.png")))?;
         let error = metrics::radiance(&hdr, &ground)?;
+        let lower = (SIZE[0] * SIZE[1] / 2) as usize;
+        let surface_roi_error = metrics::radiance(&hdr[lower..], &ground[lower..])?;
+        large::save_hdr(&root.join(format!(".sn/{name}-hybrid.f32")), &hdr)?;
+        large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
         let golden = root.join(format!("tests/goldens/{name}.png"));
         if update {
@@ -83,7 +95,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             "{name}: relative RMSE {:.5}; convergence {:.5}",
             error.relative_rmse, convergence.relative_rmse
         );
-        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
+        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":if name=="outdoor_day"{"lower half: terrain and foliage"}else{"lower half: floor and sphere bases"},"surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
         reference.destroy(gpu)?;
     }
     write_json(&root.join("measurements/robust-quality.json"), &report)?;
@@ -104,8 +116,11 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 ..large::fixed_post()
             };
             let mut view = FidelityView::new(gpu, &scene, s, None)?;
+            configure(gpu, &mut view, name)?;
             let mut totals = Vec::new();
             let mut passes = BTreeMap::<String, Vec<f64>>::new();
+            let background_before = content::background_load();
+            let cpu_before = content::cpu_load();
             for tick in 0..156 {
                 let mut frame = input(&camera, tick, false);
                 frame.deterministic = false;
@@ -142,7 +157,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 "{name} {}p: p50 {:.3}, p95 {:.3} ms",
                 render[1], totals[30], totals[56]
             );
-            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
+            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_before":background_before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
             view.destroy(gpu)?;
         }
     }

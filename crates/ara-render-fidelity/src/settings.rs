@@ -99,7 +99,8 @@ pub struct Settings {
     pub mode: Mode,
     /// Reconstruction implementation.
     pub upscaler: Upscaler,
-    /// Primary probe paths per frame, rounded down to a whole 64-ray probe.
+    /// Maximum primary probe paths per frame: 64-ray geometry updates, or
+    /// 16-ray irradiance updates during a lighting response.
     /// Each path resolves up to five surfaces plus their explicit shadow rays.
     pub probe_ray_budget: u32,
     /// Fade traced specular into probe lighting over the preceding 0.1 roughness.
@@ -133,7 +134,7 @@ impl Settings {
         );
         if let Mode::Reference { samples, bounces } = self.mode {
             ensure!(
-                (1..=16384).contains(&samples) && (1..=16).contains(&bounces),
+                (1..=65536).contains(&samples) && (1..=16).contains(&bounces),
                 "Invalid reference sample/bounce budget"
             );
             ensure!(
@@ -197,7 +198,8 @@ pub struct FrameInput<'a> {
     pub delta_seconds: f32,
     /// Camera cut, view reassignment, or content replacement.
     pub reset: bool,
-    /// Lighting changed; reject radiance history and update probes responsively.
+    /// Lighting changed; retain geometric history with responsive radiance weights
+    /// and faster probe coverage inside the configured ray budget.
     pub lighting_changed: bool,
     /// Disable subpixel jitter for exact deterministic captures.
     pub deterministic: bool,
