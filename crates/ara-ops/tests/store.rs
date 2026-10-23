@@ -340,22 +340,19 @@ proptest! {
 #[test]
 fn restore_rebuilds_history_with_ids_and_optionally_reapplies() {
     let mut s = store();
-    s.transact(
-        TxnMeta::by(agent()),
-        [set("e_a", "name", json!("One"))],
-    )
-    .expect("first");
-    s.transact(
-        TxnMeta::by(agent()),
-        [set("e_b", "name", json!("Two"))],
-    )
-    .expect("second");
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("One"))])
+        .expect("first");
+    s.transact(TxnMeta::by(agent()), [set("e_b", "name", json!("Two"))])
+        .expect("second");
     let journal = s.history().to_vec();
 
     // A restart: the disk has the first change but not the second.
     let mut fresh = store();
     fresh
-        .transact(TxnMeta::by(Author::Human), [set("e_a", "name", json!("One"))])
+        .transact(
+            TxnMeta::by(Author::Human),
+            [set("e_a", "name", json!("One"))],
+        )
         .expect("disk state");
     let mut fresh = {
         let ws = fresh.workspace().clone();
@@ -367,7 +364,11 @@ fn restore_rebuilds_history_with_ids_and_optionally_reapplies() {
     assert_eq!(get(&fresh, "e_b", "name"), json!("Two"));
     assert_eq!(fresh.txn(&journal[0].id), Some(&journal[0]));
     assert_eq!(
-        fresh.restore(journal[1].clone(), true).expect_err("not past").remove(0).code,
+        fresh
+            .restore(journal[1].clone(), true)
+            .expect_err("not past")
+            .remove(0)
+            .code,
         codes::STALE_BASE
     );
 

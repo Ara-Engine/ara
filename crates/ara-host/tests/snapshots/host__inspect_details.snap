@@ -1,0 +1,11 @@
+---
+source: crates/ara-host/tests/host.rs
+expression: "details[\"text\"].as_str().expect(\"text\")"
+---
+e_lmp1 Lamp [Light] pos(0,1,0) · parent e_stk2/e_c001 · defined in sc_arena001#e_lmp1
+  Light: kind=spot intensity=800lm color=(1,1,1,1)
+  Transform: position=(0,1,0)m rotation=(0,0,0)deg scale=(1,1,1)
+e_stk2/e_c002 Crate [MeshRenderer Light] pos(0,1,0) · parent e_stk2 · defined in pf_crate001#e_crt1
+  MeshRenderer: mesh=@meshes/crate.glb#ms_crate001 tint=(1,1,1,1)
+  Transform: position=(0,1,0)m rotation=(0,0,0)deg scale=(1,1,1)
+  Light: kind=point intensity=200lm color=(1,1,1,1)
