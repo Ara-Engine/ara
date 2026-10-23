@@ -708,6 +708,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-geo"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset",
+ "ara-json",
+ "ara-schema",
+ "bytemuck",
+ "half",
+ "meshopt",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
@@ -791,6 +806,7 @@ version = "0.0.0"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
+ "ara-geo",
  "ara-json",
  "ara-schema",
  "base64 0.22.1",
@@ -1198,6 +1214,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-render-geo"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-geo",
+ "ara-gpu",
+ "ara-render",
+ "ara-vsm",
+ "bytemuck",
+ "glam 0.30.9",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-render2d"
 version = "0.0.0"
 dependencies = [
@@ -1509,6 +1541,16 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-vsm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "glam 0.30.9",
+ "serde",
 ]
 
 [[package]]
