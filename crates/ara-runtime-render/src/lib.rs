@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 
 pub mod geometry;
+pub mod two_d;
 
 use anyhow::{Context, Result, ensure};
 use ara_render::{

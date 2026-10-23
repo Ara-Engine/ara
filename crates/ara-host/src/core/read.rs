@@ -114,6 +114,27 @@ fn entries(st: &State) -> Vec<Entry> {
                 .unwrap_or_default(),
         }
     }));
+    out.extend(st.external.iter().map(|(name, (source, entry))| {
+        Entry {
+            name: name.clone(),
+            kind: SchemaKind::Command,
+            summary: entry["summary"].as_str().unwrap_or_default().to_owned(),
+            module: source.clone(),
+            fields: entry["params"]["properties"]
+                .as_object()
+                .map(|p| {
+                    p.iter()
+                        .map(|(k, v)| {
+                            (
+                                k.clone(),
+                                v["description"].as_str().unwrap_or_default().to_owned(),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }));
     out.extend(st.catalog.iter().map(|m| Entry {
         name: m.name.clone(),
         kind: SchemaKind::Method,
@@ -185,6 +206,11 @@ pub(super) fn schema_describe(st: &mut State, p: SchemaDescribeParams) -> R {
                 "examples": info.examples,
                 "params": db.get(&info.params).map(|t| db.type_json_schema(t)),
             }));
+        } else if let Some((source, entry)) = st.external.get(name.as_str()) {
+            let mut item = entry.clone();
+            item["name"] = json!(name);
+            item["source"] = json!(source);
+            items.push(item);
         } else if let Some(m) = st.catalog.iter().find(|m| m.name == *name) {
             items.push(json!(m));
         } else {

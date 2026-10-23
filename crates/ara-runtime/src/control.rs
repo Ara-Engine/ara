@@ -7,6 +7,7 @@ use crate::{
 use ara_components::Transform;
 use ara_input::{Action, ActionKind, ActionMap, ActionValue, Binding, PlayerId};
 use ara_physics::{CharacterInput, CharacterMotion};
+use ara_physics2d::{CharacterInput2d, CharacterMotion2d};
 use ara_sim::{Identity, SimContext};
 use bevy_ecs::prelude::*;
 use glam::{Mat3, Quat, Vec3};
@@ -118,6 +119,33 @@ pub fn drive_players(
             let target = direction.x.atan2(direction.z).to_degrees();
             control.yaw = approach_angle(control.yaw, target, control.turn_rate * dt);
         }
+        let grounded = motion.is_none_or(|m| m.grounded);
+        input.jump_speed = if grounded && pressed(&ctx, control.player, JUMP) {
+            control.jump_speed
+        } else {
+            0.0
+        };
+    }
+}
+
+/// 2D players (`PlayerControl` on a `CharacterController2d`): `Move.x` drives the
+/// horizontal speed (`Sprint` runs), `Jump` launches while grounded.
+pub fn drive_players_2d(
+    ctx: Res<SimContext>,
+    mut players: Query<(
+        &PlayerControl,
+        &mut CharacterInput2d,
+        Option<&CharacterMotion2d>,
+    )>,
+) {
+    for (control, mut input, motion) in &mut players {
+        let [x, _] = axis2(&ctx, control.player, MOVE);
+        let speed = if pressed(&ctx, control.player, SPRINT) {
+            control.run_speed
+        } else {
+            control.walk_speed
+        };
+        input.desired_velocity = [x.clamp(-1.0, 1.0) * speed, 0.0];
         let grounded = motion.is_none_or(|m| m.grounded);
         input.jump_speed = if grounded && pressed(&ctx, control.player, JUMP) {
             control.jump_speed

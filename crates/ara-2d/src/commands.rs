@@ -14,8 +14,10 @@ fn invalid(e: impl std::fmt::Display) -> Diagnostic {
 /// Upper bound on cells changed by one stroke, fill or rule pass.
 const MAX_CELLS: usize = 65536;
 
-/// A signed source-cell address.
+/// A signed source-cell address. Reflected as `TileCell` (world partition cells own
+/// `Cell`).
 #[derive(Debug, Clone, Copy, Schema, Deserialize)]
+#[ara(name = "TileCell")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Cell {
     /// Signed column / axial q.

@@ -4,6 +4,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -50,6 +51,7 @@ enum Message {
     Progress(Progress),
     Complete(ImportOutput),
     Dependencies(Vec<String>),
+    Versions(BTreeMap<String, String>),
     Failed(String),
 }
 #[derive(Serialize, Deserialize)]
@@ -61,6 +63,7 @@ enum Request {
         #[serde(with = "serde_bytes")]
         source: Vec<u8>,
     },
+    Versions,
 }
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
     let bytes = rmp_serde::to_vec_named(value).map_err(|e| Error::Worker(e.to_string()))?;
@@ -101,6 +104,12 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
     let request: Request = read_frame(&mut std::io::stdin().lock())?;
     let input = match request {
         Request::Import(input) => input,
+        Request::Versions => {
+            return write_frame(
+                &mut std::io::stdout().lock(),
+                &Message::Versions(registry.versions()),
+            );
+        }
         Request::Discover {
             importer,
             version,
@@ -219,6 +228,23 @@ impl ProcessWorker {
             }
         }
     }
+    /// The installed version of every importer in this worker executable (`id` →
+    /// version). Blocks for one short worker launch; call off the frame thread.
+    pub fn versions(&self) -> Result<BTreeMap<String, String>> {
+        let job = self.start_request(Request::Versions)?;
+        match job
+            .events
+            .recv_timeout(self.timeout.min(Duration::from_secs(30)))
+        {
+            Ok(Ok(Message::Versions(versions))) => Ok(versions),
+            Ok(Ok(Message::Failed(error))) => Err(Error::Worker(error)),
+            Ok(Ok(_)) => Err(Error::Worker("unexpected worker reply".into())),
+            Ok(Err(error)) => Err(error),
+            Err(_) => Err(Error::Worker(
+                "worker did not report importer versions".into(),
+            )),
+        }
+    }
     fn start_request(&self, request: Request) -> Result<ImportJob> {
         let mut command = Command::new(&self.executable);
         command
@@ -331,6 +357,10 @@ impl ImportJob {
             Ok(Ok(Message::Failed(error))) => {
                 self.finished = true;
                 Err(Error::Worker(error))
+            }
+            Ok(Ok(Message::Versions(_))) => {
+                self.finished = true;
+                Err(Error::Worker("unexpected importer versions".into()))
             }
             Ok(Err(error)) => {
                 self.finished = true;

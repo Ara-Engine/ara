@@ -78,6 +78,10 @@ pub(crate) struct State {
     pub(crate) registry: Registry,
     pub(crate) proto: SchemaDb,
     pub(crate) catalog: Vec<MethodInfo>,
+    /// Commands published at runtime by services (C# `[Command]`s of a running play
+    /// world): name to (source, ara-cmd `Info`-shaped entry). Listed and described
+    /// with the registry; run through their source's method (`play.command`).
+    pub(crate) external: BTreeMap<String, (String, Value)>,
     pub(crate) sessions: Sessions,
     pub(crate) review: Review,
     pub(crate) journal: Journal,
@@ -194,6 +198,7 @@ impl Host {
             registry,
             proto: SchemaDb::new(),
             catalog: Vec::new(),
+            external: BTreeMap::new(),
             sessions: Sessions::default(),
             review: Review::default(),
             journal,

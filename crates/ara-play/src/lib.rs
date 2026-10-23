@@ -27,6 +27,9 @@ pub const STATUS: &str = "play.status";
 /// Player → owner notification before known-long work (GPU device creation, world
 /// build): the owner's hang watchdog allows silence until the deadline ([`Busy`]).
 pub const BUSY: &str = "play.busy";
+/// Player → owner notification: a C# reload report, a module diagnostic, or a
+/// restart request after engine bindings changed (L4) ([`Event`]).
+pub const EVENT: &str = "play.event";
 /// Prefix of the single structured crash line a player writes to stderr.
 pub const CRASH_PREFIX: &str = "ARA_PLAYER_CRASH ";
 /// Environment variable carrying the per-session token (never the command line).
@@ -72,6 +75,14 @@ pub mod method {
     pub const ASSETS: &str = "play.assets";
     /// Test builds: force a panic, access violation or hang ([`crate::Crash`]).
     pub const CRASH: &str = "play.debug.crash";
+    /// Run a C# `[Command]` between ticks ([`crate::Command`]); returns its effects.
+    pub const COMMAND: &str = "play.command";
+    /// The C# command catalog (ara-cmd `Info` shape, `scope: "play"`).
+    pub const COMMANDS: &str = "play.commands";
+    /// Claim C# source paths as an agent edit before the owner writes them.
+    pub const COMPILE: &str = "play.compile";
+    /// A portable snapshot of the current tick (hex CBOR), to resume elsewhere.
+    pub const SNAPSHOT: &str = "play.snapshot";
 }
 
 /// Process role, assigned when Play begins (same vocabulary as `ara-net` launches).
@@ -138,6 +149,76 @@ pub struct Start {
     pub connect_to: Option<String>,
     /// Stay paused after tick 0 (otherwise run at the fixed rate).
     pub start_paused: bool,
+    /// Portable snapshot (hex CBOR, from `play.snapshot`) to restore after building:
+    /// restarts keep the game state (C# L4 reloads).
+    #[serde(default)]
+    pub resume: Option<String>,
+}
+
+/// `play.command` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Command {
+    /// Command name (`game.UseMedkit`).
+    pub name: String,
+    /// Params; entity params may use document addresses (`e_fox`).
+    #[serde(default)]
+    pub params: Value,
+}
+
+/// `play.compile` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Compile {
+    /// Absolute paths of C# sources an agent is about to write.
+    pub paths: Vec<String>,
+}
+
+/// [`EVENT`] payload.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Event {
+    /// A C# reload was applied (or failed) at a tick boundary.
+    Reload {
+        /// Tick boundary it applied at.
+        tick: u64,
+        /// `RELOAD_*` level (1–4, 100 = error).
+        level: u32,
+        /// Module slot.
+        module: u32,
+        /// 0 human, 1 agent.
+        origin: u32,
+        /// Modules swapped together.
+        cascade: u32,
+        /// Compile errors (the last good code keeps running).
+        errors: u32,
+    },
+    /// A C# host or module diagnostic.
+    Diagnostic {
+        /// The diagnostic.
+        diagnostic: Value,
+    },
+    /// Engine bindings changed (L4): restart the player from a snapshot.
+    Restart,
+    /// C# module types (after load and reloads) as project `*.types.json` documents
+    /// by absolute path; the owner keeps the files current so every host validates
+    /// C# components without starting .NET.
+    Types {
+        /// Path → types document.
+        files: BTreeMap<String, Value>,
+    },
+}
+
+/// C# modules a scene runs ([`PlayScene::scripts`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptScene {
+    /// `Ara.Host` JIT build output directory.
+    pub host_dir: String,
+    /// `Ara.CompileServer.dll` (hot reload); absent loads prebuilt assemblies.
+    pub compile_server: Option<String>,
+    /// Absolute module folders (each with `ara.module.toml`).
+    pub modules: Vec<String>,
 }
 
 /// `play.start` result.
@@ -495,6 +576,9 @@ pub struct PlayScene {
     pub cache: String,
     /// Navmesh tile cache directory.
     pub nav_cache: Option<String>,
+    /// C# gameplay modules, when the project has any.
+    #[serde(default)]
+    pub scripts: Option<ScriptScene>,
 }
 
 impl PlayScene {
@@ -550,7 +634,17 @@ pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Parses 64 hex characters into 32 bytes.
+/// Parses hex text of any even length into bytes (portable snapshots).
+pub fn unhex_bytes(text: &str) -> Result<Vec<u8>, String> {
+    if !text.len().is_multiple_of(2) || !text.is_ascii() {
+        return Err("hex text must hold whole ASCII bytes".into());
+    }
+    (0..text.len() / 2)
+        .map(|i| u8::from_str_radix(&text[i * 2..i * 2 + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+/// Parses a 64-character hex digest.
 pub fn unhex(text: &str) -> Result<[u8; 32], String> {
     if text.len() != 64 {
         return Err(format!("expected 64 hex characters, got {}", text.len()));

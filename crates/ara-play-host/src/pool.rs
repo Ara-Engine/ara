@@ -34,6 +34,8 @@ pub struct Player {
     pub status: Option<Status>,
     /// Silence allowed until this instant (announced long work).
     pub grace: Instant,
+    /// `play.event` notifications (C# reloads, diagnostics, restarts) not yet drained.
+    pub events: Vec<ara_play::Event>,
 }
 
 impl Drop for Player {
@@ -56,6 +58,10 @@ impl Player {
                 && let Ok(busy) = serde_json::from_value::<Busy>(params.clone())
             {
                 self.grace = Instant::now() + Duration::from_millis(busy.max_ms.min(300_000));
+            } else if method == ara_play::EVENT
+                && let Ok(event) = serde_json::from_value(params.clone())
+            {
+                self.events.push(event);
             }
         }
     }
@@ -416,6 +422,7 @@ impl Pool {
             seen: Instant::now(),
             status: None,
             grace: Instant::now(),
+            events: Vec::new(),
         })
     }
 

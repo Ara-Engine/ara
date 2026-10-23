@@ -7,6 +7,7 @@ use ara_diag::Diagnostic;
 use ara_doc::prefab::Resolved;
 use ara_ops::Store;
 use ara_render::scene::{Light, Material, Mesh, Scene, Texture, Vertex};
+use ara_runtime::components::MeshRenderer;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::{
@@ -187,27 +188,23 @@ impl EditWorldView for DocumentView {
                 .get("name")
                 .and_then(Value::as_str)
                 .unwrap_or(id);
-            if let Some(renderer) = entity.record.get("MeshRenderer") {
-                let tint = renderer
-                    .get("color")
-                    .or_else(|| renderer.get("tint"))
-                    .and_then(Value::as_array)
-                    .filter(|a| a.len() == 4)
-                    .map(|a| std::array::from_fn(|i| a[i].as_f64().unwrap_or(1.) as f32))
-                    .unwrap_or([0.32, 0.42, 0.53, 1.]);
+            if let Some(record) = entity.record.get("MeshRenderer") {
+                // Decoded as the engine component, defaults and all: the viewport
+                // draws what Play draws (same material and procedural shapes).
+                let renderer: MeshRenderer =
+                    serde_json::from_value(record.clone()).unwrap_or_default();
                 let material = scene.materials.len();
+                let [r, g, b] = renderer.emissive;
                 scene.materials.push(Material {
-                    base_color: tint,
-                    emissive_roughness: [0., 0., 0., 0.65],
-                    ..Material::default()
+                    base_color: renderer.color.0,
+                    emissive_roughness: [r, g, b, renderer.roughness],
+                    surface: [renderer.metallic, 1.0, 1.0, 0.5],
+                    textures: [0, 1, 0, 0],
+                    flags: [u32::from(renderer.color.0[3] < 1.0) * 2, 0, 0, 0],
                 });
-                let mesh_ref = renderer
-                    .get("model")
-                    .or_else(|| renderer.get("mesh"))
-                    .and_then(Value::as_str);
-                let mut mesh = if let Some(reference) = mesh_ref {
+                let mut mesh = if let Some(reference) = &renderer.model {
                     let reference =
-                        ara_schema::grammar::parse_ref(reference).map_err(anyhow::Error::msg)?;
+                        ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
                     let path = crate::commands::project_path(
                         root,
                         reference
@@ -216,7 +213,7 @@ impl EditWorldView for DocumentView {
                     )?;
                     gltf::load(&path, render_id(id), name.to_owned(), material)?
                 } else {
-                    cube(render_id(id), name.to_owned(), material)
+                    shape(&renderer, render_id(id), name.to_owned(), material)
                 };
                 let normal = matrix.inverse().transpose();
                 for v in &mut mesh.vertices {
@@ -272,6 +269,26 @@ impl EditWorldView for DocumentView {
             scene.meshes.push(mesh);
         }
         Ok(scene)
+    }
+}
+/// The engine's procedural shape for a `MeshRenderer` without a model (model space).
+fn shape(renderer: &MeshRenderer, entity: u64, name: String, material: usize) -> Mesh {
+    let source = ara_runtime_render::geometry::shape(renderer.shape, renderer.size);
+    Mesh {
+        entity,
+        name,
+        vertices: source
+            .vertices
+            .iter()
+            .map(|v| Vertex {
+                position: v.position,
+                normal: v.normal,
+                uv: v.uv,
+                tangent: v.tangent,
+            })
+            .collect(),
+        indices: source.indices,
+        material,
     }
 }
 fn cube(entity: u64, name: String, material: usize) -> Mesh {

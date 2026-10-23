@@ -15,7 +15,7 @@ use ara_play::{
     shm::Section,
 };
 use ara_runtime::extract::RenderFrame;
-use ara_runtime_render::Presenter;
+use ara_runtime_render::{Presenter, two_d::Presenter2d};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::{
@@ -73,6 +73,7 @@ struct Player {
     size: [u32; 2],
     window: Option<device::Windowed>,
     presenter: Option<Presenter>,
+    presenter2d: Option<Presenter2d>,
     frame: RenderFrame,
     world: Option<World>,
     /// Keeps the snapshot section mapped for the session (diff baselines, restarts).
@@ -118,6 +119,7 @@ fn run(args: Args) -> Result<()> {
         size,
         window,
         presenter,
+        presenter2d: None,
         frame: RenderFrame::default(),
         world: None,
         _section: None,
@@ -203,11 +205,22 @@ impl Player {
                 window.present(&mut world.runtime, presenter, &mut self.frame)?;
             }
         }
+        self.events()?;
         if self.last_status.elapsed() >= Duration::from_millis(250) {
             self.status()?;
         }
         if self.window.is_none() {
             std::thread::sleep(Duration::from_micros(500));
+        }
+        Ok(())
+    }
+
+    /// Forwards C# host events (reloads, diagnostics, L4 restart requests).
+    fn events(&mut self) -> Result<()> {
+        if let Some(world) = &self.world {
+            for event in world.events() {
+                self.link.notify(ara_play::EVENT, &event)?;
+            }
         }
         Ok(())
     }
@@ -410,9 +423,13 @@ impl Player {
                     self.presenter =
                         Some(Presenter::new(self.size, Vec::new(), &self.args.gpu_cache));
                 }
+                let presenter2d = self
+                    .presenter2d
+                    .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
                 serde_json::to_value(world.capture(
                     &params,
                     self.presenter.as_mut(),
+                    Some(presenter2d),
                     &mut self.frame,
                 )?)?
             }
@@ -436,6 +453,16 @@ impl Player {
                     parse(params["assets"].clone())?;
                 world.assets(&pins)?
             }
+            method::COMMAND => {
+                let command: ara_play::Command = parse(params)?;
+                world.command(&command)?
+            }
+            method::COMMANDS => world.commands(),
+            method::COMPILE => {
+                let compile: ara_play::Compile = parse(params)?;
+                world.compile(&compile)
+            }
+            method::SNAPSHOT => world.snapshot()?,
             _ => return Err(Failure::Unknown),
         };
         Ok(value)
@@ -467,6 +494,9 @@ impl Player {
             handshake = Some(t.elapsed().as_secs_f64() * 1000.0);
         }
         let (mut world, build_ms) = World::build(&scene)?;
+        if let Some(resume) = &start.resume {
+            world.resume(resume)?;
+        }
         let mut started = world.start(start.start_paused, decode_ms + build_ms)?;
         started.net_handshake_ms = handshake;
         self.last_advance = Instant::now();

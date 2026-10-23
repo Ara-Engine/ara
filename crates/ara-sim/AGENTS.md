@@ -71,6 +71,14 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
   (never serialized); `record` uses it. `add_parallel_systems`: one ordering slot,
   conflicting access rejected before the schedule changes (multi-threaded executor).
   `EditWorld::workspace()` exposes the mirrored documents for live-patch ops.
+  `StateProvider::owned_components` exempts runtime-registered IDs without a Rust
+  type (C# module columns and resources).
+- External components: `SimRegistry::register_external(name)` hands a schema
+  component's storage to another runtime (C# via `ara-runtime-script`). Documents
+  still validate against its type; the projection queues complete values in the
+  `ExternalWrites` resource for the owner to apply in the same tick, and the owner's
+  provider captures it. `EditWorld::from_workspace_in(world, ..)` projects into a
+  prepared world (one already hosting that runtime). `SimContext::seed()`.
 - `Replay`: scene/dependency hash + seed + build/schema hash + initial snapshot +
   applied input/command/op log. Verification checks every tick hash. The build hash
   supplied by the host must cover native/gameplay modules. No hashes or history

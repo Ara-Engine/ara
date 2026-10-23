@@ -8,9 +8,14 @@ publish.workspace = true
 
 [dependencies]
 anyhow = "1"
+ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-render = { path = "../ara-render" }
+ara-render2d = { path = "../ara-render2d" }
 ara-runtime = { path = "../ara-runtime" }
+ara-schema.workspace = true
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+serde_json.workspace = true
 glam = "0.34"
 # ara-render's scene/camera API uses glam 0.30 types.
 glam30 = { package = "glam", version = "0.30" }

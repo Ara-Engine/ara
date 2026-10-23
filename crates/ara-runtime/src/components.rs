@@ -34,12 +34,12 @@ pub struct MeshRenderer {
     pub size: [f32; 3],
     /// Imported model (`@path#id` of a glTF/FBX source). Its meshes are drawn instead
     /// of the shape; skinned meshes follow this entity's Animator.
+    // Migration: early editor documents wrote `mesh`; reading renames it.
     #[ara(alias = "mesh")]
-    #[serde(alias = "mesh")]
     pub model: Option<AssetRef>,
     /// Linear base color multiplier and opacity.
+    // Migration: early editor documents wrote `tint`; reading renames it.
     #[ara(alias = "tint")]
-    #[serde(alias = "tint")]
     pub color: Color,
     /// Perceptual roughness.
     #[ara(default = 0.6, range(min = 0, max = 1))]
@@ -299,12 +299,18 @@ impl Default for LocomotionClip {
 }
 
 /// Skeletal animation for this entity's `MeshRenderer.model`, compiled to an ara-anim
-/// program: an `idle` state and a `move` state whose 1D blend tree is driven by the
-/// entity's ground speed, cross-faded at `moveThreshold`.
+/// program: the `controller` document when set, else an `idle` state and a `move`
+/// state whose 1D blend tree is driven by the entity's ground speed, cross-faded at
+/// `moveThreshold`.
 #[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "animation")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Animator {
+    /// Controller authored in an `.animation` document (`@anim/fox.animation#an_fox`):
+    /// its state machine, blend trees and motion matching replace the built-in
+    /// idle/locomotion graph below. A float `speed` parameter follows ground speed.
+    #[ara(asset_kind = "animation")]
+    pub controller: Option<AssetRef>,
     /// Idle clip name.
     pub idle: String,
     /// Moving blend samples in increasing speed order.
@@ -322,6 +328,7 @@ pub struct Animator {
 impl Default for Animator {
     fn default() -> Self {
         Self {
+            controller: None,
             idle: String::new(),
             locomotion: Vec::new(),
             move_threshold: 0.15,
@@ -331,15 +338,11 @@ impl Default for Animator {
     }
 }
 
-/// Registers the components the runtime understands (physics, navigation and the
-/// runtime's own) on top of the kernel types (`ara_doc::register`,
-/// `ara_components::register`). Hosts call this so documents using them validate.
-/// Idempotent.
+/// Registers the components the runtime simulates itself (physics, navigation and
+/// the runtime's own). Part of [`crate::engine::register_schemas`]. Idempotent.
 pub fn register_schemas(db: &mut SchemaDb) {
     ara_physics::register_schemas(db);
     ara_nav::register(db);
-    // Not `ara_anim::document::register`: its `Joint` value type clashes with the
-    // physics `Joint` component in one Schema DB until one of them is renamed.
     db.register::<MeshRenderer>()
         .register::<Light>()
         .register::<Environment>()

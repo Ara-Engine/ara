@@ -203,22 +203,29 @@ impl SchemaDb {
     }
 
     /// Checks every registered type and kind: names, required docs, resolvable field
-    /// types, valid defaults and examples, unique record prefixes. Returns all problems,
-    /// including registration clashes.
+    /// types, valid defaults and examples, record prefixes unique within each document
+    /// kind (record IDs are only ever resolved against their document's kind, so
+    /// subsystems may reuse a prefix across kinds). Returns all problems, including
+    /// registration clashes.
     pub fn verify(&self) -> Vec<Diagnostic> {
         let mut out = self.problems.clone();
         for t in self.types.values() {
             self.verify_type(t, &mut out);
         }
-        let mut prefixes = BTreeMap::new();
-        for t in self.types.values() {
-            if let Some(info) = t.record_info()
-                && let Some(other) = prefixes.insert(info.prefix.clone(), t.name.clone())
-            {
-                out.push(bad_def(
-                    &t.name,
-                    format!("record prefix `{}` is also used by `{other}`", info.prefix),
-                ));
+        for k in self.kinds.values() {
+            let mut prefixes = BTreeMap::new();
+            for t in k.records.iter().filter_map(|r| self.types.get(r)) {
+                if let Some(info) = t.record_info()
+                    && let Some(other) = prefixes.insert(info.prefix.clone(), t.name.clone())
+                {
+                    out.push(bad_def(
+                        &k.name,
+                        format!(
+                            "record prefix `{}` of `{}` is also used by `{other}`",
+                            info.prefix, t.name
+                        ),
+                    ));
+                }
             }
         }
         for k in self.kinds.values() {

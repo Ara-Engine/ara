@@ -55,4 +55,8 @@ patch latency, pause, light patch, keep changes → document, determinism via
 `test.run`, replay, Host + 2, panic/access-violation/hang isolation with restart) and
 prints the measured numbers. It builds `ara-import-worker` if missing. `evidence/` holds
 reviewed captures (walked with marks, relit after the patch, windowed).
+`tests/csharp.rs` (builds `dotnet/Ara.slnx`) plays a demo copy with the Outpost C#
+module (`demo-scripts/Outpost`: Door, UseMedkit, Gravity/Movement): published types,
+agent-added C# components, `play.command`, an agent `script.write` hot reload while
+playing, `restart {keepState}`. `ARA_UPDATE_DEMO=1` refreshes `Outpost.types.json`.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.

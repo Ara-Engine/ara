@@ -7,11 +7,23 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-2d = { path = "../ara-2d" }
 ara-anim = { path = "../ara-anim" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-audio = { path = "../ara-audio" }
+ara-cmd.workspace = true
 ara-components.workspace = true
+ara-diag.workspace = true
 ara-doc.workspace = true
+ara-foliage = { path = "../ara-foliage" }
+ara-l10n = { path = "../ara-l10n" }
+ara-material = { path = "../ara-material" }
+ara-physics2d = { path = "../ara-physics2d" }
+ara-save = { path = "../ara-save" }
+ara-terrain = { path = "../ara-terrain" }
+ara-vfx = { path = "../ara-vfx" }
+ara-world = { path = "../ara-world" }
 ara-input = { path = "../ara-input" }
 ara-json.workspace = true
 ara-ops.workspace = true
