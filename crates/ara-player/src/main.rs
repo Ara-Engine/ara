@@ -335,6 +335,24 @@ impl Player {
 
     fn world_method(&mut self, method: &str, params: Value) -> std::result::Result<Value, Failure> {
         let world = self.world.as_mut().ok_or_else(no_world)?;
+        let link = &mut self.link;
+        let mut last = Instant::now();
+        // Explicit steps run as fast as possible; keep the owner's watchdog fed.
+        let mut alive = |tick: u64| {
+            if last.elapsed() >= Duration::from_millis(250) {
+                last = Instant::now();
+                let status = Status {
+                    tick,
+                    paused: true,
+                    max_late_us: 0,
+                    fps: 0.0,
+                    frame_ms_p95: 0.0,
+                    fault: None,
+                };
+                let _ = link.notify(STATUS, &status);
+                let _ = link.flush();
+            }
+        };
         let value = match method {
             method::PAUSE => {
                 world.runtime.pause()?;
@@ -354,11 +372,11 @@ impl Player {
             }
             method::STEP => {
                 let step: ara_play::Step = parse(params)?;
-                serde_json::to_value(world.step(step.ticks, &step.inputs)?)?
+                serde_json::to_value(world.step(step.ticks, &step.inputs, &mut alive)?)?
             }
             method::UNTIL => {
                 let until: ara_play::Until = parse(params)?;
-                serde_json::to_value(world.until(&until)?)?
+                serde_json::to_value(world.until(&until, &mut alive)?)?
             }
             method::INPUT => {
                 let inputs: ara_play::Inputs = parse(params)?;

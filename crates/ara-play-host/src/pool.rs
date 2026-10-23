@@ -4,7 +4,7 @@
 //! 250 ms heartbeat (a 1 s silence is a hang; the player is killed).
 use ara_play::{
     CRASH_PREFIX, CrashReport, HELLO, Hello, PROTOCOL, STATUS, Status, TOKEN_ENV,
-    link::{Link, LinkError, Message, error},
+    link::{Link, Message, error},
 };
 use serde_json::{Value, json};
 use std::{
@@ -62,45 +62,49 @@ impl Player {
         params: &Value,
         timeout: Duration,
     ) -> Result<Result<Value, Value>, Value> {
-        let mut seen = Vec::new();
-        let result = self.link.call(method, params, timeout, |m| seen.push(m));
-        for message in &seen {
-            self.observe(message);
-        }
-        match result {
-            Ok(result) => {
-                self.seen = Instant::now();
-                Ok(result)
-            }
-            Err(LinkError::Timeout) => {
-                // Still alive (heartbeats) but slow: report rather than kill.
-                if self.seen.elapsed() < WATCHDOG {
-                    Err(error(
-                        -32000,
-                        format!("player did not answer `{method}` within {timeout:?}"),
-                        Value::Null,
-                    ))
-                } else {
-                    let _ = self.child.kill();
-                    Err(self.fault().unwrap_or_else(|| unresponsive(self)))
+        let id = match self.link.request(method, params) {
+            Ok(id) => json!(id),
+            Err(_) => return Err(self.closed()),
+        };
+        let started = Instant::now();
+        self.seen = Instant::now();
+        loop {
+            match self.link.wait(Duration::from_millis(20)) {
+                Ok(Some(Message::Response { id: got, result })) if got == id => {
+                    self.seen = Instant::now();
+                    return Ok(result);
                 }
+                Ok(Some(message)) => self.observe(&message),
+                Ok(None) => {}
+                Err(_) => return Err(self.closed()),
             }
-            Err(_) => {
-                // The link broke: wait briefly for the exit status, then classify.
-                let start = Instant::now();
-                while start.elapsed() < Duration::from_secs(2) {
-                    if let Some(fault) = self.fault() {
-                        return Err(fault);
-                    }
-                    std::thread::sleep(Duration::from_millis(2));
-                }
-                Err(error(
+            // Busy players keep heartbeating between tick chunks; silence is a hang.
+            if self.seen.elapsed() > WATCHDOG {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                return Err(unresponsive(self));
+            }
+            if started.elapsed() > timeout {
+                return Ok(Err(error(
                     -32000,
-                    "player link closed",
-                    json!({"code": "player_exited"}),
-                ))
+                    format!("player did not answer `{method}` within {timeout:?}"),
+                    Value::Null,
+                )));
             }
         }
+    }
+
+    /// The link broke: wait briefly for the exit status, then classify it.
+    fn closed(&mut self) -> Value {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            if let Some(fault) = self.fault() {
+                return fault;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        json!({"code": "player_exited", "message": "player link closed", "pid": self.hello.pid,
+               "actions": [{"id": "restart", "title": "Restart play from the same snapshot"}]})
     }
 
     /// Drains heartbeats; returns a fault if the player died or hung.

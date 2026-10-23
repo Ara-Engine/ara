@@ -12,9 +12,12 @@ use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
 use ara_runtime_render::Presenter;
-use ara_sim::{StepInput, TickConfig, Watch};
+use ara_sim::{TickConfig, Watch};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf, sync::atomic::Ordering, time::Instant};
+
+/// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
+const CHUNK: u32 = 30;
 
 /// A patch waiting for its tick boundary.
 pub struct PendingPatch {
@@ -119,48 +122,75 @@ impl World {
         Ok(self.runtime.play().session().state_hash()?.to_string())
     }
 
-    /// `play.step`.
-    pub fn step(&mut self, ticks: u32, inputs: &[Input]) -> Result<Stepped> {
-        let inputs = step_inputs(inputs)?;
-        let report = self.runtime.step(ticks, &inputs)?;
-        self.mark();
+    /// `play.step`: injections first, then exact ticks in chunks; `alive` runs between
+    /// chunks so a long step keeps heartbeating (the owner's hang watchdog).
+    pub fn step(
+        &mut self,
+        ticks: u32,
+        inputs: &[Input],
+        alive: &mut dyn FnMut(u64),
+    ) -> Result<Stepped> {
+        self.input(inputs)?;
+        let mut done = 0;
+        let mut collected = Vec::new();
+        while done < ticks {
+            let chunk = (ticks - done).min(CHUNK);
+            let report = self.runtime.step(chunk, &[])?;
+            collected.extend(report.samples);
+            done += report.ticks;
+            self.mark();
+            alive(self.runtime.tick());
+        }
         Ok(Stepped {
-            ticks: report.ticks,
-            tick: report.tick,
-            reached: report.reached,
+            ticks: done,
+            tick: self.runtime.tick(),
+            reached: false,
             hash: self.hash()?,
-            samples: samples(&report.samples),
+            samples: samples(&collected),
         })
     }
 
-    /// `play.until`.
-    pub fn until(&mut self, until: &ara_play::Until) -> Result<Stepped> {
-        let inputs = step_inputs(&until.inputs)?;
+    /// `play.until`: like `step`, stopping once `path compare value` holds (checked
+    /// before the first tick and after each one).
+    pub fn until(
+        &mut self,
+        until: &ara_play::Until,
+        alive: &mut dyn FnMut(u64),
+    ) -> Result<Stepped> {
+        self.input(&until.inputs)?;
         let (path, compare, value) = (until.path.clone(), until.compare, until.value.clone());
-        // Evaluated through the read-only world after each tick.
+        let mut done = 0;
+        let mut collected = Vec::new();
         let mut error = None;
-        let report =
-            self.runtime
-                .step_until(until.max_ticks, &inputs, |session| {
-                    match read_path(session, &path) {
+        let reached = loop {
+            let chunk = (until.max_ticks - done).min(CHUNK);
+            let report =
+                self.runtime
+                    .step_until(chunk, &[], |session| match read_path(session, &path) {
                         Ok(Some(actual)) => compare.test(&actual, &value),
                         Ok(None) => false,
                         Err(e) => {
                             error = Some(e);
                             true
                         }
-                    }
-                })?;
-        if let Some(e) = error {
-            return Err(e);
-        }
-        self.mark();
+                    })?;
+            if let Some(e) = error.take() {
+                return Err(e);
+            }
+            collected.extend(report.samples);
+            done += report.ticks;
+            self.mark();
+            alive(self.runtime.tick());
+            if report.reached || done >= until.max_ticks {
+                break report.reached;
+            }
+        };
         Ok(Stepped {
-            ticks: report.ticks,
-            tick: report.tick,
-            reached: report.reached,
+            ticks: done,
+            tick: self.runtime.tick(),
+            reached,
             hash: self.hash()?,
-            samples: samples(&report.samples),
+            samples: samples(&collected),
         })
     }
 
@@ -348,18 +378,6 @@ fn injection(input: &Input) -> Result<Injection> {
         value: action(&input.value)?,
         hold_ticks: input.hold_ticks,
     })
-}
-
-fn step_inputs(inputs: &[Input]) -> Result<Vec<StepInput>> {
-    inputs
-        .iter()
-        .map(|i| {
-            Ok(StepInput {
-                after_ticks: i.after_ticks,
-                input: injection(i)?,
-            })
-        })
-        .collect()
 }
 
 /// Reads `entity.Component.field…` (any registered component); vector fields accept
