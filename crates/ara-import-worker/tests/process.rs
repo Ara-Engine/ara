@@ -24,6 +24,8 @@ fn png(red: u8) -> Vec<u8> {
 }
 fn input(red: u8) -> ImportInput {
     ImportInput {
+        preset: Default::default(),
+        thread_budget: 16,
         source_path: "color.png".into(),
         source: png(red),
         importer: TextureImporter.id().into(),
@@ -122,6 +124,7 @@ fn cache_hits_last_good_fallback_supersession_and_human_application_policy() {
     let dir = tempfile::tempdir().unwrap();
     let cache = Arc::new(FileCache::new(dir.path()).unwrap());
     let mut reload = HotReload::new(worker(), cache);
+    reload.progressive = false;
     reload.request("as_color", input(10));
     assert!(wait_reload(&mut reload).iter().any(|e| matches!(
         e,
@@ -234,6 +237,8 @@ fn real_file_watcher_reimports_source_and_sidecar_and_keeps_last_good_on_error()
     let mut pipeline = AssetPipeline::new(root.path(), worker(), cache, Arc::new(db)).unwrap();
     pipeline
         .register(SourceAsset {
+            preset: Default::default(),
+            thread_budget: 16,
             id: "as_color".into(),
             path: "color.png".into(),
             importer: TextureImporter.id().into(),
@@ -243,6 +248,7 @@ fn real_file_watcher_reimports_source_and_sidecar_and_keeps_last_good_on_error()
             asset_dependencies: BTreeMap::new(),
         })
         .unwrap();
+    pipeline.reload.progressive = false;
     pipeline.request("as_color").unwrap();
     wait_pipeline(&mut pipeline, true);
     pipeline
@@ -337,6 +343,8 @@ fn external_buffer_changes_invalidate_and_reimport_only_the_consumer() {
     .unwrap();
     pipeline
         .register(SourceAsset {
+            preset: Default::default(),
+            thread_budget: 16,
             id: "as_mesh".into(),
             path: "mesh.gltf".into(),
             importer: GltfImporter.id().into(),
@@ -346,6 +354,7 @@ fn external_buffer_changes_invalidate_and_reimport_only_the_consumer() {
             asset_dependencies: BTreeMap::new(),
         })
         .unwrap();
+    pipeline.reload.progressive = false;
     pipeline.request("as_mesh").unwrap();
     wait_pipeline(&mut pipeline, true);
     pipeline
@@ -390,6 +399,8 @@ fn real_khronos_scenes_are_deterministic_and_cacheable() {
             .join("../ara-importers/.fixtures")
             .join(filename);
         let input = ImportInput {
+            preset: Default::default(),
+            thread_budget: 16,
             source_path: filename.into(),
             source: std::fs::read(path).unwrap(),
             importer: GltfImporter.id().into(),

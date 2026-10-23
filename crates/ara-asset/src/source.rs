@@ -17,6 +17,12 @@ use std::{
 /// Host-side source registration. Configuration changes come from typed sidecar ops.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceAsset {
+    /// Final project quality, also used by nonprogressive shipping cooks.
+    #[serde(default)]
+    pub preset: crate::CookPreset,
+    /// Maximum import worker threads; does not affect artifact identity.
+    #[serde(default = "crate::preset::default_thread_budget")]
+    pub thread_budget: u16,
     /// Stable ID from the import sidecar.
     pub id: String,
     /// Project-relative media path.
@@ -59,6 +65,8 @@ pub fn snapshot(
     }
     cancellation.check()?;
     Ok(ImportInput {
+        preset: asset.preset,
+        thread_budget: asset.thread_budget,
         source_path: asset.path.replace('\\', "/"),
         source,
         importer: asset.importer.clone(),
@@ -213,6 +221,7 @@ impl AssetPipeline {
                         asset.importer = settings.importer;
                         asset.version = settings.version;
                         asset.settings = settings.settings;
+                        asset.preset = settings.preset;
                         for reference in settings.dependencies {
                             let parts = ara_schema::grammar::parse_ref(&reference.0)
                                 .map_err(Error::Invalid)?;

@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+rayon = "1.11"
 ara-asset-format = { path = "../ara-asset-format" }
 ara-doc = { path = "../ara-doc" }
 ara-json = { path = "../ara-json" }

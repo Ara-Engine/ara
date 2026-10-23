@@ -1,0 +1,5 @@
+Jolt Physics 5.6.0
+https://github.com/jrouwe/JoltPhysics
+e77f175595e64cb44218cc9d9d56fc365ad0e36a
+Unmodified Jolt/ source directory and LICENSE from this commit.
+Builds are offline: no CMake, downloads, bindgen, or prebuilt libraries.

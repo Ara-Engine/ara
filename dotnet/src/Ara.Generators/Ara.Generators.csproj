@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Ara source generator: [Component]/[Resource]/[Cue] registration, [Query] systems,
+       Behaviour data columns, [Command] entry points and the module's Register method.
+       Loads into the compiler, so it targets netstandard2.0. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- No analyzer release process yet; IDs are tracked in Descriptors.cs and AGENTS.md. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

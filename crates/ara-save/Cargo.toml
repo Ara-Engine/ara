@@ -1,0 +1,25 @@
+[package]
+name = "ara-save"
+description = "Schema-declared persistent state, migrated atomic save slots and agent tools."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag = { path = "../ara-diag" }
+ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
+ara-sim = { path = "../ara-sim" }
+blake3 = "1.8"
+ciborium = "0.2"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+tempfile = "3.27"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-doc = { path = "../ara-doc" }
+
+[lints]
+workspace = true

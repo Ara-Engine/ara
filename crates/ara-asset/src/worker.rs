@@ -122,11 +122,12 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
         }
     };
     let cancellation = Cancellation::default();
-    let mut output = std::io::stdout().lock();
+    let mut output = std::io::stdout();
     let mut transport_error = None;
     let result = registry.import(
         &input,
         &mut ImportContext {
+            metrics: None,
             cancellation: &cancellation,
             progress: &mut |p| {
                 if let Err(e) = write_frame(&mut output, &Message::Progress(p)) {

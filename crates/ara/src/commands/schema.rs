@@ -1,10 +1,14 @@
-//! `ara schema`: the Schema DB as text, as `reflection.json`, or as files.
+//! `ara schema`: the Schema DB as text, as `reflection.json`, or as files; with
+//! names, the generated page of each type, command or method (`ara schema Light
+//! entity.create`).
 
 use std::fs;
 use std::path::Path;
 
+use ara_diag::{Diagnostic, codes, did_you_mean};
+use ara_host::docs;
 use ara_schema::{SchemaDb, Shape, TypeDesc};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::print_text;
 use crate::project::Project;
@@ -18,10 +22,65 @@ fn reflection(project: &Project) -> Value {
     r
 }
 
-/// Prints or writes the Schema DB.
-pub fn schema(project: &Project, json: bool, out: Option<&Path>) -> Result<bool, String> {
+/// Prints the doc page of each named type, command or method.
+fn describe(project: &Project, names: &[String], json: bool) -> bool {
+    let pages = docs::generate(
+        &project.db,
+        &project.registry,
+        &ara_host::core_methods(),
+        &project.name(),
+    );
+    let short = |p: &docs::DocPage| p.id.rsplit('/').next().unwrap_or(&p.id).to_owned();
+    let mut found = Vec::new();
+    let mut missing = Vec::new();
+    let page = |name: &str| pages.iter().find(|p| short(p).eq_ignore_ascii_case(name));
+    for name in names {
+        // A field path (`Transform.position`) shows its type's page.
+        let head = name.split_once('.').map(|(h, _)| h);
+        let hit = page(name)
+            .or_else(|| head.and_then(|h| page(h).filter(|p| p.id.starts_with("types/"))));
+        match hit {
+            Some(p) => found.push(p),
+            None => {
+                let all: Vec<String> = pages.iter().map(short).collect();
+                let mut msg = format!("nothing is named `{name}`");
+                if let Some(near) = did_you_mean(name, all.iter().map(String::as_str)) {
+                    msg.push_str(&format!("; did you mean `{near}`?"));
+                }
+                missing.push(Diagnostic::error(codes::UNKNOWN_TYPE, msg));
+            }
+        }
+    }
+    if json {
+        let items: Vec<Value> = found
+            .iter()
+            .map(|p| json!({ "id": p.id, "title": p.title, "markdown": p.markdown() }))
+            .collect();
+        print!(
+            "{}",
+            ara_json::to_canonical_string(&json!({ "items": items, "diagnostics": missing }))
+        );
+    } else {
+        for p in &found {
+            println!("{}", p.markdown());
+        }
+        print_text(&missing);
+    }
+    missing.is_empty()
+}
+
+/// Prints or writes the Schema DB; with `names`, describes those entries.
+pub fn schema(
+    project: &Project,
+    names: &[String],
+    json: bool,
+    out: Option<&Path>,
+) -> Result<bool, String> {
     if !project.diags.is_empty() {
         print_text(&project.diags);
+    }
+    if !names.is_empty() {
+        return Ok(describe(project, names, json));
     }
     if let Some(dir) = out {
         let written = write_files(project, dir)?;

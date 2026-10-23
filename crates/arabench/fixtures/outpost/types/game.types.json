@@ -1,0 +1,74 @@
+{
+  "$schema": "ara://schema/types/1",
+  "types": {
+    "Collider": {
+      "kind": "component",
+      "doc": "A collision shape for physics and triggers, centered on the entity.",
+      "module": "physics",
+      "fields": {
+        "shape": { "type": "ColliderShape", "doc": "Collision primitive." },
+        "size": { "type": "vec3", "doc": "Extents of the shape (box: width, height, depth).", "unit": "m", "default": [1, 1, 1] },
+        "trigger": { "type": "bool", "doc": "Reports overlaps instead of blocking movement." }
+      }
+    },
+    "ColliderShape": {
+      "kind": "enum",
+      "doc": "A collision primitive.",
+      "variants": {
+        "box": { "doc": "An axis-aligned box." },
+        "sphere": { "doc": "A sphere; `size.x` is the diameter." },
+        "capsule": { "doc": "A vertical capsule; `size.x` is the diameter, `size.y` the height." }
+      }
+    },
+    "Door": {
+      "kind": "component",
+      "doc": "A sliding door that players can open.",
+      "module": "gameplay",
+      "fields": {
+        "open": { "type": "bool", "doc": "Whether the door starts open." },
+        "autoOpen": { "type": "bool", "doc": "Opens by itself when a player comes within `triggerRadius`." },
+        "triggerRadius": { "type": "f32", "doc": "Distance from the door at which `autoOpen` reacts.", "unit": "m", "default": 2, "range": [0, null] },
+        "speed": { "type": "f32", "doc": "How fast the door panel slides.", "unit": "m/s", "default": 1, "range": [0, null] },
+        "locked": { "type": "bool", "doc": "Locked doors never open." }
+      }
+    },
+    "Light": {
+      "kind": "component",
+      "doc": "A punctual light source.",
+      "module": "render",
+      "fields": {
+        "kind": { "type": "LightKind", "doc": "Shape of the emission." },
+        "intensity": { "type": "f32", "doc": "Luminous power.", "unit": "lm", "default": 1000, "range": [0, null] },
+        "color": { "type": "color", "doc": "Linear color." },
+        "range": { "type": "f32", "doc": "Distance at which the light has faded out.", "unit": "m", "default": 10, "range": [0, null] }
+      }
+    },
+    "LightKind": {
+      "kind": "enum",
+      "doc": "Shape of a light.",
+      "variants": {
+        "point": { "doc": "Emits in all directions." },
+        "spot": { "doc": "Emits in a cone." },
+        "directional": { "doc": "Parallel rays, like the sun." }
+      }
+    },
+    "MeshRenderer": {
+      "kind": "component",
+      "doc": "Draws a mesh.",
+      "module": "render",
+      "fields": {
+        "mesh": { "type": "asset", "doc": "Mesh to draw." },
+        "tint": { "type": "color", "doc": "Linear tint multiplied with the material." }
+      }
+    },
+    "RigidBody": {
+      "kind": "component",
+      "doc": "Simulates the entity with physics: gravity, collisions and pushes.",
+      "module": "physics",
+      "fields": {
+        "mass": { "type": "f32", "doc": "Body mass.", "unit": "kg", "default": 1, "range": [0, null] },
+        "kinematic": { "type": "bool", "doc": "Moved only by code, never by forces." }
+      }
+    }
+  }
+}

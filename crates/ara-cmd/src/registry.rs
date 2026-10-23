@@ -293,8 +293,9 @@ impl Registry {
     }
 
     /// Runs a batch as one transaction: every call in order, symbols (`$c1`) bound by
-    /// earlier calls substituted into later ones, then commit (or, for a dry run,
-    /// check and roll back). Fails as a whole with located diagnostics.
+    /// earlier calls substituted into later ones and name selectors (`name:Crate`)
+    /// resolved against the staged document, then commit (or, for a dry run, check
+    /// and roll back). Fails as a whole with located diagnostics.
     pub fn apply(
         &self,
         store: &mut Store,
@@ -362,6 +363,16 @@ impl Registry {
             }
             let mut params = call.params.clone();
             substitute(&mut params, &symbols);
+            let entities = ReadCtx::new(staged.store(), &doc, &symbols)
+                .map_err(|d| one(at(d)))?
+                .resolved();
+            crate::select::resolve(
+                staged.store().schema(),
+                &entry.info.params,
+                &mut params,
+                &entities,
+            )
+            .map_err(|d| one(at(d)))?;
             let problems: Vec<Diagnostic> =
                 validate_params(staged.store().schema(), &entry.info, &params)
                     .into_iter()

@@ -1,0 +1,135 @@
+// Shared linear-radiance transport. All dimensions/offsets match frame.rs/scene.rs.
+struct Root {uint frame;uint pass;uint arg;uint pad0;uint pad1;uint pad2;uint pad3;uint pad4;};
+#ifdef VULKAN
+#define BIND(n) [[vk::binding(n,0)]]
+[[vk::push_constant]] ConstantBuffer<Root> root;
+#else
+#define BIND(n)
+ConstantBuffer<Root> root:register(b0,space0);
+#endif
+BIND(0) Texture2D<float4> textures[128]:register(t0,space1);
+BIND(1) RWByteAddressBuffer buffers[64]:register(u0,space2);
+BIND(2) SamplerState samplers[3]:register(s0,space0);
+BIND(3) RWTexture2D<float4> images[64]:register(u0,space3);
+#ifndef RASTER
+BIND(4) RaytracingAccelerationStructure acceleration[16]:register(t0,space4);
+#endif
+static const float PI=3.141592653589793;
+static const uint WORLD=0,NORMAL=2,BASE=4,MOTION=5,DEPTH=6,RAW=7,HISTORY=8,MOMENTS=10,FILTER0=12,FILTER1=13,BLOOM0=14,BLOOM1=15,POST=16,UPSCALED=17,OUTPUT=18;
+struct Frame {
+    float4x4 inverseVp;float4x4 vp;float4x4 previousVp;
+    float4 camera;float4 previousCamera;uint4 sizes;uint4 scene;
+    float4 origin;float4 spacing;uint4 counts;uint4 probes;
+    float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 lens;
+    uint4 control;uint4 transport;float4 jitter;uint4 read[6];uint4 write[6];
+};
+Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
+uint ri(Frame f,uint i){return f.read[i/4][i%4];}
+uint wi(Frame f,uint i){return f.write[i/4][i%4];}
+float4 pixel(Frame f,uint i,int2 p){return textures[NonUniformResourceIndex(ri(f,i))].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
+float4 sampleImage(Frame f,uint i,float2 uv){return textures[NonUniformResourceIndex(ri(f,i))].SampleLevel(samplers[2],uv,0);}
+void store(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(wi(f,i))][p]=v;}
+uint hash(uint x){x^=x>>16;x*=0x7feb352d;x^=x>>15;x*=0x846ca68b;x^=x>>16;return x;}
+float random(inout uint state){state=hash(state+0x9e3779b9);return float(state>>8)*(1./16777216.);}
+float3 basis(float3 n,float3 v){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,1,0):float3(1,0,0),n));return t*v.x+cross(n,t)*v.y+n*v.z;}
+float3 cosineDirection(float3 n,inout uint rng){float u=random(rng),v=random(rng);return basis(n,float3(sqrt(u)*cos(2*PI*v),sqrt(u)*sin(2*PI*v),sqrt(1-u)));}
+float3 coneDirection(float3 n,float radius,inout uint rng){float u=random(rng),v=random(rng);return normalize(basis(n,float3(sqrt(u)*radius*cos(2*PI*v),sqrt(u)*radius*sin(2*PI*v),1)));}
+float2 envUv(float3 d){return float2(atan2(d.z,d.x)/(2*PI)+0.5,acos(clamp(d.y,-1.,1.))/PI);}
+float3 environment(Frame f,float3 d){return textures[NonUniformResourceIndex(f.scene.z)].SampleLevel(samplers[1],envUv(d),0).rgb;}
+struct Material {float4 colour;float4 emissiveRoughness;float4 surface;uint4 textures;uint4 flags;};
+struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;};
+struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;uint id;uint material;};
+uint4 mesh(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(32+id*16);}
+Material material(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Material>(buffers[NonUniformResourceIndex(f.scene.x)].Load(4)+id*80);}
+Vertex vertex(Frame f,uint offset,uint index){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Vertex>(offset+index*48);}
+float4 tex(uint i,float2 uv){return textures[NonUniformResourceIndex(i)].SampleLevel(samplers[0],uv,0);}
+float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
+bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
+Surface surface(Frame f,uint id,uint primitive,float2 bary){
+    uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);
+    Vertex a=vertex(f,m.x,ix.x),b=vertex(f,m.x,ix.y),c=vertex(f,m.x,ix.z);float3 w=float3(1-bary.x-bary.y,bary);
+    Surface s;s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
+    uint previousCount=buffers[NonUniformResourceIndex(f.scene.w)].Load(0);
+    if(id<previousCount){uint4 previousMesh=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint4>(32+id*16);
+        if(previousMesh.z>primitive*3+2){uint3 previousIndices=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint3>(previousMesh.y+primitive*12);
+            Vertex pa=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.x*48),pb=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.y*48),pc=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.z*48);
+            s.previousPosition=pa.position*w.x+pb.position*w.y+pc.position*w.z;
+        }
+    }
+
+    s.geometricNormal=normalize(cross(b.position-a.position,c.position-a.position));
+    s.normal=normalize(a.normal*w.x+b.normal*w.y+c.normal*w.z);if(dot(s.geometricNormal,s.normal)<0)s.geometricNormal=-s.geometricNormal;float2 uv=a.uv*w.x+b.uv*w.y+c.uv*w.z;
+    float4 tangent=a.tangent*w.x+b.tangent*w.y+c.tangent*w.z;float3 t=normalize(tangent.xyz-s.normal*dot(tangent.xyz,s.normal));
+    Material mat=material(f,m.w);float3 normal=tex(mat.textures.y,uv).xyz*2-1;normal.xy*=mat.surface.y;
+    s.normal=normalize(t*normal.x+cross(s.normal,t)*tangent.w*normal.y+s.normal*normal.z);
+    float4 base=mat.colour*tex(mat.textures.x,uv);s.albedo=max(base.rgb,0);s.alpha=base.a;
+    float4 mr=tex(mat.textures.z,uv);s.metal=saturate(mat.surface.x*mr.b);s.roughness=clamp(mat.emissiveRoughness.w*mr.g,0.045,1);
+    s.emissive=max(mat.emissiveRoughness.rgb*tex(mat.textures.w,uv).rgb,0);s.id=id;s.material=m.w;return s;
+}
+struct Hit {float distance;uint id;uint primitive;float2 bary;bool front;};
+bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,out Hit hit){
+    hit=(Hit)0;hit.distance=maximum;
+#ifndef RASTER
+    RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> q;q.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],0,255,ray);
+    while(q.Proceed()){if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),rng))q.CommitNonOpaqueTriangleHit();}
+    if(q.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)return false;
+    hit.distance=q.CommittedRayT();hit.id=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();hit.bary=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();return true;
+#else
+    bool found=false;uint count=buffers[NonUniformResourceIndex(f.scene.x)].Load(0);
+    for(uint id=0;id<count;id++){uint4 m=mesh(f,id);for(uint p=0;p<m.z/3;p++){
+        uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+p*12);float3 a=vertex(f,m.x,ix.x).position,b=vertex(f,m.x,ix.y).position,c=vertex(f,m.x,ix.z).position;
+        float3 e1=b-a,e2=c-a,h=cross(direction,e2);float det=dot(e1,h);if(abs(det)<1e-8)continue;float inv=1/det;float3 v=origin-a;float u=dot(v,h)*inv;float3 q=cross(v,e1);float vv=dot(direction,q)*inv;float t=dot(e2,q)*inv;
+        if(u>=0 && vv>=0 && u+vv<=1 && t>0.001 && t<hit.distance && accept(f,id,p,float2(u,vv),rng)){hit.distance=t;hit.id=id;hit.primitive=p;hit.bary=float2(u,vv);hit.front=det>0;found=true;}
+    }}return found;
+#endif
+}
+float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
+float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
+    float nv=max(dot(s.normal,v),1e-5),nl=max(dot(s.normal,l),0.);float3 h=normalize(v+l);float nh=max(dot(s.normal,h),0.),vh=max(dot(v,h),1e-5);
+    float a=s.roughness*s.roughness,a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
+    float g=2*nv/(nv+sqrt(a2+(1-a2)*nv*nv))*2*nl/max(nl+sqrt(a2+(1-a2)*nl*nl),1e-6);
+    float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
+    pdf=lerp(nl/PI,d*nh/(4*vh),mixture);
+    return ((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6))*nl;
+}
+float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
+    float3 l;float choice=random(rng);if(choice<lerp(0.5,1.,s.metal)){
+        float u=random(rng),phi=random(rng)*2*PI;float a=s.roughness*s.roughness;float ct=sqrt((1-u)/(1+(a*a-1)*u));float3 h=basis(s.normal,float3(sqrt(1-ct*ct)*cos(phi),sqrt(1-ct*ct)*sin(phi),ct));l=reflect(-v,h);
+    }else l=cosineDirection(s.normal,rng);
+    float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
+}
+float3 direct(Frame f,Surface s,float3 v,inout uint rng){
+    float3 origin=s.position+s.normal*0.003;Hit hit;float pdf;float3 sum=0;
+    float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng);
+    if(dot(s.normal,l)>0 && !trace(f,origin,l,10000,rng,hit))sum+=evaluate(s,v,l,pdf)*f.sunLux.rgb;
+    uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
+    for(uint i=0;i<head.w;i++){
+        float4 position=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64);
+        float4 colour=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+16);
+        float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+32);
+        float4 params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64+48);
+        float3 delta=position.xyz-s.position;float dist=length(delta);l=delta/max(dist,1e-5);if(dist>position.w)continue;
+        float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
+        float fade=pow(saturate(1-pow(dist/position.w,4)),2);float3 sampled=coneDirection(l,0.025/max(dist,0.025),rng);
+        if(dot(s.normal,sampled)>0 && !trace(f,origin,sampled,max(dist-0.03,0.001),rng,hit))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
+    }return sum;
+}
+float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
+float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
+float4 probeLoad(uint buffer,uint probe,uint texel){return buffers[NonUniformResourceIndex(buffer)].Load<float4>((probe*102+texel)*16);}
+float3 probePosition(Frame f,uint index){uint x=index%f.counts.x,y=(index/f.counts.x)%f.counts.y,z=index/(f.counts.x*f.counts.y);return f.origin.xyz+float3(x,y,z)*f.spacing.xyz;}
+float3 irradiance(Frame f,float3 position,float3 normal,uint probeBuffer){
+    float3 biased=position+normal*0.02;float3 grid=(biased-f.origin.xyz)/f.spacing.xyz;int3 base=clamp(int3(floor(grid)),int3(0),int3(f.counts.xyz)-2);float3 alpha=saturate(grid-base);float3 sum=0;float total=0;
+    for(uint k=0;k<8;k++){
+        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=(p.z*f.counts.y+p.y)*f.counts.x+p.x;
+        float4 meta=probeLoad(probeBuffer,id,100);if(meta.w<0.5)continue;
+        float3 delta=biased-probePosition(f,id)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
+        uint2 at=min(uint2(octEncode(dir)*8),uint2(7));float2 moments=probeLoad(probeBuffer,id,36+at.y*8+at.x).xy;
+        float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+        float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
+        uint2 ir=min(uint2(octEncode(normal)*6),uint2(5));sum+=probeLoad(probeBuffer,id,ir.y*6+ir.x).rgb*weight;total+=weight;
+    }return total>1e-6?sum/total:float3(0);
+}
+float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 F=fresnel(max(dot(s.normal,v),0),lerp(float3(0.04),s.albedo,s.metal));return irradiance(f,s.position,s.normal,probes)*s.albedo*(1-s.metal)*(1-F)/PI;}
+float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.sizes.xy);float4 p=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,1,1));return normalize(p.xyz/p.w-f.camera.xyz);}

@@ -261,6 +261,7 @@ pub fn type_from_json(name: &str, v: &Value) -> Result<TypeDesc, Diagnostic> {
         "component" => StructRole::Component,
         "params" => StructRole::Params,
         "struct" => StructRole::Value,
+        "resource" => StructRole::Resource,
         "record" => StructRole::Record(RecordInfo {
             prefix: def
                 .prefix

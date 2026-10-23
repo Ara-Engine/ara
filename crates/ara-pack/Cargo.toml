@@ -1,0 +1,27 @@
+[package]
+name = "ara-pack"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["write"]
+write = ["dep:zstd"]
+
+[dependencies]
+ara-json = { path = "../ara-json" }
+blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
+chacha20poly1305 = "0.10.1"
+memmap2 = "0.9.9"
+ruzstd = "0.8.3"
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "2.0.18"
+zstd = { version = "0.13.3", optional = true }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

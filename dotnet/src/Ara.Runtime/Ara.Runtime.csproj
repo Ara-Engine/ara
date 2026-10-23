@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The gameplay API and the C# half of the host ABI. AOT-safe: no reflection, no
+       dynamic code. Reload (ALCs, EnC) lives in Ara.Host, which only dev builds load. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Ara</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ara.Host" />
+    <InternalsVisibleTo Include="Ara.Runtime.Tests" />
+  </ItemGroup>
+</Project>
