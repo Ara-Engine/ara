@@ -36,6 +36,26 @@ fn fbm(mut x: f32, mut y: f32) -> f32 {
     }
     sum
 }
+fn noise3(x: f32, y: f32, z: f32) -> f32 {
+    let slice = z.floor();
+    let a = z - slice;
+    let a = a * a * (3. - 2. * a);
+    noise(x + slice * 19.7, y + slice * 3.1) * (1. - a)
+        + noise(x + (slice + 1.) * 19.7, y + (slice + 1.) * 3.1) * a
+}
+fn smoke_column(x: f32, y: f32, time: f32) -> f32 {
+    let mut optical_depth = 0.;
+    for step in 0..16 {
+        let z = (step as f32 + 0.5) / 8. - 1.;
+        let radius = (x * x + y * y + z * z).sqrt();
+        let n = noise3(x * 2.4, y * 2.4 - time * 0.25, z * 2.4) * 0.65
+            + noise3(x * 4.8, y * 4.8 - time * 0.5, z * 4.8) * 0.25
+            + noise3(x * 9.6, y * 9.6 - time, z * 9.6) * 0.1;
+        let envelope = (1. - radius + (n - 0.5) * 0.45).max(0.);
+        optical_depth += (n - 0.3).max(0.) * envelope * 1.3;
+    }
+    1. - (-optical_depth).exp()
+}
 fn density(kind: u32, x: f32, y: f32, time: f32) -> f32 {
     let radius = (x * x + y * y).sqrt();
     match kind {
@@ -51,10 +71,7 @@ fn density(kind: u32, x: f32, y: f32, time: f32) -> f32 {
                 * ((1. - h) * 10.).min(1.))
             .clamp(0., 1.)
         }
-        1 => {
-            let n = fbm(x * 3.2 + time * 0.17, y * 3.2 - time * 0.55);
-            ((1. - radius).max(0.) * 2.5 * (n * 1.8 - 0.25).max(0.)).clamp(0., 1.)
-        }
+        1 => smoke_column(x, y, time),
         2 => ((-x * x * 14. - y * y * 2.8).exp() * (1. - radius).max(0.) * 3.).clamp(0., 1.),
         3 => {
             let r = 0.25 + time / 8. * 0.5;
@@ -86,12 +103,14 @@ pub fn cook_atlas() -> Vec<u8> {
                     let y = (py as f32 - 63.5) / 61.;
                     let time = frame as f32 * 0.5;
                     let d = density(kind, x, y, time);
+                    // A density bump faces away from the increasing optical depth.
+                    let gain = if kind == 1 { -4. } else { 3. };
                     let gx = (density(kind, x + 0.018, y, time)
                         - density(kind, x - 0.018, y, time))
-                        * 3.;
+                        * gain;
                     let gy = (density(kind, x, y + 0.018, time)
                         - density(kind, x, y - 0.018, time))
-                        * 3.;
+                        * gain;
                     let at = (((kind * 4 + frame / 4) * 128 + py) * ATLAS_SIZE[0]
                         + (frame % 4) * 128
                         + px)

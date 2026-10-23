@@ -162,22 +162,55 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 1721937ada73bbf90801fc014a30181bbb5fbd1cf6aea733ddb242a8da4f1296
+// VFX content ea60530d1cb98d2b30a3101a394df9639603c6765b5236c1c9f772662434717f
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
-p.life=3.0; p.size=0.41999998688697815; p.color=float4(0.30000001192092896,1.5,5.0,0.699999988079071);
+p.life=3.0; p.size=0.2800000011920929; p.color=float4(0.30000001192092896,1.5,5.0,0.699999988079071);
 }
 {
-float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(0.0,1.399999976158142,0.0)+1.0499999523162842*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
+float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(0.800000011920929,1.399999976158142,0.0)+0.05999999865889549*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
 }
 {
-p.velocity=float3(0.0,0.3499999940395355,0.0)+(2*random3(rng)-1)*float3(0.10000000149011612,0.10000000149011612,0.10000000149011612);
+p.velocity=float3(0.0,0.05000000074505806,-1.600000023841858)+(2*random3(rng)-1)*float3(0.02500000037252903,0.02500000037252903,0.02500000037252903);
 }
 break;}
 case 1u: {
 {
-p.life=10.0; p.size=3.0999999046325684; p.color=float4(0.07999999821186066,0.699999988079071,3.0,0.5);
+p.life=3.0; p.size=0.2800000011920929; p.color=float4(0.30000001192092896,1.5,5.0,0.699999988079071);
+}
+{
+float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(-3.4969112050475815e-8,1.5,0.800000011920929)+0.05999999865889549*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
+}
+{
+p.velocity=float3(1.600000023841858,0.05000000074505806,6.993822410095163e-8)+(2*random3(rng)-1)*float3(0.02500000037252903,0.02500000037252903,0.02500000037252903);
+}
+break;}
+case 2u: {
+{
+p.life=3.0; p.size=0.2800000011920929; p.color=float4(0.30000001192092896,1.5,5.0,0.699999988079071);
+}
+{
+float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(-0.800000011920929,1.399999976158142,-6.993822410095163e-8)+0.05999999865889549*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
+}
+{
+p.velocity=float3(-1.3987644820190326e-7,0.05000000074505806,1.600000023841858)+(2*random3(rng)-1)*float3(0.02500000037252903,0.02500000037252903,0.02500000037252903);
+}
+break;}
+case 3u: {
+{
+p.life=3.0; p.size=0.2800000011920929; p.color=float4(0.30000001192092896,1.5,5.0,0.699999988079071);
+}
+{
+float3 r=random3(rng); float z=2*r.x-1; float a=6.28318530718*r.y; float xy=sqrt(max(0.,1-z*z)); p.position=float3(9.539904866073812e-9,1.2999999523162842,-0.800000011920929)+0.05999999865889549*pow(r.z,1./3.)*float3(xy*cos(a),z,xy*sin(a));
+}
+{
+p.velocity=float3(-1.600000023841858,0.05000000074505806,-1.9079809732147623e-8)+(2*random3(rng)-1)*float3(0.02500000037252903,0.02500000037252903,0.02500000037252903);
+}
+break;}
+case 4u: {
+{
+p.life=10.0; p.size=4.5; p.color=float4(0.07999999821186066,0.699999988079071,3.0,0.5);
 }
 {
 p.position=float3(0.0,0.019999999552965164,0.0);
@@ -187,16 +220,16 @@ break;}
 void updateParticle(uint emitter,inout Particle p,float3 previous,float dt,inout uint events) {float t=saturate(p.age/p.life);switch(emitter){
 case 0u: {
 {
-p.velocity+=cross(normalize(float3(0.0,1.0,0.0)),p.position-float3(0.0,1.399999976158142,0.0))*1.7999999523162842*dt;
+p.velocity+=cross(normalize(float3(0.0,1.0,0.0)),p.position-float3(0.0,1.399999976158142,0.0))*2.4000000953674316*dt;
 }
 {
-float3 q=p.position*2.4000000953674316+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.30000001192092896*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+float3 q=p.position*2.4000000953674316+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.15000000596046448*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
 }
 {
-float3 d=float3(0.0,1.399999976158142,0.0)-p.position;p.velocity+=d*(0.800000011920929*dt/pow(dot(d,d)+0.20000000298023224,1.5));
+float3 d=float3(0.0,1.399999976158142,0.0)-p.position;p.velocity+=d*(4.0*dt/pow(dot(d,d)+0.4000000059604645,1.5));
 }
 {
-p.velocity/=1.+0.4000000059604645*dt;
+p.velocity/=1.+1.2000000476837158*dt;
 }
 {
 p.color=float4(0.10000000149011612,2.0,6.0,0.6000000238418579);
@@ -205,6 +238,63 @@ p.color=lerp(p.color,float4(0.10000000149011612,0.0,1.0,0.0),saturate((t-0.60000
 }
 break;}
 case 1u: {
+{
+p.velocity+=cross(normalize(float3(0.0,1.0,0.0)),p.position-float3(0.0,1.399999976158142,0.0))*2.4000000953674316*dt;
+}
+{
+float3 q=p.position*2.4000000953674316+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.15000000596046448*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+}
+{
+float3 d=float3(0.0,1.399999976158142,0.0)-p.position;p.velocity+=d*(4.0*dt/pow(dot(d,d)+0.4000000059604645,1.5));
+}
+{
+p.velocity/=1.+1.2000000476837158*dt;
+}
+{
+p.color=float4(0.10000000149011612,2.0,6.0,0.6000000238418579);
+p.color=lerp(p.color,float4(1.5,0.10000000149011612,4.0,0.699999988079071),saturate((t-0.0)/0.6000000238418579));
+p.color=lerp(p.color,float4(0.10000000149011612,0.0,1.0,0.0),saturate((t-0.6000000238418579)/0.3999999761581421));
+}
+break;}
+case 2u: {
+{
+p.velocity+=cross(normalize(float3(0.0,1.0,0.0)),p.position-float3(0.0,1.399999976158142,0.0))*2.4000000953674316*dt;
+}
+{
+float3 q=p.position*2.4000000953674316+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.15000000596046448*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+}
+{
+float3 d=float3(0.0,1.399999976158142,0.0)-p.position;p.velocity+=d*(4.0*dt/pow(dot(d,d)+0.4000000059604645,1.5));
+}
+{
+p.velocity/=1.+1.2000000476837158*dt;
+}
+{
+p.color=float4(0.10000000149011612,2.0,6.0,0.6000000238418579);
+p.color=lerp(p.color,float4(1.5,0.10000000149011612,4.0,0.699999988079071),saturate((t-0.0)/0.6000000238418579));
+p.color=lerp(p.color,float4(0.10000000149011612,0.0,1.0,0.0),saturate((t-0.6000000238418579)/0.3999999761581421));
+}
+break;}
+case 3u: {
+{
+p.velocity+=cross(normalize(float3(0.0,1.0,0.0)),p.position-float3(0.0,1.399999976158142,0.0))*2.4000000953674316*dt;
+}
+{
+float3 q=p.position*2.4000000953674316+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.15000000596046448*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
+}
+{
+float3 d=float3(0.0,1.399999976158142,0.0)-p.position;p.velocity+=d*(4.0*dt/pow(dot(d,d)+0.4000000059604645,1.5));
+}
+{
+p.velocity/=1.+1.2000000476837158*dt;
+}
+{
+p.color=float4(0.10000000149011612,2.0,6.0,0.6000000238418579);
+p.color=lerp(p.color,float4(1.5,0.10000000149011612,4.0,0.699999988079071),saturate((t-0.0)/0.6000000238418579));
+p.color=lerp(p.color,float4(0.10000000149011612,0.0,1.0,0.0),saturate((t-0.6000000238418579)/0.3999999761581421));
+}
+break;}
+case 4u: {
 break;}
 }}
 uint2 eventTarget(uint source,uint trigger) {switch(source){
@@ -212,21 +302,63 @@ case 0u: {
 break;}
 case 1u: {
 break;}
+case 2u: {
+break;}
+case 3u: {
+break;}
+case 4u: {
+break;}
 }return uint2(0xffffffffu,0);}
 float3 meshVertex(uint emitter,uint vertex){switch(emitter){
 }return float3(0);}
-// swirl / Spawn / rate: rate
-// swirl / Initialize / lifetime: lifetime
-// swirl / Initialize / sphere: sphere
-// swirl / Initialize / velocity: velocity
-// swirl / Update / vortex: vortex
-// swirl / Update / curl: curl_noise
-// swirl / Update / pull: attractor
-// swirl / Update / damping: drag
-// swirl / Update / fade: color_over_life
-// swirl / Render / sprite: sprite
-// swirl / Render / appearance: appearance
-// swirl / Render / flipbook: flipbook
+// orbit_0 / Spawn / rate: rate
+// orbit_0 / Initialize / lifetime: lifetime
+// orbit_0 / Initialize / sphere: sphere
+// orbit_0 / Initialize / velocity: velocity
+// orbit_0 / Update / vortex: vortex
+// orbit_0 / Update / curl: curl_noise
+// orbit_0 / Update / pull: attractor
+// orbit_0 / Update / damping: drag
+// orbit_0 / Update / fade: color_over_life
+// orbit_0 / Render / sprite: sprite
+// orbit_0 / Render / appearance: appearance
+// orbit_0 / Render / flipbook: flipbook
+// orbit_1 / Spawn / rate: rate
+// orbit_1 / Initialize / lifetime: lifetime
+// orbit_1 / Initialize / sphere: sphere
+// orbit_1 / Initialize / velocity: velocity
+// orbit_1 / Update / vortex: vortex
+// orbit_1 / Update / curl: curl_noise
+// orbit_1 / Update / pull: attractor
+// orbit_1 / Update / damping: drag
+// orbit_1 / Update / fade: color_over_life
+// orbit_1 / Render / sprite: sprite
+// orbit_1 / Render / appearance: appearance
+// orbit_1 / Render / flipbook: flipbook
+// orbit_2 / Spawn / rate: rate
+// orbit_2 / Initialize / lifetime: lifetime
+// orbit_2 / Initialize / sphere: sphere
+// orbit_2 / Initialize / velocity: velocity
+// orbit_2 / Update / vortex: vortex
+// orbit_2 / Update / curl: curl_noise
+// orbit_2 / Update / pull: attractor
+// orbit_2 / Update / damping: drag
+// orbit_2 / Update / fade: color_over_life
+// orbit_2 / Render / sprite: sprite
+// orbit_2 / Render / appearance: appearance
+// orbit_2 / Render / flipbook: flipbook
+// orbit_3 / Spawn / rate: rate
+// orbit_3 / Initialize / lifetime: lifetime
+// orbit_3 / Initialize / sphere: sphere
+// orbit_3 / Initialize / velocity: velocity
+// orbit_3 / Update / vortex: vortex
+// orbit_3 / Update / curl: curl_noise
+// orbit_3 / Update / pull: attractor
+// orbit_3 / Update / damping: drag
+// orbit_3 / Update / fade: color_over_life
+// orbit_3 / Render / sprite: sprite
+// orbit_3 / Render / appearance: appearance
+// orbit_3 / Render / flipbook: flipbook
 // sigil / Spawn / burst: burst
 // sigil / Initialize / life: lifetime
 // sigil / Initialize / ground: point
@@ -273,9 +405,72 @@ AraSurface evaluate1(AraMaterialInput input) {
     return result;
 }
 
+
+AraSurface evaluate2(AraMaterialInput input) {
+    AraSurface result;
+    result.baseColor = float3(1);
+    result.metallic = 0;
+    result.roughness = 0.5;
+    result.normal = float3(0, 0, 1);
+    result.emissive = float3(0);
+    result.opacityMask = 1;
+    result.clearCoat = 0;
+    result.clearCoatRoughness = 0.1;
+    result.transmission = 0;
+    result.color = float3(1);
+    result.opacity = 1;
+    result.clip = 1;
+    float3 n_892d9c40c841bec68c56 = float3(1.0, 1.0, 1.0);
+    result.color = n_892d9c40c841bec68c56;
+    return result;
+}
+
+
+AraSurface evaluate3(AraMaterialInput input) {
+    AraSurface result;
+    result.baseColor = float3(1);
+    result.metallic = 0;
+    result.roughness = 0.5;
+    result.normal = float3(0, 0, 1);
+    result.emissive = float3(0);
+    result.opacityMask = 1;
+    result.clearCoat = 0;
+    result.clearCoatRoughness = 0.1;
+    result.transmission = 0;
+    result.color = float3(1);
+    result.opacity = 1;
+    result.clip = 1;
+    float3 n_f29054b1d0a4cccaf7ee = float3(1.0, 1.0, 1.0);
+    result.color = n_f29054b1d0a4cccaf7ee;
+    return result;
+}
+
+
+AraSurface evaluate4(AraMaterialInput input) {
+    AraSurface result;
+    result.baseColor = float3(1);
+    result.metallic = 0;
+    result.roughness = 0.5;
+    result.normal = float3(0, 0, 1);
+    result.emissive = float3(0);
+    result.opacityMask = 1;
+    result.clearCoat = 0;
+    result.clearCoatRoughness = 0.1;
+    result.transmission = 0;
+    result.color = float3(1);
+    result.opacity = 1;
+    result.clip = 1;
+    float3 n_4380c71c14d701d1fc50 = float3(1.0, 1.0, 1.0);
+    result.color = n_4380c71c14d701d1fc50;
+    return result;
+}
+
 AraSurface evaluateMaterial(uint emitter,AraMaterialInput input){switch(emitter){
 case 0u:return evaluate0(input);
 case 1u:return evaluate1(input);
+case 2u:return evaluate2(input);
+case 3u:return evaluate3(input);
+case 4u:return evaluate4(input);
 }return evaluate0(input);}
 // All lists are stable by slot. No unordered atomic append enters replay state.
 [shader("compute")][numthreads(1,1,1)]

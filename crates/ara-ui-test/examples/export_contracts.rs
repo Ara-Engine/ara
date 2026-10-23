@@ -27,7 +27,7 @@ fn main() -> Result<()> {
         ara_doc::Edit::Create {
             doc: book.document().id.clone(),
             id: ara_doc::RecordId::parse("st_button")?,
-            record: serde_json::to_value(story)?
+            record: ara_json::to_value(&story)?
                 .as_object()
                 .ok_or("story object")?
                 .clone(),

@@ -162,11 +162,11 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content b485c817ea14434700df1670a47e6e1ca20127c4b5948c49cfccd7c06e6b2a85
+// VFX content 0c63fe8f88cb54dd07c51c618a34ac12dcb5db32ce35ed68b4c88dbba61cd5fd
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
-p.life=0.11999999731779099; p.size=0.25; p.color=float4(12.0,5.0,0.6000000238418579,0.800000011920929);
+p.life=0.11999999731779099; p.size=0.20000000298023224; p.color=float4(8.0,3.0,0.4000000059604645,0.800000011920929);
 }
 {
 float3 r=random3(rng); float h=pow(r.x,1./3.);float rad=sqrt(r.y)*h*0.05000000074505806;float a=6.28318530718*r.z;p.position=float3(0.0,0.5,0.0)+float3(rad*cos(a),h*0.15000000596046448,rad*sin(a));
@@ -178,6 +178,12 @@ break;}
 }}
 void updateParticle(uint emitter,inout Particle p,float3 previous,float dt,inout uint events) {float t=saturate(p.age/p.life);switch(emitter){
 case 0u: {
+{
+p.color=float4(8.0,4.0,0.699999988079071,0.0);
+p.color=lerp(p.color,float4(12.0,6.0,1.0,1.0),saturate((t-0.0)/0.07999999821186066));
+p.color=lerp(p.color,float4(8.0,3.0,0.20000000298023224,0.800000011920929),saturate((t-0.07999999821186066)/0.17000000178813934));
+p.color=lerp(p.color,float4(0.4000000059604645,0.029999999329447746,0.0,0.0),saturate((t-0.25)/0.75));
+}
 break;}
 }}
 uint2 eventTarget(uint source,uint trigger) {switch(source){
@@ -190,6 +196,7 @@ float3 meshVertex(uint emitter,uint vertex){switch(emitter){
 // flash / Initialize / lifetime: lifetime
 // flash / Initialize / cone: cone
 // flash / Initialize / speed: velocity
+// flash / Update / flash_envelope: color_over_life
 // flash / Render / sprite: sprite
 // flash / Render / atlas: flipbook
 // flash / Render / light: light

@@ -151,7 +151,15 @@ impl Effect {
         }
         effect.validate()?;
         let expected = effect.to_graph(graph.id.clone(), graph.editor.clone())?;
-        if graph.nodes != expected.nodes || graph.edges != expected.edges {
+        // Module values were decoded into their actual f32 types above. Legacy
+        // graphs may contain widened decimals for exactly the same f32 bits.
+        let coherent = graph.nodes.len() == expected.nodes.len()
+            && graph.nodes.iter().all(|(id, node)| {
+                expected.nodes.get(id).is_some_and(|target| {
+                    node.kind == target.kind && node.payload == target.payload
+                })
+            });
+        if !coherent || graph.edges != expected.edges {
             return Err(error(
                 "stack nodes/edges contradict their identity or authored order",
             ));

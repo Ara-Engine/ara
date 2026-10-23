@@ -162,7 +162,7 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 2b2cdedbef73ff005427820614344e8daf44c656df75e6c62b6a15236be834b7
+// VFX content 752d0cf31d3021d8b678186674033e9b2f07bf6771088c2cd8a18b3678d4c63b
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
@@ -208,7 +208,7 @@ p.velocity/=1.+0.6000000238418579*dt;
 }
 {
 p.color=float4(5.0,2.0,0.4000000059604645,0.0);
-p.color=lerp(p.color,float4(6.0,2.299999952316284,0.4000000059604645,0.800000011920929),saturate((t-0.0)/0.15000000596046448));
+p.color=lerp(p.color,float4(4.0,1.5,0.25,0.6499999761581421),saturate((t-0.0)/0.15000000596046448));
 p.color=lerp(p.color,float4(3.0,0.6000000238418579,0.03999999910593033,0.5),saturate((t-0.15000000596046448)/0.4999999701976776));
 p.color=lerp(p.color,float4(0.5,0.029999999329447746,0.0,0.0),saturate((t-0.6499999761581421)/0.3500000238418579));
 }

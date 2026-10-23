@@ -570,6 +570,7 @@ name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-json",
  "ash 0.38.0+1.4.352",
  "bytemuck",
  "serde",
@@ -918,6 +919,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-json",
  "ara-platform",
  "bytemuck",
  "glam 0.30.9",

@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-json.workspace = true
 ara-gpu = { path = "../ara-gpu" }
 ara-platform = { path = "../ara-platform" }
 anyhow = "1"

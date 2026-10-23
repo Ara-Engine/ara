@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-json.workspace = true
 ash = { git = "https://github.com/ash-rs/ash.git", rev = "f4c2ca3e4f6b998d5254ad101a32f024d87cdec2" }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }

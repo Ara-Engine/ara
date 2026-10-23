@@ -1,12 +1,48 @@
 {
   "tick": 140,
-  "particles_alive": 3733,
+  "particles_alive": 225,
   "emitters": [
     {
-      "name": "swirl",
-      "alive": 3733,
-      "dead": 4459,
-      "rendered": 3733,
+      "name": "orbit_0",
+      "alive": 56,
+      "dead": 456,
+      "rendered": 56,
+      "events": 0,
+      "dropped_spawns": 0,
+      "dropped_events": 0
+    },
+    {
+      "name": "orbit_1",
+      "alive": 56,
+      "dead": 456,
+      "rendered": 56,
+      "events": 0,
+      "dropped_spawns": 0,
+      "dropped_events": 0
+    },
+    {
+      "name": "orbit_2",
+      "alive": 56,
+      "dead": 456,
+      "rendered": 56,
+      "events": 0,
+      "dropped_spawns": 0,
+      "dropped_events": 0
+    },
+    {
+      "name": "orbit_3",
+      "alive": 56,
+      "dead": 456,
+      "rendered": 56,
+      "events": 0,
+      "dropped_spawns": 0,
+      "dropped_events": 0
+    },
+    {
+      "name": "sigil",
+      "alive": 1,
+      "dead": 255,
+      "rendered": 1,
       "events": 0,
       "dropped_spawns": 0,
       "dropped_events": 0
@@ -21,42 +57,42 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.020352
+      "milliseconds": 0.034528
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.002112
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Update",
       "queue": "Graphics",
-      "milliseconds": 0.002048
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics",
-      "milliseconds": 0.004096
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics",
-      "milliseconds": 0.002048
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Events",
       "queue": "Graphics",
-      "milliseconds": 0.001024
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Sort",
@@ -66,31 +102,141 @@
     {
       "pass": "Vfx.IndirectArgs",
       "queue": "Graphics",
-      "milliseconds": 0.001024
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.0152
+      "milliseconds": 0.036864
     },
     {
       "pass": "Vfx.Tonemap",
       "queue": "Graphics",
-      "milliseconds": 0.008192
+      "milliseconds": 0.007168
     },
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.158432
+      "milliseconds": 0.00256
     },
     {
       "pass": "Vfx.Host",
       "queue": "Graphics",
       "milliseconds": 0.000064
+    },
+    {
+      "pass": "Visibility.Motion",
+      "queue": "Graphics",
+      "milliseconds": 0.131104
+    },
+    {
+      "pass": "DDGI.Trace.Relocate.Classify.Integrate",
+      "queue": "Graphics",
+      "milliseconds": 0.062848
+    },
+    {
+      "pass": "RT.Reflections.SoftShadows.DDGI",
+      "queue": "Graphics",
+      "milliseconds": 0.175872
+    },
+    {
+      "pass": "RT.Disocclusion.Repair",
+      "queue": "Graphics",
+      "milliseconds": 0.05696
+    },
+    {
+      "pass": "SVGF.Reproject.Reject.Outlier.Moments",
+      "queue": "Graphics",
+      "milliseconds": 0.0848
+    },
+    {
+      "pass": "SVGF.Atrous.1",
+      "queue": "Graphics",
+      "milliseconds": 0.082976
+    },
+    {
+      "pass": "SVGF.Atrous.2",
+      "queue": "Graphics",
+      "milliseconds": 0.089216
+    },
+    {
+      "pass": "SVGF.Atrous.4",
+      "queue": "Graphics",
+      "milliseconds": 0.10832
+    },
+    {
+      "pass": "Bloom.Horizontal",
+      "queue": "Graphics",
+      "milliseconds": 0.051552
+    },
+    {
+      "pass": "Bloom.Vertical",
+      "queue": "Graphics",
+      "milliseconds": 0.029056
+    },
+    {
+      "pass": "Exposure.EV100.Meter.Adapt",
+      "queue": "Graphics",
+      "milliseconds": 0.005888
+    },
+    {
+      "pass": "Post.Atmosphere.Lens.ACES.LUT",
+      "queue": "Graphics",
+      "milliseconds": 0.034816
+    },
+    {
+      "pass": "Upscale.TAAU.Resolve",
+      "queue": "Graphics",
+      "milliseconds": 0.128192
+    },
+    {
+      "pass": "Output.SDR",
+      "queue": "Graphics",
+      "milliseconds": 0.012608
+    },
+    {
+      "pass": "Viewport.Ready",
+      "queue": "Graphics",
+      "milliseconds": 0.000096
+    },
+    {
+      "pass": "Feature.Bloom.Horizontal",
+      "queue": "Graphics",
+      "milliseconds": 0.05136
+    },
+    {
+      "pass": "Feature.Bloom.Vertical",
+      "queue": "Graphics",
+      "milliseconds": 0.028832
+    },
+    {
+      "pass": "Feature.Exposure",
+      "queue": "Graphics",
+      "milliseconds": 0.005728
+    },
+    {
+      "pass": "Feature.Post",
+      "queue": "Graphics",
+      "milliseconds": 0.030976
+    },
+    {
+      "pass": "Feature.Upscale",
+      "queue": "Graphics",
+      "milliseconds": 0.052384
+    },
+    {
+      "pass": "Feature.Output",
+      "queue": "Graphics",
+      "milliseconds": 0.012256
+    },
+    {
+      "pass": "Feature.Ready",
+      "queue": "Graphics",
+      "milliseconds": 0.00064
     }
   ],
-  "overdraw_estimate": 0.10712035000324249,
-  "batches": 1,
+  "overdraw_estimate": 7.2305427,
+  "batches": 5,
   "lights": 0,
   "device": {
     "name": "NVIDIA GeForce RTX 4070 SUPER",
@@ -109,8 +255,8 @@
     "timestamp_valid_bits": [64, 64],
     "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
   },
-  "effect_hash": "df221973979ddaefdce4bf6b1d4ccaa875a99ec455db41c8ef6bd67922f2abbb",
-  "shader_key": "aa25fdd4b87fa1b605ed106180bf52aae29a01436f49c5d20466eb403d3686be",
+  "effect_hash": "ea60530d1cb98d2b30a3101a394df9639603c6765b5236c1c9f772662434717f",
+  "shader_key": "2790cc28fa04db83eda9fe240471e5ee2704347525dbe965516885ffd0b2e1ad",
   "async_compute": false,
   "diagnostics": []
 }

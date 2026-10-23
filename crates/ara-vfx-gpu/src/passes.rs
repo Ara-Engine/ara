@@ -20,6 +20,25 @@ impl GpuSystem {
             view.exposure.is_finite() && view.exposure > 0.,
             "exposure must be finite and positive"
         );
+        ensure!(
+            !view.linear_depth || view.scene_depth.is_some(),
+            "linear depth requires an imported scene depth"
+        );
+        ensure!(
+            view.scene_background
+                .is_none_or(|c| c.state.queue == Queue::Graphics),
+            "scene background must have Graphics ownership"
+        );
+        let light = &view.lighting;
+        ensure!(
+            light.ambient.is_finite()
+                && light.ambient.cmpge(glam::Vec3::ZERO).all()
+                && light.sun_direction.is_finite()
+                && light.sun_direction.length_squared() > 0.0001
+                && light.sun_color.is_finite()
+                && light.sun_color.cmpge(glam::Vec3::ZERO).all(),
+            "invalid extracted VFX lighting"
+        );
         let camera = view.camera.resolve(self.size)?;
         self.color_target = self.hdr;
         self.color_index = self.hdr_index;
@@ -72,7 +91,8 @@ impl GpuSystem {
         if let Some(p) = &view.lighting.probes {
             ensure!(
                 p.state.queue == Queue::Graphics
-                    && p.counts.iter().all(|c| *c >= 2)
+                    && p.counts.iter().all(|c| (2..=64).contains(c))
+                    && p.origin.is_finite()
                     && p.spacing.cmpgt(glam::Vec3::ZERO).all(),
                 "invalid borrowed probe field"
             );

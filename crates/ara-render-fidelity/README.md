@@ -14,6 +14,14 @@ view.destroy(renderer.gpu_mut())?;
 ```
 
 `resize` replaces view targets and resets histories, preserving scene/AS/probes.
+`feature_inputs()` publishes the completed filtered HDR, positive view-space
+depth and directional probe storage with their resource states. Borrow these at
+a completed frame boundary to shade/composite an external feature. Pass its
+matching-extent HDR `ImageInput` to `post_process()` to run this view's actual
+bloom, exposure, lens, display and upscale pipelines over the composite. The
+external image returns in Graphics/ShaderRead, display history resets, and the
+SDR output remains CopySource. This seam does not advance scene transport.
+
 `update_scene` changes extraction at a completed frame boundary, preserving GPU
 IDs and unchanged BLASes. Position-only deformations retain old positions for
 motion; geometry topology/material changes require a history reset. Lighting

@@ -78,7 +78,7 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                             },
                             ColorKey {
                                 t: 0.15,
-                                value: [6., 2.3, 0.4, 0.8],
+                                value: [4., 1.5, 0.25, 0.65],
                             },
                             ColorKey {
                                 t: 0.65,
@@ -187,22 +187,29 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
             e.capacity = 512;
             for m in &mut e.stacks.spawn {
                 if let Module::Rate { per_second } = &mut m.module {
-                    *per_second = 95.;
+                    *per_second = 24.;
                 }
             }
             for m in &mut e.stacks.initialize {
                 match &mut m.module {
-                    Module::Lifetime { size, .. } => *size = 0.42,
+                    Module::Lifetime { size, .. } => *size = 0.28,
                     Module::Sphere { radius, .. } => *radius = 1.05,
                     _ => {}
                 }
             }
             for m in &mut e.stacks.update {
                 match &mut m.module {
-                    Module::Attractor { strength, .. } => *strength = 0.8,
-                    Module::Vortex { strength, .. } => *strength = 1.8,
-                    Module::CurlNoise { strength, .. } => *strength = 0.3,
-                    Module::Drag { coefficient } => *coefficient = 0.4,
+                    Module::Attractor {
+                        strength,
+                        softening,
+                        ..
+                    } => {
+                        *strength = 4.;
+                        *softening = 0.4;
+                    }
+                    Module::Vortex { strength, .. } => *strength = 2.4,
+                    Module::CurlNoise { strength, .. } => *strength = 0.15,
+                    Module::Drag { coefficient } => *coefficient = 1.2,
                     _ => {}
                 }
             }
@@ -211,19 +218,19 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                 SpriteTexture::Wisp,
                 Blend::Additive,
                 Alignment::Velocity,
-                2.5,
+                3.5,
                 0.5,
             );
             let mut ring = e.clone();
             ring.name = "sigil".into();
-            ring.capacity = 64;
+            ring.capacity = 256;
             ring.stacks.spawn = vec![item("burst", Module::Burst { tick: 0, count: 1 })];
             ring.stacks.initialize = vec![
                 item(
                     "life",
                     Module::Lifetime {
                         seconds: 10.,
-                        size: 3.1,
+                        size: 4.5,
                         color: [0.08, 0.7, 3., 0.5],
                     },
                 ),
@@ -252,6 +259,28 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                 1.,
                 0.,
             );
+            let base = effect.emitters.remove(0);
+            for stream in 0..4 {
+                let angle = stream as f32 * std::f32::consts::FRAC_PI_2;
+                let x = angle.cos() * 0.8;
+                let z = angle.sin() * 0.8;
+                let mut orbit = base.clone();
+                orbit.name = format!("orbit_{stream}");
+                for m in &mut orbit.stacks.initialize {
+                    match &mut m.module {
+                        Module::Sphere { center, radius } => {
+                            *center = [x, 1.4 + angle.sin() * 0.1, z];
+                            *radius = 0.06;
+                        }
+                        Module::Velocity { value, spread } => {
+                            *value = [z * 2., 0.05, -x * 2.];
+                            *spread = [0.025; 3];
+                        }
+                        _ => {}
+                    }
+                }
+                effect.emitters.push(orbit);
+            }
             effect.emitters.push(ring);
         }
         "smoke" => {
@@ -302,14 +331,14 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
             let e = &mut effect.emitters[0];
             for m in &mut e.stacks.spawn {
                 if let Module::Burst { count, .. } = &mut m.module {
-                    *count = 9;
+                    *count = 6;
                 }
             }
             for m in &mut e.stacks.initialize {
                 match &mut m.module {
                     Module::Lifetime { size, color, .. } => {
-                        *size = 0.25;
-                        *color = [12., 5., 0.6, 0.8];
+                        *size = 0.2;
+                        *color = [8., 3., 0.4, 0.8];
                     }
                     Module::Velocity { value, spread } => {
                         *value = [5., 0.25, 0.];
@@ -327,12 +356,40 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                 SpriteTexture::Fire,
                 Blend::Additive,
                 Alignment::Velocity,
-                3.,
+                1.3,
                 0.75,
             );
+            e.stacks.update.push(item(
+                "flash_envelope",
+                Module::ColorOverLife {
+                    keys: vec![
+                        ColorKey {
+                            t: 0.,
+                            value: [8., 4., 0.7, 0.],
+                        },
+                        ColorKey {
+                            t: 0.08,
+                            value: [12., 6., 1., 1.],
+                        },
+                        ColorKey {
+                            t: 0.25,
+                            value: [8., 3., 0.2, 0.8],
+                        },
+                        ColorKey {
+                            t: 1.,
+                            value: [0.4, 0.03, 0., 0.],
+                        },
+                    ],
+                },
+            ));
         }
         "rain" => {
             let rain = &mut effect.emitters[0];
+            for m in &mut rain.stacks.spawn {
+                if let Module::Rate { per_second } = &mut m.module {
+                    *per_second = 1000.;
+                }
+            }
             appearance(
                 rain,
                 SpriteTexture::Spark,
@@ -355,9 +412,9 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                 seconds,
             } = &mut splash.stacks.initialize[0].module
             {
-                *size = 0.6;
-                *seconds = 0.4;
-                *color = [0.35, 0.75, 1.2, 0.5];
+                *size = 0.35;
+                *seconds = 0.3;
+                *color = [0.5, 0.6, 0.7, 0.12];
             }
             splash.stacks.update.push(item(
                 "fade",
@@ -365,11 +422,11 @@ pub(crate) fn finish(mut effect: Effect) -> Effect {
                     keys: vec![
                         ColorKey {
                             t: 0.,
-                            value: [0.35, 0.75, 1.2, 0.6],
+                            value: [0.5, 0.6, 0.7, 0.16],
                         },
                         ColorKey {
                             t: 1.,
-                            value: [0.35, 0.75, 1.2, 0.],
+                            value: [0.5, 0.6, 0.7, 0.],
                         },
                     ],
                 },

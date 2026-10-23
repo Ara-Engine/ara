@@ -23,7 +23,7 @@
             "module": {
               "op": "burst",
               "tick": 0,
-              "count": 9
+              "count": 6
             }
           }
         ],
@@ -33,8 +33,8 @@
             "module": {
               "op": "lifetime",
               "seconds": 0.12,
-              "size": 0.25,
-              "color": [12, 5, 0.6, 0.8]
+              "size": 0.2,
+              "color": [8, 3, 0.4, 0.8]
             }
           },
           {
@@ -55,7 +55,32 @@
             }
           }
         ],
-        "update": [],
+        "update": [
+          {
+            "name": "flash_envelope",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [8, 4, 0.7, 0]
+                },
+                {
+                  "t": 0.08,
+                  "value": [12, 6, 1, 1]
+                },
+                {
+                  "t": 0.25,
+                  "value": [8, 3, 0.2, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [0.4, 0.03, 0, 0]
+                }
+              ]
+            }
+          }
+        ],
         "render": [
           {
             "name": "sprite",
@@ -90,7 +115,7 @@
               "texture": "fire",
               "blend": "additive",
               "alignment": "velocity",
-              "stretch": 3,
+              "stretch": 1.3,
               "shutter": 0.75
             }
           }

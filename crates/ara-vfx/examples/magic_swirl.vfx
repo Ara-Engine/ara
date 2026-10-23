@@ -10,7 +10,7 @@
   },
   "emitters": [
     {
-      "name": "swirl",
+      "name": "orbit_0",
       "capacity": 512,
       "bounds": {
         "min": [-8, -2, -8],
@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 95
+              "per_second": 24
             }
           }
         ],
@@ -32,7 +32,7 @@
             "module": {
               "op": "lifetime",
               "seconds": 3,
-              "size": 0.42,
+              "size": 0.28,
               "color": [0.3, 1.5, 5, 0.7]
             }
           },
@@ -40,16 +40,16 @@
             "name": "sphere",
             "module": {
               "op": "sphere",
-              "center": [0, 1.4, 0],
-              "radius": 1.05
+              "center": [0.8, 1.4, 0],
+              "radius": 0.06
             }
           },
           {
             "name": "velocity",
             "module": {
               "op": "velocity",
-              "value": [0, 0.35, 0],
-              "spread": [0.1, 0.1, 0.1]
+              "value": [0, 0.05, -1.6],
+              "spread": [0.025, 0.025, 0.025]
             }
           }
         ],
@@ -60,7 +60,7 @@
               "op": "vortex",
               "center": [0, 1.4, 0],
               "axis": [0, 1, 0],
-              "strength": 1.8
+              "strength": 2.4
             }
           },
           {
@@ -68,7 +68,7 @@
             "module": {
               "op": "curl_noise",
               "frequency": 2.4,
-              "strength": 0.3
+              "strength": 0.15
             }
           },
           {
@@ -76,15 +76,15 @@
             "module": {
               "op": "attractor",
               "position": [0, 1.4, 0],
-              "strength": 0.8,
-              "softening": 0.2
+              "strength": 4,
+              "softening": 0.4
             }
           },
           {
             "name": "damping",
             "module": {
               "op": "drag",
-              "coefficient": 0.4
+              "coefficient": 1.2
             }
           },
           {
@@ -125,7 +125,400 @@
               "texture": "wisp",
               "blend": "additive",
               "alignment": "velocity",
-              "stretch": 2.5,
+              "stretch": 3.5,
+              "shutter": 0.5
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "orbit_1",
+      "capacity": 512,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 24
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 3,
+              "size": 0.28,
+              "color": [0.3, 1.5, 5, 0.7]
+            }
+          },
+          {
+            "name": "sphere",
+            "module": {
+              "op": "sphere",
+              "center": [-3.4969112e-8, 1.5, 0.8],
+              "radius": 0.06
+            }
+          },
+          {
+            "name": "velocity",
+            "module": {
+              "op": "velocity",
+              "value": [1.6, 0.05, 6.9938224e-8],
+              "spread": [0.025, 0.025, 0.025]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "vortex",
+            "module": {
+              "op": "vortex",
+              "center": [0, 1.4, 0],
+              "axis": [0, 1, 0],
+              "strength": 2.4
+            }
+          },
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 2.4,
+              "strength": 0.15
+            }
+          },
+          {
+            "name": "pull",
+            "module": {
+              "op": "attractor",
+              "position": [0, 1.4, 0],
+              "strength": 4,
+              "softening": 0.4
+            }
+          },
+          {
+            "name": "damping",
+            "module": {
+              "op": "drag",
+              "coefficient": 1.2
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.1, 2, 6, 0.6]
+                },
+                {
+                  "t": 0.6,
+                  "value": [1.5, 0.1, 4, 0.7]
+                },
+                {
+                  "t": 1,
+                  "value": [0.1, 0, 1, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "wisp",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3.5,
+              "shutter": 0.5
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "orbit_2",
+      "capacity": 512,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 24
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 3,
+              "size": 0.28,
+              "color": [0.3, 1.5, 5, 0.7]
+            }
+          },
+          {
+            "name": "sphere",
+            "module": {
+              "op": "sphere",
+              "center": [-0.8, 1.4, -6.9938224e-8],
+              "radius": 0.06
+            }
+          },
+          {
+            "name": "velocity",
+            "module": {
+              "op": "velocity",
+              "value": [-1.3987645e-7, 0.05, 1.6],
+              "spread": [0.025, 0.025, 0.025]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "vortex",
+            "module": {
+              "op": "vortex",
+              "center": [0, 1.4, 0],
+              "axis": [0, 1, 0],
+              "strength": 2.4
+            }
+          },
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 2.4,
+              "strength": 0.15
+            }
+          },
+          {
+            "name": "pull",
+            "module": {
+              "op": "attractor",
+              "position": [0, 1.4, 0],
+              "strength": 4,
+              "softening": 0.4
+            }
+          },
+          {
+            "name": "damping",
+            "module": {
+              "op": "drag",
+              "coefficient": 1.2
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.1, 2, 6, 0.6]
+                },
+                {
+                  "t": 0.6,
+                  "value": [1.5, 0.1, 4, 0.7]
+                },
+                {
+                  "t": 1,
+                  "value": [0.1, 0, 1, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "wisp",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3.5,
+              "shutter": 0.5
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "orbit_3",
+      "capacity": 512,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 24
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 3,
+              "size": 0.28,
+              "color": [0.3, 1.5, 5, 0.7]
+            }
+          },
+          {
+            "name": "sphere",
+            "module": {
+              "op": "sphere",
+              "center": [9.539905e-9, 1.3, -0.8],
+              "radius": 0.06
+            }
+          },
+          {
+            "name": "velocity",
+            "module": {
+              "op": "velocity",
+              "value": [-1.6, 0.05, -1.907981e-8],
+              "spread": [0.025, 0.025, 0.025]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "vortex",
+            "module": {
+              "op": "vortex",
+              "center": [0, 1.4, 0],
+              "axis": [0, 1, 0],
+              "strength": 2.4
+            }
+          },
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 2.4,
+              "strength": 0.15
+            }
+          },
+          {
+            "name": "pull",
+            "module": {
+              "op": "attractor",
+              "position": [0, 1.4, 0],
+              "strength": 4,
+              "softening": 0.4
+            }
+          },
+          {
+            "name": "damping",
+            "module": {
+              "op": "drag",
+              "coefficient": 1.2
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.1, 2, 6, 0.6]
+                },
+                {
+                  "t": 0.6,
+                  "value": [1.5, 0.1, 4, 0.7]
+                },
+                {
+                  "t": 1,
+                  "value": [0.1, 0, 1, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "wisp",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3.5,
               "shutter": 0.5
             }
           },
@@ -142,7 +535,7 @@
     },
     {
       "name": "sigil",
-      "capacity": 64,
+      "capacity": 256,
       "bounds": {
         "min": [-8, -2, -8],
         "max": [8, 12, 8]
@@ -164,7 +557,7 @@
             "module": {
               "op": "lifetime",
               "seconds": 10,
-              "size": 3.1,
+              "size": 4.5,
               "color": [0.08, 0.7, 3, 0.5]
             }
           },

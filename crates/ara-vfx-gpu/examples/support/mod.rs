@@ -47,18 +47,25 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
     let mut stone = Vec::new();
     for y in 0..128u32 {
         for x in 0..128u32 {
-            let grain = ((x.wrapping_mul(73) ^ y.wrapping_mul(151) ^ x.wrapping_mul(y)) % 21) as u8;
-            let seam = x % 32 < 1 || y % 32 < 1;
-            let base = if seam { 67 } else { 115 + grain };
+            let grain =
+                ((x.wrapping_mul(73) ^ y.wrapping_mul(151) ^ x.wrapping_mul(y)) % 13) as f32;
+            let a = x as f32 * std::f32::consts::TAU / 128.;
+            let b = y as f32 * std::f32::consts::TAU / 128.;
+            let base = (103. + grain + 10. * (a.sin() * b.cos()) + 5. * (a * 2. + b * 3.).cos())
+                .clamp(0., 252.) as u8;
             stone.extend([base, base, base + 3, 255]);
         }
     }
-    let ground = Material {
+    let mut ground = Material {
         base_color: [0.4, 0.43, 0.48, 1.],
         emissive_roughness: [0., 0., 0., 0.65],
         textures: [2, 1, 0, 0],
         ..Material::default()
     };
+    if effect.name == "rain" {
+        ground.base_color = [0.25, 0.28, 0.32, 1.];
+        ground.emissive_roughness[3] = 0.35;
+    }
     let bronze = Material {
         base_color: [0.32, 0.15, 0.055, 1.],
         emissive_roughness: [0., 0., 0., 0.3],
@@ -121,6 +128,20 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
             2,
         ));
     }
+    if effect.name == "muzzle_flash" {
+        meshes.push(box_mesh(
+            40,
+            Vec3::new(-0.35, 0.55, 0.),
+            Vec3::new(0.4, 0.06, 0.09),
+            2,
+        ));
+        meshes.push(box_mesh(
+            41,
+            Vec3::new(-0.55, 0.42, 0.),
+            Vec3::new(0.08, 0.17, 0.07),
+            2,
+        ));
+    }
     let mut lights = vec![Light {
         position_range: [-2., 3., 2., 8.],
         color_lumens: [0.5, 0.65, 1., 180.],
@@ -144,7 +165,18 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
                             (e.bounds.min[2] + e.bounds.max[2]) * 0.5,
                             radius,
                         ],
-                        color_lumens: [color[0], color[1], color[2], lumens * flicker],
+                        color_lumens: [
+                            color[0],
+                            color[1],
+                            color[2],
+                            lumens
+                                * flicker
+                                * if effect.name == "muzzle_flash" {
+                                    (-(tick as f32) * 0.2).exp()
+                                } else {
+                                    1.
+                                },
+                        ],
                         direction_outer: [0.; 4],
                         parameters: [0.; 4],
                     });
@@ -191,8 +223,33 @@ fn camera(effect: &Effect) -> CameraSpec {
         vertical_fov: 0.7,
     }
 }
+/// Four representative fixed ticks, including the sample's mid-life golden.
+pub fn sequence_ticks(name: &str) -> [u32; 4] {
+    match name {
+        "muzzle_flash" => [1, 2, 3, 6],
+        "campfire" => [30, 70, 120, 180],
+        "sparks" => [10, 40, 100, 160],
+        "magic_swirl" => [30, 75, 140, 200],
+        "smoke" => [40, 100, 200, 280],
+        _ => [30, 60, 100, 160],
+    }
+}
+/// Four independently replayed frames in chronological order, at half size.
+pub fn sequence_strip(frames: &[(Capture, ara_vfx_gpu::Stats)]) -> image::RgbaImage {
+    let mut strip = image::RgbaImage::new(1920, 270);
+    for (i, (frame, _)) in frames.iter().take(4).enumerate() {
+        let thumbnail = image::imageops::resize(
+            &frame.image,
+            480,
+            270,
+            image::imageops::FilterType::Lanczos3,
+        );
+        image::imageops::replace(&mut strip, &thumbnail, (i * 480) as i64, 0);
+    }
+    strip
+}
 /// Replay independently at every requested tick, then converge the scene with a
-/// fixed 24-frame probe/lighting sequence and draw the frozen VFX before bloom.
+/// fixed 64-frame probe/lighting sequence and draw the frozen VFX before bloom.
 pub fn capture_frames(
     gpu: &mut VulkanDevice,
     effect: &Effect,
@@ -234,7 +291,7 @@ pub fn capture_frames(
             },
         };
         let mut fidelity = FidelityView::new(gpu, &scene, settings, None)?;
-        for frame in 0..24 {
+        for frame in 0..64 {
             fidelity.render(
                 gpu,
                 &FrameInput {

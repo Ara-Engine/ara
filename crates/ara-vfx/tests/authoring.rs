@@ -9,6 +9,26 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 #[test]
+fn legacy_widened_f32_graph_values_keep_their_typed_bits() {
+    let mut effect = samples::campfire();
+    if let Module::Lifetime { seconds, .. } = &mut effect.emitters[0].stacks.initialize[0].module {
+        *seconds = 1.4;
+    }
+    let mut graph = effect
+        .to_graph(AssetId::parse("gr_legacy").unwrap(), Editor::default())
+        .unwrap();
+    for node in graph.nodes.values_mut() {
+        let module: Module = serde_json::from_value(node.params["module"].clone()).unwrap();
+        node.params
+            .insert("module".into(), serde_json::to_value(module).unwrap());
+    }
+    let read = Effect::from_graph(&graph).unwrap();
+    assert_eq!(read, effect);
+    let text = read.text().unwrap();
+    assert!(text.contains("\"seconds\": 1.4,"));
+    assert!(!text.contains("1.399999976"));
+}
+#[test]
 fn samples_roundtrip_text_graph_and_compiled_modules() {
     let mut db = SchemaDb::new();
     ara_graph::register(&mut db).unwrap();

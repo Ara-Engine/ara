@@ -13,16 +13,9 @@ fn main() -> Result<()> {
         if selected.as_ref().is_some_and(|name| name != &effect.name) {
             continue;
         }
-        let sequence = match effect.name.as_str() {
-            "muzzle_flash" => [1, 2, 3, 6],
-            "campfire" => [30, 70, 120, 180],
-            "sparks" => [10, 40, 100, 160],
-            "magic_swirl" => [30, 75, 140, 200],
-            "smoke" => [40, 100, 200, 280],
-            _ => [30, 60, 100, 160],
-        };
+        let sequence = support::sequence_ticks(&effect.name);
         let mut frames = support::capture_frames(&mut gpu, &effect, &sequence, [960, 540])?;
-        let mut strip = image::RgbaImage::new(1920, 270);
+        let strip = support::sequence_strip(&frames);
         for (i, (capture, stats)) in frames.iter_mut().enumerate() {
             capture.write(
                 &output
@@ -36,13 +29,6 @@ fn main() -> Result<()> {
                     ara_json::to_canonical_string(&ara_json::to_value(stats)?),
                 )?;
             }
-            let thumbnail = image::imageops::resize(
-                &capture.image,
-                480,
-                270,
-                image::imageops::FilterType::Lanczos3,
-            );
-            image::imageops::replace(&mut strip, &thumbnail, (i * 480) as i64, 0);
         }
         strip.save(output.join(format!("{}.sequence.png", effect.name)))?;
         std::fs::write(

@@ -23,11 +23,6 @@ impl GpuSystem {
             .map(|p| f32::from_le_bytes(*p) as u32)
             .collect())
     }
-    /// Diagnostic SoA readback, including dead slots. This stalls for completion;
-    /// gameplay must consume CpuSystem instead of cosmetic GPU particle state.
-    pub fn read_particles(&mut self, gpu: &mut VulkanDevice) -> Result<Vec<Vec<Particle>>> {
-        self.read_particles_inner(gpu)
-    }
 }
 fn read_image(
     gpu: &mut VulkanDevice,
@@ -83,7 +78,9 @@ fn read_image(
     Ok(bytes)
 }
 impl GpuSystem {
-    fn read_particles_inner(&mut self, gpu: &mut VulkanDevice) -> Result<Vec<Vec<Particle>>> {
+    /// Diagnostic SoA readback, including dead slots. This stalls for completion;
+    /// gameplay must consume CpuSystem instead of cosmetic GPU particle state.
+    pub fn read_particles(&mut self, gpu: &mut VulkanDevice) -> Result<Vec<Vec<Particle>>> {
         ensure!(self.tick > 0, "step before reading particle state");
         let size = u64::from(self.layout.total) * 64;
         let staging = gpu.create_buffer(size, vk::BufferUsageFlags::TRANSFER_DST, true)?;

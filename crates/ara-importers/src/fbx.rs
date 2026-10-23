@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "2-ufbx0115-meshopt070-ispc050-tiled"
+        "3-ufbx0115-meshopt070-ispc050-tiled-f32text"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();

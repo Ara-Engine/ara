@@ -1,0 +1,266 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      1,
+      "magic_swirl"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        4.2,
+        2.8,
+        5.0
+      ],
+      "target": [
+        0.0,
+        1.2,
+        0.0
+      ],
+      "vertical_fov": 0.7
+    },
+    "deterministic": true,
+    "exposure": 1.0,
+    "marks": 1,
+    "mode": "lit",
+    "seed": 17,
+    "settle_frames": 1,
+    "size": [
+      960,
+      540
+    ],
+    "tick": 200
+  },
+  "scene_hash": "4c991113a2453d17d37f3def317d5b6775a94c05ee9386f12cf9bf2533a8a7cf",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "284f9354c997d88c10fa3599565e9593b2f0c31af6130f3c9496d7374076f278"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.000064,
+      "pass": "Vfx.Acquire",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.043584,
+      "pass": "Vfx.Backdrop",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Prepare",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Spawn",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Update",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Compact.Scan",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Compact.Prefix",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Compact.Scatter",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Events",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.Sort",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.0,
+      "pass": "Vfx.IndirectArgs",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.055072,
+      "pass": "Vfx.Draw",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.008192,
+      "pass": "Vfx.Tonemap",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.002176,
+      "pass": "Vfx.Readback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "Vfx.Host",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.157408,
+      "pass": "Visibility.Motion",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.075616,
+      "pass": "DDGI.Trace.Relocate.Classify.Integrate",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.216544,
+      "pass": "RT.Reflections.SoftShadows.DDGI",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.065312,
+      "pass": "RT.Disocclusion.Repair",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.096,
+      "pass": "SVGF.Reproject.Reject.Outlier.Moments",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.10112,
+      "pass": "SVGF.Atrous.1",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.110144,
+      "pass": "SVGF.Atrous.2",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.132928,
+      "pass": "SVGF.Atrous.4",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.062848,
+      "pass": "Bloom.Horizontal",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.035968,
+      "pass": "Bloom.Vertical",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.006496,
+      "pass": "Exposure.EV100.Meter.Adapt",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.038208,
+      "pass": "Post.Atmosphere.Lens.ACES.LUT",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.149152,
+      "pass": "Upscale.TAAU.Resolve",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.015904,
+      "pass": "Output.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000096,
+      "pass": "Viewport.Ready",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.06368,
+      "pass": "Feature.Bloom.Horizontal",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.03584,
+      "pass": "Feature.Bloom.Vertical",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.005792,
+      "pass": "Feature.Exposure",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.035776,
+      "pass": "Feature.Post",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.057088,
+      "pass": "Feature.Upscale",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.012544,
+      "pass": "Feature.Output",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.00064,
+      "pass": "Feature.Ready",
+      "queue": "Graphics"
+    }
+  ]
+}

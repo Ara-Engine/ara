@@ -162,7 +162,7 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 891c5d5712c7dd0e956c193d43bcb0c10adb740df8543ee759ab06c056978e04
+// VFX content 826b08af91ae4748a25d29a02152f67d37999c7d20117716df66e663607e877a
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
@@ -177,7 +177,7 @@ p.velocity=float3(0.30000001192092896,-6.0,0.0)+(2*random3(rng)-1)*float3(0.0500
 break;}
 case 1u: {
 {
-p.life=0.4000000059604645; p.size=0.6000000238418579; p.color=float4(0.3499999940395355,0.75,1.2000000476837158,0.5);
+p.life=0.30000001192092896; p.size=0.3499999940395355; p.color=float4(0.5,0.6000000238418579,0.699999988079071,0.11999999731779099);
 }
 break;}
 }}
@@ -189,8 +189,8 @@ float3 n=normalize(float3(0.0,1.0,0.0));float distance=dot(p.position,n)-0.00999
 break;}
 case 1u: {
 {
-p.color=float4(0.3499999940395355,0.75,1.2000000476837158,0.6000000238418579);
-p.color=lerp(p.color,float4(0.3499999940395355,0.75,1.2000000476837158,0.0),saturate((t-0.0)/1.0));
+p.color=float4(0.5,0.6000000238418579,0.699999988079071,0.1599999964237213);
+p.color=lerp(p.color,float4(0.5,0.6000000238418579,0.699999988079071,0.0),saturate((t-0.0)/1.0));
 }
 break;}
 }}

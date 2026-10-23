@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used)]
+#[path = "../examples/support/mod.rs"]
+mod support;
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::capture::{CaptureRequest, ViewMode, compare};
 use ara_vfx::{CpuSystem, Effect};
@@ -76,14 +78,57 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
                 "GPU collision events produce splashes"
             );
         }
+        system.retire(&mut gpu).unwrap();
+        let ticks = support::sequence_ticks(&effect.name);
+        let mut times = ticks.to_vec();
+        times.push(tick);
+        let mut frames = support::capture_frames(&mut gpu, &effect, &times, [960, 540]).unwrap();
+        let (replay, _) = frames.pop().unwrap();
+        let mid = ticks.iter().position(|t| *t == tick).unwrap();
+        let strip = support::sequence_strip(&frames);
+        let (a, stats) = frames.swap_remove(mid);
+        assert_eq!(
+            a.image.as_raw(),
+            replay.image.as_raw(),
+            "{} fidelity replay",
+            effect.name
+        );
+        assert_eq!(
+            a.legend.len(),
+            1,
+            "{} visible after scene depth",
+            effect.name
+        );
+        assert!(
+            a.metadata
+                .timings
+                .iter()
+                .any(|stage| stage.pass == "Feature.Bloom.Horizontal")
+        );
         let golden = root.join("goldens").join(format!("{}.png", effect.name));
+        let strip_golden = root
+            .join("goldens")
+            .join(format!("{}.sequence.png", effect.name));
         if std::env::var("ARA_UPDATE_GOLDENS").as_deref() == Ok("1") {
             std::fs::create_dir_all(golden.parent().unwrap()).unwrap();
             a.image.save(&golden).unwrap();
+            strip.save(&strip_golden).unwrap();
         }
         let reference = image::open(&golden).unwrap().to_rgba8();
         let difference = compare(&reference, &a.image, 0.005).unwrap();
         assert!(difference.passed, "{} golden comparison", effect.name);
+        let reference = image::open(&strip_golden).unwrap().to_rgba8();
+        assert!(
+            compare(&reference, &strip, 0.005).unwrap().passed,
+            "{} sequence golden",
+            effect.name
+        );
+        strip
+            .save(
+                root.join("captures")
+                    .join(format!("{}.sequence.png", effect.name)),
+            )
+            .unwrap();
         a.write(&root.join("captures").join(format!("{}.png", effect.name)))
             .unwrap();
         std::fs::write(
@@ -92,7 +137,6 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
             ara_json::to_canonical_string(&ara_json::to_value(&stats).unwrap()),
         )
         .unwrap();
-        system.retire(&mut gpu).unwrap();
     }
     gpu.context().assert_clean().unwrap();
 }

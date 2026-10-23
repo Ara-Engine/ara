@@ -119,7 +119,7 @@ fn ara_doc_edit(
     Ok(ara_doc::Edit::Create {
         doc,
         id: ara_doc::RecordId::parse(&format!("st_{index:x}"))?,
-        record: serde_json::to_value(story)?
+        record: ara_json::to_value(story)?
             .as_object()
             .ok_or("story object")?
             .clone(),
