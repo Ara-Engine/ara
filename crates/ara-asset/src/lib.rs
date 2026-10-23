@@ -20,7 +20,7 @@ pub use importer::{
 };
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
-pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, register_schema};
+pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use worker::{ImportJob, JobEvent, ProcessWorker, serve_worker};
 

@@ -261,3 +261,62 @@ pub struct TestRunParams {
     /// Run twice in separate processes and require equal final state hashes.
     pub determinism: Option<bool>,
 }
+
+/// Params of `play.command`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayCommandParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// C# command name (`game.UseMedkit`).
+    pub name: String,
+    /// Command params; entity params may use document addresses (`{"actor": "e_fox"}`).
+    pub params: Option<Value>,
+}
+
+/// Params of `play.captureAudio`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayCaptureAudioParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// WAV file to write; the analysis (loudness, peaks, spectrum) goes beside it
+    /// as `<name>.audio.json`.
+    pub path: String,
+    /// Seconds of sound to render offline from the current tick.
+    #[ara(unit = Seconds, range(min = 0.01, max = 60))]
+    pub seconds: f64,
+}
+
+/// Params of `script.write`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScriptWriteParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// Project-relative `.cs` path inside a module folder (`scripts/Outpost/Door.cs`).
+    pub path: String,
+    /// The complete new source text.
+    pub text: String,
+}
+
+/// Params of `play.restart`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayRestartParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World ID from `play.start` (`play:1`); default: the most recent world.
+    pub world: Option<String>,
+    /// Resume from a portable snapshot of the current tick (C# state included) instead
+    /// of the start snapshot (what C# L4 restarts do).
+    pub keep_state: Option<bool>,
+}

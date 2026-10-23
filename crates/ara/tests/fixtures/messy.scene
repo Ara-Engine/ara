@@ -1,7 +1,7 @@
 {"records": {
   "e_b2": {"order": "a1", "name": "Box",
     "Transform": {"scale": [1.0, 1, 1], "position": [1.0, 2.50, 0]},
-    "Renderer": {"tint": [1, 1, 1, 1], "mesh": "@old/crate.glb#ms_crate001"}},
+    "MeshRenderer": {"tint": [1, 1, 1, 1], "mesh": "@old/crate.glb#ms_crate001"}},
   "e_a1": {"prefab": "@prefabs/crate.prefab", "name": "Crate",
     "overrides": {"e_lid1/Transform": {"scale": [2, 2, 2], "position": [0, 0, 0]}, "Transform.position": [0, 0.0, 1e1]}}
  },

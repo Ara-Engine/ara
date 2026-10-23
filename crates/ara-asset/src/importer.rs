@@ -265,6 +265,13 @@ impl ImporterRegistry {
         self.importers.insert(id, Box::new(importer));
         Ok(())
     }
+    /// The installed version of every registered importer (`id` → version).
+    pub fn versions(&self) -> BTreeMap<String, String> {
+        self.importers
+            .iter()
+            .map(|(id, importer)| (id.clone(), importer.version().to_owned()))
+            .collect()
+    }
     /// Looks up a plugin for dependency discovery or worker execution.
     pub fn get(&self, id: &str) -> Result<&dyn Importer> {
         self.importers

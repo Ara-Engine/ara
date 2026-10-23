@@ -9,53 +9,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Fallback renderer authoring schema, replaced by the renderer/asset schema at integration.
-#[derive(Schema)]
-#[ara(component, module = "editor")]
-#[allow(dead_code)]
-struct MeshRenderer {
-    /// Optional source glTF; absent uses the editor's unit cube.
-    mesh: Option<AssetRef>,
-    /// Linear surface colour.
-    #[ara(default=[0.32,0.42,0.53,1.])]
-    tint: ara_schema::Color,
-}
-/// Fallback local-light authoring schema.
-#[derive(Schema)]
-#[allow(dead_code)] // Reflected authoring enum; values are stored in documents.
-enum LightKind {
-    /// Omnidirectional local light.
-    Point,
-    /// Local cone light.
-    Spot,
-    /// Sun with illuminance rather than luminous flux.
-    Directional,
-}
-/// Fallback local-light authoring schema.
-#[derive(Schema)]
-#[ara(component, module = "editor")]
-#[allow(dead_code)]
-struct Light {
-    /// Point, spot or directional light.
-    kind: LightKind,
-    /// Luminous flux, or illuminance for a directional light.
-    #[ara(default = 1000., range(min = 0.))]
-    intensity: f32,
-    /// Influence radius in metres.
-    #[ara(default=10.,unit=Meters,range(min=0.01))]
-    range: f32,
-    /// Linear RGB light colour.
-    #[ara(default=[1,1,1])]
-    color: [f32; 3],
-}
 pub(crate) fn register(registry: &mut Registry, db: &mut SchemaDb) {
     crate::fixes::register(registry, db);
-    if db.get("MeshRenderer").is_none() {
-        db.register::<MeshRenderer>();
-    }
-    if db.get("Light").is_none() {
-        db.register::<Light>();
-    }
     registry
         .command::<Duplicate>(db)
         .command::<Unpack>(db)
@@ -309,7 +264,7 @@ impl Command for InstantiateMesh {
             "Transform".into(),
             json!({"position":p.position.unwrap_or([0.;3])}),
         );
-        record.insert("MeshRenderer".into(), json!({"mesh":p.mesh.0}));
+        record.insert("MeshRenderer".into(), json!({"model":p.mesh.0}));
         let id = cx.new_id(None, "e")?;
         cx.create(id.clone(), record)?;
         Ok(json!({"id":id}))

@@ -1,18 +1,31 @@
 #![allow(clippy::unwrap_used)]
-//! The demo scene end to end in-process: player movement, AI crowds, animation,
-//! determinism, exact checkpoints, portable snapshots, live patches and keep-changes.
+//! The demo scene end to end in-process: player movement, AI crowds, animation
+//! (`.animation` controllers, motion matching), determinism, exact checkpoints,
+//! portable snapshots, live patches and keep-changes.
 use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
-use ara_doc::Workspace;
+use ara_doc::{AssetId, Document, RecordId, Workspace};
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_runtime::{
     Runtime, RuntimeConfig,
+    animation::AnimatorSlot,
     assets::MemoryAssets,
     extract::{Geometry, RenderFrame},
     live::set_edit,
 };
-use ara_sim::{Snapshot, StepInput};
+use ara_schema::{AssetRef, SchemaDb};
+use ara_sim::{Identity, Snapshot, StepInput};
 use serde_json::{Value, json};
-use std::{path::Path, sync::OnceLock};
+use std::{collections::BTreeMap, path::Path, sync::OnceLock};
+
+/// The demo's animation documents (project path, document ID). References name
+/// documents, so each holds one record.
+const ANIMATIONS: [(&str, &str); 5] = [
+    ("anim/fox.animation", "ac_foxanim1"),
+    ("anim/fox-match.animation", "ac_foxmatch"),
+    ("anim/fox-survey.animation", "ac_foxsurv1"),
+    ("anim/fox-walk.animation", "ac_foxwalk1"),
+    ("anim/fox-run.animation", "ac_foxrun01"),
+];
 
 fn demo() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-player/demo"))
@@ -50,15 +63,29 @@ fn fox() -> &'static CachedImport {
     })
 }
 
-fn runtime(seed: u64) -> Runtime {
-    let schema = ara_runtime::schema(&[]).unwrap();
-    let text = std::fs::read_to_string(demo().join("levels/demo.scene")).unwrap();
-    let read = ara_doc::read(&text, "levels/demo.scene", &schema, None);
+/// Reads a demo document strictly (canonical form, every engine type registered).
+fn read(path: &str, text: &str, schema: &SchemaDb) -> Document {
+    let read = ara_doc::read(text, path, schema, None);
     assert!(read.diags.iter().all(|d| !d.is_error()), "{:?}", read.diags);
-    let doc = read.doc.unwrap();
+    read.doc.unwrap()
+}
+
+fn runtime(seed: u64) -> Runtime {
+    runtime_with(seed, |scene| scene)
+}
+
+/// The demo with its scene text rewritten by `edit` (variants of the same level).
+fn runtime_with(seed: u64, edit: impl Fn(String) -> String) -> Runtime {
+    let schema = ara_runtime::schema(&[]).unwrap();
+    let text = edit(std::fs::read_to_string(demo().join("levels/demo.scene")).unwrap());
+    let doc = read("levels/demo.scene", &text, &schema);
     let scene = doc.id.clone();
     let mut workspace = Workspace::default();
     workspace.insert("levels/demo.scene", doc);
+    for (path, _) in ANIMATIONS {
+        let text = std::fs::read_to_string(demo().join(path)).unwrap();
+        workspace.insert(path, read(path, &text, &schema));
+    }
     let assets = MemoryAssets([("as_fox".to_owned(), fox().clone())].into());
     Runtime::new(
         schema,
@@ -203,4 +230,253 @@ fn live_patches_apply_at_the_next_tick_and_keep_changes_reports_them() {
             .iter()
             .any(|c| c.driven && c.entity.starts_with("e_bot"))
     );
+}
+
+/// The demo's animation documents, authored through typed `AnimationCommand`s and the
+/// canonical writer: the Fox's locomotion state machine (`fox.animation`: idle ↔ a
+/// speed blend of Walk/Run), a motion-matching variant (`fox-match.animation`) and
+/// clip documents binding the model's Survey/Walk/Run animations by name.
+fn fox_animations(schema: &SchemaDb) -> Vec<(&'static str, String)> {
+    use ara_anim::{
+        document::{AnimAsset, AnimationCommand},
+        graph::{
+            BlendSample, Comparison, Condition, ControllerData, Node, NodeKind, Parameter,
+            ParameterKind, State, Transition,
+        },
+        matching::{MatchConfig, MatchNode},
+    };
+    let mut workspace = Workspace::default();
+    for (path, id) in ANIMATIONS {
+        workspace.insert(
+            path,
+            Document::new("animation", AssetId::parse(id).unwrap()),
+        );
+    }
+    let mut store = ara_ops::Store::new(schema.clone(), workspace);
+    let reference = |id: &str| {
+        let (path, _) = ANIMATIONS.iter().find(|(_, d)| *d == id).unwrap();
+        AssetRef(format!("@{path}#{id}"))
+    };
+    let float = || Parameter {
+        kind: ParameterKind::Float,
+        ..Default::default()
+    };
+    let clip = |id: &str| Node {
+        kind: NodeKind::Clip,
+        clip: Some(reference(id)),
+        ..Default::default()
+    };
+    let speed = |comparison, value: f32| Condition {
+        parameter: "speed".into(),
+        comparison,
+        float_value: value,
+        ..Default::default()
+    };
+    // Idle ↔ move on ground speed, 0.2 s cross-fades (clip timebase 48 kHz).
+    let machine = |nodes: BTreeMap<String, Node>, moving: &str, cycle: u32| ControllerData {
+        parameters: BTreeMap::from([("speed".into(), float())]),
+        initial: "idle".into(),
+        fixed_step: 800,
+        extract_root_motion: true,
+        nodes,
+        states: BTreeMap::from([
+            (
+                "idle".into(),
+                State {
+                    node: "idle".into(),
+                    ..Default::default()
+                },
+            ),
+            (
+                "move".into(),
+                State {
+                    node: moving.into(),
+                    duration: cycle,
+                    ..Default::default()
+                },
+            ),
+        ]),
+        transitions: vec![
+            Transition {
+                id: "start".into(),
+                from: "idle".into(),
+                to: "move".into(),
+                duration: 9600,
+                conditions: vec![speed(Comparison::Greater, 0.15)],
+                ..Default::default()
+            },
+            Transition {
+                id: "stop".into(),
+                from: "move".into(),
+                to: "idle".into(),
+                duration: 9600,
+                conditions: vec![speed(Comparison::Less, 0.075)],
+                ..Default::default()
+            },
+        ],
+    };
+    let blend = machine(
+        BTreeMap::from([
+            ("idle".into(), clip("ac_foxsurv1")),
+            ("walk".into(), clip("ac_foxwalk1")),
+            ("run".into(), clip("ac_foxrun01")),
+            (
+                "move".into(),
+                Node {
+                    kind: NodeKind::Blend1d,
+                    parameter_x: "speed".into(),
+                    samples: vec![
+                        BlendSample {
+                            node: "walk".into(),
+                            x: 1.4,
+                            y: 0.0,
+                        },
+                        BlendSample {
+                            node: "run".into(),
+                            x: 4.5,
+                            y: 0.0,
+                        },
+                    ],
+                    ..Default::default()
+                },
+            ),
+        ]),
+        "move",
+        // Mean of the Walk (0.708 s) and Run (1.158 s) cycles.
+        44_800,
+    );
+    let config = MatchConfig {
+        clips: vec![reference("ac_foxwalk1"), reference("ac_foxrun01")],
+        // Hind and front paws: b_LeftFoot02, b_RightFoot02, b_RightHand, b_LeftHand.
+        bones: ["node21", "node25", "node11", "node14"]
+            .map(String::from)
+            .to_vec(),
+        horizons: vec![9600, 19200],
+        ..Default::default()
+    };
+    let query: Vec<String> = (0..config.dimensions())
+        .map(|i| format!("feature{i:02}"))
+        .collect();
+    let mut matching = machine(
+        BTreeMap::from([
+            ("idle".into(), clip("ac_foxsurv1")),
+            (
+                "locomotion".into(),
+                Node {
+                    kind: NodeKind::MotionMatching,
+                    clip: Some(reference("ac_foxmatch")),
+                    matching: Some(MatchNode {
+                        query: query.clone(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            ),
+        ]),
+        "locomotion",
+        0,
+    );
+    matching
+        .parameters
+        .extend(query.into_iter().map(|name| (name, float())));
+    let named = |name: &str| AnimAsset {
+        name: name.into(),
+        ..Default::default()
+    };
+    let records = [
+        (
+            "ac_foxanim1",
+            "an_fox",
+            AnimAsset {
+                name: "Fox locomotion".into(),
+                controller: Some(blend),
+                ..Default::default()
+            },
+        ),
+        (
+            "ac_foxmatch",
+            "an_foxmatch",
+            AnimAsset {
+                name: "Fox motion matching".into(),
+                controller: Some(matching),
+                motion_database: Some(config),
+                ..Default::default()
+            },
+        ),
+        ("ac_foxsurv1", "an_survey", named("Survey")),
+        ("ac_foxwalk1", "an_walk", named("Walk")),
+        ("ac_foxrun01", "an_run", named("Run")),
+    ];
+    for (doc, id, asset) in records {
+        AnimationCommand::Create(asset)
+            .apply(
+                &mut store,
+                ara_ops::TxnMeta::by(ara_ops::Author::Agent("demo".into())),
+                AssetId::parse(doc).unwrap(),
+                RecordId::parse(id).unwrap(),
+            )
+            .unwrap();
+    }
+    ANIMATIONS
+        .iter()
+        .map(|(path, id)| {
+            let doc = store.workspace().doc(id).unwrap();
+            (*path, ara_anim::document::write(doc, store.schema()))
+        })
+        .collect()
+}
+
+#[test]
+fn demo_animation_document_is_canonical_and_current() {
+    let schema = ara_runtime::schema(&[]).unwrap();
+    for (relative, expected) in fox_animations(&schema) {
+        let path = demo().join(relative);
+        if std::env::var_os("ARA_UPDATE_DEMO").is_some() {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, &expected).unwrap();
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap_or_default(),
+            expected,
+            "{relative}: regenerate with ARA_UPDATE_DEMO=1"
+        );
+    }
+}
+
+#[test]
+fn motion_matching_controller_drives_the_fox_deterministically() {
+    let matched = |seed| {
+        runtime_with(seed, |scene| {
+            scene.replace(
+                "@anim/fox.animation#ac_foxanim1",
+                "@anim/fox-match.animation#ac_foxmatch",
+            )
+        })
+    };
+    let hash = |rt: &Runtime| rt.play().session().state_hash().unwrap();
+    let mut a = matched(3);
+    let mut b = matched(3);
+    for rt in [&mut a, &mut b] {
+        rt.step(45, &walk(45)).unwrap();
+    }
+    let checkpoint = b.play_mut().checkpoint().unwrap();
+    for rt in [&mut a, &mut b] {
+        rt.step(45, &walk(45)).unwrap();
+    }
+    assert_eq!(hash(&a), hash(&b), "motion matching is deterministic");
+    let world = a.world();
+    let slot = world
+        .iter_entities()
+        .find(|e| e.get::<Identity>().is_some_and(|id| id.0 == "e_fox"))
+        .and_then(|e| e.get::<AnimatorSlot>())
+        .unwrap();
+    assert!(slot.fault.is_none(), "{:?}", slot.fault);
+    let predictor = slot.matching.as_ref().unwrap().predictor;
+    assert!(
+        predictor.motion.value.length() > 0.5,
+        "predictor follows the walking fox: {predictor:?}"
+    );
+    b.play_mut().restore(&checkpoint).unwrap();
+    b.step(45, &walk(45)).unwrap();
+    assert_eq!(hash(&a), hash(&b), "checkpoint restores predictor state");
 }

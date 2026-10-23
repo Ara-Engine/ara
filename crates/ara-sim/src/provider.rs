@@ -3,7 +3,7 @@
 //! provider owns those types, captures their portable state into snapshots/hashes and
 //! rebuilds or restores them on restore. Nothing here runs during an ordinary tick.
 use crate::Result;
-use bevy_ecs::prelude::World;
+use bevy_ecs::{component::ComponentId, prelude::World};
 use serde_json::Value;
 use std::{
     any::{Any, TypeId},
@@ -26,6 +26,12 @@ pub trait StateProvider: Send + Sync + 'static {
     fn name(&self) -> &'static str;
     /// Component and resource types this provider owns (captured, derived or rebuilt).
     fn owned_types(&self) -> Vec<TypeId>;
+    /// Runtime-registered components and resources it owns that have no Rust type
+    /// (C# module columns), by their current IDs in `world`.
+    fn owned_components(&self, world: &World) -> Vec<ComponentId> {
+        let _ = world;
+        Vec::new()
+    }
     /// Portable deterministic state at a completed tick. Return `Value::Null` when
     /// registered ECS mirrors already hold everything that affects the future.
     fn capture(&self, world: &World) -> Result<Value>;
@@ -62,4 +68,14 @@ impl std::fmt::Debug for Trusted {
 /// Owned type IDs of every installed provider.
 pub(crate) fn owned(providers: &[Box<dyn StateProvider>]) -> Vec<TypeId> {
     providers.iter().flat_map(|p| p.owned_types()).collect()
+}
+
+pub(crate) fn owned_components(
+    providers: &[Box<dyn StateProvider>],
+    world: &World,
+) -> Vec<ComponentId> {
+    providers
+        .iter()
+        .flat_map(|p| p.owned_components(world))
+        .collect()
 }

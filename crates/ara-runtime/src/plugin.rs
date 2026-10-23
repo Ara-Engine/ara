@@ -1,14 +1,16 @@
 //! Extension seam for subsystems built on parallel tracks, so they plug in without
 //! editing the runtime:
 //!
-//! - **C# scripts** (`ara-script`): register components, then add chunk-batched
-//!   systems at [`Stage::Gameplay`]; swap module generations in `before_tick`.
+//! - **C# scripts** (`ara-runtime-script`): start the .NET host on the world and add
+//!   module types in `prepare`, hand C# component storage to the host in `register`,
+//!   run C# systems at [`Stage::Gameplay`]; swap module generations in `before_tick`.
 //! - **Networking** (`ara-net`, Listen/Dedicated): drain authenticated arrivals into
 //!   the session in `before_tick` (the `ara_sim::SessionAdapter` contract) and
 //!   replicate from the read-only world in `after_tick`.
 //! - **Audio** (`ara-audio`) and **VFX**: emit from `after_tick` (authoritative events)
 //!   and follow the interpolated presentation in `frame`. They never write gameplay.
 use crate::{Result, extract::RenderFrame};
+use ara_schema::SchemaDb;
 use ara_sim::{Session, SimRegistry};
 use bevy_ecs::prelude::World;
 
@@ -25,6 +27,12 @@ pub enum Stage {
 pub trait RuntimePlugin: Send {
     /// Stable name for diagnostics.
     fn name(&self) -> &'static str;
+    /// Prepares the (still empty) simulation world and adds runtime-defined types
+    /// (C# modules) to the schema, before the registry is built and the scene projected.
+    fn prepare(&mut self, world: &mut World, schema: &mut SchemaDb) -> Result<()> {
+        let _ = (world, schema);
+        Ok(())
+    }
     /// Registers reflected components, resources and commands before projection.
     fn register(&mut self, registry: &mut SimRegistry) -> Result<()> {
         let _ = registry;

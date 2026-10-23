@@ -7,6 +7,10 @@ publish.workspace = true
 
 [dependencies]
 ara-asset = { path = "../ara-asset" }
+ara-audio = { path = "../ara-audio" }
+ara-import2d = { path = "../ara-import2d" }
+ara-json.workspace = true
+serde_json.workspace = true
 ara-importers = { path = "../ara-importers" }
 
 [dev-dependencies]

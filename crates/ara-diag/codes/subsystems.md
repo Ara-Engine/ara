@@ -515,6 +515,19 @@ Fixes:
 - Use `ara_query` to find the scene, then pass its path or ID.
 - Check the `ara_play` tool description for the supported modes and parameters, and resend.
 
+## ARA7306 play::ASSET_UPGRADED: Asset reimported with a newer importer
+owner: ara-play-host
+
+Information, not an error: a sidecar recorded an older version of its importer than the engine has. Play recorded the installed version in the sidecar (one typed `SidecarCommand::Version` transaction, canonical text) and reimported the asset with it; play continues normally.
+
+Causes:
+- The engine was updated and an importer's output format or encoder versions changed.
+- The sidecar was copied from an older project.
+
+Fixes:
+- None needed; review and commit the updated sidecar with the cooked result.
+- If the sidecar names a newer importer than this engine has, that is `ARA7303` instead: update the engine.
+
 ## ARA7401 l10n::MISSING_KEY: Missing localization key
 owner: ara-l10n
 

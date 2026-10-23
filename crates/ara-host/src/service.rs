@@ -197,6 +197,21 @@ impl Cx<'_> {
         self.st.apply(&session, params)
     }
 
+    /// Publishes the commands `source` currently provides (an ara-cmd catalog object:
+    /// name to `Info`-shaped entry), replacing its previous set. `schema.list` and
+    /// `schema.describe` show them with the registry's commands, so agents and the
+    /// editor see one catalog (C# play commands: `source` is `play`).
+    pub fn publish_commands(&mut self, source: &str, catalog: &Value) {
+        self.st.external.retain(|_, (from, _)| from != source);
+        if let Some(entries) = catalog.as_object() {
+            for (name, entry) in entries {
+                self.st
+                    .external
+                    .insert(name.clone(), (source.to_owned(), entry.clone()));
+            }
+        }
+    }
+
     /// Records a diagnostic on the bus (`logs`, the `diagnostics` topic).
     pub fn log(&mut self, d: Diagnostic) {
         self.st.log(d);

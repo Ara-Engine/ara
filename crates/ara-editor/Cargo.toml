@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+ara-audio-why = { path = "../ara-audio-why" }
 ara-cmd = { path = "../ara-cmd" }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }
@@ -25,6 +26,8 @@ ara-proto = { path = "../ara-proto" }
 ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-rpc = { path = "../ara-rpc" }
+ara-runtime = { path = "../ara-runtime" }
+ara-runtime-render = { path = "../ara-runtime-render" }
 ara-schema = { path = "../ara-schema" }
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }

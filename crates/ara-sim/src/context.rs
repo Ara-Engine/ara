@@ -49,6 +49,11 @@ impl SimContext {
     pub fn dt(&self) -> f64 {
         self.dt
     }
+
+    /// The session seed; embedded runtimes (C#) derive their RNG streams from it.
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
     pub(crate) fn new(seed: u64, hz: u32) -> Self {
         Self {
             tick: 0,

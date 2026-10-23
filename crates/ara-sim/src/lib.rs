@@ -40,7 +40,7 @@ pub use feature::{PredictionKey, SimulationFeature};
 pub use fixed::{Clock, FixedTick, FrameAdvance, TickConfig};
 pub use persistent::{PersistenceSelection, PersistentCursor, PersistentEntity, PersistentState};
 pub use play::{PlayControl, PlayState, Sample, StepInput, StepReport, Watch};
-pub use projection::{EditWorld, Identity, SceneMetadata};
+pub use projection::{EditWorld, ExternalWrite, ExternalWrites, Identity, SceneMetadata};
 pub use provider::{StateProvider, TrustedState};
 pub use registry::SimRegistry;
 pub use session::{BoundaryCommand, Session, SessionAdapter, SessionMode, TickRecord};

@@ -1,0 +1,9 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_foxrun01",
+  "records": {
+    "an_run": {
+      "name": "Run"
+    }
+  }
+}

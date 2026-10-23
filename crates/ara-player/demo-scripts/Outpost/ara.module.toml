@@ -1,0 +1,5 @@
+# The demo's gameplay module (the R10 Outpost sample: Door behaviour, UseMedkit
+# command, Gravity system), hot-reloaded by the compile server while playing.
+[module]
+name = "Outpost"
+hot = true

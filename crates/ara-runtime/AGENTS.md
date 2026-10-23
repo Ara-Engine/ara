@@ -7,9 +7,12 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
 
 ## Public API
 
-- `schema(project_types)`: kernel types + `components::register_schemas` + project
-  `*.types.json`. Hosts call `components::register_schemas` on their own DB so
-  documents using runtime components validate.
+- `engine::register_schemas(db)` / `engine::register_commands(registry, db)`: the one
+  engine schema world (kernel, runtime, physics, nav, animation documents, audio, 2D,
+  2D physics, world, l10n, save, terrain, foliage, materials, VFX commands). Every host
+  (CLI, daemon, editor via `ara_play_host::open_project`) and the player register
+  exactly this; clashes are returned, never silently skipped.
+- `schema(project_types)`: the engine schema world + project `*.types.json`.
 - `Runtime::new(schema, workspace, scene, assets, RuntimeConfig, plugins)`: projects the
   scene, loads every `MeshRenderer.model` generation, builds physics/nav/animation at
   tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
@@ -18,13 +21,24 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   `extract(&mut RenderFrame)`, `reload_assets`, `fault()`, `navigation_errors()`.
   `play()/play_mut()` expose `ara_sim::PlayControl` (watch, checkpoint, record, replay).
 - `components`: `MeshRenderer` (shape or imported model), `Light`, `Environment`,
-  `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`).
+  `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`),
+  `VisualEffect` (a cooked GPU particle effect). Also simulated: ara-2d sprites,
+  tilemaps, 2D lights and cameras, Rapier2D bodies (2D physics installs when the scene
+  has 2D bodies; `PlayerControl` on a `CharacterController2d` drives it), and
+  ara-audio `AudioSource`/`AudioListener` plus ara-acoustics `AcousticSource`,
+  `AcousticSurface`, `ReverbZone`, `AcousticPortal` (presentation intent only; played by
+  `ara-runtime-audio`). Mixer and music documents are part of the engine schema world.
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
-- `plugin::RuntimePlugin`: seams for C# scripts, ara-net, audio and VFX
-  (`register`, `install(Stage)`, `before_tick`, `after_tick`, `frame`).
+- `plugin::RuntimePlugin`: seams for C# scripts (`ara-runtime-script`), ara-net, audio
+  and VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,
+  `before_tick`, `after_tick`, `frame`).
+- `controller`: `.animation` controllers (`Animator.controller`): `Documents` (every
+  `AnimAsset` record by ID), `compile` (clip records bind model animations by `name`
+  when they hold no keys; motion-matching nodes cook their `motionDatabase`),
+  `MatchState` (trajectory predictor + feature query, predictor snapshotted).
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
   primitive, interpolated world matrix) and skin-order palettes.
 - `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
@@ -59,8 +73,6 @@ physics (exclusive) → physics.pull → camera.place → plugin Late → poses.
 - Animation: tick rate must divide 48 000. The move-state cycle is the mean of the
   locomotion clip lengths. Cubic glTF channels keep key values; morph channels are
   not animated. A reloaded model restarts its animators (old snapshots are rejected).
-- `ara_anim::document::register` is not called: its `Joint` value type clashes with
-  the physics `Joint` component in one Schema DB.
 - Models: glTF imports only; FBX manifests return a structured error.
 - Live patches always apply at the next tick boundary (paused worlds reach it by
   stepping). `changes()` compares at f32 precision with defaults materialized and
@@ -71,4 +83,6 @@ physics (exclusive) → physics.pull → camera.place → plugin Late → poses.
 `CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=2 cargo test -p ara-runtime`. `tests/demo.rs`
 cooks the Fox in-process from `../ara-player/demo` and plays the demo scene: walking
 and grounding, crowd roaming, skin palettes, determinism, exact/portable restore, live
-patch + keep changes. `cargo clippy -p ara-runtime --all-targets -- -D warnings`.
+patch + keep changes, the canonical `anim/fox.animation` (authored by typed commands;
+`ARA_UPDATE_DEMO=1` rewrites it) and a motion-matching Fox (deterministic, predictor
+survives checkpoints). `cargo clippy -p ara-runtime --all-targets -- -D warnings`.

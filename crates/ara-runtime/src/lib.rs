@@ -30,6 +30,8 @@ pub mod animation;
 pub mod assets;
 pub mod components;
 pub mod control;
+pub mod controller;
+pub mod engine;
 pub mod extract;
 pub mod live;
 pub mod math;
@@ -141,13 +143,13 @@ impl Default for RuntimeConfig {
     }
 }
 
-/// Builds the schema DB a runtime projects with: kernel types, every runtime
-/// component, and project-defined `*.types.json` documents.
+/// Builds the schema DB a runtime projects with: the engine schema world
+/// ([`engine::register_schemas`]) and project-defined `*.types.json` documents.
 pub fn schema(project_types: &[serde_json::Value]) -> Result<SchemaDb> {
     let mut db = SchemaDb::new();
-    ara_doc::register(&mut db);
-    ara_components::register(&mut db);
-    components::register_schemas(&mut db);
+    if let Some(problem) = engine::register_schemas(&mut db).into_iter().next() {
+        return Err(RuntimeError(problem.message));
+    }
     for types in project_types {
         if let Some(d) = db.add_json_types(types).into_iter().find(|d| d.is_error()) {
             return Err(RuntimeError(d.message));
@@ -182,7 +184,32 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<PlayerControl>()?;
     registry.register_component::<Wanderer>()?;
     registry.register_component::<Animator>()?;
+    registry.register_component::<components::VisualEffect>()?;
+    // Presentation sound intent; playback cursors never enter the simulation.
+    registry.register_component::<ara_audio::AudioSource>()?;
+    registry.register_component::<ara_audio::AudioListener>()?;
+    registry.register_component::<ara_acoustics::AcousticSource>()?;
+    registry.register_component::<ara_acoustics::AcousticSurface>()?;
+    registry.register_component::<ara_acoustics::ReverbZone>()?;
+    registry.register_component::<ara_acoustics::AcousticPortal>()?;
+    // 2D scenes: sprites, tilemaps, lights, cameras and Rapier2D bodies.
+    ara_2d::register_sim(registry)?;
+    ara_physics2d::register_sim(registry)?;
     Ok(())
+}
+
+/// Whether the scene has 2D bodies (2D physics is installed only then).
+fn has_2d_physics(world: &mut World) -> bool {
+    use ara_physics2d::{CharacterController2d, Collider2d, RigidBody2d};
+    world
+        .query_filtered::<(), Or<(
+            With<RigidBody2d>,
+            With<Collider2d>,
+            With<CharacterController2d>,
+        )>>()
+        .iter(world)
+        .next()
+        .is_some()
 }
 
 fn boxed<M>(system: impl IntoSystem<(), (), M>) -> BoxedSystem {
@@ -220,12 +247,17 @@ impl Runtime {
         let hz = config.tick.hz;
         config.physics.fixed_dt = 1.0 / hz as f32;
         let baseline = workspace.clone();
+        let mut schema = schema;
+        let mut world = World::new();
+        for plugin in &mut plugins {
+            plugin.prepare(&mut world, &mut schema)?;
+        }
         let mut registry = SimRegistry::new(schema.clone())?;
         register_components(&mut registry)?;
         for plugin in &mut plugins {
             plugin.register(&mut registry)?;
         }
-        let edit = EditWorld::from_workspace(registry, workspace, scene)?;
+        let edit = EditWorld::from_workspace_in(world, registry, workspace, scene)?;
         let mut session =
             Session::local(edit, config.tick, config.seed, control::default_actions())?;
         let world = session.world_mut();
@@ -240,13 +272,24 @@ impl Runtime {
         for model in &models {
             library.models.load(assets.as_ref(), model)?;
         }
+        library.documents = controller::Documents::load(&baseline)?;
         world.insert_resource(library);
         let mut players = Vec::new();
-        let mut query =
-            world.query_filtered::<Entity, (With<PlayerControl>, Without<CharacterInput>)>();
+        let mut query = world
+            .query_filtered::<(Entity, Has<ara_physics2d::CharacterController2d>), (
+                With<PlayerControl>,
+                Without<CharacterInput>,
+                Without<ara_physics2d::CharacterInput2d>,
+            )>();
         players.extend(query.iter(world));
-        for entity in players {
-            world.entity_mut(entity).insert(CharacterInput::default());
+        for (entity, two_d) in players {
+            if two_d {
+                world
+                    .entity_mut(entity)
+                    .insert(ara_physics2d::CharacterInput2d::default());
+            } else {
+                world.entity_mut(entity).insert(CharacterInput::default());
+            }
         }
         let matrices = sync::world_matrices(world);
         let poses: Vec<(Entity, Pose)> = matrices
@@ -277,6 +320,7 @@ impl Runtime {
         session.add_system("poses.remember", sync::remember_poses)?;
         session.add_system("input.cameras", control::steer_cameras)?;
         session.add_system("input.players", control::drive_players)?;
+        session.add_system("input.players2d", control::drive_players_2d)?;
         for plugin in &mut plugins {
             plugin.install(Stage::Gameplay, &mut session)?;
         }
@@ -290,6 +334,16 @@ impl Runtime {
         session.add_system("physics.push", sync::push_poses)?;
         session.add_system("physics", physics::step)?;
         session.add_system("physics.pull", sync::pull_poses)?;
+        if has_2d_physics(session.world_mut()) {
+            ara_physics2d::install(
+                &mut session,
+                ara_physics2d::Physics2dConfig {
+                    tick_hz: hz,
+                    ..Default::default()
+                },
+            )
+            .map_err(|e| RuntimeError(format!("2D physics: {e:#}")))?;
+        }
         session.add_system("camera.place", control::place_cameras)?;
         for plugin in &mut plugins {
             plugin.install(Stage::Late, &mut session)?;
@@ -314,6 +368,11 @@ impl Runtime {
     /// The authoring schema this world was projected with.
     pub fn schema(&self) -> &SchemaDb {
         &self.schema
+    }
+
+    /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).
+    pub fn documents(&self) -> &Workspace {
+        &self.baseline
     }
 
     /// Play control: watches, snapshots, record/replay and the session.

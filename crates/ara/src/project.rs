@@ -37,7 +37,5 @@ pub fn open(flag: Option<&Path>, files: &[PathBuf]) -> Result<Project, Diagnosti
 /// Opens a project with every engine component (physics, navigation, rendering,
 /// gameplay) registered, so documents using them validate everywhere.
 pub fn load(root: &Path) -> Result<Project, Diagnostic> {
-    let mut project = Project::open(root)?;
-    ara_play_host::register_engine_schemas(&mut project.db);
-    Ok(project)
+    ara_play_host::open_project(root)
 }

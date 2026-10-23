@@ -1,0 +1,9 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_foxwalk1",
+  "records": {
+    "an_walk": {
+      "name": "Walk"
+    }
+  }
+}

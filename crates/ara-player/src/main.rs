@@ -15,7 +15,7 @@ use ara_play::{
     shm::Section,
 };
 use ara_runtime::extract::RenderFrame;
-use ara_runtime_render::Presenter;
+use ara_runtime_render::{Presenter, two_d::Presenter2d};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::{
@@ -62,6 +62,10 @@ fn parse_size(text: &str) -> Result<[u32; 2]> {
     Ok([w.parse()?, h.parse()?])
 }
 
+/// Frames the live audio device keeps queued (43 ms at 48 kHz): a hardware period plus
+/// a DSP quantum with headroom for a slow frame.
+const AUDIO_WATERMARK: usize = 2048;
+
 /// JSON-RPC error codes used by the player.
 const ENGINE_ERROR: i64 = -32000;
 const INVALID_PARAMS: i64 = -32602;
@@ -73,6 +77,12 @@ struct Player {
     size: [u32; 2],
     window: Option<device::Windowed>,
     presenter: Option<Presenter>,
+    presenter2d: Option<Presenter2d>,
+    /// Live audio of windowed players: the world's presenter and the SDL device.
+    audio: Option<(
+        ara_runtime_audio::AudioPresenter,
+        ara_audio::device::SdlBackend,
+    )>,
     frame: RenderFrame,
     world: Option<World>,
     /// Keeps the snapshot section mapped for the session (diff baselines, restarts).
@@ -118,6 +128,8 @@ fn run(args: Args) -> Result<()> {
         size,
         window,
         presenter,
+        presenter2d: None,
+        audio: None,
         frame: RenderFrame::default(),
         world: None,
         _section: None,
@@ -202,12 +214,34 @@ impl Player {
             if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.presenter) {
                 window.present(&mut world.runtime, presenter, &mut self.frame)?;
             }
+            let mut audio_failed = None;
+            if let Some((audio, device)) = &mut self.audio {
+                let result = world
+                    .audio(audio, &mut self.frame)
+                    .and_then(|()| Ok(audio.pump(device, AUDIO_WATERMARK)?));
+                audio_failed = result.err();
+            }
+            if let Some(error) = audio_failed {
+                eprintln!("ara-player: audio off: {error:#}");
+                self.audio = None;
+            }
         }
+        self.events()?;
         if self.last_status.elapsed() >= Duration::from_millis(250) {
             self.status()?;
         }
         if self.window.is_none() {
             std::thread::sleep(Duration::from_micros(500));
+        }
+        Ok(())
+    }
+
+    /// Forwards C# host events (reloads, diagnostics, L4 restart requests).
+    fn events(&mut self) -> Result<()> {
+        if let Some(world) = &self.world {
+            for event in world.events() {
+                self.link.notify(ara_play::EVENT, &event)?;
+            }
         }
         Ok(())
     }
@@ -225,6 +259,7 @@ impl Player {
                 fps,
                 frame_ms_p95,
                 fault: world.runtime.fault(),
+                audio: self.audio.is_some(),
             },
             None => Status {
                 tick: 0,
@@ -233,6 +268,7 @@ impl Player {
                 fps,
                 frame_ms_p95,
                 fault: None,
+                audio: false,
             },
         };
         self.link.notify(STATUS, &status)?;
@@ -348,6 +384,7 @@ impl Player {
                     fps: 0.0,
                     frame_ms_p95: 0.0,
                     fault: None,
+                    audio: false,
                 };
                 let _ = link.notify(STATUS, &status);
                 let _ = link.flush();
@@ -410,9 +447,13 @@ impl Player {
                     self.presenter =
                         Some(Presenter::new(self.size, Vec::new(), &self.args.gpu_cache));
                 }
+                let presenter2d = self
+                    .presenter2d
+                    .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
                 serde_json::to_value(world.capture(
                     &params,
                     self.presenter.as_mut(),
+                    Some(presenter2d),
                     &mut self.frame,
                 )?)?
             }
@@ -435,6 +476,20 @@ impl Player {
                 let pins: std::collections::BTreeMap<String, String> =
                     parse(params["assets"].clone())?;
                 world.assets(&pins)?
+            }
+            method::COMMAND => {
+                let command: ara_play::Command = parse(params)?;
+                world.command(&command)?
+            }
+            method::COMMANDS => world.commands(),
+            method::COMPILE => {
+                let compile: ara_play::Compile = parse(params)?;
+                world.compile(&compile)
+            }
+            method::SNAPSHOT => world.snapshot()?,
+            method::CAPTURE_AUDIO => {
+                let params: ara_play::CaptureAudio = parse(params)?;
+                world.capture_audio(&params, &mut self.frame)?
             }
             _ => return Err(Failure::Unknown),
         };
@@ -467,6 +522,19 @@ impl Player {
             handshake = Some(t.elapsed().as_secs_f64() * 1000.0);
         }
         let (mut world, build_ms) = World::build(&scene)?;
+        if let Some(resume) = &start.resume {
+            world.resume(resume)?;
+        }
+        if self.window.is_some() {
+            // Live sound for windowed play; a missing device leaves play silent.
+            let device = ara_audio::device::SdlBackend::open(48_000)
+                .map_err(anyhow::Error::from)
+                .and_then(|device| Ok((world.audio_presenter()?, device)));
+            match device {
+                Ok(audio) => self.audio = Some(audio),
+                Err(error) => eprintln!("ara-player: no audio: {error:#}"),
+            }
+        }
         let mut started = world.start(start.start_paused, decode_ms + build_ms)?;
         started.net_handshake_ms = handshake;
         self.last_advance = Instant::now();
