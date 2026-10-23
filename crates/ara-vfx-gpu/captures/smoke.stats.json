@@ -6,7 +6,7 @@
       "name": "smoke",
       "alive": 600,
       "dead": 1448,
-      "rendered": 488,
+      "rendered": 600,
       "events": 0,
       "dropped_spawns": 0,
       "dropped_events": 0
@@ -21,17 +21,17 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.020416
+      "milliseconds": 0.021024
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.002048
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.001696
+      "milliseconds": 0.00144
     },
     {
       "pass": "Vfx.Update",
@@ -41,7 +41,7 @@
     {
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics",
-      "milliseconds": 0.00512
+      "milliseconds": 0.003072
     },
     {
       "pass": "Vfx.Compact.Prefix",
@@ -61,7 +61,7 @@
     {
       "pass": "Vfx.Sort",
       "queue": "Graphics",
-      "milliseconds": 0.118784
+      "milliseconds": 0.11776
     },
     {
       "pass": "Vfx.IndirectArgs",
@@ -71,17 +71,17 @@
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.135008
+      "milliseconds": 0.201408
     },
     {
       "pass": "Vfx.Tonemap",
       "queue": "Graphics",
-      "milliseconds": 0.008192
+      "milliseconds": 0.009216
     },
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.162656
+      "milliseconds": 0.156928
     },
     {
       "pass": "Vfx.Host",
@@ -111,7 +111,5 @@
   },
   "effect_hash": "0c38f3d5d451a4ad8c94f155bb2bfa25f521c8f82a0d6f090033c8ab67bb1f74",
   "async_compute": false,
-  "diagnostics": [
-    "smoke: render instances limited by culling/overdraw"
-  ]
+  "diagnostics": []
 }

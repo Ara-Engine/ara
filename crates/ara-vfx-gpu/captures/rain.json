@@ -74,7 +74,7 @@
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "acc59cb70f343971754aa1275fc8ddeee9e392a6b190b392b7e8874cf194b8a0"
+    "content_key": "dbc1cd37af7ada6a8e848b3235648e92cf24f804d592ee1fa0638561e1bb2eeb"
   },
   "timings": [
     {
@@ -83,67 +83,67 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.021312,
+      "milliseconds": 0.021536,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.00512,
       "pass": "Vfx.Prepare",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.004416,
+      "milliseconds": 0.005824,
       "pass": "Vfx.Spawn",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.004096,
+      "milliseconds": 0.006144,
       "pass": "Vfx.Update",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.006144,
+      "milliseconds": 0.009216,
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.007168,
+      "milliseconds": 0.01024,
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.004096,
+      "milliseconds": 0.00512,
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.031744,
+      "milliseconds": 0.034816,
       "pass": "Vfx.Events",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001024,
+      "milliseconds": 0.0,
       "pass": "Vfx.Sort",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.00512,
       "pass": "Vfx.IndirectArgs",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.008672,
+      "milliseconds": 0.00816,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.008192,
+      "milliseconds": 0.009216,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.157728,
+      "milliseconds": 0.159008,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

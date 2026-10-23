@@ -6,7 +6,7 @@
       "name": "swirl",
       "alive": 3733,
       "dead": 4459,
-      "rendered": 87,
+      "rendered": 3733,
       "events": 0,
       "dropped_spawns": 0,
       "dropped_events": 0
@@ -21,17 +21,17 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.020928
+      "milliseconds": 0.021088
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.002048
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.001856
+      "milliseconds": 0.001664
     },
     {
       "pass": "Vfx.Update",
@@ -46,7 +46,7 @@
     {
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics",
-      "milliseconds": 0.004096
+      "milliseconds": 0.00512
     },
     {
       "pass": "Vfx.Compact.Scatter",
@@ -71,17 +71,17 @@
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.004896
+      "milliseconds": 0.015104
     },
     {
       "pass": "Vfx.Tonemap",
       "queue": "Graphics",
-      "milliseconds": 0.009216
+      "milliseconds": 0.008192
     },
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.156544
+      "milliseconds": 0.156096
     },
     {
       "pass": "Vfx.Host",
@@ -89,7 +89,7 @@
       "milliseconds": 0.000064
     }
   ],
-  "overdraw_estimate": 23.819385528564453,
+  "overdraw_estimate": 0.1071203425526619,
   "batches": 1,
   "lights": 0,
   "device": {
@@ -109,9 +109,7 @@
     "timestamp_valid_bits": [64, 64],
     "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
   },
-  "effect_hash": "75f6694173a222d05f79a6a7083cbabb7215ab6b58d3a1fd0222d8f5e58428bc",
+  "effect_hash": "df221973979ddaefdce4bf6b1d4ccaa875a99ec455db41c8ef6bd67922f2abbb",
   "async_compute": false,
-  "diagnostics": [
-    "swirl: render instances limited by culling/overdraw"
-  ]
+  "diagnostics": []
 }
