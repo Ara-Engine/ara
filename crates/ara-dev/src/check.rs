@@ -109,6 +109,9 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
     let metadata = Metadata::read(root)?;
     eprintln!("Cargo target: {}", metadata.target_directory.display());
     let affected = metadata.affected(root, &changed);
+    if affected.contains("ara-dev") || full {
+        crate::platform::release_executable_path(&metadata.target_directory)?;
+    }
     let files = git::files(root)?;
     let mut logs = Logs::new(root)?;
     logs.findings("exact pins", hygiene::manifests(root, &changed)?);
@@ -123,7 +126,8 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
         &["fmt".into(), "--all".into(), "--".into(), "--check".into()],
     )?;
     if fmt && (full || !affected.is_empty()) {
-        let mut clippy = selection("clippy", &affected, full);
+        let whole_workspace = full || affected.len() == metadata.packages.len();
+        let mut clippy = selection("clippy", &affected, whole_workspace);
         clippy.extend([
             "--all-targets".into(),
             "--locked".into(),
@@ -132,8 +136,8 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
             "warnings".into(),
         ]);
         logs.command(root, "clippy", &clippy)?;
-        let mut tests = selection("test", &affected, full);
-        tests.push("--locked".into());
+        let mut tests = selection("test", &affected, whole_workspace);
+        tests.extend(["--locked".into(), "--no-fail-fast".into()]);
         logs.command(root, "tests", &tests)?;
     }
     // Coverage scans sources and C#, so always run it when code or catalog inputs change.
@@ -197,10 +201,17 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
             report
                 .affected
                 .iter()
+                .take(8)
                 .cloned()
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        if report.affected.len() > 8 {
+            println!(
+                "  ... {} more (use --json for the complete set)",
+                report.affected.len() - 8
+            );
+        }
         println!("{:<22} {:<6} {:>8}  DETAIL", "CHECK", "RESULT", "SECONDS");
         for row in &report.checks {
             println!(

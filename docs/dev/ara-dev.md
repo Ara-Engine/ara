@@ -1,6 +1,6 @@
 # Local developer infrastructure
 
-Set `CARGO_BUILD_JOBS=2` on this shared Windows machine. GPU crates also need
+Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GPU crates also need
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
 
@@ -15,7 +15,8 @@ The gate compares against the merge base of HEAD and the selected local ref. It
 includes committed, staged, unstaged and untracked changes. Cargo metadata supplies
 workspace paths and all dependency edges (including optional, build and test
 dependencies). Changed packages and their reverse dependency closure run clippy
-with all targets and warnings denied, then tests. Workspace manifests, Cargo.lock,
+with all targets and warnings denied, then tests. Tests continue across failed
+targets so a single gate reports all failing suites. Workspace manifests, Cargo.lock,
 toolchain settings and shared build inputs invalidate the whole workspace;
 documentation alone needs only hygiene and formatting. Deleted package paths
 also invalidate everything rather than silently missing dependents.
@@ -34,6 +35,10 @@ used to test the asset cache contract remain valid fixtures.
 Stdout contains the compact report or one JSON object. Cargo output and failure
 details are retained under `target/ara-dev/run-*/`. Logs and generated test data
 must stay under ignored target directories. `--full` runs workspace clippy/tests.
+On Windows a gate that tests ara-dev moves its running image into a sibling
+`ara-dev-runners` directory so Cargo can replace the original executable path.
+The process and exit status stay attached to the caller; old runner images are
+reclaimed on later runs.
 
 ## One merge flow
 
@@ -44,7 +49,8 @@ cargo run -p ara-dev -- merge feature/branch --full
 ```
 
 Start with a clean tree. The merge uses `--no-ff --no-commit`, saves the original
-HEAD, and only repairs Cargo.lock conflicts automatically. It takes our lockfile
+HEAD, and repairs Cargo.lock conflicts automatically, including alongside source
+conflicts. It takes our lockfile
 and lets Cargo's normal resolver retain existing versions while adding dependencies
 required by the merged manifests. Other conflicts stop immediately. The workspace
 must pass `cargo check --workspace --all-targets`, followed by the affected gate
@@ -53,6 +59,8 @@ against the saved HEAD, before a merge commit is created. Push is opt-in.
 A failed gate leaves the merge uncommitted. Inspect the printed log, resolve the
 problem, run `check --base <printed-original-HEAD>`, then commit manually. Use
 `git merge --abort` to abandon the merge. The tool never resets or discards work.
+After source conflicts, run `cargo check --workspace --all-targets` to regenerate
+the lockfile, stage all resolutions including Cargo.lock, then run the gate.
 
 ## GPU timing queue
 
@@ -92,3 +100,37 @@ and other reparse points are rejected. Existing Cargo profile locks must be idle
 and are held through deletion. Paths, freshness, cleanliness and branch ancestry
 are rechecked immediately before deleting exactly the canonical target directory.
 No git worktree, branch, source file or shared target elsewhere is deleted.
+
+## Shared dependencies and linker
+
+Third-party packages used by at least three workspace crates inherit their
+versions from root workspace.dependencies. Member declarations retain their
+original feature sets and default-feature behavior. Compatible requirements use
+the highest lower bound already present in the workspace; resolved versions in
+Cargo.lock stay unchanged. Incompatible glam, libloading and tungstenite versions
+have separate named workspace entries. Import aliases preserve existing Rust API
+names, including ara-anim's public glam re-export.
+
+The consolidation itself changes no Cargo.lock lines. Adding ara-dev introduces
+only its package entry and toml_edit's existing toml_writer feature dependency;
+it introduces no new third-party package versions. See `linking.md` for all three
+heavy-target measurements and the Windows rust-lld configuration.
+
+## Findings fixed while introducing the gate
+
+Atlas and audio test fixtures now read installed importer versions; the sidecar
+serialization contract uses a synthetic importer ID. This removes three literal
+couplings without introducing a dependency cycle through ara-asset.
+
+The networking process gate exposed a missed diagnostic perturbation when native
+prediction starts after its requested tick. The hook now fires once on the first
+available tick at or after that request. The process fixture requests tick one
+before its baseline arrives, retaining the rollback assertion; the existing
+listen/dedicated tests also cover a mid-session perturbation at tick 330. The
+minimized process test failed before the fix (first prediction tick 20, no applied
+perturbation, zero rollbacks) and passed after it. Temporary diagnostics were removed.
+
+A 5 × 30-million-call Rust 1.99.1 opt-level-3 microbenchmark of the edited guard
+measured medians 2.203 → 2.231 ns/call without an armed hook and 2.224 → 2.170 ns/call
+with one. Sample ranges overlap on this shared machine. The normal movement
+kernel is unchanged.

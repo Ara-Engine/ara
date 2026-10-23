@@ -314,7 +314,8 @@ impl<F: SimulationFeature> Client<F> {
             component,
         )?))
     }
-    /// Forces a reproducible prediction-only error for reconciliation diagnostics.
+    /// Forces one prediction-only error on the first available tick at or after `tick`.
+    /// A late baseline or timeline synchronization may skip the exact requested tick.
     pub fn perturb_prediction(&mut self, tick: u64, run: fn(&mut F::State)) {
         self.app.insert_resource(Perturb::<F> {
             tick,

@@ -22,7 +22,7 @@ bevy_ecs = { workspace = true, default-features = true }
 ara-schema = { path = "../ara-schema" }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 ara-json = { path = "../ara-json" }
-glam = "0.33"
+glam33.workspace = true
 
 [[bench]]
 name = "scale"

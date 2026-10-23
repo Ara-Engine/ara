@@ -64,7 +64,14 @@ fn gpu_child() {
 fn fifo_timeout_and_crash_recovery() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-dev/tests")
-        .join(format!("gpu-{}", std::process::id()));
+        .join(format!(
+            "gpu-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
     fs::create_dir_all(root.join("ara")).unwrap();
     let root = root.canonicalize().unwrap();
     let held = lock(&root);

@@ -61,7 +61,7 @@ pub(super) fn movement<F: SimulationFeature>(
             F::step(&mut state, &input);
         }
         if let Some(p) = &mut perturb
-            && tick == p.tick
+            && tick >= p.tick
             && !p.applied
         {
             (p.run)(&mut state);

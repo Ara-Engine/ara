@@ -10,7 +10,7 @@ base64 = "0.22.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 thiserror = { workspace = true }
-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
+tungstenite28 = { workspace = true, features = ["handshake"] }
 
 [lints]
 workspace = true

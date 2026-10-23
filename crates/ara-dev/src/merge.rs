@@ -29,18 +29,24 @@ pub(crate) fn run(root: &Path, branch: &str, push: bool, full: bool) -> Result<b
         if conflicts.is_empty() {
             bail!("merge failed: {}", String::from_utf8_lossy(&status.stderr));
         }
-        if conflicts.iter().any(|p| p != Path::new("Cargo.lock")) {
+        if conflicts.iter().any(|p| p == Path::new("Cargo.lock")) {
+            git::bytes(root, ["checkout", "--ours", "--", "Cargo.lock"])?;
+            git::bytes(root, ["add", "--", "Cargo.lock"])?;
+        }
+        let others: Vec<_> = conflicts
+            .iter()
+            .filter(|p| *p != Path::new("Cargo.lock"))
+            .collect();
+        if !others.is_empty() {
             bail!(
-                "merge stopped with conflicts: {}. Resolve them and run ara-dev check --base {before}, or git merge --abort",
-                conflicts
+                "merge stopped with conflicts: {}. Resolve them, run cargo check --workspace --all-targets, stage the resolutions and Cargo.lock, then ara-dev check --base {before} before committing; or git merge --abort",
+                others
                     .iter()
                     .map(|p| p.display().to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             );
         }
-        git::bytes(root, ["checkout", "--ours", "--", "Cargo.lock"])?;
-        git::bytes(root, ["add", "--", "Cargo.lock"])?;
         // Cargo's normal resolver retains usable lock entries and adds only what merged manifests need.
     }
     let merge_head = git::output(root, ["rev-parse", "--verify", "MERGE_HEAD"])?;

@@ -2,6 +2,48 @@
 
 use anyhow::Result;
 
+/// Windows allows renaming a loaded image, but Cargo cannot replace its old path.
+#[cfg(windows)]
+pub(crate) fn release_executable_path(target: &std::path::Path) -> Result<()> {
+    use anyhow::Context;
+    let executable = std::env::current_exe()?;
+    // Installed copies are not Cargo outputs and can keep their original path.
+    let Ok(target) = target.canonicalize() else {
+        return Ok(());
+    };
+    if !executable.canonicalize()?.starts_with(target) {
+        return Ok(());
+    }
+    let directory = executable
+        .parent()
+        .context("running executable directory")?
+        .join("ara-dev-runners");
+    if executable
+        .parent()
+        .and_then(std::path::Path::file_name)
+        .is_some_and(|n| n == "ara-dev-runners")
+    {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&directory)?;
+    // Old, unlocked runner images can be removed; active ones remain protected by Windows.
+    for entry in std::fs::read_dir(&directory)? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|e| e == "exe") {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    let destination = directory.join(format!("ara-dev-{}.exe", std::process::id()));
+    std::fs::rename(&executable, destination)
+        .context("move running gate aside so Cargo can rebuild ara-dev")?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub(crate) fn release_executable_path(_target: &std::path::Path) -> Result<()> {
+    Ok(())
+}
+
 /// Kill the Windows process tree if its lock-owning wrapper exits unexpectedly.
 #[cfg(windows)]
 pub(crate) fn gpu_command(command: &[std::ffi::OsString]) -> Result<bool> {

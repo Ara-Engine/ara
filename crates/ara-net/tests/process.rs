@@ -202,7 +202,8 @@ fn bot(start: &Start) -> Result<()> {
     )?;
     client.input_source(script);
     if start.player == 0 {
-        client.perturb_prediction(330, |motor| motor.x += 250);
+        // Arm before the first predicted baseline; arrival can start beyond tick one.
+        client.perturb_prediction(1, |motor| motor.x += 250);
     }
     let mut sent = false;
     loop {

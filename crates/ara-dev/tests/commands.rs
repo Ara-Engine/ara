@@ -16,8 +16,12 @@ fn scratch(label: &str) -> PathBuf {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-dev/tests")
         .join(format!(
-            "{label}-{}-{}",
+            "{label}-{}-{}-{}",
             std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
     fs::create_dir_all(&path).unwrap();
@@ -140,6 +144,12 @@ fn merge_commits_only_after_gate_and_stops_without_committing_other_conflicts() 
     );
     assert!(git(&root, &["status", "--porcelain"]).stdout.is_empty());
     git(&root, &["checkout", "-b", "conflict"]);
+    let lock = fs::read_to_string(root.join("Cargo.lock")).unwrap();
+    fs::write(
+        root.join("Cargo.lock"),
+        lock.replace("automatically @generated", "theirs @generated"),
+    )
+    .unwrap();
     fs::write(
         root.join("core/src/lib.rs"),
         "pub fn value() -> u32 {\n    3\n}\n",
@@ -147,6 +157,11 @@ fn merge_commits_only_after_gate_and_stops_without_committing_other_conflicts() 
     .unwrap();
     git(&root, &["commit", "-am", "theirs"]);
     git(&root, &["checkout", "main"]);
+    fs::write(
+        root.join("Cargo.lock"),
+        lock.replace("automatically @generated", "ours @generated"),
+    )
+    .unwrap();
     fs::write(
         root.join("core/src/lib.rs"),
         "pub fn value() -> u32 {\n    4\n}\n",
@@ -157,6 +172,15 @@ fn merge_commits_only_after_gate_and_stops_without_committing_other_conflicts() 
     let output = command(&root, env!("CARGO_BIN_EXE_ara-dev"), &["merge", "conflict"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("core/src/lib.rs"));
+    assert!(
+        !fs::read_to_string(root.join("Cargo.lock"))
+            .unwrap()
+            .contains("<<<<<<<")
+    );
+    assert_eq!(
+        git(&root, &["diff", "--name-only", "--diff-filter=U"]).stdout,
+        b"core/src/lib.rs\n"
+    );
     assert_eq!(before, git(&root, &["rev-parse", "HEAD"]).stdout);
     git(&root, &["merge", "--abort"]);
 }

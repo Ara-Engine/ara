@@ -1,0 +1,4 @@
+# rust-lld ships with the pinned Rust toolchain; rustc locates it in its sysroot.
+# Three heavy-target measurements and correctness gates: docs/dev/linking.md.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

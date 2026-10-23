@@ -83,7 +83,16 @@ fn run() -> Result<bool> {
         ["rev-parse", "--show-toplevel"],
     )?);
     match cli.command {
-        Command::Check { base, json, full } => check::run(&root, &base, json, full),
+        Command::Check { base, json, full } => {
+            let result = check::run(&root, &base, json, full);
+            if json && let Err(error) = &result {
+                println!(
+                    "{}",
+                    serde_json::json!({"passed": false, "error": format!("{error:#}")})
+                );
+            }
+            result
+        }
         Command::Merge { branch, push, full } => merge::run(&root, &branch, push, full),
         Command::CleanWorktrees {
             yes, hours, base, ..

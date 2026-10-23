@@ -166,10 +166,13 @@ impl<'ast> Visit<'ast> for ImporterVersions {
                     .find(|f| matches!(&f.member, syn::Member::Named(n) if n == name))
                     .map(|f| &f.expr)
             };
-            if let Some(importer) = field("importer").and_then(string)
-                && importer.starts_with("ara.")
+            let importer = field("importer");
+            let id = importer.and_then(string);
+            if importer.is_some()
+                && id.as_ref().is_none_or(|id| id.starts_with("ara."))
                 && let Some(version) = field("version").and_then(string)
             {
+                let importer = id.as_deref().unwrap_or("importer expression");
                 self.problems.push(format!("{importer} hard-codes version {version:?}; obtain it from the importer/registry"));
             }
         }
@@ -189,6 +192,31 @@ impl<'ast> Visit<'ast> for ImporterVersions {
             self.problems.push(format!("registry lookup {id} hard-codes version {version:?}; use installed importer metadata"));
         }
         syn::visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast syn::Macro) {
+        use syn::parse::Parser;
+        if self.in_test
+            && node.path.is_ident("assert_eq")
+            && let Ok(args) =
+                syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated
+                    .parse2(node.tokens.clone())
+            && args.len() >= 2
+        {
+            let left = &args[0];
+            let right = &args[1];
+            let importer_version = |expr: &syn::Expr| {
+                matches!(expr,
+                syn::Expr::MethodCall(call) if call.method == "version" && matches!(&*call.receiver,
+                    syn::Expr::Path(path) if path.path.segments.iter().any(|s| s.ident.to_string().to_ascii_lowercase().contains("importer"))))
+            };
+            if (importer_version(left) && string(right).is_some())
+                || (importer_version(right) && string(left).is_some())
+            {
+                self.problems.push("importer version assertion uses a literal; compare against installed registry metadata".into());
+            }
+        }
+        syn::visit::visit_macro(self, node);
     }
 }
 
@@ -239,6 +267,8 @@ fn fixture() {
 let a = ImportInput { importer: "ara.image".into(), version: "1".into() };
 let b = ImportSettings { importer: "test".into(), version: "1".into() };
 let c = ImportInput { importer: "ara.image".into(), version: ImageImporter.version().into() };
+let d = ImportInput { importer: ImageImporter.id().into(), version: "1".into() };
+assert_eq!(ImageImporter.version(), "1");
 }
 }
 "#,
@@ -249,6 +279,6 @@ let c = ImportInput { importer: "ara.image".into(), version: ImageImporter.versi
             problems: vec![],
         };
         visitor.visit_file(&file);
-        assert_eq!(visitor.problems.len(), 1);
+        assert_eq!(visitor.problems.len(), 3);
     }
 }

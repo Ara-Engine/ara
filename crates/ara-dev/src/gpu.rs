@@ -48,10 +48,28 @@ fn allocate(directory: &Path, queue: &mut File, deadline: Instant) -> Result<Tic
     let result = (|| {
         let mut value = String::new();
         queue.read_to_string(&mut value)?;
+        // A crash during the counter write must not place a new ticket ahead of live waiters.
+        let last_ticket = fs::read_dir(directory)?
+            .map(|entry| {
+                let path = entry?.path();
+                Ok(if path.extension().is_some_and(|e| e == "ticket") {
+                    path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(0)
+                } else {
+                    0
+                })
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .max()
+            .unwrap_or(0);
         let sequence = value
             .trim()
             .parse::<u64>()
             .unwrap_or(0)
+            .max(last_ticket)
             .checked_add(1)
             .context("GPU ticket counter exhausted")?;
         queue.seek(SeekFrom::Start(0))?;
