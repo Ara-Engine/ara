@@ -28,7 +28,7 @@ struct NodeData {
 }
 
 fn value<T: Serialize>(v: &T) -> Result<Value, Diagnostic> {
-    serde_json::to_value(v).map_err(|e| Diagnostic::error(codes::SYNTAX, e.to_string()))
+    ara_json::to_value(v).map_err(|e| Diagnostic::error(codes::SYNTAX, e.to_string()))
 }
 fn decode<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, Diagnostic> {
     serde_json::from_value(v).map_err(|e| Diagnostic::error(codes::SYNTAX, e.to_string()))

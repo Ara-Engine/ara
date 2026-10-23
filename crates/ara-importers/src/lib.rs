@@ -29,7 +29,7 @@ fn invalid(e: impl std::fmt::Display) -> ara_asset::Error {
 }
 fn json_bytes(value: &impl serde::Serialize) -> Result<Vec<u8>> {
     Ok(
-        ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(value)?))
+        ara_json::to_canonical_string(&ara_json::sort_keys(&ara_json::to_value(value)?))
             .into_bytes(),
     )
 }

@@ -30,7 +30,7 @@ impl Capture {
         crate::register(&mut db);
         let value = db.canonical_value(
             &ara_schema::ValueType::Named("CaptureReport".into()),
-            &serde_json::to_value(&self.report)?,
+            &ara_json::to_value(&self.report)?,
         );
         std::fs::write(&report, ara_json::to_canonical_string(&value))?;
         Ok([png, report])
@@ -161,7 +161,7 @@ impl CaptureEngine {
             TextMode::Raster,
         )?;
         let mut report = inspection::inspect(ui, view, &self.renderer)?;
-        report.work = serde_json::to_value(work)?;
+        report.work = ara_json::to_value(&work)?;
         Ok(Capture {
             png: self.cpu.pixmap()?.encode_png()?,
             report,

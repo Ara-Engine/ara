@@ -132,7 +132,7 @@ impl SidecarCommand {
                 if settings.importer.is_empty() || settings.version.is_empty() {
                     return Err(Error::Invalid("importer and version must be set".into()));
                 }
-                let record = serde_json::to_value(settings)?
+                let record = ara_json::to_value(&settings)?
                     .as_object()
                     .cloned()
                     .ok_or_else(|| Error::Invalid("settings must be an object".into()))?;
@@ -148,13 +148,13 @@ impl SidecarCommand {
                 doc,
                 id,
                 path: FieldPath::field("preset"),
-                value: Some(serde_json::to_value(preset)?),
+                value: Some(ara_json::to_value(&preset)?),
             },
             Self::Dependencies(deps) => Edit::Set {
                 doc,
                 id,
                 path: FieldPath::field("dependencies"),
-                value: Some(serde_json::to_value(deps)?),
+                value: Some(ara_json::to_value(&deps)?),
             },
         })
     }

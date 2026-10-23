@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-json.workspace = true
 ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
@@ -16,7 +17,6 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-ara-json.workspace = true
 insta.workspace = true
 
 [lints]

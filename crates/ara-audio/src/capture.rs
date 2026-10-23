@@ -66,7 +66,7 @@ impl AudioCapture {
     /// Canonical JSON through Ara's writer, never serde's generic text formatter.
     pub fn analysis_json(&self) -> Result<String> {
         let value =
-            serde_json::to_value(&self.analysis).map_err(|e| AudioError::Codec(e.to_string()))?;
+            ara_json::to_value(&self.analysis).map_err(|e| AudioError::Codec(e.to_string()))?;
         Ok(ara_json::to_canonical_string(&ara_json::sort_keys(&value)))
     }
     /// Writes caller-chosen artifacts on an offline job worker. Does not edit engine documents.
