@@ -198,8 +198,10 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 totals.push(total);
             }
         }
-        view.capture(gpu)?
-            .save(root.join(format!("captures/sponza-{}p.png", render[1])))?;
+        view.capture(gpu)?.save(output_path(
+            root,
+            format!("captures/sponza-{}p.png", render[1]),
+        )?)?;
         let frame_samples = totals.to_vec();
         totals.sort_by(f64::total_cmp);
         let p50 = totals[120];
@@ -217,7 +219,10 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         report.push(serde_json::json!({"source":"https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip","attribution":"Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections","archive_sha256":"da005cbee0be2df2abc8513f3ceb61bcb6f69aac112babcd9c00169a27c2770c","asset_policy":"local benchmark; original copyright.txt retained; no redistributed model files","triangle_count":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"instances":scene.meshes.len(),"materials":scene.materials.len(),"textures":scene.textures.len(),"material_conversion":"OBJ Kd and PNG alpha; Ns -> GGX roughness; authored bump heights -> tangent normals; UV-derived tangents; map_Ks -> bounded specular intensity, not roughness; linear-space mip pyramids","render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":p50,"p95":p95,"maximum_ms":totals.last(),"frame_samples_ms":frame_samples,"budget_ms":budget,"budget_passed":p95<=budget,"passes":passes,"camera":camera,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"async_overlap":false,"exposure":view.capture_exposure(gpu)?,"gather_events":1,"transport_stride":4,"background_before":background_before,"background_after":background_load(),"cpu_before":cpu_before,"cpu_after":cpu_load(),"background_load":"shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks; before/after snapshots are outside timed frames"}));
         view.destroy(gpu)?;
     }
-    write_json(&root.join("measurements/sponza-timings.json"), &report)?;
+    write_json(
+        &output_path(root, "measurements/sponza-timings.json")?,
+        &report,
+    )?;
     gpu.assert_clean()?;
     ensure!(
         budgets_passed,

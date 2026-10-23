@@ -53,12 +53,14 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
             ..large::fixed_post()
         })?;
         view.render(gpu, &input(&camera, 336, false))?;
-        view.capture(gpu)?
-            .save(root.join(format!("captures/{name}-{}p.png", render[1])))?;
+        view.capture(gpu)?.save(output_path(
+            root,
+            format!("captures/{name}-{}p.png", render[1]),
+        )?)?;
         view.destroy(gpu)?;
     }
     write_json(
-        &root.join(format!("measurements/{name}-timings.json")),
+        &output_path(root, format!("measurements/{name}-timings.json"))?,
         &report,
     )?;
     gpu.assert_clean()?;

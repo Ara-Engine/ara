@@ -99,8 +99,11 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
         report.push(serde_json::json!({"reservoirs":reservoirs,"size":SIZE,"warmup":256,"frames":64,"block_size":16,"roi":[0,144,480,256],"low_frequency_luminance_delta_rms":block_rms,"pixel_luminance_delta_rms":(pixel_delta/pixel_energy.max(1e-20)).sqrt(),"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision()}));
         view.destroy(gpu)?;
     }
-    strip.save(root.join(format!("captures/{name}-strip.png")))?;
-    write_json(&root.join(format!("measurements/{name}.json")), &report)?;
+    strip.save(output_path(root, format!("captures/{name}-strip.png"))?)?;
+    write_json(
+        &output_path(root, format!("measurements/{name}.json"))?,
+        &report,
+    )?;
     gpu.assert_clean()?;
     Ok(())
 }

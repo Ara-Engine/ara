@@ -77,7 +77,7 @@ fn night_denoising_preserves_angular_footprint_at_higher_resolution() -> Result<
         errors[0], errors[1]
     );
     ara_gpu::cooked::write_json(
-        &root.join("measurements/denoiser-resolution.json"),
+        &ara_pathtrace::artifacts::temporary_path(root, "measurements/denoiser-resolution.json")?,
         &serde_json::json!({"reference_samples":8192,"bounces":12,"sizes":[[480,270],[960,540]],"settle_frames":256,"roi":"lower half, resolved to matching 480x270 pixel areas","relative_rmse":errors,"maximum_error_ratio":1.05,"passed":errors[1]<=errors[0]*1.05}),
     )?;
     ensure!(

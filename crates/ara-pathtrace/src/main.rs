@@ -1,5 +1,9 @@
 use anyhow::Result;
 use ara_gpu::vulkan::VulkanDevice;
+#[cfg(not(test))]
+use ara_pathtrace::artifacts::output_path;
+#[cfg(test)]
+use ara_pathtrace::artifacts::temporary_path as output_path;
 use ara_pathtrace::{Reference, scenes};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::Path;
@@ -19,8 +23,6 @@ mod verification;
 
 fn main() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    std::fs::create_dir_all(root.join("captures"))?;
-    std::fs::create_dir_all(root.join("measurements"))?;
     let mut gpu = VulkanDevice::new(&[], root.join(".sn/pipeline-cache"))?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "smoke".into());
     match command.as_str() {
@@ -52,7 +54,7 @@ fn main() -> Result<()> {
                 view.render(&mut gpu, &input(&camera, tick, false))?;
             }
             view.capture(&mut gpu)?
-                .save(root.join("captures/smoke-hybrid.png"))?;
+                .save(output_path(root, "captures/smoke-hybrid.png")?)?;
             view.set_post(PostSettings {
                 ev100: None,
                 bloom: 0.08,
@@ -68,7 +70,7 @@ fn main() -> Result<()> {
             };
             view.render(&mut gpu, &input(&moving_camera, 16, false))?;
             view.capture(&mut gpu)?
-                .save(root.join("captures/smoke-cinematic.png"))?;
+                .save(output_path(root, "captures/smoke-cinematic.png")?)?;
             let bake = view.bake_snapshot(&mut gpu)?;
             view.destroy(&mut gpu)?;
             let mut fallback = settings([160, 90], [160, 90]);
@@ -76,13 +78,13 @@ fn main() -> Result<()> {
             let mut view = FidelityView::new(&mut gpu, &scene, fallback, Some(&bake))?;
             view.render(&mut gpu, &input(&camera, 0, true))?;
             view.capture(&mut gpu)?
-                .save(root.join("captures/smoke-raster.png"))?;
+                .save(output_path(root, "captures/smoke-raster.png")?)?;
             view.destroy(&mut gpu)?;
             let mut reference = Reference::new(&mut gpu, &scene, [160, 90], 16, 5, post())?;
             reference.converge(&mut gpu, &camera)?;
             reference
                 .capture(&mut gpu)?
-                .save(root.join("captures/smoke-reference.png"))?;
+                .save(output_path(root, "captures/smoke-reference.png")?)?;
             reference.destroy(&mut gpu)?;
             println!("RT hybrid, baked Raster, reference: validation and sync validation clean");
         }

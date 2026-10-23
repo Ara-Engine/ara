@@ -1,16 +1,18 @@
-param([switch]$UpdateGoldens, [switch]$SharedGpu, [switch]$TimingsOnly)
+param([switch]$UpdateGoldens, [switch]$UpdateMeasurements, [switch]$SharedGpu, [switch]$TimingsOnly)
 # Reproduce round-3 receipts. SharedGpu records budget failures without hiding them.
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $scratch=Join-Path $PSScriptRoot '.sn'
 $previous=@{}
-foreach($key in @('CARGO_BUILD_JOBS','PATH','VK_IMPLICIT_LAYER_PATH','VK_LAYER_PATH','ARA_UPDATE_FIDELITY_GOLDENS')) {
+foreach($key in @('CARGO_BUILD_JOBS','PATH','VK_IMPLICIT_LAYER_PATH','VK_LAYER_PATH','ARA_UPDATE_FIDELITY_GOLDENS','ARA_UPDATE_MEASUREMENTS','CARGO_TARGET_TMPDIR')) {
     $previous[$key]=[Environment]::GetEnvironmentVariable($key,'Process')
 }
 $sampler=$null
 Push-Location $repo
 try {
     $env:CARGO_BUILD_JOBS='2'
+    if(-not $env:CARGO_TARGET_TMPDIR){$env:CARGO_TARGET_TMPDIR=Join-Path $repo 'target'}
+    if($UpdateMeasurements){$env:ARA_UPDATE_MEASUREMENTS='1'}else{Remove-Item Env:ARA_UPDATE_MEASUREMENTS -ErrorAction SilentlyContinue}
     $sdk=$env:VULKAN_SDK
     if(-not $sdk){$sdk='C:/VulkanSDK/1.4.363.0'}
     $env:PATH="$repo/crates/ara-platform/native;$sdk/Bin;$env:PATH"
@@ -41,7 +43,7 @@ try {
     if(-not $sampler.HasExited){$sampler.Kill()}
     $sampler.WaitForExit();$sampler=$null
     if(-not $TimingsOnly) {
-        Remove-Item Env:ARA_UPDATE_FIDELITY_GOLDENS -ErrorAction SilentlyContinue
+        Remove-Item Env:ARA_UPDATE_FIDELITY_GOLDENS,Env:ARA_UPDATE_MEASUREMENTS -ErrorAction SilentlyContinue
         cargo test -p ara-render-fidelity -p ara-pathtrace --all-targets -- --test-threads=1
         $LASTEXITCODE | Set-Content "$scratch/round3-resolution-final-tests.exit"
         if($LASTEXITCODE -ne 0){throw 'Tests failed'}
@@ -55,6 +57,13 @@ try {
         $modules=@(Get-ChildItem -LiteralPath "$repo/crates/ara-render-fidelity/cooked/$key" -Filter '*.spv')
         if($modules.Count -ne 48){throw 'Shader count differs'}
         foreach($module in $modules){& spirv-val --target-env vulkan1.3 $module.FullName;if($LASTEXITCODE -ne 0){throw "Invalid SPIR-V: $($module.Name)"}}
+        if($UpdateMeasurements) {
+            # Tests always write scratch output. Promotion is a separate explicit action.
+            foreach($name in @('quality-targets.json','denoiser-resolution.json')) {
+                Copy-Item -LiteralPath (Join-Path $env:CARGO_TARGET_TMPDIR "ara-pathtrace/measurements/$name") -Destination (Join-Path $PSScriptRoot "measurements/$name")
+            }
+            $env:ARA_UPDATE_MEASUREMENTS='1'
+        }
         cargo run -p ara-pathtrace --example record_round3
         if($LASTEXITCODE -ne 0){throw 'Measurement aggregation failed'}
     }

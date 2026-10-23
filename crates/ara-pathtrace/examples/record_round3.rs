@@ -1,5 +1,6 @@
 //! Assemble reproducible measurements without copying HDR caches or asset inputs.
 use anyhow::Result;
+use ara_pathtrace::artifacts::output_path;
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -48,7 +49,13 @@ fn main() -> Result<()> {
         ("diagnostic_quality", "quality-targets.json"),
         ("validation", "validation.json"),
     ] {
-        after.insert(key.into(), read(root, &format!("measurements/{file}"))?);
+        after.insert(
+            key.into(),
+            serde_json::from_slice(&std::fs::read(output_path(
+                root,
+                format!("measurements/{file}"),
+            )?)?)?,
+        );
     }
     let mut trials = serde_json::Map::new();
     for file in [
@@ -99,6 +106,9 @@ fn main() -> Result<()> {
         "verification_exit_codes":gates,
         "benchmark_status":"SHARED GPU: report median, p95 and observed maxima without claiming quiet-machine budget compliance. Parent explicitly deferred the quiet-machine benchmark sweep until in-flight tracks are merged.",
         "gpu_load_samples":{"period_ms":2000,"timezone":"Asia/Qatar UTC+03:00","scope":"whole device, including Ara and other agents; samples do not isolate external GPU work","samples":load_samples(root)?}});
-    ara_gpu::cooked::write_json(&root.join("measurements/fidelity-round3.json"), &result)?;
+    ara_gpu::cooked::write_json(
+        &output_path(root, "measurements/fidelity-round3.json")?,
+        &result,
+    )?;
     Ok(())
 }

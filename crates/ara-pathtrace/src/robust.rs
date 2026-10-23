@@ -54,7 +54,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         }
         let hybrid = view.capture(gpu)?;
         let hdr = view.capture_radiance(gpu)?;
-        hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
+        hybrid.save(output_path(root, format!("captures/{name}-hybrid.png"))?)?;
         let hash = view.scene_hash().to_owned();
         let revision = view.shader_revision().to_owned();
         view.destroy(gpu)?;
@@ -80,9 +80,11 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         }
         let ground = reference.radiance(gpu)?;
         let reference_image = reference.capture(gpu)?;
-        reference_image.save(root.join(format!("captures/{name}-reference.png")))?;
-        large::side_by_side(&hybrid, &reference_image)
-            .save(root.join(format!("captures/{name}-side-by-side.png")))?;
+        reference_image.save(output_path(root, format!("captures/{name}-reference.png"))?)?;
+        large::side_by_side(&hybrid, &reference_image).save(output_path(
+            root,
+            format!("captures/{name}-side-by-side.png"),
+        )?)?;
         let error = metrics::radiance(&hdr, &ground)?;
         let lower = (SIZE[0] * SIZE[1] / 2) as usize;
         let surface_roi_error = metrics::radiance(&hdr[lower..], &ground[lower..])?;
@@ -115,7 +117,10 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":if name=="outdoor_day"{"lower half: terrain and foliage"}else{"lower half: floor and sphere bases"},"surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":samples,"surface_roi_convergence":surface_roi_convergence,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
         reference.destroy(gpu)?;
     }
-    write_json(&root.join("measurements/robust-quality.json"), &report)?;
+    write_json(
+        &output_path(root, "measurements/robust-quality.json")?,
+        &report,
+    )?;
     gpu.assert_clean()?;
     anyhow::ensure!(
         passed,
@@ -166,8 +171,10 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path, night_only: bool) -> Result<
                 ..large::fixed_post()
             })?;
             view.render(gpu, &input(&camera, 156, false))?;
-            view.capture(gpu)?
-                .save(root.join(format!("captures/{name}-{}p.png", render[1])))?;
+            view.capture(gpu)?.save(output_path(
+                root,
+                format!("captures/{name}-{}p.png", render[1]),
+            )?)?;
             let frame_samples = totals.to_vec();
             totals.sort_by(f64::total_cmp);
             let budget = if render[1] == 1440 {
@@ -195,13 +202,13 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path, night_only: bool) -> Result<
         }
     }
     let destination = if night_only {
-        ".sn/night-trial-timings.json"
+        "measurements/night-trial-timings.json"
     } else {
         "measurements/robust-timings.json"
     };
-    write_json(&root.join(destination), &report)?;
+    write_json(&output_path(root, destination)?, &report)?;
     write_json(
-        &root.join("measurements/validation.json"),
+        &output_path(root, "measurements/validation.json")?,
         &gpu.diagnostics(),
     )?;
     gpu.assert_clean()?;

@@ -89,7 +89,10 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         }
         report.push(row);
     }
-    write_json(&root.join(".sn/night-components.json"), &report)?;
+    write_json(
+        &output_path(root, "measurements/night-components.json")?,
+        &report,
+    )?;
     println!("Night direct/indirect separation: {report:?}");
     gpu.assert_clean()?;
     Ok(())

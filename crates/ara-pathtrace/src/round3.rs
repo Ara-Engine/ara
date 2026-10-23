@@ -62,7 +62,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
     let radiance = view.capture_radiance(gpu)?;
     let hash = view.scene_hash().to_owned();
     let shader = view.shader_revision().to_owned();
-    hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
+    hybrid.save(output_path(root, format!("captures/{name}-hybrid.png"))?)?;
     view.destroy(gpu)?;
     let samples = if many { 65536 } else { 4096 };
     let batches = samples / 8;
@@ -82,9 +82,11 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
     }
     let ground = reference.radiance(gpu)?;
     let picture = reference.capture(gpu)?;
-    picture.save(root.join(format!("captures/{name}-reference.png")))?;
-    large::side_by_side(&hybrid, &picture)
-        .save(root.join(format!("captures/{name}-side-by-side.png")))?;
+    picture.save(output_path(root, format!("captures/{name}-reference.png"))?)?;
+    large::side_by_side(&hybrid, &picture).save(output_path(
+        root,
+        format!("captures/{name}-side-by-side.png"),
+    )?)?;
     let error = metrics::radiance(&radiance, &ground)?;
     let convergence = metrics::radiance(&half, &ground)?;
     let lower = (size[0] * size[1] / 2) as usize;
@@ -106,7 +108,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
         comparison.score
     );
     write_json(
-        &root.join(format!("measurements/{name}-quality.json")),
+        &output_path(root, format!("measurements/{name}-quality.json"))?,
         &serde_json::json!({"size":size,"reference_samples":samples,"bounces":12,"ev100":ev,"scene_hash":hash,"shader_revision":shader,"error":error,"convergence":convergence,"surface_roi":"lower half","surface_roi_error":surface_roi_error,"surface_roi_convergence":surface_roi_convergence,"point_lights":scene.lights.len(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"source":if many{"500 points + 500 emissive panels, 1000 semantic lights"}else{"CC0 Poly Haven PBR furniture; see THIRD_PARTY_NOTICES.md"},"reference_model":if many {"independent surface path transport"} else {"independent surface transport; shared sky/froxel composition, HDR error before fog"}}),
     )?;
     large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;

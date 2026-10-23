@@ -9,6 +9,7 @@ The reference never uses DDGI, spatial filters, temporal clipping or upscaling.
 - `Reference`: progressive finite sample/bounce budget with explicit reset.
 - `scenes`: furnace, thin wall, moving emissive, disocclusion, glossy, alpha foliage.
 - `metrics`: linear radiance RMSE and temporal residual metrics.
+- `artifacts`: scratch output paths; checked-in reports require explicit opt-in.
 
 ## Verification
 Set CARGO_BUILD_JOBS=2. `./run.ps1 -Mode Check` runs local tests/clippy/fmt.
@@ -29,6 +30,11 @@ Timing reports retain chronological frame samples, median, p95, maximum and load
 failures for shared-load reporting. Omit SharedGpu for strict budget gates.
 `-TimingsOnly` reruns only the four timing modes and preserves quality receipts.
 Goldens update only with `ARA_UPDATE_FIDELITY_GOLDENS=1`; regular tests compare.
-All output/provenance goes under this crate; root files/docs remain untouched.
+Tests never publish measurements. CLI output defaults to workspace
+`target/ara-pathtrace`, or `CARGO_TARGET_TMPDIR/ara-pathtrace` when set.
+Only `ARA_UPDATE_MEASUREMENTS=1` / `-UpdateMeasurements` updates checked-in
+measurements/captures. Goldens use the separate explicit opt-in above.
+The round-3 wrapper promotes test receipts only after successful checks when
+UpdateMeasurements is requested. Keep root files/docs untouched.
 Runtime shader cooking is forbidden. Recook fidelity offline before testing edits.
 Never substitute denoised reference images for independently converged radiance.
