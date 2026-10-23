@@ -1,0 +1,273 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      1,
+      "walk tick 0"
+    ],
+    [
+      2,
+      2,
+      "hand FABRIK tick 0"
+    ],
+    [
+      3,
+      3,
+      "retarget 1.3x tick 0"
+    ],
+    [
+      4,
+      4,
+      "walk tick 6400"
+    ],
+    [
+      5,
+      5,
+      "hand FABRIK tick 6400"
+    ],
+    [
+      6,
+      6,
+      "retarget 1.3x tick 6400"
+    ],
+    [
+      7,
+      7,
+      "walk tick 12800"
+    ],
+    [
+      8,
+      8,
+      "hand FABRIK tick 12800"
+    ],
+    [
+      9,
+      9,
+      "retarget 1.3x tick 12800"
+    ],
+    [
+      10,
+      10,
+      "walk tick 19200"
+    ],
+    [
+      11,
+      11,
+      "hand FABRIK tick 19200"
+    ],
+    [
+      12,
+      12,
+      "retarget 1.3x tick 19200"
+    ],
+    [
+      13,
+      13,
+      "walk tick 25600"
+    ],
+    [
+      14,
+      14,
+      "hand FABRIK tick 25600"
+    ],
+    [
+      15,
+      15,
+      "retarget 1.3x tick 25600"
+    ],
+    [
+      16,
+      16,
+      "walk tick 32000"
+    ],
+    [
+      17,
+      17,
+      "hand FABRIK tick 32000"
+    ],
+    [
+      18,
+      18,
+      "retarget 1.3x tick 32000"
+    ],
+    [
+      19,
+      19,
+      "motion match clip 0 tick 0"
+    ],
+    [
+      20,
+      20,
+      "motion match clip 1 tick 144800"
+    ],
+    [
+      21,
+      21,
+      "motion match clip 2 tick 107200"
+    ],
+    [
+      22,
+      22,
+      "motion match clip 3 tick 112800"
+    ],
+    [
+      23,
+      23,
+      "motion match clip 6 tick 22400"
+    ],
+    [
+      24,
+      24,
+      "motion match clip 6 tick 28800"
+    ],
+    [
+      25,
+      25,
+      "Jolt Animated tick 0"
+    ],
+    [
+      26,
+      26,
+      "Jolt Ragdoll tick 25"
+    ],
+    [
+      27,
+      27,
+      "Jolt Ragdoll tick 50"
+    ],
+    [
+      28,
+      28,
+      "Jolt GettingUp tick 90"
+    ],
+    [
+      29,
+      29,
+      "Jolt GettingUp tick 120"
+    ],
+    [
+      30,
+      30,
+      "Jolt Animated tick 180"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "centre": [
+        0.0,
+        0.0
+      ],
+      "kind": "orthographic",
+      "world_size": [
+        11.399999618530273,
+        12.824999809265137
+      ]
+    },
+    "deterministic": true,
+    "exposure": 0.001500000013038516,
+    "marks": 30,
+    "mode": "albedo",
+    "seed": 7,
+    "settle_frames": 2,
+    "size": [
+      1600,
+      1800
+    ],
+    "tick": 0
+  },
+  "scene_hash": "29a0856de9aa8ffa11e78bb6df9633cde11cdc66e8b2d7c8bcee3d77f0fa7a48",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.008576,
+      "pass": "ShadowAtlas.4Cascades",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.061536,
+      "pass": "GBuffer",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.003648,
+      "pass": "TiledLightCull",
+      "queue": "Compute"
+    },
+    {
+      "milliseconds": 0.116608,
+      "pass": "DeferredLighting",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.003744,
+      "pass": "ForwardTransparency",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.04928,
+      "pass": "TemporalResolve",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.048416,
+      "pass": "Exposure.ACESFitted.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.872192,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.002752,
+      "pass": "HostReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "TileOwnershipReturn",
+      "queue": "Compute"
+    }
+  ]
+}
