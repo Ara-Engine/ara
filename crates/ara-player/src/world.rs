@@ -11,7 +11,7 @@ use ara_render::capture::ViewMode;
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
-use ara_runtime_audio::AudioPresenter;
+use ara_runtime_audio::{AssetVoices, AudioPresenter, STREAM_BUDGET, StreamMode};
 use ara_runtime_render::{
     Presenter,
     two_d::{self, Presenter2d},
@@ -227,8 +227,11 @@ impl World {
     }
 
     /// A fresh audio presenter for this world (its project mixer, room reverb).
-    pub fn audio_presenter(&self) -> Result<AudioPresenter> {
-        Ok(AudioPresenter::new(self.runtime.documents())?)
+    pub fn audio_presenter(&self) -> Result<Audio> {
+        Ok(Audio {
+            presenter: AudioPresenter::new(self.runtime.documents())?,
+            voices: AssetVoices::new(self.asset_source()?, StreamMode::Live, STREAM_BUDGET),
+        })
     }
 
     /// `play.captureAudio`: renders `seconds` of the world's sound offline from the
@@ -240,17 +243,16 @@ impl World {
         params: &ara_play::CaptureAudio,
         frame: &mut RenderFrame,
     ) -> Result<Value> {
-        let mut audio = self.audio_presenter()?;
+        let mut audio = AudioPresenter::new(self.runtime.documents())?;
         self.runtime.extract(frame);
         let listener = listener(frame);
         let AudioInputs { resident, assets } = self.audio_inputs()?;
         let probes = audio.stream_cells(&resident, &assets);
         audio.wait_cells(std::time::Duration::from_secs(5));
         let probes = probes.max(audio.stream_cells(&resident, &assets));
-        let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
-            ara_runtime_audio::clip(assets.as_ref(), reference)
-        })?;
-        let capture = audio.capture(params.seconds)?;
+        let mut voices = AssetVoices::new(assets, StreamMode::Offline, STREAM_BUDGET);
+        let heard = audio.update_voices(self.runtime.world(), &listener, &mut voices)?;
+        let capture = audio.capture_streamed(params.seconds, &mut voices)?;
         let path = std::path::Path::new(&params.path);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -661,19 +663,41 @@ pub struct AudioInputs {
     pub assets: Arc<dyn ara_runtime::assets::AssetSource>,
 }
 
+/// Live Play audio and its bounded compressed-asset producers. Dropped on the
+/// control path; decoder workers never join inside the mixer callback.
+pub struct Audio {
+    presenter: AudioPresenter,
+    voices: AssetVoices,
+}
+
+impl Audio {
+    /// Feeds the live device after the control worker has updated voices.
+    pub fn pump(
+        &mut self,
+        backend: &mut dyn ara_audio::device::DeviceBackend,
+        target_frames: usize,
+    ) -> ara_runtime_audio::Result<ara_audio::device::DeviceEvent> {
+        self.presenter.pump(backend, target_frames)
+    }
+}
+
 /// One live audio update: streams cell probes, then evaluates acoustics against the
 /// physics scene and retargets voices. Reads the simulation only, so the player runs
 /// it on a worker thread while the frame presents (physics is not stepping then).
 pub fn update_audio(
-    audio: &mut AudioPresenter,
+    audio: &mut Audio,
     world: &ara_sim::bevy_ecs::world::World,
     listener: &ara_audio::AudioListener,
     inputs: &AudioInputs,
 ) -> Result<()> {
-    audio.stream_cells(&inputs.resident, &inputs.assets);
-    audio.update(world, listener, &mut |reference| {
-        ara_runtime_audio::clip(inputs.assets.as_ref(), reference)
-    })?;
+    audio
+        .presenter
+        .stream_cells(&inputs.resident, &inputs.assets);
+    audio.voices.set_assets(Arc::clone(&inputs.assets));
+    audio.voices.refill()?;
+    audio
+        .presenter
+        .update_voices(world, listener, &mut audio.voices)?;
     Ok(())
 }
 

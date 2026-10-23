@@ -18,8 +18,12 @@ Depends on ara-audio, ara-acoustics (physics, ecs), ara-audio-mix, ara-runtime.
   visibility, occluders and `Audibility::explain()` diagnostics (ARA3400–3410).
 - `pump(device, frames)` (live, windowed players), `capture(seconds)` (offline).
 - `clip(assets, reference)`: decodes a published `ara.audio` import (resident).
+- `AssetVoices` + `update_voices`: ordinary sources and music honor streamed imports
+  with bounded 4096-frame queues. Live producers decode on workers; offline producers
+  refill through `capture_streamed` before each render quantum. The default aggregate
+  PCM queue budget is 8 MiB; compressed assets and codec packet scratch are separate.
 - `MusicSource` entities play their `.music` score (one `MusicPlayer` each, following
-  gameplay `intensity`/`segment`, stems loaded through `clip`); `AudioGraphSource`
+  gameplay `intensity`/`segment`, stems prepared through `VoiceLoader`); `AudioGraphSource`
   entities play a procedural audio graph (compiled once per graph document, one
   instance per entity seeded by its identity, spatialized by its `AudioSource`,
   parameters and trigger counts forwarded at the next control frame).

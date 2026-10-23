@@ -177,6 +177,16 @@ impl AudioCapture {
 /// Captures the next seconds from an offline engine, bounded to 60 seconds.
 /// Run on an isolated replay/presentation engine so agents never interrupt human playback (D20).
 pub fn capture_audio(engine: &mut AudioEngine, seconds: f64) -> Result<AudioCapture> {
+    capture_audio_prepared(engine, seconds, &mut || Ok(()))
+}
+
+/// Captures offline, asking a control-side loader to refill bounded streams before
+/// each render quantum. Decoding stays outside the allocation-free audio renderer.
+pub fn capture_audio_prepared(
+    engine: &mut AudioEngine,
+    seconds: f64,
+    prepare: &mut dyn FnMut() -> Result<()>,
+) -> Result<AudioCapture> {
     if !seconds.is_finite() || seconds <= 0.0 || seconds > 60.0 {
         return Err(AudioError::Invalid("capture seconds must be in (0,60]"));
     }
@@ -194,7 +204,13 @@ pub fn capture_audio(engine: &mut AudioEngine, seconds: f64) -> Result<AudioCapt
         })
         .collect();
     let mut backend = OfflineBackend::new(engine.sample_rate(), frames)?;
-    render_to(engine, &mut backend, frames)?;
+    let mut remaining = frames;
+    while remaining > 0 {
+        prepare()?;
+        let count = remaining.min(crate::QUANTUM);
+        render_to(engine, &mut backend, count)?;
+        remaining -= count;
+    }
     let mut capture = analyze(
         engine.sample_rate(),
         backend.samples(),
