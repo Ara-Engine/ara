@@ -129,15 +129,15 @@ pub fn generate(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 "See original license files"
             });
         inventory.push(json!({"name":name,"version":version,"license":license,"repository":package["repository"],"source":package["source"],"originalLicenseFiles":texts.len()}));
-        let source = if package["source"].is_null() {
-            "Private Ara source; all rights reserved".into()
-        } else {
-            format!("https://crates.io/api/v1/crates/{name}/{version}/download")
+        let source = match package["source"].as_str() {
+            None => "Private Ara source; all rights reserved".into(),
+            Some(source) if source.starts_with("git+") => source.to_owned(),
+            Some(_) => format!("https://crates.io/api/v1/crates/{name}/{version}/download"),
         };
         sections.insert(
             format!("{name} {version}"),
             format!(
-                "SPDX: {license}\nAuthors (Cargo metadata): {}\nRepository: {}\nSource archive: {source}\n{}",
+                "SPDX: {license}\nAuthors (Cargo metadata): {}\nRepository: {}\nSource: {source}\n{}",
                 package["authors"],
                 package["repository"],
                 texts.join("\n\n")

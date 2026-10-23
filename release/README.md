@@ -54,8 +54,9 @@ The deliberately inclusive inventory does not claim every package is linked.
 When a published crate omits its license files, cached upstream notices and full
 SPDX texts supplement its metadata attribution. Exact upstream revisions are
 recorded alongside those notices. New unsupported SPDX IDs fail packaging until
-their texts are added. Every third-party package has a source-download link,
-including the unmodified MPL-licensed audio dependencies.
+their texts are added. Registry packages have source-download links, including
+the unmodified MPL-licensed audio dependencies; Git packages retain their exact
+source URI and revision.
 
 Samples are copied when `samples/<id>/ara.project.json` exists; caches, build
 directories and evidence are excluded. `samples/assets.lock.json` is copied beside
@@ -80,3 +81,9 @@ convert PDBs into a local Breakpad store. Then run
 `cargo run -p ara-crash --features symbols -- symbolize <dump> <symbol-store>`.
 Matching PE images accompany PDBs for Windows unwind information. No symbol server
 or telemetry is contacted.
+
+After `cargo test -p ara-crash --all-features`, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File release/verify-crash-recovery.ps1`
+to capture the actual next-launch folder offer. The script creates a test crash,
+targets only its editor process, declines the offer, then closes that editor.
+All settings and evidence are isolated under target/release-dist.
