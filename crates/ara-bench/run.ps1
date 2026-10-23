@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $TargetDir) { $TargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo 'target' } }
-$keys = @('CARGO_BUILD_JOBS', 'CARGO_TARGET_DIR', 'CARGO_PROFILE_DEV_DEBUG', 'CARGO_PROFILE_TEST_DEBUG', 'CARGO_INCREMENTAL', 'VULKAN_SDK', 'VK_IMPLICIT_LAYER_PATH', 'SDL3_LIB_DIR', 'PATH')
+$keys = @('CARGO_BUILD_JOBS', 'CARGO_TARGET_DIR', 'CARGO_PROFILE_DEV_DEBUG', 'CARGO_PROFILE_TEST_DEBUG', 'CARGO_INCREMENTAL', 'VULKAN_SDK', 'VK_IMPLICIT_LAYER_PATH', 'SDL3_LIB_DIR', 'PATH', 'TEMP', 'TMP')
 $previous = @{}
 foreach ($key in $keys) { $previous[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
 Push-Location $repo
@@ -15,6 +15,10 @@ try {
     $env:CARGO_PROFILE_DEV_DEBUG = '0'
     $env:CARGO_PROFILE_TEST_DEBUG = '0'
     $env:CARGO_INCREMENTAL = '0'
+    $temporary = Join-Path $TargetDir 'temp'
+    New-Item -ItemType Directory -Force -Path $temporary | Out-Null
+    $env:TEMP = $temporary
+    $env:TMP = $temporary
     if (-not $env:VULKAN_SDK) { $env:VULKAN_SDK = 'C:/VulkanSDK/1.4.363.0' }
     if (-not $env:SDL3_LIB_DIR) { $env:SDL3_LIB_DIR = "$repo/crates/ara-platform/native" }
     $env:PATH = "$env:SDL3_LIB_DIR;$env:VULKAN_SDK/Bin;$env:PATH"

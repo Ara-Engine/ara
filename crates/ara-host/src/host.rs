@@ -134,7 +134,7 @@ fn lock(state_dir: &Path) -> Result<File, Diagnostic> {
 impl Host {
     /// Opens a host over `project`: takes the project lock, loads every document,
     /// replays the journal (recovering edits a crash kept from disk) and registers
-    /// the core service.
+    /// the core and profiling services.
     pub fn open(project: Project, config: HostConfig) -> Result<Host, Diagnostic> {
         let state_dir = project.root.join(STATE_DIR);
         fs::create_dir_all(&state_dir).map_err(|e| io_error("create", &state_dir, e))?;

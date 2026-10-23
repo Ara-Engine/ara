@@ -29,8 +29,9 @@ original frame while retained. Stop producers before saving a complete capture.
 Enable subsystem features such as `ara-sim/profiling`, `ara-render/profiling`,
 `ara-anim/profiling`, `ara-physics/profiling`, `ara-nav/profiling`,
 `ara-audio/profiling`, `ara-asset/profiling`, `ara-script/profiling`.
-They default off. Compose `tracing_subscriber::registry().with(ProfileLayer)` to
-record Bevy's named system spans. Reuse tracing spans in per-frame code.
+They default off. Compose `tracing_subscriber::registry().with(ProfileLayer)`
+before registering simulation/C# systems, so their reusable named spans have a
+subscriber. Attach each executing worker before recording starts.
 
 `Host::profiler()` owns the recorder used by the automatically registered
 `profile` Engine Protocol service. `profile.start/stop/summary/hitches/compare`
@@ -82,7 +83,8 @@ Retain complete metric summaries for baselines; top-N is only for agent response
 thread IDs, nanosecond ranges, parents and allocation totals. `flame_children`
 selects roots or children within one thread. `gpu` lists label/queue/duration;
 `jobs`, `counters`, `memory`, `load` and `dropped` complete the panel data.
-Resolve label indices through `Profile::labels` and worker IDs through `threads`.
+Resolve label indices through `Profile::labels` and CPU thread IDs through
+`threads`. Job worker identities belong to their respective job managers.
 Durations do not imply absolute clock alignment or a cross-queue critical path.
 VRAM categories/counters come from their owning subsystems at `end_frame`.
 
