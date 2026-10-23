@@ -86,6 +86,13 @@ fn delayed_workers_and_gpu_keep_origin_frame_and_report_eviction() {
 
 #[test]
 fn ring_overflow_is_bounded_and_explicit() {
+    assert!(
+        Profiler::new(Config {
+            ring_capacity: 3,
+            ..Default::default()
+        })
+        .is_err()
+    );
     let (mut p, _attached) = profiler(1, 2);
     p.begin_frame().unwrap();
     for _ in 0..10 {
@@ -129,6 +136,28 @@ fn tokens_refuse_cross_capture_attachment() {
             .in_scope(|| panic!("must not run on the wrong capture"))
             .is_err()
     );
+}
+
+#[test]
+fn nested_work_for_an_older_frame_has_no_cross_frame_parent() {
+    let (mut p, _attached) = profiler(2, 32);
+    let older = p.begin_frame().unwrap();
+    end(&mut p);
+    p.begin_frame().unwrap();
+    {
+        let _outer = scope("current");
+        older
+            .in_scope(|| {
+                let _old = scope("older");
+            })
+            .unwrap();
+    }
+    end(&mut p);
+    let old = p.profile().frames[0].spans[0];
+    let current = p.profile().frames[1].spans[0];
+    assert_eq!(old.parent, 0);
+    assert_eq!(current.parent, 0);
+    assert_eq!(current.self_ns + old.duration_ns, current.duration_ns);
 }
 
 #[cfg(all(feature = "allocation", not(feature = "tracy")))]

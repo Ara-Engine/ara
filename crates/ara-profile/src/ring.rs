@@ -57,6 +57,10 @@ pub(crate) struct Ring {
 unsafe impl Sync for Ring {}
 impl Ring {
     pub fn new(capacity: usize) -> Self {
+        debug_assert!(
+            capacity.is_power_of_two(),
+            "Profiler validates ring capacity"
+        );
         Self {
             slots: (0..capacity)
                 .map(|_| UnsafeCell::new(MaybeUninit::uninit()))
@@ -74,7 +78,7 @@ impl Ring {
         }
         // SAFETY: this is the sole producer's unpublished slot, not held by the reader.
         unsafe {
-            (*self.slots[write % self.slots.len()].get()).write(span);
+            (*self.slots[write & (self.slots.len() - 1)].get()).write(span);
         }
         self.write.store(write.wrapping_add(1), Ordering::Release);
     }
@@ -84,7 +88,7 @@ impl Ring {
             return None;
         }
         // SAFETY: acquire observed an initialized slot; producer cannot reuse it yet.
-        let span = unsafe { (*self.slots[read % self.slots.len()].get()).assume_init_read() };
+        let span = unsafe { (*self.slots[read & (self.slots.len() - 1)].get()).assume_init_read() };
         self.read.store(read.wrapping_add(1), Ordering::Release);
         Some(span)
     }
@@ -95,6 +99,7 @@ struct Active {
     name: Name,
     id: u64,
     parent: u64,
+    tree_parent: u64,
     start: u64,
     children: u64,
     allocated: u64,
@@ -148,11 +153,18 @@ pub(crate) fn begin(name: Name, display: &str) -> Option<u64> {
             .checked_sub(1)
             .and_then(|i| p.stack[i].as_ref())
             .map_or(0, |s| s.id);
+        let tree_parent = p
+            .depth
+            .checked_sub(1)
+            .and_then(|i| p.stack[i].as_ref())
+            .filter(|s| s.frame == frame)
+            .map_or(0, |s| s.id);
         p.stack[p.depth] = Some(Active {
             frame,
             name,
             id: p.next,
             parent,
+            tree_parent,
             start: p.control.now(),
             children: 0,
             allocated: local_bytes(),
@@ -204,7 +216,7 @@ pub(crate) fn end(id: u64) {
             frame: active.frame,
             name: active.name,
             id,
-            parent: active.parent,
+            parent: active.tree_parent,
             start: active.start,
             duration,
             self_ns: duration.saturating_sub(active.children),
@@ -238,17 +250,16 @@ impl SpanGuard {
 }
 impl Drop for SpanGuard {
     fn drop(&mut self) {
-        if let Some(id) = self.id {
-            if PRODUCER
+        if let Some(id) = self.id
+            && PRODUCER
                 .try_with(|p| {
                     p.borrow()
                         .as_ref()
                         .is_some_and(|p| p.control.id == self.owner)
                 })
                 .unwrap_or(false)
-            {
-                end(id);
-            }
+        {
+            end(id);
         }
     }
 }

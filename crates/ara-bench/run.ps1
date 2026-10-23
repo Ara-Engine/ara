@@ -21,6 +21,9 @@ try {
     $layers = Join-Path $TargetDir 'empty-vulkan-layers'
     New-Item -ItemType Directory -Force -Path $layers | Out-Null
     $env:VK_IMPLICIT_LAYER_PATH = $layers
+    # Windows PowerShell 5 turns redirected native stderr into ErrorRecords.
+    # Cargo reports progress there even on success; check its exit code explicitly.
+    $ErrorActionPreference = 'Continue'
     if ($Mode -eq 'Overhead') {
         foreach ($features in @('', 'allocation', 'tracy')) {
             $arguments = @('run', '-p', 'ara-bench', '--release', '--example', 'overhead')

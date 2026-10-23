@@ -410,10 +410,16 @@ impl ScriptHost {
             };
             let state: SystemState<(ScriptQuery<'static, 'static>, Res<'static, ScriptTick>)> =
                 (ScriptQueryBuilder(plan), ParamBuilder).build_state(world);
-            let system =
-                state.build_system(|mut q: ScriptQuery<'_, '_>, tick: Res<'_, ScriptTick>| {
+            #[cfg(feature = "profiling")]
+            let profile =
+                tracing::info_span!(target: "ara_profile", "system", name = s.name.as_str());
+            let system = state.build_system(
+                move |mut q: ScriptQuery<'_, '_>, tick: Res<'_, ScriptTick>| {
+                    #[cfg(feature = "profiling")]
+                    let _profile = profile.enter();
                     q.run(&tick.0)
-                });
+                },
+            );
             let conflicts = |a: &registry::SystemDecl, b: &registry::SystemDecl| {
                 let clash = |x: &[(u32, bool)], y: &[(u32, bool)]| {
                     x.iter()

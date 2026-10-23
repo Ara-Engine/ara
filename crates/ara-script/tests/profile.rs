@@ -10,8 +10,18 @@ fn compile_server_report_stays_separate_from_tick_cpu_time() {
     let frame = profiler.begin_frame().unwrap();
     let report = ara_script::abi::ReloadReport {
         module: 7,
+        kind: ara_script::abi::RELOAD_L3,
+        escalation: 0,
+        generation: 1,
+        delta_count: 0,
+        changed_members: 0,
+        error_count: 0,
+        hot: 1,
         server_us: 1234,
-        ..Default::default()
+        t_received: 100,
+        t_staged: 200,
+        t_applied: 300,
+        bytes: 32,
     };
     ara_script::Boundary {
         reloaded: true,

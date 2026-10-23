@@ -81,3 +81,46 @@ fn paired_rounds_reverse_order_reset_and_correlate_ranges() {
     );
     ThreadRegistration::detach();
 }
+
+#[test]
+fn simulation_reports_the_registered_system_name() {
+    use tracing_subscriber::prelude::*;
+    let mut profiler = Profiler::new(Config {
+        history: 1,
+        ..Default::default()
+    })
+    .unwrap();
+    profiler.register_thread("simulation").attach().unwrap();
+    profiler.start();
+    let subscriber = tracing_subscriber::registry().with(ara_profile::ProfileLayer);
+    tracing::subscriber::with_default(subscriber, || {
+        let mut schema = ara_schema::SchemaDb::new();
+        ara_doc::register(&mut schema);
+        ara_components::register(&mut schema);
+        let document = ara_doc::read(
+            r#"{"$schema":"ara://schema/scene/1","id":"sc_profile1","records":{}}"#,
+            "test.scene",
+            &schema,
+            None,
+        )
+        .doc
+        .unwrap();
+        let world =
+            ara_sim::EditWorld::new(ara_sim::SimRegistry::new(schema).unwrap(), document).unwrap();
+        let mut simulation =
+            ara_sim::Session::local(world, Default::default(), 1, Default::default()).unwrap();
+        simulation.add_system("movement", || {}).unwrap();
+        profiler.begin_frame().unwrap();
+        simulation.step().unwrap();
+        profiler
+            .end_frame(Default::default(), Default::default())
+            .unwrap();
+    });
+    assert!(
+        profiler.profile().frames[0]
+            .spans
+            .iter()
+            .any(|span| profiler.profile().labels[span.label as usize] == "movement")
+    );
+    ThreadRegistration::detach();
+}

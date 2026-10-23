@@ -90,6 +90,9 @@ impl Service for ProfileService {
             let p: CompareParams = parse(params)?;
             let _ = p.session;
             let baseline = summary(&p.baseline)?;
+            if p.current.is_none() {
+                cx.st.profiler.collect();
+            }
             let current = match p.current {
                 Some(text) => summary(&text)?,
                 None => cx
@@ -117,7 +120,11 @@ impl Service for ProfileService {
         let p: ProfileParams = parse(params)?;
         let _ = p.session;
         let budget = SummaryBudget {
-            top_n: p.top_n.unwrap_or(20) as usize,
+            top_n: if method == "profile.hitches" {
+                0
+            } else {
+                p.top_n.unwrap_or(20) as usize
+            },
             hitches: p.limit.unwrap_or(5) as usize,
             max_bytes: p.max_bytes.unwrap_or(16_384) as usize,
         };

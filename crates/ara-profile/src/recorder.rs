@@ -20,7 +20,7 @@ pub struct Config {
     pub history: usize,
     /// CPU records retained per frame across all threads.
     pub spans_per_frame: usize,
-    /// Records queued per registered thread between collections.
+    /// Records queued per thread; must be a nonzero power of two.
     pub ring_capacity: usize,
     /// Maximum GPU passes retained per frame.
     pub gpu_passes: usize,
@@ -122,7 +122,7 @@ impl Profiler {
             || config.history > 10_000
             || config.spans_per_frame == 0
             || config.spans_per_frame > 1_000_000
-            || config.ring_capacity == 0
+            || !config.ring_capacity.is_power_of_two()
             || config.ring_capacity > 1_000_000
             || config.gpu_passes > 65_536
             || config.budget_ns == 0
