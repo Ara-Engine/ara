@@ -28,12 +28,19 @@ pub struct PreparedStreamEntity {
     identity: String,
     record: Record,
     signature: [u8; 32],
+    staged_bytes: usize,
 }
 
 impl PreparedStreamEntity {
     /// Stable lookup key; moving a row between cells does not change it.
     pub fn identity(&self) -> &str {
         &self.identity
+    }
+
+    /// Conservative owned staging footprint, including materialized schema defaults.
+    /// Hosts add ECS/mapping and source-buffer reservations before admitting a cell.
+    pub fn staged_bytes(&self) -> usize {
+        self.staged_bytes
     }
 }
 
@@ -68,10 +75,17 @@ impl SimRegistry {
                 )));
             }
         }
+        let staged_bytes = std::mem::size_of::<PreparedStreamEntity>()
+            + identity.capacity()
+            + complete
+                .iter()
+                .map(|(key, value)| 96 + key.capacity() + value_bytes(value))
+                .sum::<usize>();
         Ok(PreparedStreamEntity {
             identity,
             record: complete,
             signature: self.stream_signature,
+            staged_bytes,
         })
     }
 }
@@ -123,6 +137,7 @@ impl StreamingBoundary<'_> {
             identity,
             mut record,
             signature: _,
+            staged_bytes: _,
         } = entity;
         let metadata = SceneMetadata {
             name: record
@@ -193,4 +208,20 @@ impl StreamingBoundary<'_> {
             StreamChange::Despawn { identity } => self.despawn(&identity),
         }
     }
+}
+
+fn value_bytes(value: &Value) -> usize {
+    std::mem::size_of::<Value>()
+        + match value {
+            Value::String(text) => text.capacity(),
+            Value::Array(values) => {
+                values.capacity() * std::mem::size_of::<Value>()
+                    + values.iter().map(value_bytes).sum::<usize>()
+            }
+            Value::Object(fields) => fields
+                .iter()
+                .map(|(key, value)| 96 + key.capacity() + value_bytes(value))
+                .sum(),
+            _ => 0,
+        }
 }

@@ -36,7 +36,9 @@ before unloading (streaming never stores authoritative gameplay in this crate).
 
 Reservations cover in-flight, prepared, resident and retiring cells. Worker
 transient buffers are separately limited to one eighth of the cell reservation.
-Rows over 16 KiB are rejected; move bulky data to assets. Retire cells on workers;
+Materialized rows over 16 KiB are rejected; move bulky data to assets. Decoded
+source rows, schema defaults and HLOD metadata count toward admission too.
+Retire cells on workers;
 release reservations only after destruction acknowledgement. A failed cell needs
 an explicit retry. Schema/file generation changes require a new source/pool;
 retain the last good generation until its D20 application boundary.

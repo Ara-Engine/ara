@@ -143,29 +143,43 @@ fn load(
     blob.validate()?; // Validate custom sources too, not just file-backed sources.
     let mut prepared = VecDeque::with_capacity(blob.entities.len());
     let mut identities = Vec::with_capacity(blob.entities.len());
-    let mut charge = std::mem::size_of::<LoadedCell>();
+    // Reserve decoded input too: it coexists with prepared rows while cooking.
+    let mut charge = std::mem::size_of::<LoadedCell>()
+        + blob.entities.capacity() * std::mem::size_of::<crate::CellEntity>()
+        + blob
+            .entities
+            .iter()
+            .map(|row| row.identity.capacity() + record_bytes(&row.record))
+            .sum::<usize>()
+        + blob.proxies.capacity() * std::mem::size_of::<crate::HlodProxy>()
+        + blob
+            .proxies
+            .iter()
+            .map(|proxy| proxy.asset.capacity())
+            .sum::<usize>();
+    if charge > limit {
+        return Err(invalid("decoded cell exceeds memory reservation"));
+    }
     for row in std::mem::take(&mut blob.entities) {
         // Includes retained identity/mapping nodes, prepared values and ECS overhead.
-        let row_bytes = row
-            .record
-            .iter()
-            .map(|(key, value)| 96 + key.capacity() + value_bytes(value))
-            .sum::<usize>();
+        let identity = row.identity.to_owned();
+        let entity = registry.prepare_stream_entity(row.identity, row.record)?;
+        let row_bytes = entity.staged_bytes();
         if row_bytes > 16 * 1024 {
             return Err(invalid(
                 "streamed row exceeds 16 KiB; move large data into cooked assets",
             ));
         }
         charge = charge
-            .checked_add(1024 + row.identity.len() * 4 + row_bytes * 3)
+            .checked_add(1024 + identity.capacity() * 2 + row_bytes)
             .ok_or_else(|| invalid("cell memory accounting overflow"))?;
         if charge > limit {
             return Err(invalid(
                 "cell exceeds reserved memory; split it or raise cell reservation",
             ));
         }
-        identities.push(row.identity.to_owned());
-        prepared.push_back(registry.prepare_stream_entity(row.identity, row.record)?);
+        identities.push(identity);
+        prepared.push_back(entity);
     }
     Ok(LoadedCell {
         blob,
@@ -173,6 +187,13 @@ fn load(
         identities,
         charge,
     })
+}
+
+fn record_bytes(record: &ara_doc::Record) -> usize {
+    record
+        .iter()
+        .map(|(key, value)| 96 + key.capacity() + value_bytes(value))
+        .sum()
 }
 
 fn value_bytes(value: &serde_json::Value) -> usize {
@@ -205,3 +226,56 @@ fn lower_priority() {
 }
 #[cfg(not(windows))]
 fn lower_priority() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CellEntity, CellKey, HlodProxy};
+    use serde_json::json;
+
+    struct Source(CellBlob);
+    impl CellSource for Source {
+        fn load(&self, _: &str, _: usize) -> Result<CellBlob> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn admission_counts_materialized_defaults_and_hlod_metadata() {
+        let mut schema = ara_schema::SchemaDb::new();
+        crate::register(&mut schema);
+        assert!(schema.add_json_types(&json!({"$schema":"ara://schema/types/1","types":{"Bulk":{"kind":"component","doc":"A large authored default.","fields":{"payload":{"type":"string","doc":"Default bytes.","default":"a".repeat(17_000)}}}}})).is_empty());
+        let registry = SimRegistry::new(schema).expect("valid schema");
+        let blob = CellBlob {
+            cell: "c_a".into(),
+            key: CellKey {
+                x: 0,
+                z: 0,
+                slot: 0,
+            },
+            schema: crate::cook::schema_hash(registry.schema()),
+            entities: vec![CellEntity {
+                identity: "e_a".into(),
+                record: serde_json::from_value(json!({"Bulk":{}})).expect("record"),
+            }],
+            proxies: Vec::new(),
+        };
+        let result = load(&Source(blob.clone()), &registry, "c_a", 1024 * 1024);
+        assert!(matches!(result,Err(crate::Error::Invalid(message)) if message.contains("16 KiB")));
+        let mut proxies = blob;
+        proxies.entities.clear();
+        proxies.proxies = vec![
+            HlodProxy {
+                asset: "@hlod/proxy.mesh#ms_proxy".into(),
+                min: [0.0; 3],
+                max: [1.0; 3],
+                error: 0.5
+            };
+            400
+        ];
+        let result = load(&Source(proxies), &registry, "c_a", 20_000);
+        assert!(
+            matches!(result,Err(crate::Error::Invalid(message)) if message.contains("decoded cell"))
+        );
+    }
+}
