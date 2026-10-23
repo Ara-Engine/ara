@@ -24,6 +24,7 @@ use bevy_ecs::prelude::{IntoScheduleConfigs, Mut, Res, Resource};
 use bevy_ecs::schedule::{MultiThreadedExecutor, Schedule, SystemSet};
 use bevy_ecs::system::{ParamBuilder, SystemParamBuilder, SystemState};
 use bevy_ecs::world::World;
+use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
 use bevy_tasks::{ComputeTaskPool, TaskPoolBuilder};
 use serde_json::{Value, json};
 
@@ -247,17 +248,18 @@ impl ScriptHost {
         world: &mut World,
         register: bool,
         journal: Option<&mut ctx::Journal>,
-        f: impl FnOnce(&ScriptApi) -> R,
+        f: impl FnOnce(&ScriptApi, UnsafeWorldCell<'_>) -> R,
     ) -> R {
+        let cell = world.as_unsafe_world_cell();
         let mut scope = Scope {
-            world: world.as_unsafe_world_cell(),
+            world: cell,
             registry: &raw mut self.registry,
             journal: journal.map(std::ptr::from_mut),
             thread: std::thread::current().id(),
             register,
         };
         let api = &self.api;
-        self.ctx.with_scope(&mut scope, || f(api))
+        self.ctx.with_scope(&mut scope, || f(api, cell))
     }
 
     /// Loads modules (compiled by the compile server when configured, otherwise from
@@ -278,7 +280,7 @@ impl ScriptHost {
             })).collect::<Vec<_>>(),
         })
         .to_string();
-        let rc = self.exclusive(world, true, None, |api| {
+        let rc = self.exclusive(world, true, None, |api, _| {
             // SAFETY: the JSON span is valid for the call; world access is published.
             unsafe {
                 (api.load_modules)(
@@ -313,7 +315,7 @@ impl ScriptHost {
         let mut out = Boundary::default();
         if pending {
             let tick = self.tick;
-            let flags = self.exclusive(world, true, None, |api| {
+            let flags = self.exclusive(world, true, None, |api, _| {
                 // SAFETY: no C# code is running; world access is published for registration.
                 unsafe { (api.tick_boundary)(&tick) }
             });
@@ -429,7 +431,7 @@ impl ScriptHost {
     /// Runs one fixed tick: C# systems in parallel, then the behaviour phase.
     pub fn run_tick(&mut self, world: &mut World, tick: Tick) {
         self.tick = tick;
-        world.insert_resource(ScriptTick(tick));
+        world.resource_mut::<ScriptTick>().0 = tick;
         if let Some(schedule) = self.schedule.as_mut() {
             schedule.run(world);
         }
@@ -447,9 +449,9 @@ impl ScriptHost {
             return;
         }
         let this_run = world.change_tick();
-        self.phase_buf.reset(world.entity_allocator());
         let tick = self.tick;
         let cell = world.as_unsafe_world_cell();
+        self.phase_buf.reset(cell.entity_allocator());
         let mut scope = Scope {
             world: cell,
             registry: &raw mut self.registry,

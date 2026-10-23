@@ -64,6 +64,8 @@ internal sealed class ModuleSession : IDisposable
     EmitBaseline? _baseline;
     GeneratorDriver _driver = ModuleCompiler.Driver();
     bool _hot;
+    /// <summary>A build has succeeded: <see cref="_final"/> and the baseline exist.</summary>
+    bool _built;
     uint _generation;
     int _sizeLevel;
     readonly SyntaxTree _usings = ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings);
@@ -238,6 +240,7 @@ internal sealed class ModuleSession : IDisposable
         SendDiagnostics(problems, t0);
         if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return false;
         _final = final;
+        _built = true;
         _generated = gen;
         _baseline = _hot ? ModuleCompiler.Baseline(final, image) : null;
         phases.Mark("baseline");
@@ -375,7 +378,7 @@ internal sealed class ModuleSession : IDisposable
         // Body-only edits cannot change the generator's output (it reads declarations,
         // attributes and doc comments only), so L1 skips the generator and keeps the
         // generated trees: the edited user trees are swapped into the last final compilation.
-        var escalation = !_enc || !_hot ? Escalation.Cold : Escalation.None;
+        var escalation = !_enc || !_hot ? Escalation.Cold : !_built ? Escalation.Requested : Escalation.None;
         List<BodyEdit> bodyEdits = [];
         if (escalation == Escalation.None) (escalation, bodyEdits) = EditClassifier.Classify(changes);
         if (escalation == Escalation.None && EditClassifier.DocsChanged(changes)) escalation = Escalation.Generated;

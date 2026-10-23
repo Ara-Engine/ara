@@ -123,7 +123,6 @@ impl ScriptHost {
         }
         let mut journal = Journal::default();
         let mut buf = CmdBuf::default();
-        buf.reset(world.entity_allocator());
         let tick = self.tick;
         let mut call = CommandCall {
             command: decl.id,
@@ -132,11 +131,14 @@ impl ScriptHost {
             tick: &tick,
             sequence: self.sequence,
             caller: caller.map_or(value::NULL_ENTITY, Entity::to_bits),
-            commands: std::ptr::from_mut(&mut buf).cast(),
+            commands: std::ptr::null_mut(), // set once the buffer is bound to the published world
             reason: [0; 64],
         };
         self.sequence += 1;
-        let rc = self.exclusive(world, false, Some(&mut journal), |api| {
+        let rc = self.exclusive(world, false, Some(&mut journal), |api, cell| {
+            // The allocator comes from the published cell, which stays valid for the call.
+            buf.reset(cell.entity_allocator());
+            call.commands = std::ptr::from_mut(&mut buf).cast();
             // SAFETY: `call` and everything it points at live for the call; world access is published.
             unsafe { (api.run_command)(&mut call) }
         });
