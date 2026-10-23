@@ -1,0 +1,6 @@
+sample 1: TotalTime: 993 | first C# call at 64.31 ms
+sample 2: TotalTime: 2299 | first C# call at 11.73 ms
+sample 3: TotalTime: 1018 | first C# call at 112.71 ms
+sample 4: TotalTime: 914 | first C# call at 41.95 ms
+sample 5: TotalTime: 2773 | first C# call at 13.77 ms
+sample 6: TotalTime: 1964 | first C# call at 31.72 ms

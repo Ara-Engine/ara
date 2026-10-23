@@ -1,0 +1,14 @@
+{"message":"started","stage":"template","t_ms":0.9,"type":"progress"}
+{"detail":null,"ms":465.9,"stage":"template","t_ms":466.8,"type":"stage"}
+{"message":"started","stage":"script","t_ms":466.9,"type":"progress"}
+{"detail":null,"ms":4443.2,"stage":"script","t_ms":4910.1,"type":"stage"}
+{"message":"started","stage":"pack","t_ms":4910.1,"type":"progress"}
+{"bytes":8364,"detail":{"file_blake3":"3bad8b0b76a7d04a395ba1aeb92e8861342d558538291c828c0a5f78c3f3a923","pack_id":"c7d225613f3fe424ee65625e6d27f9afdf2298cdab06b767f33ea42c9af50735","profile":"desktop"},"kind":"pack","path":"C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-72aedab3\\spikes\\s7-export\\out\\linux-aot-cross\\game.arapack","t_ms":4911.3,"type":"artifact"}
+{"detail":null,"ms":1.2,"stage":"pack","t_ms":4911.4,"type":"stage"}
+{"message":"started","stage":"assemble","t_ms":4911.4,"type":"progress"}
+{"detail":null,"ms":6.8,"stage":"assemble","t_ms":4918.2,"type":"stage"}
+{"message":"started","stage":"audit","t_ms":4918.2,"type":"progress"}
+{"detail":null,"ms":555.1,"stage":"audit","t_ms":5473.4,"type":"stage"}
+{"message":"started","stage":"verify","t_ms":5473.4,"type":"progress"}
+{"detail":null,"ms":467.2,"stage":"verify","t_ms":5940.6,"type":"stage"}
+{"result":{"built_on":"windows","clean":false,"dist":"C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-72aedab3\\spikes\\s7-export\\dist\\linux-aot-cross","glibc":{"ara-player":"GLIBC_2.30","game/Game.so":"GLIBC_2.29"},"lane":"linux-aot-cross","sizes":{"mods_bytes":4096,"pack_bytes":8364,"script_bytes":1860960,"template_bytes":675728,"total_bytes":2549214},"stages":[{"ms":465.9,"stage":"template"},{"ms":4443.2,"stage":"script"},{"ms":1.2,"stage":"pack"},{"ms":6.8,"stage":"assemble"},{"ms":555.1,"stage":"audit"},{"ms":467.2,"stage":"verify"}],"total_ms":5941.8,"verify":{"pass":true,"report":{"bench":null,"checksum_cs":"0x825f3722a803f55c","checksum_rust":"0x825f3722a803f55c","entities":100000,"fault_contained":true,"lane":"nativeaot","mod_status":2,"pack_bytes":8364,"pack_id":"c7d225613f3fe424ee65625e6d27f9afdf2298cdab06b767f33ea42c9af50735","platform":"linux-x86_64","startup":{"content_ms":0.129937,"first_cs_call_ms":4.64192,"pack_open_ms":0.070845,"script_load_ms":0.217583,"spawn_ms":3.22584,"spawn_to_first_cs_call_ms":null},"texture":"64x64 rgba8 blake3:05dcad7d3bf73177","tick":{"cs_mean_ms":0.22688482500000004,"cs_min_ms":0.16649699999999998,"cs_ns_per_entity":1.6649699999999996,"rust_ns_per_entity":1.19828},"ticks":120,"verified":true}}},"t_ms":5941.8,"type":"result"}

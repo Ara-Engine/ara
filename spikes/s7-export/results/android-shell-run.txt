@@ -1,0 +1,4 @@
+adb shell run of ara-player (x86_64-linux-android executable) + libgame NativeAOT on emulator API 37.2, 16 KB pages:
+16384
+x86_64
+ARA_RESULT {"platform":"android-x86_64","lane":"nativeaot","pack_id":"302568c6c81d99e2ab2fdd4bc0968ebecd7a9bee1e784d2b6fc5cfe7ee36f63e","pack_bytes":8364,"texture":"64x64 rgba8 blake3:05dcad7d3bf73177","entities":100000,"ticks":120,"checksum_cs":"0x825f3722a803f55c","checksum_rust":"0x825f3722a803f55c","verified":true,"fault_contained":true,"mod_status":null,"startup":{"pack_open_ms":0.3929,"content_ms":1.5952,"spawn_ms":17.8305,"script_load_ms":0.7904,"first_cs_call_ms":28.0461,"spawn_to_first_cs_call_ms":null},"tick":{"cs_mean_ms":0.4017666666666667,"cs_min_ms":0.1812,"cs_ns_per_entity":1.812,"rust_ns_per_entity":1.495},"bench":{"iters":10000000,"rust_to_cs_ns":11.45145,"cs_to_rust_ns":22.34994,"cs_to_rust_fast_ns":2.99105}}

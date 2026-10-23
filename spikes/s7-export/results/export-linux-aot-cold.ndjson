@@ -1,0 +1,15 @@
+{"message":"started","stage":"template","t_ms":57.2,"type":"progress"}
+{"detail":null,"ms":18452.1,"stage":"template","t_ms":18509.4,"type":"stage"}
+{"message":"started","stage":"script","t_ms":18509.5,"type":"progress"}
+{"detail":null,"ms":5409.1,"stage":"script","t_ms":23918.6,"type":"stage"}
+{"message":"started","stage":"pack","t_ms":23918.6,"type":"progress"}
+{"bytes":8364,"detail":{"file_blake3":"3bad8b0b76a7d04a395ba1aeb92e8861342d558538291c828c0a5f78c3f3a923","pack_id":"c7d225613f3fe424ee65625e6d27f9afdf2298cdab06b767f33ea42c9af50735","profile":"desktop"},"kind":"pack","path":"C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-72aedab3\\spikes\\s7-export\\out\\linux-aot\\game.arapack","t_ms":23920.2,"type":"artifact"}
+{"detail":null,"ms":1.7,"stage":"pack","t_ms":23920.4,"type":"stage"}
+{"message":"started","stage":"assemble","t_ms":23920.4,"type":"progress"}
+{"detail":null,"ms":14.0,"stage":"assemble","t_ms":23934.4,"type":"stage"}
+{"message":"started","stage":"audit","t_ms":23934.4,"type":"progress"}
+{"detail":null,"ms":395.3,"stage":"audit","t_ms":24329.7,"type":"stage"}
+{"code":"ARA-EXP-LNX-010","context":{"files":[["ara-player","GLIBC_2.34"],["game/Game.so","GLIBC_2.34"]]},"fixes":[{"kind":"doc","run":"Build Linux templates (and NativeAOT images) against a glibc 2.31 sysroot: sniper SDK container, or zig cc -target x86_64-linux-gnu.2.31"}],"message":"needs glibc 2.34; Steam Runtime 3 (sniper) provides 2.31","stage":"audit","t_ms":24329.7,"type":"warning"}
+{"message":"started","stage":"verify","t_ms":24329.7,"type":"progress"}
+{"detail":null,"ms":181.0,"stage":"verify","t_ms":24510.7,"type":"stage"}
+{"result":{"built_on":"wsl","clean":true,"dist":"C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-72aedab3\\spikes\\s7-export\\dist\\linux-aot","glibc":{"ara-player":"GLIBC_2.34","game/Game.so":"GLIBC_2.34"},"lane":"linux-aot","sizes":{"mods_bytes":4096,"pack_bytes":8364,"script_bytes":1864792,"template_bytes":653360,"total_bytes":2530678},"stages":[{"ms":18452.1,"stage":"template"},{"ms":5409.1,"stage":"script"},{"ms":1.7,"stage":"pack"},{"ms":14.0,"stage":"assemble"},{"ms":395.3,"stage":"audit"},{"ms":181.0,"stage":"verify"}],"total_ms":24511.6,"verify":{"pass":true,"report":{"bench":null,"checksum_cs":"0x825f3722a803f55c","checksum_rust":"0x825f3722a803f55c","entities":100000,"fault_contained":true,"lane":"nativeaot","mod_status":2,"pack_bytes":8364,"pack_id":"c7d225613f3fe424ee65625e6d27f9afdf2298cdab06b767f33ea42c9af50735","platform":"linux-x86_64","startup":{"content_ms":0.14228,"first_cs_call_ms":3.951811,"pack_open_ms":0.074982,"script_load_ms":0.34511600000000003,"spawn_ms":2.535379,"spawn_to_first_cs_call_ms":null},"texture":"64x64 rgba8 blake3:05dcad7d3bf73177","tick":{"cs_mean_ms":0.27515333333333325,"cs_min_ms":0.17417100000000002,"cs_ns_per_entity":1.7417100000000003,"rust_ns_per_entity":1.28224},"ticks":120,"verified":true}}},"t_ms":24511.6,"type":"result"}
