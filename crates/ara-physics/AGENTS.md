@@ -36,8 +36,8 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
    the ECS/RNG/input checkpoint at the same
    completed tick. Restore the simulation's other state, then `restore_ecs` before replay.
 4. Treat PhysicsWorld, the private integration cache, PhysicsCommands and PhysicsStatus as
-   external infrastructure owned by this checkpoint provider. ara-sim's unmerged strict
-   snapshot implementation needs an external-provider/exclusion hook for these resources;
+   external infrastructure owned by this checkpoint provider. Register an ara-sim
+   StateProvider and exclude these resources from its strict ECS snapshot;
    serializing only the registered ECS values is insufficient for native rollback.
    `infrastructure_type_ids::<B>()` exposes all four resource TypeIds to that hook.
 5. Restore requires identical native structure. For lifecycle changes, reconstruct the

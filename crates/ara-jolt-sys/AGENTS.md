@@ -6,8 +6,8 @@ No CMake, bindgen, build-time download, or prebuilt library is involved.
 
 ## API and ownership
 
-- `src/lib.rs` and `src/types.rs` are the ABI declaration sources. Run `python generate_abi.py` after
-  changing it, then rustfmt. This regenerates the C header and layout probes.
+- `src/lib.rs` and `src/types.rs` are the ABI declaration sources. Keep the C
+  header and layout probes in sync when changing them; builds need no generator.
 - A world owns every shape, character, vehicle and constraint. Body handles carry
   Jolt's generation. Character/vehicle/joint slots are never reused.
 - Pointer/count pairs are borrowed only for a synchronous call. No callback enters Rust.

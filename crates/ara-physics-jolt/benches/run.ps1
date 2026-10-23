@@ -26,6 +26,7 @@ function Build-Bench([string]$Name, [string[]]$Features, [string]$Bench = 'perfo
 if (-not $RunOnly) {
     Build-Bench 'deterministic' @('--features', 'bench')
     Build-Bench 'scale' @('--features', 'bench') 'scale'
+    Build-Bench 'ecs-bowl' @('--features', 'bench') 'ecs_bowl'
     Build-Bench 'fast' @('--no-default-features', '--features', 'bench')
     Build-Bench 'profile' @('--features', 'profile')
 }

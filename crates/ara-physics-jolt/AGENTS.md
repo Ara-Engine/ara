@@ -58,6 +58,10 @@ Set `CARGO_BUILD_JOBS=2`; on the shared host also use `RUST_TEST_THREADS=2`.
 - `benches/run.ps1` builds deterministic, fast and instrumented executables before
   running them sequentially. `performance` alternates Ara/direct C++ every tick,
   records host load, verifies final states and measures native scratch fallback.
+- `benches/ecs-bowl.ps1` extends a completed matrix with complete 20k bowl ECS
+  phase timings versus native Update for every preset. Both clear frame trackers;
+  listeners remain off to match the solver fixtures. Full ECS costs exceed the
+  update shim's 3% budget; see benches/RESULTS.md for measured scope and gaps.
 - `cargo test -p ara-physics-jolt --features bench --test performance_contract`
   additionally compares the spatial character tree with the original Jolt scan
   through crowd motion, crouching, removal and snapshot restore.
