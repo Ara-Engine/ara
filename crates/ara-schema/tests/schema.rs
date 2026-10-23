@@ -314,3 +314,69 @@ fn normalization_renames_and_upgrades() {
     assert!(!db.normalize_component(get(&db, "Health"), 3, &mut v, "Health", &mut out));
     assert_eq!(out[0].code, codes::NEWER_VERSION);
 }
+
+#[test]
+fn struct_layout_follows_c_rules() {
+    let mut db = SchemaDb::new();
+    let problems = db.add_json_types(&json!({
+        "$schema": "ara://schema/types/1",
+        "types": {
+            "Mode": { "kind": "enum", "doc": "A mode.", "variants": {
+                "idle": { "doc": "Idle." }, "busy": { "doc": "Busy." } } },
+            "Probe": { "kind": "component", "doc": "Layout probe.", "fields": {
+                "flag": { "type": "bool", "doc": "1 byte." },
+                "hp": { "type": "u16", "doc": "2 bytes, aligned to 2." },
+                "owner": { "type": "entity", "doc": "8 bytes, aligned to 8." },
+                "mode": { "type": "Mode", "doc": "Enum: u32 variant index." },
+                "at": { "type": "vec3", "doc": "12 bytes, aligned to 4." } } },
+            "Named": { "kind": "component", "doc": "Has a name.", "fields": {
+                "name": { "type": "string", "doc": "Not blittable." } } }
+        }
+    }));
+    assert!(problems.is_empty(), "{problems:?}");
+    let probe = db.struct_layout("Probe").expect("blittable");
+    let offsets: Vec<(&str, usize)> = probe
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), f.offset))
+        .collect();
+    assert_eq!(
+        offsets,
+        [
+            ("flag", 0),
+            ("hp", 2),
+            ("owner", 8),
+            ("mode", 16),
+            ("at", 20)
+        ]
+    );
+    assert_eq!((probe.size, probe.align), (32, 8));
+    let err = db
+        .struct_layout("Named")
+        .expect_err("strings are not blittable");
+    assert!(err.contains("`Named.name`"), "{err}");
+}
+
+#[test]
+fn runtime_types_can_be_replaced_and_resources_round_trip() {
+    let mut db = SchemaDb::new();
+    let def = |doc: &str| {
+        json!({
+            "$schema": "ara://schema/types/1",
+            "types": { "Rules": { "kind": "resource", "doc": doc, "aliases": ["OldRules"],
+                "fields": { "gravity": { "type": "f32", "doc": "Downward acceleration.",
+                    "unit": "m/s2", "default": 9.81 } } } }
+        })
+    };
+    assert!(db.add_json_types(&def("Game rules.")).is_empty());
+    assert_eq!(get(&db, "Rules").kind_name(), "resource");
+    let exported = db.reflection()["types"]["Rules"].clone();
+    assert_eq!(exported["kind"], "resource");
+    // A module reload replaces the definition: remove, then add again.
+    let old = db.remove("Rules").expect("registered");
+    assert_eq!(old.doc, "Game rules.");
+    assert!(db.lookup("OldRules").is_none(), "aliases go with the type");
+    assert!(db.add_json_types(&def("Game rules, v2.")).is_empty());
+    assert_eq!(get(&db, "Rules").doc, "Game rules, v2.");
+    assert!(db.verify().is_empty());
+}

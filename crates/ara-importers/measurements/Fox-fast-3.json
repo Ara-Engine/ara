@@ -1,0 +1,22 @@
+{
+  "bytes": 1634121,
+  "cacheStoreMs": 101.3432,
+  "coldMs": 128.8241,
+  "cookMs": 27.338,
+  "fixture": "Fox.glb",
+  "peakWorkingSetBytes": 35729408,
+  "preset": "fast",
+  "processCpuMs": 156.25,
+  "quality": {
+    "textures/0-Color.ktx2": 53.10928361374359
+  },
+  "stages": {
+    "compressionMs": 9.7885,
+    "decodeMs": 11.2947,
+    "meshMs": 2.0326,
+    "mipsMs": 1.9845,
+    "validationMs": 0.3193
+  },
+  "threads": "16",
+  "warmMedianMs": 1.1762000000000001
+}

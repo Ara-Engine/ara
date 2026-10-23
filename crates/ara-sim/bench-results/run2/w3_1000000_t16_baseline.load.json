@@ -1,0 +1,146 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:27:02.5267412Z",
+                        "cpuPercent":  25,
+                        "freeKiB":  6217704,
+                        "processes":  [
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "claude",
+                                              "IDProcess":  24124,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "services",
+                                              "IDProcess":  1492,
+                                              "PercentProcessorTime":  13
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "Lunar Client#5",
+                                              "IDProcess":  102184,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "powershell#1",
+                                              "IDProcess":  101772,
+                                              "PercentProcessorTime":  8
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:04.7636385Z",
+                        "cpuPercent":  56,
+                        "freeKiB":  6033644,
+                        "processes":  [
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  66988,
+                                              "PercentProcessorTime":  726
+                                          },
+                                          {
+                                              "Name":  "powershell#2",
+                                              "IDProcess":  104896,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "cargo#1",
+                                              "IDProcess":  47932,
+                                              "PercentProcessorTime":  37
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  33
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  33
+                                          },
+                                          {
+                                              "Name":  "relay_win",
+                                              "IDProcess":  96048,
+                                              "PercentProcessorTime":  24
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  24
+                                          },
+                                          {
+                                              "Name":  "NZXT CAM#4",
+                                              "IDProcess":  100472,
+                                              "PercentProcessorTime":  16
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:06.5343747Z",
+                        "cpuPercent":  7,
+                        "freeKiB":  6260744,
+                        "processes":  [
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  31
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "claude",
+                                              "IDProcess":  24124,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win#1",
+                                              "IDProcess":  73408,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "codex",
+                                              "IDProcess":  77272,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "claude#3",
+                                              "IDProcess":  63100,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win",
+                                              "IDProcess":  96048,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win#2",
+                                              "IDProcess":  40460,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}

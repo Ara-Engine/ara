@@ -1,0 +1,8 @@
+material EmissiveScreen : unlit budget 1 {
+  param screen : TextureColor = @textures/screen.png#tx_screen01;
+  param intensity : float = 3;
+  let uv0 : vec2 = uv();
+  let image : ColorLinear = sampleColor(screen, uv0);
+  let glow : ColorLinear = mul(image, intensity);
+  output color = glow;
+}

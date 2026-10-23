@@ -1,0 +1,9 @@
+material RoundedPanel : ui budget 1 {
+  param panelColor : ColorLinear = linear(0.025, 0.04, 0.07);
+  param size : vec2 = vec2(320, 160);
+  param radius : float = 12;
+  let uv0 : vec2 = uv();
+  let coverage : float = roundedPanel(uv0, size, radius);
+  output color = panelColor;
+  output opacity = coverage;
+}

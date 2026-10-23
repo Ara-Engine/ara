@@ -1,0 +1,320 @@
+use crate::{settings::*, targets::*, view::FidelityView};
+use anyhow::Result;
+use ara_gpu::{
+    Access, Queue, Resource, RootConstants,
+    vulkan::{Command, VulkanDevice},
+};
+use ara_render::graph::{Graph, State};
+
+impl FidelityView {
+    /// Execute graph-declared passes and publish a completed offscreen output.
+    /// No compiler, image readback or wall-clock sampling runs in this method.
+    pub fn render(&mut self, gpu: &mut VulkanDevice, input: &FrameInput<'_>) -> Result<()> {
+        let (frame, vp, camera) = self.frame(input)?;
+        gpu.upload(self.frame_buffer, bytemuck::bytes_of(&frame))?;
+        let mut graph = Graph::default();
+        let ids = self
+            .targets
+            .images
+            .iter()
+            .zip(&self.targets.states)
+            .map(|(i, s)| graph.import(Resource::Image(*i), *s))
+            .collect::<Vec<_>>();
+        let probes =
+            [0, 1].map(|i| graph.import(Resource::Buffer(self.probes[i]), self.probe_states[i]));
+        let exposure = graph.import(Resource::Buffer(self.exposure), self.exposure_state);
+        let mut shared = self
+            .scene
+            .resources()
+            .into_iter()
+            .map(|(r, a)| {
+                (
+                    graph.import(
+                        r,
+                        State {
+                            access: a,
+                            queue: Queue::Graphics,
+                        },
+                    ),
+                    a,
+                )
+            })
+            .collect::<Vec<_>>();
+        let f = graph.import(
+            Resource::Buffer(self.frame_buffer),
+            State {
+                access: Access::HostWrite,
+                queue: Queue::Graphics,
+            },
+        );
+        shared.push((f, Access::ShaderRead));
+        let lut = graph.import(
+            Resource::Image(self.lut),
+            State {
+                access: Access::ShaderRead,
+                queue: Queue::Graphics,
+            },
+        );
+        let mut recipes = Vec::new();
+        let render = self.settings.render_size;
+        let display = self.settings.display_size;
+        let dispatch = [render[0].div_ceil(8), render[1].div_ceil(8), 1];
+        let mut add = |name: &str,
+                       pipeline: &'static str,
+                       arg: u32,
+                       groups: [u32; 3],
+                       uses: Vec<_>|
+         -> Result<()> {
+            let id = graph.pass(name, Queue::Graphics, uses);
+            graph.accesses(id, shared.iter().copied())?;
+            recipes.push((id, pipeline, arg, groups));
+            Ok(())
+        };
+        let slot = self.slot;
+        let previous = 1 - slot;
+        let reset = input.reset || !self.history;
+        let rt = self.settings.tier == Tier::Rt;
+        let reference = matches!(self.settings.mode, Mode::Reference { .. });
+        add(
+            "Visibility.Motion",
+            if rt { "primary" } else { "primary_raster" },
+            0,
+            dispatch,
+            [WORLD0 + slot, NORMAL0 + slot, BASE, MOTION, DEPTH]
+                .map(|i| (ids[i], Access::Storage))
+                .to_vec(),
+        )?;
+        if rt && !reference {
+            add(
+                "DDGI.Trace.Relocate.Classify.Integrate",
+                "ddgi",
+                0,
+                [self.volume.len() as u32, 1, 1],
+                vec![
+                    (probes[1 - self.probe_slot], Access::ShaderRead),
+                    (probes[self.probe_slot], Access::Storage),
+                ],
+            )?;
+        }
+        add(
+            if reference {
+                "Reference.PathTransport"
+            } else {
+                "RT.Reflections.SoftShadows.DDGI"
+            },
+            if reference {
+                "reference"
+            } else if rt {
+                "hybrid"
+            } else {
+                "hybrid_raster"
+            },
+            0,
+            dispatch,
+            vec![
+                (ids[RAW], Access::Storage),
+                (probes[self.probe_slot], Access::ShaderRead),
+            ],
+        )?;
+        let mut temporal = vec![
+            (ids[RAW], Access::ShaderRead),
+            (ids[WORLD0 + slot], Access::ShaderRead),
+            (ids[NORMAL0 + slot], Access::ShaderRead),
+            (ids[MOTION], Access::ShaderRead),
+            (ids[HISTORY0 + slot], Access::Storage),
+            (ids[MOMENTS0 + slot], Access::Storage),
+        ];
+        if !reset {
+            temporal.extend(
+                [
+                    WORLD0 + previous,
+                    NORMAL0 + previous,
+                    HISTORY0 + previous,
+                    MOMENTS0 + previous,
+                ]
+                .map(|i| (ids[i], Access::ShaderRead)),
+            );
+        }
+        add(
+            if reference {
+                "Reference.Accumulate.Undenoised"
+            } else {
+                "SVGF.Reproject.Reject.Clamp.Moments"
+            },
+            "temporal",
+            0,
+            dispatch,
+            temporal,
+        )?;
+        for i in 0..if reference { 1 } else { 3 } {
+            let source = if i == 0 {
+                HISTORY0 + slot
+            } else if i == 1 {
+                FILTER0
+            } else {
+                FILTER1
+            };
+            let target = if i == 1 { FILTER1 } else { FILTER0 };
+            let mut uses = vec![
+                (ids[source], Access::ShaderRead),
+                (ids[target], Access::Storage),
+            ];
+            uses.extend(
+                [BASE, WORLD0 + slot, NORMAL0 + slot, MOMENTS0 + slot]
+                    .map(|j| (ids[j], Access::ShaderRead)),
+            );
+            add(
+                if reference {
+                    "Reference.Copy"
+                } else {
+                    ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
+                },
+                "atrous",
+                i as u32,
+                dispatch,
+                uses,
+            )?;
+        }
+        for (i, source, target) in [(0, FILTER0, BLOOM0), (1, BLOOM0, BLOOM1)] {
+            add(
+                if i == 0 {
+                    "Bloom.Horizontal"
+                } else {
+                    "Bloom.Vertical"
+                },
+                "bloom",
+                i,
+                dispatch,
+                vec![
+                    (ids[source], Access::ShaderRead),
+                    (ids[target], Access::Storage),
+                ],
+            )?;
+        }
+        add(
+            "Exposure.EV100.Meter.Adapt",
+            "exposure",
+            0,
+            [1, 1, 1],
+            vec![
+                (ids[FILTER0], Access::ShaderRead),
+                (exposure, Access::Storage),
+            ],
+        )?;
+        add(
+            "Post.Atmosphere.Lens.ACES.LUT",
+            "post",
+            0,
+            dispatch,
+            vec![
+                (ids[FILTER0], Access::ShaderRead),
+                (ids[BLOOM1], Access::ShaderRead),
+                (ids[DEPTH], Access::ShaderRead),
+                (ids[MOTION], Access::ShaderRead),
+                (ids[POST], Access::Storage),
+                (exposure, Access::ShaderRead),
+                (lut, Access::ShaderRead),
+            ],
+        )?;
+        let fsr = u32::from(self.settings.upscaler == Upscaler::Fsr1 && render != display);
+        let display_groups = [display[0].div_ceil(8), display[1].div_ceil(8), 1];
+        let mut upscale = vec![
+            (ids[POST], Access::ShaderRead),
+            (ids[UPSCALED], Access::Storage),
+            (ids[DISPLAY_HISTORY0 + slot], Access::Storage),
+            (ids[MOTION], Access::ShaderRead),
+            (ids[WORLD0 + slot], Access::ShaderRead),
+            (ids[DEPTH], Access::ShaderRead),
+            (exposure, Access::ShaderRead),
+        ];
+        if !reset && fsr == 0 {
+            upscale.extend(
+                [DISPLAY_HISTORY0 + previous, WORLD0 + previous]
+                    .map(|i| (ids[i], Access::ShaderRead)),
+            );
+        }
+        add(
+            if fsr == 1 {
+                "Upscale.FSR1.EASU"
+            } else {
+                "Upscale.TAAU.Resolve"
+            },
+            "upscale",
+            fsr,
+            display_groups,
+            upscale,
+        )?;
+        add(
+            if fsr == 1 {
+                "Upscale.FSR1.RCAS"
+            } else {
+                "Output.SDR"
+            },
+            "sharpen",
+            fsr,
+            display_groups,
+            vec![
+                (ids[UPSCALED], Access::ShaderRead),
+                (ids[OUTPUT], Access::Storage),
+            ],
+        )?;
+        let ready = graph.pass(
+            "Viewport.Ready",
+            Queue::Graphics,
+            [(ids[OUTPUT], Access::CopySource)],
+        );
+        let compiled = graph.compile()?;
+        let mut points = Vec::new();
+        for pass in &compiled.passes {
+            let mut c = gpu.begin(pass.queue);
+            c.push(Command::BeginPass(pass.name.to_owned()));
+            c.barriers(pass.before.iter().copied());
+            if pass.id != ready {
+                let (_, name, arg, groups) = recipes
+                    .iter()
+                    .find(|(id, _, _, _)| *id == pass.id)
+                    .ok_or_else(|| anyhow::anyhow!("Missing fidelity pass recipe"))?;
+                c.push(Command::Pipeline(self.pipelines[name]));
+                c.push(Command::Constants(RootConstants {
+                    words: [self.frame_index, *arg, 0, 0, 0, 0, 0, 0],
+                }));
+                c.push(Command::Dispatch(*groups));
+            }
+            c.barriers(pass.after.iter().copied());
+            c.push(Command::EndPass);
+            let waits = pass.waits.iter().map(|i| points[*i]).collect::<Vec<_>>();
+            points.push(gpu.submit(c.finish(), &waits)?);
+        }
+        self.timings.clear();
+        for p in points {
+            self.timings.extend(gpu.resolve(p)?);
+        }
+        for (i, id) in ids.iter().enumerate() {
+            self.targets.states[i] = compiled.final_states[id.0];
+        }
+        for (i, id) in probes.iter().enumerate() {
+            self.probe_states[i] = compiled.final_states[id.0];
+        }
+        self.exposure_state = compiled.final_states[exposure.0];
+        if let Mode::Reference { samples, .. } = self.settings.mode {
+            self.samples = if reset { 0 } else { self.samples };
+            self.samples = (self.samples + 8).min(samples);
+        }
+        self.scene.motion_pending = false;
+        self.previous_jitter = glam::Vec2::new(frame.jitter[0], frame.jitter[1]);
+        self.previous_vp = vp;
+        self.previous_camera = camera;
+        self.history = true;
+        self.slot = previous;
+        self.responsive_frames = if input.lighting_changed {
+            (self.volume.len() as u32).div_ceil(self.settings.probe_ray_budget / 64) * 2
+        } else {
+            self.responsive_frames.saturating_sub(1)
+        };
+        self.probe_start =
+            (self.probe_start + self.settings.probe_ray_budget / 64) % self.volume.len() as u32;
+        self.probe_slot = 1 - self.probe_slot;
+        gpu.assert_clean()?;
+        Ok(())
+    }
+}

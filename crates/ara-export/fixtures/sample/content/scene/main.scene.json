@@ -1,0 +1,14 @@
+{
+  "format": "ara.scene/0",
+  "entities": {
+    "k1": {
+      "name": "Swarm",
+      "Spawner": { "count": 100000, "seed": 7, "extent": 50.0, "speed": 4.0 }
+    },
+    "k2": {
+      "name": "Ground",
+      "Material": { "albedo": "@textures/checker.tga" }
+    }
+  },
+  "sim": { "tick_hz": 60, "ticks": 120 }
+}

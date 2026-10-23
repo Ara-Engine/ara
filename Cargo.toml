@@ -51,3 +51,11 @@ unsafe_op_in_unsafe_fn = "deny"
 all = { level = "warn", priority = -1 }
 undocumented_unsafe_blocks = "warn"
 unwrap_used = "warn"
+
+# Dev builds: light optimization for our crates, full optimization for dependencies,
+# so the editor, importers and renderer stay usable in debug (decode, compression, meshopt).
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -21,6 +21,7 @@ Rules:
 - Selectors are one type, class or ID with one hover/focus/active/disabled state.
 - Global tokens are whole-value `var(--name)` references; cycles fail eagerly.
 - Public syntax/op structs are serializable so the host can wrap them in Ara commands/transactions.
+- Optional `test-id` metadata supports semantic queries; it is preserved through source edits/expansion.
 - `SourceOp` supplies preimages/inverses; the engine transaction owner supplies author and why.
 - The root diagnostic catalog can register the UI range when the shell integrates diagnostics.
 

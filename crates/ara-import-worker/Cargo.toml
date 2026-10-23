@@ -1,0 +1,23 @@
+[package]
+name = "ara-import-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-asset = { path = "../ara-asset" }
+ara-importers = { path = "../ara-importers" }
+
+[dev-dependencies]
+ara-asset-format = { path = "../ara-asset-format" }
+ara-doc = { path = "../ara-doc" }
+ara-schema = { path = "../ara-schema" }
+serde_json.workspace = true
+tempfile = "3.23"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+gltf = { version = "1.4", default-features = false }
+texture2ddecoder = "0.1.2"
+
+[lints]
+workspace = true

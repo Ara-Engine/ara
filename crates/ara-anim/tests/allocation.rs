@@ -15,11 +15,40 @@ fn playback_crossfade_seek_snapshot_and_palette_allocate_nothing() {
     let mut snapshot = actor.snapshot();
     let mut model = vec![Mat4::IDENTITY; 65];
     let mut palette = model.clone();
+    let empty = CookedClip::cook(
+        &data::ClipData {
+            duration: 48000,
+            tracks: vec![data::JointTrack::default(); 65],
+            ..Default::default()
+        },
+        &skeleton,
+        CompressionSettings::default(),
+    )
+    .unwrap()
+    .0;
+    let mut source = common::clip(&skeleton, 1.0);
+    source.curves.clear();
+    let clip = CookedClip::cook(&source, &skeleton, CompressionSettings::default())
+        .unwrap()
+        .0;
+    let mut sampler = Sampler::new(&empty);
+    let mut sampled = Pose::new(65);
     actor
         .set(c.parameter("go").unwrap(), ParameterValue::Trigger(true))
         .unwrap();
     let region = Region::new(GLOBAL);
     for tick in 0..120 {
+        let asset = if tick % 2 == 0 { &empty } else { &clip };
+        sampler
+            .sample_prefix(
+                asset,
+                &skeleton,
+                tick * 317,
+                tick as usize % 66,
+                &mut sampled,
+                &mut [],
+            )
+            .unwrap();
         actor
             .tick(&c, &skeleton, |e| {
                 std::hint::black_box(e);

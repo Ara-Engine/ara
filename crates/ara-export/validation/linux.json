@@ -1,0 +1,69 @@
+{
+  "artifacts": {
+    "ara-launch.json": 155,
+    "ara-player": 1269648,
+    "game.arapack": 12288,
+    "game/Game.so": 2026352
+  },
+  "config": "release",
+  "elapsed_ms": 62780,
+  "format": "ara.export.report/1",
+  "lane": "nativeAot",
+  "pack_id": "f5c11f13ecdfd324ce9e4296663a3bf97adf30c26e0fd33783f4f2b583b80ce9",
+  "platform": "linux",
+  "signing": "unsigned",
+  "stages_ms": {
+    "assemble": 4,
+    "native": 0,
+    "pack": 8,
+    "resolve": 24,
+    "script": 62504,
+    "template": 182,
+    "verify": 54
+  },
+  "verify": {
+    "evidence": [
+      {
+        "file": "ara-player",
+        "glibc_versions": [
+          "2.2.5",
+          "2.3",
+          "2.3.4",
+          "2.14",
+          "2.16",
+          "2.17",
+          "2.18",
+          "2.25",
+          "2.28",
+          "2.30"
+        ]
+      },
+      {
+        "file": "Game.so",
+        "glibc_versions": [
+          "2.2.5",
+          "2.29",
+          "2.3.2",
+          "2.3.4",
+          "2.4",
+          "2.6",
+          "2.9",
+          "2.14",
+          "2.17",
+          "2.3",
+          "2.3.3",
+          "2.12"
+        ]
+      }
+    ],
+    "logs": "verify.log",
+    "method": "static_elf",
+    "passed": true,
+    "perf": null,
+    "runtime_executed": false,
+    "screenshot": null,
+    "unavailable": [
+      "Linux smoke launch was not requested; static ELF architecture, load segments and glibc requirements verified without starting WSL"
+    ]
+  }
+}

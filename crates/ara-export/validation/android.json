@@ -1,0 +1,52 @@
+{
+  "artifacts": {
+    "ara-launch.json": 155,
+    "game.aab": 3068360,
+    "game.apk": 7312139,
+    "game.apk.idsig": 62891,
+    "game.arapack": 12288,
+    "lib/arm64-v8a/libara_export_player.so": 1645896,
+    "lib/arm64-v8a/libgame.so": 1926496,
+    "lib/x86_64/libara_export_player.so": 1656648,
+    "lib/x86_64/libgame.so": 2025608
+  },
+  "config": "release",
+  "elapsed_ms": 88186,
+  "format": "ara.export.report/1",
+  "lane": "nativeAot",
+  "pack_id": "ad3066cb12fb9d3b43afb6d924b46e029a320dfc363b12efb8875d2001da783e",
+  "platform": "android",
+  "signing": "android-debug",
+  "stages_ms": {
+    "assemble": 10,
+    "native": 0,
+    "pack": 11,
+    "package-sign": 13905,
+    "resolve": 0,
+    "script": 73882,
+    "template": 207,
+    "verify": 166
+  },
+  "verify": {
+    "evidence": {
+      "aab_signature": "verified",
+      "abis": [
+        "arm64-v8a",
+        "x86_64"
+      ],
+      "apk_signature": "verified",
+      "elf_alignment": 16384,
+      "target_api": 36,
+      "zip_alignment": 16384
+    },
+    "logs": "verify.log",
+    "method": "android_structure",
+    "passed": true,
+    "perf": null,
+    "runtime_executed": false,
+    "screenshot": null,
+    "unavailable": [
+      "ARA-EXP-AND-009: no device requested; pass --device SERIAL (and --allow-emulator for an existing emulator)"
+    ]
+  }
+}

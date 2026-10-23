@@ -1,0 +1,99 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:26:32.4306382Z",
+                        "cpuPercent":  41,
+                        "freeKiB":  5890664,
+                        "processes":  [
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  36972,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  51652,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "powershell#2",
+                                              "IDProcess":  32964,
+                                              "PercentProcessorTime":  92
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "relay_win#4",
+                                              "IDProcess":  35136,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win#2",
+                                              "IDProcess":  40460,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win#1",
+                                              "IDProcess":  73408,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:26:34.3150904Z",
+                        "cpuPercent":  23,
+                        "freeKiB":  6051356,
+                        "processes":  [
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  36972,
+                                              "PercentProcessorTime":  98
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  73012,
+                                              "PercentProcessorTime":  98
+                                          },
+                                          {
+                                              "Name":  "engine-72c590472ec88ea0",
+                                              "IDProcess":  12924,
+                                              "PercentProcessorTime":  68
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  47
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  42
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  25
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "relay_win",
+                                              "IDProcess":  96048,
+                                              "PercentProcessorTime":  8
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}

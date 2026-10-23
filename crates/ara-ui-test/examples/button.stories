@@ -1,0 +1,196 @@
+{
+  "$schema": "ara://schema/stories/1",
+  "id": "us_button",
+  "records": {
+    "st_button": {
+      "name": "widget-button",
+      "component": "button",
+      "markup": "<ui id='root'><text id='story-title' class='heading' text='widget-button'/><button id='sample' test-id='subject' text='loc:resume' action='game.resume'/></ui>",
+      "stylesheet": "#sample { min-height:48px; } .split-row { flex-direction:row; gap:6px; height:150px; } splitter { width:8px; background:var(--border); } .warning { color:var(--warning-foreground); } .error { color:var(--destructive-foreground); }",
+      "fixtureType": "UiStoryFixture",
+      "fixture": {
+        "text": "Outpost",
+        "value": 0.65
+      },
+      "locales": [
+        {
+          "id": "en",
+          "messages": {
+            "camera": "Camera",
+            "clear": "Clear",
+            "console": "Console",
+            "dock": "Workspace",
+            "enabled": "Enabled",
+            "error": "Script compile failed",
+            "example": "Component preview",
+            "health": "Health",
+            "hierarchy": "Hierarchy",
+            "inspector": "Inspector",
+            "interact": "Interact",
+            "inventory": "Inventory",
+            "medkit": "Medkit",
+            "name": "Name",
+            "objective": "Reach the outpost",
+            "paused": "Paused",
+            "player": "Player",
+            "quit": "Quit",
+            "ready": "World ready",
+            "resume": "Resume",
+            "scrap": "Scrap",
+            "search": "Search",
+            "settings": "Settings",
+            "volume": "Volume",
+            "warning": "Missing asset preview"
+          }
+        },
+        {
+          "id": "ar",
+          "rtl": true,
+          "messages": {
+            "camera": "الكاميرا",
+            "clear": "مسح",
+            "console": "وحدة التحكم",
+            "dock": "مساحة العمل",
+            "enabled": "مفعّل",
+            "error": "فشل تجميع البرنامج",
+            "example": "معاينة المكوّن",
+            "health": "الصحة",
+            "hierarchy": "التسلسل",
+            "inspector": "المفتّش",
+            "interact": "تفاعل",
+            "inventory": "المخزون",
+            "medkit": "حقيبة إسعاف",
+            "name": "الاسم",
+            "objective": "الوصول إلى الموقع",
+            "paused": "متوقف مؤقتًا",
+            "player": "اللاعب",
+            "quit": "خروج",
+            "ready": "العالم جاهز",
+            "resume": "استئناف",
+            "scrap": "خردة",
+            "search": "بحث",
+            "settings": "الإعدادات",
+            "volume": "مستوى الصوت",
+            "warning": "معاينة الأصل مفقودة"
+          }
+        },
+        {
+          "id": "qps-ploc",
+          "pseudo": true,
+          "messages": {
+            "camera": "Camera",
+            "clear": "Clear",
+            "console": "Console",
+            "dock": "Workspace",
+            "enabled": "Enabled",
+            "error": "Script compile failed",
+            "example": "Component preview",
+            "health": "Health",
+            "hierarchy": "Hierarchy",
+            "inspector": "Inspector",
+            "interact": "Interact",
+            "inventory": "Inventory",
+            "medkit": "Medkit",
+            "name": "Name",
+            "objective": "Reach the outpost",
+            "paused": "Paused",
+            "player": "Player",
+            "quit": "Quit",
+            "ready": "World ready",
+            "resume": "Resume",
+            "scrap": "Scrap",
+            "search": "Search",
+            "settings": "Settings",
+            "volume": "Volume",
+            "warning": "Missing asset preview"
+          }
+        }
+      ],
+      "views": [
+        {
+          "width": 480,
+          "height": 320,
+          "dpi": 96,
+          "locale": "en"
+        },
+        {
+          "width": 480,
+          "height": 320,
+          "dpi": 96,
+          "locale": "en",
+          "input": "keyboard",
+          "theme": "light",
+          "timeMs": 200
+        },
+        {
+          "width": 480,
+          "height": 320,
+          "dpi": 144,
+          "locale": "ar",
+          "input": "gamepad",
+          "timeMs": 200
+        },
+        {
+          "width": 480,
+          "height": 320,
+          "dpi": 96,
+          "locale": "ar",
+          "theme": "light"
+        },
+        {
+          "width": 320,
+          "height": 360,
+          "dpi": 96,
+          "locale": "qps-ploc",
+          "input": "keyboard"
+        },
+        {
+          "width": 320,
+          "height": 360,
+          "dpi": 144,
+          "locale": "qps-ploc",
+          "input": "gamepad",
+          "theme": "light",
+          "timeMs": 200
+        }
+      ],
+      "transitions": [
+        {
+          "node": "story-title",
+          "from": [-4, 0],
+          "durationMs": 200
+        }
+      ],
+      "steps": [
+        {
+          "query": {
+            "by": "testId",
+            "value": "subject"
+          }
+        },
+        {
+          "kind": "activate",
+          "query": {
+            "by": "testId",
+            "value": "subject"
+          }
+        },
+        {
+          "kind": "focused",
+          "query": {
+            "by": "testId",
+            "value": "subject"
+          }
+        },
+        {
+          "kind": "action",
+          "query": {
+            "by": "testId",
+            "value": "subject"
+          },
+          "value": "game.resume"
+        }
+      ]
+    }
+  }
+}

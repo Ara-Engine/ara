@@ -2,6 +2,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+#[cfg(test)]
+mod codec_tests;
 mod compile;
 mod compression;
 mod controller;
@@ -10,9 +12,14 @@ pub mod document;
 mod evaluate;
 pub mod graph;
 pub mod ik;
+mod measure;
+mod packed_block;
+mod packed_wire;
 pub mod pose;
+mod prediction;
 mod quantization;
 mod sampling;
+mod sampling_plan;
 mod skeleton;
 
 pub use compression::{CompressionReport, CompressionSettings, CookedClip};

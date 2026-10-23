@@ -8,7 +8,8 @@ Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag
 
 ## Public API
 
-- `Project::open(root)` (needs `ara.project.json`), `project::discover(start)`,
+- `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
+  marker, else `levels/main.scene`), `project::discover(start)`,
   `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`).
   Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, nested projects.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads
@@ -39,6 +40,23 @@ Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag
 `diagnostics`, `history`, `jobs`); `doc.sync`; `daemon.shutdown`.
 Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a
 service registers them.
+
+- `cmd.apply` / `inspect`: `doc` is optional (`core/pick.rs`): the one document
+  holding every entity the call names (IDs, addresses, `name:` selectors), else
+  the only scene, else the main scene; else ARA1814 with a fix per candidate.
+  Named documents also match by unique stem or file name (`outpost`).
+- `cmd.apply` returns `doc` (path) and `text`: what was applied where, then every
+  created / modified / deleted record with its name and symbol (`would …` for dry
+  runs) and the rollback checkpoint. Agent sessions need a `why` (ARA1610); the
+  error comes with everything a dry run of the batch reports. Registry fixes are
+  relocated to `commands[i].args…` like their locations. `as` may equal `args.id`
+  and may skip its `$`. `schema.describe` takes `names` or one `name`.
+- `cmd.apply`'s catalog entry lists every command with its args in the `cmd`
+  field's description (`list_commands`), so MCP clients see them without lookups.
+- `session.begin` also returns `documents` (path, kind, ID) and `mainScene`.
+- `inspect` entities and `query` terms accept names: `name:Crate`, a bare word
+  (`query`: names containing it; `inspect`: one exact match).
+- Scene-to-text flags unresolved merge conflicts with the `ara resolve` hint.
 
 ## Semantics
 
@@ -73,8 +91,9 @@ service registers them.
 
 ## Testing
 
-`cargo test -p ara-host`. Unit tests: query parsing, logs, journal compaction,
-review roll-up. `tests/host.rs` (fixture project copied to a temp dir): JSON-RPC
+`cargo test -p ara-host`. Unit tests: query parsing (bare words), logs, journal
+compaction, review roll-up. `tests/host.rs` (fixture project copied to a temp dir): JSON-RPC
 round trips, scopes, dry run = apply, symbols, review per entity, rollback, crash
 replay, external edits/conflicts, service registration, subscriptions with a
-registry job's progress. Snapshots: scene-to-text.
+registry job's progress, document inference + apply text, required agent
+`why`. Snapshots: scene-to-text.

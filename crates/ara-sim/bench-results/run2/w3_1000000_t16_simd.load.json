@@ -1,0 +1,146 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:27:07.5123006Z",
+                        "cpuPercent":  13,
+                        "freeKiB":  6147896,
+                        "processes":  [
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "CrossDeviceService",
+                                              "IDProcess":  99936,
+                                              "PercentProcessorTime":  13
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  13
+                                          },
+                                          {
+                                              "Name":  "relay_win#4",
+                                              "IDProcess":  35136,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "relay_win#3",
+                                              "IDProcess":  86896,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "relay_win#1",
+                                              "IDProcess":  73408,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "relay_win",
+                                              "IDProcess":  96048,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:09.3471813Z",
+                        "cpuPercent":  24,
+                        "freeKiB":  6240536,
+                        "processes":  [
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  25
+                                          },
+                                          {
+                                              "Name":  "cargo#1",
+                                              "IDProcess":  47932,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "cargo#3",
+                                              "IDProcess":  75400,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  12
+                                          },
+                                          {
+                                              "Name":  "cargo#2",
+                                              "IDProcess":  2936,
+                                              "PercentProcessorTime":  12
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  8
+                                          },
+                                          {
+                                              "Name":  "relay_win#1",
+                                              "IDProcess":  73408,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:10.4180329Z",
+                        "cpuPercent":  69,
+                        "freeKiB":  5711400,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  183
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  9612,
+                                              "PercentProcessorTime":  96
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  101424,
+                                              "PercentProcessorTime":  91
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "lghub_agent",
+                                              "IDProcess":  24256,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "svchost#3",
+                                              "IDProcess":  2148,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "cargo#2",
+                                              "IDProcess":  2936,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}

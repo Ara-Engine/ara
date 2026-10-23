@@ -1,0 +1,24 @@
+{
+  "measuredUtc": "2026-10-23T00:52:49.169123+00:00",
+  "cpu": {
+    "Name": "AMD Ryzen 7 7800X3D 8-Core Processor           ",
+    "NumberOfCores": 8,
+    "NumberOfLogicalProcessors": 16
+  },
+  "os": {
+    "Caption": "Microsoft Windows 11 Pro",
+    "Version": "10.0.26300",
+    "BuildNumber": "26300"
+  },
+  "rust": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "flags": "-C target-cpu=native",
+  "profile": "bench opt-level=3 lto=thin codegen-units=1",
+  "cargoBuildJobs": 4,
+  "logicalWorkerCounts": [
+    1,
+    16
+  ],
+  "priority": "AboveNormal for benchmark process only",
+  "affinity": "OS default, all logical CPUs",
+  "sourceNotes": "Final timed matrix uses the retained Vec4 cell-sorted boid kernel and serial repacking. A separate phase-probe CLI path was added after timing. Checkpoints/recording are disabled in these matched kernel workloads."
+}

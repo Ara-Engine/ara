@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e",
+  "stages": [
+    {
+      "dxil": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e/primaryRasterMain.dxil",
+      "dxil_hash": "287d78ad13b0599ee5e1c81334a2ec84b11d3a4141f9aa73a6765d706ef08af4",
+      "source_entry": "primaryRasterMain",
+      "spirv": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e/primaryRasterMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "ec5fc98b6876220dd86d6909c7e78777bf018392185b19def5234ccfbbad723a",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}
