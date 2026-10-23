@@ -17,6 +17,11 @@
 mod commands;
 mod engine;
 mod project;
+
+// Delegates directly to System unless ara-profile/allocation is enabled.
+#[global_allocator]
+static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
+    ara_profile::CountingAllocator(std::alloc::System);
 mod relaxed;
 
 use std::path::PathBuf;
@@ -48,6 +53,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Local performance regression checks (no daemon or project required).
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommand,
+    },
     /// Create a project: ara.project.json, AGENTS.md, .gitattributes, .gitignore,
     /// .mcp.json and a starter scene.
     Init {
@@ -386,12 +396,50 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
     }))
 }
 
+#[derive(Subcommand)]
+enum ProfileCommand {
+    /// Compare saved JSON summaries; exit 1 for regressions or incomplete evidence.
+    Compare {
+        /// Saved baseline summary.
+        baseline: PathBuf,
+        /// Current summary.
+        current: PathBuf,
+        /// Allowed fractional p95 increase.
+        #[arg(long, default_value_t = 0.05)]
+        relative: f64,
+        /// Allowed absolute p95 increase in nanoseconds.
+        #[arg(long, default_value_t = 1000)]
+        absolute_ns: u64,
+    },
+}
+
 fn run(cli: Cli) -> Result<bool, Diagnostic> {
     let json = cli.json;
     let root_flag = cli.root.as_deref();
     let open = |files: &[PathBuf]| project::open(root_flag, files);
     let io = |msg: String| Diagnostic::error(codes::IO, msg);
     match cli.command {
+        Command::Profile {
+            command:
+                ProfileCommand::Compare {
+                    baseline,
+                    current,
+                    relative,
+                    absolute_ns,
+                },
+        } => {
+            let baseline = ara_profile::read_summary(&baseline).map_err(|e| io(e.to_string()))?;
+            let current = ara_profile::read_summary(&current).map_err(|e| io(e.to_string()))?;
+            let report = ara_profile::compare(&baseline, &current, relative, absolute_ns)
+                .map_err(|e| io(e.into()))?;
+            if json {
+                let value = serde_json::to_value(&report).map_err(|e| io(e.to_string()))?;
+                print!("{}", ara_json::to_canonical_string(&value));
+            } else {
+                print!("{}", report.table());
+            }
+            Ok(report.passed)
+        }
         Command::Init { dir, name } => {
             commands::init(dir.as_deref(), name.as_deref(), json).map_err(io)
         }

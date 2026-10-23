@@ -21,6 +21,10 @@ Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag
 - `Service { name, methods(db), call(cx, method, params), tick(cx) }`;
   `Method::new::<P>(db, name, summary).scope(..).read_only().destructive()
   .tool("ara_x") | .action("ara_x", "verb") | .sessionless()`; `parse::<P>(params)`.
+- `Host::profiler()`: frame/timestamp/worker integration for the registered
+  `profile.start/stop/summary/hitches/compare` service and `ara_profile` MCP tool.
+  Presentation may own frame boundaries; host ticks reuse an already open frame.
+  Summaries accept `topN`, `limit`, `maxBytes`; comparisons use JSON summary data.
 - `Cx`: `session()`, `conn()`, `store()` (read-only), `registry()`, `root()`,
   `apply(ApplyParams)` (edits = `cmd.apply`), `log`, `notify`, `start_job`,
   `job_progress`, `finish_job`, `job_cancelled`.
