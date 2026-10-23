@@ -53,5 +53,6 @@ pattern: SDL3.dll and the Vulkan SDK `Bin` on PATH, `VK_LAYER_PATH`, an empty
 the demo over MCP end to end (pool boot, Move 120 ticks, grounded, labelled capture,
 patch latency, pause, light patch, keep changes → document, determinism via
 `test.run`, replay, Host + 2, panic/access-violation/hang isolation with restart) and
-prints the measured numbers. It builds `ara-import-worker` if missing.
+prints the measured numbers. It builds `ara-import-worker` if missing. `evidence/` holds
+reviewed captures (walked with marks, relit after the patch, windowed).
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
