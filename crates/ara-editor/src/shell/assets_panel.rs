@@ -92,13 +92,22 @@ impl Shell {
             .find("assets-content")
             .map(|i| self.ui.nodes[i].rect.h)
             .unwrap_or(190.);
-        let columns = ((width - 16.) / 112.).floor().max(1.) as usize;
-        self.asset_grid_extent = items.len().div_ceil(columns) as f32 * 116.;
+        // Short drawers keep filenames visible beside the thumbnail.
+        let compact = height < 124.;
+        let (card_width, card_height, thumbnail) = if compact {
+            (168., 64., 48.)
+        } else {
+            (104., 108., 68.)
+        };
+        let column_step = card_width + 8.;
+        let row_step = card_height + 8.;
+        let columns = ((width - 16.) / column_step).floor().max(1.) as usize;
+        self.asset_grid_extent = items.len().div_ceil(columns) as f32 * row_step;
         self.asset_offset = self
             .asset_offset
             .clamp(0., (self.asset_grid_extent - height).max(0.));
-        let first = (self.asset_offset / 116.).floor() as usize * columns;
-        let count = ((height / 116.).ceil() as usize + 2) * columns;
+        let first = (self.asset_offset / row_step).floor() as usize * columns;
+        let count = ((height / row_step).ceil() as usize + 2) * columns;
         out.push_str("<panel id='asset-grid' style='flex-grow:1;flex-basis:0px;overflow:hidden'>");
         for (n, asset) in items.iter().enumerate().skip(first).take(count) {
             let id = format!("asset-card-{n}");
@@ -106,9 +115,16 @@ impl Shell {
                 ara_ui::source::stable_id(&id),
                 Binding::Asset(asset.clone()),
             );
-            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:104px;height:108px' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8+(n%columns)*112,8.+(n/columns) as f32*116.-self.asset_offset,escape(&asset.path),escape(&asset.path)));
-            self.asset_thumbnail(asset, out, &id, 68.);
-            out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' /></button>",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
+            out.push_str(&format!("<button id='{id}' class='asset-card {}' style='position:absolute;left:{}px;top:{}px;width:{card_width}px;height:{card_height}px;flex-direction:{}' label='{}' description='{}' action='Dispatch'>",if editor.state.asset_path.as_deref()==Some(&asset.path){"asset-selected"}else{""},8.+(n%columns) as f32*column_step,8.+(n/columns) as f32*row_step-self.asset_offset,if compact{"row"}else{"column"},escape(&asset.path),escape(&asset.path)));
+            self.asset_thumbnail(asset, out, &id, thumbnail);
+            if compact {
+                out.push_str(&format!("<panel id='{id}-caption' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:3px'>"));
+            }
+            out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' />",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
+            if compact {
+                out.push_str("</panel>");
+            }
+            out.push_str("</button>");
         }
         out.push_str("</panel></panel>");
     }

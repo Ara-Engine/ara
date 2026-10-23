@@ -271,6 +271,23 @@ impl Verification {
                 }
                 self.interactions
                     .push("settings edit and isolated reimport completed");
+                let grid = shell.ui.nodes[shell.ui.find("asset-grid").ok_or("asset grid")?].rect;
+                let caption = shell
+                    .ui
+                    .nodes
+                    .iter()
+                    .find(|n| {
+                        n.element.id.starts_with("asset-card-")
+                            && n.element.id.ends_with("-name")
+                            && n.text.as_ref().is_some_and(|t| t.value == "Avocado.glb")
+                    })
+                    .ok_or("mesh filename caption")?
+                    .rect;
+                if !grid.contains(caption.x, caption.y)
+                    || !grid.contains(caption.x + caption.w - 0.1, caption.y + caption.h - 0.1)
+                {
+                    return Err("asset filename is clipped in the short drawer".into());
+                }
                 self.capture_pair("assets", editor, shell, gpu, ui, renderer)?;
                 editor.action(
                     "editor.workspace",
