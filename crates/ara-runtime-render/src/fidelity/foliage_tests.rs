@@ -40,6 +40,8 @@ fn foliage_uses_the_rule_model_and_respects_exclusion_zones() {
         model: Arc::new(Model {
             asset: "as_shrub".into(),
             digest: ara_asset::Digest([9; 32]),
+            nodes: BTreeMap::new(),
+            node_names: BTreeMap::new(),
             primitives: vec![Primitive {
                 vertices: source.vertices,
                 indices: source.indices,

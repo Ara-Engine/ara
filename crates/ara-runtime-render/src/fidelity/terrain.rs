@@ -106,7 +106,7 @@ impl Builder {
             for primitive in &model.primitives {
                 let mut material = Material::default();
                 if let Some(m) = primitive.material.and_then(|m| model.materials.get(m)) {
-                    self.model_material(&mut material, model, m, [1.0; 4], [0.0; 3])?;
+                    self.model_material(&mut material, model, m, [1.0; 4], [1.0; 3], None)?;
                 }
                 materials.push(material);
             }
