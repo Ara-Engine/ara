@@ -15,5 +15,10 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ara.TestModule/Ara.TestModule.csproj" />
+    <Project Path="tests/Ara.Analyzers.Tests/Ara.Analyzers.Tests.csproj" />
+    <Project Path="tests/Ara.CompileServer.Tests/Ara.CompileServer.Tests.csproj" />
+    <Project Path="tests/Ara.Generators.Tests/Ara.Generators.Tests.csproj" />
+    <Project Path="tests/Ara.RunWorker.Tests/Ara.RunWorker.Tests.csproj" />
+    <Project Path="tests/Ara.Runtime.Tests/Ara.Runtime.Tests.csproj" />
   </Folder>
 </Solution>

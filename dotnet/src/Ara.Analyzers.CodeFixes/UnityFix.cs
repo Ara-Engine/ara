@@ -118,9 +118,10 @@ public sealed class UnityFix : CodeFixProvider
             && decl.Type is IdentifierNameSyntax { IsVar: true } && decl.Variables.Count == 1)
         {
             var newInv = inv.ReplaceNode(g, renamed);
+            var refKeyword = SyntaxFactory.Token(SyntaxKind.RefKeyword).WithTrailingTrivia(SyntaxFactory.Space);
             var newDecl = decl
-                .WithType(SyntaxFactory.RefType(decl.Type.WithoutTrivia()).WithTriviaFrom(decl.Type))
-                .ReplaceNode(decl.Variables[0].Initializer!, eq.WithValue(SyntaxFactory.RefExpression(newInv.WithoutLeadingTrivia()).WithLeadingTrivia(SyntaxFactory.Space)));
+                .ReplaceNode(eq, eq.WithValue(SyntaxFactory.RefExpression(newInv.WithoutLeadingTrivia()).WithRefKeyword(refKeyword)));
+            newDecl = newDecl.WithType(SyntaxFactory.RefType(newDecl.Type.WithoutTrivia()).WithRefKeyword(refKeyword).WithTriviaFrom(newDecl.Type));
             return root.ReplaceNode(decl, newDecl);
         }
         return root.ReplaceNode(g, renamed);

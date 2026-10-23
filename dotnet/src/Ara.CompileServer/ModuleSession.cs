@@ -114,6 +114,14 @@ internal sealed class ModuleSession : IDisposable
     internal void Rebuild(uint escalation) =>
         _work.Add(() => BuildFull(AbiConst.ReloadL3, (Escalation)escalation, Stopwatch.GetTimestamp()));
 
+    /// <summary>Queues a change set as if the watcher had reported it (tests, tools).</summary>
+    internal void Change(IEnumerable<string> paths)
+    {
+        var list = paths.ToList();
+        var t = Stopwatch.GetTimestamp();
+        _work.Add(() => OnChange(list, t));
+    }
+
     /// <summary>Lets the session's queued work drain (tests).</summary>
     internal void WaitIdle()
     {

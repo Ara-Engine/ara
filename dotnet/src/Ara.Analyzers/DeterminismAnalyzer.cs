@@ -65,6 +65,9 @@ public sealed class DeterminismAnalyzer : DiagnosticAnalyzer
         if (!Symbols.InSimulation(c.ContainingSymbol)) return;
         var (member, type) = c.Operation switch
         {
+            // `new Random().Next()` is reported once, at the creation.
+            IInvocationOperation { Instance: IObjectCreationOperation } => (null, null),
+            IPropertyReferenceOperation { Instance: IObjectCreationOperation } => (null, null),
             IInvocationOperation i => ((ISymbol)i.TargetMethod, i.TargetMethod.ContainingType),
             IPropertyReferenceOperation p => (p.Property, p.Property.ContainingType),
             IFieldReferenceOperation f => (f.Field, f.Field.ContainingType),

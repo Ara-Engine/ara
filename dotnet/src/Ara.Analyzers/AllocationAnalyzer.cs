@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -41,7 +42,8 @@ public sealed class AllocationAnalyzer : DiagnosticAnalyzer
 
     static void Check(OperationAnalysisContext c)
     {
-        if (!OnTickPath(c.ContainingSymbol)) return;
+        // Attribute arguments are metadata, not code that runs on the tick.
+        if (!OnTickPath(c.ContainingSymbol) || c.Operation.Syntax.FirstAncestorOrSelf<AttributeSyntax>() is not null) return;
         var what = c.Operation switch
         {
             IObjectCreationOperation { Type: { IsReferenceType: true } t } => $"`new {t.Name}(...)`",
