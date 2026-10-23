@@ -377,3 +377,128 @@ fn restore_rebuilds_history_with_ids_and_optionally_reapplies() {
     assert_eq!(undo.reverts.as_ref(), Some(&journal[1].id));
     assert_eq!(get(&fresh, "e_b", "name"), json!("B"));
 }
+
+/// Blocks agent ops on `e_b` unless the committing origin is `ses_owner`.
+#[derive(Debug)]
+struct OwnsB;
+
+impl ara_ops::Guard for OwnsB {
+    fn check(
+        &self,
+        meta: &TxnMeta,
+        origin: Option<&str>,
+        ops: &[ara_doc::Op],
+    ) -> Vec<ara_diag::Diagnostic> {
+        let agent = matches!(meta.author, Author::Agent(_));
+        let touches_b = ops.iter().any(|op| op.id().as_str() == "e_b");
+        if agent && touches_b && origin != Some("ses_owner") {
+            vec![ara_diag::Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "e_b is claimed",
+            )]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+#[test]
+fn guards_veto_commits_and_dry_runs_by_origin() {
+    let mut s = store();
+    s.set_guard(Some(Box::new(OwnsB)));
+    let before = text(&s);
+    let err = s
+        .transact(TxnMeta::by(agent()), [set("e_b", "name", json!("X"))])
+        .expect_err("guarded");
+    assert_eq!(err[0].message, "e_b is claimed");
+    assert_eq!(text(&s), before);
+
+    // Dry runs see the same verdict.
+    let mut staged = s.begin(TxnMeta::by(agent()));
+    staged
+        .apply(set("e_b", "name", json!("X")))
+        .expect("applies");
+    assert_eq!(staged.check().len(), 1);
+    staged.rollback();
+
+    // Humans, other records and the owning origin pass.
+    s.transact(TxnMeta::by(Author::Human), [set("e_b", "name", json!("H"))])
+        .expect("human");
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("A"))])
+        .expect("other record");
+    s.set_origin(Some("ses_owner".into()));
+    assert_eq!(s.origin(), Some("ses_owner"));
+    s.transact(TxnMeta::by(agent()), [set("e_b", "name", json!("O"))])
+        .expect("owner");
+    s.set_guard(None);
+    s.set_origin(None);
+    s.transact(TxnMeta::by(agent()), [set("e_b", "name", json!("Free"))])
+        .expect("no guard");
+}
+
+#[test]
+fn rebased_undo_skips_what_others_changed_since() {
+    let mut s = store();
+    let mia = Author::Agent("mia".into());
+    let sam = Author::Agent("sam".into());
+    let mine = s
+        .transact(
+            TxnMeta::by(mia.clone()),
+            [
+                set("e_a", "name", json!("Mine")),
+                set("e_a", "Transform.position", json!([1, 2, 3])),
+            ],
+        )
+        .expect("commit")
+        .txn()
+        .cloned()
+        .expect("txn");
+    // Sam changes the position afterwards; the name stays Mia's.
+    s.transact(
+        TxnMeta::by(sam.clone()),
+        [set("e_a", "Transform.position.x", json!(9))],
+    )
+    .expect("commit");
+    let foreign = |t: &ara_ops::Transaction| t.author != Author::Agent("mia".into());
+    let r = s
+        .undo_rebased(&mine.id, mia.clone(), &foreign)
+        .expect("rebased undo");
+    let undo = r.txn.cloned().expect("an undo transaction");
+    assert_eq!(undo.reverts.as_ref(), Some(&mine.id));
+    assert_eq!(r.skipped.len(), 1, "the position op is skipped");
+    assert_eq!(get(&s, "e_a", "name"), json!("A"));
+    assert_eq!(
+        get(&s, "e_a", "Transform")["position"],
+        json!([9, 2, 3]),
+        "Sam's later change stands"
+    );
+    assert_eq!(s.reverted_by(&mine.id), Some(&undo.id));
+
+    // Everything overwritten: nothing to commit, the transaction stays in effect.
+    let only = s
+        .transact(TxnMeta::by(mia.clone()), [set("e_b", "name", json!("M"))])
+        .expect("commit")
+        .txn()
+        .cloned()
+        .expect("txn");
+    s.transact(TxnMeta::by(sam), [set("e_b", "name", json!("S"))])
+        .expect("commit");
+    let rev = s.revision();
+    let r = s.undo_rebased(&only.id, mia.clone(), &foreign).expect("ok");
+    assert!(r.txn.is_none() && r.skipped.len() == 1);
+    assert_eq!(s.revision(), rev);
+
+    // A later change by the same participant still conflicts, as with plain undo.
+    let older = s
+        .transact(TxnMeta::by(mia.clone()), [set("e_a", "name", json!("1"))])
+        .expect("commit")
+        .txn()
+        .cloned()
+        .expect("txn");
+    s.transact(TxnMeta::by(mia.clone()), [set("e_a", "name", json!("2"))])
+        .expect("commit");
+    let err = s
+        .undo_rebased(&older.id, mia, &foreign)
+        .expect_err("conflict");
+    assert_eq!(err[0].code, codes::UNDO_CONFLICT);
+}

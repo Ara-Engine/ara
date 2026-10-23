@@ -8,7 +8,7 @@ use ara_diag::{Diagnostic, codes};
 use ara_doc::{AssetId, Document, Edit, IdGen, Op, RecordId, Workspace};
 use ara_schema::{FieldPath, SchemaDb};
 
-use crate::{Author, Transaction, TxnId, TxnMeta};
+use crate::{Author, Guard, Transaction, TxnId, TxnMeta};
 
 /// The result of committing.
 #[derive(Debug)]
@@ -29,6 +29,16 @@ impl<'a> Commit<'a> {
             Commit::Empty => None,
         }
     }
+}
+
+/// The result of [`Store::undo_rebased`].
+#[derive(Debug)]
+pub struct Rebased<'a> {
+    /// The undo transaction; `None` when every op was skipped.
+    pub txn: Option<&'a Transaction>,
+    /// The target's ops left in place because someone else changed the same paths
+    /// later, in their original order.
+    pub skipped: Vec<Op>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -54,6 +64,8 @@ pub struct Store {
     stacks: BTreeMap<Author, Stacks>,
     ids: IdGen,
     subscribers: Vec<Sender<Transaction>>,
+    guard: Option<Box<dyn Guard>>,
+    origin: Option<String>,
 }
 
 impl Store {
@@ -75,6 +87,8 @@ impl Store {
             stacks: BTreeMap::new(),
             ids,
             subscribers: Vec::new(),
+            guard: None,
+            origin: None,
         }
     }
 
@@ -147,6 +161,23 @@ impl Store {
         let (tx, rx) = channel();
         self.subscribers.push(tx);
         rx
+    }
+
+    /// Installs (or with `None`, removes) the commit guard; returns the previous one.
+    /// Every commit and dry-run check asks it after the base-revision check.
+    pub fn set_guard(&mut self, guard: Option<Box<dyn Guard>>) -> Option<Box<dyn Guard>> {
+        std::mem::replace(&mut self.guard, guard)
+    }
+
+    /// Sets who is committing from now on (a session handle), for the guard. The host
+    /// sets it around each call; `None` when unknown.
+    pub fn set_origin(&mut self, origin: Option<String>) {
+        self.origin = origin;
+    }
+
+    /// Who is committing, as last set by [`set_origin`](Self::set_origin).
+    pub fn origin(&self) -> Option<&str> {
+        self.origin.as_deref()
     }
 
     /// Opens a transaction.
@@ -291,6 +322,94 @@ impl Store {
         }
     }
 
+    /// Per-participant undo (D21): undoes `id` without undoing anyone else's work.
+    ///
+    /// Each op's inverse is applied, newest first, unless a later still-effective
+    /// transaction for which `foreign` is true touched an overlapping path: that op is
+    /// skipped (the other participant's later value stands) and returned in
+    /// [`Rebased::skipped`]. Overlapping later transactions that are not foreign fail
+    /// the undo with `ARA1502`, as in [`undo`](Self::undo). When every op is skipped,
+    /// nothing is committed and `id` stays in effect.
+    pub fn undo_rebased(
+        &mut self,
+        id: &TxnId,
+        by: Author,
+        foreign: &dyn Fn(&Transaction) -> bool,
+    ) -> Result<Rebased<'_>, Vec<Diagnostic>> {
+        let Some(target) = self.txn(id).cloned() else {
+            return Err(vec![Diagnostic::error(
+                codes::TXN_NOT_FOUND,
+                format!("no transaction `{id}`"),
+            )]);
+        };
+        if let Some(r) = self.reverted_by.get(id) {
+            return Err(vec![Diagnostic::error(
+                codes::ALREADY_REVERTED,
+                format!("`{id}` was already reverted by `{r}`"),
+            )]);
+        }
+        let later: Vec<&Transaction> = self
+            .since(target.result)
+            .iter()
+            .filter(|t| foreign(t) && !self.cancelled(t, target.result))
+            .collect();
+        let overwritten = |op: &Op| {
+            let mine = Touch::of(op);
+            later.iter().any(|t| {
+                t.ops
+                    .iter()
+                    .flat_map(Touch::of)
+                    .any(|theirs| mine.iter().any(|m| m.overlaps(&theirs)))
+            })
+        };
+        let (mut skipped, mut inverse) = (Vec::new(), Vec::new());
+        for op in target.ops.iter().rev() {
+            if overwritten(op) {
+                skipped.push(op.clone());
+            } else {
+                inverse.push(op.inverse().to_edit());
+            }
+        }
+        skipped.reverse();
+        if inverse.is_empty() {
+            return Ok(Rebased { txn: None, skipped });
+        }
+        let label = format!("undo {}", target.label.as_deref().unwrap_or(&target.id.0));
+        let meta = TxnMeta {
+            author: by,
+            why: None,
+            label: Some(label),
+            base: Some(target.result),
+            idempotency_key: None,
+        };
+        let mut staged = self.begin(meta);
+        staged.reverts = Some(target.id.clone());
+        for edit in inverse {
+            staged.apply(edit).map_err(|d| vec![d])?;
+        }
+        staged.commit()?;
+        let new = self.history.len() - 1;
+        self.reverted_by
+            .insert(target.id.clone(), self.history[new].id.clone());
+        if let Some(stacks) = self.stacks.get_mut(&target.author) {
+            stacks.undo.retain(|t| *t != target.id);
+        }
+        Ok(Rebased {
+            txn: Some(&self.history[new]),
+            skipped,
+        })
+    }
+
+    /// True if `t` (committed after `base`) no longer counts: it was undone, or it is
+    /// the undo of a transaction also committed after `base`.
+    fn cancelled(&self, t: &Transaction, base: u64) -> bool {
+        self.reverted_by.contains_key(&t.id)
+            || t.reverts
+                .as_ref()
+                .and_then(|r| self.txn(r))
+                .is_some_and(|r| r.result > base)
+    }
+
     /// Commits the inverse of `id`. Returns the new transaction's history index.
     fn revert(&mut self, id: &TxnId, by: Author) -> Result<usize, Vec<Diagnostic>> {
         let Some(target) = self.txn(id).cloned() else {
@@ -330,12 +449,7 @@ impl Store {
     fn conflicts(&self, base: u64, touched: &[Touch], undo: bool) -> Vec<Diagnostic> {
         let mut out = Vec::new();
         for t in self.since(base) {
-            let cancelled = self.reverted_by.contains_key(&t.id)
-                || t.reverts
-                    .as_ref()
-                    .and_then(|r| self.txn(r))
-                    .is_some_and(|r| r.result > base);
-            if cancelled {
+            if self.cancelled(t, base) {
                 continue;
             }
             for op in &t.ops {
@@ -538,6 +652,9 @@ impl<'s> Staged<'s> {
                 let touched: Vec<Touch> = self.ops.iter().flat_map(Touch::of).collect();
                 errors.extend(store.conflicts(base, &touched, self.reverts.is_some()));
             }
+        }
+        if let Some(guard) = &store.guard {
+            errors.extend(guard.check(&self.meta, store.origin(), &self.ops));
         }
         for (doc, before) in &self.baselines {
             let after = store.ws.check(doc, None, &store.db);
