@@ -25,10 +25,14 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 ## Contracts
 
-The v1 global update-after-bind heap has 128 sampled images, 64 storage buffers,
-64 storage images and, on RT-capable devices, 16 acceleration structures.
-Binding 2 has three immutable linear samplers: material repeat, environment U
-repeat/V clamp, and temporal clamp. Root constants are exactly 32 bytes.
+The v2 global update-after-bind heap has a variable-count runtime sampled-image
+array at binding 5 (up to 65,536 slots, clamped to queried set/stage/pool limits),
+64 storage buffers, 64 storage images and, on RT devices, 16 acceleration structures.
+`DeviceInfo.sampled_image_capacity` records the selected capacity. Binding 0 mirrors
+the first 128 slots for cached editor material previews only. All engine pipelines
+must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
+Binding 2 has three fixed trilinear samplers: material repeat, environment U
+repeat/V clamp, and temporal clamp, with native mip LODs enabled. Root constants are 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle
@@ -60,6 +64,10 @@ or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
 GPU tests need Vulkan 1.3, validation layers, a dedicated compute family and
 process-local `VK_IMPLICIT_LAYER_PATH` pointing at an empty directory on this PC.
 They verify malformed-copy rejection, stale handles and real BLAS/TLAS lifetime.
+The sampled-heap probe reads 257 nonuniform slots on GPU, publishes an unused slot
+before completion, and checks native mip interpolation. Explicit offline fixture
+updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
+`ara-shader-cook crates/ara-gpu/tests/shaders/pipelines.json crates/ara-gpu/tests/cooked`.
 
 Metal 4's implementation point is `metal.rs`, enabled only on macOS. Implement
 this same portable surface using converter-compatible root buffers, argument

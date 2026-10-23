@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
   "stages": [
     {
-      "dxil": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/fogRasterMain.dxil",
-      "dxil_hash": "67bb187fb1161f31be7f3422f4f4e885b0bd0ecc0711e5d308fa492d2b28cd03",
+      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/fogRasterMain.dxil",
+      "dxil_hash": "c0d41ce900ead325448f83ffdda3f9fc78343539703752b03abecafa38be3a6b",
       "source_entry": "fogRasterMain",
-      "spirv": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/fogRasterMain.spv",
+      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/fogRasterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "05ba843f0de10f226d1731856e27100504487570bee29dad14c89adcfb0b1571",
+      "spirv_hash": "3b428698e10153efc30f58bfcd09f93c58a7ab527c9ee4fea3147d2cd1c92c8c",
       "stage": "compute"
     }
   ],

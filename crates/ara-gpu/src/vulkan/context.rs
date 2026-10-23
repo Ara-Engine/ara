@@ -120,6 +120,9 @@ pub struct DeviceInfo {
     pub ray_tracing: bool,
     /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
     pub texture_compression_bc: bool,
+    /// Allocated variable-count sampled-image slots at binding 5, capped at 65,536
+    /// and by the device's update-after-bind set, stage and pool limits.
+    pub sampled_image_capacity: u32,
     /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
     pub mesh_shading: bool,
     /// Mesh indirect group limits: x, y, z, and the total group count.

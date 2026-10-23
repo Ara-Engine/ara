@@ -7,7 +7,7 @@ struct Root {uint particles;uint lists;uint control;uint frame;uint tick;uint em
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128] : register(t0,space1);
+BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 struct Config {uint4 partition;uint4 lists;uint4 scratch;uint4 render;uint4 atlas;float4 surface;float4 boundsMin;float4 boundsMax;float4 lightColor;float4 lightPosition;uint4 appearance;float4 motion;};

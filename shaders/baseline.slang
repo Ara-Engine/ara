@@ -7,7 +7,7 @@ struct Root { uint frame; uint materials; uint material; uint entity; uint casca
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128] : register(t0,space1);
+BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
 BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);

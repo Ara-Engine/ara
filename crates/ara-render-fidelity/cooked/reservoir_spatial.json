@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
   "stages": [
     {
-      "dxil": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/reservoirSpatial.dxil",
-      "dxil_hash": "4f9a5db3c5b1b28ec5434e5010f5c17d2236b7f9b5aa255007d8d63f84b62fde",
+      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/reservoirSpatial.dxil",
+      "dxil_hash": "a92a15c8d43d6c0c1542a864e63141b6e0efa340972944b97fe397fea42f5969",
       "source_entry": "reservoirSpatial",
-      "spirv": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/reservoirSpatial.spv",
+      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/reservoirSpatial.spv",
       "spirv_entry": "main",
-      "spirv_hash": "304e22b5fb7a664c466ff81fc505c5ef79bd8bcda6fba121c6fa95fab2538eae",
+      "spirv_hash": "69630a4aba77b51d64f2d696a40ebd91e92feaad37a6a4102eeb2f71227c32a2",
       "stage": "compute"
     }
   ],

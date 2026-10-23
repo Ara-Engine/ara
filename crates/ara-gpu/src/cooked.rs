@@ -18,11 +18,22 @@ pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std
         .unwrap_or_else(|| checkout.as_ref().to_path_buf())
 }
 
-/// Binding ABI version one. Changes invalidate every cooked pipeline.
-pub const BINDING_LAYOUT: &str = "ara.v1:root32:texture128:buffer64:sampler3:storage64:as16";
+/// Runtime sampled-image array at binding 5. Bindings 0..4 retain the v1 subset
+/// for cached material previews; new cooks always use this version's fingerprint.
+pub const BINDING_LAYOUT: &str =
+    "ara.v2:root32:texture-runtime@5:legacy-texture128@0:buffer64:sampler3:storage64:as16";
 /// Hash of the exact global binding ABI.
 pub fn binding_layout_hash() -> String {
     format!("{:x}", Sha256::digest(BINDING_LAYOUT.as_bytes()))
+}
+
+/// Only cached editor material previews retain this binding subset. Engine
+/// pipelines must be recooked before addressing the runtime sampled-image array.
+pub(crate) fn legacy_preview_layout_hash() -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(b"ara.v1:root32:texture128:buffer64:sampler3:storage64:as16")
+    )
 }
 
 /// A shader stage produced by the offline cook.
