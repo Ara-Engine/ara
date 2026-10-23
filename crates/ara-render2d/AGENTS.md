@@ -18,13 +18,16 @@ Owned Vulkan 2D render path on ara-gpu, reusing ara-render's graph, ToneMap and 
 ## Rules
 
 - Scene2d is never authoritative gameplay state; stage new renderers off the human's
-  frame and swap at frame boundaries (D20). `batch::prepare` is per-frame code: borrow
-  from the extraction, no per-sprite allocation (100k sprites: 13 ms dev profile).
+  frame and swap at frame boundaries (D20). `update` validates everything before any
+  GPU write, so a rejected update leaves the previous frame resident.
+- `batch::prepare` is per-frame code: borrow from the extraction, no per-sprite
+  allocation (100k sprites: 13 ms dev profile).
 - Sprites: procedural instancing (6 vertices; nine-slice 54), bindless atlases, stable
   painter sort (sorting layer, order, identity). Batches never merge across an
-  intervening sort key. Tile layers become 32x32 batches culled with parallax- and
-  pivot-aware bounds, drawn back to front (iso batches are screen-aligned x+y / x-y
-  bands) so tiles taller than their cell overlap correctly.
+  intervening sort key. Tile layers become batches culled with parallax- and
+  pivot-aware bounds: 32x32 cell chunks, or, when a map has tiles larger than their
+  cell, world-space depth bands drawn far to near (any layout or basis), each sorted
+  back to front.
 - Pixel mode snaps camera and pivots to art pixels, samples nearest, never jitters.
 - Color atlases are SRGB, normal atlases UNORM. Lighting and shadows run only for
   opt-in lit sprites/tiles; unlit draws skip the light loop entirely.

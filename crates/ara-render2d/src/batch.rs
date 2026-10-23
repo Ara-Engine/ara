@@ -3,7 +3,7 @@
 //! only the output vectors.
 use crate::Scene2d;
 use anyhow::{Result, ensure};
-use ara_2d::{GridLayout, tilemap};
+use ara_2d::tilemap;
 use bytemuck::{Pod, Zeroable};
 use std::collections::BTreeMap;
 
@@ -124,6 +124,16 @@ pub(crate) fn prepare(
             .map(|a| a.0.as_str())
             .ok_or_else(|| anyhow::anyhow!("tilemap {} has no atlas", map.name))?;
         let map_id = id(map.entity)?;
+        // Tiles larger than their cell overlap neighbors, so their batches must be
+        // world-space depth bands drawn far to near (any basis, any layout). Otherwise
+        // nothing overlaps and compact 32x32 cell chunks cull best.
+        let cell = map.map.cell_size;
+        let tall = map
+            .map
+            .definitions
+            .values()
+            .any(|d| !d.size.contains(&0.) && d.size != cell);
+        let band = 32. * cell[1];
         let mut ranks: Vec<_> = map.map.layers.iter().map(|l| l.id.as_str()).collect();
         ranks.sort_unstable();
         for layer in &map.map.layers {
@@ -174,7 +184,11 @@ pub(crate) fn prepare(
                     centre[1] + ey,
                 ];
                 let (instances, bounds) = groups
-                    .entry(depth_batch(map.map.layout, x, y))
+                    .entry(if tall {
+                        [-(position[1] / band).floor() as i32, 0]
+                    } else {
+                        [x.div_euclid(32), y.div_euclid(32)]
+                    })
                     .or_insert_with(|| (Vec::new(), rect));
                 instances.push((position[1], position[0], instance));
                 *bounds = [
@@ -348,15 +362,4 @@ impl<'a> Resolver<'a> {
             basis: draw.basis,
         })
     }
-}
-/// Render batch of a cell: `[-depth band, column band]`, so ascending keys draw far
-/// bands first. Isometric bands follow screen axes (x+y depth, x-y column), keeping
-/// tall diamond art back to front across batch borders; grid and hex use rows.
-fn depth_batch(layout: GridLayout, x: i32, y: i32) -> [i32; 2] {
-    let (depth, column) = match layout {
-        GridLayout::Isometric => (i64::from(x) + i64::from(y), i64::from(x) - i64::from(y)),
-        _ => (i64::from(y), i64::from(x)),
-    };
-    // |i32 + i32| / 32 always fits in i32.
-    [-depth.div_euclid(32) as i32, column.div_euclid(32) as i32]
 }

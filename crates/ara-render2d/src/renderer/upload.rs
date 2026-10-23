@@ -97,11 +97,16 @@ impl Renderer2d {
     }
     /// Replaces the extraction between frames on the same device and pipeline: moved
     /// sprites, flipbook frames, painted tiles, lights. Buffers grow as needed. The atlas
-    /// set (references, sizes, encodings) must be unchanged; new pixels need a new
-    /// renderer staged off-frame.
+    /// set (references, metadata, encodings) must be unchanged; pixels under an unchanged
+    /// reference are assumed unchanged, so hot-reloaded atlases need a new renderer.
     pub fn update(&mut self, scene: &Scene2d) -> Result<()> {
         ensure!(
-            atlas_key(scene) == self.atlas_key,
+            self.atlas_key.len() == scene.atlases.len()
+                && self.atlas_key.iter().zip(&scene.atlases).all(
+                    |((id, atlas, linear), (sid, s))| {
+                        id == sid && *atlas == s.atlas && *linear == s.linear
+                    }
+                ),
             "2D atlas set changed; stage a new Renderer2d"
         );
         self.load(scene)
@@ -111,7 +116,43 @@ impl Renderer2d {
             scene.lights.len() <= 64 && scene.occluders.len() <= 4096,
             "2D light/occluder capacity exceeded"
         );
+        // Validate and build everything before touching the GPU, so a rejected update
+        // leaves the previous extraction fully resident and consistent.
         let prepared = batch::prepare(scene, &self.indices, &self.names)?;
+        let mut frame = vec![0u8; HEADER];
+        for light in &scene.lights {
+            ensure!(
+                light
+                    .position
+                    .iter()
+                    .chain(light.color.iter())
+                    .all(|v| v.is_finite())
+                    && light.radius.is_finite()
+                    && light.radius > 0.,
+                "invalid 2D light"
+            );
+            frame.extend(bytemuck::cast_slice(&[
+                light.position[0],
+                light.position[1],
+                light.position[2],
+                light.radius,
+                light.color[0],
+                light.color[1],
+                light.color[2],
+                f32::from(u8::from(light.shadows)),
+            ]));
+        }
+        for segment in &scene.occluders {
+            ensure!(
+                segment.iter().all(|v| v.is_finite()),
+                "invalid shadow segment"
+            );
+            frame.extend(bytemuck::bytes_of(segment));
+        }
+        let lights = scene.lights.len() as u32;
+        let counts = [lights, scene.occluders.len() as u32, 0, 0];
+        frame[32..48].copy_from_slice(bytemuck::bytes_of(&counts));
+        frame[48..64].copy_from_slice(bytemuck::bytes_of(&[64u32, 64 + lights * 32, 0, 0]));
         let bytes: &[u8] = if prepared.instances.is_empty() {
             &[0; INSTANCE as usize]
         } else {
@@ -148,40 +189,6 @@ impl Renderer2d {
         self.gpu.resolve(point)?;
         self.gpu.collect()?;
         self.instance_state = Access::ShaderRead;
-        let mut frame = vec![0u8; HEADER];
-        for light in &scene.lights {
-            ensure!(
-                light
-                    .position
-                    .iter()
-                    .chain(light.color.iter())
-                    .all(|v| v.is_finite())
-                    && light.radius.is_finite()
-                    && light.radius > 0.,
-                "invalid 2D light"
-            );
-            frame.extend(bytemuck::cast_slice(&[
-                light.position[0],
-                light.position[1],
-                light.position[2],
-                light.radius,
-                light.color[0],
-                light.color[1],
-                light.color[2],
-                f32::from(u8::from(light.shadows)),
-            ]));
-        }
-        for segment in &scene.occluders {
-            ensure!(
-                segment.iter().all(|v| v.is_finite()),
-                "invalid shadow segment"
-            );
-            frame.extend(bytemuck::bytes_of(segment));
-        }
-        let lights = scene.lights.len() as u32;
-        let counts = [lights, scene.occluders.len() as u32, 0, 0];
-        frame[32..48].copy_from_slice(bytemuck::bytes_of(&counts));
-        frame[48..64].copy_from_slice(bytemuck::bytes_of(&[64u32, 64 + lights * 32, 0, 0]));
         if frame.len() as u64 > self.frame_capacity {
             self.gpu.retire(Resource::Buffer(self.frame))?;
             self.frame_capacity = (frame.len() as u64).next_power_of_two();
@@ -232,11 +239,11 @@ fn frame_buffer(gpu: &mut VulkanDevice, capacity: u64) -> Result<Buffer> {
     Ok(gpu.create_buffer(capacity, vk::BufferUsageFlags::STORAGE_BUFFER, true)?)
 }
 /// What an `update` may not change without a new renderer.
-fn atlas_key(scene: &Scene2d) -> Vec<(String, u32, u32, bool)> {
+fn atlas_key(scene: &Scene2d) -> Vec<(String, ara_2d::Atlas, bool)> {
     scene
         .atlases
         .iter()
-        .map(|(id, a)| (id.to_owned(), a.atlas.width, a.atlas.height, a.linear))
+        .map(|(id, a)| (id.to_owned(), a.atlas.clone(), a.linear))
         .collect()
 }
 /// Validates and uploads every atlas plus a flat normal; returns bindless indices by ref.

@@ -77,6 +77,29 @@ pub(crate) enum Source {
     Body(RigidBody2d, Collider2d),
     Character(CharacterController2d),
 }
+/// An entity's physical role, borrowed from the ECS for one boundary.
+#[derive(Clone, Copy)]
+pub(crate) enum Kind<'w> {
+    Body(&'w RigidBody2d, &'w Collider2d),
+    Character(&'w CharacterController2d),
+}
+impl Source {
+    /// Compares without cloning, so unchanged bodies cost no allocation per tick.
+    pub fn matches(&self, kind: Kind<'_>) -> bool {
+        match (self, kind) {
+            (Self::Body(b, c), Kind::Body(kb, kc)) => b == kb && c == kc,
+            (Self::Character(a), Kind::Character(b)) => a == b,
+            _ => false,
+        }
+    }
+    /// Owned copy, taken only when a binding is created.
+    pub fn of(kind: Kind<'_>) -> Self {
+        match kind {
+            Kind::Body(b, c) => Self::Body(*b, c.clone()),
+            Kind::Character(c) => Self::Character(*c),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Binding {
     pub body: RigidBodyHandle,
@@ -128,6 +151,21 @@ impl SolverState {
         );
         let state: Self = codec().deserialize(&bytes[build.len()..])?;
         state.config.validate()?;
+        // Untrusted bytes: every binding must name a live body with exactly its collider,
+        // and owners must be the exact inverse, or later ticks would index missing handles.
+        ensure!(
+            state.owners.len() == state.bindings.len()
+                && state.bindings.iter().all(|(id, b)| {
+                    state.world.bodies.get(b.body).is_some()
+                        && state
+                            .world
+                            .colliders
+                            .get(b.collider)
+                            .is_some_and(|c| c.parent() == Some(b.body))
+                        && state.owners.get(&b.collider.into_raw_parts()) == Some(id)
+                }),
+            "2D physics snapshot bindings are inconsistent"
+        );
         Ok(state)
     }
 }
@@ -231,6 +269,11 @@ impl Physics2d {
                 })
             }))
     }
+    /// Whether a bound body is asleep (resting, skipped by the solver); None if unbound.
+    pub fn sleeping(&self, entity: &str) -> Option<bool> {
+        let binding = self.state.bindings.get(entity)?;
+        Some(self.state.world.bodies.get(binding.body)?.is_sleeping())
+    }
     /// Identities touching `entity` after the last tick: solid contacts and sensor
     /// overlaps, sorted and deduplicated. Use for triggers, pickups and hazards.
     pub fn touching(&self, entity: &str) -> Vec<&str> {
@@ -273,5 +316,46 @@ impl Physics2d {
         );
         self.state = state;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CharacterController2d;
+
+    #[test]
+    fn snapshots_with_dangling_bindings_are_rejected() {
+        let mut physics = Physics2d::new(Physics2dConfig::default()).expect("valid config");
+        let state = &mut physics.state;
+        let (body, collider) = state
+            .world
+            .insert(RigidBodyBuilder::fixed(), ColliderBuilder::ball(0.5));
+        state.owners.insert(collider.into_raw_parts(), "e_a".into());
+        state.bindings.insert(
+            "e_a".into(),
+            Binding {
+                body,
+                collider,
+                source: Source::Character(CharacterController2d::default()),
+            },
+        );
+        let mut target = Physics2d::new(Physics2dConfig::default()).expect("valid config");
+        assert!(
+            target
+                .restore(&physics.snapshot().expect("snapshot"))
+                .is_ok()
+        );
+        physics.state.world.remove_body(body);
+        let dangling = physics.snapshot().expect("snapshot");
+        assert!(
+            target.restore(&dangling).is_err(),
+            "would panic on the next tick"
+        );
+        assert_eq!(
+            target.len(),
+            1,
+            "a rejected restore keeps the existing solver"
+        );
     }
 }

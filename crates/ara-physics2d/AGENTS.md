@@ -13,7 +13,7 @@ Mirrors ara-physics' 3D vocabulary with dimension-specific 2D geometry.
 - `install(session, Physics2dConfig)`: inserts resources and appends the boundary system.
   `tick_ecs(world)` runs one boundary directly; `prepare_ecs` binds without stepping.
 - `Physics2d`: `raycast`, `touching` (contacts + sensor overlaps, sorted identities),
-  `snapshot`/`restore` (versioned, build-fingerprinted, bounded at 256 MiB).
+  `sleeping`, `snapshot`/`restore` (versioned, build-fingerprinted, bounded at 256 MiB).
 - `commands::register`: `physics2d.set` (atomic body-or-character role) and
   `tilemap.colliders.generate` (owned, replaceable, undoable static hulls).
 
@@ -24,7 +24,10 @@ Mirrors ara-physics' 3D vocabulary with dimension-specific 2D geometry.
 - Gameplay state is ECS: pose, velocity, grounded. The solver (contacts, islands, BVH,
   handles) is infrastructure snapshotted whole; never rebuild it from transforms.
 - Writes to `PhysicsPose2d` teleport static/dynamic bodies and characters; kinematic
-  bodies move to it. Writes to `Velocity2d` apply to dynamic bodies.
+  bodies move to it. Rotation is compared as the stored angle, never a rebuilt complex
+  (round trips are not bit-exact and would wake bodies). `Velocity2d` writes apply to
+  dynamic bodies. Rows borrow from the ECS; nothing is cloned for unchanged bodies.
+- Restore validates bindings against the decoded world before replacing the solver.
 - Character policy matches 3D CharacterVirtual: grounded drops vertical speed, jumps
   only from ground, gravity integrates the rest; desired velocity ⟂ gravity.
 - New/teleported colliders reach queries through `BroadPhaseBvh::set_aabb`. Never call

@@ -460,3 +460,48 @@ fn respawns_and_new_ground_are_visible_to_characters_on_the_same_tick() {
         "new ground seen"
     );
 }
+
+#[test]
+fn rotated_resting_bodies_fall_asleep_through_the_ecs_round_trip() {
+    let mut world = World::new();
+    spawn(
+        &mut world,
+        "e_floor",
+        MotionType2d::Static,
+        [0., -0.5],
+        slab([30., 0.5]),
+    );
+    // Many angles: atan2/sin_cos round trips are not bit-exact for all of them.
+    for i in 0..32 {
+        let at = [i as f32 * 1.5 - 24., 1.];
+        let rotation = 0.05 + i as f32 * 0.097;
+        let e = spawn(
+            &mut world,
+            &format!("e_tilt{i:02}"),
+            MotionType2d::Dynamic,
+            at,
+            Collider2d::default(),
+        );
+        world.entity_mut(e).insert((
+            RigidBody2d {
+                motion: MotionType2d::Dynamic,
+                lock_rotation: true,
+                ..Default::default()
+            },
+            PhysicsPose2d {
+                position: at,
+                rotation,
+            },
+        ));
+    }
+    world.insert_resource(Physics2d::new(Physics2dConfig::default()).unwrap());
+    tick(&mut world, 400);
+    let physics = world.resource::<Physics2d>();
+    let awake: Vec<_> = (0..32)
+        .filter(|i| physics.sleeping(&format!("e_tilt{i:02}")) != Some(true))
+        .collect();
+    assert!(
+        awake.is_empty(),
+        "kept awake by the ECS round trip: {awake:?}"
+    );
+}

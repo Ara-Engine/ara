@@ -159,7 +159,23 @@ fn update_matches_a_fresh_upload_and_rejects_atlas_changes() -> Result<()> {
         updated.metadata.scene_hash == reference.metadata.scene_hash,
         "provenance must describe resident content"
     );
+    // A rejected update (gameplay wrote an invalid light) changes nothing resident.
+    let mut broken = scene.clone();
+    broken.lights[0].radius = 0.;
+    ensure!(renderer.update(&broken).is_err(), "invalid light accepted");
+    let after = renderer.capture(&camera, common::request([640, 360]))?;
+    ensure!(
+        after.image == updated.image && after.metadata.scene_hash == updated.metadata.scene_hash,
+        "a rejected update left partial state resident"
+    );
     let mut other = next.clone();
+    if let Some(atlas) = other.atlases.values_mut().next() {
+        atlas.atlas.regions.clear();
+    }
+    ensure!(
+        renderer.update(&other).is_err(),
+        "atlas metadata change must restage"
+    );
     other.atlases.clear();
     ensure!(
         renderer.update(&other).is_err(),
@@ -189,7 +205,14 @@ fn tall_isometric_tiles_draw_back_to_front() -> Result<()> {
         layers: vec![ara_2d::TileLayer {
             id: "l_iso".into(),
             // "0,0" sorts before "1,1" as text, yet (0,0) is nearer and must win.
-            cells: [("0,0".into(), 1), ("1,1".into(), 2)].into(),
+            // (30,-1) and (31,-1) straddle a 32-cell column band; (30,-1) is nearer.
+            cells: [
+                ("0,0".into(), 1),
+                ("1,1".into(), 2),
+                ("30,-1".into(), 1),
+                ("31,-1".into(), 2),
+            ]
+            .into(),
             ..Default::default()
         }],
         ..Default::default()
@@ -214,9 +237,18 @@ fn tall_isometric_tiles_draw_back_to_front() -> Result<()> {
     let mut request = common::request([128, 128]);
     request.mode = ViewMode::Albedo;
     request.marks = None;
-    let capture = renderer.capture(&camera, request)?;
-    // World (0, 0.25) lies in both quads; masonry (blue) must cover the crate (brown).
-    let [r, _, b, _] = capture.image.get_pixel(64, 64).0;
-    ensure!(b > r, "back tile drawn over the front tile: rgb {r},{b}");
+    // Each camera centre lies in both quads; masonry (blue) must cover the crate (brown).
+    for centre in [[0., 0.25], [15.75, 7.]] {
+        let camera = ara_2d::Camera2d {
+            centre,
+            ..camera.clone()
+        };
+        let capture = renderer.capture(&camera, request.clone())?;
+        let [r, _, b, _] = capture.image.get_pixel(64, 64).0;
+        ensure!(
+            b > r,
+            "back tile drawn over the front tile at {centre:?}: rgb {r},{b}"
+        );
+    }
     Ok(())
 }

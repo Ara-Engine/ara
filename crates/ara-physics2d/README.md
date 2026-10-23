@@ -28,7 +28,7 @@ include the application build hash, as ara-sim's checkpoint contract requires.
 | Determinism | `enhanced-determinism` (cross-platform IEEE mode); bit-exact here across processes and insertion orders | Cross-platform determinism advertised since v3.1 |
 | Snapshot/restore | Serde of the complete world; versioned by us | `b2World_GetSnapshot` exists but is marked experimental with an unstable format |
 | Character control | Kinematic controller: slopes, autostep, snap-to-ground | Character mover primitives (plane solving, casts) |
-| Performance | 0.65 ms/tick for 1k boxes, ECS sync included (Rapier built at opt-level 3) | Likely faster (SIMD solver); not measured here |
+| Performance | 0.57 ms/tick for 1k boxes, ECS sync included (Rapier built at opt-level 3) | Likely faster (SIMD solver); not measured here |
 | Maintenance | Pure Rust, Cargo only, no ABI | C via an owned `cc` shim like S6 (Jolt), ~vendored revision upkeep |
 
 Rapier wins on the two netcode-critical criteria: a stable, complete serialization
@@ -41,12 +41,13 @@ do not inherit ground velocity yet, so moving platforms are the next controller 
 
 | Bodies | Step p50 / p95 | Snapshot | Snapshot / restore |
 |---|---|---|---|
-| 129 | 0.069 / 0.087 ms | 210 KB | 0.52 / 0.75 ms |
-| 1025 | 0.65 / 1.12 ms | 1.83 MB | 4.2 / 5.8 ms |
+| 129 | 0.074 / 0.10 ms | 210 KB | 0.52 / 0.77 ms |
+| 1025 | 0.57 / 1.13 ms | 1.83 MB | 3.7 / 5.2 ms |
 
 ECS-inclusive (stable-ID sync, validation, step, writeback), 120 ticks after 60 warm-up
 ticks, dev profile with dependencies at opt-level 3. `measurements/solver.json`; the
-pre-refactor run is `solver-before-component-split.json` (0.067 / 0.63 ms p50).
+pre-refactor run is `solver-before-component-split.json` (0.067 / 0.63 ms p50); rows
+now borrow from the ECS instead of cloning colliders each tick.
 Reproduce with `cargo run -p ara-physics2d --example physics2d-timings`.
 
 ## Authoring

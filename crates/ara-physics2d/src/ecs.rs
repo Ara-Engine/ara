@@ -1,9 +1,11 @@
 //! Fixed-tick ECS boundary: extract in stable Identity order, step once, write back.
+//! Rows borrow from the ECS for the whole step, so unchanged bodies allocate nothing;
+//! component writes are applied after the borrow ends.
 use crate::{
     CharacterController2d, CharacterInput2d, CharacterMotion2d, Collider2d, MotionType2d,
     Physics2d, PhysicsPose2d, RigidBody2d, Velocity2d,
     shape::{self, body_builder, character_collider, collider_builder},
-    world::{Binding, SolverState, Source},
+    world::{Binding, Kind, SolverState, Source},
 };
 use anyhow::{Result, ensure};
 use ara_schema::Schema;
@@ -58,7 +60,7 @@ pub fn step_system(world: &mut World) {
 }
 
 /// Runs one boundary directly, returning errors instead of storing a fault.
-/// Validates the whole extraction before any solver mutation.
+/// Validates the whole extraction, inputs included, before any solver mutation.
 pub fn tick_ecs(world: &mut World) -> Result<()> {
     world.resource_scope(|world, mut physics: Mut<Physics2d>| run(world, &mut physics.state))
 }
@@ -67,17 +69,39 @@ pub fn tick_ecs(world: &mut World) -> Result<()> {
 /// initial checkpoint see the projected scene before the first tick.
 pub fn prepare_ecs(world: &mut World) -> Result<()> {
     world.resource_scope(|world, mut physics: Mut<Physics2d>| {
-        let rows = rows(world)?;
-        let created = synchronize(world, &mut physics.state, &rows)?;
-        refresh_queries(&mut physics.state, &created);
+        let state = &mut physics.state;
+        let mut query = world.query_filtered::<Extract, Physical>();
+        let up = state.config.up();
+        let changes = {
+            let rows = rows(&mut query, world, up)?;
+            let (created, removed) = synchronize(state, &rows)?;
+            refresh_queries(state, &created);
+            removed
+        };
+        for entity in changes {
+            world.entity_mut(entity).remove::<CharacterMotion2d>();
+        }
         Ok(())
     })
 }
 
-struct Row {
+type Extract = (
+    Entity,
+    &'static Identity,
+    Option<&'static RigidBody2d>,
+    Option<&'static Collider2d>,
+    Option<&'static CharacterController2d>,
+    Option<&'static PhysicsPose2d>,
+    Option<&'static Velocity2d>,
+    Option<&'static CharacterInput2d>,
+    Option<&'static CharacterMotion2d>,
+);
+type Physical = Or<(With<RigidBody2d>, With<CharacterController2d>)>;
+
+struct Row<'w> {
     entity: Entity,
-    id: String,
-    source: Source,
+    id: &'w str,
+    kind: Kind<'w>,
     pose: PhysicsPose2d,
     velocity: Velocity2d,
     input: CharacterInput2d,
@@ -85,43 +109,36 @@ struct Row {
     grounded: bool,
 }
 
-fn rows(world: &mut World) -> Result<Vec<Row>> {
-    let mut query = world.query_filtered::<(
-        Entity,
-        &Identity,
-        Option<&RigidBody2d>,
-        Option<&Collider2d>,
-        Option<&CharacterController2d>,
-        Option<&PhysicsPose2d>,
-        Option<&Velocity2d>,
-        Option<&CharacterInput2d>,
-        Option<&CharacterMotion2d>,
-    ), Or<(With<RigidBody2d>, With<CharacterController2d>)>>();
+/// Extracts and validates every physical entity in identity order, borrowing the ECS.
+fn rows<'w>(
+    query: &mut QueryState<Extract, Physical>,
+    world: &'w World,
+    up: Option<Vector>,
+) -> Result<Vec<Row<'w>>> {
     let mut rows = Vec::new();
     for (entity, id, body, collider, character, pose, velocity, input, motion) in query.iter(world)
     {
-        let source = match (body, collider, character) {
+        let id = id.0.as_str();
+        let kind = match (body, collider, character) {
             (Some(_), _, Some(_)) => {
-                anyhow::bail!(
-                    "{}: an entity may have RigidBody2d or CharacterController2d",
-                    id.0
-                )
+                anyhow::bail!("{id}: an entity may have RigidBody2d or CharacterController2d")
             }
             (Some(body), Some(collider), None) => {
                 shape::validate_body(body)?;
-                Source::Body(*body, collider.clone())
+                shape::validate_collider(collider, body)?;
+                Kind::Body(body, collider)
             }
-            (Some(_), None, None) => anyhow::bail!("{}: RigidBody2d requires Collider2d", id.0),
+            (Some(_), None, None) => anyhow::bail!("{id}: RigidBody2d requires Collider2d"),
             (None, _, Some(character)) => {
                 shape::validate_character(character)?;
-                Source::Character(*character)
+                Kind::Character(character)
             }
             (None, _, None) => unreachable!("query requires a body or controller"),
         };
         let row = Row {
             entity,
-            id: id.0.clone(),
-            source,
+            id,
+            kind,
             pose: pose.copied().unwrap_or_default(),
             velocity: velocity.copied().unwrap_or_default(),
             input: input.copied().unwrap_or_default(),
@@ -129,9 +146,20 @@ fn rows(world: &mut World) -> Result<Vec<Row>> {
         };
         shape::validate_state(&row.pose, &row.velocity)?;
         shape::validate_input(&row.input)?;
+        if matches!(kind, Kind::Character(_)) {
+            let desired = Vector::new(row.input.desired_velocity[0], row.input.desired_velocity[1]);
+            if let Some(up) = up {
+                ensure!(
+                    desired.dot(up).abs() <= 1e-4 * desired.length().max(1.),
+                    "{id}: desired character velocity must be perpendicular to gravity"
+                );
+            } else {
+                ensure!(row.input.jump_speed == 0., "{id}: jumps require gravity");
+            }
+        }
         rows.push(row);
     }
-    rows.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+    rows.sort_unstable_by(|a, b| a.id.cmp(b.id));
     ensure!(
         rows.windows(2).all(|pair| pair[0].id != pair[1].id),
         "duplicate 2D physics identity"
@@ -140,52 +168,47 @@ fn rows(world: &mut World) -> Result<Vec<Row>> {
 }
 
 /// Removes stale bindings and creates new ones, both in identity order. Returns the new
-/// colliders, which queries cannot see until `refresh_queries`.
+/// colliders (invisible to queries until `refresh_queries`) and the entities that are
+/// no longer characters, whose CharacterMotion2d must be removed.
 fn synchronize(
-    world: &mut World,
     state: &mut SolverState,
-    rows: &[Row],
-) -> Result<Vec<ColliderHandle>> {
-    // Validate every collider before mutating the solver.
-    for row in rows {
-        if let Source::Body(body, collider) = &row.source {
-            shape::validate_collider(collider, body)?;
-        }
-    }
+    rows: &[Row<'_>],
+) -> Result<(Vec<ColliderHandle>, Vec<Entity>)> {
     let find = |id: &str| {
-        rows.binary_search_by(|r| r.id.as_str().cmp(id))
+        rows.binary_search_by(|r| r.id.cmp(id))
             .ok()
             .map(|i| &rows[i])
     };
     let stale: Vec<_> = state
         .bindings
         .iter()
-        .filter(|(id, b)| find(id).is_none_or(|row| row.source != b.source))
+        .filter(|(id, b)| find(id).is_none_or(|row| !b.source.matches(row.kind)))
         .map(|(id, _)| id.to_owned())
         .collect();
+    let mut removed = Vec::new();
     for id in stale {
         if let Some(binding) = state.bindings.remove(&id) {
             state.owners.remove(&binding.collider.into_raw_parts());
             state.world.remove_body(binding.body);
             if let Some(row) = find(&id)
-                && !matches!(row.source, Source::Character(_))
+                && !matches!(row.kind, Kind::Character(_))
             {
-                world.entity_mut(row.entity).remove::<CharacterMotion2d>();
+                removed.push(row.entity);
             }
         }
     }
     let masks = state.config.layer_masks;
     let mut created = Vec::new();
     for row in rows {
-        if state.bindings.contains_key(&row.id) {
+        if state.bindings.contains_key(row.id) {
             continue;
         }
-        let (body, collider) = match &row.source {
-            Source::Body(body, collider) => (
+        let (body, collider) = match row.kind {
+            Kind::Body(body, collider) => (
                 body_builder(body, &row.pose, &row.velocity),
                 collider_builder(collider, body, &masks)?,
             ),
-            Source::Character(character) => (
+            Kind::Character(character) => (
                 RigidBodyBuilder::kinematic_position_based()
                     .translation(Vector::new(row.pose.position[0], row.pose.position[1]))
                     .lock_rotations(),
@@ -195,18 +218,18 @@ fn synchronize(
         let (body, collider) = state.world.insert(body, collider);
         state
             .owners
-            .insert(collider.into_raw_parts(), row.id.clone());
+            .insert(collider.into_raw_parts(), row.id.to_owned());
         state.bindings.insert(
-            row.id.clone(),
+            row.id.to_owned(),
             Binding {
                 body,
                 collider,
-                source: row.source.clone(),
+                source: Source::of(row.kind),
             },
         );
         created.push(collider);
     }
-    Ok(created)
+    Ok((created, removed))
 }
 
 /// Makes new or teleported colliders visible to scene queries before the step. Rapier's
@@ -229,24 +252,24 @@ fn refresh_queries(state: &mut SolverState, colliders: &[ColliderHandle]) {
 
 /// Gameplay writes to pose/velocity become teleports, kinematic targets or velocity edits.
 /// A character whose pose differs from its body was teleported (for example a respawn).
-/// Returns the teleported colliders.
-fn apply_writes(state: &mut SolverState, rows: &[Row]) -> Vec<ColliderHandle> {
+/// Rotation is compared as the stored angle, never as a rebuilt unit complex, so the
+/// write-back round trip never wakes or teleports a rotating body. Returns teleported
+/// colliders.
+fn apply_writes(state: &mut SolverState, rows: &[Row<'_>]) -> Vec<ColliderHandle> {
     let mut moved = Vec::new();
     for row in rows {
-        let binding = &state.bindings[&row.id];
+        let binding = &state.bindings[row.id];
         let rb = &mut state.world.bodies[binding.body];
-        let pose = Pose::new(
-            Vector::new(row.pose.position[0], row.pose.position[1]),
-            row.pose.rotation,
-        );
-        let Source::Body(body, _) = &row.source else {
-            if rb.translation() != pose.translation {
-                rb.set_position(Pose::from_translation(pose.translation), true);
+        let translation = Vector::new(row.pose.position[0], row.pose.position[1]);
+        let Kind::Body(body, _) = row.kind else {
+            if rb.translation() != translation {
+                rb.set_position(Pose::from_translation(translation), true);
                 moved.push(binding.collider);
             }
             continue;
         };
-        if *rb.position() != pose {
+        if rb.translation() != translation || rb.rotation().angle() != row.pose.rotation {
+            let pose = Pose::new(translation, row.pose.rotation);
             if body.motion == MotionType2d::Kinematic {
                 rb.set_next_kinematic_position(pose);
             } else {
@@ -265,41 +288,36 @@ fn apply_writes(state: &mut SolverState, rows: &[Row]) -> Vec<ColliderHandle> {
     moved
 }
 
-struct Moved {
+/// A component write-back, applied once the ECS borrow ends.
+struct Write {
     entity: Entity,
-    position: Vector,
-    velocity: Vector,
-    motion: CharacterMotion2d,
+    pose: PhysicsPose2d,
+    velocity: Velocity2d,
+    motion: Option<CharacterMotion2d>,
 }
 
 /// Mirrors ara-physics' CharacterVirtual policy: grounded characters drop vertical speed,
-/// jumps launch only from the ground, gravity integrates the rest.
-fn move_characters(state: &mut SolverState, rows: &[Row], dt: f32) -> Result<Vec<Moved>> {
+/// jumps launch only from the ground, gravity integrates the rest. Inputs were validated
+/// by `rows`.
+fn move_characters(state: &mut SolverState, rows: &[Row<'_>], dt: f32) -> Vec<Write> {
     let up = state.config.up();
     let gravity = Vector::new(state.config.gravity[0], state.config.gravity[1]);
     let mut moved = Vec::new();
     for row in rows {
-        let Source::Character(c) = &row.source else {
+        let Kind::Character(c) = row.kind else {
             continue;
         };
-        let binding = &state.bindings[&row.id];
+        let binding = &state.bindings[row.id];
         let desired = Vector::new(row.input.desired_velocity[0], row.input.desired_velocity[1]);
         let previous = Vector::new(row.velocity.linear[0], row.velocity.linear[1]);
-        let was_grounded = row.grounded;
         let (velocity, jumping) = if let Some(up) = up {
-            ensure!(
-                desired.dot(up).abs() <= 1e-4 * desired.length().max(1.),
-                "{}: desired character velocity must be perpendicular to gravity",
-                row.id
-            );
-            let mut vertical = if was_grounded { 0. } else { previous.dot(up) };
-            let jumping = was_grounded && row.input.jump_speed > 0.;
+            let mut vertical = if row.grounded { 0. } else { previous.dot(up) };
+            let jumping = row.grounded && row.input.jump_speed > 0.;
             if jumping {
                 vertical += row.input.jump_speed;
             }
             (desired + up * vertical + gravity * dt, jumping)
         } else {
-            ensure!(row.input.jump_speed == 0., "jumps require gravity");
             (desired, false)
         };
         let controller = KinematicCharacterController {
@@ -349,26 +367,28 @@ fn move_characters(state: &mut SolverState, rows: &[Row], dt: f32) -> Result<Vec
         }
         state.world.bodies[binding.body]
             .set_next_kinematic_position(Pose::from_translation(position));
-        moved.push(Moved {
+        let normal = match (movement.grounded, ground_normal == Vector::ZERO) {
+            (false, _) => Vector::ZERO,
+            (true, true) => up.unwrap_or(Vector::ZERO),
+            (true, false) => ground_normal,
+        };
+        moved.push(Write {
             entity: row.entity,
-            position,
-            velocity: actual,
-            motion: CharacterMotion2d {
-                grounded: movement.grounded,
-                ground_normal: if movement.grounded {
-                    let n = if ground_normal == Vector::ZERO {
-                        up.unwrap_or(Vector::ZERO)
-                    } else {
-                        ground_normal
-                    };
-                    [n.x, n.y]
-                } else {
-                    [0.; 2]
-                },
+            pose: PhysicsPose2d {
+                position: [position.x, position.y],
+                rotation: 0.,
             },
+            velocity: Velocity2d {
+                linear: [actual.x, actual.y],
+                angular: 0.,
+            },
+            motion: Some(CharacterMotion2d {
+                grounded: movement.grounded,
+                ground_normal: [normal.x, normal.y],
+            }),
         });
     }
-    Ok(moved)
+    moved
 }
 
 fn run(world: &mut World, state: &mut SolverState) -> Result<()> {
@@ -379,43 +399,47 @@ fn run(world: &mut World, state: &mut SolverState) -> Result<()> {
             "2D physics requires its configured fixed tick"
         );
     }
-    let rows = rows(world)?;
-    let mut touched = synchronize(world, state, &rows)?;
-    touched.extend(apply_writes(state, &rows));
-    refresh_queries(state, &touched);
-    let characters = move_characters(state, &rows, dt)?;
-    state.world.step();
-    // Static bodies never move on their own; skipping them keeps tile worlds cheap.
-    for row in &rows {
-        if let Source::Body(body, _) = &row.source
-            && body.motion != MotionType2d::Static
-        {
-            let rb = &state.world.bodies[state.bindings[&row.id].body];
-            let (p, v) = (rb.translation(), rb.linvel());
-            world.entity_mut(row.entity).insert((
-                PhysicsPose2d {
-                    position: [p.x, p.y],
-                    rotation: rb.rotation().angle(),
-                },
-                Velocity2d {
-                    linear: [v.x, v.y],
-                    angular: rb.angvel(),
-                },
-            ));
+    let mut query = world.query_filtered::<Extract, Physical>();
+    let up = state.config.up();
+    let (mut writes, removed) = {
+        let rows = rows(&mut query, world, up)?;
+        let (mut touched, removed) = synchronize(state, &rows)?;
+        touched.extend(apply_writes(state, &rows));
+        refresh_queries(state, &touched);
+        let mut writes = move_characters(state, &rows, dt);
+        state.world.step();
+        // Static bodies never move on their own; skipping them keeps tile worlds cheap.
+        for row in &rows {
+            if let Kind::Body(body, _) = row.kind
+                && body.motion != MotionType2d::Static
+            {
+                let rb = &state.world.bodies[state.bindings[row.id].body];
+                let (p, v) = (rb.translation(), rb.linvel());
+                writes.push(Write {
+                    entity: row.entity,
+                    pose: PhysicsPose2d {
+                        position: [p.x, p.y],
+                        rotation: rb.rotation().angle(),
+                    },
+                    velocity: Velocity2d {
+                        linear: [v.x, v.y],
+                        angular: rb.angvel(),
+                    },
+                    motion: None,
+                });
+            }
         }
+        (writes, removed)
+    };
+    for entity in removed {
+        world.entity_mut(entity).remove::<CharacterMotion2d>();
     }
-    for c in characters {
-        world.entity_mut(c.entity).insert((
-            PhysicsPose2d {
-                position: [c.position.x, c.position.y],
-                rotation: 0.,
-            },
-            Velocity2d {
-                linear: [c.velocity.x, c.velocity.y],
-                angular: 0.,
-            },
-            c.motion,
-        ));
+    for w in writes.drain(..) {
+        let mut entity = world.entity_mut(w.entity);
+        entity.insert((w.pose, w.velocity));
+        if let Some(motion) = w.motion {
+            entity.insert(motion);
+        }
     }
     Ok(())
 }

@@ -37,7 +37,7 @@ pub struct Renderer2d {
     frame_index: u32,
     images: Vec<Image>,
     indices: BTreeMap<String, u32>,
-    atlas_key: Vec<(String, u32, u32, bool)>,
+    atlas_key: Vec<(String, ara_2d::Atlas, bool)>,
     atlas_digest: [u8; 32],
     targets: [Image; 3],
     states: [State; 3],
