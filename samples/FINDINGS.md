@@ -92,6 +92,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     their own fence), `KHR_materials_emissive_strength`, `KHR_materials_transmission`.
     Poly Haven glTF downloads also ship colour maps as JPG with opacity in separate maps;
     nothing in the pipeline can merge them (the build does it, `kit::cutout`).
+    **Cooked data fixed (`9f2813f`):** independent texture transforms/UV selectors,
+    emissive strength, transmission and cook-time companion opacity maps. Renderer
+    consumption is tracked by the renderer workstream.
 12. **Physical sky, fog, exposure and post cannot be authored in a scene.** `Environment`
     is a 3-colour gradient plus a linear exposure; the fidelity atmosphere, height fog,
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep

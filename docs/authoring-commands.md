@@ -41,6 +41,8 @@ ara do import.initialize --args '{"source":"audio/theme.ogg","id":"as_theme","se
 Selection follows the source extension, and the engine records the installed
 importer version. Configure replaces supplied settings, preset or dependencies;
 omitted fields are retained. Settings are reflected and validated before commit.
+Play consumes these command settings immediately, including a newly initialized
+import or a configure operation before the host's debounced sidecar save.
 Sidecars save alongside the source while asset references continue to name the
 source file. Undo removes a newly initialized sidecar, preserving the source.
 
@@ -59,6 +61,11 @@ Audio `decodedBudget` counts resident PCM staging bytes (64 MiB default; 64 KiB
 minimum). Music and dialogue decode and resample in bounded blocks before Opus
 encoding, independent of track duration. Effects decode into a resident clip and
 must fit the budget. Compressed input/output and codec/meter scratch are separate.
+Play keeps streamed imports compressed and feeds 4096-frame stereo PCM queues
+(about 33 KiB per voice) under an 8 MiB aggregate queue budget. Live playback
+decodes on workers; offline captures refill synchronously before each render
+quantum. Looping rewinds the compressed source on its producer. Graph sample
+nodes retain resident loading for their short effects.
 
 Animation commands expose the Rust `AnimationCommand` API:
 `animation.create`, `animation.skeleton.set`, `animation.clip.set`,

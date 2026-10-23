@@ -358,6 +358,9 @@ impl PlayService {
                 collect_refs(&Value::Object(record.clone()), &mut referenced);
             }
         }
+        self.assets()?
+            .synchronize(workspace, store.revision())
+            .map_err(|e| fail(codes::ASSETS, e))?;
         let pins = self
             .assets()?
             .pins(&referenced, Duration::from_secs(180))
@@ -1000,6 +1003,9 @@ impl Service for PlayService {
         let playing = !self.worlds.is_empty();
         let allow = self.worlds.values().any(|w| w.hot_reload);
         if let Ok(assets) = self.assets() {
+            if let Err(error) = assets.synchronize(cx.store().workspace(), cx.store().revision()) {
+                cx.log(Diagnostic::warning(codes::ASSETS, error));
+            }
             let changed = assets.poll(playing, allow);
             if !changed.is_empty() {
                 let pins: BTreeMap<String, String> = changed
