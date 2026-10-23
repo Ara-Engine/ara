@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 mod acceleration;
 mod emitters;
+mod mips;
 mod packing;
 mod upload;
 use packing::{content_hash, pack, texture_hash, validate};
@@ -58,6 +59,7 @@ pub struct GpuScene {
     pub(crate) sun_direction: Vec3,
     pub(crate) sun_lux: Vec3,
     pub(crate) has_emitters: bool,
+    pub(crate) has_layers: bool,
     pub(crate) hash: String,
     geometry: Vec<Geometry>,
     acceleration_update: AccelerationUpdate,
@@ -93,6 +95,7 @@ impl GpuScene {
                     .iter()
                     .any(|v| *v > 0.)
             }),
+            has_layers: crate::material::has_layers(&scene.materials),
             hash: String::new(),
             geometry: Vec::new(),
             acceleration_update: AccelerationUpdate::default(),
@@ -101,12 +104,7 @@ impl GpuScene {
         let mut materials = scene.materials.to_vec();
         let mut texture_indices = Vec::new();
         for texture in &scene.textures {
-            let format = if texture.srgb {
-                vk::Format::R8G8B8A8_SRGB
-            } else {
-                vk::Format::R8G8B8A8_UNORM
-            };
-            let image = upload_image(gpu, texture.size, format, &texture.rgba)?;
+            let image = mips::texture(gpu, texture)?;
             texture_indices.push(gpu.sampled_image(image, false)?.index);
             result.images.push(image);
         }
@@ -171,6 +169,7 @@ impl GpuScene {
         self.motion_pending = true;
         self.sun_direction = scene.sun_direction.normalize();
         self.sun_lux = scene.sun_lux;
+        self.has_layers = crate::material::has_layers(&scene.materials);
         self.has_emitters = scene.meshes.iter().any(|m| {
             scene.materials[m.material].emissive_roughness[..3]
                 .iter()

@@ -5,6 +5,9 @@ use ara_pathtrace::{metrics, robust_scenes};
 use std::collections::BTreeMap;
 
 const SIZE: [u32; 2] = [480, 270];
+fn configure(gpu: &mut VulkanDevice, view: &mut FidelityView, name: &str) -> Result<()> {
+    robust_scenes::configure_view(gpu, view, name == "outdoor_day")
+}
 
 fn cases() -> Result<
     Vec<(
@@ -42,6 +45,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let mut s = settings(SIZE, SIZE);
         s.post = post;
         let mut view = FidelityView::new(gpu, &scene, s, None)?;
+        configure(gpu, &mut view, name)?;
         for tick in 0..256 {
             let mut frame = input(&camera, tick, false);
             frame.deterministic = false;
@@ -53,6 +57,9 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let hash = view.scene_hash().to_owned();
         view.destroy(gpu)?;
         let mut reference = Reference::new(gpu, &scene, SIZE, 4096, 12, post)?;
+        if name == "outdoor_day" {
+            reference.set_atmosphere(Some(Default::default()))?;
+        }
         let mut half = Vec::new();
         for batch in 0..512 {
             reference.step(gpu, &camera, false)?;
@@ -104,6 +111,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 ..large::fixed_post()
             };
             let mut view = FidelityView::new(gpu, &scene, s, None)?;
+            configure(gpu, &mut view, name)?;
             let mut totals = Vec::new();
             let mut passes = BTreeMap::<String, Vec<f64>>::new();
             for tick in 0..156 {

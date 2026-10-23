@@ -21,7 +21,7 @@ struct Frame {
     float4 camera;float4 previousCamera;uint4 sizes;uint4 scene;
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
-    uint4 control;uint4 transport;float4 jitter;uint4 read[6];uint4 write[6];
+    uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;uint4 read[7];uint4 write[7];
 };
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint ri(Frame f,uint i){return f.read[i/4][i%4];}
@@ -35,35 +35,76 @@ float3 basis(float3 n,float3 v){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,
 float3 cosineDirection(float3 n,inout uint rng){float u=random(rng),v=random(rng);return basis(n,float3(sqrt(u)*cos(2*PI*v),sqrt(u)*sin(2*PI*v),sqrt(1-u)));}
 float3 coneDirection(float3 n,float radius,inout uint rng){float u=random(rng),v=random(rng);return normalize(basis(n,float3(sqrt(u)*radius*cos(2*PI*v),sqrt(u)*radius*sin(2*PI*v),1)));}
 float2 envUv(float3 d){return float2(atan2(d.z,d.x)/(2*PI)+0.5,acos(clamp(d.y,-1.,1.))/PI);}
-float3 environment(Frame f,float3 d){return textures[NonUniformResourceIndex(f.scene.z)].SampleLevel(samplers[1],envUv(d),0).rgb;}
+float3 atmosphereEnvironment(Frame f,float3 d,bool disk);
+float3 solarIrradiance(Frame f,float3 position);
+float3 environment(Frame f,float3 d){
+#ifdef SKY_ATMOSPHERE
+    return atmosphereEnvironment(f,d,false);
+#else
+    return textures[NonUniformResourceIndex(f.scene.z)].SampleLevel(samplers[1],envUv(d),0).rgb;
+#endif
+}
 struct Material {float4 colour;float4 emissiveRoughness;float4 surface;uint4 textures;uint4 flags;};
 struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;};
-struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;uint id;uint material;};
+struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;float specular;float ao;float coat;float coatRoughness;float3 sheen;float sheenRoughness;float transmission;uint id;uint material;};
 uint4 mesh(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(32+id*16);}
 Material material(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Material>(buffers[NonUniformResourceIndex(f.scene.x)].Load(4)+id*80);}
 Vertex vertex(Frame f,uint offset,uint index){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Vertex>(offset+index*48);}
-float4 tex(uint i,float2 uv){return textures[NonUniformResourceIndex(i)].SampleLevel(samplers[0],uv,0);}
+float4 mipTex(uint i,float2 uv,uint level){
+    uint w,h;textures[NonUniformResourceIndex(i)].GetDimensions(w,h);h/=2;
+    if(w==1 && h==1)return textures[NonUniformResourceIndex(i)].Load(int3(0,0,0));
+    uint offset=2*h-2*(h>>level)-countbits(h&((1u<<level)-1));uint2 size=max(uint2(w,h)>>level,uint2(1));
+    float2 wrapped=frac(uv)*size;
+    // Hardware bilinear filtering handles every interior tap. Only the repeat
+    // border needs explicit wrapped taps because the pyramid shares one image.
+    [branch]if(all(wrapped>=0.5) && all(wrapped<=float2(size)-0.5))return textures[NonUniformResourceIndex(i)].SampleLevel(samplers[2],float2(wrapped.x/w,(offset+wrapped.y)/(2*h)),0);
+    float2 q=wrapped-0.5,a=frac(q);int2 p=int2(floor(q));
+    int2 lo=(p+int2(size))%int2(size),hi=(p+1+int2(size))%int2(size);
+    float4 aa=textures[NonUniformResourceIndex(i)].Load(int3(lo.x,offset+lo.y,0)),bb=textures[NonUniformResourceIndex(i)].Load(int3(hi.x,offset+lo.y,0));
+    float4 cc=textures[NonUniformResourceIndex(i)].Load(int3(lo.x,offset+hi.y,0)),dd=textures[NonUniformResourceIndex(i)].Load(int3(hi.x,offset+hi.y,0));
+    return lerp(lerp(aa,bb,a.x),lerp(cc,dd,a.x),a.y);
+}
+float4 tex(uint i,float2 uv){return mipTex(i,uv,0);}
+float4 texLod(uint i,float2 uv,float footprint,float bias){
+    uint w,h;textures[NonUniformResourceIndex(i)].GetDimensions(w,h);h/=2;
+    float lod=clamp(log2(max(1e-8,footprint*max(w,h)))+bias,0.,floor(log2(float(min(w,h)))));
+    uint lo=uint(lod);float4 a=mipTex(i,uv,lo);return frac(lod)>0?lerp(a,mipTex(i,uv,lo+1),frac(lod)):a;
+}
 float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
 bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
-Surface surface(Frame f,uint id,uint primitive,float2 bary){
-    uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);
-    Vertex a=vertex(f,m.x,ix.x),b=vertex(f,m.x,ix.y),c=vertex(f,m.x,ix.z);float3 w=float3(1-bary.x-bary.y,bary);
-    Surface s;s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
+// Only primary motion-vector extraction needs the preceding vertex table.
+float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 current){
+    if(f.scene.x==f.scene.w)return current;float3 w=float3(1-bary.x-bary.y,bary);
     uint previousCount=buffers[NonUniformResourceIndex(f.scene.w)].Load(0);
     if(id<previousCount){uint4 previousMesh=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint4>(32+id*16);
         if(previousMesh.z>primitive*3+2){uint3 previousIndices=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint3>(previousMesh.y+primitive*12);
             Vertex pa=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.x*48),pb=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.y*48),pc=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.z*48);
-            s.previousPosition=pa.position*w.x+pb.position*w.y+pc.position*w.z;
+            return pa.position*w.x+pb.position*w.y+pc.position*w.z;
         }
     }
 
+    return current;
+}
+Surface surface(Frame f,uint id,uint primitive,float2 bary){
+    uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);
+    Vertex a=vertex(f,m.x,ix.x),b=vertex(f,m.x,ix.y),c=vertex(f,m.x,ix.z);float3 w=float3(1-bary.x-bary.y,bary);
+    Surface s;s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
     s.geometricNormal=normalize(cross(b.position-a.position,c.position-a.position));
     s.normal=normalize(a.normal*w.x+b.normal*w.y+c.normal*w.z);if(dot(s.geometricNormal,s.normal)<0)s.geometricNormal=-s.geometricNormal;float2 uv=a.uv*w.x+b.uv*w.y+c.uv*w.z;
     float4 tangent=a.tangent*w.x+b.tangent*w.y+c.tangent*w.z;float3 t=normalize(tangent.xyz-s.normal*dot(tangent.xyz,s.normal));
-    Material mat=material(f,m.w);float3 normal=tex(mat.textures.y,uv).xyz*2-1;normal.xy*=mat.surface.y;
+    float density=max(length(b.uv-a.uv)/max(length(b.position-a.position),1e-6),length(c.uv-a.uv)/max(length(c.position-a.position),1e-6));
+    float footprint=density*length(s.position-f.camera.xyz)*f.texture.x;
+    Material mat=material(f,m.w);float3 normal=texLod(mat.textures.y,uv,footprint,f.texture.y).xyz*2-1;normal.xy*=mat.surface.y;
     s.normal=normalize(t*normal.x+cross(s.normal,t)*tangent.w*normal.y+s.normal*normal.z);
-    float4 base=mat.colour*tex(mat.textures.x,uv);s.albedo=max(base.rgb,0);s.alpha=base.a;
-    float4 mr=tex(mat.textures.z,uv);s.metal=saturate(mat.surface.x*mr.b);s.roughness=clamp(mat.emissiveRoughness.w*mr.g,0.045,1);
+    float4 base=mat.colour*texLod(mat.textures.x,uv,footprint,f.texture.y);s.albedo=max(base.rgb,0);s.alpha=base.a;
+    float4 mr=texLod(mat.textures.z,uv,footprint,f.texture.y);s.metal=saturate(mat.surface.x*mr.b);s.roughness=clamp(sqrt(pow(mat.emissiveRoughness.w*mr.g,2)+min(max(0,1-dot(normal,normal)),0.25)),0.045,1);
+    bool detail=mat.flags.w==0x41524132;s.specular=detail?mat.surface.z*mr.a:1;s.ao=detail && (mat.flags.y&0x1000000)!=0?mr.r:1;
+#ifdef MATERIAL_LAYERS
+    s.coat=detail?float(mat.flags.y&255)/255.:0;s.coatRoughness=max(0.045,float((mat.flags.y>>8)&255)/255.);
+    s.sheen=detail?float3(mat.flags.z&255,(mat.flags.z>>8)&255,(mat.flags.z>>16)&255)/255.:float3(0);s.sheenRoughness=max(0.1,float(mat.flags.z>>24)/255.);s.transmission=detail?float((mat.flags.y>>16)&255)/255.:0;
+#else
+    s.coat=0;s.coatRoughness=0.15;s.sheen=0;s.sheenRoughness=0.5;s.transmission=0;
+#endif
     s.emissive=max(mat.emissiveRoughness.rgb*tex(mat.textures.w,uv).rgb,0);s.id=id;s.material=m.w;return s;
 }
 struct Hit {float distance;uint id;uint primitive;float2 bary;bool front;};
@@ -107,18 +148,33 @@ float3 visibleGgx(Surface s,float3 v,inout uint rng){
     float3 h=normalize(float3(a*nh.xy,max(nh.z,0)));return t*h.x+b*h.y+s.normal*h.z;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
+float sheenLambda(float c,float a){
+    float k=pow(1-a,2),x=min(c,1-c);float aa=lerp(21.5473,25.3245,k),b=lerp(3.82987,3.32435,k),cc=lerp(0.19823,0.16801,k),d=lerp(-1.9776,-1.27393,k),e=lerp(-4.32054,-4.85967,k);
+    float value=aa/(1+b*pow(max(x,1e-5),cc))+d*x+e;
+    if(c>=0.5){float half=aa/(1+b*pow(0.5,cc))+d*0.5+e;value=2*half-value;}return exp(value);
+}
 float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
     float nv=max(dot(s.normal,v),1e-5),nl=max(dot(s.normal,l),0.);float3 h=normalize(v+l);float nh=max(dot(s.normal,h),0.),vh=max(dot(v,h),1e-5);
     float a=s.roughness*s.roughness,a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
     float g=2*nv/(nv+sqrt(a2+(1-a2)*nv*nv))*2*nl/max(nl+sqrt(a2+(1-a2)*nl*nl),1e-6);
-    float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
-    pdf=lerp(nl/PI,d*smith(nv,a2)/(4*nv),mixture);
-    return ((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6))*nl;
+    float3 F=fresnel(vh,lerp(float3(0.04*s.specular),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
+    float diffusePdf=abs(dot(s.normal,l))/PI*(dot(s.normal,l)<0?s.transmission:1-s.transmission);
+    pdf=lerp(diffusePdf,d*smith(nv,a2)/(4*nv)*float(nl>0),mixture);
+    float3 result=((1-F)*(1-s.metal)*s.albedo/PI*(1-s.transmission)+d*g*F/max(4*nv*nl,1e-6))*nl;
+    if(dot(s.normal,l)<0)result=(1-F)*(1-s.metal)*s.albedo/PI*s.transmission*abs(dot(s.normal,l));
+    if(max(max(s.sheen.x,s.sheen.y),s.sheen.z)>0 && nl>0){float aSheen=s.sheenRoughness*s.sheenRoughness;float ds=(2+1/aSheen)*pow(max(0,1-nh*nh),0.5/aSheen)/(2*PI);float vis=1/((1+sheenLambda(nv,aSheen)+sheenLambda(nl,aSheen))*max(4*nv*nl,1e-6));
+        // Conservative unit-albedo bound instead of an under-estimated fitted E LUT.
+        result=result*(1-max(max(s.sheen.x,s.sheen.y),s.sheen.z))+s.sheen*ds*vis*nl;}
+    if(s.coat>0){float ca=pow(s.coatRoughness,4),cd=ca/(PI*pow(nh*nh*(ca-1)+1,2)),cg=smith(nv,ca)*smith(nl,ca);float cf=s.coat*fresnel(nv,float3(0.04)).x;
+        result=lerp(result,float3(cd*cg/max(4*nv,1e-6)),cf);pdf=lerp(pdf,cd*smith(nv,ca)/(4*nv)*float(nl>0),s.coat*0.25);}
+    // Authored micro-occlusion modulates unresolvable normal-map horizons only.
+    return result*saturate(abs(dot(s.normal,l))+2*s.ao-1);
 }
 float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
     float3 l;float choice=random(rng);if(choice<lerp(0.5,1.,s.metal)){
         l=reflect(-v,visibleGgx(s,v,rng));
-    }else l=cosineDirection(s.normal,rng);
+    }else l=cosineDirection(random(rng)<s.transmission?-s.normal:s.normal,rng);
+    if(s.coat>0 && random(rng)<s.coat*0.25){Surface coat=s;coat.roughness=s.coatRoughness;l=reflect(-v,visibleGgx(coat,v,rng));}
     float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }
 // Explicit area-light sampling is the sole emitter estimator after the camera
@@ -133,9 +189,9 @@ float3 emissiveDirect(Frame f,Surface s,float3 v,inout uint rng){
     float u=sqrt(random(rng)),t=random(rng);float2 bary=float2(u*(1-t),u*t);
     if(!accept(f,record.x,record.y,bary,rng))return 0;
     float3 position=a.xyz*(1-u)+b.xyz*bary.x+c.xyz*bary.y,delta=position-s.position;float distance=length(delta);float3 l=delta/max(distance,1e-6);
-    float lightCosine=abs(dot(normalize(cross(b.xyz-a.xyz,c.xyz-a.xyz)),-l));if(lightCosine<1e-6 || dot(s.normal,l)<=0 || distance<0.003)return 0;
+    float lightCosine=abs(dot(normalize(cross(b.xyz-a.xyz,c.xyz-a.xyz)),-l));if(lightCosine<1e-6 || (dot(s.normal,l)<=0 && s.transmission==0) || distance<0.003)return 0;
     float pdf=(c.w/(total*b.w))*distance*distance/lightCosine;
-    if(occluded(f,rayOrigin(s,s.normal),l,max(0.001,distance-0.003),rng))return 0;
+    if(occluded(f,rayOrigin(s,l),l,max(0.001,distance-0.003),rng))return 0;
     float bsdfPdf;return evaluate(s,v,l,bsdfPdf)*surface(f,record.x,record.y,bary).emissive/max(pdf,1e-12);
 #else
     return 0;
@@ -144,7 +200,11 @@ float3 emissiveDirect(Frame f,Surface s,float3 v,inout uint rng){
 float3 direct(Frame f,Surface s,float3 v,inout uint rng){
     float3 origin=rayOrigin(s,s.normal);Hit hit;float pdf;float3 sum=emissiveDirect(f,s,v,rng);
     float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng);
-    if(any(f.sunLux.rgb>0) && dot(s.normal,l)>0 && !occluded(f,origin,l,10000,rng))sum+=evaluate(s,v,l,pdf)*f.sunLux.rgb;
+    float3 sunlight=f.sunLux.rgb;
+#ifdef SKY_ATMOSPHERE
+    sunlight=solarIrradiance(f,s.position);
+#endif
+    if(any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng))sum+=evaluate(s,v,l,pdf)*sunlight;
     uint4 head=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
     for(uint i=0;i<head.w;i++){
         float4 position=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(head.z+i*64);
@@ -154,7 +214,7 @@ float3 direct(Frame f,Surface s,float3 v,inout uint rng){
         float3 delta=position.xyz-s.position;float dist=length(delta);l=delta/max(dist,1e-5);if(dist>position.w)continue;
         float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
         float fade=pow(saturate(1-pow(dist/position.w,4)),2);float3 sampled=coneDirection(l,0.025/max(dist,0.025),rng);
-        if(dot(s.normal,sampled)>0 && !occluded(f,origin,sampled,max(dist-0.03,0.001),rng))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
+        if((dot(s.normal,sampled)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,sampled),sampled,max(dist-0.03,0.001),rng))sum+=evaluate(s,v,sampled,pdf)*colour.rgb*(colour.w/(4*PI*max(dist*dist,0.01)))*fade*spot;
     }return sum;
 }
 float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
@@ -185,18 +245,43 @@ float3 irradianceBiased(Frame f,float3 position,float3 normal,uint probeBuffer,f
     }return total>1e-6?sum/total:float3(0);
 }
 float3 irradiance(Frame f,float3 position,float3 normal,uint probeBuffer){return irradianceBiased(f,position,normal,probeBuffer,normal*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2));}
-float3 indirect(Frame f,Surface s,float3 v,uint probes){float3 gn=dot(s.geometricNormal,v)>0?s.geometricNormal:-s.geometricNormal;float3 bias=gn*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2)+v*0.05;float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04),s.albedo,s.metal));return irradianceBiased(f,s.position,normalize(lerp(s.normal,reflect(-v,s.normal),s.metal*(1-s.roughness))),probes,bias)*(s.albedo*(1-s.metal)*(1-F)+F)/PI;}
+float3 indirect(Frame f,Surface s,float3 v,uint probes){
+    float3 gn=dot(s.geometricNormal,v)>0?s.geometricNormal:-s.geometricNormal;
+    float3 bias=gn*min(0.15,min(f.spacing.x,min(f.spacing.y,f.spacing.z))*0.2)+v*0.05;
+    float3 F=fresnel(sqrt(0.5+0.5*saturate(dot(s.normal,v))),lerp(float3(0.04*s.specular),s.albedo,s.metal));
+    float3 reflection=reflect(-v,s.normal);float horizon=pow(saturate(1+dot(reflection,gn)),2);
+    float specularOcclusion=saturate(pow(saturate(dot(s.normal,v))+s.ao,exp2(-16*s.roughness-1))-1+s.ao);
+    float3 diffuseWeight=s.albedo*(1-s.metal)*(1-F),specularWeight=F*horizon*specularOcclusion;
+    float3 biased=s.position+bias,grid=(biased-f.origin.xyz)/f.spacing.xyz;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(f.counts.xyz)-2);float3 alpha=saturate(grid-base),sum=0;float total=0;
+    // Surface visibility chooses the same probes for both lobes. Share metadata
+    // and moment reads, then evaluate each lobe's directional irradiance in place.
+    for(uint k=0;k<8;k++){
+        uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1),p=uint3(base)+d;uint id=(p.z*f.counts.y+p.y)*f.counts.x+p.x;
+        float4 meta=probeLoad(probes,id,100);if(meta.w<0.5)continue;
+        float3 delta=biased-probePosition(f,id)-meta.xyz;float distance=length(delta),dirScale=1/max(distance,1e-6);float3 dir=delta*dirScale;
+        float2 moments=probeSample(probes,id,dir,8,36).xy;float variance=max(moments.y-moments.x*moments.x,0.0001);
+        float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+        float3 tri=lerp(1-alpha,alpha,float3(d));float weight=tri.x*tri.y*tri.z*max(0.02,pow(saturate(dot(-dir,gn)*0.5+0.5),2))*visibility;
+        float3 value=0;
+        if(s.metal<1)value=probeSample(probes,id,s.normal,6,0).rgb*diffuseWeight*(1-s.transmission);
+        if(s.transmission>0)value+=probeSample(probes,id,-s.normal,6,0).rgb*diffuseWeight*s.transmission;
+        value+=probeSample(probes,id,reflection,6,0).rgb*specularWeight;
+        sum+=value*weight;total+=weight;
+    }return total>1e-6?sum/(total*PI):float3(0);
+}
 // Filter irradiance-like radiance, then restore high-frequency material colour.
 // BASE.w stores an exactly representable 24-bit UNORM RGB integer, not ray depth.
 float3 demodulation(Frame f,uint2 p){uint packed=uint(pixel(f,BASE,p).w);return pixel(f,WORLD+f.control.x,p).w==0?float3(1):max(float3(packed&255,(packed>>8)&255,(packed>>16)&255)/255.,float3(0.04));}
 float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.sizes.xy);float4 p=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,1,1));return normalize(p.xyz/p.w-f.camera.xyz);}
+#include "atmosphere.slangh"
 
 // Shared validity is also used by checkerboard transport, so uncovered pixels
 // always receive a fresh ray rather than an uninitialized reconstruction sample.
 bool reproject(Frame f,uint2 p,out float2 uv,out int2 at){
     uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p),normal=pixel(f,NORMAL+slot,p),motion=pixel(f,MOTION,p);
     uv=(float2(p)+0.5)/float2(f.sizes.xy)+motion.xy+(f.jitter.zw-f.jitter.xy)/float2(f.sizes.xy);at=int2(uv*f.sizes.xy);
-    if(f.temporal.x>0 || f.temporal.y>0)return false;
+    if(f.temporal.x>0)return false;
     // A stationary pixel integrates its area across subpixel samples, including
     // changing coverage at silhouettes. Reprojecting each individual hit instead
     // of the pixel footprint erases this antialiasing and smears fine textures.
