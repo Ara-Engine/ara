@@ -12,6 +12,8 @@
 //! the file stays strict JSON. `ara check` reports unresolved conflicts until the
 //! entries are removed.
 
+mod diff;
+
 use std::collections::BTreeSet;
 
 use ara_diag::{Diagnostic, Location, codes};
@@ -20,6 +22,8 @@ use ara_doc::{Document, Record, field};
 use ara_json::json_eq;
 use ara_schema::SchemaDb;
 use serde_json::{Map, Value};
+
+pub use diff::diff;
 
 /// One field both sides changed differently.
 #[derive(Debug, Clone, PartialEq)]

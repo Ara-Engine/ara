@@ -5,6 +5,10 @@
 > Claude in 24% fewer turns and Codex in 9% fewer; Codex used more input tokens.
 > Details: [`diagnose.md`](diagnose.md) (`why-with[-rN]-*`, `why-without[-rN]-*`).
 
+> **Suite `collab` (D21 claims and branch sessions):** two tasks with a teammate
+> holding claims. Run 1: Claude 2/2, Codex 1/2 (queued unclaimed work in a branch
+> too); after rewording ARA2500, run 2: both 2/2. Details: [`collab.md`](collab.md).
+
 Suite v0 (22 tasks) run by Claude Code with `claude:sonnet-5.5` and Codex with
 `codex:gpt-6-luna` (medium effort), once per engine version, 3 tasks at a time,
 on Windows 11. Each attempt is a fresh `ara init` project plus the outpost fixture,

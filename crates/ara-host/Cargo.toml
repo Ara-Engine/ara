@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 ara-profile = { path = "../ara-profile" }
 ara-cmd.workspace = true
+ara-collab = { path = "../ara-collab" }
 ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true

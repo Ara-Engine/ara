@@ -235,6 +235,20 @@ impl World {
             .count()
     }
 
+    /// Branch sessions persisted in `.ara/branches/`, rebuilt over the live
+    /// documents (their own state is `branch.store()`).
+    pub fn branches(&self) -> Vec<ara_collab::Branch> {
+        let dir = self.root.join(".ara/branches");
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+            .filter_map(|t| serde_json::from_str::<ara_collab::SavedBranch>(&t).ok())
+            .filter_map(|b| ara_collab::Branch::load(b, self.host.store()).ok())
+            .collect()
+    }
+
     /// `ara check` errors over every project document.
     pub fn errors(&self) -> &[Diagnostic] {
         &self.errors

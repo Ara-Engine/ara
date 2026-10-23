@@ -1,0 +1,133 @@
+{
+  "label": "collab",
+  "agent": "claude:sonnet-5.5",
+  "suite": "collab",
+  "started": "2026-10-23T10:42:40Z",
+  "engine": "62b8ce4",
+  "results": [
+    {
+      "task": "collab-avoid-claimed",
+      "area": "collab",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "Mia's claimed DoorLamp is untouched",
+          "ok": true
+        },
+        {
+          "what": "no agent changed the DoorLamp while it was claimed",
+          "ok": true
+        },
+        {
+          "what": "no hand edits of the scene file",
+          "ok": true,
+          "detail": "0 external edits"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_query": 1,
+        "ara_session": 1
+      },
+      "wallMs": 19725,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 121105,
+        "cacheWrite": 14364,
+        "output": 931
+      },
+      "costUsd": 0.07902129999999999,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I doubled two of the four lights in the outpost level and left the other two alone.\n\n- **WorkLight:** intensity went from 1200 to 2400.\n- **YardLamp bulb:** intensity went from 800 to 1600. This is a prefab instance, so the change is saved as an override on that instance, not on the prefab.\n- **DoorLamp bulb (800):** I didn't touch it. Mia has claimed the DoorLamp and the gate door while she re-times them, with about 180 minutes left. Once she's done, setting the bulb to 1600 would finish the job. I can do that then, or work in a branch session if you'd rather not wait.\n- **Floodlight (0):** I"
+    },
+    {
+      "task": "collab-branch-claimed",
+      "area": "collab",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_door01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the live door is untouched while Mia works",
+          "ok": true
+        },
+        {
+          "what": "no agent changed the GateDoor while it was claimed",
+          "ok": true
+        },
+        {
+          "what": "no hand edits of the scene file",
+          "ok": true,
+          "detail": "0 external edits"
+        },
+        {
+          "what": "a submitted branch session holds the change",
+          "ok": true
+        },
+        {
+          "what": "the queued change doubles the door speed",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_session": 4
+      },
+      "wallMs": 33762,
+      "tokens": {
+        "input": 14,
+        "cacheRead": 231353,
+        "cacheWrite": 15308,
+        "output": 1266
+      },
+      "costUsd": 0.09718629999999999,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The speed change is queued, not live. I didn't touch the gate door in the live level, so Mia's rework is unaffected.\n\n- **Change:** `Door.speed` on `GateDoor` (`e_door01`, `levels/outpost.scene`) goes from 1.2 to 2.4 m/s.\n- **Where it sits:** I made the edit in a branch (`br_96vm9fn7`) and submitted it. Mia has claimed `GateDoor` for about 180 more minutes, so the branch is waiting on that claim.\n- **When it lands:** It merges by itself once Mia releases the claim, with no further action from you or me.\n\nIf Mia changes the door's speed in her rework, the merge may conflict with her value. Chec"
+    }
+  ]
+}

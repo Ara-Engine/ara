@@ -657,6 +657,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-collab"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-host",
+ "ara-json",
+ "ara-merge",
+ "ara-ops",
+ "ara-proto",
+ "ara-rpc",
+ "ara-schema",
+ "proptest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-components"
 version = "0.0.0"
 dependencies = [
@@ -849,6 +868,7 @@ name = "ara-host"
 version = "0.0.0"
 dependencies = [
  "ara-cmd",
+ "ara-collab",
  "ara-components",
  "ara-diag",
  "ara-doc",
@@ -1033,6 +1053,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-json",
+ "ara-ops",
  "ara-schema",
  "insta",
  "serde_json",
@@ -1774,6 +1795,7 @@ dependencies = [
 name = "arabench"
 version = "0.0.0"
 dependencies = [
+ "ara-collab",
  "ara-diag",
  "ara-doc",
  "ara-host",

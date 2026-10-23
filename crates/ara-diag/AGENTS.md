@@ -58,7 +58,7 @@ only); every crate can depend on it.
 | 0900–0999 | C# host (`ara-script`) |
 | 1000–1999 | kernel: 1000 JSON, 1100 schema, 1200 documents, 1300 references, 1400 prefabs, 1500 transactions, 1600 commands, 1700 merge, 1800 protocol, 1900 projects |
 | 2000–2099 | the bus, `ara why`, runtime events (2020 reloads, 2030 frames) |
-| 2100 / 2200 / 2400 | assets / world streaming / networking |
+| 2100 / 2200 / 2400 / 2500 | assets / world streaming / networking / collaboration (`ara-collab`) |
 | 3100 / 3200 / 3300 / 3400 | graphs / materials / render visibility / audio |
 | 3600–3699 | terrain, VFX, 2D, 2D physics (3600, 3601 collide: see below) |
 | 6000–6099 | GPU, named `ARA_GPU_*` |

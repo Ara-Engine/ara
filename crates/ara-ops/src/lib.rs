@@ -9,11 +9,16 @@
 //!   base/result revisions, an idempotency key and its ops.
 //! - Undo applies inverse ops as a new transaction, after checking that no later,
 //!   still-effective transaction touched the same paths. Redo undoes the undo.
+//!   [`Store::undo_rebased`] is per-participant undo: it skips ops someone else
+//!   changed since, instead of failing.
+//! - A [`Guard`] can veto commits (collaboration claims).
 //! - [`Store::subscribe`] streams committed transactions; [`Store::since`] returns
 //!   them from a revision onward.
 
+mod guard;
 mod store;
 mod txn;
 
-pub use store::{Commit, Staged, Store};
+pub use guard::Guard;
+pub use store::{Commit, Rebased, Staged, Store};
 pub use txn::{Author, Transaction, TxnId, TxnMeta};

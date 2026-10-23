@@ -20,6 +20,11 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - `Author::{Human, Agent(name)}` ↔ `"human"` / `"agent:<name>"`.
 - Undo: `undo(txn, by)` (selective, e.g. review revert), `undo_last(author)`,
   `redo_last(author)`.
+- `undo_rebased(txn, by, foreign) -> Rebased { txn, skipped }`: per-participant
+  undo (D21); ops whose paths a later `foreign` transaction touched are skipped.
+- `Guard` (`check(meta, origin, ops) -> errors`): `set_guard` installs one (the
+  host's collaboration claims); `set_origin(session)` / `origin()` tell it who
+  is committing. Commit and `Staged::check` (dry runs) ask it.
 - `subscribe() -> mpsc::Receiver<Transaction>`.
 - `restore(txn, apply)`: put a journaled transaction back into history after a
   restart (same ID and revisions); `apply` re-applies its ops first.
