@@ -9,6 +9,7 @@ publish.workspace = true
 anyhow = "1.0"
 ara-asset = { path = "../ara-asset" }
 ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
 bytemuck = { version = "1.24", features = ["derive"] }
 half = "2.7"
 meshopt = "0.7"

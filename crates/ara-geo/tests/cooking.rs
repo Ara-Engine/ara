@@ -55,3 +55,35 @@ fn invalid_input_is_diagnosed() {
     s.indices[0] = u32::MAX;
     assert!(cook(&s, Settings::default()).is_err());
 }
+
+#[test]
+fn mixed_dag_cuts_preserve_every_shared_edge() {
+    use std::collections::BTreeMap;
+    let g = cook(&sample::rock(48, 96), Settings::default()).unwrap();
+    for threshold in [0.0, 0.0001, 0.001, 0.005, 0.01, 0.03, 0.1, 0.3, 1.0] {
+        let acceptable = |id: u32| id == ROOT || g.groups[id as usize].error <= threshold;
+        let mut edges = BTreeMap::new();
+        for (id, c) in g
+            .clusters
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| acceptable(c.group) && (c.parent == ROOT || !acceptable(c.parent)))
+        {
+            let page = g.cluster(id as u32).unwrap();
+            for tri in page.triangles.as_chunks::<3>().0 {
+                let p = tri.map(|v| page.vertices[v as usize].position);
+                for (mut a, mut b) in [(p[0], p[1]), (p[1], p[2]), (p[2], p[0])] {
+                    if a > b {
+                        std::mem::swap(&mut a, &mut b);
+                    }
+                    *edges.entry((a, b)).or_insert(0u32) += 1;
+                }
+            }
+            assert!(c.vertex_count <= 64);
+        }
+        assert!(
+            edges.values().all(|&count| count == 2),
+            "open/nonmanifold edge at error {threshold}"
+        );
+    }
+}

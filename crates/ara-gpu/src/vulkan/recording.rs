@@ -343,6 +343,7 @@ impl VulkanDevice {
                     }
                     if !rendering
                         || pipeline != Some(false)
+                        || bound.is_some_and(|h| self.pipelines.get(h).is_ok_and(|p| p.mesh))
                         || (u64::from(d.first_index) + u64::from(d.index_count)) * 4 > i.raw.size
                     {
                         return Err(GpuError::Contract("Invalid indexed draw".into()));

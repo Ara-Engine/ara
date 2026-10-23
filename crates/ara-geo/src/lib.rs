@@ -1,8 +1,10 @@
 #![warn(missing_docs)]
 //! Offline, border-preserving cluster DAGs and independently decodable pages.
 mod cook;
+mod diagnostics;
 mod format;
 mod importer;
+pub use diagnostics::Diagnostic;
 pub mod sample;
 
 use bytemuck::{Pod, Zeroable};
@@ -41,14 +43,18 @@ pub struct SourceMesh {
     pub indices: Vec<u32>,
 }
 /// Offline cook policy; every value participates in the cache identity.
-#[derive(Clone, Copy, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Clone, Copy, Serialize, Deserialize, ara_schema::Schema)]
+#[ara(name = "VirtualGeometrySettings", module = "geo")]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     /// Desired neighboring clusters per simplification group (2..=32).
+    #[ara(default = 8, range(min = 2, max = 32))]
     pub group_size: u32,
     /// Maximum hierarchy depth (1..=32).
+    #[ara(default = 24, range(min = 1, max = 32))]
     pub max_levels: u32,
     /// Relative error allowed in a single reduction (0..=1).
+    #[ara(default = 0.1, range(min = 0, max = 1))]
     pub relative_error: f32,
 }
 impl Default for Settings {

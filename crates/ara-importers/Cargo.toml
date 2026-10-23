@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 rayon = "1.11"
 ara-asset = { path = "../ara-asset" }
+ara-geo = { path = "../ara-geo" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }

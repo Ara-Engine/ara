@@ -1,0 +1,15 @@
+[package]
+name = "ara-vsm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0"
+bytemuck = { version = "1.24", features = ["derive"] }
+glam = { version = "0.30", features = ["bytemuck"] }
+serde.workspace = true
+
+[lints]
+workspace = true

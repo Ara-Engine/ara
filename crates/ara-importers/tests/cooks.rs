@@ -58,6 +58,7 @@ fn importer_settings_are_reflected_with_defaults_and_constraints() {
         "MeshSettings",
         "TextureSettings",
         "TextureUsage",
+        "VirtualGeometrySettings",
     ] {
         assert!(db.get(name).is_some());
     }
@@ -69,6 +70,24 @@ fn importer_settings_are_reflected_with_defaults_and_constraints() {
     assert_eq!(
         db.field_default(db.get("TextureSettings").unwrap().field("mipmaps").unwrap()),
         json!(true)
+    );
+}
+
+#[test]
+fn virtual_geometry_runs_through_the_builtin_asset_worker_registry() {
+    let source = ara_geo::sample::rock(12, 24);
+    let bytes = ara_json::to_canonical_string(&ara_json::to_value(&source).unwrap()).into_bytes();
+    let mut request = input(bytes, &ara_geo::GeoImporter, json!({"groupSize":8}));
+    request.thread_budget = 1;
+    let a = cook(&request);
+    request.thread_budget = 2;
+    let b = cook(&request);
+    assert_eq!(a, b);
+    assert_eq!(a.artifacts.len(), 1);
+    let geometry = ara_geo::Geometry::decode(&a.artifacts[0].bytes).unwrap();
+    assert_eq!(
+        geometry.diagnostics.source_triangles,
+        source.indices.len() as u64 / 3
     );
 }
 

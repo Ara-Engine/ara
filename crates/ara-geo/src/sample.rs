@@ -1,4 +1,4 @@
-//! Original procedural benchmark media, dedicated to the public domain (CC0).
+//! Original procedural benchmark media; no third-party source assets.
 use crate::{SourceMesh, Vertex};
 
 /// Generates a closed, indexed faceted rock without duplicated polar vertices.

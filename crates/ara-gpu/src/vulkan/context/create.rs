@@ -205,6 +205,10 @@ impl Gpu {
                     .descriptor_binding_acceleration_structure_update_after_bind(ray_tracing);
             let mut ray = vk::PhysicalDeviceRayQueryFeaturesKHR::default().ray_query(ray_tracing);
             let core = vk::PhysicalDeviceFeatures::default()
+                // Slang's fragment PrimitiveId interface declares Geometry.
+                // Enabling the reported core feature also permits that interface
+                // when the producer is a mesh stage rather than geometry stage.
+                .geometry_shader(core_supported.geometry_shader != 0)
                 .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
@@ -250,9 +254,12 @@ impl Gpu {
             let acceleration = ash::khr::acceleration_structure::Device::load(&instance, &device);
             let memory = instance.get_physical_device_memory_properties(physical);
             let mut as_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
+            let mut mesh_properties = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
             instance.get_physical_device_properties2(
                 physical,
-                &mut vk::PhysicalDeviceProperties2::default().push(&mut as_properties),
+                &mut vk::PhysicalDeviceProperties2::default()
+                    .push(&mut as_properties)
+                    .push(&mut mesh_properties),
             );
             let info = DeviceInfo {
                 name: CStr::from_ptr(properties.device_name.as_ptr())
@@ -268,6 +275,19 @@ impl Gpu {
                 device_id: properties.device_id,
                 ray_tracing,
                 mesh_shading,
+                mesh_dispatch: [
+                    mesh_properties.max_mesh_work_group_count[0],
+                    mesh_properties.max_mesh_work_group_count[1],
+                    mesh_properties.max_mesh_work_group_count[2],
+                    mesh_properties.max_mesh_work_group_total_count,
+                ],
+                task_dispatch: [
+                    mesh_properties.max_task_work_group_count[0],
+                    mesh_properties.max_task_work_group_count[1],
+                    mesh_properties.max_task_work_group_count[2],
+                    mesh_properties.max_task_work_group_total_count,
+                ],
+                geometry_shader: core_supported.geometry_shader != 0,
                 buffer_int64_atomics,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
                 driver_version: properties.driver_version,

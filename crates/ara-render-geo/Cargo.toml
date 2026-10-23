@@ -1,0 +1,21 @@
+[package]
+name = "ara-render-geo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0"
+ara-geo = { path = "../ara-geo" }
+ara-gpu = { path = "../ara-gpu" }
+ara-render = { path = "../ara-render" }
+ara-vsm = { path = "../ara-vsm" }
+bytemuck = { version = "1.24", features = ["derive"] }
+glam = { version = "0.30", features = ["bytemuck"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

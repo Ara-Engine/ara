@@ -10,6 +10,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 - `Handle<T>`: arena/device identity plus a 64-bit generation. Shader `HeapIndex`
   identities are separate. An expired CPU handle never aliases a replacement.
 - `Recorder` / `CommandList`: owned portable commands; no borrowed ECS state.
+- `DeviceInfo::{mesh_shading,buffer_int64_atomics}`: queried optional tiers.
+  `Stage::{Mesh,Task}` and `DrawMeshTasksIndirect` require the mesh tier; the
+  existing vertex/indirect path remains available. Mesh reads use ALL_GRAPHICS
+  barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
 - `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.

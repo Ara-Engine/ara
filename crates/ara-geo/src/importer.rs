@@ -9,7 +9,10 @@ impl Importer for GeoImporter {
         "ara.geo"
     }
     fn version(&self) -> &str {
-        "1-meshopt0.7-dag1"
+        "2-settings1-meshopt0.7-dag1"
+    }
+    fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
+        db.register::<Settings>();
     }
     fn import(
         &self,
@@ -18,7 +21,11 @@ impl Importer for GeoImporter {
     ) -> ara_asset::Result<ImportOutput> {
         context.report(0.05, "decoding static geometry")?;
         let source: SourceMesh = serde_json::from_slice(&input.source)?;
-        let settings: Settings = serde_json::from_value(input.settings.clone())?;
+        let settings: Settings = if input.settings.is_null() {
+            Settings::default()
+        } else {
+            serde_json::from_value(input.settings.clone())?
+        };
         context.report(0.1, "building border-locked cluster DAG")?;
         let geometry = cook(&source, settings)
             .and_then(|g| g.encode())

@@ -105,6 +105,12 @@ pub struct DeviceInfo {
     pub ray_tracing: bool,
     /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
     pub mesh_shading: bool,
+    /// Mesh indirect group limits: x, y, z, and the total group count.
+    pub mesh_dispatch: [u32; 4],
+    /// Task indirect group limits: x, y, z, and the total group count.
+    pub task_dispatch: [u32; 4],
+    /// Enabled core geometry capability (also used by Slang PrimitiveId inputs).
+    pub geometry_shader: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics.
     pub buffer_int64_atomics: bool,
     /// Maximum supported 2D extent.

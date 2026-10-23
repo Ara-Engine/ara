@@ -34,7 +34,9 @@ pub fn cook(source: &SourceMesh, settings: Settings) -> Result<Geometry> {
             .chain(&v.normal)
             .chain(&v.uv)
             .all(|x| x.is_finite())
-            && v.uv.iter().all(|x| x.abs() <= 65504.0)),
+            && v.uv.iter().all(|x| x.abs() <= 65504.0)
+            && v.normal.iter().any(|v| v.abs() > 1e-10)
+            && v.normal.iter().all(|v| v.abs() < 1e10)),
         "ARA_GEO_VERTEX: nonfinite/unrepresentable attributes"
     );
     let adapter = meshopt::VertexDataAdapter::new(

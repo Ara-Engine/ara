@@ -71,6 +71,10 @@ pub struct Geometry {
     pub diagnostics: Diagnostics,
 }
 impl Geometry {
+    /// Content identity used to reject streaming pages from another cooked asset.
+    pub fn identity(&self) -> Result<[u8; 32]> {
+        Ok(ara_asset::Digest::of(&self.encode()?).0)
+    }
     /// Decodes a single cluster; malformed streams never reach GPU upload.
     pub fn cluster(&self, id: u32) -> Result<Page> {
         let c = self
