@@ -13,7 +13,7 @@ use ara_diag::catalog;
 
 /// Numbers two crates define with different meanings, documented in one entry each.
 /// Never add to this list: give the newer code a free number instead.
-const KNOWN_COLLISIONS: &[u16] = &[3600, 3601];
+const KNOWN_COLLISIONS: &[u16] = &[];
 
 /// Export failures without a specific code use `ARA-EXP-<platform>-100`.
 const DYNAMIC: &[&str] = &[

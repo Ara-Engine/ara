@@ -188,37 +188,29 @@ Fixes:
 - For future renames, use `material.rename` with `from` and `to` so identity, connections, layout and overrides survive.
 - If deletion and creation were intentional, keep the new identity and disregard the rename suggestion.
 
-## ARA3600 terrain_vfx::INVALID: Invalid terrain or VFX operation
-owner: ara-terrain, ara-vfx
+## ARA3600 vfx::INVALID: Invalid VFX operation
+owner: ara-vfx
 
-Two crates report this number with different meanings: `ara-terrain` reports invalid terrain data, authoring operations or tile cooking; `ara-vfx` reports invalid effects, graph projections, bindings or simulation inputs. Read the message and subject to tell them apart. Invalid authoring commands are rejected; a failed terrain cook retains the last good tile rather than publishing the failed result.
+`ara-vfx` reports invalid effects, graph projections, bindings or simulation inputs. Invalid authoring commands are rejected and leave the effect unchanged.
 
 Causes:
-- Terrain grid, layer, brush or tile data is invalid, a referenced payload is missing or corrupt, or a cook cannot run or exceeds its dependency/residency bounds.
 - VFX names repeat, modules occupy the wrong stages, an emitter lacks exactly one lifetime and one geometry module, or parameter bindings have the wrong scope or type.
 - A VFX command targets a missing emitter/module/parameter, CPU depth collision lacks an authoritative `DepthQuery`, or the simulation tick counter is exhausted.
 
 Fixes:
-- For terrain, correct the named grid, layer or brush fields through terrain commands; use power-of-two tile cell counts from `16` through `256` and layer opacity in `0..1`.
-- Split terrain gestures touching more than `4096` tiles, reduce erosion stacks exceeding the `256`-sample dependency halo, or increase residency capacity when a tile exceeds its budget.
-- Restore the named terrain payload or worker executable, use a fresh unique job output path, then retry the cook.
-- For VFX, correct the effect with `vfx.text.apply` or `vfx.stack.edit`; give modules unique names, legal stages and valid typed bindings.
+- Correct the effect with `vfx.text.apply` or `vfx.stack.edit`; give modules unique names, legal stages and valid typed bindings.
 - Supply an authoritative `DepthQuery` for CPU depth collision, or reset the VFX instance if its tick counter is exhausted.
 
-## ARA3601 vfx_2d::QUALITY_OR_COMMAND: VFX limit or 2D command failure
-owner: ara-vfx, ara-2d
+## ARA3601 vfx::QUALITY: VFX quality limit reached
+owner: ara-vfx
 
-Two crates report this number with different meanings: `ara-vfx` warns that quality limits reduce particle or light work, while `ara-2d` reports a rejected authoring command. Read the message and subject to tell them apart. VFX continues with particle capacity allocated in authored emitter order and later excess lights omitted; failed 2D strokes and setters leave their transaction unapplied.
+Quality limits reduce particle or light work. VFX continues with particle capacity allocated in authored emitter order and later excess lights omitted.
 
 Causes:
-- VFX emitter capacities exceed `quality.particles`, or render light modules exceed `quality.lights`.
-- A 2D command targets an entity without `Tilemap`, an unknown layer or invalid tile data.
-- A fill has invalid bounds, excludes its seed or exceeds `65536` cells; a stroke exceeds its sample limit, or a component setter receives invalid geometry, light, camera or flipbook values.
+- Emitter capacities exceed `quality.particles`, or render light modules exceed `quality.lights`.
 
 Fixes:
-- For VFX, lower emitter capacities or light counts, reorder emitters to prioritize their allocations, or raise the corresponding valid quality limit with `vfx.text.apply`.
-- For 2D, target an existing tilemap layer and correct tile definitions with `tilemap.set` before retrying `tilemap.paint` or `tilemap.rule.apply`.
-- Keep `tilemap.fill` bounds within `65536` cells and include the seed; split oversized strokes and correct the component values named in the error before retrying the setter.
+- Lower emitter capacities or light counts, reorder emitters to prioritize their allocations, or raise the corresponding valid quality limit with `vfx.text.apply`.
 
 ## ARA3602 physics2d::COMMAND: Invalid 2D physics command
 owner: ara-physics2d
@@ -234,6 +226,32 @@ Fixes:
 - Resubmit `physics2d.set` with one valid role: `body` and `collider`, or `character`, plus a finite pose.
 - Correct the reported dimensions and material values; polygon colliders need `3..64` finite points forming a nondegenerate hull, and character height must exceed twice its positive radius.
 - Run `tilemap.colliders.generate` on a plain tilemap entity with a finite origin and invertible basis; generate prefab colliders in the prefab's source document.
+
+## ARA3610 terrain::INVALID: Invalid terrain operation
+owner: ara-terrain
+
+`ara-terrain` reports invalid terrain data, authoring operations or tile cooking. Invalid authoring commands are rejected; a failed cook retains the last good tile rather than publishing the failed result.
+
+Causes:
+- Terrain grid, layer, brush or tile data is invalid, a referenced payload is missing or corrupt, or a cook cannot run or exceeds its dependency/residency bounds.
+
+Fixes:
+- Correct the named grid, layer or brush fields through terrain commands; use power-of-two tile cell counts from `16` through `256` and layer opacity in `0..1`.
+- Split gestures touching more than `4096` tiles, reduce erosion stacks exceeding the `256`-sample dependency halo, or increase residency capacity when a tile exceeds its budget.
+- Restore the named terrain payload or worker executable, use a fresh unique job output path, then retry the cook.
+
+## ARA3620 2d::COMMAND: 2D command rejected
+owner: ara-2d
+
+`ara-2d` rejected an authoring command. Failed strokes and setters leave their transaction unapplied.
+
+Causes:
+- A command targets an entity without `Tilemap`, an unknown layer or invalid tile data.
+- A fill has invalid bounds, excludes its seed or exceeds `65536` cells; a stroke exceeds its sample limit, or a component setter receives invalid geometry, light, camera or flipbook values.
+
+Fixes:
+- Target an existing tilemap layer and correct tile definitions with `tilemap.set` before retrying `tilemap.paint` or `tilemap.rule.apply`.
+- Keep `tilemap.fill` bounds within `65536` cells and include the seed; split oversized strokes and correct the component values named in the error before retrying the setter.
 
 ## ARA7001 physics::BACKEND: Physics operation failed
 owner: ara-physics

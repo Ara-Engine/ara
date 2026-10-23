@@ -17,5 +17,5 @@ pub use tile::*;
 
 /// Terrain validation failure (local diagnostic range pending central allocation).
 pub fn invalid(message: impl Into<String>) -> ara_diag::Diagnostic {
-    ara_diag::Diagnostic::error(ara_diag::Code(3600), message)
+    ara_diag::Diagnostic::error(ara_diag::Code(3610), message)
 }
