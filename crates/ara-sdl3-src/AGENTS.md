@@ -24,7 +24,10 @@ on the registry bindings or build a second SDL instance.
 Native video, Vulkan surfaces, events, keyboard/mouse/text/IME/clipboard/high-DPI,
 joysticks/gamepads (HIDAPI, virtual devices), haptics, platform sensors, dialogs,
 power, filesystem and SDL audio. No SDL renderer, GPU backend, camera or OpenGL.
-Their central C API stub files remain because SDL's dynapi table references them.
+Their central C API files remain because SDL's dynapi table references them.
+SDL's renderer core also requires its YUV texture helpers even with every render
+driver disabled; no SDL renderer, GPU or camera backend is enabled.
+Linux IME uses XIM/Fcitx and Wayland text-input-v3; IBus/GLib is not compiled.
 
 ## Gates and maintenance
 
@@ -36,3 +39,12 @@ Also link the workspace after changes to binding features.
 
 See THIRD_PARTY_NOTICES.md for origins/licenses and manual protocol regeneration.
 Keep vendor files plain UTF-8/LF text; no symlinks, archives, binaries or changelogs.
+
+## Measurements (Windows x64, 2026-10-23)
+
+Ryzen 7 7800X3D, MSVC 14.50, native optimization level 3 and debug symbols:
+clean SDL C/C++ compilation + archives took 52.12 s with two Cargo jobs and
+22.37 s with eight (Rust dependencies excluded; other agents were active).
+WASAPI loopback, 32 trials: p50/p95 24.45/26.08 ms before, 25.31/26.35 ms after.
+SDL WASAPI fallback, 8 trials: 92.48/93.72 ms before, 82.67/83.39 ms after.
+Both use the existing QPC/MLS probe; output endpoint was BlackShark V3 - Game.

@@ -14,7 +14,7 @@ templates in config/. Upstream implementation source is otherwise unchanged.
 ## Linux declaration headers
 
 Headers originate from Ubuntu 24.04 packages for X11/Xorg protocols, Xext,
-Xcursor, Xfixes, Xi, Xrandr, Xss, Xtst, Wayland 1.22, xkbcommon 1.6,
+Xcursor, Xfixes, Xi, Xrandr, Xrender, Xss, Xtst, XCB, Wayland 1.22, xkbcommon 1.6,
 ALSA 1.2.11, PulseAudio 16.1, PipeWire/SPA 1.0.5, D-Bus 1.14.10,
 libudev (systemd 255) and libdecor 0.2.2. Only declarations are built against;
 the corresponding implementations are loaded from the host at runtime.
@@ -22,6 +22,8 @@ Each package's copyright/license text is retained under vendor/linux/licenses/.
 Those files identify the upstream projects, authors and license terms, including
 MIT/X11, LGPL-2.1-or-later and ALSA's LGPL-2.1-or-later header exception.
 No Linux implementation library is copied or statically linked.
+Shared full license texts are retained alongside the per-package notices.
+The Vulkan headers bundled with SDL use Apache-2.0; its full text is also there.
 
 ## Wayland protocol declarations
 

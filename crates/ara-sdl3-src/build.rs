@@ -43,7 +43,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("SDL Windows build currently requires the MSVC ABI".into());
     }
     println!("cargo:rerun-if-changed=config");
-    println!("cargo:rerun-if-changed=vendor");
+    for input in ["src", "include"] {
+        println!("cargo:rerun-if-changed={SDL}/{input}");
+    }
+    if os == "linux" {
+        println!("cargo:rerun-if-changed=vendor/linux/include");
+        println!("cargo:rerun-if-changed=vendor/wayland-generated");
+    }
     let mut build = cc::Build::new();
     build
         .include("config")
