@@ -4,6 +4,8 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 /// Editor launch settings; bounded verification runs use the same production event loop.
 pub struct Options {
+    /// Render a scene capture without creating a native window, then exit.
+    pub headless: bool,
     /// Project directory containing ara.project.json.
     pub project: PathBuf,
     /// Stop after this many event-loop frames; None keeps the editor open.
@@ -30,11 +32,12 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            headless: false,
             project: ".".into(),
             frames: None,
             verify: false,
             sample: false,
-            output: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence"),
+            output: PathBuf::from(".ara/captures"),
             size: [1440, 900],
             dpi: None,
             panel: None,

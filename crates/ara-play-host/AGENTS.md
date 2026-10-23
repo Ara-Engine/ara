@@ -10,7 +10,8 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
   `ARA_IMPORT_WORKER`), the .NET host (`ScriptPaths::locate`: `ARA_DOTNET_ARTIFACTS`
-  or the nearest `dotnet/artifacts/bin`); two warm headless players, no warm window.
+  or the nearest `dotnet/artifacts/bin`; installed tools beside the executable take
+  precedence); two warm headless players, no warm window.
 - `open_project(root)`: opens a project with the engine schema world and commands
   (`ara_runtime::engine`) for a host before `Host::open`; clashes become diagnostics.
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-

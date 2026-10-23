@@ -1,0 +1,99 @@
+ARA v0.0.1-alpha: release validation
+Windows 11 x64 / RTX 4070 SUPER; 2026-10-23
+Branch: t3/engine-release-packaging
+Packaged code commit: ab2b8083ba77daeea61d13919f26ce1871dae9b8
+
+Commands (CARGO_BUILD_JOBS=2):
+  cargo run -p ara-release -- package --version 0.0.1-alpha
+  cargo run -p ara-release -- notes --version 0.0.1-alpha
+  cargo run -p ara-release -- smoke
+All three commands completed successfully on this machine.
+
+Artifacts under target/release-dist:
+  ara-0.0.1-alpha-windows-x64.zip: 97764277 bytes (97.8 MB)
+    BLAKE3 771088521999ebd4dc476202e470e0225c594f6af1ae94db29a32cd892c8f19d
+  ara-0.0.1-alpha-windows-x64-setup.exe: 98762224 bytes (98.8 MB)
+    BLAKE3 1df975ccaa8cf3740bfd63e4feac5dfad12c97291ba726e252bc79d8b7305629
+  ara-0.0.1-alpha-windows-x64-symbols.zip: 193463424 bytes (193.5 MB)
+    BLAKE3 3e7742bcfd72d85ddc9bc125fdcf81b4dd4a506b6c3a0eec95bbf4fa0f2f253e
+Distribution: target/release-dist/ara-0.0.1-alpha-windows-x64/
+Release notes: target/release-dist/RELEASE_NOTES.md
+Runtime distribution contains zero PDBs; private symbols are separate.
+
+Final smoke: 12/12 PASS
+Evidence: C:\Users\snowy\.t3\worktrees\snengine\t3-a806fadd\target/release-dist\smoke-24728-1792778946
+  Silent SFX install into a new directory containing spaces.
+  Installed ara --version reports 0.0.1-alpha.
+  Installed ara doctor passes without VULKAN_SDK.
+  Bundled Slang + DXC + SPIR-V validation compile a real shader.
+  ara init creates a starter project.
+  Installed ara-editor creates a window-free scene capture.
+  Installed ara-editor opens a native window and captures its client area.
+  Hub registers the project and exact installed engine path.
+  Global MCP ara_projects list returns the registered project.
+  Installed ara-player runs 120 exact headless ticks over MCP.
+  Uninstall removes installed files and preserves the project.
+
+Visually inspected:
+  C:\Users\snowy\.t3\worktrees\snengine\t3-a806fadd\target/release-dist\smoke-24728-1792778946/native/editor.png
+  C:\Users\snowy\.t3\worktrees\snengine\t3-a806fadd\target/release-dist\smoke-24728-1792778946/capture/editor-scene.png
+  target/release-dist/crash-recovery-72060/crash-folder-offer.png
+Native and headless captures render the four-entity starter scene.
+The native crash dialog clearly offers Yes/No and says reports are never uploaded.
+
+Additional installed-build checks:
+  target/release-dist/shell-integration-56136/RESULT.txt: PASS.
+  Actual per-user Ara Hub / Ara Editor Start menu shortcuts, Installed apps
+  registration and PATH entry were created, checked and uninstalled.
+  The user's PATH was restored exactly; test shortcuts/registration were removed.
+  1211 native/tool/resource/installer files match the payload
+  used for that shell-integration verification. Managed assemblies were rebuilt
+  for the final commit; their informational versions embed its Git revision.
+  target/release-dist/crash-recovery-72060/RESULT.txt: PASS.
+  A real panic produced local JSON and a minidump. Next interactive editor
+  launch offered the crash folder; declining continued into the native editor.
+  The editor then closed normally and recorded the seen marker.
+  target/release-dist/symbol-validation/symbol-store/: PASS.
+  The packaged ara_nav_worker PDB and matching PE converted through ara-crash
+  into a Breakpad store; MODULE/INFO identify the matching Windows x64 image.
+
+Gates:
+  Scoped cargo check: PASS.
+  Scoped cargo clippy --all-targets -- -D warnings: PASS.
+  Scoped cargo test: 96 passed across 46 test targets.
+  cargo test -p ara-crash --all-features: 2 passed (native/panic capture, consent).
+  cargo clippy -p ara-crash --all-targets --all-features -- -D warnings: PASS.
+  Final ara-release tests/clippy and cargo fmt --all -- --check: PASS.
+  Logs are under target/release-dist/logs/.
+  Tests left tracked source files clean.
+
+Bundled:
+  CLI/Hub service/global MCP, editor, player, import/nav/terrain workers,
+  shader cook, cooked runtime resources, Slang/DXC/SPIR-V tools and licenses,
+  Ara .NET host/runtime/compile server/analyzers/generators/agent worker,
+  brand assets, starter template, all-rights-reserved placeholder license.
+  Cargo license inventory covers 1138 packages with vendored notices,
+  cached original upstream notices, SPDX texts and source provenance.
+  SDK Slang 2026.17 uses Apache-2.0 WITH LLVM-exception, not historical MIT.
+
+Required / current slots:
+  Windows 10/11 x64, Vulkan 1.3 GPU, 16 GB RAM; RT recommended.
+  x64 .NET 10 SDK/runtime and Microsoft VC++ v14 x64 runtime are prerequisites.
+  No Microsoft .NET SDK/runtime installer, reference packs or proprietary
+  CRT DLLs were copied into the distribution. Setup/doctor provide download links.
+  Hub UI is explicitly absent; ara-hub.exe is a reserved auto-packaging slot.
+  Only templates/starter exists in this checkout. The samples/assets.lock.json
+  and project-copy hooks are ready without changing samples/.
+  Unsigned alpha: ARA_SIGN_THUMBPRINT was unset; signtool hook was diagnosed/skipped.
+
+Machine isolation:
+  This PC has stale PRISM/Overwolf implicit Vulkan registrations. Smoke uses an
+  empty process-local VK_IMPLICIT_LAYER_PATH; final native logs have no overlay
+  loader diagnostics. No machine-wide Vulkan registry/settings were changed.
+  Crash and Hub tests use isolated user/config directories; no crashes upload.
+
+Main condition:
+  crates/ara-dev was absent on main (96292515439cd1f937f71b2a936e3906f149146d)
+  at final inspection, so its conditional check was not run.
+No push, tag, GitHub release, or external artifact publication was performed.
+

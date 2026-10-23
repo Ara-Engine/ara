@@ -1,0 +1,9 @@
+Original license texts for:
+aeronet_io 0.22.0-rc.1
+aeronet_steam 0.22.0-rc.1
+aeronet_tokio_runtime 0.22.0-rc.1
+aeronet_websocket 0.22.0-rc.1
+aeronet_webtransport 0.22.0-rc.1
+
+https://raw.githubusercontent.com/aecsocket/aeronet/82b2090e6f63d2f3a321a8fdcab2d823b2eee002/LICENSE-MIT
+https://raw.githubusercontent.com/aecsocket/aeronet/82b2090e6f63d2f3a321a8fdcab2d823b2eee002/LICENSE-APACHE

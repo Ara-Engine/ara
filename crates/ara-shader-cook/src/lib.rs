@@ -31,6 +31,31 @@ pub struct Toolchain {
     /// SPIR-V validator executable.
     pub spirv_val: PathBuf,
 }
+
+impl Toolchain {
+    /// Prefer bundled tools; SDK and PATH support development checkouts.
+    pub fn discover() -> Self {
+        let tool = |name: &str| {
+            let name = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("tools").join(&name)))
+                .filter(|path| path.is_file())
+                .or_else(|| {
+                    std::env::var_os("VULKAN_SDK").map(|sdk| {
+                        PathBuf::from(sdk)
+                            .join(if cfg!(windows) { "Bin" } else { "bin" })
+                            .join(&name)
+                    })
+                })
+                .unwrap_or_else(|| PathBuf::from(name))
+        };
+        Self {
+            slangc: tool("slangc"),
+            spirv_val: tool("spirv-val"),
+        }
+    }
+}
 fn run(command: &mut Command) -> Result<Vec<u8>> {
     let output = command
         .output()
@@ -67,7 +92,14 @@ pub fn cook(manifest: &Path, output: &Path, tools: &Toolchain) -> Result<usize> 
     source_hash.update(b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation");
     source_hash.update(std::fs::read(&tools.slangc)?);
     if let Some(bin) = tools.slangc.parent() {
-        for name in ["slang.dll", "slang-glslang.dll", "dxcompiler.dll"] {
+        for name in [
+            "slang.dll",
+            "slang-compiler.dll",
+            "slang-glslang.dll",
+            "slang-glsl-module.dll",
+            "slang-rt.dll",
+            "dxcompiler.dll",
+        ] {
             if let Ok(bytes) = std::fs::read(bin.join(name)) {
                 source_hash.update(name.as_bytes());
                 source_hash.update(bytes);

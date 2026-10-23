@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 fn main() -> ara_ui::Result<()> {
+    if ara_crash::monitor_from_args()? {
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("--import-worker") {
         ara_asset::serve_worker(&ara_importers::registry()?)?;
         return Ok(());
@@ -8,6 +11,11 @@ fn main() -> ara_ui::Result<()> {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--headless" => options.headless = true,
+            "--version" | "-V" => {
+                println!("ara-editor {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "--verify" => options.verify = true,
             "--verify-panels" => options.verify_panels = true,
             "--verify-ux" => options.verify_ux = true,
@@ -38,7 +46,7 @@ fn main() -> ara_ui::Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--sample] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings."
+                    "ara-editor <project> [--sample] [--headless] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings."
                 );
                 return Ok(());
             }
@@ -46,5 +54,19 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
+    let _capture = match ara_crash::desktop::start(
+        "ara-editor",
+        !options.headless
+            && options.frames.is_none()
+            && !options.verify
+            && !options.verify_panels
+            && !options.verify_ux,
+    ) {
+        Ok(capture) => Some(capture),
+        Err(error) => {
+            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            None
+        }
+    };
     ara_editor::run(options)
 }

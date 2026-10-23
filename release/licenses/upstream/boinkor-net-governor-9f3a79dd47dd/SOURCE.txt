@@ -1,0 +1,4 @@
+Original license texts for:
+governor 0.10.4
+
+https://raw.githubusercontent.com/boinkor-net/governor/9f3a79dd47dd32acd589c562b8d4fefe99b93372/LICENSE

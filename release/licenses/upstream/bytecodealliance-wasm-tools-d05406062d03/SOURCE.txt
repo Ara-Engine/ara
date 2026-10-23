@@ -1,0 +1,5 @@
+Original license texts for:
+wasmparser 0.243.0
+
+https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d05406062d031ae96146486f58a965d87eefea5e/LICENSE-MIT
+https://raw.githubusercontent.com/bytecodealliance/wasm-tools/d05406062d031ae96146486f58a965d87eefea5e/LICENSE-APACHE

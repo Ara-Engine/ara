@@ -1,0 +1,5 @@
+Original license texts for:
+encase_derive 0.12.1
+encase_derive_impl 0.12.1
+
+https://raw.githubusercontent.com/teoxoy/encase/561121cd17298355de74c07a7206eb8329fd8347/LICENSE

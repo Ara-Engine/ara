@@ -1,0 +1,5 @@
+Original license texts for:
+block2 0.5.1
+objc-sys 0.3.5
+
+https://raw.githubusercontent.com/madsmtm/objc2/4fc083f1c6d6784577e38b0ee8dbd344481e2fd2/LICENSE.txt

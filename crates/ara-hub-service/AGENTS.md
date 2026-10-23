@@ -34,6 +34,8 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision}` |
 | `hub.engines` | `{}` | `{engines:[{version,executable,editor}]}`; installed builds for each project's pin picker |
+| `hub.engine.register` | `{engine:{version,executable,editor}}` | Persist an installed version; executable paths must exist and be absolute |
+| `hub.engine.remove` | `{engine:{version,executable,editor}}` | Remove only that exact build; reject while pinned projects are open |
 | `hub.activity` | `{project?}` | `{activity:[{project:id,participants,presence}]}`; attached human/editor and agent rows, current selection/camera/task |
 | `hub.subscribe` | `{}` | `{revision}`; subsequent `hub.changed {revision,kind,project}` notifications |
 | `hub.unsubscribe` | `{}` | `{ok:true}`; also automatic on socket close |

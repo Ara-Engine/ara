@@ -1,0 +1,5 @@
+Original license texts for:
+bevy_scene_macros 0.20.0
+
+https://raw.githubusercontent.com/bevyengine/bevy/b3bdd75becaffe9a16677cf5bae5bd6d198f052b/LICENSE-MIT
+https://raw.githubusercontent.com/bevyengine/bevy/b3bdd75becaffe9a16677cf5bae5bd6d198f052b/LICENSE-APACHE

@@ -1,0 +1,5 @@
+Original license texts for:
+meshopt 0.7.0
+
+https://raw.githubusercontent.com/gwihlidal/meshopt-rs/67c589e166a41be6f7e1e41360ecd7cb02f0b9c9/LICENSE-MIT
+https://raw.githubusercontent.com/gwihlidal/meshopt-rs/67c589e166a41be6f7e1e41360ecd7cb02f0b9c9/LICENSE-APACHE

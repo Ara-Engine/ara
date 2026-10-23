@@ -53,3 +53,4 @@ fn json_report(files: usize, diags: &[Diagnostic]) -> Value {
     let (errors, warnings) = tally(diags);
     json!({ "files": files, "errors": errors, "warnings": warnings, "diagnostics": diags })
 }
+pub mod doctor;

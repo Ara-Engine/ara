@@ -6,10 +6,7 @@ use ara_gpu::{
     vulkan::VulkanDevice,
 };
 use ara_render::capture::{Capture, CaptureRequest, FeatureCapture, ShaderMetadata, ViewMode};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::Path};
 pub(super) fn capture(
     root: &Path,
     material: &ara_material::Material,
@@ -43,17 +40,8 @@ pub(super) fn capture(
         let manifest = serde_json::json!({"preview":{"source":"preview.slang","entries":{"previewVertex":"vertex","previewFragment":"fragment"},"state":ara_gpu::cooked::RenderState{color_formats:vec![37,100],..Default::default()}}});
         let path = folder.join("pipelines.json");
         std::fs::write(&path, ara_json::to_canonical_string(&manifest))?;
-        let sdk = std::env::var_os("VULKAN_SDK")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("C:/VulkanSDK/1.4.363.0"));
-        ara_shader_cook::cook(
-            &path,
-            &cooked,
-            &ara_shader_cook::Toolchain {
-                slangc: sdk.join("Bin/slangc.exe"),
-                spirv_val: sdk.join("Bin/spirv-val.exe"),
-            },
-        )?;
+
+        ara_shader_cook::cook(&path, &cooked, &ara_shader_cook::Toolchain::discover())?;
     }
     let pipeline: ara_gpu::cooked::CookedPipeline =
         serde_json::from_slice(&std::fs::read(cooked.join("preview.json"))?)?;

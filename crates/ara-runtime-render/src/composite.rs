@@ -6,6 +6,7 @@ use ara_gpu::{
 };
 use ara_render::{graph::State, renderer::post::ToneMap};
 use ara_vfx_gpu::{SceneColor, SceneDepth};
+#[cfg(test)]
 use std::path::Path;
 
 pub struct Composite {
@@ -32,7 +33,10 @@ fn barrier(image: Image, before: Access, after: Access) -> Barrier {
 
 impl Composite {
     pub fn new(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Self> {
-        let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
         let cooked = serde_json::from_slice(&std::fs::read(artifacts.join("composite.json"))?)?;
         let pipeline = gpu.create_pipeline(&cooked, &artifacts)?;
         let usage = vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED;

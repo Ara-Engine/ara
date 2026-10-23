@@ -1,0 +1,35 @@
+Original license texts for:
+lightyear 0.31.0
+lightyear_aeronet 0.31.0
+lightyear_avian2d 0.31.0
+lightyear_avian3d 0.31.0
+lightyear_connection 0.31.0
+lightyear_core 0.31.0
+lightyear_deterministic_replication 0.31.0
+lightyear_frame_interpolation 0.31.0
+lightyear_inputs 0.31.0
+lightyear_inputs_bei 0.31.0
+lightyear_inputs_leafwing 0.31.0
+lightyear_inputs_native 0.31.0
+lightyear_interpolation 0.31.0
+lightyear_link 0.31.0
+lightyear_messages 0.31.0
+lightyear_metrics 0.31.0
+lightyear_netcode 0.31.0
+lightyear_p2p 0.31.0
+lightyear_prediction 0.31.0
+lightyear_raw_connection 0.31.0
+lightyear_replication 0.31.0
+lightyear_serde 0.31.0
+lightyear_steam 0.31.0
+lightyear_sync 0.31.0
+lightyear_tools 0.31.0
+lightyear_transport 0.31.0
+lightyear_udp 0.31.0
+lightyear_utils 0.31.0
+lightyear_web 0.31.0
+lightyear_websocket 0.31.0
+lightyear_webtransport 0.31.0
+
+https://raw.githubusercontent.com/cBournhonesque/lightyear/8a926d6fece6a0cf04c2747de90c01258524fe0d/LICENSE-MIT
+https://raw.githubusercontent.com/cBournhonesque/lightyear/8a926d6fece6a0cf04c2747de90c01258524fe0d/LICENSE-APACHE

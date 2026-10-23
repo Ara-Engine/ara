@@ -1,0 +1,4 @@
+Original license texts for:
+nanorand 0.6.1
+
+https://raw.githubusercontent.com/Absolucy/nanorand-rs/5e4ea401102cb3e1a519fed84778bc110d792e56/LICENSE.md

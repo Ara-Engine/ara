@@ -1,0 +1,9 @@
+Original license texts for:
+accesskit_consumer 0.38.0
+accesskit_ios 0.1.2
+accesskit_macos 0.26.3
+accesskit_windows 0.34.0
+accesskit_winit 0.33.2
+
+https://raw.githubusercontent.com/AccessKit/accesskit/c88605b96d04431f9c3c792464a0f2f253480e94/LICENSE-MIT
+https://raw.githubusercontent.com/AccessKit/accesskit/c88605b96d04431f9c3c792464a0f2f253480e94/LICENSE-APACHE

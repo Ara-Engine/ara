@@ -16,7 +16,7 @@ use std::{
 };
 
 /// Engine pin used by the first alpha distribution.
-pub const ALPHA_VERSION: &str = "0.0.1-alpha";
+pub const ALPHA_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// User config directory; `ARA_CONFIG_DIR` isolates tests and portable installations.
 pub fn config_dir() -> io::Result<PathBuf> {

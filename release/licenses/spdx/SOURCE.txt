@@ -1,0 +1,2 @@
+Standard license texts from https://github.com/spdx/license-list-data/tree/main/text
+Retrieved for the exact SPDX expressions in cargo metadata. Original author notices are retained alongside them when distributed by the upstream crate or its source repository.

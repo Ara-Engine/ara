@@ -37,6 +37,49 @@ fn config(directory: &Path) -> HubConfig {
 }
 
 #[test]
+fn engine_installations_register_durably_and_remove_only_the_matching_build() {
+    let root = scratch("installed-engines");
+    let mut hub = Hub::open(config(&root)).expect("Hub");
+    let installed = engine("0.0.1-alpha");
+    hub.call("hub.engine.register", json!({"engine":installed}))
+        .expect("register installed build");
+    hub.call("hub.engine.register", json!({"engine":installed}))
+        .expect("idempotent registration");
+    let registry = Registry::load(&root).expect("durable");
+    assert_eq!(
+        registry
+            .engines
+            .iter()
+            .filter(|e| e.version == installed.version)
+            .count(),
+        1
+    );
+    let mut other_path = engine("0.0.1-alpha");
+    other_path.executable = root.join("another-installation.exe");
+    hub.call("hub.engine.remove", json!({"engine":other_path}))
+        .expect("no unrelated removal");
+    assert_eq!(
+        hub.call("hub.engines", json!({})).expect("engines")["engines"]
+            .as_array()
+            .expect("list")
+            .len(),
+        2
+    );
+    hub.call("hub.engine.remove", json!({"engine":installed}))
+        .expect("remove exact build");
+    assert_eq!(Registry::load(&root).expect("durable").engines.len(), 1);
+    let invalid = EngineBuild {
+        version: "future".into(),
+        executable: root.join("missing.exe"),
+        editor: None,
+    };
+    assert!(
+        hub.call("hub.engine.register", json!({"engine":invalid}))
+            .is_err()
+    );
+}
+
+#[test]
 fn canonical_registry_survives_restart_and_pins_the_project() {
     let root = scratch("registry");
     let config_dir = root.join("config");
