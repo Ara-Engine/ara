@@ -45,6 +45,12 @@ pub enum TargetPlatform {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportInput {
+    /// Encoder preset, included in the action digest. Shipping defaults to HQ.
+    #[serde(default)]
+    pub preset: crate::CookPreset,
+    /// Maximum Rayon threads for this job (1..=256); excluded from cache identity.
+    #[serde(default = "crate::preset::default_thread_budget")]
+    pub thread_budget: u16,
     /// Relative source path, also part of the cache key.
     pub source_path: String,
     /// Exact source media bytes.
@@ -64,9 +70,10 @@ pub struct ImportInput {
     pub asset_dependencies: BTreeMap<String, Digest>,
 }
 impl ImportInput {
-    /// Action digest includes every input, names and dependency hashes, length-framed.
+    /// Action digest covers semantic inputs and dependency hashes, length-framed.
+    /// Thread budgets affect scheduling only and never fragment the cache.
     pub fn key(&self) -> Result<Digest> {
-        let mut h = blake3::Hasher::new_derive_key("Ara import action v1");
+        let mut h = blake3::Hasher::new_derive_key("Ara import action v2");
         let mut add = |b: &[u8]| {
             h.update(&(b.len() as u64).to_le_bytes());
             h.update(b);
@@ -77,6 +84,7 @@ impl ImportInput {
         add(&Digest::of(&self.source).0);
         add(ara_json::to_canonical_string(&ara_json::sort_keys(&self.settings)).as_bytes());
         add(&serde_json::to_vec(&self.target)?);
+        add(&serde_json::to_vec(&self.preset)?);
         add(&(self.dependencies.len() as u64).to_le_bytes());
         for (path, bytes) in &self.dependencies {
             add(path.as_bytes());
@@ -198,10 +206,12 @@ pub struct Progress {
 }
 /// Worker-local progress and cancellation hooks.
 pub struct ImportContext<'a> {
+    /// Optional per-job profiling sink; timers never enter cooked data.
+    pub metrics: Option<&'a crate::ImportMetrics>,
     /// Cancellation requested by the caller.
     pub cancellation: &'a Cancellation,
     /// Invoked only between work units; never affects cook bytes.
-    pub progress: &'a mut dyn FnMut(Progress),
+    pub progress: &'a mut (dyn FnMut(Progress) + Send),
 }
 impl ImportContext<'_> {
     /// Reports finite clamped progress and checks cancellation.
@@ -262,16 +272,28 @@ impl ImporterRegistry {
             .map(Box::as_ref)
             .ok_or_else(|| Error::Invalid(format!("unknown importer {id}")))
     }
-    /// Runs one exact importer version and validates the complete result.
+    /// Runs an exact preset/version in a private bounded pool and validates it.
+    /// Editor callers execute this through ProcessWorker, never on a frame thread.
     pub fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
         let importer = self.get(&input.importer)?;
         if importer.version() != input.version {
             return Err(Error::Invalid("importer version mismatch".into()));
         }
         ctx.report(0.0, "starting")?;
-        let mut output = importer.import(input, ctx)?;
+        if !(1..=256).contains(&input.thread_budget) {
+            return Err(Error::Invalid("thread budget must be in 1..=256".into()));
+        }
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(usize::from(input.thread_budget))
+            .thread_name(|i| format!("ara-import-{i}"))
+            .build()
+            .map_err(|e| Error::Invalid(e.to_string()))?;
+        let mut output = pool.install(|| importer.import(input, ctx))?;
         output.artifacts.sort_by(|a, b| a.name.cmp(&b.name));
-        output.validate()?;
+        {
+            let _timer = ctx.metrics.map(|m| m.start(crate::ImportStage::Validation));
+            output.validate()?;
+        }
         ctx.report(1.0, "ready")?;
         Ok(output)
     }

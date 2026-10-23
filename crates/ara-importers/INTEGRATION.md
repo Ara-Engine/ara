@@ -18,8 +18,8 @@ uses the shared schema DB. `ara_importers::registry()?.register_schemas(&mut db)
 also registers MeshSettings, TextureSettings and TextureUsage (defaults, ranges
 and docs); plugins implement Importer::register_settings for their own types.
 Each sidecar is an import document with the source asset ID and one `i_settings` record of
-reflected type ImportSettings. It carries importer ID/version, JSON settings and
-`@path#id` dependencies. `SidecarCommand::Initialize/Settings/Dependencies::edit`
+reflected type ImportSettings. It carries importer ID/version, final CookPreset, JSON settings and
+`@path#id` dependencies. `SidecarCommand::Initialize/Settings/Preset/Dependencies::edit`
 returns ordinary kernel Edits: submit them with author/base/why through ara-ops,
 then persist `ara_doc::write` output. This gives sidecars kernel ops, inverse edits,
 undo, revisions and canonical key/default behavior. Importers never modify them.
@@ -59,6 +59,47 @@ for one action are rejected as corruption/nondeterminism. A shared cache server
 implements CacheBackend. Collect only with writers quiescent, including roots from
 all active/staged/undo generations and every process. Snapshot and cache APIs do
 disk I/O; call them from background/CLI code, never directly on an editor frame.
+
+## Progressive quality and execution budget
+
+Set `ImportInput.preset` (or `SourceAsset.preset`) to the final project/export
+quality. `CookPreset::HighQuality` is the serde/Rust/schema default. Fast selects
+ISPC BC7 ultrafast / BC6H fast; Balanced selects basic / basic; HighQuality selects
+slow / very slow. `SidecarCommand::Preset` produces an undoable kernel Edit.
+Exports call `ProcessWorker::start` with the final preset directly, or explicitly
+set `HotReload.progressive = false`; export code must not consume a preview slot.
+The v1 mesh/skeleton/clip/KTX2 contracts and renderer/animation readers are unchanged.
+
+`HotReload.progressive` defaults true. On a final-cache miss it cooks/loads Fast,
+stages a complete generation before disk persistence, then cooks the requested
+final preset. Slow cache writes never hold up the first preview publication. `Ready` now
+has `final_pass`: false means preview readiness, true means the requested final
+quality is ready. Jobs remain active across preview publication; protocol adapters
+must not report completion on the preview event. Both generations use existing
+frame/idle/approval/Play gates, epochs and last-good fallback. HQ failure retains
+the preview or prior live generation. A final-cache hit never schedules/downgrades
+to Fast. Staged results superseded by HQ are freed off-thread too.
+
+`ImportInput.thread_budget` / `SourceAsset.thread_budget` defaults to 16 and accepts
+1..=256. One private Rayon pool bounds nested texture/mip/block and mesh tasks.
+Budgets do not enter the cache key; the preset does. Action keys are now v2 and
+builtin importer versions are bumped. Use the current `Importer::version()` when
+creating/updating sidecars through kernel ops. Worker processes retain their
+below-normal Windows process priority (Linux nice / macOS utility setup also
+remains). In-process registry calls are CLI/benchmark APIs and do not change the
+host process priority. Never invoke them from an editor frame.
+
+Decode/pixel preparation, mip filtering and BC packing are parallel. Mesh/primitive
+optimization is parallel; native ufbx extraction is followed by owned Rust jobs.
+Texture batches retain at most eight images' float/mip buffers before encoding.
+Four-pixel-high block-row tasks bound scheduling tails; output order is fixed.
+Frequently repeated solid BC7 blocks reuse exact ISPC results, including alpha;
+no quality heuristics replace the selected encoder. Alpha mode is selected for
+an entire mip. All pixel reductions keep their original per-pixel operation order.
+`ImportContext.metrics` optionally collects elapsed batch-phase timings and never
+enters cooked bytes. `progress` is now Send so bounded pool execution can own it.
+Direct `cook_texture` remains HQ; `cook_texture_with_preset` accepts explicit quality
+and uses the current Rayon pool (wrap direct calls in a private pool if needed).
 
 ## Renderer / animation
 
@@ -102,8 +143,8 @@ the shared format reader already supports ASTC 4×4/6×6/8×8.
 Adopt pinned `intel_tex_2 = 0.5.0`, the maintained bindings to Intel's
 [ISPC Texture Compressor](https://github.com/GameTechDev/ISPCTextureCompressor),
 with precompiled Windows/Linux/macOS kernels (no ISPC compiler prerequisite).
-It covers BC4/5/6H/7 through one CPU implementation, uses slow BC7 / very-slow
-BC6H presets and gives deterministic worker output. The independent decoder is
+It covers BC4/5/6H/7 through one CPU implementation, uses explicit fast, balanced and high-quality
+presets and gives deterministic worker output. The independent decoder is
 texture2ddecoder. See [MEASUREMENTS.md](MEASUREMENTS.md) for PSNR and timings.
 
 The older ispc-texcomp/intel_tex wrappers offer the same underlying algorithm with
