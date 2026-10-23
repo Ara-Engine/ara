@@ -9,10 +9,15 @@
 pub mod capture;
 pub mod codec;
 pub mod device;
+pub mod diagnose;
+pub mod dsp;
 pub mod effects;
 pub mod importer;
+pub mod loudness;
 pub mod mixer;
 pub mod schema;
+pub mod sends;
+pub mod source;
 pub mod spatial;
 pub mod steam;
 mod steam_alloc;
@@ -22,8 +27,10 @@ mod voice;
 pub mod wasapi;
 
 pub use kira::Frame;
-pub use mixer::{AudioEngine, BusId, EngineConfig, Snapshot, VoiceId};
+pub use mixer::{AudioEngine, BusId, EngineConfig, Snapshot, VoiceId, VoiceState, VoiceStatus};
 pub use schema::{AudioListener, AudioSource, register};
+pub use sends::{AuxEffect, AuxId};
+pub use source::SignalSource;
 pub use voice::{Clip, Playback, PreparedVoice, VoiceCommand, VoiceParameters};
 
 /// Fixed DSP quantum. SDL may request any number of frames; partial quanta are cached.

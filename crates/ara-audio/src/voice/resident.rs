@@ -41,6 +41,7 @@ impl Voice {
                 *sample = clip.frames[(*cursor + clip.len() - (4 - i) % clip.len()) % clip.len()];
             }
             out.fill(Frame::ZERO);
+            self.send = 0.0;
             self.time += n as u64;
             self.shared.position.fetch_add(n as u64, Ordering::Relaxed);
             self.shared
@@ -48,7 +49,7 @@ impl Voice {
                 .store(self.gain.value.to_bits(), Ordering::Relaxed);
             return true;
         }
-        let gain = self.gain.value * self.virtual_gain.value;
+        let gain = self.gain.value * self.virtual_gain.value * self.trim;
         let mut samples = [Frame::ZERO; QUANTUM];
         samples[..3].copy_from_slice(&self.history[1..]);
         let mut written = 3;
@@ -75,6 +76,7 @@ impl Voice {
             for (mono, sample) in self.mono.iter_mut().zip(&samples[..n]) {
                 *mono = (sample.left + sample.right) * 0.5 * gain;
             }
+            self.send_aux(n);
             self.spatializer.process(
                 &self.mono[..n],
                 out,

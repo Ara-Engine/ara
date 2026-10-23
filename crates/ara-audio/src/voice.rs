@@ -2,6 +2,8 @@
 
 use crate::{
     AudioError, Frame, QUANTUM, Result,
+    sends::AuxRoute,
+    source::SignalSource,
     spatial::{AcousticPath, Spatializer, StereoPanner},
     streaming::StreamReader,
 };
@@ -14,56 +16,16 @@ use std::{
     convert::Infallible,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering},
     },
 };
 
+mod clip;
+mod input;
 mod resident;
 
-/// Immutable resident audio. Cloning a clip shares its samples on the control path.
-#[derive(Clone)]
-pub struct Clip {
-    pub(crate) frames: Arc<[Frame]>,
-    sample_rate: u32,
-}
-
-impl Clip {
-    /// Takes ownership of finite mono/stereo frames, enforcing the resident byte limit.
-    pub fn new(sample_rate: u32, frames: Vec<Frame>, max_bytes: usize) -> Result<Self> {
-        if !(8000..=192000).contains(&sample_rate) || frames.is_empty() {
-            return Err(AudioError::Invalid("clip sample rate or empty clip"));
-        }
-        if frames.len().saturating_mul(size_of::<Frame>()) > max_bytes {
-            return Err(AudioError::Capacity("resident clip budget"));
-        }
-        if frames
-            .iter()
-            .any(|f| !f.left.is_finite() || !f.right.is_finite())
-        {
-            return Err(AudioError::Invalid("non-finite PCM"));
-        }
-        Ok(Self {
-            frames: frames.into(),
-            sample_rate,
-        })
-    }
-    /// Source frames per second, before resampling.
-    pub fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-    /// Number of stereo frames.
-    pub fn len(&self) -> usize {
-        self.frames.len()
-    }
-    /// Clips are nonempty by construction.
-    pub fn is_empty(&self) -> bool {
-        self.frames.is_empty()
-    }
-    /// Borrow decoded stereo samples for cooking or inspection.
-    pub fn frames(&self) -> &[Frame] {
-        &self.frames
-    }
-}
+pub use clip::Clip;
+pub(crate) use input::Input;
 
 /// Prepared voice controls. All values must be finite; linear gain is in [0,16].
 #[derive(Debug, Clone, Copy, ara_schema::Schema, serde::Serialize, serde::Deserialize)]
@@ -222,11 +184,24 @@ impl VoiceCommand {
     }
 }
 
+/// Why a voice is not currently audible on the real-voice budget (`VoiceShared::cull`).
+pub(crate) mod cull {
+    /// Real voice.
+    pub const ACTIVE: u8 = 0;
+    /// Virtualized by the engine's global real-voice limit.
+    pub const GLOBAL_LIMIT: u8 = 1;
+    /// Virtualized by a bus (category) voice limit.
+    pub const BUS_LIMIT: u8 = 2;
+    /// Scheduled in the future or already finished.
+    pub const IDLE: u8 = 3;
+}
+
 pub(crate) struct VoiceShared {
     pub active: AtomicBool,
     pub finished: AtomicBool,
     pub position: AtomicU64,
     pub audibility: AtomicU32,
+    pub cull: AtomicU8,
 }
 
 pub(crate) struct VoiceControl {
@@ -237,31 +212,25 @@ pub(crate) struct VoiceControl {
     pub at_frame: u64,
 }
 
-pub(crate) enum Input {
-    Resident {
-        clip: Clip,
-        cursor: usize,
-        looping: bool,
-    },
-    Stream(StreamReader),
-}
-
 /// Fully allocated voice, ready to move from a loader to the audio worker at a boundary.
 /// Native HRTFs, decoder prebuffering and all voice queue/box allocations happen before installation.
 pub struct PreparedVoice {
     pub(crate) sound: Box<Voice>,
     pub(crate) control: VoiceControl,
+    pub(crate) loudness: Option<f32>,
+    pub(crate) peak: f32,
 }
 impl PreparedVoice {
     /// Prepares resident playback off the callback. Scheduling is validated again on installation.
     pub fn resident(clip: Clip, playback: Playback) -> Result<Self> {
         playback.parameters.validate()?;
+        let (loudness, peak) = (clip.loudness(), clip.peak());
         let input = Input::Resident {
             clip,
             cursor: 0,
             looping: playback.looping,
         };
-        Ok(Self::new(input, playback))
+        Ok(Self::new(input, playback).with_loudness(loudness, Some(peak)))
     }
     /// Prepares a prebuffered stream off the callback. The producer owns streaming loops.
     pub fn streaming(stream: StreamReader, playback: Playback) -> Result<Self> {
@@ -273,55 +242,36 @@ impl PreparedVoice {
         }
         Ok(Self::new(Input::Stream(stream), playback))
     }
+    /// Prepares a synthesized source (a compiled audio graph). `Playback::looping` must be
+    /// false: the source decides when it ends. The first block renders here, off the callback.
+    pub fn procedural(source: Box<dyn SignalSource>, playback: Playback) -> Result<Self> {
+        playback.parameters.validate()?;
+        if playback.looping {
+            return Err(AudioError::Invalid("procedural sources own their looping"));
+        }
+        if !(8000..=192000).contains(&source.sample_rate()) {
+            return Err(AudioError::Invalid("procedural source sample rate"));
+        }
+        Ok(Self::new(Input::procedural(source), playback))
+    }
+    /// Supplies cooked loudness (LUFS) and sample peak, e.g. for streams. Buses with a
+    /// loudness target trim the voice at installation; unknown loudness is never trimmed.
+    pub fn with_loudness(mut self, lufs: Option<f32>, peak: Option<f32>) -> Self {
+        self.loudness = lufs.filter(|l| l.is_finite());
+        self.peak = peak.filter(|p| p.is_finite() && *p >= 0.0).unwrap_or(0.0);
+        self
+    }
     fn new(input: Input, playback: Playback) -> Self {
         let (sound, control) = Voice::new(input, playback, 0);
         Self {
             sound: Box::new(sound),
             control,
+            loudness: None,
+            peak: 0.0,
         }
     }
 }
 pub(crate) struct ReadySound(pub Box<Voice>);
-
-impl Input {
-    fn sample_rate(&self) -> u32 {
-        match self {
-            Self::Resident { clip, .. } => clip.sample_rate,
-            Self::Stream(s) => s.sample_rate(),
-        }
-    }
-    fn next(&mut self) -> Frame {
-        match self {
-            Self::Resident {
-                clip,
-                cursor,
-                looping,
-            } => {
-                if *cursor >= clip.len() {
-                    if *looping {
-                        *cursor = 0;
-                    } else {
-                        return Frame::ZERO;
-                    }
-                }
-                let frame = clip.frames[*cursor];
-                *cursor += 1;
-                frame
-            }
-            Self::Stream(s) => s.next_frame(),
-        }
-    }
-    fn ended(&self) -> bool {
-        match self {
-            Self::Resident {
-                clip,
-                cursor,
-                looping,
-            } => !looping && *cursor >= clip.len(),
-            Self::Stream(s) => s.ended(),
-        }
-    }
-}
 
 pub(crate) struct Voice {
     input: Input,
@@ -346,11 +296,20 @@ pub(crate) struct Voice {
     stereo: [Frame; QUANTUM],
     spatial: bool,
     spatializer: Box<dyn Spatializer>,
+    trim: f32,
+    aux: Option<AuxRoute>,
+    send: f32,
 }
 
 impl Voice {
     pub(crate) fn align_clock(&mut self, frame: u64) {
         self.time = frame;
+    }
+    /// Installation-time routing: loudness trim, aux send and the engine sample rate.
+    pub(crate) fn configure(&mut self, trim: f32, aux: Option<AuxRoute>, sample_rate: u32) {
+        self.trim = trim;
+        self.aux = aux.filter(|_| self.spatial);
+        self.spatializer.prepare(sample_rate);
     }
     pub(crate) fn new(mut input: Input, playback: Playback, time: u64) -> (Self, VoiceControl) {
         let (commands, reader) = RingBuffer::new(64);
@@ -359,6 +318,7 @@ impl Voice {
             finished: AtomicBool::new(false),
             position: AtomicU64::new(0),
             audibility: AtomicU32::new(playback.parameters.gain.to_bits()),
+            cull: AtomicU8::new(cull::IDLE),
         });
         let control = VoiceControl {
             shared: Arc::clone(&shared),
@@ -368,8 +328,13 @@ impl Voice {
             at_frame: playback.at_frame,
         };
         let rate = input.sample_rate();
-        let first = input.next();
-        let history = [first, first, input.next(), input.next()];
+        let first = input.next(playback.at_frame);
+        let history = [
+            first,
+            first,
+            input.next(playback.at_frame),
+            input.next(playback.at_frame),
+        ];
         let spatializer = playback
             .spatializer
             .unwrap_or_else(|| Box::<StereoPanner>::default());
@@ -398,9 +363,26 @@ impl Voice {
                 stereo: [Frame::ZERO; QUANTUM],
                 spatial: playback.spatial,
                 spatializer,
+                trim: 1.0,
+                aux: None,
+                send: 0.0,
             },
             control,
         )
+    }
+
+    /// Adds this block's mono signal to the routed aux return (room reverb), ramping
+    /// the send from its previous level to `reverb_send × bus gain`.
+    fn send_aux(&mut self, n: usize) {
+        let Some(route) = &self.aux else {
+            return;
+        };
+        let target = self.parameters.path.reverb_send * route.scale();
+        if target == 0.0 && self.send == 0.0 {
+            return;
+        }
+        route.input.add(&self.mono[..n], self.send, target);
+        self.send = target;
     }
 
     fn apply_commands(&mut self) {
@@ -474,7 +456,7 @@ impl Sound for Voice {
             }
             if self.time >= self.start && !self.dry_ended {
                 let sample = cubic(self.history, self.fraction as f32);
-                let gain = self.gain.next() * self.virtual_gain.next();
+                let gain = self.gain.next() * self.virtual_gain.next() * self.trim;
                 self.mono[index] = (sample.left + sample.right) * 0.5 * gain;
                 self.stereo[index] = sample * gain;
                 let step = self.rate.next() as f64 * self.source_rate as f64 * dt;
@@ -482,7 +464,7 @@ impl Sound for Voice {
                 while self.fraction >= 1.0 {
                     self.fraction -= 1.0;
                     self.history.rotate_left(1);
-                    self.history[3] = self.input.next();
+                    self.history[3] = self.input.next(self.time);
                 }
                 if self.input.ended() || self.stop.is_some_and(|stop| self.time >= stop) {
                     self.tail = self.tail.saturating_sub(1);
@@ -499,6 +481,7 @@ impl Sound for Voice {
             .audibility
             .store(self.gain.value.to_bits(), Ordering::Relaxed);
         if self.spatial && (target > 0.0 || self.virtual_gain.value > 0.0) {
+            self.send_aux(out.len());
             if draining {
                 self.ended = self.spatializer.drain(out);
             } else {
@@ -514,10 +497,12 @@ impl Sound for Voice {
             self.ended = self.dry_ended;
         } else {
             out.fill(Frame::ZERO);
+            self.send = 0.0;
             self.ended = self.dry_ended;
         }
         if self.ended {
             self.shared.finished.store(true, Ordering::Release);
+            self.shared.cull.store(cull::IDLE, Ordering::Relaxed);
         }
     }
     fn finished(&self) -> bool {

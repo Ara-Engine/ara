@@ -3,6 +3,7 @@
 use crate::{
     AudioEngine, AudioError, Frame, Result,
     device::{OfflineBackend, render_to},
+    effects::{Meter, MeterReading},
     importer::pcm_wav,
 };
 use ebur128::{EbuR128, Mode};
@@ -20,6 +21,93 @@ pub struct SpectrumBand {
     /// Mean energy across both channels, in dBFS; None means no energy.
     pub rms_dbfs: Option<f64>,
 }
+/// One bus or aux return's meter over the capture window.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BusMeter {
+    /// Bus or aux name.
+    pub name: String,
+    /// `bus` or `aux`.
+    pub kind: &'static str,
+    /// Highest absolute sample in the window, in dBFS; None for silence.
+    pub peak_dbfs: Option<f64>,
+    /// Stereo RMS over the window, in dBFS; None for silence.
+    pub rms_dbfs: Option<f64>,
+    /// Channel samples beyond full scale in the window, before final limiting.
+    pub overloads: u64,
+}
+
+/// What blocks one emitter's direct path, nearest first.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Blocker {
+    /// Blocking entity or geometry label.
+    pub entity: String,
+    /// Acoustic material name.
+    pub material: String,
+    /// Distance from the source along the direct path, in meters.
+    pub distance: f32,
+    /// Low/mid/high transmission through this blocker.
+    pub transmission: [f32; 3],
+}
+
+/// One emitter's acoustics result, produced by `ara-acoustics` for the capture.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcclusionRecord {
+    /// Emitter entity or label.
+    pub emitter: String,
+    /// Whether visibility is below `diagnose::OCCLUDED_BELOW`.
+    pub occluded: bool,
+    /// Fraction of unblocked direct rays.
+    pub visibility: f32,
+    /// Low/mid/high combined transmission through blockers.
+    pub transmission: [f32; 3],
+    /// Low/mid/high air absorption gains.
+    pub air: [f32; 3],
+    /// Reverb send level.
+    pub reverb_send: f32,
+    /// Reverb zone of the emitter, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zone: Option<String>,
+    /// Portals the sound travels through to reach the listener, in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub portals: Vec<String>,
+    /// Blockers along the center ray.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blockers: Vec<Blocker>,
+}
+
+/// One procedural graph node's activity, produced by `ara-audio-graph`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeActivity {
+    /// Authored node name.
+    pub node: String,
+    /// Node operation (`lowpass`, `sample`).
+    pub op: String,
+    /// Quanta rendered.
+    pub blocks: u64,
+    /// Quanta whose output exceeded -80 dBFS (or carried a trigger).
+    pub active_blocks: u64,
+    /// Highest absolute output sample.
+    pub peak: f32,
+    /// Trigger pulses emitted.
+    pub triggers: u64,
+}
+
+/// A procedural graph instance's per-node activity.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphActivity {
+    /// Graph name.
+    pub graph: String,
+    /// Instance label (voice or emitter).
+    pub instance: String,
+    /// Nodes in program order.
+    pub nodes: Vec<NodeActivity>,
+}
+
 /// Machine-readable evidence for audio.play and clipping/silence assertions.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +142,15 @@ pub struct Analysis {
     pub spectrum: Vec<SpectrumBand>,
     /// BLAKE3 of the delivered PCM16 WAV, stable on the same platform and binary.
     pub wav_blake3: String,
+    /// Per-bus and aux-return meters over the capture window (offline captures only).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<BusMeter>,
+    /// Emitter acoustics for this capture, attached by the acoustics layer.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub occlusion: Vec<OcclusionRecord>,
+    /// Procedural graph node activity, attached by the graph layer.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub graphs: Vec<GraphActivity>,
 }
 /// A self-contained capture; publishing transport belongs to the protocol job layer.
 pub struct AudioCapture {
@@ -88,13 +185,47 @@ pub fn capture_audio(engine: &mut AudioEngine, seconds: f64) -> Result<AudioCapt
         return Err(AudioError::Invalid("capture shorter than one frame"));
     }
     let before = engine.delivered_overloads();
+    let meters = meters(engine);
+    let start: Vec<MeterReading> = meters
+        .iter()
+        .map(|(_, _, m)| {
+            m.take_window_peak();
+            m.reading()
+        })
+        .collect();
     let mut backend = OfflineBackend::new(engine.sample_rate(), frames)?;
     render_to(engine, &mut backend, frames)?;
-    analyze(
+    let mut capture = analyze(
         engine.sample_rate(),
         backend.samples(),
         engine.delivered_overloads() - before,
-    )
+    )?;
+    capture.analysis.buses = meters
+        .iter()
+        .zip(&start)
+        .map(|((name, kind, meter), start)| {
+            let now = meter.reading();
+            BusMeter {
+                name: name.clone(),
+                kind,
+                peak_dbfs: db(f64::from(meter.take_window_peak())),
+                rms_dbfs: now.rms_dbfs_since(start),
+                overloads: now.overloads - start.overloads,
+            }
+        })
+        .collect();
+    Ok(capture)
+}
+
+/// Every bus then aux meter, cloned so rendering can borrow the engine mutably.
+fn meters(engine: &AudioEngine) -> Vec<(String, &'static str, Meter)> {
+    let buses = engine.buses().filter_map(|(id, name)| {
+        Some((name.to_owned(), "bus", engine.bus_meter(id).ok()?.clone()))
+    });
+    let auxes = engine.auxes().filter_map(|(id, name)| {
+        Some((name.to_owned(), "aux", engine.aux_meter(id).ok()?.clone()))
+    });
+    buses.chain(auxes).collect()
 }
 
 /// Analyzes interleaved stereo samples, also useful for independently recorded device output.
@@ -162,6 +293,9 @@ pub fn analyze(
         channel_rms,
         spectrum: spectrum(sample_rate, samples),
         wav_blake3: hash,
+        buses: Vec::new(),
+        occlusion: Vec::new(),
+        graphs: Vec::new(),
     };
     Ok(AudioCapture { wav, analysis })
 }
