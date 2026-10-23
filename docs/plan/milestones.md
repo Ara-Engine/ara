@@ -13,7 +13,7 @@ Agents build most of it, using the engine's own tools.
 
 ---
 
-## M0: Foundations and spikes
+## M0: Foundations and spikes (DONE 2026-10-23)
 
 **Goal:** prove the risky foundations before building on them. Each spike lives in `spikes/<id>-<name>/` (outside the workspace, throwaway) and ends with `RESULT.md` plus an entry in [`decisions.md`](../decisions.md).
 
