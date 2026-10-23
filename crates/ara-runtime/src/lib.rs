@@ -58,7 +58,10 @@ use ara_sim::{
     EditWorld, FixedTick, FrameAdvance, PlayControl, PlayState, Sample, Session, SimError,
     SimRegistry, StateHash, StepInput, StepReport, TickConfig,
 };
-use bevy_ecs::{prelude::*, system::BoxedSystem};
+use bevy_ecs::{
+    prelude::*,
+    system::{BoxedSystem, RunSystemOnce},
+};
 use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 
 pub use ara_sim;
@@ -258,6 +261,10 @@ impl Runtime {
             &poses.iter().copied().collect(),
         )?;
         animation::ensure_slots(world, hz)?;
+        // Cameras start behind their targets rather than at their authored pose.
+        world
+            .run_system_once(control::place_cameras)
+            .map_err(|e| RuntimeError(e.to_string()))?;
         sync::resolve_poses(world);
 
         session.add_provider(sync::PoseProvider)?;
