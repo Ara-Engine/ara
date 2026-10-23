@@ -4,6 +4,13 @@ Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GP
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
 
+Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
+keeping final executables in each worktree's local target directory. Prefer this
+to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
+Shared intermediate caches still serialize compilation and can rebuild when
+branches use different linkers or feature sets. Cleanup inspects local target
+directories; an external shared cache needs its own explicit cleanup policy.
+
 ## One gate
 
 ```
