@@ -98,6 +98,7 @@ asynchronous cache prefetch, bounded tile uploads and per-pass GPU distributions
 - [Noon golden](tests/goldens/noon.png), [dusk golden](tests/goldens/dusk.png).
 - [Device/content provenance](tests/goldens/provenance.json).
 - [Per-pass p50/p95/p99 timings and visible counts](measurements/gpu-timings.json).
+- [Recorded timing table and measurement conditions](measurements/README.md).
 
 Goldens use local RGB 1-SSIM <=0.005 and separately require identical repeated
 fixed-tick captures. Other tests exercise command rollback/undo/redo, layer
@@ -110,3 +111,6 @@ current GPU extraction accepts square origin-zero terrains with 32-cell tiles.
 Erosion cooking diagnoses dependency halos above 256 samples; larger stacks need
 checkpoint support, while their source gestures remain editable. Metal execution
 depends on the GPU backend track; both offline shader targets are supplied here.
+
+The workspace discovers these crates through `crates/*`. The integration owner
+refreshes the root Cargo.lock; this track does not add root dependency entries.
