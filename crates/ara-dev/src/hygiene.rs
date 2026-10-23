@@ -90,7 +90,8 @@ pub(crate) fn importer_versions(root: &Path, files: &[PathBuf]) -> Result<Vec<St
         let source = fs::read_to_string(root.join(path))?;
         if !(source.contains("ImportInput")
             || source.contains("ImportSettings")
-            || source.contains(".version()"))
+            || source.contains(".version()")
+            || source.contains(".get("))
         {
             continue;
         }
@@ -280,5 +281,26 @@ assert_eq!(ImageImporter.version(), "1");
         };
         visitor.visit_file(&file);
         assert_eq!(visitor.problems.len(), 3);
+    }
+
+    #[test]
+    fn importer_hygiene_scans_registry_only_test_files() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/tests")
+            .join(format!("importer-registry-{}", std::process::id()));
+        let path = PathBuf::from("crates/fixture/tests/registry.rs");
+        fs::create_dir_all(root.join(&path).parent().unwrap()).unwrap();
+        fs::write(
+            root.join(&path),
+            r#"#[test] fn registry() {
+                registry.get("ara.audio", "2");
+                registry.get("ara.audio", installed_version);
+                registry.get("test.audio", "2");
+            }"#,
+        )
+        .unwrap();
+        let problems = importer_versions(&root, &[path]).unwrap();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("registry lookup ara.audio"));
     }
 }
