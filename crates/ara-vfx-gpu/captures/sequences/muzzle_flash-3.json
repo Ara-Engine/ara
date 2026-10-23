@@ -70,11 +70,11 @@
     ],
     "tick": 3
   },
-  "scene_hash": "5b4665d528759174ad591c81c9fa1a7a6d0c9c038389c8d4fe801cdb2891e1ad",
+  "scene_hash": "574f48b87a1b37389b9797fab375363a8fbac6c53c8205a660f8b4ab1c8aaae3",
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "553f00e457556a60a6582b564cd0a28192c649f194217021d764a89fc3d65499"
+    "content_key": "1accf41d65498dd0ac272b8a6c513d831afb2146b0ea7bdf9abfed622f92c5b1"
   },
   "timings": [
     {
@@ -83,7 +83,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.033216,
+      "milliseconds": 0.03952,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -138,12 +138,12 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.007168,
+      "milliseconds": 0.009216,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.00336,
+      "milliseconds": 0.002688,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },
@@ -153,72 +153,72 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.13728,
+      "milliseconds": 0.17264,
       "pass": "Visibility.Motion",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.062592,
+      "milliseconds": 0.080832,
       "pass": "DDGI.Trace.Relocate.Classify.Integrate",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.17824,
+      "milliseconds": 0.243904,
       "pass": "RT.Reflections.SoftShadows.DDGI",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.07952,
+      "milliseconds": 0.027072,
       "pass": "RT.Disocclusion.Repair",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.084512,
+      "milliseconds": 0.075104,
       "pass": "SVGF.Reproject.Reject.Outlier.Moments",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.079808,
+      "milliseconds": 0.077184,
       "pass": "SVGF.Atrous.1",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.085024,
+      "milliseconds": 0.080352,
       "pass": "SVGF.Atrous.2",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.102304,
+      "milliseconds": 0.10368,
       "pass": "SVGF.Atrous.4",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.048416,
+      "milliseconds": 0.056096,
       "pass": "Bloom.Horizontal",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.028288,
+      "milliseconds": 0.032736,
       "pass": "Bloom.Vertical",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.006144,
+      "milliseconds": 0.00672,
       "pass": "Exposure.EV100.Meter.Adapt",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.033568,
-      "pass": "Post.Atmosphere.Lens.ACES.LUT",
+      "milliseconds": 0.03744,
+      "pass": "Post.Atmosphere.Lens.ToneMap.LUT",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.128384,
+      "milliseconds": 0.077088,
       "pass": "Upscale.TAAU.Resolve",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.012736,
+      "milliseconds": 0.01328,
       "pass": "Output.SDR",
       "queue": "Graphics"
     },
@@ -228,37 +228,37 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.048512,
+      "milliseconds": 0.056736,
       "pass": "Feature.Bloom.Horizontal",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.0272,
+      "milliseconds": 0.032128,
       "pass": "Feature.Bloom.Vertical",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.005216,
+      "milliseconds": 0.006176,
       "pass": "Feature.Exposure",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.030624,
+      "milliseconds": 0.031616,
       "pass": "Feature.Post",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.05136,
+      "milliseconds": 0.020768,
       "pass": "Feature.Upscale",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.010784,
+      "milliseconds": 0.0128,
       "pass": "Feature.Output",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.000672,
+      "milliseconds": 0.00064,
       "pass": "Feature.Ready",
       "queue": "Graphics"
     }
