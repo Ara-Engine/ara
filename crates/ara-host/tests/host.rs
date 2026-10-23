@@ -199,11 +199,7 @@ fn scopes_are_granted_by_policy_and_enforced_before_running() {
         "logs",
         json!({ "session": s, "codes": ["ARA1805"] }),
     );
-    assert_eq!(
-        logs["entries"].as_array().map(Vec::len),
-        Some(1),
-        "the denial is recorded"
-    );
+    assert_eq!(logs["total"], 1, "the denial is recorded");
 }
 
 #[test]
@@ -411,7 +407,7 @@ fn the_journal_replays_commits_lost_in_a_crash() {
         "logs",
         json!({ "session": s, "codes": ["ARA1906"] }),
     );
-    assert_eq!(logs["entries"].as_array().map(Vec::len), Some(1));
+    assert_eq!(logs["total"], 1);
     let history = call(&mut h, "history.list", json!({ "session": s }));
     assert_eq!(
         history["items"][0]["txn"],
@@ -462,7 +458,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
         "logs",
         json!({ "session": s, "codes": ["ARA1908"] }),
     );
-    assert_eq!(logs["entries"].as_array().map(Vec::len), Some(1), "{logs}");
+    assert_eq!(logs["total"], 1, "{logs}");
     assert_eq!(name_of(&mut h, &s, "e_flr1"), "Agent", "memory kept");
     h.flush();
     assert_eq!(scene(&dir), human_text, "the file is not overwritten");
@@ -486,7 +482,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
         "logs",
         json!({ "session": s, "codes": ["ARA1909"] }),
     );
-    assert_eq!(logs["entries"].as_array().map(Vec::len), Some(1));
+    assert_eq!(logs["total"], 1);
     assert_eq!(name_of(&mut h, &s, "e_flr1"), "Agent");
 }
 

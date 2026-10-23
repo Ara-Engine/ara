@@ -435,7 +435,8 @@ pub struct LogsParams {
     pub group: Option<bool>,
     /// Approximate size of the text answer in characters (default 2000).
     pub budget: Option<u32>,
-    /// Maximum entries in `entries`, newest kept (default 10 grouped, 50 not).
+    /// Also return up to this many entries (newest kept) as JSON `entries`, with the
+    /// grouped `summary`. Without it the answer is the text: what agents need.
     pub limit: Option<u32>,
 }
 

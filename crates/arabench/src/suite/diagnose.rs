@@ -100,7 +100,10 @@ pub const BAD_MATERIAL: Task = Task {
         );
     },
     solve: |s: &mut Solver| {
-        let why = s.call("why", json!({ "question": "name:Radio not visible" }))?;
+        let why = s.call(
+            "why",
+            json!({ "question": "name:Radio not visible", "full": true }),
+        )?;
         if why["causes"][0]["code"] != "ARA3306" {
             return Err(format!("unexpected answer:\n{}", why["text"]));
         }
@@ -141,7 +144,10 @@ pub const MISSING_MESH: Task = Task {
         with_why(c, w, OUTPOST, &["e_gen001"]);
     },
     solve: |s: &mut Solver| {
-        let why = s.call("why", json!({ "question": "name:Generator not visible" }))?;
+        let why = s.call(
+            "why",
+            json!({ "question": "name:Generator not visible", "full": true }),
+        )?;
         let fix = &why["causes"][0]["fixes"][0];
         if fix["command"] != "property.set" {
             return Err(format!("no runnable fix:\n{}", why["text"]));
@@ -195,7 +201,10 @@ pub const CULLING_MASK: Task = Task {
         with_why(c, w, OUTPOST, &["e_bench1"]);
     },
     solve: |s: &mut Solver| {
-        let why = s.call("why", json!({ "question": "name:Workbench not visible" }))?;
+        let why = s.call(
+            "why",
+            json!({ "question": "name:Workbench not visible", "full": true }),
+        )?;
         let cause = &why["causes"][0];
         if cause["code"] != "ARA3308" {
             return Err(format!("unexpected answer:\n{}", why["text"]));

@@ -616,7 +616,7 @@ expression: pretty
           "maximum": 4294967295
         },
         "limit": {
-          "description": "Maximum entries in `entries`, newest kept (default 10 grouped, 50 not).",
+          "description": "Also return up to this many entries (newest kept) as JSON `entries`, with the grouped `summary`. Without it the answer is the text: what agents need.",
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295
@@ -676,6 +676,10 @@ expression: pretty
         },
         "list": {
           "description": "List the explainers and example questions instead of answering.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return the whole report as JSON (causes with evidence, checks, related). Default: the text plus the runnable fixes, which is what agents need and costs about half the tokens.",
           "type": "boolean"
         }
       },

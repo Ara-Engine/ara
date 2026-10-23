@@ -217,8 +217,18 @@ fn filter(
     }
 }
 
-/// What a query answers: records, a grouped summary and its text.
-fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) -> Value {
+/// What a query answers: the text, and (unless `compact`) the records and the grouped
+/// summary as JSON. Agents read results as JSON (MCP clients pass
+/// `structuredContent` to the model), so `logs` answers compactly unless the caller
+/// asks for records with `limit`.
+fn answer(
+    st: &State,
+    f: &Filter,
+    group: bool,
+    budget: u32,
+    limit: Option<u32>,
+    compact: bool,
+) -> Value {
     let all = st.diag.query(&Filter {
         limit: 0,
         ..f.clone()
@@ -251,6 +261,9 @@ fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) 
             ));
         }
         text.push_str(&format!("cursor {cursor}\n"));
+        if compact {
+            return json!({ "cursor": cursor, "total": all.len(), "text": text });
+        }
         return json!({ "cursor": cursor, "total": all.len(), "entries": entries, "text": text });
     }
     let summary = summarize(&all, 3);
@@ -263,6 +276,9 @@ fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) 
     match worst {
         Some(code) => text.push_str(&format!("cursor {cursor} · explain: ara why {code}\n")),
         None => text.push_str(&format!("cursor {cursor}\n")),
+    }
+    if compact {
+        return json!({ "cursor": cursor, "total": all.len(), "text": text });
     }
     json!({
         "cursor": cursor,
@@ -284,12 +300,14 @@ pub(crate) fn logs(st: &mut State, p: LogsParams) -> R {
     let mut f = filter(p.codes, p.severity, subjects, p.origin)?;
     f.since = p.since.unwrap_or(0);
     f.text = p.text;
+    let compact = p.limit.is_none();
     Ok(answer(
         st,
         &f,
         p.group.unwrap_or(true),
         p.budget.unwrap_or(BUDGET),
         p.limit,
+        compact,
     ))
 }
 
@@ -306,6 +324,7 @@ fn query(st: &mut State, p: DiagQueryParams) -> R {
         p.group.unwrap_or(true),
         p.budget.unwrap_or(BUDGET),
         p.limit,
+        false,
     ))
 }
 

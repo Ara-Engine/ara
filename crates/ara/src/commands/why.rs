@@ -20,6 +20,10 @@ pub struct WhyArgs {
     /// List what `ara why` can explain.
     #[arg(long)]
     pub list: bool,
+    /// With `--json`: the whole report (causes with evidence, checks, related),
+    /// not just the text and the runnable fixes.
+    #[arg(long)]
+    pub full: bool,
 }
 
 impl WhyArgs {
@@ -32,6 +36,7 @@ impl WhyArgs {
                 "question": (!question.is_empty()).then_some(question),
                 "doc": self.doc,
                 "list": self.list.then_some(true),
+                "full": self.full.then_some(true),
             })),
             summary: pretty,
         }

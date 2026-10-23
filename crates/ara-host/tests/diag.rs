@@ -94,7 +94,14 @@ fn logs_are_grouped_budgeted_and_attributed() {
         "{text}"
     );
     assert!(text.contains("explain: ara why ARA1204"), "{text}");
-    assert_eq!(r["summary"]["groups"][0]["records"], 2);
+    assert!(r.get("summary").is_none(), "agents get the text only");
+    let full = call(
+        &mut h,
+        ConnId::LOCAL,
+        "logs",
+        json!({ "session": agent, "codes": ["ARA1204"], "limit": 10 }),
+    );
+    assert_eq!(full["summary"]["groups"][0]["records"], 2);
 
     let mine = call(
         &mut h,
@@ -286,7 +293,7 @@ fn why_explains_through_the_protocol_and_its_fixes_run() {
         &mut h,
         ConnId::LOCAL,
         "why",
-        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }),
+        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible", "full": true }),
     );
     assert_eq!(r["explainer"], "visibility");
     assert_eq!(r["causes"][0]["code"], "ARA3307", "{}", r["text"]);
@@ -307,7 +314,7 @@ fn why_explains_through_the_protocol_and_its_fixes_run() {
         &mut h,
         ConnId::LOCAL,
         "why",
-        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }),
+        json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible", "full": true }),
     );
     assert!(
         r["causes"]

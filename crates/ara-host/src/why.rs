@@ -39,6 +39,10 @@ pub struct WhyParams {
     pub doc: Option<String>,
     /// List the explainers and example questions instead of answering.
     pub list: Option<bool>,
+    /// Return the whole report as JSON (causes with evidence, checks, related).
+    /// Default: the text plus the runnable fixes, which is what agents need and
+    /// costs about half the tokens.
+    pub full: Option<bool>,
 }
 
 /// Record keys that are structure, not flags.
@@ -365,10 +369,24 @@ impl Service for WhyService {
         let st = &*st;
         let facts = HostFacts::new(st, profile);
         let report = st.why.explain(&question, &facts)?;
-        let mut out = serde_json::to_value(&report).unwrap_or(Value::Null);
-        if let Some(o) = out.as_object_mut() {
-            o.insert("text".into(), report.text().into());
+        if p.full.unwrap_or(false) {
+            let mut out = serde_json::to_value(&report).unwrap_or(Value::Null);
+            if let Some(o) = out.as_object_mut() {
+                o.insert("text".into(), report.text().into());
+            }
+            return Ok(out);
         }
-        Ok(out)
+        // Agents read results as JSON (MCP clients pass `structuredContent` to the
+        // model): the text says everything once; `fixes` are the runnable ones.
+        let fixes: Vec<Value> = report
+            .causes
+            .iter()
+            .flat_map(|c| {
+                c.fixes
+                    .iter()
+                    .map(move |f| json!({ "cause": c.code, "fix": f }))
+            })
+            .collect();
+        Ok(json!({ "text": report.text(), "fixes": fixes }))
     }
 }

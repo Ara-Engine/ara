@@ -48,7 +48,7 @@ fn why_explains_and_its_fix_runs_through_ara_do() {
     assert_eq!(code, 0);
     assert!(text.contains("`Transform.scale` is 0 on y"), "{text}");
 
-    let (_, json) = ara(root, &["--json", "why", "name:Crate not visible"]);
+    let (_, json) = ara(root, &["--json", "why", "name:Crate not visible", "--full"]);
     let report: Value = serde_json::from_str(&json).expect("json report");
     let scale = report["causes"]
         .as_array()
