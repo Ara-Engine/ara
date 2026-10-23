@@ -243,11 +243,11 @@ Measured on the shared Windows dev box (release, one core, 128-frame quanta,
 `evidence/` in each crate):
 
 - 1,000 real voices, each on the occluded three-band path with air absorption and a
-  per-voice reverb send into the FDN room reverb: **p50 0.47 ms, p95 0.66 ms** per block;
-  with all 1,000 voices retargeted every 8 blocks (256-frame ramps): p50 0.54 ms, p95 0.85 ms.
+  per-voice reverb send into the FDN room reverb: **p50 0.46 ms, p95 0.66 ms** per block;
+  with all 1,000 voices retargeted every 8 blocks (256-frame ramps): p50 0.48 ms, p95 0.76 ms.
   Zero allocations. (`cargo run -p ara-acoustics --release --example acoustics_bench`)
-- Graph voices: 3–6 µs per voice per block for the footsteps, wind, engine and rifle
-  examples (`cargo run -p ara-audio-graph --release --example graph_cost`).
+- Graph voices: 3.3–6.2 µs per voice per block for the five example graphs
+  (`cargo run -p ara-audio-graph --release --example graph_cost`).
 - Device latency path unchanged: WASAPI RAW 480-frame period, 20 ms queue estimate,
   3.0–4.6 ms command to first submit (`evidence/latency-v2.json`); the earlier loopback
   measurement (p50 25.3 ms) therefore still applies.
