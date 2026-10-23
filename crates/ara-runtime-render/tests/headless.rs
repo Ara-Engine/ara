@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 //! The demo scene rendered headless: labelled captures, motion between frames,
 //! CPU-skinned Fox, live light edits and validation-clean dynamic uploads.
-use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, Importer, TargetPlatform};
+use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
 use ara_doc::Workspace;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_render::capture::{ViewMode, compare};

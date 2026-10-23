@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 //! The demo scene end to end in-process: player movement, AI crowds, animation,
 //! determinism, exact checkpoints, portable snapshots, live patches and keep-changes.
-use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, Importer, TargetPlatform};
+use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
 use ara_doc::Workspace;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_runtime::{
