@@ -21,7 +21,7 @@
   "sampling": "256-phase Halton pixel-area integration including remodulation; four-phase transport; one-event lobe mixture; mip-filtered materials",
   "scene_hash": "15b0e2c469e8cea8f719599b22306bd0e4b33d3c85e786c605596e3b6dda38b1",
   "settle_frames": 192,
-  "shader_revision": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
+  "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
   "size": [
     640,
     360

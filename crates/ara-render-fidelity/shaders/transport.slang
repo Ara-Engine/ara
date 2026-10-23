@@ -5,11 +5,12 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     float3 ray=cameraRay(f,float2(p)+0.5);Hit hit;uint slot=f.control.x;
     if(!trace(f,f.camera.xyz,ray,10000,rng,hit)){store(f,WORLD+slot,p,0);store(f,NORMAL+slot,p,0);store(f,BASE,p,0);store(f,MOTION,p,0);store(f,DEPTH,p,0);if(f.transport.x==0){store(f,DIRECT,p,0);store(f,RAW,p,float4(environment(f,ray),1));}return;}
     Surface s=surface(f,hit.id,hit.primitive,hit.bary);if(dot(s.normal,-ray)<0)s.normal=-s.normal;
-    float4 previous=mul(f.previousVp,float4(previousPosition(f,hit.id,hit.primitive,hit.bary,s.position),1));float4 current=mul(f.vp,float4(s.position,1));
+    float3 previousWorld=previousPosition(f,hit.id,hit.primitive,hit.bary,s.position);
+    float4 previous=mul(f.previousVp,float4(previousWorld,1));float4 current=mul(f.vp,float4(s.position,1));
     float2 previousUv=float2(previous.x,-previous.y)/previous.w*0.5+0.5;float2 currentUv=float2(current.x,-current.y)/current.w*0.5+0.5;
     store(f,WORLD+slot,p,float4(s.position,float(s.id+1)));store(f,NORMAL+slot,p,float4(s.normal,s.roughness));uint3 modulation=uint3(saturate(s.albedo*(1-s.metal)+lerp(float3(0.04*s.specular),s.albedo,s.metal))*255+0.5);
     store(f,BASE,p,float4(hit.bary,float(hit.primitive),float(modulation.x|(modulation.y<<8)|(modulation.z<<16))));
-    store(f,MOTION,p,float4(previousUv-currentUv,length(s.previousPosition-f.previousCamera.xyz),max(max(s.emissive.x,s.emissive.y),s.emissive.z)>1?1:0));
+    store(f,MOTION,p,float4(previousUv-currentUv,length(previousWorld-f.previousCamera.xyz),max(max(s.emissive.x,s.emissive.y),s.emissive.z)>1?1:0));
     store(f,DEPTH,p,float4(current.w,0,0,0));
     if(f.transport.x==0){store(f,DIRECT,p,float4(s.emissive+direct(f,s,-ray,rng),1));store(f,RAW,p,0);}
 }

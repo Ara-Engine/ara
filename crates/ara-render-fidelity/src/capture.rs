@@ -65,6 +65,11 @@ impl FidelityView {
     pub fn capture_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
         self.read_hdr(gpu, FILTER0)
     }
+    /// Read current-to-previous UV motion, previous radial depth and reactive mask.
+    /// Explicit diagnostics only; ordinary rendering never reads back motion.
+    pub fn capture_motion(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
+        self.read_hdr(gpu, crate::targets::MOTION)
+    }
     /// Read the separately accumulated direct/emissive signal for lighting diagnostics.
     /// Subtract it from `capture_radiance` to inspect filtered indirect transport.
     pub fn capture_direct_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {

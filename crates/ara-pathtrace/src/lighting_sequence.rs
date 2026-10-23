@@ -161,11 +161,18 @@ pub(crate) fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             .zip(&samples[160..191])
             .map(|(a, b)| (a - b) / steady)
             .collect::<Vec<_>>();
-        let flicker = differences.iter().map(|v| v * v).sum::<f64>() / differences.len() as f64;
+        let mean_delta = differences.iter().sum::<f64>() / differences.len() as f64;
+        let mean_square = differences.iter().map(|v| v * v).sum::<f64>() / differences.len() as f64;
+        let flicker = (mean_square - mean_delta * mean_delta).max(0.);
+        let display_rms = (display_delta / display_energy.max(1e-12)).sqrt();
         println!(
             "{name}: convergence {convergence:?} frames; normalized luminance delta variance {flicker:.8}"
         );
-        events.push(serde_json::json!({"event":name,"convergence_frames":convergence,"flicker_variance":flicker,"flicker_rms":flicker.sqrt(),"display_pixel_flicker_rms":(display_delta/display_energy.max(1e-12)).sqrt(),"pixel_flicker_variance":spatial_deltas.iter().sum::<f64>()/spatial_deltas.len() as f64/(steady*steady),"steady_luminance":steady,"steady_indirect_luminance":steady_indirect,"luminance":samples,"direct_luminance":direct,"incident_luminance":incident,"active_probes":probe_counts}));
+        anyhow::ensure!(
+            display_rms <= 0.01,
+            "{name}: display flicker RMS exceeds 1%"
+        );
+        events.push(serde_json::json!({"event":name,"convergence_frames":convergence,"flicker_variance":flicker,"flicker_rms":mean_square.sqrt(),"display_pixel_flicker_rms":display_rms,"pixel_flicker_variance":spatial_deltas.iter().sum::<f64>()/spatial_deltas.len() as f64/(steady*steady),"steady_luminance":steady,"steady_indirect_luminance":steady_indirect,"luminance":samples,"direct_luminance":direct,"incident_luminance":incident,"active_probes":probe_counts}));
     }
     strip.save(root.join("captures/sponza-lighting-sequence.png"))?;
     view.destroy(gpu)?;

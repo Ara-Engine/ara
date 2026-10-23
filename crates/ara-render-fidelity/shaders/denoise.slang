@@ -14,8 +14,10 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
         if(valid){
             // Bilinear taps must all belong to the same surface. Otherwise use the
             // validated nearest sample; this removes dark foreground/background rims.
-            int2 low=int2(floor(uv*f.sizes.xy-0.5));bool footprint=true;
-            for(int y=0;y<2;y++)for(int x=0;x<2;x++)footprint=footprint && pixel(f,WORLD+previous,low+int2(x,y)).w==world.w;
+            // Stationary pixel-area accumulation addresses the exact old texel;
+            // neither a four-neighbor footprint test nor bilinear sampling is needed.
+            int2 low=int2(floor(uv*f.sizes.xy-0.5));bool footprint=f.transport.w!=1;
+            if(footprint)for(int y=0;y<2;y++)for(int x=0;x<2;x++)footprint=footprint && pixel(f,WORLD+previous,low+int2(x,y)).w==world.w;
             float4 history=footprint?sampleImage(f,HISTORY+previous,uv):pixel(f,HISTORY+previous,at);
             bool sampled=pixel(f,RAW,p).w>0;count=min(history.w+float(sampled),length(motion.xy*f.sizes.xy)>1?4.:64.);float weight=sampled?max(1/count,motion.w>0?0.35:0.02):0;
             if(f.temporal.y>0 && sampled){weight=max(weight,0.5);count=min(count,2.);}

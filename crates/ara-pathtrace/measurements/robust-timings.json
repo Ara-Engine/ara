@@ -1,9 +1,13 @@
 [
   {
     "async_overlap": false,
+    "background_after": "94 %, 57 %, 3158 MiB, 125.95 W, 2805 MHz, 10501 MHz",
+    "background_before": "0 %, 1 %, 3168 MiB, 20.29 W, 2535 MHz, 10501 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 10.0,
     "budget_passed": true,
+    "cpu_after": "cpu_percent=37; free_ram_kib=6249792",
+    "cpu_before": "cpu_percent=57; free_ram_kib=6255940",
     "display_size": [
       2560,
       1440
@@ -15,72 +19,72 @@
       "target_ev100": 10.894477844238281
     },
     "frames": 60,
-    "p50": 5.963711999999999,
-    "p95": 6.010784000000001,
+    "p50": 5.87408,
+    "p95": 5.937248,
     "passes": {
       "Atmosphere.Froxels.AerialPerspective": {
-        "p50": 0.078752,
-        "p95": 0.08096
+        "p50": 0.079008,
+        "p95": 0.080736
       },
       "Atmosphere.SkyView": {
-        "p50": 0.014496,
+        "p50": 0.014624,
         "p95": 0.015136
       },
       "Bloom.Horizontal": {
-        "p50": 0.20624,
-        "p95": 0.206976
+        "p50": 0.206816,
+        "p95": 0.207456
       },
       "Bloom.Vertical": {
-        "p50": 0.10672,
-        "p95": 0.1072
+        "p50": 0.10688,
+        "p95": 0.107488
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.117088,
-        "p95": 0.137632
+        "p50": 0.116864,
+        "p95": 0.134336
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.02336,
-        "p95": 0.023904
+        "p50": 0.023328,
+        "p95": 0.024
       },
       "Output.SDR": {
         "p50": 0.041056,
-        "p95": 0.04224
+        "p95": 0.04176
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.370112,
-        "p95": 0.38272
+        "p50": 0.369888,
+        "p95": 0.380704
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 1.256384,
-        "p95": 1.277792
+        "p50": 1.258688,
+        "p95": 1.273728
       },
       "SVGF.Atrous.1": {
-        "p50": 0.465664,
-        "p95": 0.495264
+        "p50": 0.466368,
+        "p95": 0.501952
       },
       "SVGF.Atrous.2": {
-        "p50": 0.490464,
-        "p95": 0.499104
+        "p50": 0.491328,
+        "p95": 0.498912
       },
       "SVGF.Atrous.4": {
-        "p50": 0.61168,
-        "p95": 0.613568
+        "p50": 0.612288,
+        "p95": 0.615968
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.78592,
-        "p95": 0.812256
+        "p50": 0.68256,
+        "p95": 0.726272
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.205824,
-        "p95": 0.217664
+        "p50": 0.206272,
+        "p95": 0.214976
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000096
+        "p95": 0.000128
       },
       "Visibility.Motion": {
-        "p50": 1.184576,
-        "p95": 1.188
+        "p50": 1.188448,
+        "p95": 1.191712
       }
     },
     "render_size": [
@@ -89,14 +93,19 @@
     ],
     "scene": "outdoor_day",
     "scene_hash": "e5527cd4e8eac8f0b96e8a45055b02d8ccab2d19725d32d36560a80aa2560e54",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "triangles": 49496,
     "warmup": 96
   },
   {
     "async_overlap": false,
+    "background_after": "83 %, 43 %, 2692 MiB, 98.70 W, 2820 MHz, 10501 MHz",
+    "background_before": "1 %, 1 %, 2692 MiB, 46.81 W, 2820 MHz, 10501 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 5.0,
     "budget_passed": true,
+    "cpu_after": "cpu_percent=66; free_ram_kib=6179276",
+    "cpu_before": "cpu_percent=76; free_ram_kib=6145240",
     "display_size": [
       2560,
       1440
@@ -108,72 +117,72 @@
       "target_ev100": 10.893136978149414
     },
     "frames": 60,
-    "p50": 3.09008,
-    "p95": 3.1302719999999997,
+    "p50": 3.030816,
+    "p95": 3.230176,
     "passes": {
       "Atmosphere.Froxels.AerialPerspective": {
-        "p50": 0.07888,
-        "p95": 0.08112
+        "p50": 0.078976,
+        "p95": 0.080608
       },
       "Atmosphere.SkyView": {
-        "p50": 0.015616,
-        "p95": 0.016032
+        "p50": 0.015456,
+        "p95": 0.015968
       },
       "Bloom.Horizontal": {
         "p50": 0.096544,
-        "p95": 0.09728
+        "p95": 0.097312
       },
       "Bloom.Vertical": {
         "p50": 0.051232,
-        "p95": 0.051904
+        "p95": 0.05168
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.116192,
-        "p95": 0.140416
+        "p50": 0.115712,
+        "p95": 0.13632
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.02544,
-        "p95": 0.025952
+        "p50": 0.025504,
+        "p95": 0.026048
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.17248,
-        "p95": 0.180832
+        "p50": 0.171232,
+        "p95": 0.18496
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.622464,
-        "p95": 0.634944
+        "p50": 0.621984,
+        "p95": 0.632768
       },
       "SVGF.Atrous.1": {
-        "p50": 0.211904,
-        "p95": 0.218496
+        "p50": 0.213824,
+        "p95": 0.21968
       },
       "SVGF.Atrous.2": {
-        "p50": 0.23312,
-        "p95": 0.239328
+        "p50": 0.23264,
+        "p95": 0.238688
       },
       "SVGF.Atrous.4": {
-        "p50": 0.276992,
-        "p95": 0.279552
+        "p50": 0.276704,
+        "p95": 0.278656
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.36592,
-        "p95": 0.392352
+        "p50": 0.308512,
+        "p95": 0.346816
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.216576,
-        "p95": 0.217536
+        "p50": 0.216512,
+        "p95": 0.21744
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.055424,
-        "p95": 0.05632
+        "p50": 0.055264,
+        "p95": 0.056064
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000096
+        "p95": 0.000128
       },
       "Visibility.Motion": {
-        "p50": 0.547648,
-        "p95": 0.550144
+        "p50": 0.547296,
+        "p95": 0.549664
       }
     },
     "render_size": [
@@ -182,14 +191,19 @@
     ],
     "scene": "outdoor_day",
     "scene_hash": "e5527cd4e8eac8f0b96e8a45055b02d8ccab2d19725d32d36560a80aa2560e54",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "triangles": 49496,
     "warmup": 96
   },
   {
     "async_overlap": false,
+    "background_after": "95 %, 80 %, 3115 MiB, 164.33 W, 2775 MHz, 10501 MHz",
+    "background_before": "1 %, 1 %, 3115 MiB, 46.38 W, 2820 MHz, 10501 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 10.0,
     "budget_passed": true,
+    "cpu_after": "cpu_percent=45; free_ram_kib=6298592",
+    "cpu_before": "cpu_percent=61; free_ram_kib=6235760",
     "display_size": [
       2560,
       1440
@@ -201,64 +215,64 @@
       "target_ev100": 4.473917484283447
     },
     "frames": 60,
-    "p50": 5.627744000000001,
-    "p95": 6.021216,
+    "p50": 5.510847999999999,
+    "p95": 5.748288,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.209728,
-        "p95": 0.212832
+        "p50": 0.20992,
+        "p95": 0.210528
       },
       "Bloom.Vertical": {
-        "p50": 0.109056,
-        "p95": 0.111008
+        "p50": 0.109344,
+        "p95": 0.110112
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
         "p50": 0.054624,
-        "p95": 0.056704
+        "p95": 0.0568
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.024992,
-        "p95": 0.025824
+        "p50": 0.024928,
+        "p95": 0.025536
       },
       "Output.SDR": {
-        "p50": 0.040864,
-        "p95": 0.041472
+        "p50": 0.04096,
+        "p95": 0.041568
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.273408,
-        "p95": 0.298112
+        "p50": 0.274656,
+        "p95": 0.304928
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.91184,
-        "p95": 0.922944
+        "p50": 0.912864,
+        "p95": 0.916064
       },
       "SVGF.Atrous.1": {
-        "p50": 0.48944,
-        "p95": 0.498368
+        "p50": 0.49376,
+        "p95": 0.506336
       },
       "SVGF.Atrous.2": {
-        "p50": 0.527648,
-        "p95": 0.545088
+        "p50": 0.529408,
+        "p95": 0.545728
       },
       "SVGF.Atrous.4": {
-        "p50": 0.628064,
-        "p95": 0.636736
+        "p50": 0.630496,
+        "p95": 0.63664
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 1.005632,
-        "p95": 1.055584
+        "p50": 0.867008,
+        "p95": 0.909024
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.260736,
-        "p95": 0.280288
+        "p50": 0.261376,
+        "p95": 0.282752
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000128
+        "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 1.07824,
-        "p95": 1.140416
+        "p50": 1.08352,
+        "p95": 1.139776
       }
     },
     "render_size": [
@@ -267,14 +281,19 @@
     ],
     "scene": "night_interior",
     "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "triangles": 4628,
     "warmup": 96
   },
   {
     "async_overlap": false,
+    "background_after": "90 %, 68 %, 2649 MiB, 96.50 W, 2805 MHz, 10501 MHz",
+    "background_before": "0 %, 1 %, 2649 MiB, 47.13 W, 2820 MHz, 10501 MHz",
     "background_load": "shared GPU with approximately ten other agents; no forced clocks or exclusive access",
     "budget_ms": 5.0,
     "budget_passed": true,
+    "cpu_after": "cpu_percent=63; free_ram_kib=6230124",
+    "cpu_before": "cpu_percent=48; free_ram_kib=6283060",
     "display_size": [
       2560,
       1440
@@ -286,64 +305,64 @@
       "target_ev100": 4.47515344619751
     },
     "frames": 60,
-    "p50": 2.6987520000000003,
-    "p95": 2.758432,
+    "p50": 2.662944,
+    "p95": 2.8091839999999997,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.096192,
-        "p95": 0.096736
+        "p50": 0.096384,
+        "p95": 0.097344
       },
       "Bloom.Vertical": {
-        "p50": 0.051328,
-        "p95": 0.051776
+        "p50": 0.051424,
+        "p95": 0.052512
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.05392,
-        "p95": 0.055264
+        "p50": 0.05408,
+        "p95": 0.057792
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.025472,
-        "p95": 0.02592
+        "p50": 0.025568,
+        "p95": 0.026112
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.080512,
-        "p95": 0.081888
+        "p50": 0.0816,
+        "p95": 0.084768
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 0.439904,
-        "p95": 0.443328
+        "p50": 0.442272,
+        "p95": 0.477792
       },
       "SVGF.Atrous.1": {
-        "p50": 0.219776,
-        "p95": 0.221728
+        "p50": 0.221856,
+        "p95": 0.224544
       },
       "SVGF.Atrous.2": {
-        "p50": 0.249248,
-        "p95": 0.270784
+        "p50": 0.250528,
+        "p95": 0.270912
       },
       "SVGF.Atrous.4": {
-        "p50": 0.278528,
-        "p95": 0.282304
+        "p50": 0.279072,
+        "p95": 0.2824
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.443744,
-        "p95": 0.486624
+        "p50": 0.37872,
+        "p95": 0.401472
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.211424,
-        "p95": 0.212096
+        "p50": 0.212384,
+        "p95": 0.214592
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.04912,
-        "p95": 0.049952
+        "p50": 0.049312,
+        "p95": 0.050112
       },
       "Viewport.Ready": {
         "p50": 0.000096,
-        "p95": 0.000128
+        "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.493568,
-        "p95": 0.550528
+        "p50": 0.513792,
+        "p95": 0.574592
       }
     },
     "render_size": [
@@ -352,6 +371,7 @@
     ],
     "scene": "night_interior",
     "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "triangles": 4628,
     "warmup": 96
   }

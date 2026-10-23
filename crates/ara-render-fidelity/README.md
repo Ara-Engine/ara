@@ -241,3 +241,45 @@ models. The pinned OBJ/MTL has no authored coat or sheen parameters; the furnace
 test exercises those layers independently. Production material-AST lowering,
 landscape streaming and foliage wind still need the existing extraction seams.
 Editor viewport output, FSR1/TAAU and the DLSS seam retain their contracts.
+
+## Geometry / shadow integration contract
+
+The public extraction boundary remains `ara_render::scene::Scene` through
+`FidelityView::new` / `update_scene`; `GpuScene::instance_id(entity)` gives its
+stable instance ID. `Material` is still 80 bytes and `Vertex` 48 bytes. Optional
+`MaterialDetail` uses a version tag in reserved material flags. Geometry/VSM work
+must preserve alpha cutoff, two-sided normals, previous deformed positions and
+the extracted light units (lux, lumens, radiance). No root renderer changes are
+required by this round.
+
+The visibility-to-lighting layout below is unchanged. All images have render-size
+dimensions, top-left UVs and right-handed Y-up world coordinates in metres.
+These are internal graph targets, **not** a public writable-image import API;
+an external visibility producer needs an additive graph adapter rather than
+writing view-owned images behind the graph. That adapter must declare every
+sampled/storage access and preserve this schema:
+
+| Signal | Hybrid format | Channels and validity |
+|---|---|---|
+| WORLD, ping-pong | RGBA32F | world position xyz; exact stable instance ID + 1 in w; zero means sky |
+| NORMAL, ping-pong | RGBA16F | camera-facing shading normal xyz; perceptual GGX roughness w |
+| BASE | RGBA32F | triangle barycentrics xy, primitive index z, RGB8 demodulation factor packed as an exact 24-bit integer in w |
+| MOTION | RGBA32F | previous UV minus current UV, excluding jitter, xy; previous radial camera distance z; reactive mask w |
+| DEPTH | RGBA32F | positive current view depth x; zero means sky |
+| DIRECT | RGBA16F | unexposed linear direct + primary emission rgb; surface-valid flag w |
+| RAW | RGBA16F | demodulated indirect rgb; sample-valid flag w (quarter-rate phases leave holes) |
+
+IDs/primitive indices must remain exactly representable as f32 integers. Barycentrics
+refer to the same extracted triangles used by secondary hardware rays. A virtual
+geometry producer therefore needs a correspondence to that ray scene. VSM visibility
+may replace direct-light shadow evaluation; it must not multiply indirect lighting
+by a second ambient-occlusion term. Normal/ORM sampling, layer energy and specular
+occlusion remain shared with the reference material evaluator.
+
+Camera matrices are unjittered for motion; the current inverse projection includes
+jitter. History rejection adds the separately supplied jitter delta. `update_scene`
+retains previous geometry for one frame; signal lighting edits with
+`FrameInput::lighting_changed`, and cuts/reassignments with `reset`.
+`upscaler_input` still exports scene-linear colour at pre-exposure 1, depth, motion,
+jitter and both sizes. `output()` is the completed offscreen SDR image in CopySource
+state; the editor must import/transition it before sampling, outlining or gizmos.

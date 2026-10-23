@@ -95,7 +95,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             "{name}: relative RMSE {:.5}; convergence {:.5}",
             error.relative_rmse, convergence.relative_rmse
         );
-        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":"lower half, including terrain and foliage rather than predominantly sky","surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
+        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":if name=="outdoor_day"{"lower half: terrain and foliage"}else{"lower half: floor and sphere bases"},"surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
         reference.destroy(gpu)?;
     }
     write_json(&root.join("measurements/robust-quality.json"), &report)?;
@@ -119,6 +119,8 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             configure(gpu, &mut view, name)?;
             let mut totals = Vec::new();
             let mut passes = BTreeMap::<String, Vec<f64>>::new();
+            let background_before = content::background_load();
+            let cpu_before = content::cpu_load();
             for tick in 0..156 {
                 let mut frame = input(&camera, tick, false);
                 frame.deterministic = false;
@@ -155,7 +157,7 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 "{name} {}p: p50 {:.3}, p95 {:.3} ms",
                 render[1], totals[30], totals[56]
             );
-            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
+            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_before":background_before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
             view.destroy(gpu)?;
         }
     }

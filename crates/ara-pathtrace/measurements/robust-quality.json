@@ -31,12 +31,12 @@
     "scene": "outdoor_day",
     "scene_hash": "e5527cd4e8eac8f0b96e8a45055b02d8ccab2d19725d32d36560a80aa2560e54",
     "settle_frames": 256,
-    "shader_revision": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "size": [
       480,
       270
     ],
-    "surface_roi": "lower half, including terrain and foliage rather than predominantly sky",
+    "surface_roi": "lower half: terrain and foliage",
     "surface_roi_error": {
       "mae": 15.575405776238245,
       "relative_rmse": 0.043755874859034656,
@@ -76,12 +76,12 @@
     "scene": "night_interior",
     "scene_hash": "a4f1e702bf7df989cfe3a34269ba55b3e0caca540da79f3b7fa308a50f7fe76b",
     "settle_frames": 256,
-    "shader_revision": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "size": [
       480,
       270
     ],
-    "surface_roi": "lower half, including terrain and foliage rather than predominantly sky",
+    "surface_roi": "lower half: floor and sphere bases",
     "surface_roi_error": {
       "mae": 1.5658199258596965,
       "relative_rmse": 0.18637304980673122,

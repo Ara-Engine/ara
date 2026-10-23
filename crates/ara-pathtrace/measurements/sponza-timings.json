@@ -4,11 +4,11 @@
     "asset_policy": "local benchmark; original copyright.txt retained; no redistributed model files",
     "async_overlap": false,
     "attribution": "Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections",
-    "background_after": "0 %, 2 %, 3571 MiB, 175.68 W, 2820 MHz, 10501 MHz",
-    "background_before": "3 %, 20 %, 3534 MiB, 21.92 W, 330 MHz, 810 MHz",
+    "background_after": "96 %, 59 %, 3546 MiB, 216.71 W, 2820 MHz, 10501 MHz",
+    "background_before": "2 %, 11 %, 3240 MiB, 21.20 W, 240 MHz, 405 MHz",
     "background_load": "shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks; before/after snapshots are outside timed frames",
     "budget_ms": 10.0,
-    "budget_passed": false,
+    "budget_passed": true,
     "camera": {
       "kind": "look_at",
       "position": [
@@ -23,8 +23,8 @@
       ],
       "vertical_fov": 1.0499999523162842
     },
-    "cpu_after": "cpu_percent=97; free_ram_kib=3546908",
-    "cpu_before": "cpu_percent=99; free_ram_kib=3610348",
+    "cpu_after": "cpu_percent=65; free_ram_kib=5189860",
+    "cpu_before": "cpu_percent=45; free_ram_kib=5475628",
     "display_size": [
       2560,
       1440
@@ -40,64 +40,64 @@
     "instances": 25,
     "material_conversion": "OBJ Kd and PNG alpha; Ns -> GGX roughness; authored bump heights -> tangent normals; UV-derived tangents; map_Ks -> bounded specular intensity, not roughness; linear-space mip pyramids",
     "materials": 25,
-    "p50": 9.218271999999999,
-    "p95": 13.231328,
+    "p50": 8.836383999999999,
+    "p95": 9.164992,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.207712,
-        "p95": 0.216864
+        "p50": 0.20752,
+        "p95": 0.20832
       },
       "Bloom.Vertical": {
-        "p50": 0.108096,
-        "p95": 0.108768
+        "p50": 0.107968,
+        "p95": 0.10864
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.167584,
-        "p95": 0.238048
+        "p50": 0.170912,
+        "p95": 0.274976
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.024832,
-        "p95": 0.025632
+        "p50": 0.024736,
+        "p95": 0.025728
       },
       "Output.SDR": {
-        "p50": 0.053632,
-        "p95": 0.059968
+        "p50": 0.0536,
+        "p95": 0.057824
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.306848,
-        "p95": 0.345408
+        "p50": 0.306656,
+        "p95": 0.335712
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 3.466304,
-        "p95": 3.840608
+        "p50": 3.459424,
+        "p95": 3.499232
       },
       "SVGF.Atrous.1": {
-        "p50": 0.513568,
-        "p95": 1.745984
+        "p50": 0.50848,
+        "p95": 0.532544
       },
       "SVGF.Atrous.2": {
-        "p50": 0.55856,
-        "p95": 1.76
+        "p50": 0.551552,
+        "p95": 0.573312
       },
       "SVGF.Atrous.4": {
-        "p50": 0.641952,
-        "p95": 1.846432
+        "p50": 0.635008,
+        "p95": 0.640704
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 1.020736,
-        "p95": 4.112864
+        "p50": 0.835872,
+        "p95": 0.89152
       },
       "Upscale.TAAU.Resolve": {
-        "p50": 0.303552,
-        "p95": 0.595136
+        "p50": 0.299616,
+        "p95": 0.59632
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000128
       },
       "Visibility.Motion": {
-        "p50": 1.599456,
-        "p95": 1.604256
+        "p50": 1.594496,
+        "p95": 1.598112
       }
     },
     "render_size": [
@@ -105,7 +105,7 @@
       1440
     ],
     "scene_hash": "15b0e2c469e8cea8f719599b22306bd0e4b33d3c85e786c605596e3b6dda38b1",
-    "shader_revision": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "source": "https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip",
     "textures": 39,
     "transport_stride": 4,
@@ -117,8 +117,8 @@
     "asset_policy": "local benchmark; original copyright.txt retained; no redistributed model files",
     "async_overlap": false,
     "attribution": "Frank Meinl, Crytek 2010; Morgan McGuire Computer Graphics Archive, 2011 corrections",
-    "background_after": "91 %, 53 %, 3105 MiB, 210.18 W, 2820 MHz, 10501 MHz",
-    "background_before": "13 %, 3 %, 3105 MiB, 26.44 W, 210 MHz, 5001 MHz",
+    "background_after": "93 %, 54 %, 3102 MiB, 213.93 W, 2805 MHz, 10501 MHz",
+    "background_before": "9 %, 4 %, 3102 MiB, 27.09 W, 270 MHz, 5001 MHz",
     "background_load": "shared RTX 4070 SUPER with approximately ten other agents; no exclusive GPU reservation or forced clocks; before/after snapshots are outside timed frames",
     "budget_ms": 5.0,
     "budget_passed": true,
@@ -136,16 +136,16 @@
       ],
       "vertical_fov": 1.0499999523162842
     },
-    "cpu_after": "cpu_percent=96; free_ram_kib=3634236",
-    "cpu_before": "cpu_percent=94; free_ram_kib=3526064",
+    "cpu_after": "cpu_percent=62; free_ram_kib=5306564",
+    "cpu_before": "cpu_percent=78; free_ram_kib=5227272",
     "display_size": [
       2560,
       1440
     ],
     "exposure": {
       "metered_luminance": 3.8807733058929443,
-      "multiplier": 0.016440875828266144,
-      "previous_multiplier": 0.0164430383592844,
+      "multiplier": 0.01644092984497547,
+      "previous_multiplier": 0.016443096101284027,
       "target_ev100": 4.167240619659424
     },
     "frames": 240,
@@ -153,64 +153,64 @@
     "instances": 25,
     "material_conversion": "OBJ Kd and PNG alpha; Ns -> GGX roughness; authored bump heights -> tangent normals; UV-derived tangents; map_Ks -> bounded specular intensity, not roughness; linear-space mip pyramids",
     "materials": 25,
-    "p50": 4.278656,
-    "p95": 4.564671999999999,
+    "p50": 4.225631999999999,
+    "p95": 4.305280000000001,
     "passes": {
       "Bloom.Horizontal": {
-        "p50": 0.096192,
-        "p95": 0.096832
+        "p50": 0.09664,
+        "p95": 0.098176
       },
       "Bloom.Vertical": {
-        "p50": 0.051392,
-        "p95": 0.051904
+        "p50": 0.051552,
+        "p95": 0.052224
       },
       "DDGI.Trace.Relocate.Classify.Integrate": {
-        "p50": 0.161696,
-        "p95": 0.196224
+        "p50": 0.162656,
+        "p95": 0.19696
       },
       "Exposure.EV100.Meter.Adapt": {
-        "p50": 0.025376,
-        "p95": 0.025824
+        "p50": 0.025408,
+        "p95": 0.025952
       },
       "Post.Atmosphere.Lens.ToneMap.LUT": {
-        "p50": 0.099232,
-        "p95": 0.10544
+        "p50": 0.100032,
+        "p95": 0.106656
       },
       "RT.Reflections.SoftShadows.DDGI": {
-        "p50": 1.616704,
-        "p95": 1.643936
+        "p50": 1.621984,
+        "p95": 1.648032
       },
       "SVGF.Atrous.1": {
-        "p50": 0.227168,
-        "p95": 0.2336
+        "p50": 0.233504,
+        "p95": 0.24352
       },
       "SVGF.Atrous.2": {
-        "p50": 0.261248,
-        "p95": 0.285824
+        "p50": 0.26432,
+        "p95": 0.285888
       },
       "SVGF.Atrous.4": {
-        "p50": 0.283616,
-        "p95": 0.288192
+        "p50": 0.286624,
+        "p95": 0.291456
       },
       "SVGF.Reproject.Reject.Moments": {
-        "p50": 0.435104,
-        "p95": 0.486496
+        "p50": 0.36944,
+        "p95": 0.406208
       },
       "Upscale.FSR1.EASU": {
-        "p50": 0.220672,
-        "p95": 0.223712
+        "p50": 0.221664,
+        "p95": 0.224384
       },
       "Upscale.FSR1.RCAS": {
-        "p50": 0.062048,
-        "p95": 0.06304
+        "p50": 0.061952,
+        "p95": 0.062912
       },
       "Viewport.Ready": {
         "p50": 0.000096,
         "p95": 0.000096
       },
       "Visibility.Motion": {
-        "p50": 0.733472,
-        "p95": 0.738624
+        "p50": 0.73472,
+        "p95": 0.741728
       }
     },
     "render_size": [
@@ -218,7 +218,7 @@
       960
     ],
     "scene_hash": "15b0e2c469e8cea8f719599b22306bd0e4b33d3c85e786c605596e3b6dda38b1",
-    "shader_revision": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
+    "shader_revision": "81e9f725384018c20073ac99a4d56ce7f08fa1dc9f5e4afca0a5d8452b5cab64",
     "source": "https://casual-effects.com/g3d/data10/common/model/crytek_sponza/sponza.zip",
     "textures": 39,
     "transport_stride": 4,
