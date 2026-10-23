@@ -1,4 +1,4 @@
-param([ValidateSet('Check','Smoke','Capture','Timings')][string]$Mode='Check')
+param([ValidateSet('Check','Smoke','Capture','Timings','Quality','Content')][string]$Mode='Check')
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Push-Location $repo

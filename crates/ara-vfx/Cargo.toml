@@ -17,7 +17,7 @@ ara-json = { path = "../ara-json" }
 ara-material = { path = "../ara-material" }
 ara-schema = { path = "../ara-schema" }
 blake3 = "1"
-bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std"] }
 glam = { version = "0.30", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true

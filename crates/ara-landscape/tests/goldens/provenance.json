@@ -1,0 +1,49 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "height_hash": "013d88813ee8590a7d0617e976799e3e7ddf9962d547dab13bbe6d48ea1e11f1",
+  "instance_hash": "8251f4131805a525d60e0bae66bec459a2d3fa0b40848c791a23c8ad84e5e42f",
+  "instances": 1390348,
+  "seed": 42,
+  "size": [
+    2560,
+    1440
+  ],
+  "tick": 120,
+  "tolerance_1_ssim": 0.005
+}

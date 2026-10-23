@@ -348,6 +348,26 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Invalid indexed draw".into()));
                     }
                 }
+                Command::DrawIndirect { arguments, offset } => {
+                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
+                    let buffer = self.buffers.get(*arguments)?;
+                    if !rendering
+                        || pipeline != Some(false)
+                        || bound.is_none_or(|h| {
+                            self.pipelines.get(h).is_ok_and(|p| p.vertex_stride != 0)
+                        })
+                        || offset % 4 != 0
+                        || offset
+                            .checked_add(16)
+                            .is_none_or(|end| end > buffer.raw.size)
+                        || !buffer
+                            .raw
+                            .usage
+                            .contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
+                    {
+                        return Err(GpuError::Contract("Invalid indirect draw".into()));
+                    }
+                }
                 Command::Fullscreen => {
                     self.validate_attachment_formats(bound, &color_formats, depth_format)?;
                     if !rendering || pipeline != Some(false) {
@@ -359,24 +379,18 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Dispatch outside compute scope".into()));
                     }
                 }
-                Command::DispatchIndirect { arguments, offset }
-                | Command::DrawIndirect { arguments, offset } => {
-                    let draw = matches!(c, Command::DrawIndirect { .. });
-                    if draw {
-                        self.validate_attachment_formats(bound, &color_formats, depth_format)?;
-                    }
+                Command::DispatchIndirect { arguments, offset } => {
                     let buffer = self.buffers.get(*arguments)?.raw;
-                    let bytes = if draw { 16 } else { 12 };
-                    if rendering != draw
-                        || pipeline != Some(!draw)
+                    if rendering
+                        || pipeline != Some(true)
                         || offset % 4 != 0
                         || offset
-                            .checked_add(bytes)
+                            .checked_add(12)
                             .is_none_or(|end| end > buffer.size)
                         || !buffer.usage.contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
                     {
                         return Err(GpuError::Contract(
-                            "Invalid indirect command scope, usage or range".into(),
+                            "Invalid indirect dispatch scope, usage or range".into(),
                         ));
                     }
                 }

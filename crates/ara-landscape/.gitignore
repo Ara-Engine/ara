@@ -1,0 +1,4 @@
+/cache/
+/captures/
+# Keep unreferenced cook cohorts as a local cache. Stage referenced artifacts explicitly.
+/cooked/*/

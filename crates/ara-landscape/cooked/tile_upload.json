@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521",
+  "stages": [
+    {
+      "dxil": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/tileUpload.dxil",
+      "dxil_hash": "385a58862cf1992d9408bc8f0020ea53a0ab81788fee4a8a0a9dec3f07310622",
+      "source_entry": "tileUpload",
+      "spirv": "7ebb584189bb9b9b05a4906e29461dd7c0072d5761c6e98e6bbc0b5db2f18521/tileUpload.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "fecf874fadaad595c85b8888fe64030bb055fcfd64181058b955c0316098cc59",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

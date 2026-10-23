@@ -119,15 +119,6 @@ impl VulkanDevice {
                         *offset,
                     );
                 }
-                Command::DrawIndirect { arguments, offset } => {
-                    device.cmd_draw_indirect(
-                        cmd,
-                        self.buffers.get(*arguments)?.raw.handle,
-                        *offset,
-                        1,
-                        16,
-                    );
-                }
                 Command::BeginRendering {
                     colors,
                     depth,
@@ -199,6 +190,13 @@ impl VulkanDevice {
                     );
                     device.cmd_draw_indexed(cmd, d.index_count, 1, d.first_index, 0, 0);
                 }
+                Command::DrawIndirect { arguments, offset } => device.cmd_draw_indirect(
+                    cmd,
+                    self.buffers.get(*arguments)?.raw.handle,
+                    *offset,
+                    1,
+                    16,
+                ),
                 Command::Fullscreen => device.cmd_draw(cmd, 3, 1, 0, 0),
                 Command::EndRendering => device.cmd_end_rendering(cmd),
                 Command::UploadImage {
