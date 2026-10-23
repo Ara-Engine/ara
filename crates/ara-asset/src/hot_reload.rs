@@ -59,6 +59,8 @@ pub enum ReloadEvent {
         asset: String,
         /// True if no importer process was necessary.
         cache_hit: bool,
+        /// False for a preview; true when the requested final preset is complete.
+        final_pass: bool,
     },
     /// Source/worker/cache failure; the last good slot is unchanged.
     Failed {
@@ -70,7 +72,7 @@ pub enum ReloadEvent {
 }
 enum Background {
     Progress(String, u64, Progress),
-    Complete(String, u64, Result<(CachedImport, bool)>),
+    Complete(String, u64, bool, Result<(CachedImport, bool)>),
 }
 /// Owns asynchronous jobs and stable slots. Frame code only drains events and moves
 /// completed results; hashing, disk I/O and importers run on background threads.
@@ -84,6 +86,9 @@ pub struct HotReload {
     slots: BTreeMap<String, AssetSlot>,
     ready: BTreeMap<String, CachedImport>,
     retired: mpsc::Sender<CachedImport>,
+    /// Publish fast previews before the requested final preset on cache misses.
+    /// Disable for export/headless workflows, which execute the input preset exactly.
+    pub progressive: bool,
     /// Human-selected application timing.
     pub policy: ApplyPolicy,
     /// Defaults false: imports cannot alter a human's Play session without consent.
@@ -112,6 +117,7 @@ impl HotReload {
             slots: BTreeMap::new(),
             ready: BTreeMap::new(),
             retired,
+            progressive: true,
             policy: ApplyPolicy::Immediately,
             allow_during_play: false,
             graph: DependencyGraph::default(),
@@ -145,6 +151,7 @@ impl HotReload {
                 }))
                 .chain(input.asset_dependencies.keys().cloned()),
         );
+        let progressive = self.progressive;
         thread::spawn(move || {
             crate::worker::background_priority();
             let result = (|| {
@@ -154,15 +161,43 @@ impl HotReload {
                     cancellation.check()?;
                     return Ok((hit, true));
                 }
-                let output = worker.start(input)?.wait(&cancellation, |p| {
+                if progressive && input.preset != crate::CookPreset::Fast {
+                    let mut preview = input.clone();
+                    preview.preset = crate::CookPreset::Fast;
+                    let preview_key = preview.key()?;
+                    if let Some(hit) = cache.load(preview_key)? {
+                        cancellation.check()?;
+                        let _ = tx.send(Background::Complete(
+                            asset.clone(),
+                            epoch,
+                            false,
+                            Ok((hit, true)),
+                        ));
+                    } else {
+                        let output = worker.start(preview)?.wait(&cancellation, |p| {
+                            let _ = tx.send(Background::Progress(asset.clone(), epoch, p));
+                        })?;
+                        cancellation.check()?;
+                        // Publish validated bytes before potentially slow disk persistence.
+                        // This copy and the write stay on the background job, never a frame.
+                        let ready = CachedImport {
+                            key: preview_key,
+                            output: output.clone(),
+                        };
+                        let _ = tx.send(Background::Complete(
+                            asset.clone(),
+                            epoch,
+                            false,
+                            Ok((ready, false)),
+                        ));
+                        cache.store(preview_key, &output)?;
+                    }
+                }
+                cook_cached(&worker, cache.as_ref(), input, &cancellation, |p| {
                     let _ = tx.send(Background::Progress(asset.clone(), epoch, p));
-                })?;
-                cancellation.check()?;
-                cache.store(key, &output)?;
-                cancellation.check()?;
-                Ok((CachedImport { key, output }, false))
+                })
             })();
-            let _ = tx.send(Background::Complete(asset, epoch, result));
+            let _ = tx.send(Background::Complete(asset, epoch, true, result));
         });
     }
     /// Drains job events, rejecting stale results even if a cancelled worker raced.
@@ -175,19 +210,27 @@ impl HotReload {
                 {
                     events.push(ReloadEvent::Progress { asset, progress })
                 }
-                Background::Complete(asset, epoch, result)
+                Background::Complete(asset, epoch, terminal, result)
                     if self.epochs.get(&asset) == Some(&epoch) =>
                 {
-                    self.jobs.remove(&asset);
+                    if terminal {
+                        self.jobs.remove(&asset);
+                    }
                     match result {
                         Ok((cached, cache_hit)) => {
-                            self.ready.insert(asset.clone(), cached);
-                            events.push(ReloadEvent::Ready { asset, cache_hit });
+                            if let Some(staged) = self.ready.insert(asset.clone(), cached) {
+                                let _ = self.retired.send(staged);
+                            }
+                            events.push(ReloadEvent::Ready {
+                                asset,
+                                cache_hit,
+                                final_pass: terminal,
+                            });
                         }
                         Err(error) => events.push(ReloadEvent::Failed { asset, error }),
                     }
                 }
-                Background::Complete(_, _, Ok((cached, _))) => {
+                Background::Complete(_, _, _, Ok((cached, _))) => {
                     let _ = self.retired.send(cached);
                 }
                 _ => {}
@@ -275,6 +318,26 @@ impl Drop for HotReload {
             job.cancel();
         }
     }
+}
+
+fn cook_cached(
+    worker: &ProcessWorker,
+    cache: &dyn CacheBackend,
+    input: ImportInput,
+    cancellation: &Cancellation,
+    progress: impl FnMut(Progress),
+) -> Result<(CachedImport, bool)> {
+    cancellation.check()?;
+    let key = input.key()?;
+    if let Some(hit) = cache.load(key)? {
+        cancellation.check()?;
+        return Ok((hit, true));
+    }
+    let output = worker.start(input)?.wait(cancellation, progress)?;
+    cancellation.check()?;
+    cache.store(key, &output)?;
+    cancellation.check()?;
+    Ok((CachedImport { key, output }, false))
 }
 
 fn normalize_path(path: &Path) -> String {

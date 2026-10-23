@@ -1,13 +1,12 @@
-use crate::{
-    MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, cook_texture, invalid,
-    json_bytes,
-};
+use crate::{MeshSettings, TextureSettings, TextureUsage, Vertex, cook_mesh, invalid, json_bytes};
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, Result,
 };
 use ara_asset_format::{Builder, Channel, Clip, Joint, Kind, write_skeleton};
+use rayon::prelude::*;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 /// Autodesk FBX importer through ufbx, with explicit external input snapshots.
 pub struct FbxImporter;
@@ -34,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "1-ufbx0115-meshopt070-ispc050"
+        "2-ufbx0115-meshopt070-ispc050-tiled"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -59,6 +58,9 @@ impl Importer for FbxImporter {
         };
         let mut output = ImportOutput::default();
         let mut meshes = Vec::new();
+        let mut mesh_jobs = Vec::new();
+        let cancellation = ctx.cancellation;
+        let metrics = ctx.metrics;
         for mesh in &scene.meshes {
             ctx.report(0.1, "optimize FBX geometry")?;
             let mut vertices = Vec::with_capacity(mesh.num_indices);
@@ -139,20 +141,30 @@ impl Importer for FbxImporter {
                     .or_default()
                     .extend_from_slice(&triangulated[..count]);
             }
+            let vertices = Arc::new(vertices);
             for (material, indices) in by_material {
                 if indices.is_empty() {
                     continue;
                 }
                 let name = format!("meshes/{}-{material}.mesh", mesh.element.typed_id);
-                let bytes = cook_mesh(&vertices, &indices, settings)?;
-                output.artifacts.push(Artifact {
-                    name: name.clone(),
-                    kind: ArtifactKind::Mesh,
-                    bytes,
-                });
+                mesh_jobs.push((name.clone(), Arc::clone(&vertices), indices));
                 meshes.push(json!({"mesh":mesh.element.typed_id,"primitive":material,"artifact":name,"material":mesh.materials.get(material as usize).map(|m|m.element.typed_id),"skin":mesh.skin_deformers.first().map(|s|s.element.typed_id)}));
             }
         }
+        let mesh_timer = metrics.map(|m| m.start(ara_asset::ImportStage::Mesh));
+        let artifacts: Result<Vec<_>> = mesh_jobs
+            .into_par_iter()
+            .map(|(name, vertices, indices)| {
+                cancellation.check()?;
+                Ok(Artifact {
+                    name,
+                    kind: ArtifactKind::Mesh,
+                    bytes: cook_mesh(&vertices, &indices, settings)?,
+                })
+            })
+            .collect();
+        drop(mesh_timer);
+        output.artifacts.extend(artifacts?);
         let mut skins = Vec::new();
         for skin in &scene.skin_deformers {
             let joint_index: BTreeMap<_, _> = skin
@@ -195,6 +207,7 @@ impl Importer for FbxImporter {
             skins.push(json!({"skin":skin.element.typed_id,"artifact":name}));
         }
         let mut textures = Vec::new();
+        let mut texture_jobs = Vec::new();
         let mut materials = Vec::new();
         let mut cooked = BTreeSet::new();
         for material in &scene.materials {
@@ -225,20 +238,7 @@ impl Importer for FbxImporter {
                                 .cloned()
                                 .ok_or_else(|| invalid(format!("missing FBX texture {path}")))?
                         };
-                        let cooked = cook_texture(
-                            &bytes,
-                            &TextureSettings {
-                                usage,
-                                ..Default::default()
-                            },
-                            input.target,
-                            ctx,
-                        )?;
-                        output.artifacts.push(Artifact {
-                            name: name.clone(),
-                            kind: ArtifactKind::Texture,
-                            bytes: cooked,
-                        });
+                        texture_jobs.push((name.clone(), usage, bytes));
                         textures.push(json!({"texture":id,"usage":usage,"artifact":name}));
                     }
                 }
@@ -247,6 +247,29 @@ impl Importer for FbxImporter {
             }
             materials.push(json!({"material":material.element.typed_id,"name":material.element.name.as_ref(),"maps":maps}));
         }
+        let (names, jobs): (Vec<_>, Vec<_>) = texture_jobs
+            .into_iter()
+            .map(|(name, usage, source)| {
+                (
+                    name,
+                    (
+                        TextureSettings {
+                            usage,
+                            ..Default::default()
+                        },
+                        source,
+                    ),
+                )
+            })
+            .unzip();
+        let cooked = crate::texture::cook_texture_batch(&jobs, input.target, input.preset, ctx)?;
+        output
+            .artifacts
+            .extend(names.into_iter().zip(cooked).map(|(name, bytes)| Artifact {
+                name,
+                bytes,
+                kind: ArtifactKind::Texture,
+            }));
         let mut clips = Vec::new();
         for stack in &scene.anim_stacks {
             ctx.report(0.9, "bake FBX animation")?;

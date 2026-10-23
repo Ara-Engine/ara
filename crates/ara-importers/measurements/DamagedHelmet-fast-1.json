@@ -1,0 +1,24 @@
+{
+  "bytes": 26687272,
+  "cacheStoreMs": 70.7747,
+  "coldMs": 434.5714,
+  "cookMs": 363.0284,
+  "fixture": "DamagedHelmet.glb",
+  "peakWorkingSetBytes": 493527040,
+  "preset": "fast",
+  "processCpuMs": 1859.375,
+  "quality": {
+    "textures/0-Color.ktx2": 45.513336756212546,
+    "textures/1-Linear.ktx2": 39.90268139976091,
+    "textures/2-Color.ktx2": 52.6464206769996
+  },
+  "stages": {
+    "compressionMs": 116.912,
+    "decodeMs": 117.6896,
+    "meshMs": 57.0734,
+    "mipsMs": 67.1207,
+    "validationMs": 0.1898
+  },
+  "threads": "16",
+  "warmMedianMs": 12.2047
+}
