@@ -1,7 +1,7 @@
 //! Read methods: `rpc.discover`, `schema.*`, `query`, `inspect`, `logs`,
 //! `docs.search`.
 
-use ara_diag::{Diagnostic, Severity, codes, did_you_mean};
+use ara_diag::{Diagnostic, codes, did_you_mean};
 use ara_doc::AssetId;
 use ara_proto::{PROTOCOL, Scope};
 use ara_schema::TypeDesc;
@@ -9,7 +9,6 @@ use serde_json::{Value, json};
 
 use crate::docs;
 use crate::host::State;
-use crate::logs::LogFilter;
 use crate::params::*;
 use crate::query;
 use crate::text;
@@ -375,7 +374,8 @@ pub(super) fn query(st: &mut State, p: QueryParams) -> R {
 
 /// The address an `inspect` entity names: an address, or a name selector (`name:Crate`,
 /// also a bare name) matching exactly one entity.
-fn inspect_target(tree: &Tree, key: &str) -> Result<String, Diagnostic> {
+/// The address `key` (an address, ID or name selector) names in `tree`.
+pub(crate) fn inspect_target(tree: &Tree, key: &str) -> Result<String, Diagnostic> {
     if tree.get(key).is_some() {
         return Ok(key.to_owned());
     }
@@ -500,43 +500,26 @@ pub(super) fn inspect(st: &mut State, p: InspectParams) -> R {
     })
 }
 
-pub(super) fn logs(st: &mut State, p: LogsParams) -> R {
-    let filter = LogFilter {
-        since: p.since.unwrap_or(0),
-        codes: p.codes.unwrap_or_default(),
-        severity: p.severity.map(|s| match s {
-            SeverityParam::Error => Severity::Error,
-            SeverityParam::Warning => Severity::Warning,
-            SeverityParam::Info => Severity::Info,
-        }),
-        entity: p.entity,
-        limit: p.limit.unwrap_or(50).clamp(1, 1000) as usize,
-    };
-    let entries = st.logs.query(&filter);
-    let mut text = String::new();
-    for e in &entries {
-        let count = if e.count > 1 {
-            format!(" ×{}", e.count)
-        } else {
-            String::new()
-        };
-        text.push_str(&format!("#{}{count} {}\n", e.seq, e.diagnostic));
-    }
-    if entries.is_empty() {
-        text.push_str("no new entries\n");
-    }
-    Ok(json!({ "entries": entries, "cursor": st.logs.cursor(), "text": text }))
-}
-
 pub(super) fn docs_search(st: &mut State, p: DocsSearchParams) -> R {
     let pages = docs::generate(st.store.schema(), &st.registry, &st.catalog, &st.name);
-    let hits = docs::search(&pages, &p.query, p.limit.unwrap_or(5).clamp(1, 50) as usize);
+    let limit = p.limit.unwrap_or(5).clamp(1, 50) as usize;
+    let mut hits = docs::search(&pages, &p.query, limit);
+    // A code (`ARA1302`, `ARA-EXP-AND-007`, `UNRESOLVED_REF`) answers with its whole page.
+    let code_page = ara_diag::catalog::lookup(&p.query)
+        .map(|d| format!("errors/{}", d.code))
+        .and_then(|id| pages.iter().find(|pg| pg.id == id));
+    if let Some(page) = code_page {
+        hits.retain(|h| h.id != page.id);
+        hits.insert(0, page);
+        hits.truncate(limit);
+    }
     let full = p.full.unwrap_or(false);
     let mut text = String::new();
     let results: Vec<Value> = hits
         .iter()
         .map(|page| {
-            let body = if full { page.markdown() } else { docs::snippet(page, &p.query) };
+            let whole = full || code_page.is_some_and(|c| c.id == page.id);
+            let body = if whole { page.markdown() } else { docs::snippet(page, &p.query) };
             text.push_str(&format!("## {} (ara://docs/{})\n{}\n\n", page.title, page.id, body));
             json!({ "id": page.id, "uri": format!("ara://docs/{}", page.id), "title": page.title, "summary": page.summary, "text": body })
         })

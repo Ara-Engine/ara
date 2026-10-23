@@ -31,6 +31,11 @@ Agents are `<cli>:<model>[@effort]`; Claude model names map `sonnet-5.5` →
 
 - `task.rs`: `Task` (id, area, prompt, fixture, setup, budget, verify, solve),
   `Check`/`Checks`.
+- `suite/diagnose.rs`: suite `diagnose`, 4 broken scenes described only by their
+  symptom (material that does not compile, mesh lost in a re-export, a layer the
+  camera does not draw, a NaN reported by the play process in
+  `.ara/diagnostics.jsonl`). Each adds the game camera first. Measure with the
+  current `ara` vs a frozen pre-`ara why` one (`--ara`).
 - `suite/`: suite v0, 22 tasks by area (`assembly`, `components`, `prefabs`,
   `hierarchy`, `repair`, `workflow`) plus shared verifier helpers in `mod.rs`
   (`one`, `at`, `vec_is`, `num_is`, `parent_is`, `with_why`, `clean`,

@@ -662,6 +662,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-bridge",
+ "ara-diag",
  "ara-json",
  "ara-pack",
  "ara-schema",
@@ -711,6 +712,7 @@ name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-diag",
  "ara-json",
  "ash 0.38.0+1.4.352",
  "bytemuck",
@@ -749,6 +751,7 @@ dependencies = [
  "ara-profile",
  "ara-proto",
  "ara-schema",
+ "ara-why",
  "insta",
  "serde",
  "serde_json",
@@ -999,6 +1002,7 @@ dependencies = [
 name = "ara-pack"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "blake3",
  "chacha20poly1305",
@@ -1508,6 +1512,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-why"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-material",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-world"
 version = "0.0.0"
 dependencies = [
@@ -1538,6 +1552,7 @@ dependencies = [
  "ara-doc",
  "ara-host",
  "ara-json",
+ "ara-material",
  "ara-merge",
  "ara-ops",
  "ara-proto",

@@ -25,6 +25,8 @@ use ara_schema::SchemaDb;
 use serde_json::Value;
 
 pub(crate) use edit::list_commands;
+pub(crate) use pick::{find_doc, pick};
+pub(crate) use read::inspect_target;
 
 use crate::params::*;
 use crate::service::{Cx, Method, Service, parse};
@@ -92,7 +94,7 @@ pub(crate) fn methods(db: &mut SchemaDb) -> Vec<Method> {
             .tool("ara_inspect"),
         Method::new::<ApplyParams>(db, "cmd.apply", "Run a batch of commands as one atomic, reviewable transaction; dryRun returns the diff.")
             .tool("ara_apply"),
-        Method::new::<LogsParams>(db, "logs", "Diagnostics from every subsystem since a cursor, filtered and de-duplicated with counts.")
+        Method::new::<LogsParams>(db, "logs", "Diagnostics from every subsystem, grouped by code with counts, subjects and fixes; filter by code, severity, subject or origin, and read new ones with `since`.")
             .read_only()
             .tool("ara_logs"),
         Method::new::<DocsSearchParams>(db, "docs.search", "Search this engine version's generated docs (the same pages as llms.txt).")
@@ -155,7 +157,7 @@ impl Service for Core {
             "schema.search" => read::schema_search(st, parse(params)?),
             "query" => read::query(st, parse(params)?),
             "inspect" => read::inspect(st, parse(params)?),
-            "logs" => read::logs(st, parse(params)?),
+            "logs" => crate::diag::logs(st, parse(params)?),
             "docs.search" => read::docs_search(st, parse(params)?),
             "cmd.apply" => st.apply(&sid, parse(params)?),
             "jobs.list" => Ok(edit::jobs_list(st)),

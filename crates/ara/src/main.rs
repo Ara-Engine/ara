@@ -5,7 +5,8 @@
 //! - Engine: `serve` (the project daemon), `mcp` (MCP over stdio).
 //! - Protocol commands, through the daemon when it runs, else in-process: `do`,
 //!   `query`, `inspect`, `history`, `undo`, `redo`, `review`, `accept`, `revert`,
-//!   `logs`. Each runs in its own session attributed to `--author` (default human).
+//!   `logs`, `why`. Each runs in its own session attributed to `--author` (default
+//!   human).
 //!
 //! Every command takes `--json`. The project root is `--root`, else the nearest
 //! ancestor with `ara.project.json`; without one, commands fail with ARA1901.
@@ -237,24 +238,11 @@ enum Command {
         #[arg(long)]
         entity: Option<String>,
     },
-    /// Show diagnostics from the engine's log.
-    Logs {
-        /// Only entries after this cursor.
-        #[arg(long)]
-        since: Option<u64>,
-        /// Only these codes (`ARA1101`). Repeatable.
-        #[arg(long = "code")]
-        codes: Vec<String>,
-        /// Minimum severity: error, warning, info.
-        #[arg(long)]
-        severity: Option<String>,
-        /// Only entries about this entity.
-        #[arg(long)]
-        entity: Option<String>,
-        /// How many.
-        #[arg(long)]
-        limit: Option<u32>,
-    },
+    /// Show diagnostics from every subsystem, grouped by code (`--all`: one by one).
+    Logs(commands::why::LogsArgs),
+    /// Explain a problem: `ara why name:Crate not visible`, `ara why ARA1302`,
+    /// `ara why "is the frame slow"`. Ranked causes with evidence and runnable fixes.
+    Why(commands::why::WhyArgs),
 }
 
 /// Drops `null` fields so optional params stay absent.
@@ -378,20 +366,8 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
             params: params(json!({ "txn": txn, "entity": entity })),
             summary: protocol::reviewed,
         },
-        Command::Logs {
-            since,
-            codes,
-            severity,
-            entity,
-            limit,
-        } => Call {
-            method: "logs",
-            params: params(json!({
-                "since": since, "severity": severity, "entity": entity, "limit": limit,
-                "codes": (!codes.is_empty()).then_some(codes),
-            })),
-            summary,
-        },
+        Command::Logs(args) => args.call(),
+        Command::Why(args) => args.call(),
         _ => return None,
     }))
 }

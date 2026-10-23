@@ -55,6 +55,21 @@ unsafe extern "system" fn debug_callback(
         }
         let label = if counted { "VALIDATION" } else { "ENVIRONMENT" };
         eprintln!("{label} {severity:?}: {message}");
+        // Validation can fire every frame: admission samples it before anything is built.
+        let code = if counted {
+            ara_diag::codes::GPU_VALIDATION
+        } else {
+            ara_diag::codes::GPU_ENVIRONMENT
+        };
+        if ara_diag::bus::admit(code) {
+            let error = severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
+            let d = if error {
+                ara_diag::Diagnostic::error(code, message.clone())
+            } else {
+                ara_diag::Diagnostic::warning(code, message.clone())
+            };
+            ara_diag::bus::push(d, ara_diag::bus::Meta::default());
+        }
         if let Ok(mut messages) = state.messages.lock() {
             messages.push(Diagnostic {
                 code: if counted {

@@ -43,6 +43,8 @@ pub enum Area {
     DryRun,
     /// Several of the above in one request.
     MultiStep,
+    /// Finding out why something is broken with the tools, then fixing it.
+    Diagnose,
 }
 
 /// The project a task starts from.

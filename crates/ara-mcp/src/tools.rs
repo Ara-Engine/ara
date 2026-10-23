@@ -1,4 +1,4 @@
-//! The twelve tools (R03 §4.5) and how their schemas are generated from the method
+//! The thirteen tools (R03 §4.5, plus `ara_why`) and how their schemas are generated from the method
 //! catalog: a tool backed by one method takes that method's params schema; a tool
 //! backed by several gets an `action` enum plus the union of their params.
 
@@ -19,7 +19,7 @@ pub struct ToolSpec {
 }
 
 /// The tools, in their fixed order (deterministic `tools/list`).
-pub const TOOLS: [ToolSpec; 12] = [
+pub const TOOLS: [ToolSpec; 13] = [
     ToolSpec {
         name: "ara_query",
         title: "Query entities",
@@ -71,8 +71,14 @@ pub const TOOLS: [ToolSpec; 12] = [
     ToolSpec {
         name: "ara_logs",
         title: "Read diagnostics",
-        description: "Diagnostics from every subsystem (stable ARA#### codes, locations, machine-applicable fixes), de-duplicated with counts. Pass the returned `cursor` as `since` to see only what is new; filter by `codes`, `severity` or `entity`.",
+        description: "Diagnostics from every subsystem (stable ARA codes, locations, machine-applicable fixes), grouped by code with counts, the subjects involved and the best fix, within a `budget` of characters. Pass the returned `cursor` as `since` to see only what is new; filter by `codes`, `severity`, `subjects` (`entity:e_8b21`, `asset:@meshes/crate.glb`) or `origin`; `group: false` lists entries one by one. To understand one, use ara_why.",
         reserved: "logs",
+    },
+    ToolSpec {
+        name: "ara_why",
+        title: "Explain a problem",
+        description: "Explain why something is wrong, in one call: an entity and its symptom (`name:Crate not visible`), a diagnostic code (`ARA1302`), an asset (`@materials/crate.material`) or a topic (`did reload fall back to L3`, `is the frame slow`). Returns a short ranked list of likely causes, each with its evidence and runnable fixes (commands to pass to ara_apply as is), plus what was checked and ruled out. Use it before inspecting by hand. `list: true` shows what it can explain.",
+        reserved: "why",
     },
     ToolSpec {
         name: "ara_session",
