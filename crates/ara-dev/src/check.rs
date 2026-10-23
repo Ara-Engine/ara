@@ -1,21 +1,25 @@
 //! One report combines cheap hygiene checks with logged Cargo gates.
 
-use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use crate::{git, hygiene, known, workspace::Metadata};
+use crate::{
+    git, hygiene, known, process,
+    selection::{self, Selection},
+    workspace::Metadata,
+};
 
 #[derive(Serialize)]
 struct Row {
     check: String,
     passed: bool,
     known_failure: bool,
+    timed_out: bool,
     seconds: f64,
     detail: String,
 }
@@ -24,7 +28,8 @@ struct Row {
 struct Report {
     passed: bool,
     base: String,
-    affected: BTreeSet<String>,
+    #[serde(flatten)]
+    selection: Selection,
     known_failures: Vec<known::KnownFailure>,
     checks: Vec<Row>,
 }
@@ -32,6 +37,7 @@ struct Report {
 pub(crate) struct Logs {
     pub(crate) directory: PathBuf,
     rows: Vec<Row>,
+    deadline: Option<Instant>,
 }
 
 impl Logs {
@@ -47,31 +53,71 @@ impl Logs {
         Ok(Self {
             directory,
             rows: Vec::new(),
+            deadline: None,
         })
     }
 
     pub(crate) fn command(&mut self, root: &Path, name: &str, args: &[String]) -> Result<bool> {
         let log = self.directory.join(format!("{name}.log"));
         let file = File::create(&log)?;
+        self.execute(root, name, args, &file, &file, &log)
+    }
+
+    fn capture(&mut self, root: &Path, name: &str, args: &[String]) -> Result<Vec<u8>> {
+        let output = self.directory.join(format!("{name}.json"));
+        let log = self.directory.join(format!("{name}.log"));
+        if !self.execute(
+            root,
+            name,
+            args,
+            &File::create(&output)?,
+            &File::create(&log)?,
+            &log,
+        )? {
+            bail!(
+                "{}; {}",
+                self.rows.last().context("command result")?.detail,
+                fs::read_to_string(log).unwrap_or_default()
+            );
+        }
+        Ok(fs::read(output)?)
+    }
+
+    fn execute(
+        &mut self,
+        root: &Path,
+        name: &str,
+        args: &[String],
+        stdout: &File,
+        stderr: &File,
+        log: &Path,
+    ) -> Result<bool> {
         eprintln!("{name}: cargo {} (log: {})", args.join(" "), log.display());
         let start = Instant::now();
-        let status = Command::new("cargo")
+        let mut command = Command::new("cargo");
+        command
             .current_dir(root)
             .args(args)
             .env("CARGO_BUILD_JOBS", "2")
             .env("CARGO_TERM_COLOR", "never")
-            .stdout(Stdio::from(file.try_clone()?))
-            .stderr(Stdio::from(file))
-            .status();
-        let passed = status.as_ref().is_ok_and(|s| s.success());
+            .stdout(Stdio::from(stdout.try_clone()?))
+            .stderr(Stdio::from(stderr.try_clone()?));
+        let status = process::run(&mut command, self.deadline);
+        let passed = status.as_ref().is_ok_and(process::Outcome::success);
+        let timed_out = matches!(status, Ok(process::Outcome::TimedOut));
         let detail = match status {
-            Ok(s) => format!("{s}; {}", log.display()),
+            Ok(process::Outcome::Exited(s)) => format!("{s}; {}", log.display()),
+            Ok(process::Outcome::TimedOut) => format!(
+                "timed out at the check deadline (including Cargo cache waits); {}",
+                log.display()
+            ),
             Err(e) => format!("{e}; {}", log.display()),
         };
         self.rows.push(Row {
             check: name.into(),
             passed,
             known_failure: false,
+            timed_out,
             seconds: start.elapsed().as_secs_f64(),
             detail,
         });
@@ -83,6 +129,7 @@ impl Logs {
             check: name.into(),
             passed: findings.is_empty(),
             known_failure: false,
+            timed_out: false,
             seconds: 0.0,
             detail: if findings.is_empty() {
                 "ok".into()
@@ -93,7 +140,11 @@ impl Logs {
     }
 }
 
-pub(crate) fn selection(command: &str, affected: &BTreeSet<String>, full: bool) -> Vec<String> {
+pub(crate) fn selection(
+    command: &str,
+    affected: &std::collections::BTreeSet<String>,
+    full: bool,
+) -> Vec<String> {
     let mut args = vec![command.into()];
     if full {
         args.push("--workspace".into());
@@ -105,13 +156,28 @@ pub(crate) fn selection(command: &str, affected: &BTreeSet<String>, full: bool) 
     args
 }
 
-pub(crate) fn run(
-    root: &Path,
-    base: &str,
-    json: bool,
-    full: bool,
-    known_path: Option<&Path>,
-) -> Result<bool> {
+pub(crate) struct Options<'a> {
+    pub(crate) base: &'a str,
+    pub(crate) json: bool,
+    pub(crate) full: bool,
+    pub(crate) known_path: Option<&'a Path>,
+    pub(crate) plan: bool,
+    pub(crate) timeout_seconds: Option<u64>,
+}
+
+pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
+    let started = Instant::now();
+    let Options {
+        base,
+        json,
+        full,
+        known_path,
+        plan,
+        timeout_seconds,
+    } = options;
+    let budget = timeout_seconds
+        .or(if full { None } else { Some(2400) })
+        .filter(|s| *s != 0);
     let allowed = known::read(root, known_path)?;
     let mut known_failures = Vec::new();
     // Capture before metadata, too: Cargo itself must not silently rewrite Cargo.lock.
@@ -119,14 +185,77 @@ pub(crate) fn run(
     let base = git::text(root, ["merge-base", "HEAD", base])
         .context("resolve --base (use an existing local ref)")?;
     let changed = git::changed(root, &base)?;
-    let metadata = Metadata::read(root)?;
+    let mut logs = Logs::new(root)?;
+    logs.deadline = budget
+        .map(|seconds| {
+            started
+                .checked_add(Duration::from_secs(seconds))
+                .context("timeout is too large")
+        })
+        .transpose()?;
+    let metadata: Metadata = serde_json::from_slice(
+        &logs.capture(
+            root,
+            "metadata",
+            &[
+                "metadata",
+                "--format-version",
+                "1",
+                "--no-deps",
+                "--locked",
+                "--offline",
+            ]
+            .map(String::from),
+        )?,
+    )?;
     eprintln!("Cargo target: {}", metadata.target_directory.display());
-    let affected = metadata.affected(root, &changed);
+    let mut scope = selection::compute(root, &base, &changed, &metadata)?;
+    if full {
+        scope.affected = metadata.packages.iter().map(|p| p.name.clone()).collect();
+        scope
+            .reasons
+            .push("--full requested the whole workspace".into());
+    }
+    if plan {
+        before.verify(&git::TreeState::read(root)?)?;
+        if json {
+            #[derive(Serialize)]
+            struct Plan<'a> {
+                planned: bool,
+                base: &'a str,
+                #[serde(flatten)]
+                selection: &'a Selection,
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&Plan {
+                    planned: true,
+                    base: &base,
+                    selection: &scope
+                })?
+            );
+        } else {
+            println!(
+                "Plan: {} affected packages: {}",
+                scope.affected.len(),
+                scope
+                    .affected
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            for reason in &scope.reasons {
+                println!("  {reason}");
+            }
+        }
+        return Ok(true);
+    }
+    let affected = &scope.affected;
     if affected.contains("ara-dev") || full {
         crate::platform::release_executable_path(&metadata.target_directory)?;
     }
     let files = git::files(root)?;
-    let mut logs = Logs::new(root)?;
     logs.findings("exact pins", hygiene::manifests(root, &changed)?);
     logs.findings("AGENTS.md", hygiene::agents(root, &files)?);
     logs.findings(
@@ -138,9 +267,32 @@ pub(crate) fn run(
         "fmt",
         &["fmt".into(), "--all".into(), "--".into(), "--check".into()],
     )?;
-    if fmt && (full || !affected.is_empty()) {
+    let ready = fmt && logs.rows.iter().all(|row| row.passed);
+    let codes = changed.iter().any(|p| {
+        p.starts_with("dotnet") && p.extension().is_some_and(|e| e == "cs")
+            || p.starts_with("crates/ara-diag/codes")
+    }) || metadata
+        .packages
+        .iter()
+        .filter(|p| affected.contains(&p.name))
+        .any(|p| p.name == "ara-diag" || p.dependencies.iter().any(|d| d.name == "ara-diag"))
+        || changed
+            .iter()
+            .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+            .any(|p| {
+                fs::read_to_string(root.join(p))
+                    .is_ok_and(|text| text.contains("Code(") || text.contains("\"ARA"))
+            });
+    let early_coverage = ready && codes && !affected.contains("ara-diag");
+    let coverage_ready = !early_coverage
+        || logs.command(
+            root,
+            "diagnostic-coverage",
+            &["test", "-p", "ara-diag", "--test", "coverage", "--locked"].map(String::from),
+        )?;
+    if ready && coverage_ready && (full || !affected.is_empty()) {
         let whole_workspace = full || affected.len() == metadata.packages.len();
-        let mut clippy = selection("clippy", &affected, whole_workspace);
+        let mut clippy = selection("clippy", affected, whole_workspace);
         clippy.extend([
             "--all-targets".into(),
             "--locked".into(),
@@ -148,14 +300,22 @@ pub(crate) fn run(
             "-D".into(),
             "warnings".into(),
         ]);
-        logs.command(root, "clippy", &clippy)?;
-        let mut tests = selection("test", &affected, whole_workspace);
+        let clippy_passed = logs.command(root, "clippy", &clippy)?;
+        let mut tests = selection("test", affected, whole_workspace);
         tests.extend(["--locked".into(), "--no-fail-fast".into()]);
-        if !logs.command(root, "tests", &tests)? && !allowed.is_empty() {
+        if clippy_passed
+            && !logs.command(root, "tests", &tests)?
+            && !allowed.is_empty()
+            && !logs.rows.last().is_some_and(|row| row.timed_out)
+        {
             let output = fs::read_to_string(logs.directory.join("tests.log"))?;
             let (accepted, observed) = known::classify(&output, &allowed);
             known_failures = observed;
-            if accepted {
+            if accepted
+                && !known_failures
+                    .iter()
+                    .any(|known| known.package == "ara-diag" && known.target == "coverage")
+            {
                 let row = logs
                     .rows
                     .last_mut()
@@ -170,11 +330,15 @@ pub(crate) fn run(
             }
         }
     }
-    // Coverage scans sources and C#, so always run it when code or catalog inputs change.
-    let codes = changed
-        .iter()
-        .any(|p| p.starts_with("crates") || p.starts_with("dotnet"));
-    if codes {
+    let covered = affected.contains("ara-diag")
+        && logs
+            .rows
+            .iter()
+            .any(|row| row.check == "tests" && row.passed);
+    if ready && codes && !early_coverage && covered {
+        logs.findings("diagnostic-coverage", Vec::new());
+        logs.rows.last_mut().expect("coverage row").detail = "passed in affected tests".into();
+    } else if ready && codes && !early_coverage {
         logs.command(
             root,
             "diagnostic-coverage",
@@ -219,7 +383,7 @@ pub(crate) fn run(
     let report = Report {
         passed: logs.rows.iter().all(|r| r.passed),
         base,
-        affected,
+        selection: scope,
         known_failures,
         checks: logs.rows,
     };
@@ -228,8 +392,9 @@ pub(crate) fn run(
     } else {
         println!(
             "Affected ({}): {}",
-            report.affected.len(),
+            report.selection.affected.len(),
             report
+                .selection
                 .affected
                 .iter()
                 .take(8)
@@ -237,10 +402,10 @@ pub(crate) fn run(
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        if report.affected.len() > 8 {
+        if report.selection.affected.len() > 8 {
             println!(
                 "  ... {} more (use --json for the complete set)",
-                report.affected.len() - 8
+                report.selection.affected.len() - 8
             );
         }
         println!("{:<22} {:<6} {:>8}  DETAIL", "CHECK", "RESULT", "SECONDS");
@@ -248,7 +413,9 @@ pub(crate) fn run(
             println!(
                 "{:<22} {:<6} {:>8.1}  {}",
                 row.check,
-                if row.known_failure {
+                if row.timed_out {
+                    "TIMEOUT"
+                } else if row.known_failure {
                     "KNOWN"
                 } else if row.passed {
                     "PASS"

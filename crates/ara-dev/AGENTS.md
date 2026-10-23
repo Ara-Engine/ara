@@ -4,6 +4,7 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
 
 - `check`: merge-base diff, reverse workspace dependency closure, hygiene, fmt,
   clippy, tests, diagnostic coverage and unchanged-tree verification.
+  `--plan` previews selection; default deadline 40 minutes includes cache waits.
 - `merge`: clean-tree no-ff merge, Cargo.lock-only recovery, workspace check,
   affected gate (or `--full`), commit and optional push.
 - `gpu`: machine-wide FIFO file-lock queue with OS crash recovery and timeout.
@@ -18,3 +19,4 @@ JSON mode writes exactly one report to stdout; command output goes to log files.
 Known failures require an explicit JSON file and exact test/output matches; fail closed.
 Keep safety predicates pure and test them. Never silently restore test mutations.
 See `docs/dev/ara-dev.md` for usage and recovery details.
+`run.ps1` keeps bootstrap compilation separate and final binaries worktree-local.

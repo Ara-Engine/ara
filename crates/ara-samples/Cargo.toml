@@ -8,7 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ara-json = { path = "../ara-json" }
-anyhow = "1"
+anyhow.workspace = true
 ara-anim = { path = "../ara-anim" }
 ara-asset = { path = "../ara-asset" }
 ara-diag.workspace = true
@@ -28,11 +28,11 @@ ara-schema.workspace = true
 ara-terrain = { path = "../ara-terrain" }
 ara-vfx = { path = "../ara-vfx" }
 ara-vfx-gpu = { path = "../ara-vfx-gpu" }
-blake3 = "1.8"
+blake3 = { workspace = true, default-features = true }
 clap = { workspace = true, features = ["derive"] }
-glam = "0.30"
-glam34 = { package = "glam", version = "0.34" }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr"] }
+glam.workspace = true
+glam34.workspace = true
+image = { workspace = true, features = ["png", "jpeg", "hdr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 

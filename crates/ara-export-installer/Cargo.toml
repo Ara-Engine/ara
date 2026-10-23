@@ -9,7 +9,7 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 blake3 = { workspace = true, features = ["std", "pure"] }
-zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
+zip = { workspace = true, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

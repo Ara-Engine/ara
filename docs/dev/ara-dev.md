@@ -4,6 +4,14 @@ Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GP
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
 
+On Windows, use `.\crates\ara-dev\run.ps1 check --json` for the fast entry. It
+builds the small tool through `%LOCALAPPDATA%\ara\dev-build`, keeping bootstrap
+compilation out of engine Cargo locks. Final tool and engine executable names
+stay under the worktree's `target/`; hashed engine intermediates retain the
+configured `CARGO_BUILD_BUILD_DIR`, or the original Cargo target directory. The
+script restores the caller's environment afterwards. The ordinary `cargo run`
+entry remains supported.
+
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this
 to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
@@ -18,17 +26,36 @@ cache: replacing its dependencies can invalidate already-built Rust metadata.
 ```
 cargo run -p ara-dev -- check
 cargo run -p ara-dev -- check --base main --json
+cargo run -p ara-dev -- check --plan --json
 ```
 
 The gate compares against the merge base of HEAD and the selected local ref. It
 includes committed, staged, unstaged and untracked changes. Cargo metadata supplies
 workspace paths and all dependency edges (including optional, build and test
-dependencies). Changed packages and their reverse dependency closure run clippy
-with all targets and warnings denied, then tests. Tests continue across failed
-targets so a single gate reports all failing suites. Workspace manifests, Cargo.lock,
-toolchain settings and shared build inputs invalidate the whole workspace;
-documentation alone needs only hygiene and formatting. Deleted package paths
-also invalidate everything rather than silently missing dependents.
+dependencies). Library/build changes and real dependency updates propagate through
+reverse dependencies. Integration tests, examples and benches select their own
+package; root documentation and AGENTS.md need hygiene and formatting. Crate
+Markdown remains a build input because catalogs can use include_str!. Manifest comparisons resolve
+workspace inheritance, features, defaults and locked versions. Moving an unchanged
+dependency into workspace.dependencies, including a verified Rust import alias,
+does not retest its consumers. Lockfile bookkeeping for a new workspace package
+does not invalidate existing packages. Transitive version/source/checksum changes
+select their consumers. A linker-only configuration change selects executable
+packages to exercise final links and native interoperability; other shared build
+settings and deleted package paths conservatively select the workspace.
+
+Selected packages run clippy with all targets and warnings denied, then tests.
+Cheap hygiene or compilation failures stop later build/test work. Tests continue
+across failing targets so one run reports all failing suites. Diagnostic coverage
+is reused when already passed in the selected test set. `--plan` prints the exact
+selection and reasons without building; JSON plans say `planned`, never `passed`.
+
+An affected gate has a total 2400-second deadline, including metadata and Cargo
+cache waits. Timeout returns failure with the command log and terminates its
+process tree (a kill-on-close Windows job). It cannot waive an unfinished test.
+`--timeout <seconds>` overrides the budget; `--timeout 0` disables it. `--full`
+selects workspace clippy/tests and has no default deadline for nightly use. The
+deadline starts inside ara-dev; the Windows helper isolates the bootstrap build.
 
 Every run checks formatting, exact version pins in changed manifests, all tracked
 and new AGENTS.md files (150 lines), built-in importer version literals in tests,
@@ -133,8 +160,9 @@ Cargo.lock stay unchanged. Incompatible glam, libloading and tungstenite version
 have separate named workspace entries. Import aliases preserve existing Rust API
 names, including ara-anim's public glam re-export.
 
+All 37 third-party package families used by three or more crates are centralized.
 The consolidation itself changes no Cargo.lock lines. Adding ara-dev introduces
-only its package entry and toml_edit's existing toml_writer feature dependency;
+only its package entry and feature edges for existing TOML packages;
 it introduces no new third-party package versions. See `linking.md` for all three
 heavy-target measurements and the Windows rust-lld configuration.
 

@@ -14,7 +14,7 @@ name = "ara-hub"
 path = "src/main.rs"
 
 [build-dependencies]
-embed-resource = "3"
+embed-resource.workspace = true
 
 [dependencies]
 ara-crash = { path = "../ara-crash" }
@@ -29,12 +29,12 @@ ara-rpc.workspace = true
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
-anyhow = "1"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-resvg = { version = "0.45", default-features = false }
-sdl3-sys = { version = "0.7", default-features = false }
+anyhow.workspace = true
+image = { workspace = true, features = ["png", "jpeg"] }
+resvg.workspace = true
+sdl3-sys.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }

@@ -6,8 +6,11 @@ mod git;
 mod gpu;
 mod hygiene;
 mod known;
+mod manifest;
 mod merge;
 mod platform;
+mod process;
+mod selection;
 mod workspace;
 mod worktrees;
 
@@ -40,6 +43,12 @@ enum Command {
         /// Explicit JSON exceptions for individually documented main test failures.
         #[arg(long)]
         known_failures: Option<PathBuf>,
+        /// Show affected packages without running build/test gates.
+        #[arg(long, conflicts_with = "full")]
+        plan: bool,
+        /// Total seconds including cache waits (default 2400; --full unlimited; 0 unlimited).
+        #[arg(long)]
+        timeout: Option<u64>,
     },
     /// Merge locally, validate before committing, and optionally push.
     Merge {
@@ -50,6 +59,8 @@ enum Command {
         full: bool,
         #[arg(long)]
         known_failures: Option<PathBuf>,
+        #[arg(long)]
+        timeout: Option<u64>,
     },
     /// Serialize GPU benchmarks/captures across every worktree on this machine.
     Gpu {
@@ -94,8 +105,20 @@ fn run() -> Result<bool> {
             json,
             full,
             known_failures,
+            plan,
+            timeout,
         } => {
-            let result = check::run(&root, &base, json, full, known_failures.as_deref());
+            let result = check::run(
+                &root,
+                check::Options {
+                    base: &base,
+                    json,
+                    full,
+                    known_path: known_failures.as_deref(),
+                    plan,
+                    timeout_seconds: timeout,
+                },
+            );
             if json && let Err(error) = &result {
                 println!(
                     "{}",
@@ -109,7 +132,15 @@ fn run() -> Result<bool> {
             push,
             full,
             known_failures,
-        } => merge::run(&root, &branch, push, full, known_failures.as_deref()),
+            timeout,
+        } => merge::run(
+            &root,
+            &branch,
+            push,
+            full,
+            known_failures.as_deref(),
+            timeout,
+        ),
         Command::CleanWorktrees {
             yes, hours, base, ..
         } => worktrees::run(&root, yes, hours, &base),

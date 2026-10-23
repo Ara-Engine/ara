@@ -29,7 +29,7 @@ serde_bytes = "0.11"
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Diagnostics_Debug"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [dev-dependencies]
 ara-ops = { path = "../ara-ops" }

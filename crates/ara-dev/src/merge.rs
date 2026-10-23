@@ -12,6 +12,7 @@ pub(crate) fn run(
     push: bool,
     full: bool,
     known_path: Option<&Path>,
+    timeout_seconds: Option<u64>,
 ) -> Result<bool> {
     // Reject a malformed exception file before starting a merge.
     crate::known::read(root, known_path)?;
@@ -71,7 +72,17 @@ pub(crate) fn run(
         bail!("workspace check failed; merge remains uncommitted. Fix it or git merge --abort");
     }
     git::bytes(root, ["add", "--", "Cargo.lock"])?;
-    if !check::run(root, &before, false, full, known_path)? {
+    if !check::run(
+        root,
+        check::Options {
+            base: &before,
+            json: false,
+            full,
+            known_path,
+            plan: false,
+            timeout_seconds,
+        },
+    )? {
         bail!(
             "merge gate failed; merge remains uncommitted. Fix it and run ara-dev check --base {before}, or git merge --abort"
         );

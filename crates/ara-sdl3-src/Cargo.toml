@@ -7,7 +7,7 @@ publish.workspace = true
 links = "ara_sdl3"
 
 [dependencies]
-sdl3-sys = { version = "0.7.2", default-features = false, features = ["no-link"] }
+sdl3-sys = { workspace = true, features = ["no-link"] }
 
 [build-dependencies]
 cc = { workspace = true, features = ["parallel"] }

@@ -7,7 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-glam = "0.34"
+glam34.workspace = true
 ara-json.workspace = true
 ara-components.workspace = true
 ara-diag.workspace = true

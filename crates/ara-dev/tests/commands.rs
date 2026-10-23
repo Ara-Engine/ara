@@ -169,6 +169,111 @@ fn known_failures_are_opt_in_and_do_not_hide_other_tests_in_the_same_target() {
 }
 
 #[test]
+fn plan_keeps_test_edits_local_and_ignores_equivalent_workspace_moves() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::create_dir_all(root.join("core/tests")).unwrap();
+    fs::write(
+        root.join("core/tests/check.rs"),
+        "#[test]\nfn checks_value() {\n    assert_eq!(mini_core::value(), 1);\n}\n",
+    )
+    .unwrap();
+    fs::write(root.join("core/AGENTS.md"), "# Core\nDocumentation only.\n").unwrap();
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--plan", "--json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["planned"], true);
+    assert!(
+        report.get("passed").is_none(),
+        "a plan must not claim gate success"
+    );
+    assert_eq!(report["affected"], serde_json::json!(["mini-core"]));
+    assert_eq!(report["test_only"], serde_json::json!(["mini-core"]));
+
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "test and docs"]);
+    let root_manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(root.join("Cargo.toml"), format!("{root_manifest}\n[workspace.dependencies]\nrenamed = {{ package = \"mini-core\", path = \"core\" }}\n")).unwrap();
+    let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
+    fs::write(
+        root.join("tool/Cargo.toml"),
+        tool.replace(
+            "{ package = \"mini-core\", path = \"../core\", optional = true }",
+            "{ workspace = true, optional = true }",
+        ),
+    )
+    .unwrap();
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--plan", "--json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["affected"], serde_json::json!([]));
+}
+
+#[test]
+fn adding_a_workspace_package_does_not_invalidate_existing_packages() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::create_dir_all(root.join("extra/src")).unwrap();
+    fs::write(
+        root.join("extra/src/lib.rs"),
+        "pub fn value() -> u32 {\n    1\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("extra/Cargo.toml"),
+        "[package]\nname = \"extra\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        manifest.replace("\"diag\"]", "\"diag\", \"extra\"]"),
+    )
+    .unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--plan", "--json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["affected"], serde_json::json!(["extra"]));
+}
+
+#[test]
+fn gate_deadline_includes_metadata_and_compilation() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::write(
+        root.join("core/build.rs"),
+        "fn main() {\n    std::thread::sleep(std::time::Duration::from_secs(3));\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("core/src/lib.rs"),
+        "pub fn value() -> u32 {\n    2\n}\n",
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let output = command(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--timeout", "1"],
+    );
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], false);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("timed out"));
+    assert!(started.elapsed() < std::time::Duration::from_secs(15));
+}
+
+#[test]
 fn merge_commits_only_after_gate_and_stops_without_committing_other_conflicts() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

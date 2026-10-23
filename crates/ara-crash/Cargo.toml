@@ -38,7 +38,7 @@ minidumper = "0.11"
 minidump-writer = "0.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }

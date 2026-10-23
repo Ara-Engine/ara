@@ -1,8 +1,10 @@
 //! Git subprocesses preserve NUL-separated paths and never invoke a shell.
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use anyhow::{Context, Result, bail, ensure};
 
@@ -81,6 +83,68 @@ pub(crate) fn changed(root: &Path, base: &str) -> Result<Vec<PathBuf>> {
     files.sort();
     files.dedup();
     Ok(files)
+}
+
+/// One Git process reads the base manifests; absent paths represent new packages.
+pub(crate) fn read_at(
+    root: &Path,
+    base: &str,
+    paths: &[PathBuf],
+) -> Result<BTreeMap<PathBuf, Option<String>>> {
+    let mut queries = Vec::new();
+    for path in paths {
+        let path = path
+            .to_str()
+            .context("non-UTF-8 manifest path")?
+            .replace('\\', "/");
+        ensure!(!path.contains(['\n', '\r']), "newline in manifest path");
+        writeln!(queries, "{base}:{path}")?;
+    }
+    let mut child = Command::new("git")
+        .current_dir(root)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut input = child.stdin.take().context("git batch stdin")?;
+    // Drain stdout while feeding requests: either pipe can exceed Windows' buffer.
+    let writer = std::thread::spawn(move || input.write_all(&queries));
+    let output = child.wait_with_output()?;
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git request writer panicked"))??;
+    ensure!(
+        output.status.success(),
+        "git batch: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut rest = output.stdout.as_slice();
+    let mut result = BTreeMap::new();
+    for path in paths {
+        let end = rest
+            .iter()
+            .position(|b| *b == b'\n')
+            .context("git batch header")?;
+        let header = std::str::from_utf8(&rest[..end])?;
+        rest = &rest[end + 1..];
+        if header.ends_with(" missing") {
+            result.insert(path.clone(), None);
+        } else {
+            let size: usize = header
+                .split_whitespace()
+                .last()
+                .context("git blob size")?
+                .parse()?;
+            ensure!(rest.len() > size, "truncated git blob");
+            result.insert(
+                path.clone(),
+                Some(std::str::from_utf8(&rest[..size])?.to_owned()),
+            );
+            rest = &rest[size + 1..];
+        }
+    }
+    Ok(result)
 }
 
 /// Compare content as well as status: overwriting an already-dirty file must fail.
