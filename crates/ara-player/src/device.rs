@@ -1,0 +1,253 @@
+//! Windowed players: an SDL3 window, keyboard/mouse → action injections (the same
+//! replayable path agents use), and per-frame presentation through `ara-platform`.
+use anyhow::Result;
+use ara_input::{ActionValue, Injection, PlayerId};
+use ara_platform::{Event, Present, Window};
+use ara_runtime::{
+    Runtime,
+    components::{Environment, MeshShape},
+    control::{JUMP, LOOK, MOVE, SPRINT},
+    extract::{Draw, Geometry, RenderFrame},
+};
+use ara_runtime_render::Presenter;
+use std::{
+    collections::BTreeSet,
+    path::Path,
+    time::{Duration, Instant},
+};
+
+// SDL scancodes used by the default bindings.
+const W: i32 = 26;
+const A: i32 = 4;
+const S: i32 = 22;
+const D: i32 = 7;
+const UP: i32 = 82;
+const DOWN: i32 = 81;
+const LEFT: i32 = 80;
+const RIGHT: i32 = 79;
+const SPACE: i32 = 44;
+const LEFT_SHIFT: i32 = 225;
+const ESCAPE: i32 = 41;
+/// Holds that last until replaced (the next change re-injects).
+const HELD: u32 = 1 << 30;
+
+/// The player's window and device-input state.
+pub struct Windowed {
+    window: Window,
+    present: Option<Present>,
+    keys: BTreeSet<i32>,
+    sent_move: [f32; 2],
+    sent_sprint: bool,
+    look: [f32; 2],
+    orbit: bool,
+    frames: u32,
+    frame_times: Vec<f32>,
+    window_start: Instant,
+}
+
+impl Windowed {
+    /// Opens the window and warms the GPU device and pipelines with a one-box frame,
+    /// so a pooled player pays none of that after Play.
+    pub fn open(name: &str, size: [u32; 2], cache: &Path) -> Result<(Self, Presenter)> {
+        let window = Window::new(&format!("Ara | {name} | waiting for Play"), size)?;
+        let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
+        let mut warm = RenderFrame::default();
+        warm.environment = Environment::default();
+        warm.draws.push(Draw {
+            entity: 1,
+            address: "warm".into(),
+            label: "warm".into(),
+            geometry: Geometry::Shape {
+                shape: MeshShape::Box,
+                size: [1.0; 3],
+            },
+            world: glam::Mat4::IDENTITY,
+            color: [1.0; 4],
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: [0.0; 3],
+            skin: None,
+        });
+        presenter.prepare(&warm)?;
+        Ok((
+            Self {
+                window,
+                present: None,
+                keys: BTreeSet::new(),
+                sent_move: [0.0; 2],
+                sent_sprint: false,
+                look: [0.0; 2],
+                orbit: false,
+                frames: 0,
+                frame_times: Vec::new(),
+                window_start: Instant::now(),
+            },
+            presenter,
+        ))
+    }
+
+    /// Drains window events into action injections for the next tick. Returns true
+    /// when the user closed the window (Esc or the close button).
+    pub fn events(&mut self, runtime: &mut Runtime) -> Result<bool> {
+        let mut quit = false;
+        let mut jump = false;
+        for event in self.window.poll()? {
+            match event {
+                Event::Quit
+                | Event::Key {
+                    scancode: ESCAPE,
+                    pressed: true,
+                    ..
+                } => quit = true,
+                Event::Key {
+                    scancode,
+                    pressed,
+                    repeat: false,
+                } => {
+                    if pressed {
+                        self.keys.insert(scancode);
+                        jump |= scancode == SPACE;
+                    } else {
+                        self.keys.remove(&scancode);
+                    }
+                }
+                Event::MouseButton { button: 3, pressed } => self.orbit = pressed,
+                Event::MouseMotion { delta, .. } if self.orbit => {
+                    self.look[0] += delta[0] * 0.15;
+                    self.look[1] += delta[1] * 0.1;
+                }
+                _ => {}
+            }
+        }
+        let held = |a: i32, b: i32| self.keys.contains(&a) || self.keys.contains(&b);
+        let axis = |pos: bool, neg: bool| f32::from(u8::from(pos)) - f32::from(u8::from(neg));
+        let movement = [
+            axis(held(D, RIGHT), held(A, LEFT)),
+            axis(held(W, UP), held(S, DOWN)),
+        ];
+        let sprint = self.keys.contains(&LEFT_SHIFT);
+        let mut inputs = Vec::new();
+        let player = PlayerId(1);
+        if movement != self.sent_move {
+            inputs.push(Injection {
+                player,
+                action: MOVE.into(),
+                value: ActionValue::Axis2(movement),
+                hold_ticks: HELD,
+            });
+            self.sent_move = movement;
+        }
+        if sprint != self.sent_sprint {
+            inputs.push(Injection {
+                player,
+                action: SPRINT.into(),
+                value: ActionValue::Button(sprint),
+                hold_ticks: HELD,
+            });
+            self.sent_sprint = sprint;
+        }
+        if jump {
+            inputs.push(Injection {
+                player,
+                action: JUMP.into(),
+                value: ActionValue::Button(true),
+                hold_ticks: 1,
+            });
+        }
+        if self.look != [0.0; 2] {
+            let look = std::mem::take(&mut self.look);
+            inputs.push(Injection {
+                player,
+                action: LOOK.into(),
+                value: ActionValue::Axis2(look),
+                hold_ticks: 1,
+            });
+        }
+        if !inputs.is_empty() {
+            runtime.inject(inputs)?;
+        }
+        Ok(quit)
+    }
+
+    /// Extracts, renders and presents one frame, recreating the swapchain on resize.
+    pub fn present(
+        &mut self,
+        runtime: &mut Runtime,
+        presenter: &mut Presenter,
+        frame: &mut RenderFrame,
+    ) -> Result<()> {
+        let started = Instant::now();
+        let size = self.window.size()?;
+        if size.contains(&0) {
+            std::thread::sleep(Duration::from_millis(5));
+            return Ok(());
+        }
+        runtime.extract(frame);
+        if presenter.renderer().is_some_and(|r| r.size() != size) {
+            self.recreate(presenter)?;
+            presenter.resize(size)?;
+        }
+        presenter.present(frame)?;
+        let cpu = started.elapsed() - presenter.stats().render;
+        let renderer = presenter
+            .renderer()
+            .ok_or_else(|| anyhow::anyhow!("renderer missing"))?;
+        if self.present.is_none() {
+            // SAFETY: the window and device both outlive `present`, which is destroyed
+            // after device idle in `recreate`/`Drop` ordering below.
+            self.present = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
+        }
+        let image = renderer.gpu().native_image(renderer.output())?;
+        let result = match &mut self.present {
+            // SAFETY: the renderer completed this CopySource image; both owners are live.
+            Some(present) => unsafe {
+                present.display(renderer.gpu().context(), image, renderer.size())
+            },
+            None => Ok(()),
+        };
+        if let Err(error) = result {
+            if error.downcast_ref::<ara_gpu::vk::Result>()
+                == Some(&ara_gpu::vk::Result::ERROR_OUT_OF_DATE_KHR)
+            {
+                self.recreate(presenter)?;
+            } else {
+                return Err(error);
+            }
+        }
+        self.frames += 1;
+        self.frame_times
+            .push((cpu + presenter.stats().render).as_secs_f32() * 1000.0);
+        Ok(())
+    }
+
+    /// Destroys presentation objects after the device is idle (before exit).
+    pub fn shutdown(&mut self, presenter: &Presenter) -> Result<()> {
+        self.recreate(presenter)
+    }
+
+    fn recreate(&mut self, presenter: &Presenter) -> Result<()> {
+        if let (Some(mut present), Some(renderer)) = (self.present.take(), presenter.renderer()) {
+            // SAFETY: waiting for device idle before destroying presentation objects.
+            unsafe {
+                renderer.gpu().context().device.device_wait_idle()?;
+                present.destroy(renderer.gpu().context());
+            }
+        }
+        Ok(())
+    }
+
+    /// Frames per second and p95 frame time since the previous call.
+    pub fn take_stats(&mut self) -> (f64, f64) {
+        let seconds = self.window_start.elapsed().as_secs_f64().max(1e-6);
+        let fps = f64::from(self.frames) / seconds;
+        let mut times = std::mem::take(&mut self.frame_times);
+        times.sort_by(f32::total_cmp);
+        let p95 = times
+            .get(((times.len() as f64 * 0.95) as usize).min(times.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or(0.0);
+        self.frames = 0;
+        self.window_start = Instant::now();
+        (fps, f64::from(p95))
+    }
+}

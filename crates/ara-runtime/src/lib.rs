@@ -389,7 +389,7 @@ impl Runtime {
         &mut self,
         max: u32,
         inputs: &[StepInput],
-        mut predicate: impl FnMut(&World) -> bool,
+        mut predicate: impl FnMut(&Session) -> bool,
     ) -> Result<StepReport> {
         let start = self.tick();
         for input in inputs {
@@ -406,14 +406,14 @@ impl Runtime {
         let mut report = StepReport {
             ticks: 0,
             tick: start,
-            reached: predicate(self.world()),
+            reached: predicate(self.play.session()),
             samples: Vec::new(),
         };
         while report.ticks < max && !report.reached {
             self.tick_once(&mut report.samples)?;
             report.ticks += 1;
             report.tick = self.tick();
-            report.reached = predicate(self.world());
+            report.reached = predicate(self.play.session());
         }
         Ok(report)
     }

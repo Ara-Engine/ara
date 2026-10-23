@@ -14,7 +14,7 @@ use std::net::TcpListener;
 use std::path::Path;
 use std::time::Duration;
 
-use ara_host::{Host, HostConfig, Project};
+use ara_host::{Host, HostConfig};
 use ara_mcp::Adapter;
 use ara_proto::{ConnId, PROTOCOL};
 use ara_rpc::http::{HttpRequest, HttpResponse};
@@ -91,12 +91,18 @@ fn run_daemon(
     mcp_on_stdio: bool,
     announce: bool,
 ) -> Result<bool, String> {
-    let host = Host::open(
-        Project::open(root).map_err(|d| d.to_string())?,
+    let mut host = Host::open(
+        crate::project::load(root).map_err(|d| d.to_string())?,
         HostConfig::default(),
     )
     .map_err(|d| d.to_string())?;
     let root = host.root().to_path_buf();
+    // Play and test run in pooled ara-player processes owned by this daemon.
+    host.register(Box::new(ara_play_host::PlayService::new(
+        &root,
+        ara_play_host::PlayConfig::for_project(&root),
+    )))
+    .map_err(|d| d.to_string())?;
     let token = project_token(&root).map_err(|e| format!("cannot create `.ara/token`: {e}"))?;
     let listener = TcpListener::bind(("127.0.0.1", port))
         .map_err(|e| format!("cannot listen on 127.0.0.1:{port}: {e}"))?;

@@ -13,6 +13,7 @@ ara-host.workspace = true
 ara-json.workspace = true
 ara-mcp.workspace = true
 ara-merge.workspace = true
+ara-play-host = { path = "../ara-play-host" }
 ara-proto.workspace = true
 ara-rpc.workspace = true
 ara-schema.workspace = true

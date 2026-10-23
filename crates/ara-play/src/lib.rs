@@ -1,0 +1,550 @@
+//! The play-mode wire contract between the edit-world owner (`ara` daemon or editor)
+//! and `ara-player` processes (S5):
+//!
+//! - Players connect back to the owner over localhost WebSocket and speak JSON-RPC 2.0
+//!   ([`link::Link`]); the first message is [`HELLO`] with the session token.
+//! - The scene arrives as a binary [`PlayScene`] (CBOR) in a named shared-memory
+//!   section ([`shm`]) or, where sections are unavailable, a binary frame.
+//! - Methods are the `play.*` names below; results and notifications are the typed
+//!   structs in this crate. Live edits use authoring paths, never raw ECS writes.
+//! - A crashing player writes one [`CRASH_PREFIX`] line ([`CrashReport`]) to stderr.
+#![warn(missing_docs)]
+
+pub mod link;
+pub mod shm;
+
+use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
+
+/// Wire protocol identifier; bumped only for incompatible changes.
+pub const PROTOCOL: &str = "ara-play/1";
+/// Player → owner request: `{token, protocol, pid, name, window, initMs}` → `{}`.
+pub const HELLO: &str = "player.hello";
+/// Player → owner notification every 250 ms; also the liveness signal ([`Status`]).
+pub const STATUS: &str = "play.status";
+/// Prefix of the single structured crash line a player writes to stderr.
+pub const CRASH_PREFIX: &str = "ARA_PLAYER_CRASH ";
+/// Environment variable carrying the per-session token (never the command line).
+pub const TOKEN_ENV: &str = "ARA_PLAY_TOKEN";
+
+/// Owner → player methods (requests with ids).
+pub mod method {
+    /// Start the assigned world from a snapshot ([`crate::Start`]).
+    pub const START: &str = "play.start";
+    /// Stop and exit; the player is single-use.
+    pub const STOP: &str = "play.stop";
+    /// Freeze host-time ticking.
+    pub const PAUSE: &str = "play.pause";
+    /// Resume host-time ticking.
+    pub const RESUME: &str = "play.resume";
+    /// Run exact ticks as fast as possible ([`crate::Step`]).
+    pub const STEP: &str = "play.step";
+    /// Run until a watched value satisfies a predicate ([`crate::Until`]).
+    pub const UNTIL: &str = "play.until";
+    /// Host-time speed multiplier.
+    pub const TIMESCALE: &str = "play.timescale";
+    /// Queue action injections for the next tick ([`crate::Inputs`]).
+    pub const INPUT: &str = "play.input";
+    /// Read components of one entity ([`crate::Inspect`]).
+    pub const INSPECT: &str = "play.inspect";
+    /// Read `entity.Component.field` values ([`crate::Read`]).
+    pub const READ: &str = "play.read";
+    /// Live edit applied at the next tick, acked after it ([`crate::Patch`]).
+    pub const PATCH: &str = "play.patch";
+    /// State hash and optionally a labelled image ([`crate::CaptureParams`]).
+    pub const CAPTURE: &str = "play.capture";
+    /// Replace watched paths sampled by step/until ([`crate::WatchParams`]).
+    pub const WATCH: &str = "play.watch";
+    /// Begin recording a replay.
+    pub const RECORD: &str = "play.record";
+    /// Finish recording and write the replay to a file ([`crate::SaveReplay`]).
+    pub const SAVE_REPLAY: &str = "play.recording";
+    /// Verify a replay file tick by tick ([`crate::SaveReplay`]).
+    pub const REPLAY: &str = "play.replay";
+    /// Field-level differences against the start documents, for "Keep changes".
+    pub const DIFF: &str = "play.diff";
+    /// Publish new asset generations, applied at the next tick boundary.
+    pub const ASSETS: &str = "play.assets";
+    /// Test builds: force a panic, access violation or hang ([`crate::Crash`]).
+    pub const CRASH: &str = "play.debug.crash";
+}
+
+/// Process role, assigned when Play begins (same vocabulary as `ara-net` launches).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Role {
+    /// Single authority world with local input (no networking).
+    Local,
+    /// Player-hosted authority (Listen).
+    Host,
+    /// Renderer-free authority.
+    Dedicated,
+    /// Remote player.
+    Client,
+}
+
+/// `player.hello` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hello {
+    /// Session token from [`TOKEN_ENV`].
+    pub token: String,
+    /// Must equal [`PROTOCOL`].
+    pub protocol: String,
+    /// OS process ID.
+    pub pid: u32,
+    /// Pool slot name.
+    pub name: String,
+    /// Whether this player owns a window.
+    pub window: bool,
+    /// Process start → hello, in milliseconds (init cost the pool hides).
+    pub init_ms: f64,
+    /// UDP address a server-role player listens on for client handshakes.
+    pub net_addr: Option<String>,
+}
+
+/// Where the snapshot bytes are.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "transport", rename_all = "camelCase")]
+pub enum SnapshotRef {
+    /// A named read-only shared-memory section ([`shm`]).
+    Shm {
+        /// Section name.
+        section: String,
+        /// Payload length in bytes.
+        len: u64,
+    },
+    /// Inline bytes (remote players, platforms without sections).
+    Inline {
+        /// The encoded [`PlayScene`].
+        bytes: Vec<u8>,
+    },
+}
+
+/// `play.start` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Start {
+    /// The scene snapshot.
+    pub snapshot: SnapshotRef,
+    /// Process role.
+    pub role: Role,
+    /// Server UDP address for client roles (handshake before reporting running).
+    pub connect_to: Option<String>,
+    /// Stay paused after tick 0 (otherwise run at the fixed rate).
+    pub start_paused: bool,
+}
+
+/// `play.start` result.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Started {
+    /// Completed tick (0 when started paused, else 1).
+    pub tick: u64,
+    /// Entities in the world.
+    pub entities: usize,
+    /// Snapshot decode + world build, in milliseconds.
+    pub build_ms: f64,
+    /// First tick, in milliseconds (0 when started paused).
+    pub first_tick_ms: f64,
+    /// Client ↔ server handshake, in milliseconds.
+    pub net_handshake_ms: Option<f64>,
+}
+
+/// One action injection, relative to the next tick.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Input {
+    /// Ticks after the next boundary (0 = next tick).
+    #[serde(default)]
+    pub after_ticks: u32,
+    /// Input owner.
+    #[serde(default = "one")]
+    pub player: u64,
+    /// Declared action (`Move`, `Look`, `Jump`, `Sprint`).
+    pub action: String,
+    /// `true/false` for buttons, a number for axes, `[x, y]` for 2D axes.
+    pub value: Value,
+    /// Hold duration in ticks.
+    #[serde(default = "one_u32")]
+    pub hold_ticks: u32,
+}
+fn one() -> u64 {
+    1
+}
+fn one_u32() -> u32 {
+    1
+}
+
+/// `play.step` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Step {
+    /// Ticks to run.
+    pub ticks: u32,
+    /// Injections relative to the first stepped tick.
+    #[serde(default)]
+    pub inputs: Vec<Input>,
+}
+
+/// Comparison for `play.until` and test assertions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Compare {
+    /// Equal (numbers at f32 precision).
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Greater than (numbers).
+    Gt,
+    /// Greater or equal.
+    Ge,
+    /// Less than.
+    Lt,
+    /// Less or equal.
+    Le,
+}
+
+impl Compare {
+    /// Applies the comparison to two JSON values (numbers compare as f64, other
+    /// values only for (in)equality).
+    pub fn test(self, actual: &Value, expected: &Value) -> bool {
+        match (actual.as_f64(), expected.as_f64()) {
+            (Some(a), Some(b)) => {
+                let (fa, fb) = (a as f32, b as f32);
+                match self {
+                    Self::Eq => fa == fb,
+                    Self::Ne => fa != fb,
+                    Self::Gt => a > b,
+                    Self::Ge => a >= b,
+                    Self::Lt => a < b,
+                    Self::Le => a <= b,
+                }
+            }
+            _ => match self {
+                Self::Eq => actual == expected,
+                Self::Ne => actual != expected,
+                _ => false,
+            },
+        }
+    }
+}
+
+/// `play.until` params: tick until `path` compares true, at most `max_ticks`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Until {
+    /// `entity.Component.field` path (`e_fox.Transform.position.z`).
+    pub path: String,
+    /// Comparison.
+    pub compare: Compare,
+    /// Right-hand value.
+    pub value: Value,
+    /// Tick budget.
+    pub max_ticks: u32,
+    /// Injections relative to the first tick.
+    #[serde(default)]
+    pub inputs: Vec<Input>,
+}
+
+/// One watched value after a tick.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sample {
+    /// Tick after which it was sampled.
+    pub tick: u64,
+    /// Watched path.
+    pub path: String,
+    /// Value, absent for a missing entity/component.
+    pub value: Option<Value>,
+}
+
+/// `play.step` / `play.until` result.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stepped {
+    /// Ticks executed by this request.
+    pub ticks: u32,
+    /// Final tick.
+    pub tick: u64,
+    /// Whether the until predicate held.
+    pub reached: bool,
+    /// State hash after the last tick (hex).
+    pub hash: String,
+    /// Watch samples in tick order.
+    pub samples: Vec<Sample>,
+}
+
+/// `play.input` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Inputs {
+    /// Injections, relative to the next tick.
+    pub inputs: Vec<Input>,
+}
+
+/// `play.inspect` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Inspect {
+    /// Entity address.
+    pub entity: String,
+    /// Components to read; all registered components when empty.
+    #[serde(default)]
+    pub components: Vec<String>,
+}
+
+/// `play.read` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Read {
+    /// `entity.Component.field` paths.
+    pub paths: Vec<String>,
+}
+
+/// One live edit: set (or clear) an authored value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Set {
+    /// Entity address in the scene.
+    pub entity: String,
+    /// `Component.field` path.
+    pub path: String,
+    /// New value; absent restores the default.
+    pub value: Option<Value>,
+}
+
+/// `play.patch` params: applied atomically at the next tick boundary.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Patch {
+    /// Edits in order.
+    pub sets: Vec<Set>,
+}
+
+/// `play.patch` result, sent after the tick that applied it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Patched {
+    /// Tick whose boundary applied the edits.
+    pub applied_at_tick: u64,
+    /// The values read back after that tick, one per set.
+    pub read_back: Vec<Option<Value>>,
+}
+
+/// `play.capture` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureParams {
+    /// PNG path to write (plus `.marks.png`, `.legend.json`, `.json`); hash only when absent.
+    pub path: Option<String>,
+    /// Image width.
+    #[serde(default = "width")]
+    pub width: u32,
+    /// Image height.
+    #[serde(default = "height")]
+    pub height: u32,
+    /// Maximum numbered marks (0 disables marks).
+    #[serde(default = "marks")]
+    pub marks: usize,
+}
+fn width() -> u32 {
+    1280
+}
+fn height() -> u32 {
+    720
+}
+fn marks() -> usize {
+    40
+}
+
+/// One numbered mark in a capture.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mark {
+    /// Number drawn on the image.
+    pub mark: usize,
+    /// `Name (e_address)` label.
+    pub label: String,
+    /// Visible-pixel box `[x, y, w, h]`.
+    pub bbox: [u32; 4],
+}
+
+/// `play.capture` result.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Captured {
+    /// Tick captured.
+    pub tick: u64,
+    /// State hash (hex).
+    pub hash: String,
+    /// Entities in the world.
+    pub entities: usize,
+    /// Written image path, if any.
+    pub image: Option<String>,
+    /// Numbered marks.
+    pub marks: Vec<Mark>,
+}
+
+/// `play.watch` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchParams {
+    /// `entity.Component.field` paths.
+    pub paths: Vec<String>,
+    /// Sampling interval in ticks.
+    #[serde(default = "one_u32")]
+    pub every: u32,
+}
+
+/// `play.recording` / `play.replay` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveReplay {
+    /// Replay file path (binary CBOR).
+    pub path: String,
+}
+
+/// `play.debug.crash` params.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Crash {
+    /// `panic`, `access` or `hang`.
+    pub kind: String,
+}
+
+/// `play.status` notification.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    /// Completed tick.
+    pub tick: u64,
+    /// Whether host time is frozen.
+    pub paused: bool,
+    /// Worst lateness of a tick start since the last status, in microseconds.
+    pub max_late_us: u64,
+    /// Presented frames per second (windowed players).
+    pub fps: f64,
+    /// p95 frame CPU time in milliseconds since the last status (windowed players).
+    pub frame_ms_p95: f64,
+    /// A subsystem fault that paused the world.
+    pub fault: Option<String>,
+}
+
+/// The single machine-readable crash line.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashReport {
+    /// `panic` or `exception`.
+    pub kind: String,
+    /// Panic message or exception name.
+    pub message: String,
+    /// `file:line:column` of a panic, or the faulting address of an exception.
+    pub location: String,
+    /// Last completed tick.
+    pub tick: u64,
+}
+
+/// One document of a play snapshot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DocumentData {
+    /// Project-relative path.
+    pub path: String,
+    /// Document kind (`scene`, `prefab`).
+    pub kind: String,
+    /// Asset ID.
+    pub id: String,
+    /// Records by ID, as stored.
+    pub records: BTreeMap<String, Record>,
+}
+
+/// Everything a player needs to build the world: documents, project types, seed,
+/// tick rate and the published asset generations it must load.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayScene {
+    /// Format version (1).
+    pub format: u32,
+    /// Scene asset ID.
+    pub scene: String,
+    /// Scene and prefab documents.
+    pub documents: Vec<DocumentData>,
+    /// Project `*.types.json` documents.
+    pub types: Vec<Value>,
+    /// Session seed.
+    pub seed: u64,
+    /// Fixed tick rate.
+    pub tick_hz: u32,
+    /// Asset ID → action digest (64 hex) of the generation to load.
+    pub assets: BTreeMap<String, String>,
+    /// Content-addressed cache directory holding those generations.
+    pub cache: String,
+    /// Navmesh tile cache directory.
+    pub nav_cache: Option<String>,
+}
+
+impl PlayScene {
+    /// Captures documents from a workspace (scene and prefabs alike).
+    pub fn documents(workspace: &Workspace) -> Vec<DocumentData> {
+        workspace
+            .docs()
+            .map(|(path, doc)| DocumentData {
+                path: path.to_owned(),
+                kind: doc.kind.clone(),
+                id: doc.id.to_string(),
+                records: doc
+                    .records()
+                    .iter()
+                    .map(|(id, r)| (id.to_string(), r.clone()))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// Rebuilds the workspace and scene ID (records are validated by projection).
+    pub fn workspace(&self) -> Result<(Workspace, AssetId), String> {
+        let mut workspace = Workspace::default();
+        for data in &self.documents {
+            let mut doc = Document::new(data.kind.clone(), AssetId::parse(&data.id)?);
+            for (id, record) in &data.records {
+                doc.insert_unchecked(RecordId::parse(id)?, record.clone());
+            }
+            workspace.insert(&data.path, doc);
+        }
+        Ok((workspace, AssetId::parse(&self.scene)?))
+    }
+
+    /// Binary (CBOR) encoding for the shared-memory section.
+    pub fn encode(&self) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+        ciborium::ser::into_writer(self, &mut bytes).map_err(|e| e.to_string())?;
+        Ok(bytes)
+    }
+
+    /// Decodes and checks the format version.
+    pub fn decode(bytes: &[u8]) -> Result<Self, String> {
+        let scene: Self = ciborium::de::from_reader(bytes).map_err(|e| e.to_string())?;
+        if scene.format != 1 {
+            return Err(format!("unsupported play snapshot format {}", scene.format));
+        }
+        Ok(scene)
+    }
+}
+
+/// Formats bytes as lowercase hex.
+pub fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Parses 64 hex characters into 32 bytes.
+pub fn unhex(text: &str) -> Result<[u8; 32], String> {
+    if text.len() != 64 {
+        return Err(format!("expected 64 hex characters, got {}", text.len()));
+    }
+    let mut out = [0; 32];
+    for (i, slot) in out.iter_mut().enumerate() {
+        *slot = u8::from_str_radix(&text[i * 2..i * 2 + 2], 16).map_err(|e| e.to_string())?;
+    }
+    Ok(out)
+}
