@@ -1,0 +1,146 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:28:15.6915441Z",
+                        "cpuPercent":  44,
+                        "freeKiB":  6149008,
+                        "processes":  [
+                                          {
+                                              "Name":  "cargo#1",
+                                              "IDProcess":  97536,
+                                              "PercentProcessorTime":  82
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  25
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  25
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "svchost#2",
+                                              "IDProcess":  2140,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "SpotifyLauncher",
+                                              "IDProcess":  33196,
+                                              "PercentProcessorTime":  4
+                                          },
+                                          {
+                                              "Name":  "relay_win#2",
+                                              "IDProcess":  40460,
+                                              "PercentProcessorTime":  4
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:28:17.9227332Z",
+                        "cpuPercent":  97,
+                        "freeKiB":  6191128,
+                        "processes":  [
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  3368,
+                                              "PercentProcessorTime":  977
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  94
+                                          },
+                                          {
+                                              "Name":  "cl",
+                                              "IDProcess":  52988,
+                                              "PercentProcessorTime":  60
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  60
+                                          },
+                                          {
+                                              "Name":  "goldens-652c0c246dbf7c18",
+                                              "IDProcess":  63472,
+                                              "PercentProcessorTime":  56
+                                          },
+                                          {
+                                              "Name":  "cl#1",
+                                              "IDProcess":  56136,
+                                              "PercentProcessorTime":  49
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "claude#3",
+                                              "IDProcess":  63100,
+                                              "PercentProcessorTime":  26
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:28:18.9301856Z",
+                        "cpuPercent":  68,
+                        "freeKiB":  6098300,
+                        "processes":  [
+                                          {
+                                              "Name":  "cl",
+                                              "IDProcess":  28140,
+                                              "PercentProcessorTime":  328
+                                          },
+                                          {
+                                              "Name":  "cl#1",
+                                              "IDProcess":  52048,
+                                              "PercentProcessorTime":  147
+                                          },
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "goldens-652c0c246dbf7c18",
+                                              "IDProcess":  63472,
+                                              "PercentProcessorTime":  95
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  56
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  98356,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#1",
+                                              "IDProcess":  85552,
+                                              "PercentProcessorTime":  12
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}
