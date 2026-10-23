@@ -138,6 +138,18 @@ fn menus_label_undo_explain_disabled_items_and_filter_as_you_type() {
     let undo = rows.iter().find(|r| r.0 == "edit.undo").unwrap();
     assert_eq!(undo.1, "Undo \u{201c}Move crate\u{201d}");
     assert!(undo.2.is_none());
+    // A long reason is cut, and every row (keycaps included) stays inside the menu.
+    editor
+        .apply(vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"Transform.position.y","value":1}})], "Raise the crate so the verification route has a long reason", None)
+        .unwrap();
+    let rows = shell.menu_rows(&mut editor, 1).unwrap();
+    let undo = rows.iter().find(|r| r.0 == "edit.undo").unwrap();
+    assert!(undo.1.ends_with("\u{2026}\u{201d}"), "{}", undo.1);
+    let overflow = shell.menu_overflow(&mut editor, 1).unwrap();
+    assert!(overflow.is_empty(), "{overflow:?}");
+    shell
+        .run_command(&mut editor, "edit.undo", &Default::default())
+        .unwrap();
     // Type-to-filter flattens submenus: "grid" finds Snapping ▸ Grid Snap Size….
     let found = shell.filter_menu(&mut editor, 1, "grid").unwrap();
     assert!(found.iter().any(|r| r.0 == "snap.grid"), "{found:?}");
@@ -414,4 +426,16 @@ fn context_menus_open_for_rows_fields_tabs_and_empty_space() {
     };
     let swatch = paints("swatch-MeshRenderer-color").next_back().unwrap();
     assert!(swatch < paints("menu-pop-0").next().unwrap());
+}
+#[test]
+fn tinted_icons_take_their_state_color() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The active tool's icon sits on the selection fill, so it uses the selection text color.
+    let icon = shell.ui.find("tool-Translate-icon").unwrap();
+    assert_eq!(
+        Some(shell.ui.nodes[icon].computed.color),
+        shell.ui.sheet.color_token("--selection-foreground")
+    );
 }

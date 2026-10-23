@@ -10,7 +10,7 @@ Ara's editor ships two default themes that match **T3 Code's default dark and li
 - **Status colours.** `destructive`, `warning`, `success` and `info` each come in three tokens: text (`*-foreground`), fill (base), and a tinted background (`*-surface`).
 - **Rounded corners.** The base radius is 10 px, matching T3's `0.625rem`; use `md` 8, `sm` 6 and `xs` 4 for dense editor controls.
 - **Editor chrome tokens (UX v2).** `chrome` paints the menu bar and the native caption (DWM on Windows); `separator-strong` is the window border and dock splitters; `panel-header` is the 28 px panel header; `raised` lifts controls one step off a panel; `hover-surface` is the neutral hover fill; `menu-surface` and `keycap` style menus and shortcut chips.
-- **Selection is solid.** `selection-surface` (#2f62dc dark, #2a5bdb light) with `selection-foreground` text keeps selected rows at 3:1 or better against panels; `selection-surface-inactive` marks selection in an unfocused panel.
+- **Selection is solid.** `selection-surface` (#2f62dc dark, #2a5bdb light) with `selection-foreground` text (`selection-muted-foreground` for paths and ids) keeps selected rows at 3:1 or better against panels; `selection-surface-inactive` marks selection in an unfocused panel.
 - **Compact type.** Body text is about 13 px, with muted labels in `muted-foreground` and a monospace face for values and code. The font choice is still open; whatever we pick must be bundled with the engine.
 
 ## Rules

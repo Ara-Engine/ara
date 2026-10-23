@@ -258,7 +258,7 @@ impl Shell {
                 out.push_str(&format!(
                     "<text id='{id}-path' class='{}' text='{}' />",
                     if active {
-                        "on-selection"
+                        "palette-path on-selection-muted"
                     } else {
                         "palette-path"
                     },
@@ -267,7 +267,8 @@ impl Shell {
             }
             if !item.id.is_empty() && group != "Entities" {
                 out.push_str(&format!(
-                    "<text id='{id}-id' class='palette-id' text='{}' />",
+                    "<text id='{id}-id' class='palette-id{}' text='{}' />",
+                    if active { " on-selection-muted" } else { "" },
                     escape(&item.id)
                 ));
             }

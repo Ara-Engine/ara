@@ -189,6 +189,84 @@ v1: the layout is coherent, labels and controls are legible, and previews show
 actual engine output. The compact drawer no longer hides filenames. The
 [`capture gallery`](evidence/panels/gallery.html) compares every panel and theme.
 
+## Editor UX v2, phase 1
+
+D23 shell: the native OS frame styled from the theme (DWM dark mode plus caption,
+border and text colours, switched live), and one 36 px menu bar row. The row holds
+the nine menus, the project/scene breadcrumb, the Play cluster, a search box that
+opens the palette, and status chips.
+
+- **One command registry** (`shell/commands`, 272 commands). Each command has an id,
+  a human title, a menu path and default shortcuts, and drives the menus, the
+  palette, context menus, shortcuts and toolbar buttons. `editor.commands` exports
+  it to MCP. Disabled items say why (155 enabled, 117 with a reason). Edit ▸ Undo
+  names the next command. Alt/F10 reach the menus with mnemonics, and typing in
+  an open menu filters it, submenus included.
+- **Settings** (Ctrl+,): Preferences/Project scopes, search, a modified-only filter,
+  per-setting reset, and undoable edits (`editor.settings.*`). Keyboard Shortcuts
+  has Ara, Unreal, Unity and Blender presets, key recording and conflict notes.
+- **Detachable panels.** Drag any tab (except Scene) out of the window, or use
+  ⋯ ▸ Move Panel To ▸ Move Panel to New Window. Each floating panel is an owned OS window on
+  the same GPU device, with its own swapchain. Drop targets light up across
+  windows and Esc cancels. Window rects persist in the layout, and off-screen
+  windows are recovered at startup. Window ▸ Layouts has six built-in layouts,
+  Save Layout As… and Reset.
+- **Density.** Compact is the default, with 22 px tree rows and 24 px property rows.
+  The Inspector has two columns with a resizable label column, reset arrows,
+  modified markers and real enum, bool and colour widgets. Selection is a solid
+  `selection-surface`. The viewport gets 57% of a 2560×1369 window (39% before).
+- **Panels:** 28 px headers with ⋯ menus, icon toolbars, real empty states, and
+  per-row actions as hover icons. Right-click anywhere opens a registry-built
+  context menu: rows, fields, tabs, the viewport and empty space.
+- **Viewport:** a v2 toolbar with tools, space, pivot, snaps, camera, view mode
+  and Show. The gizmo is constant-size with plane handles and hover/active
+  states. A readout pill shows the value while dragging, typing a value enters it,
+  and fading/hiding follows Appendix C.
+
+Try: Ctrl+K "fra"; right-click a hierarchy row or an Inspector field; drag the
+Inspector tab out of the window, then drop it back on the right dock; open Ctrl+,
+and switch the keymap preset to Unreal; Window ▸ Layouts ▸ Animation.
+
+```powershell
+./crates/ara-editor/verify-ux.ps1 -Release
+```
+
+This route captures the main editor and five menus (each with a submenu open),
+four context menus, the palette, Settings and Keyboard Shortcuts, a floating
+Inspector (main window and its own OS window), all eight tool tabs and an empty
+Inspector. Every capture is taken in dark and light at 1440×900 and 2560×1369
+(1x). Output goes to `evidence/ux-v2/{1440,2560}`, with `commands.json`,
+`ux-report.json` (viewport share, toolbar buttons without a command) and
+`timings.json`. `tests/ux.rs` covers the registry walk, menus and undo labels,
+detach/redock and layouts, settings undo and presets, empty states, context menus,
+decoration paint order and icon tints.
+
+Release timings on the RTX 4070 SUPER, on a shared host (other worktrees'
+builds were not paused; CPU load was 35–62%). The full table and samples are in
+[`evidence/ux-v2`](evidence/ux-v2/README.md).
+
+| Size (1x) | Idle CPU p95 | Idle interval p95 | Warm camera → present p50 / p95 |
+|---|---:|---:|---:|
+| 1440×900 | 0.123 ms | 6.652 ms | 3.322 / 3.899 ms |
+| 2560×1369 | 0.117 ms | 6.642 ms | 6.861 / 8.023 ms |
+
+Judged against the UE5/Unity 6 references:
+
+- **Close to both:** structure (one menu row, Unity-style columns), row density,
+  context menus and the Settings/Shortcuts pages.
+- **Ahead:** the palette shows each command's menu path and id, and disabled
+  items explain why.
+- **Behind:** viewport share (UE5 is about 73% with its drawer collapsed); there
+  is no font weight, so headers are distinguished by size and colour only; the
+  gizmo is slimmer than UE5's, with sphere tips instead of arrowheads.
+
+Known gaps:
+
+- Floating windows use the main window's glyph raster scale.
+- Splitters inside a floating window are not persisted.
+- The Scene viewport stays in the main window.
+- Floating windows have no accessibility adapter yet.
+
 ## Integration boundaries
 
 - `world::EditWorldView` isolates the temporary document projection from ara-sim.

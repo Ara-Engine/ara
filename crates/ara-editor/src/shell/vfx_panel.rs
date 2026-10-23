@@ -181,7 +181,7 @@ impl Shell {
                 if let Some(module) = modules.iter().find(|m| m.name == *module) {
                     let value = ara_json::to_value(&module.module)?;
                     let kind = value["op"].as_str().unwrap_or("");
-                    out.push_str(&format!("<panel id='vfx-module-header' class='component-header'>{}<text id='vfx-module-name' class='component-title' text='{}' /><text id='vfx-module-kind' class='caption' text='{}' /></panel><text id='vfx-module-doc' class='dialog-text' style='padding:6px;padding-left:12px' text='{}' />",icons::icon("vfx-module-header","sparkles"),escape(&module.name),escape(&super::inspector_panel::sentence(kind).to_lowercase()),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module"))));
+                    out.push_str(&format!("<panel id='vfx-module-header' class='component-header'>{}<text id='vfx-module-name' class='component-title' text='{}' /><text id='vfx-module-kind' class='caption' text='{}' /></panel><panel id='vfx-module-doc-row' style='flex-shrink:0;padding:6px;padding-left:12px'><text id='vfx-module-doc' class='dialog-text' text='{}' /></panel>",icons::icon("vfx-module-header","sparkles"),escape(&module.name),escape(&super::inspector_panel::sentence(kind).to_lowercase()),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module"))));
                     if let Some(fields) = value.as_object() {
                         for (key, v) in fields {
                             if key == "op" {

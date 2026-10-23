@@ -259,6 +259,11 @@ fn undo_label(c: &Ctx, redo: bool) -> String {
         txn.and_then(|t| t.why.clone().or_else(|| t.label.clone()))
     };
     match label {
+        // Long agent reasons are cut so the item's shortcut stays in the menu.
+        Some(l) if l.chars().count() > 32 => {
+            let short: String = l.chars().take(31).collect();
+            format!("{verb} \u{201c}{}\u{2026}\u{201d}", short.trim_end())
+        }
         Some(l) => format!("{verb} \u{201c}{l}\u{201d}"),
         None => verb.into(),
     }

@@ -63,6 +63,28 @@ impl Shell {
         self.rebuild(editor)?;
         Ok(rows)
     }
+    /// IDs of menu bar menu `index`'s nodes (labels, keycaps) that extend past its right edge.
+    pub fn menu_overflow(
+        &mut self,
+        editor: &mut Editor,
+        index: usize,
+    ) -> ara_ui::Result<Vec<String>> {
+        self.open_bar(index, false);
+        self.rebuild(editor)?;
+        let menu = self.ui.nodes[self.ui.find("menu-pop-0").ok_or("menu not open")?].rect;
+        let overflow = self
+            .ui
+            .nodes
+            .iter()
+            .filter(|n| {
+                n.element.id.starts_with("m0-") && n.rect.x + n.rect.w > menu.x + menu.w + 0.5
+            })
+            .map(|n| n.element.id.clone())
+            .collect();
+        self.menu = None;
+        self.rebuild(editor)?;
+        Ok(overflow)
+    }
     /// Rows of a menu filtered by typed text.
     pub fn filter_menu(
         &mut self,

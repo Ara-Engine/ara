@@ -27,6 +27,7 @@
     "separator-strong": "#2e2e2e",
     "selection-surface": "#2f62dc",
     "selection-foreground": "#ffffff",
+    "selection-muted-foreground": "#ffffffb8",
     "selection-surface-inactive": "#262626",
     "hover-surface": "#262626",
     "menu-surface": "#161616",
