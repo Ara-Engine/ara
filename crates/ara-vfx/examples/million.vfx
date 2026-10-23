@@ -4,7 +4,7 @@
   "hz": 60,
   "quality": {
     "particles": 1000000,
-    "overdraw": 16,
+    "overdraw": 64,
     "lights": 8,
     "events": 4096
   },
@@ -33,24 +33,24 @@
             "module": {
               "op": "lifetime",
               "seconds": 60,
-              "size": 0.003000000026077032,
-              "color": [0.15000000596046448, 0.4000000059604645, 1, 0.20000000298023224]
+              "size": 0.003,
+              "color": [0.15, 0.4, 1, 0.2]
             }
           },
           {
             "name": "box",
             "module": {
               "op": "box",
-              "center": [0, 1, 0],
-              "extent": [4, 2.5, 1]
+              "center": [0, 2.5, 0],
+              "extent": [3, 1.8, 0.8]
             }
           },
           {
             "name": "drift",
             "module": {
               "op": "velocity",
-              "value": [0, 0.009999999776482582, 0],
-              "spread": [0.009999999776482582, 0.009999999776482582, 0.009999999776482582]
+              "value": [0, 0.01, 0],
+              "spread": [0.01, 0.01, 0.01]
             }
           }
         ],
@@ -59,7 +59,7 @@
             "name": "gravity",
             "module": {
               "op": "gravity",
-              "acceleration": [0, -0.0010000000474974513, 0]
+              "acceleration": [0, -0.001, 0]
             }
           }
         ],
@@ -69,7 +69,7 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
             }
           }

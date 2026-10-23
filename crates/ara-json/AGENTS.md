@@ -6,6 +6,9 @@ Strict JSON in, canonical JSON out. Every Ara text format (scenes, prefabs,
 
 ## Public API
 
+- `to_value(&T)`: required typed-data path before canonical writing; preserves
+  shortest round-trip `f32` decimals. `serde_json::to_value` widens them to `f64`.
+
 - `parse(&str) -> Result<Value, ParseError>`: RFC 8259, rejects duplicate keys;
   `ParseError { message, line, column, duplicate_key }`.
 - `to_canonical_string(&Value) -> String`: 2-space indent, LF, trailing newline,

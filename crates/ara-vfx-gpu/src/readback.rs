@@ -9,62 +9,75 @@ impl GpuSystem {
     /// Intended for editor thumbnails/captures; it waits for the copy to complete.
     pub fn read_output(&self, gpu: &mut VulkanDevice) -> Result<Vec<u8>> {
         ensure!(self.tick > 0, "render before reading output");
-        let staging = gpu.create_buffer(
-            u64::from(self.size[0]) * u64::from(self.size[1]) * 4,
-            vk::BufferUsageFlags::TRANSFER_DST,
-            true,
-        )?;
-        let state = self.resources[9].state;
-        let mut recorder = gpu.begin(state.queue);
-        for (resource, before, after) in [
-            (
-                Resource::Image(self.output),
-                state.access,
-                Access::CopySource,
-            ),
-            (
-                Resource::Buffer(staging),
-                Access::Undefined,
-                Access::CopyDestination,
-            ),
-        ] {
-            recorder.push(Command::Barrier(Barrier {
-                resource,
-                before,
-                after,
-                handoff: None,
-            }));
-        }
-        recorder.push(Command::ReadImage {
-            source: self.output,
-            destination: staging,
-        });
-        for (resource, before, after) in [
-            (
-                Resource::Image(self.output),
-                Access::CopySource,
-                state.access,
-            ),
-            (
-                Resource::Buffer(staging),
-                Access::CopyDestination,
-                Access::HostRead,
-            ),
-        ] {
-            recorder.push(Command::Barrier(Barrier {
-                resource,
-                before,
-                after,
-                handoff: None,
-            }));
-        }
-        let point = gpu.submit(recorder.finish(), &[])?;
-        gpu.resolve(point)?;
-        let bytes = gpu.read(staging)?;
-        gpu.retire(Resource::Buffer(staging))?;
-        gpu.collect()?;
-        Ok(bytes)
+        read_image(gpu, self.output, self.resources[9].state, self.size)
     }
+    /// Read actual post-depth particle coverage for composed capture legends.
+    /// This explicit diagnostic readback waits for completion and restores access.
+    pub fn read_coverage(&self, gpu: &mut VulkanDevice) -> Result<Vec<u32>> {
+        ensure!(self.tick > 0, "render before reading particle coverage");
+        let bytes = read_image(gpu, self.feature_ids, self.resources[10].state, self.size)?;
+        Ok(bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| f32::from_le_bytes(*p) as u32)
+            .collect())
+    }
+}
+fn read_image(
+    gpu: &mut VulkanDevice,
+    image: ara_gpu::Image,
+    state: ara_render::graph::State,
+    size: [u32; 2],
+) -> Result<Vec<u8>> {
+    let staging = gpu.create_buffer(
+        u64::from(size[0]) * u64::from(size[1]) * 4,
+        vk::BufferUsageFlags::TRANSFER_DST,
+        true,
+    )?;
+    let mut recorder = gpu.begin(state.queue);
+    for (resource, before, after) in [
+        (Resource::Image(image), state.access, Access::CopySource),
+        (
+            Resource::Buffer(staging),
+            Access::Undefined,
+            Access::CopyDestination,
+        ),
+    ] {
+        recorder.push(Command::Barrier(Barrier {
+            resource,
+            before,
+            after,
+            handoff: None,
+        }));
+    }
+    recorder.push(Command::ReadImage {
+        source: image,
+        destination: staging,
+    });
+    for (resource, before, after) in [
+        (Resource::Image(image), Access::CopySource, state.access),
+        (
+            Resource::Buffer(staging),
+            Access::CopyDestination,
+            Access::HostRead,
+        ),
+    ] {
+        recorder.push(Command::Barrier(Barrier {
+            resource,
+            before,
+            after,
+            handoff: None,
+        }));
+    }
+    let point = gpu.submit(recorder.finish(), &[])?;
+    gpu.resolve(point)?;
+    let bytes = gpu.read(staging)?;
+    gpu.retire(Resource::Buffer(staging))?;
+    gpu.collect()?;
+    Ok(bytes)
+}
+impl GpuSystem {
     /// Diagnostic SoA readback, including dead slots. This stalls for completion;
     /// gameplay must consume CpuSystem instead of cosmetic GPU particle state.
     pub fn read_particles(&mut self, gpu: &mut VulkanDevice) -> Result<Vec<Vec<Particle>>> {

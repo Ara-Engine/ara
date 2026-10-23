@@ -147,7 +147,7 @@ fn params_of<P: DeserializeOwned>(v: Value) -> Result<P, Diagnostic> {
 }
 
 fn output<O: Serialize>(o: O) -> Result<Value, Diagnostic> {
-    serde_json::to_value(o).map_err(|e| Diagnostic::error(codes::INVALID_PARAMS, e.to_string()))
+    ara_json::to_value(&o).map_err(|e| Diagnostic::error(codes::INVALID_PARAMS, e.to_string()))
 }
 
 fn edit_fn<C: Command>(ctx: &mut EditCtx<'_, '_>, v: Value) -> Result<Value, Diagnostic> {

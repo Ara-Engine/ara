@@ -141,13 +141,13 @@ fn move_edits(store: &Store, manifest: &Manifest, params: &MoveToCell) -> Result
                 doc: manifest.id.clone(),
                 id: RecordId::parse(&entity.cell).map_err(invalid)?,
                 path: FieldPath::field("actors"),
-                value: Some(serde_json::to_value(from)?),
+                value: Some(ara_json::to_value(&from)?),
             },
             Edit::Set {
                 doc: manifest.id.clone(),
                 id: RecordId::parse(&params.cell).map_err(invalid)?,
                 path: FieldPath::field("actors"),
-                value: Some(serde_json::to_value(to)?),
+                value: Some(ara_json::to_value(&to)?),
             },
         ]);
     }

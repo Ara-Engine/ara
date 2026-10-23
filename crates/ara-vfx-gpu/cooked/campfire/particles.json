@@ -1,31 +1,32 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aac98665cede6f109fd21527e85428bbed0445390260da02bdd546e13c123057",
+  "key": "adbec8e38b77fd5571aa8fff7b03c0915549dcb573f473b8f0c8eefb713ed72d",
   "stages": [
     {
-      "dxil": "aac98665cede6f109fd21527e85428bbed0445390260da02bdd546e13c123057/particleFragment.dxil",
-      "dxil_hash": "b3110b899b7b9fdf026a5863f1abd18a2af21a837eb4bc711e6c8874529cd72d",
+      "dxil": "adbec8e38b77fd5571aa8fff7b03c0915549dcb573f473b8f0c8eefb713ed72d/particleFragment.dxil",
+      "dxil_hash": "5725e0add27f21fe74b45aafae3a40bed0505a4de4dc60dda80a11eb45aefc05",
       "source_entry": "particleFragment",
-      "spirv": "aac98665cede6f109fd21527e85428bbed0445390260da02bdd546e13c123057/particleFragment.spv",
+      "spirv": "adbec8e38b77fd5571aa8fff7b03c0915549dcb573f473b8f0c8eefb713ed72d/particleFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "3d7fb034bb183b7487be9ff530612d8787a84f3db8b42f859211bbdc31e3390e",
+      "spirv_hash": "f1a164bc3f07fb665326776ab9758b3afee36e1298869e319ddc53e93c4ed2fe",
       "stage": "fragment"
     },
     {
-      "dxil": "aac98665cede6f109fd21527e85428bbed0445390260da02bdd546e13c123057/particleVertex.dxil",
-      "dxil_hash": "37e40bd08e3ecbf17082708d6f067c3cae7f5f56f3aa3f7720cd6ca6ab568417",
+      "dxil": "adbec8e38b77fd5571aa8fff7b03c0915549dcb573f473b8f0c8eefb713ed72d/particleVertex.dxil",
+      "dxil_hash": "33bb824f9c95b27dea949dc8dd7090b0a16048cc0092cacc39c4830a8149cffb",
       "source_entry": "particleVertex",
-      "spirv": "aac98665cede6f109fd21527e85428bbed0445390260da02bdd546e13c123057/particleVertex.spv",
+      "spirv": "adbec8e38b77fd5571aa8fff7b03c0915549dcb573f473b8f0c8eefb713ed72d/particleVertex.spv",
       "spirv_entry": "main",
-      "spirv_hash": "4ebae7058b1b2167ee7be04115ca9efc29f8091a60622abad2295ab8d2eb8e8e",
+      "spirv_hash": "17922ee6f5953ea648ee0b1a42013e48b38f70c382f50bdc63bc903100324fd4",
       "stage": "vertex"
     }
   ],
   "state": {
     "blend": true,
     "color_formats": [
-      109
+      109,
+      100
     ],
     "depth_format": null,
     "depth_test": false,

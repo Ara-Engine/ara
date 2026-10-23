@@ -44,6 +44,19 @@ pub enum Trigger {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Module {
+    /// Textured output, blending and velocity shutter. Does not change simulation.
+    Appearance {
+        /// Offline procedural sprite sheet, blended between adjacent frames.
+        texture: crate::SpriteTexture,
+        /// Premultiplied alpha or additive radiance.
+        blend: crate::Blend,
+        /// Camera, velocity or ground-plane alignment.
+        alignment: crate::Alignment,
+        /// Minimum length-to-width ratio, at least one.
+        stretch: f32,
+        /// Exposed fraction of a fixed tick, from zero through one.
+        shutter: f32,
+    },
     /// Emit particles per second using fixed-tick accumulated demand.
     Rate {
         /// Particles per second.
@@ -262,6 +275,11 @@ impl Module {
                     Value::Float(_)
                 )
                 | (Self::Sprite { .. }, "soft_distance", Value::Float(_))
+                | (
+                    Self::Appearance { .. },
+                    "stretch" | "shutter",
+                    Value::Float(_)
+                )
                 | (Self::Flipbook { .. }, "fps", Value::Float(_))
                 | (Self::Ribbon { .. }, "width", Value::Float(_))
                 | (Self::Light { .. }, "color", Value::Vec3(_))
@@ -295,6 +313,7 @@ impl Module {
     /// Stable module registry key.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::Appearance { .. } => "appearance",
             Self::Rate { .. } => "rate",
             Self::Burst { .. } => "burst",
             Self::Lifetime { .. } => "lifetime",

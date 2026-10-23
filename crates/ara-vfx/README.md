@@ -7,7 +7,9 @@ and a matching CPU implementation and generated Slang implementation.
 `.vfx` is strict JSON without asset, node or edge IDs. It is a text view of an
 `ara-graph` document, not a second authoring authority. `Effect::parse` rejects
 duplicate keys, unknown fields, invalid numeric inputs and modules in the wrong
-stack. `Effect::text` uses ara-json's canonical writer. Complete examples are in
+stack. `Effect::text` uses `ara_json::to_value` before the canonical writer, so
+typed `f32` values retain readable shortest decimals and bit-exact round trips.
+Complete examples are in
 [`examples/`](examples/).
 
 ```json
@@ -50,7 +52,14 @@ defaults, while mutable position/velocity/color/age live in SoA channels.
 | Spawn | `rate`, `burst` |
 | Initialize | `lifetime`, `point`, `sphere`, `box`, `cone`, `mesh_surface`, `velocity` |
 | Update | `gravity`, `drag`, `curl_noise`, `vortex`, `attractor`, `color_over_life`, `size_over_life`, `plane_collision`, `depth_collision` |
-| Render | `sprite`, `flipbook`, `ribbon`, `mesh`, `light`, `event_spawn` |
+| Render | `sprite`, `appearance`, `flipbook`, `ribbon`, `mesh`, `light`, `event_spawn` |
+
+Add `{"name":"sheet","module":{"op":"appearance","texture":"spark","blend":"additive","alignment":"velocity","stretch":3,"shutter":0.85}}`
+to the render stack for a textured, stretched spark. Built-in sheets are `fire`,
+`smoke`, `spark`, `ring` and `wisp`; `none` preserves a procedural sprite. Blending
+is `alpha` (premultiplied source-over) or `additive`. Alignment is `camera`,
+`velocity` or `ground`. The GPU cooker bakes these original procedural assets;
+humans and agents author only the typed module, without texture heap IDs.
 
 Mesh surfaces sample triangles by area; asset workers provide world-space cooked
 triangles. Curves/gradients have 2–16 strictly ordered normalized lifetime keys.

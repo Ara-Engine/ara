@@ -23,7 +23,7 @@
             "module": {
               "op": "burst",
               "tick": 0,
-              "count": 96
+              "count": 6
             }
           }
         ],
@@ -32,9 +32,9 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 0.11999999731779099,
-              "size": 0.30000001192092896,
-              "color": [15, 5, 0.5, 0.699999988079071]
+              "seconds": 0.12,
+              "size": 0.2,
+              "color": [8, 3, 0.4, 0.8]
             }
           },
           {
@@ -42,27 +42,52 @@
             "module": {
               "op": "cone",
               "origin": [0, 0.5, 0],
-              "height": 0.800000011920929,
-              "radius": 0.30000001192092896
+              "height": 0.15,
+              "radius": 0.05
             }
           },
           {
             "name": "speed",
             "module": {
               "op": "velocity",
-              "value": [0, 1, 0],
-              "spread": [0.6000000238418579, 1, 0.6000000238418579]
+              "value": [5, 0.25, 0],
+              "spread": [1.5, 0.5, 0.5]
             }
           }
         ],
-        "update": [],
+        "update": [
+          {
+            "name": "flash_envelope",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [8, 4, 0.7, 0]
+                },
+                {
+                  "t": 0.08,
+                  "value": [12, 6, 1, 1]
+                },
+                {
+                  "t": 0.25,
+                  "value": [8, 3, 0.2, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [0.4, 0.03, 0, 0]
+                }
+              ]
+            }
+          }
+        ],
         "render": [
           {
             "name": "sprite",
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
             }
           },
@@ -78,9 +103,20 @@
             "name": "light",
             "module": {
               "op": "light",
-              "color": [1, 0.44999998807907104, 0.07999999821186066],
+              "color": [1, 0.45, 0.08],
               "lumens": 900,
               "radius": 3
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "fire",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 1.3,
+              "shutter": 0.75
             }
           }
         ]

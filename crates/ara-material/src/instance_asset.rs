@@ -54,7 +54,7 @@ impl InstanceAsset {
                 "instance asset ID must start mi_",
             ));
         }
-        let record = serde_json::to_value(self).map_err(error)?;
+        let record = ara_json::to_value(self).map_err(error)?;
         let mut doc = Document::new("materialinstance", id);
         doc.insert_unchecked(
             record_id()?,

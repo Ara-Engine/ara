@@ -10,11 +10,11 @@ ConstantBuffer<Root> root : register(b0,space0);
 BIND(0) Texture2D<float4> textures[128] : register(t0,space1);
 BIND(1) RWByteAddressBuffer buffers[64] : register(u0,space2);
 BIND(2) SamplerState samplers[3] : register(s0,space0);
-struct Config {uint4 partition;uint4 lists;uint4 scratch;uint4 render;uint4 atlas;float4 surface;float4 boundsMin;float4 boundsMax;float4 lightColor;float4 lightPosition;};
-struct Frame {float4x4 vp;float4x4 inverseVp;float4 camera;float4 right;float4 up;float4 forward;uint4 extent;float4 clock;uint4 inputs;uint4 demands[16];};
+struct Config {uint4 partition;uint4 lists;uint4 scratch;uint4 render;uint4 atlas;float4 surface;float4 boundsMin;float4 boundsMax;float4 lightColor;float4 lightPosition;uint4 appearance;float4 motion;};
+struct Frame {float4x4 vp;float4x4 inverseVp;float4 camera;float4 right;float4 up;float4 forward;uint4 extent;float4 clock;uint4 inputs;uint4 demands[16];uint4 visuals;float4 ambient;float4 sunDirection;float4 sunColor;float4 probeOrigin;float4 probeSpacing;uint4 probeCounts;};
 struct Particle {float3 position;float age;float3 velocity;float life;float4 color;float size;uint seed;uint birth;};
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
-Config config(uint e){return buffers[NonUniformResourceIndex(frame().inputs.x)].Load<Config>(e*160);}
+Config config(uint e){return buffers[NonUniformResourceIndex(frame().inputs.x)].Load<Config>(e*192);}
 uint state(uint e,uint offset){return buffers[NonUniformResourceIndex(root.control)].Load(e*64+offset);}
 void storeState(uint e,uint offset,uint value){buffers[NonUniformResourceIndex(root.control)].Store(e*64+offset,value);}
 uint list(uint offset){return buffers[NonUniformResourceIndex(root.lists)].Load(offset);}
@@ -39,15 +39,16 @@ void storeParticle(uint slot,Particle p,uint events){
     buffers[NonUniformResourceIndex(root.particles)].Store<uint4>((slot+3*n)*16,uint4(asuint(p.size),p.seed,p.birth,events));
 }
 float3 reconstruct(float2 uv,float z){float4 w=mul(frame().inverseVp,float4(uv.x*2-1,1-uv.y*2,z,1));return w.xyz/w.w;}
+float sceneDepth(uint2 pixel){Frame f=frame();float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;return (f.visuals.z&1u)!=0&&z>0?f.clock.z/z:z;}
 void collideDepth(inout Particle p,float3 previous,float restitution,float thickness,inout uint events){
     Frame f=frame();if(f.inputs.z==0)return;
     float4 clip=mul(f.vp,float4(p.position,1));if(clip.w<=0)return;
     float2 uv=float2(clip.x/clip.w*.5+.5,.5-clip.y/clip.w*.5);if(any(uv<=0)||any(uv>=1))return;
     uint2 pixel=min(uint2(uv*f.extent.xy),f.extent.xy-1);
-    float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(pixel,0)).r;if(z<=0)return;
+    float z=sceneDepth(pixel);if(z<=0)return;
     float3 contact=reconstruct(uv,z);
-    float3 dx=reconstruct(uv+float2(1./f.extent.x,0),textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(min(pixel+uint2(1,0),f.extent.xy-1),0)).r)-contact;
-    float3 dy=reconstruct(uv+float2(0,1./f.extent.y),textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(min(pixel+uint2(0,1),f.extent.xy-1),0)).r)-contact;
+    float3 dx=reconstruct(uv+float2(1./f.extent.x,0),sceneDepth(min(pixel+uint2(1,0),f.extent.xy-1)))-contact;
+    float3 dy=reconstruct(uv+float2(0,1./f.extent.y),sceneDepth(min(pixel+uint2(0,1),f.extent.xy-1)))-contact;
     float3 n=normalize(cross(dx,dy));if(dot(n,f.camera.xyz-contact)<0)n=-n;
     float distance=dot(p.position-contact,n);
     if(distance<0&&(distance>=-thickness||dot(previous-contact,n)>=0)){
@@ -161,7 +162,7 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 0c38f3d5d451a4ad8c94f155bb2bfa25f521c8f82a0d6f090033c8ab67bb1f74
+// VFX content aea856a5df4ec40d3e4718571a7455389314f81951d87151ffa1dbe6805fcac5
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
@@ -181,13 +182,14 @@ case 0u: {
 float3 q=p.position*1.5+float(p.birth)*0.013;float3 c=cos(q);p.velocity+=0.44999998807907104*dt*float3(c.y-c.z,c.z-c.x,c.x-c.y);
 }
 {
-p.size=0.30000001192092896;
-p.size=lerp(p.size,1.2999999523162842,saturate((t-0.0)/1.0));
+p.size=0.44999998807907104;
+p.size=lerp(p.size,1.5,saturate((t-0.0)/1.0));
 }
 {
-p.color=float4(0.15000000596046448,0.17000000178813934,0.2199999988079071,0.0);
-p.color=lerp(p.color,float4(0.25,0.2800000011920929,0.33000001311302185,0.1599999964237213),saturate((t-0.0)/0.11999999731779099));
-p.color=lerp(p.color,float4(0.4000000059604645,0.4300000071525574,0.47999998927116394,0.0),saturate((t-0.11999999731779099)/0.8799999952316284));
+p.color=float4(0.3499999940395355,0.38999998569488525,0.4399999976158142,0.0);
+p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.550000011920929),saturate((t-0.0)/0.15000000596046448));
+p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.20000000298023224),saturate((t-0.15000000596046448)/0.6000000238418579));
+p.color=lerp(p.color,float4(0.550000011920929,0.5799999833106995,0.6299999952316284,0.0),saturate((t-0.75)/0.25));
 }
 break;}
 }}
@@ -205,6 +207,8 @@ float3 meshVertex(uint emitter,uint vertex){switch(emitter){
 // smoke / Update / grow: size_over_life
 // smoke / Update / fade: color_over_life
 // smoke / Render / sprite: sprite
+// smoke / Render / appearance: appearance
+// smoke / Render / flipbook: flipbook
 
 AraSurface evaluate0(AraMaterialInput input) {
     AraSurface result;
@@ -257,7 +261,7 @@ groupshared float areaScan[256];
 void scanMain(uint3 id:SV_DispatchThreadID,uint3 local:SV_GroupThreadID,uint3 group:SV_GroupID){
     Config c=config(root.emitter);uint l=local.x;uint i=id.x;uint a=0;uint events=0;float area=0;
     if(i<c.partition.y){Particle p=loadParticle(c.partition.x+i);a=p.age>=0?1:0;uint flags=buffers[NonUniformResourceIndex(root.particles)].Load((c.partition.x+i+3*frame().extent.z)*16+12);events=countbits(flags&3u);
-        if(a!=0){Frame f=frame();float diameter=p.size;if(c.render.x==1)diameter=max(c.surface.z,length(c.boundsMax.xyz-c.boundsMin.xyz));if(c.render.x==2)diameter*=asfloat(f.demands[root.emitter].z);
+        if(a!=0){Frame f=frame();float diameter=p.size;if(c.render.x==0){if(c.appearance.x==1)diameter*=2.;if(c.appearance.z==1)diameter=max(diameter,max(p.size*c.motion.x,p.size+length(p.velocity)*f.clock.x*c.motion.y));}if(c.render.x==1)diameter=max(c.surface.z,length(c.boundsMax.xyz-c.boundsMin.xyz));if(c.render.x==2)diameter*=asfloat(f.demands[root.emitter].z);
             float distance=max(f.clock.z,dot(p.position-f.camera.xyz,f.forward.xyz)-diameter*.5);float projected=diameter*f.clock.w/(2*distance);area=max(1./float(f.extent.x*f.extent.y),min(1.,projected*projected*float(f.extent.y)/f.extent.x));}}
     aliveScan[l]=a;eventScan[l]=events;areaScan[l]=area;GroupMemoryBarrierWithGroupSync();
     for(uint stride=1;stride<256;stride*=2){uint pa=l>=stride?aliveScan[l-stride]:0;uint pe=l>=stride?eventScan[l-stride]:0;float ps=l>=stride?areaScan[l-stride]:0;GroupMemoryBarrierWithGroupSync();aliveScan[l]+=pa;eventScan[l]+=pe;areaScan[l]+=ps;GroupMemoryBarrierWithGroupSync();}
@@ -335,16 +339,30 @@ Screen screenVertex(uint id:SV_VertexID){Screen o;float2 uv=float2((id<<1)&2,id&
 struct Backdrop {float4 color:SV_Target0;float depth:SV_Target1;};
 [shader("fragment")]
 Backdrop backdropFragment(Screen input){
-    Frame f=frame();float3 ray=normalize(reconstruct(input.uv,0.001)-f.camera.xyz);Backdrop o;
-    o.depth=0;o.color=float4(lerp(float3(.008,.013,.025),float3(.025,.04,.065),saturate(1-input.uv.y)),0);
+    Frame f=frame();Backdrop o;o.depth=0;
+    if((f.visuals.z&2u)!=0){o.color=float4(textures[NonUniformResourceIndex(f.visuals.y)].Load(int3(uint2(input.clip.xy),0)).rgb,0);return o;}
+    float3 ray=normalize(reconstruct(input.uv,0.001)-f.camera.xyz);
+    o.color=float4(lerp(float3(.008,.013,.025),float3(.025,.04,.065),saturate(1-input.uv.y)),0);
     if(ray.y<-.0001){float distance=-f.camera.y/ray.y;if(distance>0){float3 world=f.camera.xyz+ray*distance;
         float grid=1-smoothstep(.01,.025,min(abs(frac(world.x+.5)-.5),abs(frac(world.z+.5)-.5)));
         float3 color=lerp(float3(.025,.035,.05),float3(.045,.06,.08),grid*.4);
-        for(uint e=0;e<f.extent.w;e++){Config c=config(e);if(c.lightColor.w>0&&state(e,0)>0){float3 delta=c.lightPosition.xyz-world;float d2=max(dot(delta,delta),.05);float attenuation=saturate(1-sqrt(d2)/c.lightPosition.w);color+=c.lightColor.rgb*c.lightColor.w/(12.56637*d2)*attenuation*attenuation*.025;}}
         float4 clip=mul(f.vp,float4(world,1));o.depth=clip.z/clip.w;o.color=float4(color,0);}}
     return o;
 }
-struct ParticleVarying {float4 clip:SV_Position;float3 world:TEXCOORD0;float2 uv:TEXCOORD1;float4 color:TEXCOORD2;float3 normal:TEXCOORD3;float age:TEXCOORD4;nointerpolation uint emitter:TEXCOORD5;};
+// Fidelity's directional octahedral probe packing is 102 float4s per probe.
+float3 particleAmbient(float3 world,float3 normal){
+    Frame f=frame();if(f.probeCounts.w==0)return f.ambient.rgb;
+    float3 grid=(world-f.probeOrigin.xyz)/f.probeSpacing.xyz;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(f.probeCounts.xyz)-2);float3 alpha=saturate(grid-base),sum=0;float total=0;
+    normal/=abs(normal.x)+abs(normal.y)+abs(normal.z);float2 oct=normal.xy;if(normal.z<0)oct=(1-abs(oct.yx))*float2(oct.x>=0?1:-1,oct.y>=0?1:-1);
+    uint2 texel=min(uint2((oct*.5+.5)*6),uint2(5));
+    for(uint k=0;k<8;k++){uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1),p=uint3(base)+d;uint id=(p.z*f.probeCounts.y+p.y)*f.probeCounts.x+p.x;
+        float4 meta=buffers[NonUniformResourceIndex(f.probeCounts.w-1)].Load<float4>((id*102+100)*16);if(meta.w<.5)continue;
+        float3 w=lerp(1-alpha,alpha,float3(d));float weight=w.x*w.y*w.z;
+        sum+=buffers[NonUniformResourceIndex(f.probeCounts.w-1)].Load<float4>((id*102+texel.y*6+texel.x)*16).rgb*weight;total+=weight;
+    }return total>1e-5?sum/(total*3.14159265):f.ambient.rgb;
+}
+struct ParticleVarying {float4 clip:SV_Position;float3 world:TEXCOORD0;float2 uv:TEXCOORD1;float4 color:TEXCOORD2;float3 normal:TEXCOORD3;float age:TEXCOORD4;nointerpolation uint emitter:TEXCOORD5;float life:TEXCOORD6;};
 [shader("vertex")]
 ParticleVarying particleVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
     uint e=root.emitter;Config c=config(e);Frame f=frame();uint local=list(c.lists.x+instance*4);Particle p=loadParticle(c.partition.x+local);
@@ -352,28 +370,50 @@ ParticleVarying particleVertex(uint vertex:SV_VertexID,uint instance:SV_Instance
     ParticleVarying o;float2 corner=corners[vertex%6];float3 world;float3 normal=-f.forward.xyz;
     if(c.render.x==1){uint next=list(c.lists.x+(instance+1)*4);Particle q=loadParticle(c.partition.x+next);float3 tangent=normalize(q.position-p.position+float3(1e-8,0,0));float3 side=normalize(cross(tangent,f.camera.xyz-p.position));world=lerp(p.position,q.position,(corner.y+1)*.5)+side*corner.x*c.surface.z*.5;}
     else if(c.render.x==2){float3 forward=length(p.velocity)>.001?normalize(p.velocity):float3(0,0,1);float3 right=normalize(cross(abs(forward.y)>.99?float3(1,0,0):float3(0,1,0),forward));float3 up=cross(forward,right);float3 vert=meshVertex(e,vertex);world=p.position+p.size*(right*vert.x+up*vert.y+forward*vert.z);normal=normalize(right*vert.x+up*vert.y+forward*vert.z+float3(1e-8,0,0));}
-    else world=p.position+(f.right.xyz*corner.x+f.up.xyz*corner.y)*p.size*.5;
-    o.clip=mul(f.vp,float4(world,1));o.world=world;o.uv=(corner+1)*.5;o.color=p.color;o.normal=normal;o.age=p.age;o.emitter=e;return o;
+    else {
+        float3 right=f.right.xyz,up=f.up.xyz;float width=p.size,height=p.size;float3 centre=p.position;
+        if(c.appearance.z==1){float3 projected=p.velocity-f.forward.xyz*dot(p.velocity,f.forward.xyz);up=length(projected)>.0001?normalize(projected):f.up.xyz;right=normalize(cross(up,-f.forward.xyz));height=max(p.size*c.motion.x,p.size+length(projected)*f.clock.x*c.motion.y);centre-=p.velocity*f.clock.x*c.motion.y*.5;}
+        if(c.appearance.z==2){right=float3(1,0,0);up=float3(0,0,1);normal=float3(0,1,0);centre.y=max(centre.y,.012);}
+        if(c.appearance.x==1){height*=2.;centre.y+=p.size*.25;}
+        if(c.appearance.x==2){float angle=float(hash(p.seed)>>8)/16777216.*6.2831853;float3 r=right;right=r*cos(angle)+up*sin(angle);up=up*cos(angle)-r*sin(angle);}
+        world=centre+(right*corner.x*width+up*corner.y*height)*.5;
+    }
+    o.clip=mul(f.vp,float4(world,1));o.world=world;o.uv=(corner+1)*.5;o.color=p.color;o.normal=normal;o.age=p.age;o.life=p.life;o.emitter=e;return o;
 }
+float4 sheet(uint kind,float2 uv,float frameIndex){
+    uint first=min(uint(frameIndex),15u),next=min(first+1,15u);float2 a=float2(first%4,first/4+(kind-1)*4),b=float2(next%4,next/4+(kind-1)*4);
+    float2 cell=(clamp(uv,0,1)*123.+2.5)/128.;
+    float4 x=textures[NonUniformResourceIndex(frame().visuals.x)].SampleLevel(samplers[2],(cell+a)/float2(4,20),0);
+    float4 y=textures[NonUniformResourceIndex(frame().visuals.x)].SampleLevel(samplers[2],(cell+b)/float2(4,20),0);
+    return lerp(x,y,frac(frameIndex));
+}
+struct ParticleOutput {float4 color:SV_Target0;float id:SV_Target1;};
 [shader("fragment")]
-float4 particleFragment(ParticleVarying input):SV_Target0{
+ParticleOutput particleFragment(ParticleVarying input){
     if(input.age<0)discard;
-    Config c=config(input.emitter);Frame f=frame();float2 disc=input.uv*2-1;
-    float coverage=c.render.x==2?1:pow(saturate(1-dot(disc,disc)),1.6);if(coverage<.001)discard;
+    Config c=config(input.emitter);Frame f=frame();float2 disc=input.uv*2-1;uint kind=c.render.x==0?c.appearance.x:0;
+    float4 texel=float4(1,.5,.5,1);float coverage=c.render.x==2?1:pow(saturate(1-dot(disc,disc)),1.6);
+    if(kind>0){texel=sheet(kind,input.uv,saturate(input.age/input.life)*15.);coverage=texel.a;}
+    if(coverage<.003)discard;
     float2 uv=input.uv;uint frameIndex=uint(max(0,input.age*c.surface.y))%(c.atlas.x*c.atlas.y);
     uv=(uv+float2(frameIndex%c.atlas.x,frameIndex/c.atlas.x))/float2(c.atlas.xy);
-    float fade=1;if(f.inputs.z!=0){float z=textures[NonUniformResourceIndex(f.inputs.y)].Load(int3(uint2(input.clip.xy),0)).r;if(z>input.clip.z)discard;if(c.surface.x>0&&z>0)fade=saturate((f.clock.z/z-f.clock.z/input.clip.z)/c.surface.x);}
+    float fade=1;if(f.inputs.z!=0){float z=sceneDepth(uint2(input.clip.xy));if(z>input.clip.z)discard;if(c.surface.x>0&&z>0)fade=saturate((f.clock.z/z-f.clock.z/input.clip.z)/c.surface.x);}
     AraMaterialInput m;m.uv=uv;m.worldPosition=input.world;m.worldNormal=input.normal;m.worldTangent=f.right.xyz;m.worldBitangent=f.up.xyz;m.viewDirection=normalize(f.camera.xyz-input.world);
+    if(kind==2)m.worldNormal=normalize(input.normal+f.right.xyz*(texel.g*2-1)*1.8+f.up.xyz*(texel.b*2-1)*1.8);
     AraSurface s=evaluateMaterial(input.emitter,m);if(s.opacityMask<.5||s.clip<.5)discard;
     float3 color;
-    if(c.render.z==0){s.baseColor*=input.color.rgb;color=ara_engine_light(s,m,normalize(float3(.4,1,.3)),float3(1.5,1.3,1.1),float3(.12,.17,.24));
-        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a/(12.56637*d2)),float3(0));}}}
+    if(c.render.z==0){s.baseColor*=input.color.rgb;float3 ambient=particleAmbient(input.world,m.worldNormal);color=ara_engine_light(s,m,f.sunDirection.xyz,f.sunColor.rgb,ambient);
+        for(uint e=0;e<f.extent.w;e++){Config light=config(e);if(light.lightColor.w>0&&state(e,0)>0){float3 d=light.lightPosition.xyz-input.world;float d2=max(dot(d,d),.05);float a=saturate(1-sqrt(d2)/light.lightPosition.w);float flicker=.85+.1*sin(float(root.tick)*.73)+.05*sin(float(root.tick)*1.37);color+=ara_engine_light(s,m,normalize(d),light.lightColor.rgb*(light.lightColor.w*a*a*flicker/(12.56637*d2)),float3(0));}}
+        // Local Beer-Lambert density attenuation approximates sprite self shadowing.
+        if(kind==2)color*=exp(-texel.r*1.4)*(.65+.35*saturate(dot(m.worldNormal,f.sunDirection.xyz)));
+    }
     else color=s.color*input.color.rgb;
-    float alpha=saturate(input.color.a*s.opacity*coverage*fade);return float4(color*alpha,alpha);
+    if(kind==1){float heat=pow(texel.r,.6);color*=lerp(float3(.7,.08,.005),float3(1.6,1.1,.35),heat);}
+    float alpha=saturate(input.color.a*s.opacity*coverage*fade);if(alpha<.001)discard;
+    ParticleOutput o;o.color=float4(color*alpha,c.appearance.y==1?0:alpha);o.id=1;return o;
 }
-struct Display {float4 color:SV_Target0;float id:SV_Target1;};
 [shader("fragment")]
-Display tonemapFragment(Screen input){
-    float4 hdr=textures[NonUniformResourceIndex(root.sortK)].Load(int3(uint2(input.uv*frame().extent.xy),0));float3 c=hdr.rgb*frame().clock.y;
-    c=(c*(2.51*c+.03))/(c*(2.43*c+.59)+.14);c=saturate(c);c=pow(c,1./2.2);Display o;o.color=float4(c,1);o.id=hdr.a>0.00001?1:0;return o;
+float4 tonemapFragment(Screen input):SV_Target0{
+    float3 c=textures[NonUniformResourceIndex(root.sortK)].Load(int3(uint2(input.uv*frame().extent.xy),0)).rgb*frame().clock.y;
+    c=(c*(2.51*c+.03))/(c*(2.43*c+.59)+.14);return float4(pow(saturate(c),1./2.2),1);
 }

@@ -64,7 +64,7 @@ impl Importer for TextureImporter {
         "ara.texture"
     }
     fn version(&self) -> &str {
-        "2-image025-ispc050-tiled"
+        "3-image025-ispc050-tiled-f32text"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<TextureSettings>();

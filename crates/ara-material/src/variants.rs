@@ -83,7 +83,7 @@ impl Instance {
             .filter(|(_, p)| p.is_static)
             .map(|(id, p)| (id, self.overrides.get(id).unwrap_or(&p.default)))
             .collect();
-        let value = serde_json::to_value((m, selected))
+        let value = ara_json::to_value(&(m, selected))
             .map_err(|e| vec![Diagnostic::error(codes::OVERRIDE, e.to_string())])?;
         Ok(VariantKey {
             hash: blake3::hash(

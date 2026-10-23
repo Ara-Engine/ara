@@ -90,7 +90,7 @@ pub struct LegendEntry {
 /// Reproduction data written next to every capture.
 #[derive(Serialize)]
 pub struct CaptureMetadata {
-    /// SHA-256 of uploaded scene content, including textures and HDR pixels.
+    /// Renderer or feature content identity, including contributing scene assets.
     pub scene_hash: String,
     /// Complete deterministic request.
     pub request: CaptureRequest,
@@ -220,7 +220,7 @@ impl Capture {
                     .enumerate()
                     .map(|(i, (id, name))| (i as u32 + 1, *id, name.clone()))
                     .collect(),
-                device: serde_json::to_value(device)?,
+                device: ara_json::to_value(device)?,
                 timings: timings.to_vec(),
             },
         })

@@ -15,7 +15,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "2-gltf14-meshopt070-ispc050-tiled"
+        "3-gltf14-meshopt070-ispc050-tiled-f32text"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();

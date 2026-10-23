@@ -9,6 +9,10 @@ events. Shader compilers are never runtime dependencies.
 - `GpuSystem`: allocate from a matching cooked effect, step fixed ticks, render,
   capture through ara-render's channel/provenance API, return agent stats.
 - `View`: camera/frame inputs; optional scene HDR and depth for world composition.
+- `Lighting`, `ProbeLighting`: sun/ambient and completed fidelity DDGI inputs.
+- `GpuSystem::render`, `hdr_output`: frozen-tick HDR composition before fidelity post.
+- `read_coverage`: explicit diagnostic readback of actual GPU feature IDs.
+- `cook_atlas`: original offline flipbooks; committed RGBA8 density/gradient assets.
 - `cook_source`: offline specialized module source plus material-system shaders.
 - `examples/vfx_cook`: external Slang/SPIR-V/DXIL cooker for the sample cohort.
 - `examples/vfx_capture`: deterministic previews and reproducible channel hashes.
@@ -34,5 +38,7 @@ Set CARGO_BUILD_JOBS=2. `run.ps1 -Mode Check` scopes the renderer's implicit-lay
 workaround and runs crate gates. Capture/timing modes run headlessly.
 Ordinary cargo test includes CPU contract tests; GPU goldens are explicitly
 enabled with ARA_VFX_GPU_TESTS=1. They require this device/driver and SDK layers.
-ARA_UPDATE_GOLDENS=1 deliberately updates the six PNG baselines.
+ARA_UPDATE_GOLDENS=1 deliberately updates six still/sequence PNG baseline pairs.
+Inspect captures before accepting them. Gallery frames use lit geometry and the
+fidelity post stack; benchmark sprites intentionally isolate simulation/fill cost.
 Cooked artifacts are committed. A fresh check/test never runs a shader compiler.

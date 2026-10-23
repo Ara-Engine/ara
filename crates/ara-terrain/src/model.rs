@@ -207,7 +207,7 @@ pub fn register(db: &mut SchemaDb) -> Result<(), Diagnostic> {
 }
 
 pub(crate) fn value<T: Serialize>(v: &T) -> Result<serde_json::Value, Diagnostic> {
-    serde_json::to_value(v).map_err(|e| invalid(e.to_string()))
+    ara_json::to_value(v).map_err(|e| invalid(e.to_string()))
 }
 pub(crate) fn record<T: Serialize>(v: &T) -> Result<ara_doc::Record, Diagnostic> {
     match value(v)? {

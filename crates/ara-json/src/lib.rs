@@ -10,11 +10,13 @@
 //! - numbers in their shortest round-trip form, integral floats without `.0`.
 //!
 //! Writing what [`parse`] read from canonical text gives back identical bytes.
+//! Convert typed data with [`to_value`] before canonical writing so `f32` fields
+//! retain their shortest decimals instead of widening into noisy `f64` values.
 
 use std::fmt;
 
-use serde::Deserialize;
 use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Serialize};
 pub use serde_json::{Map, Number, Value};
 
 /// A JSON syntax error, or a duplicate key, with its position.
@@ -43,6 +45,16 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 const DUPLICATE: &str = "duplicate key";
+
+/// Convert typed data for canonical text, preserving each `f32`'s shortest
+/// round-trip decimal. Use this instead of `serde_json::to_value`, which widens
+/// `f32` to `f64` before formatting and exposes binary rounding noise.
+///
+/// Serialize directly to JSON first so Serde retains the source float width,
+/// then use the strict parser. Serialization errors and duplicate keys propagate.
+pub fn to_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, serde_json::Error> {
+    parse(&serde_json::to_string(value)?).map_err(serde::ser::Error::custom)
+}
 
 /// Parses strict JSON, rejecting duplicate object keys.
 pub fn parse(text: &str) -> Result<Value, ParseError> {
@@ -322,6 +334,26 @@ mod tests {
     }
 
     #[test]
+    fn typed_f32_keeps_short_decimal_and_exact_bits() {
+        #[derive(Serialize, Deserialize)]
+        struct Settings {
+            seconds: f32,
+            precise: f64,
+        }
+        let original = Settings {
+            seconds: 1.4,
+            precise: 0.30000000000000004,
+        };
+        let value = to_value(&original).expect("serialize");
+        let text = to_canonical_string(&value);
+        assert!(text.contains("\"seconds\": 1.4,"));
+        assert!(text.contains("\"precise\": 0.30000000000000004"));
+        let back: Settings = serde_json::from_str(&text).expect("round trip");
+        assert_eq!(back.seconds.to_bits(), original.seconds.to_bits());
+        assert_eq!(back.precise.to_bits(), original.precise.to_bits());
+    }
+
+    #[test]
     fn canonical_layout() {
         let v = parse(r#"{"b":[0,1.0,0],"a":{"x":[{"k":"v"}],"e":[],"o":{}},"s":["q\"\n"]}"#)
             .expect("valid");
@@ -340,6 +372,13 @@ mod tests {
     }
 
     proptest! {
+        #[test]
+        fn typed_f32_round_trips_through_canonical_text(f in any::<f32>().prop_filter("finite", |f| f.is_finite())) {
+            let text = to_canonical_string(&to_value(&f).expect("serialize"));
+            let back: f32 = serde_json::from_str(&text).expect("parse");
+            prop_assert_eq!(back.to_bits(), if f == 0.0 { 0_f32.to_bits() } else { f.to_bits() });
+        }
+
         #[test]
         fn floats_round_trip_through_text(f in any::<f64>().prop_filter("finite", |f| f.is_finite())) {
             let text = format_f64(f);

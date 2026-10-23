@@ -63,9 +63,18 @@ No editor shell or document side-channel writes are needed.
 `cook_source` incorporates the actual `ara-material` generator and engine math.
 Sprite, ribbon and mesh outputs accept surface, unlit or UI domains. Surface
 output uses the shared GGX lighting evaluator; unlit/UI output stays unlit.
-The preview supplies a directional light and capped emitter point lights.
-Runtime lit-particle scene-light/probe extraction can feed that same evaluator;
-the baseline scene's full light/probe tables are not yet imported automatically.
+`View::lighting` supplies the scene sun, ambient fallback and an optional completed
+fidelity DDGI field. Lit sprites sample the actual directional probes. Their baked
+density gradients shape the normal; Beer-Lambert opacity approximates local self
+shadowing. This is a sprite approximation, without inter-particle volume shadows.
+
+`FidelityView::feature_inputs` publishes read-only HDR, positive linear depth and
+probe storage. Set `scene_background`, `scene_depth`, `linear_depth` and the
+lighting inputs, then redraw the completed VFX tick with `GpuSystem::render`.
+Pass `hdr_output()` into `FidelityView::post_process` to run the shared bloom,
+exposure, lens and display pipelines. It resets display history for composition.
+The gallery extracts capped emitter lights into the actual scene, with fixed-tick
+fire flicker and a muzzle-flash envelope lighting the floor and bronze prop.
 
 Pass one checked material per emitter to `cook_source` for custom shading.
 `Instance::pack` produces typed float4 rows; `bind_materials` accepts up to 64 rows
@@ -74,8 +83,19 @@ resolution belongs to the asset renderer. The material crate currently restricts
 packed texture indices to its first 16 slots. Bind only the matching cooked
 material layout. Ordinary row changes do not require new shader variants.
 
-Flipbook UVs use grid dimensions and particle age; an atlas material receives
-the resulting coordinates. Ribbons connect particles from oldest to newest.
+The typed `appearance` module selects fire, smoke, spark, ripple or wisp sheets,
+alpha/additive output, camera/velocity/ground alignment, stretch and a shutter.
+`cook_atlas` creates original noise-based RGBA8 assets offline. Smoke integrates a
+3D density field into each frame. Adjacent built-in frames blend over normalized
+particle life; the separate `flipbook` UV module supplies grid/FPS addressing to
+custom atlas materials. No texture synthesis runs during ordinary builds or play.
+The atlas is `cooked/atlas.rgba`; `atlas.png` visualizes density/lighting channels.
+
+Alpha output uses premultiplied source-over. Additive output carries premultiplied
+radiance with zero transmittance alpha, so the same native blend state adds light.
+A separate unblended GPU coverage attachment retains correct picking/capture IDs.
+Velocity sprites cover the fixed-tick shutter path with a tapered exposure mask.
+Ground-aligned ring sheets form splash ripples. Ribbons join oldest to newest.
 Mesh particles consume cooked local triangles and orient to velocity. Mesh
 surface initialization samples cooked world triangles by area. Soft particles
 use reconstructed depth distance. GPU depth collision reconstructs a surface
@@ -105,8 +125,12 @@ compiler/layout key, GPU/driver provenance and measured pass timestamps.
 The capture API currently exposes the lit channel. `read_output` captures an
 existing view without resetting or stepping it.
 
-Six committed PNG goldens cover campfire, plane-colliding sparks, a curl/vortex
-swirl, lit smoke, a muzzle flash with a light, and rain with GPU splash events.
+Six committed still/sequence PNG golden pairs cover campfire, plane-colliding
+sparks, a curl/vortex swirl, lit smoke, a muzzle flash with a light, and rain with
+GPU splash events. The gallery uses a lit ground, props, RT shadows, probes and
+fidelity bloom. Each frame independently replays its tick and converges 64 fixed
+scene frames. `captures/sequences/` contains every full-size sequence frame;
+`captures/*.sequence.json` records the four strip ticks. Main PNGs are mid-life.
 Tests compare independent replays byte-for-byte, compare against the PNG goldens
 with 1-SSIM <= 0.005, check CPU/GPU counts and sampled particle state, and inspect
 visible feature bounds. Separate tests exercise ribbons, mesh surfaces/geometry,
@@ -116,34 +140,54 @@ Goldens update only under explicit `ARA_UPDATE_GOLDENS=1`.
 `captures/*.stats.json` reports alive/dead/rendered counts, event counts, dropped
 work, projected overdraw, batches, lights and actual per-stage GPU milliseconds.
 `captures/timings.json` records 30 warmup frames and 120 samples for 1M updated
-and drawn sprites at 2560x1440, on both graphics and dedicated compute queues.
+and drawn sprites at 2560x1440, at both 0.003 m and 0.05 m diameters, on graphics
+and dedicated compute queues. Both sizes use identical motion, camera and a
+6x3.6x1.6 m box entirely above ground and inside the camera. Coverage is reported
+explicitly; the 64-layer budget must retain every particle for a valid run.
 The benchmark fails if either live or rendered count is less than 1M. Stage
 timestamps exclude intervening barriers/submission overhead; they are not a
-whole-frame wall-time claim. No Niagara-equivalent baseline has been measured.
+whole-frame wall-time claim. [COMPARISON.md](COMPARISON.md) records the nearest
+published Niagara/VFX Graph numbers and the differences preventing a speedup claim.
 Same-device GPU replay is exact; cross-vendor floating-point identity is not
 promised. Async compute stays opt-in because this workload offers little overlap.
 
-Measured on the RTX 4070 SUPER with Vulkan SDK 1.4.363.0, the parallel group-prefix
-pass reduced its 1M-particle median from 0.423 ms to about 0.018 ms. Update is
-about 0.28 ms and the 6M-vertex instanced sprite draw about 0.56–0.62 ms. Summed
-stage medians, including the 1440p background and tone mapper, are about
-1.2–1.3 ms. The workload uses 0.003 m sprites distributed across an 8×5×2 m box;
-this measures simulation and geometry throughput with low fill cost. Raw reports
-retain the quality-cap and prefix-scan measurements before and after the change.
+Measured on the RTX 4070 SUPER with Vulkan SDK 1.4.363.0 after merging main
+through `41cbc25` (2026-10-23), in ms:
 
-Final measurements after merging main through `b7c63d3` (2026-10-23), in ms:
+| Stage, median | 0.003 m graphics | 0.003 m compute | 0.05 m graphics | 0.05 m compute |
+|---|---:|---:|---:|---:|
+| Update | 0.279552 | 0.277504 | 0.280576 | 0.277504 |
+| Compact scan | 0.132096 | 0.131072 | 0.133120 | 0.132096 |
+| Compact prefix | 0.018432 | 0.017408 | 0.018432 | 0.017408 |
+| Compact scatter | 0.107520 | 0.106496 | 0.107520 | 0.106496 |
+| Draw | 0.616096 | 0.560000 | 10.858176 | 10.860064 |
+| Tone map | 0.112640 | 0.111616 | 0.072704 | 0.072704 |
+| Sum of all stage medians | 1.406976 | 1.337568 | 11.610816 | 11.604384 |
+| Estimated full-screen coverage layers | 0.2712673 | 0.2712673 | 36.044125 | 36.044125 |
 
-| Stage, median | Graphics queue | Dedicated compute |
-|---|---:|---:|
-| Update | 0.275456 | 0.272384 |
-| Compact scan | 0.089088 | 0.088064 |
-| Compact prefix | 0.017408 | 0.017408 |
-| Compact scatter | 0.065536 | 0.065536 |
-| Draw | 0.559104 | 0.559200 |
-| Tone map | 0.100352 | 0.099328 |
-| Sum of all stage medians | 1.240608 | 1.231872 |
+The raw report includes every stage and its p95. All four runs update and submit
+every one of the 1,000,000 particles. The larger footprint makes blending/fill
+dominate; the small-sprite result does not predict dense smoke or fire cost.
+Dedicated compute remains opt-in: these isolated stages do not establish overlap
+with a game's graphics work. `timings.shared-gpu.json` preserves an earlier run
+affected by another agent's active path tracer; the final report was repeated
+after that process exited. Earlier optimization reports retain the prefix-scan
+change from 0.423 ms to about 0.018 ms under the previous box/camera settings.
 
-The raw report includes every stage and its p95. Both runs retain and draw all
-1,000,000 particles. The same merged source passed 21 tests, including the six
-unchanged goldens and CPU/GPU state comparisons, plus check, clippy with warnings
-denied and formatting checks for both VFX crates and the two integration crates.
+[QUALITY.md](QUALITY.md) records the visual inspection and remaining limits.
+These effects improve the starter baseline but do not yet match Niagara showcase
+art: visible sprite layering and repeated silhouettes still need artist work.
+
+Verification on 2026-10-23: `run.ps1 -Mode Check` passed all-targets check, 35 tests
+with GPU gates enabled, clippy with warnings denied, and formatting for `ara-vfx`,
+`ara-vfx-gpu`, `ara-gpu`, `ara-render`, `ara-render-fidelity` and `ara-json`.
+The twelve gallery goldens passed without update mode, including independent
+byte-exact mid-life replay and CPU/GPU state comparisons. The additional ribbon,
+mesh and depth fixtures were also captured and inspected.
+
+The canonical float migration additionally passed check/clippy on all targets,
+175 tests, and formatting for `ara-schema`, `ara-cmd`, `ara-graph`, `ara-material`,
+`ara-anim`, `ara-asset`, `ara-audio`, `ara-foliage`, `ara-terrain`, `ara-world`,
+`ara-nav`, `ara-ui`, `ara-ui-test`, `ara-importers`, `ara-pack` and `ara-export`.
+Four existing opt-in/documentation tests remained ignored (Steam Audio runtime,
+prepared export/signing toolchains, and the schema documentation example).

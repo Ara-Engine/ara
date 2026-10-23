@@ -21,7 +21,13 @@ fn repeatable_cpu_capture_and_partition_conservation() {
 }
 #[test]
 fn event_children_spawn_on_next_tick_and_remain_cpu_authoritative() {
-    let effect = samples::rain();
+    let mut effect = samples::rain();
+    // Exercise event multiplicity independently of the starter's splash artwork.
+    for module in &mut effect.emitters[0].stacks.render {
+        if let Module::EventSpawn { count, .. } = &mut module.module {
+            *count = 3;
+        }
+    }
     let mut sim = CpuSystem::new(&effect).unwrap();
     loop {
         sim.step(None).unwrap();

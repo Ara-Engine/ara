@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 1800
+              "per_second": 1000
             }
           }
         ],
@@ -31,9 +31,9 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 1.2000000476837158,
-              "size": 0.02500000037252903,
-              "color": [0.30000001192092896, 0.6000000238418579, 0.8999999761581421, 0.5]
+              "seconds": 1.2,
+              "size": 0.025,
+              "color": [0.3, 0.6, 0.9, 0.5]
             }
           },
           {
@@ -41,15 +41,15 @@
             "module": {
               "op": "box",
               "center": [0, 4, 0],
-              "extent": [2, 0.10000000149011612, 2]
+              "extent": [2, 0.1, 2]
             }
           },
           {
             "name": "fall",
             "module": {
               "op": "velocity",
-              "value": [0.30000001192092896, -6, 0],
-              "spread": [0.05000000074505806, 0.5, 0.05000000074505806]
+              "value": [0.3, -6, 0],
+              "spread": [0.05, 0.5, 0.05]
             }
           }
         ],
@@ -59,7 +59,7 @@
             "module": {
               "op": "plane_collision",
               "normal": [0, 1, 0],
-              "offset": 0.009999999776482582,
+              "offset": 0.01,
               "restitution": 0
             }
           }
@@ -70,7 +70,7 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
             }
           },
@@ -80,7 +80,26 @@
               "op": "event_spawn",
               "trigger": "collision",
               "target": "splash",
-              "count": 3
+              "count": 1
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 2,
+              "shutter": 0.8
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]
@@ -100,26 +119,27 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 0.30000001192092896,
-              "size": 0.03500000014901161,
-              "color": [0.25, 0.6499999761581421, 1, 0.5]
-            }
-          },
-          {
-            "name": "spray",
-            "module": {
-              "op": "velocity",
-              "value": [0, 1.100000023841858, 0],
-              "spread": [0.699999988079071, 0.5, 0.699999988079071]
+              "seconds": 0.3,
+              "size": 0.35,
+              "color": [0.5, 0.6, 0.7, 0.12]
             }
           }
         ],
         "update": [
           {
-            "name": "gravity",
+            "name": "fade",
             "module": {
-              "op": "gravity",
-              "acceleration": [0, -8, 0]
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.5, 0.6, 0.7, 0.16]
+                },
+                {
+                  "t": 1,
+                  "value": [0.5, 0.6, 0.7, 0]
+                }
+              ]
             }
           }
         ],
@@ -129,8 +149,27 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.003,
               "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "ring",
+              "blend": "alpha",
+              "alignment": "ground",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]

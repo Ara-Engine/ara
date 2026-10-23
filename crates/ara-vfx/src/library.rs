@@ -16,6 +16,11 @@ macro_rules! kinds {($(($name:literal,$stage:ident,$doc:literal)),* $(,)?)=>{
 };}
 kinds![
     (
+        "appearance",
+        Render,
+        "Blend offline fire/smoke/streak/ripple/wisp sheets with typed alpha/additive output, alignment and a fixed-tick shutter."
+    ),
+    (
         "rate",
         Spawn,
         "Emit particles per second with fractional fixed-tick accumulation."

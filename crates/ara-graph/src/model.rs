@@ -201,7 +201,7 @@ pub fn register(db: &mut SchemaDb) -> Result<(), Diagnostic> {
 }
 
 pub(crate) fn encode<T: Serialize>(value: &T) -> Result<Value, Diagnostic> {
-    serde_json::to_value(value).map_err(|e| Diagnostic::error(codes::STRUCTURE, e.to_string()))
+    ara_json::to_value(value).map_err(|e| Diagnostic::error(codes::STRUCTURE, e.to_string()))
 }
 
 pub(crate) fn decode<T: DeserializeOwned>(value: Value) -> Result<T, Diagnostic> {

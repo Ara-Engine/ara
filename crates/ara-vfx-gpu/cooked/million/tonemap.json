@@ -1,32 +1,31 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d0130b55bd69dde37bad2ecf923e75c70c98c3331900d12371329306d17acfef",
+  "key": "49af82bbe6aa3620342bb01999d95e71272cabb435f05bac899d4293d2405446",
   "stages": [
     {
-      "dxil": "d0130b55bd69dde37bad2ecf923e75c70c98c3331900d12371329306d17acfef/screenVertex.dxil",
+      "dxil": "49af82bbe6aa3620342bb01999d95e71272cabb435f05bac899d4293d2405446/screenVertex.dxil",
       "dxil_hash": "b9e64d59497ad3f256cef5a57e9b679e98c1a935fbfd9d8610b6789cdda2eafe",
       "source_entry": "screenVertex",
-      "spirv": "d0130b55bd69dde37bad2ecf923e75c70c98c3331900d12371329306d17acfef/screenVertex.spv",
+      "spirv": "49af82bbe6aa3620342bb01999d95e71272cabb435f05bac899d4293d2405446/screenVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "355196214be9615bef01ad6af76e915afc39b52d4d87188f6fb43f92aa42909e",
       "stage": "vertex"
     },
     {
-      "dxil": "d0130b55bd69dde37bad2ecf923e75c70c98c3331900d12371329306d17acfef/tonemapFragment.dxil",
-      "dxil_hash": "852a4799dc70bbab507de28801e2fef1e3e163357f9fd0c59bda616c773ddb6a",
+      "dxil": "49af82bbe6aa3620342bb01999d95e71272cabb435f05bac899d4293d2405446/tonemapFragment.dxil",
+      "dxil_hash": "537a66996d8194c65b7d36a191ae46031f8d50dd075f8c391e13ed69b7136afe",
       "source_entry": "tonemapFragment",
-      "spirv": "d0130b55bd69dde37bad2ecf923e75c70c98c3331900d12371329306d17acfef/tonemapFragment.spv",
+      "spirv": "49af82bbe6aa3620342bb01999d95e71272cabb435f05bac899d4293d2405446/tonemapFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "d159f40cbec4907311abd289eede23b04d453ed54fbeb2c8608c08ebaea603bc",
+      "spirv_hash": "f0ac604a29453471b114b36a7b0fe64c38b29b576d12980590f7e5a78ad21c23",
       "stage": "fragment"
     }
   ],
   "state": {
     "blend": false,
     "color_formats": [
-      37,
-      100
+      37
     ],
     "depth_format": null,
     "depth_test": false,

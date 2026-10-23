@@ -39,7 +39,7 @@ pub(crate) fn invalid(message: impl Into<String>) -> Error {
 
 pub(crate) fn canonical<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, Error> {
     Ok(
-        ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(value)?))
+        ara_json::to_canonical_string(&ara_json::sort_keys(&ara_json::to_value(value)?))
             .into_bytes(),
     )
 }

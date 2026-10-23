@@ -11,6 +11,12 @@ use glam::Vec3;
 
 /// Per-view extracted data; one instance may render into several views sequentially.
 pub struct View {
+    /// Read-only scene background, copied into the feature's own HDR attachment.
+    pub scene_background: Option<SceneColor>,
+    /// Fidelity depth is positive view distance; the baseline uses reversed Z.
+    pub linear_depth: bool,
+    /// Scene sun, ambient fallback and optional directional-probe field.
+    pub lighting: Lighting,
     /// Camera using Ara's reversed-Z projection.
     pub camera: CameraSpec,
     /// Positive linear exposure before tone mapping.
@@ -21,6 +27,42 @@ pub struct View {
     pub scene_depth: Option<SceneDepth>,
     /// Optional HDR scene color to composite into; requires scene_depth.
     pub scene_color: Option<SceneColor>,
+}
+/// Extracted lighting inputs for lit particles.
+pub struct Lighting {
+    /// Fallback diffuse incident radiance when probes are absent/uninitialized.
+    pub ambient: Vec3,
+    /// Normalized direction toward the scene sun.
+    pub sun_direction: Vec3,
+    /// Linear RGB directional illuminance.
+    pub sun_color: Vec3,
+    /// Optional completed fidelity probe field; returns in Graphics/ShaderRead.
+    pub probes: Option<ProbeLighting>,
+}
+impl Default for Lighting {
+    fn default() -> Self {
+        Self {
+            ambient: Vec3::new(0.12, 0.17, 0.24),
+            sun_direction: Vec3::new(0.4, 1., 0.3).normalize(),
+            sun_color: Vec3::new(1.5, 1.3, 1.1),
+            probes: None,
+        }
+    }
+}
+/// Read-only fidelity DDGI field, borrowed until the next fidelity render.
+pub struct ProbeLighting {
+    /// Same-device directional-probe storage.
+    pub buffer: Buffer,
+    /// Published native storage-buffer index.
+    pub index: u32,
+    /// First lattice position in metres.
+    pub origin: Vec3,
+    /// Probe separation in metres.
+    pub spacing: Vec3,
+    /// XYZ lattice dimensions.
+    pub counts: [u32; 3],
+    /// Actual previous access; ownership must be Graphics.
+    pub state: State,
 }
 /// Imported linear HDR scene color, preserved beneath the VFX draw.
 #[derive(Clone, Copy)]
@@ -45,6 +87,9 @@ pub struct SceneDepth {
 impl Default for View {
     fn default() -> Self {
         Self {
+            scene_background: None,
+            linear_depth: false,
+            lighting: Lighting::default(),
             camera: CameraSpec::LookAt {
                 position: Vec3::new(5., 3.4, 6.),
                 target: Vec3::new(0., 1.4, 0.),
@@ -90,6 +135,7 @@ pub struct GpuSystem {
     pub(crate) indices: [u32; 4],
     pub(crate) config_index: u32,
     pub(crate) depth_index: u32,
+    pub(crate) atlas_index: u32,
     pub(crate) hdr_index: u32,
     pub(crate) color_target: Image,
     pub(crate) color_index: u32,
@@ -134,6 +180,7 @@ impl GpuSystem {
             async_compute: false,
             scene_depth: None,
             scene_color: None,
+            ..View::default()
         };
         for _ in 1..request.tick {
             self.run_frame(gpu, &view, false, true)?;
@@ -181,6 +228,22 @@ impl GpuSystem {
     /// Current SDR output image; ownership/layout remain tracked by this feature.
     pub fn output(&self) -> Image {
         self.output
+    }
+    /// Completed composited HDR image, ready for the fidelity post stack.
+    pub fn hdr_output(&self) -> SceneColor {
+        SceneColor {
+            image: self.color_target,
+            sampled_index: self.color_index,
+            state: State {
+                access: Access::ShaderRead,
+                queue: Queue::Graphics,
+            },
+        }
+    }
+    /// Redraw a completed tick with new view inputs, without advancing simulation.
+    pub fn render(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
+        ensure!(self.tick > 0, "step before rendering a completed tick");
+        self.run_frame(gpu, view, false, false)
     }
     /// Bind material-system instance rows and all texture images reachable by them.
     /// Call at a completed frame boundary; textures return in Graphics/ShaderRead.

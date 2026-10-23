@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     std::fs::write(
         output,
-        ara_json::to_canonical_string(&serde_json::to_value(capture)?),
+        ara_json::to_canonical_string(&ara_json::to_value(&capture)?),
     )?;
     println!(
         "40 counterflow agents, 1800 fixed ticks, {} reached, {arrived} currently at goal; mesh and trace exported",

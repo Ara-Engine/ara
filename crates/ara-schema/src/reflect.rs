@@ -175,7 +175,7 @@ impl SchemaDb {
                 })
                 .collect(),
         };
-        serde_json::to_value(def).unwrap_or(Value::Null)
+        ara_json::to_value(&def).unwrap_or(Value::Null)
     }
 
     fn field_def(&self, f: &FieldDesc) -> FieldDef {

@@ -97,7 +97,7 @@ pub enum AnimationCommand {
 impl AnimationCommand {
     /// Lowers the typed intent into a kernel edit with automatic inverse ops.
     pub fn edit(self, doc: AssetId, id: RecordId) -> Result<Edit, Error> {
-        let encode = |value| serde_json::to_value(value).map_err(|e| Error(e.to_string()));
+        let encode = |value| ara_json::to_value(&value).map_err(|e| Error(e.to_string()));
         let (path, value) = match self {
             Self::Create(asset) => {
                 let value = encode(asset)?;
@@ -109,15 +109,15 @@ impl AnimationCommand {
             }
             Self::SetSkeleton(data) => (
                 "skeleton".parse().map_err(Error)?,
-                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetClip(data) => (
                 "clip".parse().map_err(Error)?,
-                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetController(data) => (
                 "controller".parse().map_err(Error)?,
-                Some(serde_json::to_value(data).map_err(|e| Error(e.to_string()))?),
+                Some(ara_json::to_value(&data).map_err(|e| Error(e.to_string()))?),
             ),
             Self::SetField { path, value } => (path, value),
         };

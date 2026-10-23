@@ -101,6 +101,9 @@ impl Effect {
                         }
                     }
                     let valid = match &item.module {
+                        Module::Appearance {
+                            stretch, shutter, ..
+                        } => (1. ..=64.).contains(stretch) && (0. ..=1.).contains(shutter),
                         Module::Rate { per_second } => {
                             *per_second >= 0. && *per_second <= 100_000_000.
                         }

@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 650
+              "per_second": 220
             }
           }
         ],
@@ -32,15 +32,15 @@
             "module": {
               "op": "lifetime",
               "seconds": 2,
-              "size": 0.03500000014901161,
-              "color": [8, 2.799999952316284, 0.25, 0.8999999761581421]
+              "size": 0.012,
+              "color": [14, 4.5, 0.7, 0.85]
             }
           },
           {
             "name": "source",
             "module": {
               "op": "point",
-              "position": [0, 0.699999988079071, 0]
+              "position": [0, 0.7, 0]
             }
           },
           {
@@ -48,7 +48,7 @@
             "module": {
               "op": "velocity",
               "value": [0, 3, 0],
-              "spread": [2.5999999046325684, 2, 2.5999999046325684]
+              "spread": [2.6, 2, 2.6]
             }
           }
         ],
@@ -57,7 +57,7 @@
             "name": "gravity",
             "module": {
               "op": "gravity",
-              "acceleration": [0, -9.8100004196167, 0]
+              "acceleration": [0, -9.81, 0]
             }
           },
           {
@@ -66,7 +66,27 @@
               "op": "plane_collision",
               "normal": [0, 1, 0],
               "offset": 0,
-              "restitution": 0.6000000238418579
+              "restitution": 0.6
+            }
+          },
+          {
+            "name": "cool",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [18, 8, 2, 1]
+                },
+                {
+                  "t": 0.5,
+                  "value": [9, 1.8, 0.1, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [1, 0.05, 0, 0]
+                }
+              ]
             }
           }
         ],
@@ -76,8 +96,27 @@
             "module": {
               "op": "sprite",
               "domain": "unlit",
-              "soft_distance": 0.15000000596046448,
+              "soft_distance": 0.15,
               "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3,
+              "shutter": 0.85
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]

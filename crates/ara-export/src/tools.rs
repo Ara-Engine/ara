@@ -269,7 +269,7 @@ pub fn probe(
 pub fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
     std::fs::write(
         path,
-        ara_json::to_canonical_string(&ara_json::sort_keys(&serde_json::to_value(value)?)),
+        ara_json::to_canonical_string(&ara_json::sort_keys(&ara_json::to_value(value)?)),
     )?;
     Ok(())
 }

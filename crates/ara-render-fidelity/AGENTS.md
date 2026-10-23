@@ -10,6 +10,8 @@ No authoritative gameplay or authoring state lives here.
 - `ProbeVolume`, `BakedProbes`: automatic DDGI volume and offline fallback data.
 - `scene::GpuScene`: stable instance IDs, masked ray-query material inputs, AS cache.
 - `Reference`: high-sample, undenoised reference transport, shared shader semantics.
+- `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
+- `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
@@ -30,6 +32,8 @@ repair invalid history before temporal resolve. Reference targets stay RGBA32F.
 Exposure is applied once after reconstruction. Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
+Feature inputs remain owned by the view; consume them at a completed boundary.
+External HDR post input returns Graphics/ShaderRead; output remains CopySource.
 Frames currently serialize because the merged GPU API serializes diagnostics.
 Release resources using `destroy` before dropping the external device.
 See README for unsupported backend contracts and measured gates; do not claim
