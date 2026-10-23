@@ -103,12 +103,11 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
                 p.text("code-text", command);
                 p.leaf("fill");
                 p.text("tiny muted", what);
-                p.button(
+                p.copy(
+                    hub.copied.as_deref(),
                     &format!("copy-cli-{index}"),
-                    "ghost icon-compact",
-                    "Copy",
-                    Some(Intent::Copy((*command).into())),
-                    |p| p.icon("copy", "inherit"),
+                    command,
+                    true,
                 );
             });
         }

@@ -147,6 +147,9 @@ fn subtitle(hub: &Hub) -> String {
                 .filter(|project| hub.state(&project.id) != State::Closed)
                 .count();
             let count = hub.projects.len();
+            if count == 0 {
+                return "Create your first project, or add one you already have.".into();
+            }
             let noun = if count == 1 { "project" } else { "projects" };
             if open > 0 {
                 format!("{count} {noun} · {open} open")
@@ -238,12 +241,11 @@ pub(super) fn toasts(p: &mut Page, hub: &Hub) {
                             }
                             FixAction::Cli { args } => {
                                 p.text("toast-copy fill", &fix.title);
-                                p.action(
+                                p.copy(
+                                    hub.copied.as_deref(),
                                     &format!("fix-{}-{index}", notice.id),
-                                    "compact",
-                                    "copy",
-                                    "Copy command",
-                                    Some(Intent::Copy(format!("ara {}", args.join(" ")))),
+                                    &format!("ara {}", args.join(" ")),
+                                    false,
                                 );
                             }
                             _ => p.text("toast-copy", &format!("Fix: {}", fix.title)),

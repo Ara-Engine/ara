@@ -106,6 +106,7 @@ fn participant(p: &mut Page, person: &Participant, presence: Option<&Presence>) 
 
 fn connect(p: &mut Page, hub: &Hub) {
     let client = hub.prefs.agent;
+    let copied = hub.copied.as_deref();
     p.panel("panel-card", |p| {
         p.panel("row", |p| {
             p.panel("engine-icon", |p| p.icon("plug", "icon-lg accent"));
@@ -138,18 +139,18 @@ fn connect(p: &mut Page, hub: &Hub) {
         match client {
             AgentClient::Claude => {
                 step(p, "1", "Register Ara with Claude Code (user scope)", |p| {
-                    code(p, "copy-claude-add", CLAUDE_ADD);
+                    code(p, copied, "copy-claude-add", CLAUDE_ADD);
                 });
                 step(p, "2", "Or add this entry to ~/.claude.json yourself", |p| {
-                    block(p, "copy-claude-json", printed, &install);
+                    block(p, copied, "copy-claude-json", printed, &install);
                 });
             }
             AgentClient::Codex => {
                 step(p, "1", "Add this to ~/.codex/config.toml", |p| {
-                    block(p, "copy-codex-toml", printed, &install);
+                    block(p, copied, "copy-codex-toml", printed, &install);
                 });
                 step(p, "2", "Print it again any time", |p| {
-                    code(p, "copy-codex-install", &install);
+                    code(p, copied, "copy-codex-install", &install);
                 });
             }
         }
@@ -172,37 +173,25 @@ fn step(p: &mut Page, number: &str, title: &str, body: impl FnOnce(&mut Page)) {
     });
 }
 
-fn code(p: &mut Page, id: &str, command: &str) {
+fn code(p: &mut Page, copied: Option<&str>, id: &str, command: &str) {
     p.panel("code", |p| {
         p.text("code-text fill", command);
-        p.action(
-            id,
-            "compact",
-            "copy",
-            "Copy",
-            Some(Intent::Copy(command.into())),
-        );
+        p.copy(copied, id, command, false);
     });
 }
 
 /// Multi-line output (`install-mcp`), or the command that prints it.
-fn block(p: &mut Page, id: &str, output: Option<&str>, command: &str) {
+fn block(p: &mut Page, copied: Option<&str>, id: &str, output: Option<&str>, command: &str) {
     let Some(output) = output.filter(|o| !o.trim().is_empty()) else {
-        code(p, id, command);
+        code(p, copied, id, command);
         return;
     };
-    p.panel("code", |p| {
+    p.panel("code code-top", |p| {
         p.panel("col fill", |p| {
             for line in output.lines() {
                 p.text("code-text", line);
             }
         });
-        p.action(
-            id,
-            "compact",
-            "copy",
-            "Copy",
-            Some(Intent::Copy(output.trim_end().into())),
-        );
+        p.copy(copied, id, output.trim_end(), false);
     });
 }

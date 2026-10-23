@@ -19,7 +19,8 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
                 &format!("grid-template-columns:{}; gap:14px", tracks(cols)),
                 |p| {
                     for template in &hub.templates {
-                        tile_for(p, hub, ctx, template, thumb);
+                        let on = hub.create.template.as_deref() == Some(template.id.as_str());
+                        tile_for(p, ctx, template, thumb, on);
                     }
                 },
             );
@@ -31,8 +32,8 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     });
 }
 
-fn tile_for(p: &mut Page, hub: &Hub, ctx: &Ctx, template: &Template, thumb: f32) {
-    let on = hub.create.template.as_deref() == Some(template.id.as_str());
+/// A template tile; choosing it opens Create with that template (`on` = selected).
+pub(super) fn tile_for(p: &mut Page, ctx: &Ctx, template: &Template, thumb: f32, on: bool) {
     let class = if on {
         "template template-on"
     } else {
@@ -118,13 +119,7 @@ fn settings(p: &mut Page, hub: &Hub) {
                 if let Some(setup) = &template.setup {
                     p.panel("code", |p| {
                         p.text("code-text fill", &setup.command);
-                        p.button(
-                            "copy-setup",
-                            "ghost icon-compact",
-                            "Copy command",
-                            Some(Intent::Copy(setup.command.clone())),
-                            |p| p.icon("copy", "inherit"),
-                        );
+                        p.copy(hub.copied.as_deref(), "copy-setup", &setup.command, true);
                     });
                 }
             });

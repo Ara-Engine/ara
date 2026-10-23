@@ -26,6 +26,8 @@ pub struct CreateForm {
     revision: u64,
     checking: Option<u64>,
     checked: Option<u64>,
+    /// An older Hub service rejected `dryRun`: check locally, and fully on create.
+    no_dry_run: bool,
 }
 
 impl CreateForm {
@@ -42,6 +44,7 @@ impl CreateForm {
             revision: 0,
             checking: None,
             checked: None,
+            no_dry_run: false,
         }
     }
 
@@ -120,6 +123,11 @@ impl CreateForm {
         if self.checking.is_some() || self.submitting {
             return None;
         }
+        if self.no_dry_run {
+            self.problems = self.local();
+            self.checked = Some(self.revision);
+            return None;
+        }
         let call = self.call(true)?;
         self.checking = Some(self.revision);
         Some(call)
@@ -136,6 +144,14 @@ impl CreateForm {
         }
         let local = self.local();
         let mut problems = local.clone();
+        if let Err(error) = &result
+            && error.message.contains("dryRun")
+        {
+            self.no_dry_run = true;
+            self.problems = local;
+            self.checked = Some(*revision);
+            return None;
+        }
         if let Err(error) = result {
             problems.extend(error.diagnostics().into_iter().filter(|d| {
                 // A local path problem replaces the service's "choose a folder".

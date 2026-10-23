@@ -1,11 +1,12 @@
 //! `ara-hub --capture DIR`: every view, dark and light, rendered by the real GPU
-//! path and read back. The data is a fixed fixture fed through the model's own
+//! path (a headless device and the window's UI adapter; no window opens) and read
+//! back. The data is a fixed fixture fed through the model's own
 //! reply handling (no service), so captures are reproducible; the service path is
 //! covered by `tests/service.rs`.
 use crate::{
     connection::Event,
     model::{AgentClient, Call, Hub, Intent, Layout, View},
-    native::HostApi,
+    native::Offscreen,
 };
 use serde_json::{Value, json};
 use std::{
@@ -30,6 +31,15 @@ fn checkout() -> Option<PathBuf> {
 /// editor, one headless), templates with a sample needing art, two builds,
 /// an agent at work, and both install snippets.
 pub fn seed(hub: &mut Hub) {
+    seed_with(hub, true);
+}
+
+/// A first run: the installed build and templates, no projects yet.
+pub fn seed_first_run(hub: &mut Hub) {
+    seed_with(hub, false);
+}
+
+fn seed_with(hub: &mut Hub, with_projects: bool) {
     let root = checkout();
     let evidence = |sample: &str, file: &str| {
         root.as_ref()
@@ -121,6 +131,11 @@ pub fn seed(hub: &mut Hub) {
             {"id":"ses_ag02","kind":"agent","name":"codex","joinedMs":0}],
          "presence":{"ses_ag02":{"doc":"levels/showcase.scene","selection":["e_plinth03","e_plinth04"]}}}
     ]});
+    let (projects, statuses, activity) = if with_projects {
+        (projects, statuses, activity)
+    } else {
+        (Vec::new(), Vec::new(), json!({"activity":[]}))
+    };
     hub.event(Event::Connected);
     for call in hub.take_calls() {
         let result = match &call {
@@ -182,7 +197,7 @@ const STEPS: &[Step] = &[
 
 /// Seed, then capture every step in both themes under `directory/<w>x<h>/`.
 pub fn run(
-    host: &mut HostApi,
+    host: &mut Offscreen,
     app: &mut crate::native::App,
     hub: &mut Hub,
     directory: &Path,
@@ -193,12 +208,23 @@ pub fn run(
     std::fs::create_dir_all(&folder)?;
     app.size = host.logical();
     for light in [false, true] {
+        let theme = if light { "light" } else { "dark" };
+        // What a tester sees right after installing: no projects yet.
+        let mut fresh = Hub::new(
+            hub.prefs.clone(),
+            hub.create.destination.clone().into(),
+            None,
+        );
+        seed_first_run(&mut fresh);
+        fresh.prefs.light = light;
+        settle(host, app, &mut fresh)?;
+        let path = folder.join(format!("{theme}-first-run.png"));
+        host.capture(app)?.save(&path)?;
+        println!("{}", path.display());
         hub.prefs.light = light;
-        host.style(light);
         for (name, step) in STEPS {
             step(hub);
             settle(host, app, hub)?;
-            let theme = if light { "light" } else { "dark" };
             let path = folder.join(format!("{theme}-{name}.png"));
             host.capture(app)?.save(&path)?;
             println!("{}", path.display());
@@ -208,7 +234,7 @@ pub fn run(
 }
 
 /// Rebuild until every requested preview has arrived (or two seconds pass).
-fn settle(host: &mut HostApi, app: &mut crate::native::App, hub: &mut Hub) -> anyhow::Result<()> {
+fn settle(host: &mut Offscreen, app: &mut crate::native::App, hub: &mut Hub) -> anyhow::Result<()> {
     let until = Instant::now() + Duration::from_secs(2);
     // Twice: the overflow menu anchors to the previous layout of its button.
     for _ in 0..2 {

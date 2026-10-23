@@ -178,6 +178,22 @@ impl Page {
             }
         });
     }
+    /// A copy button; after use it reads "Copied" until the next navigation.
+    pub fn copy(&mut self, copied: Option<&str>, id: &str, text: &str, icon_only: bool) {
+        let (icon, label) = if copied == Some(text) {
+            ("check", "Copied")
+        } else {
+            ("copy", "Copy")
+        };
+        let intent = Some(Intent::Copy(text.to_owned()));
+        if icon_only {
+            self.button(id, "ghost icon-compact", label, intent, |p| {
+                p.icon(icon, "inherit");
+            });
+        } else {
+            self.action(id, "compact", icon, label, intent);
+        }
+    }
     /// A single-line text field whose edits raise `on(value)`.
     pub fn field(&mut self, id: &str, class: &str, value: &str, on: fn(String) -> Intent) {
         let _ = write!(

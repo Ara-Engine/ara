@@ -144,10 +144,10 @@ field:focus { border-color:var(--ring); }
 .col-actions { width:150px; flex-shrink:0; flex-direction:row; align-items:center; justify-content:end; gap:6px; }
 
 /* Empty states and banners */
-.empty { flex-shrink:0; align-items:center; justify-content:center; gap:12px; padding:56px; border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-base); background:var(--card); }
 .empty-icon { width:56px; height:56px; align-items:center; justify-content:center; border-radius:28px; background:var(--raised); }
 .empty-title { font-size:17px; color:var(--foreground); }
-.empty-copy { font-size:13px; color:var(--muted-foreground); white-space:normal; max-width:440px; flex-shrink:1; }
+.empty { flex-shrink:0; align-items:center; justify-content:center; gap:12px; padding:48px; border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-base); background:var(--card); }
+.empty-copy { font-size:13px; color:var(--muted-foreground); white-space:normal; width:460px; max-width:100%; flex-shrink:1; }
 .banner { flex-shrink:0; flex-direction:row; align-items:center; gap:12px; padding:14px; padding-left:16px; border-radius:var(--radius-md); border-width:1px; }
 .banner-warn { background:var(--warning-surface); border-color:var(--warning-surface); color:var(--warning-foreground); }
 .banner-error { background:var(--destructive-surface); border-color:var(--destructive-surface); color:var(--destructive-foreground); }
@@ -186,6 +186,7 @@ field:focus { border-color:var(--ring); }
 .form-row { gap:7px; flex-shrink:0; }
 .preview-path { font-size:12px; color:var(--muted-foreground); white-space:normal; flex-shrink:1; }
 .code { flex-shrink:0; flex-direction:row; align-items:center; gap:10px; padding:10px; padding-left:14px; background:var(--background); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
+.code-top { align-items:start; }
 .code-text { font-family:JetBrains Mono; font-size:12px; color:var(--foreground); white-space:normal; flex-shrink:1; }
 .code-block { flex-shrink:0; gap:2px; padding:14px; background:var(--background); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); }
 

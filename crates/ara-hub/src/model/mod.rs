@@ -366,6 +366,8 @@ pub struct Hub {
     pub local_engine: Option<Engine>,
     /// Field the window should focus after the next rebuild.
     pub focus: Option<&'static str>,
+    /// Text last copied, so its button reads "Copied" until the next navigation.
+    pub copied: Option<String>,
     loaded: BTreeSet<List>,
     inflight: BTreeSet<List>,
     stale: BTreeSet<List>,
@@ -398,6 +400,7 @@ impl Hub {
             install: BTreeMap::new(),
             local_engine,
             focus: None,
+            copied: None,
             loaded: BTreeSet::new(),
             inflight: BTreeSet::new(),
             stale: BTreeSet::new(),
@@ -498,6 +501,7 @@ impl Hub {
             Intent::Navigate(view) => {
                 self.view = view;
                 self.menu = None;
+                self.copied = None;
                 if view == View::Create {
                     self.create
                         .validate(&self.projects, &self.engines, &self.templates);
@@ -599,7 +603,10 @@ impl Hub {
                 }
             }
             Intent::Agent(client) => self.prefs.agent = client,
-            Intent::Copy(text) => self.effects.push(Effect::Copy(text)),
+            Intent::Copy(text) => {
+                self.effects.push(Effect::Copy(text.clone()));
+                self.copied = Some(text);
+            }
             Intent::OpenPath(path) => self.effects.push(Effect::Open(path)),
             Intent::Dismiss(id) => self.notices.retain(|n| n.id != id),
             Intent::Fix { notice, fix } => self.fix(notice, fix),
@@ -655,8 +662,7 @@ impl Hub {
                 }
             }
             Some(FixAction::Cli { args }) => {
-                self.effects
-                    .push(Effect::Copy(format!("ara {}", args.join(" "))));
+                self.intent(Intent::Copy(format!("ara {}", args.join(" "))));
             }
             _ => {}
         }

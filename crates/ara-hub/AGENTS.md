@@ -31,6 +31,7 @@ contract is `crates/ara-hub-service/AGENTS.md`.
   local docs).
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
   reply paths and writes every page, dark and light, from the real GPU target.
+  No window opens: a headless Vulkan device drives the same `NativeUi` adapter.
 
 ## Behavior worth knowing
 
@@ -69,12 +70,12 @@ Set `CARGO_BUILD_JOBS=4` and `VULKAN_SDK`.
   real Hub service in `target/hub-ui-tests/<scratch>/config` (create with inline
   validation, open headless, badge, close, remove, undo). It runs
   `cargo build -p ara --bin ara` first so the service matches the checkout.
-- Captures (GPU; debug builds need the validation layers):
+- Captures (GPU, windowless; debug builds need the validation layers):
   `VK_IMPLICIT_LAYER_PATH=<empty dir> VK_LAYER_PATH=$VULKAN_SDK/Bin`, then
   `target/debug/ara-hub --capture target/hub-captures --size 1440x900 --dpi 1`
   and `--size 2560x1440 --dpi 2`. Look at every PNG.
 - Try it without touching your real registry:
-  `ara-hub --config-dir target/hub-dev-config`.
+  `ara-hub --config-dir target/hub-dev-config` (this one opens a window).
 - `cargo clippy -p ara-hub --all-targets -- -D warnings`.
 
 ## Gotchas

@@ -69,9 +69,6 @@ impl Host {
         let window = Window::new("Ara Hub", options.size)?;
         frame::style(window.raw(), light);
         let input = NativeInput::attach(window.raw())?;
-        if options.capture.is_some() {
-            fix_extent(&window, options.size)?;
-        }
         let gpu = Gpu::new(&window.extensions()?)?;
         // SAFETY: `gpu` is declared after `ui_gpu` and `present` in Host, so it outlives
         // both; all queue access stays on this thread.
@@ -120,16 +117,7 @@ impl Host {
         Ok(true)
     }
     fn render(&mut self, app: &App) -> anyhow::Result<()> {
-        self.ui_gpu.select_target(0);
-        self.renderer
-            .render(
-                &mut self.ui_gpu,
-                &app.ui.display,
-                &app.text.assets,
-                app.ui.size.map(|v| v.round() as u32),
-                TextMode::Raster,
-            )
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
         let (image, size) = self.ui_gpu.output()?;
         // SAFETY: The UI submission completed; the image is CopySource; owners are live.
         unsafe { self.present.display(&self.gpu, image, size) }
@@ -146,31 +134,18 @@ impl Drop for Host {
     }
 }
 
-/// Fix the client extent in physical pixels, independent of desktop scaling (captures).
-fn fix_extent(window: &Window, pixels: [u32; 2]) -> anyhow::Result<()> {
-    use sdl3_sys::video::*;
-    let raw = window.raw();
-    // SAFETY: Main-thread live window; output pointers are valid locals.
-    unsafe {
-        anyhow::ensure!(SDL_SetWindowBordered(raw, false), "remove capture chrome");
-        anyhow::ensure!(SDL_SetWindowPosition(raw, 0, 0), "position capture window");
-        let density = SDL_GetWindowPixelDensity(raw).max(0.25);
-        anyhow::ensure!(
-            SDL_SetWindowSize(
-                raw,
-                (pixels[0] as f32 / density).round() as i32,
-                (pixels[1] as f32 / density).round() as i32
-            ),
-            "size capture window"
-        );
-        anyhow::ensure!(SDL_SyncWindow(raw), "synchronize capture window");
-    }
-    let actual = window.size()?;
-    anyhow::ensure!(
-        actual == pixels,
-        "capture requested {pixels:?}, the native client is {actual:?}"
-    );
-    Ok(())
+/// Render the app's display list into the adapter's current target.
+fn draw(renderer: &mut Renderer, ui_gpu: &mut NativeUi, app: &App) -> anyhow::Result<()> {
+    ui_gpu.select_target(0);
+    renderer
+        .render(
+            ui_gpu,
+            &app.ui.display,
+            &app.text.assets,
+            app.ui.size.map(|v| v.round() as u32),
+            TextMode::Raster,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 fn now_ms() -> u64 {
@@ -229,45 +204,59 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         load_prefs(&config)
     };
     let mut hub = Hub::new(prefs, home(), engines::installed(&exe_dir));
-    let mut host = Host::new(&options, hub.prefs.light)?;
     let docs = os::docs(&exe_dir);
-    let mut app = App::new(host.logical(), docs).map_err(|e| anyhow::anyhow!("{e}"))?;
     if let Some(directory) = options.capture.clone() {
-        return capture::run(&mut host_api(&mut host), &mut app, &mut hub, &directory);
+        let mut offscreen = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
+        let mut app = App::new(offscreen.logical(), docs).map_err(err)?;
+        return capture::run(&mut offscreen, &mut app, &mut hub, &directory);
     }
+    let mut host = Host::new(&options, hub.prefs.light)?;
+    let mut app = App::new(host.logical(), docs).map_err(err)?;
     interactive(&mut host, &mut app, &mut hub, &config, &ara)
 }
 
-/// The slice of [`Host`] the capture driver needs.
-pub struct HostApi<'a> {
-    host: &'a mut Host,
+/// Captures without a window: a headless device, the same `NativeUi` adapter and
+/// the same render path, read back from its target. Nothing appears on screen.
+pub struct Offscreen {
+    ui_gpu: NativeUi,
+    renderer: Renderer,
+    // Declared last so the adapter above drops first.
+    _gpu: Gpu,
+    physical: [u32; 2],
+    dpi: f32,
 }
-fn host_api(host: &mut Host) -> HostApi<'_> {
-    HostApi { host }
-}
-impl HostApi<'_> {
-    /// Logical window size.
+impl Offscreen {
+    fn new(physical: [u32; 2], dpi: f32) -> anyhow::Result<Self> {
+        let gpu = Gpu::new(&[])?;
+        // SAFETY: `_gpu` is a later field, so it outlives the adapter; single-threaded use.
+        let mut ui_gpu = unsafe { NativeUi::new(&gpu)? };
+        ui_gpu.set_dpi(dpi)?;
+        let mut renderer = Renderer::default();
+        images::install(&mut renderer, dpi)?;
+        Ok(Self {
+            ui_gpu,
+            renderer,
+            _gpu: gpu,
+            physical,
+            dpi,
+        })
+    }
+    /// Logical size.
     pub fn logical(&self) -> [f32; 2] {
-        self.host.logical()
+        self.physical.map(|v| v as f32 / self.dpi)
     }
     /// Physical extent.
     pub fn physical(&self) -> [u32; 2] {
-        self.host.physical
-    }
-    /// Restyle the native frame for a theme.
-    pub fn style(&self, light: bool) {
-        frame::style(self.host.window.raw(), light);
+        self.physical
     }
     /// Upload finished previews; true when any arrived.
     pub fn upload(&mut self, app: &mut App) -> bool {
-        app.thumbnails.upload(&mut self.host.renderer)
+        app.thumbnails.upload(&mut self.renderer)
     }
-    /// Render, present and read back the actual GPU target.
+    /// Render and read back the actual GPU target.
     pub fn capture(&mut self, app: &App) -> anyhow::Result<image::RgbaImage> {
-        // Drain OS events so the window stays responsive while capturing.
-        let _ = Window::poll_tagged();
-        self.host.render(app)?;
-        self.host.ui_gpu.pixels()
+        draw(&mut self.renderer, &mut self.ui_gpu, app)?;
+        self.ui_gpu.pixels()
     }
 }
 

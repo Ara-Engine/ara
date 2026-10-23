@@ -60,7 +60,7 @@ pub(super) fn toolbar(p: &mut Page, hub: &Hub, _ctx: &Ctx) {
 pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     if hub.projects.is_empty() {
         if hub.ready() {
-            empty(p);
+            empty(p, hub, ctx);
         }
         return;
     }
@@ -82,7 +82,8 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     }
 }
 
-fn empty(p: &mut Page) {
+/// First run: the call to action, then the templates themselves.
+fn empty(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     p.panel("empty", |p| {
         p.panel("empty-icon", |p| p.icon("folder-plus", "icon-lg accent"));
         p.text("empty-title", "No projects yet");
@@ -107,6 +108,29 @@ fn empty(p: &mut Page) {
             );
         });
     });
+    if hub.templates.is_empty() {
+        return;
+    }
+    p.panel("section-head", |p| {
+        p.text("section-title", "Start from a template");
+        p.text(
+            "section-copy",
+            "Outpost and Showcase are real-art samples: open one to see what Ara renders today.",
+        );
+    });
+    let width = (ctx.size[0] - CHROME).max(260.);
+    let cols = columns(width, 230., 20.).min(hub.templates.len().max(1));
+    let tile = (width - 20. * (cols - 1) as f32) / cols as f32;
+    let thumb = ((tile - 14.) * 9. / 16.).round().min(240.);
+    p.panel_styled(
+        "grid",
+        &format!("grid-template-columns:{}", tracks(cols)),
+        |p| {
+            for template in &hub.templates {
+                super::create::tile_for(p, ctx, template, thumb, false);
+            }
+        },
+    );
 }
 
 /// The badge for a project's state, or its in-flight work.
