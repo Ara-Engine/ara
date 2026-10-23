@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No dex: android.app.NativeActivity loads libara_runtime.so (Rust template), which dlopens libgame.so (C# NativeAOT). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.ara.s7">
+    <application android:label="Ara S7" android:hasCode="false" android:extractNativeLibs="false">
+        <activity android:name="android.app.NativeActivity" android:exported="true"
+                  android:configChanges="orientation|keyboardHidden|screenSize|screenLayout">
+            <meta-data android:name="android.app.lib_name" android:value="ara_runtime" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

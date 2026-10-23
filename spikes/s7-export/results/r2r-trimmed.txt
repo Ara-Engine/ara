@@ -1,0 +1,6 @@
+Windows R2R lane, trimmed (PublishTrimmed=true, Game rooted via TrimmerRootAssembly), 2026-10-23:
+  dotnet publish game/Game.csproj -c Release -r win-x64 -p:AraLane=r2r -p:PublishTrimmed=true -o out/manual/win-r2r-trimmed
+  CoreCLR folder: 23,028,183 bytes (29 files)   vs untrimmed 80,186,580 bytes (190 files)
+  ara-player run: ara_script_init ok, checksum 0x825f3722a803f55c MATCH, fault contained
+  IL mod: "mod rejected: TargetInvocationException" (the mod reached a trimmed framework member)
+  Without TrimmerRootAssembly: coreclr_create_delegate(Exports.Init) failed 0x80131522 (TypeLoad; Exports trimmed)

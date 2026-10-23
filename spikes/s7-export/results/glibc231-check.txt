@@ -1,0 +1,14 @@
+GNU C Library (Debian GLIBC 2.31-13+deb11u11) stable release version 2.31.
+== /mnt/c/Users/snowy/.t3/worktrees/snengine/t3-72aedab3/spikes/s7-export/dist/linux-aot-cross
+[cs] ara_script_init: .NET 10.0.6 linux-x64 dynamicCode=False jit=False
+[rt] verify: C# 0x8afd64738ef36276 vs Rust 0x8afd64738ef36276 -> MATCH
+exit=0
+== /mnt/c/Users/snowy/.t3/worktrees/snengine/t3-72aedab3/spikes/s7-export/dist/linux-r2r
+[cs] ara_script_init: .NET 10.0.6 unknown dynamicCode=True jit=True
+[rt] verify: C# 0x8afd64738ef36276 vs Rust 0x8afd64738ef36276 -> MATCH
+exit=0
+== /mnt/c/Users/snowy/.t3/worktrees/snengine/t3-72aedab3/spikes/s7-export/dist/linux-aot
+./ara-player: /tmp/glibc231/sysroot/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.32' not found (required by ./ara-player)
+./ara-player: /tmp/glibc231/sysroot/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.33' not found (required by ./ara-player)
+./ara-player: /tmp/glibc231/sysroot/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found (required by ./ara-player)
+exit=1

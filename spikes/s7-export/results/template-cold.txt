@@ -1,0 +1,5 @@
+windows-x64 ara-player: 15468 ms
+linux-x64 ara-player (zigcc, glibc 2.31): 13734 ms
+aarch64-linux-android libara_runtime.so: 12035 ms
+x86_64-linux-android libara_runtime.so: 14317 ms
+(Ryzen 7 7800X3D, CARGO_BUILD_JOBS=4, dependencies included, other agents building concurrently)

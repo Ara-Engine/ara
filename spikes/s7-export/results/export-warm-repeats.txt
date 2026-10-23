@@ -1,0 +1,9 @@
+windows aot total 12209 {'template': 1227, 'script': 10952, 'pack': 1, 'assemble': 27}
+windows aot total 4679 {'template': 139, 'script': 4525, 'pack': 1, 'assemble': 13}
+windows aot total 6439 {'template': 417, 'script': 6011, 'pack': 2, 'assemble': 8}
+linux aot-cross total 23924 {'template': 11659, 'script': 9509, 'pack': 1, 'assemble': 7, 'audit': 2745}
+linux aot-cross total 4318 {'template': 151, 'script': 3922, 'pack': 2, 'assemble': 8, 'audit': 234}
+linux aot-cross total 6648 {'template': 443, 'script': 5968, 'pack': 2, 'assemble': 8, 'audit': 224}
+android aot total 32044 {'template': 9252, 'script': 15944, 'pack': 2, 'package-apk': 2131, 'package-aab': 4714}
+android aot total 14121 {'template': 866, 'script': 8092, 'pack': 1, 'package-apk': 1281, 'package-aab': 3878}
+android aot total 11243 {'template': 280, 'script': 5118, 'pack': 2, 'package-apk': 1246, 'package-aab': 4596}
