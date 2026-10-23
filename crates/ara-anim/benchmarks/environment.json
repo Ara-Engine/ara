@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-23",
+  "os": "Windows 11",
+  "cpu": "Ryzen 7 7800X3D (8 physical / 16 logical cores)",
+  "rust": "1.99.1",
+  "cpp": "MSVC 19.50, default SSE2 ozz release",
+  "cargo_build_jobs": 2,
+  "priority": "BelowNormal",
+  "frames": 300,
+  "warmup": 30,
+  "chunk": 16,
+  "baseline_commit": "4e01c27501da1f25f28f2d26db81371511068dad",
+  "ozz_commit": "744eb9d99f606eda849acb0b1204f7a3dc20bca1",
+  "sha256": {
+    "baseline_stages": "62ff24390210bb4c9e152cb793cd382f28ec3741833d8589e7e486490be092d8",
+    "candidate_stages": "dd5480810f817b9d1b54b2e9a9e240aa1a0370a1ce662455771112f048ee1700",
+    "baseline_crowd": "7d743e6022a27928b5c544c85ad0a5aff1d1d790baf7608ac4782323c7d60dc9",
+    "candidate_crowd": "4b1003f257e8871c2da7a34d00e44616bcad60adcc77bb6070007603718b89ef",
+    "ozz": "1b533bbaca790945507c264a4bd06f7cb3d42670f051901a5f2609e2e66684b5",
+    "assets": "cda4c86b7cfde29be4f682fbf1691a5e03628213c5dc9aa47f5d6d5a44d57ecf"
+  }
+}

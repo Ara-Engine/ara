@@ -18,6 +18,7 @@ fn quantized_sampling_matches_reference_and_certified_bounds() {
     assert!(report.translation_error <= report.translation_bound);
     assert!(report.rotation_error <= report.rotation_bound);
     assert!(report.source_bytes > report.cooked_bytes * 2);
+    assert!(report.source_bytes >= report.cooked_bytes * 10);
     let bytes = clip.to_bytes().unwrap();
     let decoded = CookedClip::from_bytes(&bytes, &skeleton).unwrap();
     let mut sampler = Sampler::new(&decoded);
@@ -57,6 +58,116 @@ fn quantized_sampling_matches_reference_and_certified_bounds() {
     assert!(CookedClip::from_bytes(&bytes[..bytes.len() - 1], &skeleton).is_err());
     assert!(CookedClip::from_bytes(&[bytes.as_slice(), &[0]].concat(), &skeleton).is_err());
     assert!(CookedClip::from_bytes(&bytes, &common::skeleton(64)).is_err());
+}
+
+#[test]
+fn presentation_lod_and_compatible_clip_rebinding_preserve_accuracy() {
+    let s = common::skeleton(5);
+    let empty = ClipData {
+        duration: 48000,
+        tracks: vec![JointTrack::default(); 5],
+        ..Default::default()
+    };
+    let (empty, _) = CookedClip::cook(&empty, &s, CompressionSettings::default()).unwrap();
+    let mut source = common::clip(&s, 1.0);
+    source.curves.clear();
+    let (clip, _) = CookedClip::cook(&source, &s, CompressionSettings::default()).unwrap();
+    let mut reused = Sampler::new(&empty);
+    let mut fresh = Sampler::new(&clip);
+    let mut actual = Pose::new(5);
+    let mut expected = Pose::new(5);
+    for tick in [0, 137, 32000, 48000, 17] {
+        reused
+            .sample(&clip, &s, tick, &mut actual, &mut [])
+            .unwrap();
+        fresh
+            .sample(&clip, &s, tick, &mut expected, &mut [])
+            .unwrap();
+        for i in 0..5 {
+            assert!(actual.translations()[i].distance(expected.translations()[i]) < 1e-6);
+            assert!((actual.rotations()[i] - expected.rotations()[i]).length() < 1e-6);
+        }
+        for prefix in [0, 1, 3, 4, 5] {
+            fresh
+                .sample_prefix(&clip, &s, tick, prefix, &mut actual, &mut [])
+                .unwrap();
+            for i in 0..prefix {
+                assert_eq!(actual.joint(i), expected.joint(i));
+            }
+            for i in prefix..5 {
+                assert_eq!(actual.joint(i), s.bind_pose().joint(i));
+            }
+        }
+        reused
+            .sample(&empty, &s, tick, &mut actual, &mut [])
+            .unwrap();
+        assert_eq!(actual, *s.bind_pose());
+    }
+    let before = actual.clone();
+    assert!(
+        fresh
+            .sample_prefix(&clip, &s, 0, 6, &mut actual, &mut [])
+            .is_err()
+    );
+    assert_eq!(before, actual);
+}
+
+#[test]
+fn irregular_step_scale_and_full_rotation_packets_match_after_loading() {
+    let s = common::skeleton(5);
+    let axis = Vec3::new(1.0, 2.0, 3.0).normalize();
+    let source = ClipData {
+        duration: 100,
+        tracks: (0..5)
+            .map(|joint| JointTrack {
+                translations: [0, 31 + joint, 100]
+                    .into_iter()
+                    .map(|tick| VectorKey {
+                        tick,
+                        value: [tick as f32 * 0.001, joint as f32, 0.0],
+                    })
+                    .collect(),
+                rotations: [0, 27, 61, 100]
+                    .into_iter()
+                    .zip([-3.0, -1.0, 1.0, 3.0])
+                    .map(|(tick, angle)| RotationKey {
+                        tick,
+                        value: Quat::from_axis_angle(axis, angle).to_array(),
+                    })
+                    .collect(),
+                scales: [0, 19 + joint, 100]
+                    .into_iter()
+                    .map(|tick| VectorKey {
+                        tick,
+                        value: [1.0 + tick as f32 * 0.0001, 1.0, 1.0],
+                    })
+                    .collect(),
+                translation_interpolation: if joint % 2 == 0 {
+                    Interpolation::Step
+                } else {
+                    Interpolation::Linear
+                },
+                rotation_interpolation: Interpolation::Linear,
+                scale_interpolation: Interpolation::Linear,
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let (clip, report) = CookedClip::cook(&source, &s, CompressionSettings::default()).unwrap();
+    assert!(report.translation_error <= report.translation_bound);
+    assert!(report.rotation_error <= report.rotation_bound);
+    assert!(report.scale_error <= report.scale_bound);
+    let loaded = CookedClip::from_bytes(&clip.to_bytes().unwrap(), &s).unwrap();
+    let mut warm = Sampler::new(&clip);
+    let mut cold = Sampler::new(&loaded);
+    let mut a = Pose::new(5);
+    let mut b = Pose::new(5);
+    for tick in (0..=100).chain([90, 27, 0, 100]) {
+        warm.sample(&clip, &s, tick, &mut a, &mut []).unwrap();
+        cold.reset();
+        cold.sample(&loaded, &s, tick, &mut b, &mut []).unwrap();
+        assert_eq!(a, b);
+    }
 }
 
 #[test]
