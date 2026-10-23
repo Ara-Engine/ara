@@ -1,4 +1,6 @@
-use anyhow::{Context, Result, bail};
+#[cfg(any(windows, target_os = "linux"))]
+use anyhow::Context;
+use anyhow::{Result, bail};
 use std::path::Path;
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -9,7 +11,7 @@ mod native {
         process::{Child, Command, Stdio},
         sync::{
             Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU32, Ordering},
         },
         time::{Duration, Instant},
     };
@@ -19,7 +21,7 @@ mod native {
 
     /// Owns the native crash handler and the monitor child. Drop detaches and reaps.
     pub struct Capture {
-        handler: Option<crash_handler::CrashHandler>,
+        handler: Option<Arc<crash_handler::CrashHandler>>,
         child: Child,
         socket: PathBuf,
         previous_hook: Arc<PanicHook>,
@@ -87,12 +89,21 @@ mod native {
                     return Err(error);
                 }
             };
+            let panic_client = Arc::downgrade(&client);
+            let snapshot = Arc::new(AtomicU32::new(0));
+            let in_snapshot = snapshot.clone();
             // SAFETY: the callback owns the connected client for the handler's lifetime.
             // It performs only minidumper's signal-safe IPC; all allocation and I/O
             // for the dump happens in the monitor process.
             let event = unsafe {
                 crash_handler::make_crash_event(move |context: &crash_handler::CrashContext| {
-                    crash_handler::CrashEventResult::Handled(client.request_dump(context).is_ok())
+                    crash_handler::CrashEventResult::Handled(
+                        if in_snapshot.load(Ordering::Acquire) == crate::snapshot::thread(context) {
+                            crate::snapshot::request(&client, context)
+                        } else {
+                            client.request_dump(context).is_ok()
+                        },
+                    )
                 })
             };
             let handler = match crash_handler::CrashHandler::attach(event) {
@@ -106,17 +117,40 @@ mod native {
             };
             #[cfg(target_os = "linux")]
             handler.set_ptracer(Some(child.id()));
+            let handler = Arc::new(handler);
+            let panic_handler = Arc::downgrade(&handler);
             let previous_hook: Arc<PanicHook> = Arc::from(std::panic::take_hook());
             let previous = previous_hook.clone();
             let build = build_id.to_owned();
+            let panic_lock = std::sync::Mutex::new(());
             std::panic::set_hook(Box::new(move |info| {
+                // An old hook can survive a guard dropped during unwinding. Its
+                // weak handler prevents duplicate reports and retained workers.
+                let Some(handler) = panic_handler.upgrade() else {
+                    previous(info);
+                    return;
+                };
                 let report = crate::CrashReport::new(
                     &build,
                     crate::CrashKind::Panic,
                     info.to_string(),
                     std::backtrace::Backtrace::force_capture().to_string(),
                 );
-                let _ = crate::write_report(&directory, &report);
+                let record = crate::write_report(&directory, &report);
+                if let Ok(_guard) = panic_lock.try_lock()
+                    && let Some(client) = panic_client.upgrade()
+                    && let Ok(record) = record
+                    && let Some(name) = record.file_name().and_then(|n| n.to_str())
+                    && let Ok(metadata) = crate::canonical(&serde_json::json!({"name":name}))
+                    && client.send_message(1, metadata).is_ok()
+                {
+                    snapshot.store(crate::snapshot::current_thread(), Ordering::Release);
+                    #[cfg(windows)]
+                    let _ = handler.simulate_exception(None);
+                    #[cfg(target_os = "linux")]
+                    let _ = handler.simulate_signal(crash_handler::Signal::Abort as u32);
+                    snapshot.store(0, Ordering::Release);
+                }
                 previous(info);
             }));
             Ok(Self {
@@ -146,6 +180,7 @@ mod native {
     struct Handler {
         directory: PathBuf,
         build_id: String,
+        panic: std::sync::Mutex<Option<String>>,
     }
     impl minidumper::ServerHandler for Handler {
         fn create_minidump_file(&self) -> std::io::Result<(std::fs::File, PathBuf)> {
@@ -179,9 +214,28 @@ mod native {
                     let _ = std::fs::write(dump.path.with_extension("crash.json"), json);
                 }
             }
-            minidumper::LoopAction::Exit
+            // A caught Rust panic can continue running. The worker stays ready
+            // until the owning process disconnects or drops its capture guard.
+            minidumper::LoopAction::Continue
         }
-        fn on_message(&self, _kind: u32, _buffer: Vec<u8>) {}
+        fn on_message(&self, kind: u32, buffer: Vec<u8>) {
+            if kind == 1
+                && buffer.len() <= 60 * 1024
+                && let Ok(report) = serde_json::from_slice::<serde_json::Value>(&buffer)
+                && let Some(name) = report.get("name").and_then(|v| v.as_str())
+                && let Ok(mut pending) = self.panic.lock()
+            {
+                *pending = Some(name.to_owned());
+            } else if kind == 2
+                && let Some(name) = self
+                    .panic
+                    .lock()
+                    .ok()
+                    .and_then(|mut pending| pending.take())
+            {
+                let _ = crate::snapshot::write(&self.directory, &name, &buffer);
+            }
+        }
         fn on_client_disconnected(&self, num_clients: usize) -> minidumper::LoopAction {
             if num_clients == 0 {
                 minidumper::LoopAction::Exit
@@ -210,6 +264,7 @@ mod native {
             Box::new(Handler {
                 directory,
                 build_id,
+                panic: std::sync::Mutex::new(None),
             }),
             &AtomicBool::new(false),
             None,

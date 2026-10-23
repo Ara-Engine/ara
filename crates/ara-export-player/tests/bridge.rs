@@ -11,7 +11,8 @@ use std::{
 #[test]
 #[ignore = "requires ARA_EXPORT_ARTIFACTS/windows from ara-export end-to-end test"]
 fn exported_dev_runtime_serves_authenticated_desktop_observability() {
-    let root = PathBuf::from(std::env::var_os("ARA_EXPORT_ARTIFACTS").unwrap()).join("windows");
+    let root =
+        PathBuf::from(std::env::var_os("ARA_EXPORT_ARTIFACTS").unwrap()).join("windows/build");
     let dir = tempfile::tempdir().unwrap();
     fn copy(from: &std::path::Path, to: &std::path::Path) {
         std::fs::create_dir_all(to).unwrap();

@@ -3,6 +3,84 @@ use ara_schema::{Schema, SchemaDb, ValueType};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+/// The one switch between the export conformance fixture and an engine runtime pin.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlayerTemplate {
+    /// S7 ABI and pack verification only; does not execute authored demo gameplay.
+    #[default]
+    Conformance,
+    /// The integrated engine player supplied by the runtime owner.
+    Runtime,
+}
+impl PlayerTemplate {
+    /// Versioned launch contract a pinned template must implement.
+    pub fn contract(self) -> &'static str {
+        match self {
+            Self::Conformance => "ara.player.conformance/1",
+            Self::Runtime => "ara.player.runtime/1",
+        }
+    }
+}
+
+/// Generic delivery format, independent of any upload service.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize, clap::ValueEnum,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum PackageFormat {
+    /// Plain player folder and distribution manifest.
+    #[default]
+    Folder,
+    /// Windows portable ZIP.
+    WindowsPortable,
+    /// Windows self-extracting executable and portable ZIP.
+    WindowsInstaller,
+    /// Linux type-2 AppImage using a separately pinned runtime.
+    LinuxAppimage,
+    /// Linux tar.gz with executable permissions.
+    LinuxTar,
+    /// Signed release Android APK and upload AAB, validated with bundletool.
+    AndroidPlay,
+}
+
+/// Independently pinned tooling artifact, such as an installer stub or symbols.
+#[derive(Debug, Clone, Schema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ara(params)]
+pub struct ArtifactPin {
+    /// Expected BLAKE3, lowercase hex.
+    pub hash: String,
+    /// Local file or HTTPS source; cache hits are rehashed too.
+    pub source: String,
+}
+impl ArtifactPin {
+    /// Validates identity syntax before resolving any filesystem or network input.
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.hash.len() == 64
+                && self
+                    .hash
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                && !self.source.is_empty(),
+            "ARA-EXP-TPL-002: invalid artifact pin"
+        );
+        Ok(())
+    }
+}
+
+/// Optional Authenticode identity. Private keys remain in the Windows certificate store.
+#[derive(Debug, Clone, Schema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ara(params)]
+pub struct WindowsSigning {
+    /// Environment variable containing the signing certificate's SHA1 thumbprint.
+    pub certificate_env: String,
+    /// Optional HTTPS RFC3161 timestamp authority.
+    pub timestamp_url: Option<String>,
+}
+
 /// Destination operating system; Apple lanes delegate to an Apple silicon Mac.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "camelCase")]
@@ -90,6 +168,9 @@ pub struct TemplatePin {
     pub hash: String,
     /// Local file or HTTPS URL; read only when the content-addressed cache misses.
     pub source: String,
+    /// Matching native PDB for Windows templates; Linux templates contain DWARF.
+    #[serde(default)]
+    pub symbols: Option<ArtifactPin>,
 }
 
 /// Android keystore configuration. Passwords are environment-variable references.
@@ -145,6 +226,10 @@ pub struct ExportPreset {
     pub chunk_size: u32,
     /// Runtime pins, one per destination architecture.
     pub templates: Vec<TemplatePin>,
+    /// Selects the template contract; switching runtime pins is the engine integration seam.
+    #[serde(default)]
+    #[ara(default = "conformance")]
+    pub player_template: PlayerTemplate,
     /// Explicit native plugins compiled in the native lane.
     #[serde(default)]
     pub plugins: Vec<NativePlugin>,
@@ -176,6 +261,22 @@ pub struct ExportPreset {
     /// Optional Mac-agent SSH destination; Apple builds require this seam.
     #[serde(default)]
     pub mac_agent: Option<String>,
+    /// Generic delivery format, in addition to the plain build folder.
+    #[serde(default)]
+    #[ara(default = "folder")]
+    pub packaging: PackageFormat,
+    /// Local crash policy; uploads are disabled unless explicitly configured and consented.
+    #[serde(default)]
+    pub crash: ara_crash::CrashSettings,
+    /// Prebuilt Windows installer executable, needed only by windows-installer.
+    #[serde(default)]
+    pub installer_stub: Option<ArtifactPin>,
+    /// Type-2 AppImage runtime, needed only by linux-appimage.
+    #[serde(default)]
+    pub appimage_runtime: Option<ArtifactPin>,
+    /// Optional Windows code-signing identity and timestamp endpoint.
+    #[serde(default)]
+    pub windows_signing: Option<WindowsSigning>,
 }
 fn default_chunk() -> u32 {
     1048576
@@ -234,6 +335,55 @@ impl ExportPreset {
     }
     /// Checks unsupported combinations and portable path/pin constraints.
     pub fn validate(&self) -> Result<()> {
+        self.crash.validate()?;
+        let compatible = match self.packaging {
+            PackageFormat::Folder => true,
+            PackageFormat::WindowsPortable | PackageFormat::WindowsInstaller => {
+                self.platform == Platform::Windows
+            }
+            PackageFormat::LinuxAppimage | PackageFormat::LinuxTar => {
+                self.platform == Platform::Linux
+            }
+            PackageFormat::AndroidPlay => {
+                self.platform == Platform::Android
+                    && self.signing.is_some()
+                    && self.config == Configuration::Release
+            }
+        };
+        ensure!(
+            compatible,
+            "ARA-EXP-DIST-001: package format does not match platform or requires Android release signing"
+        );
+        if self.packaging == PackageFormat::WindowsInstaller {
+            ensure!(
+                self.installer_stub.is_some(),
+                "ARA-EXP-INSTALL-005: windows-installer requires a pinned installerStub"
+            );
+        }
+        if self.packaging == PackageFormat::LinuxAppimage {
+            ensure!(
+                self.appimage_runtime.is_some(),
+                "ARA-EXP-APPIMAGE-001: linux-appimage requires a pinned appimageRuntime"
+            );
+        }
+        for pin in self
+            .installer_stub
+            .iter()
+            .chain(self.appimage_runtime.iter())
+            .chain(self.templates.iter().filter_map(|p| p.symbols.as_ref()))
+        {
+            pin.validate()?;
+        }
+        if let Some(signing) = &self.windows_signing {
+            ensure!(
+                self.platform == Platform::Windows
+                    && !signing.certificate_env.is_empty()
+                    && signing.timestamp_url.as_ref().is_none_or(
+                        |url| url.starts_with("https://") && !url.contains(['\r', '\n'])
+                    ),
+                "ARA-EXP-SIGN-001: invalid Windows signing configuration"
+            );
+        }
         ensure!(
             !matches!(self.platform, Platform::Android | Platform::Ios)
                 || self.lane == ScriptLane::NativeAot,

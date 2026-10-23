@@ -5,6 +5,8 @@
 pub mod android;
 pub mod apple;
 mod bus;
+/// Generic ZIP, self-extracting installer, tar.gz, AppImage and upload manifests.
+pub mod distribution;
 /// Platform-scoped host prerequisites and runnable fixes.
 pub mod doctor;
 /// Versioned NDJSON progress/artifact/diagnostic stream.
@@ -14,6 +16,9 @@ mod native;
 mod pipeline;
 /// Schema-registered project export documents.
 pub mod preset;
+mod shipping_doctor;
+/// Debug-symbol archive production and stripping tool discovery.
+pub mod symbols;
 /// Hash-pinned template cache.
 pub mod template;
 /// Tool discovery, bounded child processes and metadata writing.

@@ -54,6 +54,10 @@ pub struct ExportSummary {
     pub artifacts: BTreeMap<String, u64>,
     /// Content pack identity.
     pub pack_id: String,
+    /// Identity of the private native/managed symbol archive.
+    pub build_id: String,
+    /// Selected launch contract; conformance results never imply engine gameplay ran.
+    pub template_contract: String,
     /// Runtime verification / explicitly selected static checks.
     pub verify: VerifyReport,
 }
@@ -179,7 +183,8 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
     }
     let project = dunce::canonicalize(&r.project)?;
     let toolchain = Toolchain::discover();
-    let dist = d.work.join("dist");
+    let output = d.work.join("dist");
+    let dist = output.join("build");
     std::fs::create_dir_all(&dist)?;
     let templates = d.stage("template", |_| {
         p.templates
@@ -193,6 +198,20 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             .collect::<Result<BTreeMap<_, _>>>()
     })?;
     let script_project = tools::project_path(&project, &p.script_project)?;
+    let crash_source = d.work.join("AraCrash.cs");
+    std::fs::write(&crash_source, include_str!("managed-crash.cs"))?;
+    let crash_targets = d.work.join("AraCrash.targets");
+    std::fs::write(
+        &crash_targets,
+        format!(
+            "<Project><ItemGroup><Compile Include=\"{}\" /></ItemGroup></Project>",
+            quick_xml::escape::escape(
+                crash_source
+                    .to_str()
+                    .context("non-UTF8 managed crash source path")?
+            )
+        ),
+    )?;
     let mut scripts = BTreeMap::new();
     d.stage("script", |d| {
         let targets: Vec<_> = if p.platform == Platform::Android {
@@ -231,6 +250,12 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 .arg("-p:Deterministic=true")
                 .arg("-p:InvariantGlobalization=true")
                 .arg("-p:UseSharedCompilation=false")
+                .arg("-p:DebugSymbols=true")
+                .arg("-p:StripSymbols=false")
+                .arg(format!(
+                    "-p:CustomBeforeMicrosoftCommonTargets={}",
+                    crash_targets.display()
+                ))
                 .arg(format!(
                     "-p:BaseIntermediateOutputPath={}/",
                     d.work.join("obj").join(arch).display()
@@ -267,14 +292,6 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 ])
                 .env("ARA_ZIG", zig)
                 .env("ARA_ZIGCC", wrapper);
-                if toolchain
-                    .ndk_bin()
-                    .is_some_and(|b| b.join(tools::executable("llvm-objcopy")).is_file())
-                {
-                    cmd.arg("-p:ObjCopyName=llvm-objcopy");
-                } else {
-                    cmd.arg("-p:StripSymbols=false");
-                }
             }
             if p.platform == Platform::Android {
                 cmd.args([
@@ -328,7 +345,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         Ok(built)
     })?;
     d.stage("assemble",|_| {
-        let launch=json!({"pack":"game.arapack","lane":if p.lane==ScriptLane::NativeAot {"nativeaot"} else {"r2r-coreclr"},"script":if p.platform==Platform::Windows {if p.lane==ScriptLane::NativeAot {format!("game/{}.dll",p.assembly)} else {"dotnet".into()}} else if p.lane==ScriptLane::NativeAot {format!("game/{}.so",p.assembly)} else {"dotnet".into()},"assembly":p.assembly,"config":p.config.name(),"encryption_key_env":p.encryption_key_env});
+        let launch=json!({"contract":p.player_template.contract(),"pack":"game.arapack","lane":if p.lane==ScriptLane::NativeAot {"nativeaot"} else {"r2r-coreclr"},"script":if p.platform==Platform::Windows {if p.lane==ScriptLane::NativeAot {format!("game/{}.dll",p.assembly)} else {"dotnet".into()}} else if p.lane==ScriptLane::NativeAot {format!("game/{}.so",p.assembly)} else {"dotnet".into()},"assembly":p.assembly,"config":p.config.name(),"encryption_key_env":p.encryption_key_env});
         tools::write_json(&dist.join("ara-launch.json"),&launch)?;
         if p.platform==Platform::Android {
             for (abi,_,_) in android::ABIS {
@@ -345,18 +362,67 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         for (arch,path) in &plugins {let name=path.file_name().context("plugin has no filename")?; tools::copy(path,&if p.platform==Platform::Android {dist.join("lib").join(arch).join(name)} else {dist.join("plugins").join(name)})?;}
         Ok(())
     })?;
+    let build_id = d.stage("symbols", |d| {
+        crate::symbols::archive(
+            crate::symbols::Inputs {
+                preset: p,
+                templates: &templates,
+                scripts: &scripts,
+                plugins: &plugins,
+                project: &project,
+                cache: &std::path::absolute(&r.cache)?,
+                work: &d.work,
+                tools: &toolchain,
+            },
+            &dist,
+            &output,
+        )
+    })?;
+    if p.platform == Platform::Windows {
+        d.stage("code-sign", |d| {
+            for (name, path) in crate::distribution::files(&dist)? {
+                if path.extension().is_some_and(|e| e == "exe" || e == "dll") {
+                    crate::distribution::sign(
+                        &path,
+                        p,
+                        &d.log(&format!("sign-{}", name.replace('/', "-"))),
+                    )?;
+                }
+            }
+            Ok(())
+        })?;
+    }
     if p.platform == Platform::Android {
         d.stage("package-sign", |d| {
-            android::package(&project, p, &toolchain, &dist, &d.work, &dist)
+            android::package(&project, p, &toolchain, &dist, &d.work, &output)
         })?;
     }
     let verify = d.stage("verify", |_| match p.platform {
         Platform::Windows => verify::desktop(&dist),
         Platform::Linux => verify::linux(&dist),
-        Platform::Android => {
-            verify::android(&dist, p, &toolchain, r.device.as_deref(), r.allow_emulator)
-        }
+        Platform::Android => verify::android(
+            &output,
+            p,
+            &toolchain,
+            r.device.as_deref(),
+            r.allow_emulator,
+        ),
         _ => unreachable!("Apple lanes returned before compilation"),
+    })?;
+    // Verification logs and crash artifacts are private job evidence, never payload.
+    if dist.join("verify.log").exists() {
+        tools::copy(&dist.join("verify.log"), &output.join("verify.log"))?;
+        std::fs::remove_file(dist.join("verify.log"))?;
+    }
+    let packages = d.stage("distribution", |d| {
+        crate::distribution::package(
+            p,
+            &project,
+            &std::path::absolute(&r.cache)?,
+            &dist,
+            &output,
+            &d.work,
+        )
     })?;
     for message in &verify.unavailable {
         d.emit(EventKind::Warning(Diagnostic {
@@ -378,42 +444,47 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             ],
         }))?;
     }
+    let signing = if p.platform == Platform::Android {
+        if p.signing.is_some() {
+            "android-upload"
+        } else {
+            "android-debug"
+        }
+    } else if p.windows_signing.is_some() {
+        "authenticode"
+    } else {
+        "unsigned"
+    };
+    crate::distribution::manifest(p, &build_id, &output, &packages, signing)?;
     let mut artifacts = BTreeMap::new();
-    collect_sizes(&dist, &dist, &mut artifacts)?;
+    collect_sizes(&output, &output, &mut artifacts)?;
     let summary = ExportSummary {
         format: "ara.export.report/1".into(),
         platform: p.platform.name().into(),
         config: p.config.name().into(),
         lane: p.lane,
-        signing: if p.platform == Platform::Android {
-            if p.signing.is_some() {
-                "android-upload"
-            } else {
-                "android-debug"
-            }
-        } else {
-            "unsigned"
-        }
-        .into(),
+        signing: signing.into(),
         elapsed_ms: millis(started.elapsed()),
         stages_ms: d.stages.clone(),
         artifacts,
         pack_id: pack.manifest.id()?,
+        build_id,
+        template_contract: p.player_template.contract().into(),
         verify,
     };
-    tools::write_json(&dist.join("report.json"), &summary)?;
+    tools::write_json(&output.join("report.json"), &summary)?;
     if let Some(parent) = r.output.parent() {
         std::fs::create_dir_all(parent)?;
     }
     // Preserve compiler/signing logs with the export. Never log secret command arguments.
     let logs = d.work.join("logs");
     if logs.is_dir() {
-        copy_all(&logs, &dist.join("logs"))?;
+        copy_all(&logs, &output.join("logs"))?;
     }
     std::fs::create_dir(&r.output).context(
         "ARA-EXP-OUT-001: cannot claim output directory; another export may have created it",
     )?;
-    copy_all(&dist, &r.output)?;
+    copy_all(&output, &r.output)?;
     for name in summary.artifacts.keys() {
         d.artifact(&r.output.join(name))?;
     }

@@ -1,8 +1,167 @@
 # Ara export integration
 
+## Distribution v2
+
+Export writes a plain `build/` folder, `distribution.json`, `report.json`, generic
+packages, and a private `symbols/<build-id>.zip` plus its unpacked symbol store.
+`distribution.json` lists player files and packages with BLAKE3, length and execute
+permission, the entry point, build ID, symbol location and actual signing state.
+Symbols, logs and crash records are excluded from every player package.
+
+Stores will be supported by optional plugins later. The engine produces generic
+builds and manifests; this change introduces no store integration or plugin system.
+
+The preset's `packaging` field selects `windowsPortable`, `windowsInstaller`,
+`linuxAppimage`, `linuxTar` or `androidPlay` (`folder` is the default). Generic
+project presets live at `presets/<name>.export.json`; `export --preset
+windows-portable --project PROJECT --output NEW_DIR` resolves that file. Paths to
+existing presets still work. `ara-export preset --kind windows-portable --base
+BASE --output PROJECT/presets/windows-portable.export.json` derives a named preset
+from a platform preset with real runtime pins. The CLI owner can call the unchanged
+`export(ExportRequest, EventSink)` entry point for an export job and forward its
+progress, artifact and diagnostic events to `ara_jobs`.
+
+- `windows-portable`: deterministic `game.zip`.
+- `windows-installer`: `game.zip` and a self-extracting `game-setup.exe`. Prepare
+  `ara-export-installer` once, pin it with `artifact-pin --file FILE`, and put that
+  pin in `installerStub`. The installer supports `--list` and `--destination DIR`,
+  installs into a new directory and never updates an existing installation.
+  No WiX/NSIS, elevated process, service or system configuration is involved.
+- `linux-tar`: deterministic `game.tar.gz`, with executable files marked 0755.
+- `linux-appimage`: type-2 `game.AppImage`, built with Rust SquashFS/Gzip on Windows.
+  Supply an x86_64 [AppImage runtime](https://github.com/AppImage/type2-runtime/releases)
+  as a BLAKE3 `appimageRuntime` pin. Download it explicitly during setup; it is
+  never fetched by Cargo. The ELF baseline remains glibc 2.31. FUSE/extraction and
+  actual execution need Linux; Windows verifies the embedded image structure.
+- `android-play`: requires release configuration and an explicit upload signing
+  key; emits the existing signed APK/AAB with bundletool, signature and 16 KiB
+  structure checks. A debug key cannot select this preset.
+
+Optional `windowsSigning: { certificateEnv, timestampUrl }` signs player PE images
+and the finished installer using the certificate store and SHA256. A configured
+identity makes missing signtool/signing failures fatal; an absent identity yields
+explicitly unsigned packages. `ARA_SIGNTOOL` overrides discovery. Doctor diagnoses
+the tool and certificate reference without printing values. Actual identity/trust
+and installation are not claimed by an unsigned export.
+
+## Crash reporting v2
+
+Desktop templates retain native debug information at preparation time:
+`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`, `CARGO_PROFILE_RELEASE_STRIP=none`.
+Windows template pins include `symbols: { hash, source }` for the matching PDB;
+`pin --symbols PDB` produces it. Export checks the PE's GUID/age against the PDB.
+Linux/Android templates carry DWARF. C# NativeAOT is published with symbols retained.
+Export archives raw PDB/DWARF and a standard Breakpad symbol store, then strips
+the deployed ELF files. `ARA_OBJCOPY` or the installed LLVM/NDK supplies objcopy;
+doctor diagnoses setup, and Cargo never invokes it to build these crates.
+
+`ara-crash` uses [crash-handler and minidumper](https://github.com/EmbarkStudios/crash-handling)
+to request a native dump from an isolated worker: MiniDumpWriteDump on Windows,
+ptrace and Breakpad-format minidumps on Linux. The same executable has a private
+monitor mode; production templates must call `monitor_from_args` before runtime
+initialization and retain the `Capture` guard. The export conformance template does
+this. Native callbacks only perform preconnected IPC. A normal exit detaches the
+handler and reaps the worker. Forced termination/fast-fail paths that bypass native
+handlers cannot guarantee capture. Android's native capture is not implemented;
+the managed reporting import remains available there.
+
+Rust panic hooks record the message/source and a forced backtrace, plus a paired
+native snapshot for offline symbolization after PDB/DWARF is stripped. A caught
+panic keeps its fatal crash connection available for later faults. A compile-time
+managed module initializer attaches `AppDomain.UnhandledException` and records the
+exception's full managed stack before termination. Export injects it without editing
+the game project or changing the host ABI. Its bounded `ARAMCS1` record is converted
+by Rust's canonical writer during symbolization. Contained C# boundary exceptions
+continue to use the existing host diagnostics. Crash storage is
+`LOCALAPPDATA/Ara/crashes/<build-id>` or `XDG_STATE_HOME/Ara/crashes/<build-id>`
+(fallback `~/.local/state`); `ARA_CRASH_DIR` is an explicit test override.
+
+`ara-export crash symbolize DUMP --symbols EXPORT/symbols/BUILD/store` processes
+native `.dmp`, Rust `.crash.json` and managed `.managed` files offline and emits
+both the report and diagnostic `ARA2701`. `ara-crash symbolize DUMP SYMBOL_DIR`
+is a standalone tooling binary. No symbol server is contacted. The integrating CLI
+owner wires `ara crash symbolize` to `ara_crash::symbols::symbolize`; the host
+registers `ara_crash::why::CrashExplainer` through `Host::why().register(...)` and
+ingests the emitted diagnostic through its normal bus/report seam. The explainer
+quotes the exception and stack, and requires the matching build's symbols; it
+does not infer a root cause from a stack alone.
+
+`crash: { uploadEndpoint, consentText }` optionally configures an HTTPS receiver.
+Defaults disable upload. Capture/startup never uploads; the game must show the
+configured disclosure and call `upload(..., UploadConsent::Granted, artifact)`
+after consent for that attempt. Decline or absent configuration starts no network
+operation. Upload uses optional OS curl with a 30-second deadline and a 128 MiB cap.
+
+`playerTemplate` is the explicit template-to-runtime switch. It defaults to
+`conformance` and emits launch/report contract `ara.player.conformance/1`. After
+the runtime owner provides integrated player binaries and matching symbols, replace
+the platform pins and set `playerTemplate: runtime` (`ara.player.runtime/1`). The
+conformance executable rejects that contract, so it cannot stand in for an engine
+player. The runtime template must implement the launch JSON fields, load the pack's
+`ara.project.json` main scene and cooked assets, use the generated C# host ABI, call
+the crash monitor/startup seam, and emit an honest headless `ARA_RESULT` including
+`template_contract: "ara.player.runtime/1"` and `verified: true`. Windows export
+rejects a result whose contract differs from the selected template.
+
+The conformance fixture can validate a pack containing the real Fox demo project:
+it verifies every file and the main scene document, then runs the original seeded
+S7 ECS/C# workload. Its report explicitly says conformance; it does not simulate
+the authored Fox controllers, physics, navigation or rendering. Stage a copy of
+`crates/ara-player/demo` under a scratch project's `content/` and the existing
+`fixtures/sample/game` under `game/`; this is export-test scaffolding. Never change
+the demo or label this fixture as a runnable Outpost game. The Outpost Door,
+UseMedkit and Gravity samples under `dotnet/` need the integrated host ABI and are
+not wired into the S7 conformance ABI.
+
+For an explicitly launched validation child, `--crash-probe native|panic|managed`
+forces capture. Keep those artifacts outside `build/` and retain the original
+report and symbols when testing. The existing S7 fixture remains a conformance
+driver; it does not prove that Outpost gameplay or the complete engine ran.
+
+## V2 verification
+
+[distribution-v2.json](validation/distribution-v2.json) records real exports of the
+Fox demo's five packed files through the release conformance template. Windows ran
+120 headless ticks over 100,000 S7 test entities, with equal Rust/C# checksums. The
+self-extracting installer was executed into a new directory and its files checked.
+Windows ZIP/installer are about 1.7/2.1 MB; Linux tar.gz/AppImage about 2.7/3.6 MB;
+Android APK/AAB about 11.5/4.0 MB. The refreshed Windows installer export took
+14.6 s, Linux tar/AppImage 10.8/10.6 s and Android 34.6 s on the shared machine.
+The earlier cold Windows portable export took 79.2 s; compiler time dominates.
+Native crashes, Rust panic snapshots and actual NativeAOT C# unhandled exceptions
+were captured from the exported Windows executable after loading C#. Their local
+symbolized stacks and ARA2701 diagnostics are in the evidence. A separate child
+test checks that a caught panic leaves capture working for a subsequent native
+fault. Windows packages are unsigned; Android used a disposable upload test key.
+Linux checks are static ELF/glibc 2.31 and embedded SquashFS hash verification;
+no Linux launch, FUSE mount, Android device, real signing identity or store upload
+is claimed.
+
+To repeat the distribution test, stage the demo and conformance C# files as above
+under `EVIDENCE/project/content` and `EVIDENCE/project/game`, and save prepared base
+presets at `EVIDENCE/presets/{windows,linux,android}.export.json`. The Windows preset
+needs `installerStub`, Linux needs `appimageRuntime`, and Android needs its explicit
+test-key signing configuration. Configure the SDK environment shown below and the
+password environments named in that preset. Then run:
+
+```powershell
+$env:CARGO_BUILD_JOBS = '2'
+$env:ARA_DISTRIBUTION_EVIDENCE = '<new evidence directory>'
+cargo test -p ara-export --test distribution_e2e -- --ignored --nocapture
+```
+
+`ARA_DISTRIBUTION_RESUME=1` reuses complete exports after checking every manifest
+file and package hash; use it only while their inputs remain unchanged. Crash test
+directories must be new, so stale dumps cannot satisfy a later failed capture.
+Generated pins, binaries, private symbols and keys remain outside git; only the
+canonical validation report is checked in.
+
+## Integration entry points
+
 `ara-export` owns orchestration; the protocol/CLI track can call
 `export(&ExportRequest, &mut dyn EventSink)` and `doctor(&DoctorOptions, &Toolchain)`.
-The temporary binary exposes `doctor`, `export`, `pin`, `preset-fmt` and `schema`.
+The temporary binary exposes `doctor`, `export`, `pin`, `artifact-pin`, `preset`,
+`preset-fmt`, `schema` and `crash symbolize`.
 It does not change the `ara` CLI. Dependencies are declared locally, without root
 workspace edits. `ara-export-player` is an export **conformance fixture**, adapted
 from Ara's S7 sample, until the merged engine supplies full `ara-player` templates.
@@ -93,7 +252,7 @@ For release/upload signing, set:
 
 Passwords are resolved by the signing tools from the named environment variables,
 not passed as literal arguments or written into logs/presets. Windows Authenticode
-is an external post-export operation; doctor reports the missing identity.
+uses the optional signing configuration described above.
 
 ## Packs and delivery
 

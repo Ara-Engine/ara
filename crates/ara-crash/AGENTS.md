@@ -7,7 +7,10 @@ Windows, ptrace/Breakpad minidumps on Linux). No SDK download or build tool.
 `monitor_from_args` must run before any application initialization. `Capture`
 owns the child process and native handler; drop detaches and reaps it. The crash
 callback only requests a dump over preconnected IPC. Never allocate, symbolize
-or upload from that callback. Rust's panic hook writes a local JSON report.
+or upload from that callback. Rust's panic hook writes a local JSON report and
+requests a paired native snapshot using ordinary messages, preserving the fatal
+client connection for a later crash after a caught panic. Ping pins exception
+context until the monitor finishes writing. Snapshot requests are thread-scoped.
 Managed hosts report exception text/stacks through `write_report`; the export
 fixture includes an AppDomain.UnhandledException hook without changing host ABI.
 

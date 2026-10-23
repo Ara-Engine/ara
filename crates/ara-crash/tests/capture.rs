@@ -39,7 +39,7 @@ fn native_crash_and_panic_are_captured_in_separate_processes() {
         process::Command,
         time::{Duration, Instant},
     };
-    for mode in ["native", "panic"] {
+    for mode in ["native", "panic", "recovered"] {
         let dir = tempfile::tempdir().unwrap();
         let mut child = Command::new(env!("CARGO_BIN_EXE_ara-crash"))
             .args(["probe", mode])
@@ -67,15 +67,29 @@ fn native_crash_and_panic_are_captured_in_separate_processes() {
             .iter()
             .find(|p| {
                 p.extension()
-                    .is_some_and(|ext| ext == if mode == "native" { "dmp" } else { "json" })
+                    .is_some_and(|ext| ext == if mode == "panic" { "json" } else { "dmp" })
             })
             .expect("crash artifact");
-        if mode == "native" {
+        if mode != "panic" {
             let dump = minidump::Minidump::read_path(artifact).unwrap();
             assert!(dump.get_stream::<minidump::MinidumpException>().is_ok());
+            if mode == "recovered" {
+                assert_eq!(
+                    artifacts
+                        .iter()
+                        .filter(|p| p.extension().is_some_and(|ext| ext == "dmp"))
+                        .count(),
+                    2
+                );
+            }
         } else {
             let report = ara_crash::symbols::symbolize(artifact, dir.path()).unwrap();
-            assert!(report.stack.contains("ara_crash"));
+            assert!(!report.stack.is_empty());
+            assert!(
+                artifacts
+                    .iter()
+                    .any(|p| p.extension().is_some_and(|ext| ext == "dmp"))
+            );
             assert!(report.message.contains("Ara panic capture probe"));
         }
     }

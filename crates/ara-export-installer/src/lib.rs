@@ -11,11 +11,15 @@ use std::{
 pub const MAGIC: &[u8; 8] = b"ARASFX1\0";
 const TRAILER: usize = 56;
 
-/// Appends an authenticated archive to a prebuilt executable, before code signing.
+/// Appends a hash-checked archive to a prebuilt executable, before code signing.
 pub fn append(stub: &[u8], archive: &[u8]) -> Result<Vec<u8>> {
     ensure!(
         stub.starts_with(b"MZ"),
         "ARA-EXP-INSTALL-001: installer stub must be a Windows PE image"
+    );
+    ensure!(
+        unsigned_end(stub).is_none(),
+        "ARA-EXP-INSTALL-001: provide an unsigned installer stub; sign after appending the payload"
     );
     let mut bytes = stub.to_vec();
     let offset = bytes.len() as u64;

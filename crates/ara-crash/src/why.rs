@@ -33,7 +33,7 @@ impl Explainer for CrashExplainer {
         let causes = records.iter().filter_map(|record| {
             let crash = record.diagnostic.data.as_ref()?.get("crash")?;
             let report = serde_json::from_value::<crate::CrashReport>(crash.clone()).ok()?;
-            Some(Cause { code: crate::CRASH, likelihood: Likelihood::High, title: report.message, evidence: vec![report.stack], subjects: vec![], fixes: vec![], advice: vec![format!("Use the symbols archive matching build {}. The first application frame identifies the failing call; a stack alone does not establish its cause.", report.build_id)] })
+            Some(Cause { code: crate::CRASH, likelihood: Likelihood::High, title: report.message, evidence: vec![report.stack], subjects: vec![], fixes: vec![], advice: vec![format!("Use the symbols archive matching build {}. Start with the exception message and gameplay frames; the stack records the call path, and the root cause still needs investigation.", report.build_id)] })
         }).collect::<Vec<_>>();
         Ok(Report {
             question: q.text.clone(),

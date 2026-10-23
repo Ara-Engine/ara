@@ -34,22 +34,15 @@ fn run() -> Result<()> {
         Some("probe") => {
             let mode = args
                 .next()
-                .context("probe needs native|panic|managed and a directory")?;
+                .context("probe needs native|panic and a directory")?;
             let directory = PathBuf::from(args.next().context("probe directory missing")?);
             let _capture = ara_crash::Capture::start(&directory, "probe")?;
             match mode.as_str() {
                 "native" => native_crash_probe(),
                 "panic" => panic!("Ara panic capture probe"),
-                "managed" => {
-                    ara_crash::write_report(
-                        &directory,
-                        &ara_crash::CrashReport::new(
-                            "probe",
-                            ara_crash::CrashKind::Managed,
-                            "managed bridge probe".into(),
-                            "Ara.Game.Exports.OnUnhandledException".into(),
-                        ),
-                    )?;
+                "recovered" => {
+                    let _ = std::panic::catch_unwind(|| panic!("Ara caught panic probe"));
+                    native_crash_probe();
                 }
                 _ => bail!("unknown crash probe"),
             }

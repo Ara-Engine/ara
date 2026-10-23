@@ -36,8 +36,21 @@ pub fn archive_pe(image: &Path, pdb: &Path, raw: &Path, store: &Path) -> Result<
     std::fs::create_dir_all(raw)?;
     let target = raw.join(&name);
     std::fs::copy(pdb, &target)?;
+    // On Windows x64, unwind information lives in the PE image, not the PDB.
+    // dump_syms finds that image beside the PDB using the same stem and GUID.
+    let image_bytes = std::fs::read(image)?;
+    let extension = if goblin::pe::PE::parse(&image_bytes)?.is_lib {
+        "dll"
+    } else {
+        "exe"
+    };
+    std::fs::copy(image, target.with_extension(extension))?;
     archive(&target, store)?;
-    let symbol_name = format!("{}.sym", name.trim_end_matches(".pdb"));
+    let stem = Path::new(&name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .context("invalid PDB filename")?;
+    let symbol_name = format!("{stem}.sym");
     anyhow::ensure!(
         store.join(&name).join(&id).join(symbol_name).is_file(),
         "ARA-EXP-CRASH-005: PDB does not match image GUID/age"
@@ -106,6 +119,16 @@ pub fn symbolize(dump: &Path, store: &Path) -> Result<crate::CrashReport> {
         return Ok(report);
     }
     if dump.extension().is_some_and(|ext| ext == "json") {
+        if let Some(stem) = dump
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".crash.json"))
+        {
+            let native = dump.with_file_name(format!("{stem}.dmp"));
+            if native.is_file() {
+                return symbolize(&native, store);
+            }
+        }
         let report: crate::CrashReport = serde_json::from_slice(&std::fs::read(dump)?)?;
         anyhow::ensure!(
             report.format == "ara.crash/1",

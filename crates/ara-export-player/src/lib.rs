@@ -9,6 +9,7 @@ mod columns;
 pub mod observability;
 pub mod runtime;
 mod script;
+pub mod shipping;
 
 /// Platform log sink (stdout or Android logcat).
 pub mod log {

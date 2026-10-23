@@ -3,6 +3,8 @@
 
 mod capture;
 mod report;
+#[cfg(any(windows, target_os = "linux"))]
+mod snapshot;
 #[cfg(feature = "symbols")]
 pub mod symbols;
 #[cfg(feature = "explain")]

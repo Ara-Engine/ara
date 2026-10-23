@@ -9,6 +9,23 @@ use std::{
 /// Resolves a pinned runtime into an immutable content-addressed local cache.
 /// Every hit is rehashed. Cache corruption never silently falls back to a new pin.
 pub fn resolve(pin: &TemplatePin, project: &Path, cache: &Path) -> Result<PathBuf> {
+    resolve_artifact(
+        &crate::preset::ArtifactPin {
+            hash: pin.hash.clone(),
+            source: pin.source.clone(),
+        },
+        project,
+        cache,
+    )
+}
+
+/// Resolves a tooling/symbol artifact with the same content-addressed checks as a runtime.
+pub fn resolve_artifact(
+    pin: &crate::preset::ArtifactPin,
+    project: &Path,
+    cache: &Path,
+) -> Result<PathBuf> {
+    pin.validate()?;
     let root = cache.join("templates");
     std::fs::create_dir_all(&root)?;
     let target = root.join(&pin.hash);
