@@ -126,6 +126,8 @@ pub struct DeviceInfo {
     pub task_dispatch: [u32; 4],
     /// Enabled core geometry capability (also used by Slang PrimitiveId inputs).
     pub geometry_shader: bool,
+    /// VK_EXT_hdr_metadata enabled for native window presentation.
+    pub hdr_metadata: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics.
     pub buffer_int64_atomics: bool,
     /// Maximum supported 2D extent.
