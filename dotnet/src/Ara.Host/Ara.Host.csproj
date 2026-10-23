@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Dev-only hosting: loads module generations into collectible ALCs, applies EnC deltas
+       and talks to the out-of-process compile server. hostfxr loads this assembly (and its
+       runtimeconfig) into the default ALC. Never part of a NativeAOT image. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Ara.Hosting</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Emits Ara.Host.runtimeconfig.json for hostfxr. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- S2 finding 2: tier-0 JIT of optimized loop methods pins collectible ALCs forever. -->
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+    <!-- S2 finding 3: Release runtimeconfigs disable MetadataUpdater.ApplyUpdate (L1) otherwise. -->
+    <MetadataUpdaterSupport>true</MetadataUpdaterSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Ara.Runtime/Ara.Runtime.csproj" />
+    <Compile Include="../Ara.CompileServer/Protocol.cs" Link="Protocol.cs" />
+  </ItemGroup>
+</Project>

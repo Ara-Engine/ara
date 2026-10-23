@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 bytemuck = { version = "1.24", features = ["derive"] }
-ktx2 = "=0.5.0"
+ktx2 = "0.5.0"
 
 [lints]
 workspace = true

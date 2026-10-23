@@ -1,0 +1,4 @@
+# One gameplay module: one reload unit, compiled into its own assembly.
+# Keep modules under ~5k lines so L3 reloads stay fast (the compile server warns past that).
+[module]
+name = "Outpost.Sample"

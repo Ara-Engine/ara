@@ -96,6 +96,12 @@ no scratch allocation in W2 ticks. W4 deliberately retains S8's command path.
 
 ## Integration boundaries
 
+`PersistenceSelection` + `Session::persistent_state/restore_persistent` provide
+ara-save's opt-in component/resource bridge. They preserve tick/RNG/identity cursor,
+exclude input holds/pending work/presentation, and prevalidate schemas/typed codecs.
+Capture/apply at host-approved tick boundaries; the host enforces server authority
+and resynchronizes network baselines after load. Full Snapshot semantics are unchanged.
+
 This crate is the engine library side of play control. A6's child-process player
 pool/shared-memory transport, protocol authorization and ara_play/ara_test handlers
 belong to the process/protocol integration. No networking stack is linked here;

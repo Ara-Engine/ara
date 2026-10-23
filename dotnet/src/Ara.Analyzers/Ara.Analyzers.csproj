@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Ara's Roslyn analyzers (ARA0001-ARA0400). Gameplay modules reference this as an
+       analyzer; the compile server runs it on every edit. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- No analyzer release process yet; IDs are listed in Rules.cs and AGENTS.md. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Ara.Generators/Polyfills.cs" Link="Polyfills.cs" />
+  </ItemGroup>
+</Project>

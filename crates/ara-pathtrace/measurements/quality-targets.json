@@ -1,0 +1,32 @@
+[
+  {
+    "hybrid_settle_frames": 96,
+    "reference_bounces": 12,
+    "reference_convergence": 0.014554045699550473,
+    "reference_precision": "RGBA32F accumulation, unfiltered",
+    "reference_samples": 4096,
+    "relative_rmse": 0.06987742567840928,
+    "scene": "glossy_interior",
+    "target": 0.08
+  },
+  {
+    "hybrid_settle_frames": 96,
+    "reference_bounces": 12,
+    "reference_convergence": 0.014855823508312391,
+    "reference_precision": "RGBA32F accumulation, unfiltered",
+    "reference_samples": 4096,
+    "relative_rmse": 0.09642910214576818,
+    "scene": "thin_wall",
+    "target": 0.1
+  },
+  {
+    "hybrid_settle_frames": 96,
+    "reference_bounces": 12,
+    "reference_convergence": 0.0011963823384919731,
+    "reference_precision": "RGBA32F accumulation, unfiltered",
+    "reference_samples": 4096,
+    "relative_rmse": 0.006492074767161772,
+    "scene": "furnace",
+    "target": 0.025
+  }
+]

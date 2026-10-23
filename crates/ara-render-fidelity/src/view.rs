@@ -139,7 +139,12 @@ impl FidelityView {
         Ok(Self {
             settings,
             scene,
-            targets: Targets::new(gpu, settings.render_size, settings.display_size)?,
+            targets: Targets::new(
+                gpu,
+                settings.render_size,
+                settings.display_size,
+                matches!(settings.mode, Mode::Reference { .. }),
+            )?,
             pipelines,
             frame_buffer,
             frame_index,
@@ -224,7 +229,12 @@ impl FidelityView {
         {
             return Ok(());
         }
-        let replacement = Targets::new(gpu, render_size, display_size)?;
+        let replacement = Targets::new(
+            gpu,
+            render_size,
+            display_size,
+            matches!(self.settings.mode, Mode::Reference { .. }),
+        )?;
         std::mem::replace(&mut self.targets, replacement).destroy(gpu)?;
         self.settings = settings;
         self.history = false;

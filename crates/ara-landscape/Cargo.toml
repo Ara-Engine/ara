@@ -1,0 +1,31 @@
+[package]
+name = "ara-landscape"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-terrain = { path = "../ara-terrain" }
+ara-foliage = { path = "../ara-foliage" }
+ara-gpu = { path = "../ara-gpu" }
+ara-render = { path = "../ara-render" }
+ara-material = { path = "../ara-material" }
+ara-doc = { path = "../ara-doc" }
+ara-json = { path = "../ara-json" }
+ara-schema = { path = "../ara-schema" }
+ara-asset-format = { path = "../ara-asset-format" }
+half = "2"
+anyhow = "1"
+bytemuck = { version = "1", features = ["derive"] }
+glam = { version = "0.30", features = ["bytemuck", "serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+blake3 = "1"
+
+[dev-dependencies]
+ara-shader-cook = { path = "../ara-shader-cook" }

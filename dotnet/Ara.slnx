@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ara.Runtime/Ara.Runtime.csproj" />
+    <Project Path="src/Ara.Generators/Ara.Generators.csproj" />
+    <Project Path="src/Ara.Host/Ara.Host.csproj" />
+    <Project Path="src/Ara.Analyzers/Ara.Analyzers.csproj" />
+    <Project Path="src/Ara.Analyzers.CodeFixes/Ara.Analyzers.CodeFixes.csproj" />
+    <Project Path="src/Ara.CompileServer/Ara.CompileServer.csproj" />
+    <Project Path="src/Ara.Agent/Ara.Agent.csproj" />
+    <Project Path="src/Ara.RunWorker/Ara.RunWorker.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Outpost.Sample/Outpost.Sample.csproj" />
+    <Project Path="samples/Outpost.Sample.Aot/Outpost.Sample.Aot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ara.TestModule/Ara.TestModule.csproj" />
+    <Project Path="tests/Ara.Analyzers.Tests/Ara.Analyzers.Tests.csproj" />
+    <Project Path="tests/Ara.CompileServer.Tests/Ara.CompileServer.Tests.csproj" />
+    <Project Path="tests/Ara.Generators.Tests/Ara.Generators.Tests.csproj" />
+    <Project Path="tests/Ara.RunWorker.Tests/Ara.RunWorker.Tests.csproj" />
+    <Project Path="tests/Ara.Runtime.Tests/Ara.Runtime.Tests.csproj" />
+  </Folder>
+</Solution>
