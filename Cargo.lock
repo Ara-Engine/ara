@@ -400,6 +400,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-host",
+ "ara-hub-service",
  "ara-json",
  "ara-mcp",
  "ara-merge",
@@ -947,6 +948,20 @@ dependencies = [
  "insta",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-hub-service"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-host",
+ "ara-json",
+ "ara-proto",
+ "ara-rpc",
+ "serde",
+ "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
