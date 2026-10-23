@@ -73,13 +73,13 @@ public class DescriptorTests
         var b = new ModuleBuilder();
         Probe p = default;
         var at = (byte*)&p;
-        b.Component<Probe>("Probe", [(int)((byte*)&p.Hp - at), (int)((byte*)&p.Owner - at)], _ => { });
+        b.Component("Probe", [sizeof(Probe), (int)((byte*)&p.Hp - at), (int)((byte*)&p.Owner - at)], _ => { });
         b.Type("Probe", """{"kind":"component","doc":"P.","fields":{}}""");
         using var doc = JsonDocument.Parse(b.Descriptor("Game", 2, 5, hot: true));
         var root = doc.RootElement;
         Assert.Equal((2, 5, true), (root.GetProperty("slot").GetInt32(), root.GetProperty("generation").GetInt32(), root.GetProperty("hot").GetBoolean()));
         var layout = root.GetProperty("components")[0];
-        Assert.Equal((16, 8), (layout.GetProperty("size").GetInt32(), layout.GetProperty("align").GetInt32()));
+        Assert.Equal(16, layout.GetProperty("size").GetInt32());
         Assert.Equal([0, 8], layout.GetProperty("offsets").EnumerateArray().Select(o => o.GetInt32()));
         Assert.Equal("component", root.GetProperty("types").GetProperty("types").GetProperty("Probe").GetProperty("kind").GetString());
     }

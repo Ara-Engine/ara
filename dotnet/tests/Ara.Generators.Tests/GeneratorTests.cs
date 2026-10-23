@@ -100,8 +100,8 @@ public class GeneratorTests
         Assert.Contains("[assembly: global::Ara.Hosting.AraModule(\"Game.Module\", typeof(global::Ara.Generated.AraModule_Game_Module))]", module);
         Assert.Contains("""b.Type("Health", "{\"kind\":\"component\",\"doc\":\"Hit points.\",\"fields\":{\"value\":{\"type\":\"f32\",\"doc\":\"Current value.\",\"unit\":\"%\",\"replicate\":{\"audience\":\"owner\",\"rollback\":true},\"range\":[0,100]},\"lastHit\":{\"type\":\"entity\",\"doc\":\"Who last hit it.\"}}}");""", module);
         Assert.Contains("b.System(\"Regen\", &global::Game.Regen.__AraRun_Run, 3, [new global::Ara.Hosting.ColumnAccess(\"Health\", true)], [new global::Ara.Hosting.ColumnAccess(\"Tuning\", false)], [], []);", module);
-        Assert.Contains("b.Behaviour<global::Game.Lamp, global::Game.Lamp.Data>(\"Lamp\", \"Lamp\"", module);
-        Assert.Contains("b.Command<global::Game.Toggle.Params>(\"game.Toggle\", \"Switches a lamp.\", \"ToggleParams\"", module);
+        Assert.Contains("b.Behaviour(\"Lamp\", \"Lamp\", sizeof(global::Game.Lamp.Data), static () => new global::Game.Lamp());", module);
+        Assert.Contains("b.Command(\"game.Toggle\", \"Switches a lamp.\", \"ToggleParams\", global::Game.Toggle.__AraParamsLayout()", module);
         Assert.Contains("[\"Health\"], [],", module); // reads Health, writes nothing
         Assert.Contains("public partial bool On { get => AraData<Data>().On; set => AraData<Data>().On = value; }", sources["Game.Lamp.behaviour.g.cs"]);
     }

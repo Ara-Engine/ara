@@ -136,11 +136,12 @@ public sealed class DevModuleLoader : IModuleLoader
                 ?? throw new InvalidOperationException("the assembly has no [AraModule]; is Ara.Generators referenced?");
             register = attr.Entry.GetMethod("Register", [typeof(ModuleBuilder)])?.CreateDelegate<Action<ModuleBuilder>>()
                 ?? throw new InvalidOperationException($"{attr.Entry} has no Register(ModuleBuilder)");
+            Prepare(asm, attr.Entry);
+            var t2 = Host.Now();
             var builder = new ModuleBuilder();
             register(builder);
-            Prepare(asm);
             report.TStaged = Host.Now();
-            Host.Log(0, $"module `{m.Name}` generation {generation} staged: load {(t1 - t0) / 1e6:F1} ms, register + pre-JIT {(report.TStaged - t1) / 1e6:F1} ms ({pe.Length / 1024} KB PE)");
+            Host.Log(0, $"module `{m.Name}` generation {generation} staged: load {(t1 - t0) / 1e6:F1} ms, pre-JIT {(t2 - t1) / 1e6:F1} ms, register {(report.TStaged - t2) / 1e6:F1} ms ({pe.Length / 1024} KB PE)");
             report.Bytes = (ulong)(pe.Length + pdb.Length);
             ScriptRuntime.Enqueue(new SwapUpdate
             {
@@ -184,13 +185,21 @@ public sealed class DevModuleLoader : IModuleLoader
     }
 
     /// <summary>JITs the generated entry points now, so the first tick on new code does not pay for it.</summary>
-    static void Prepare(Assembly asm)
+    /// <summary>
+    /// JITs the generated entry points, layouts and registration lambdas in parallel, so
+    /// neither <c>Register</c> nor the first tick on new code pays for them.
+    /// </summary>
+    static void Prepare(Assembly asm, Type entry)
     {
-        const BindingFlags all = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-        foreach (var t in asm.GetTypes())
-            foreach (var method in t.GetMethods(all))
-                if (method.Name.StartsWith("__AraRun_", StringComparison.Ordinal) || method.Name == "__AraInvoke")
-                    RuntimeHelpers.PrepareMethod(method.MethodHandle);
+        const BindingFlags all = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        var generated = asm.GetTypes().SelectMany(t => t.GetMethods(all))
+            .Where(m => m.Name.StartsWith("__Ara", StringComparison.Ordinal));
+        var lambdas = entry.GetNestedTypes(BindingFlags.NonPublic).SelectMany(t => t.GetMethods(all)).Where(m => !m.IsAbstract && !m.ContainsGenericParameters);
+        var entries = generated.Concat(lambdas).ToArray();
+        // The JIT is thread-safe: spread the entry points over a few pool threads (the
+        // boosted tick threads keep priority).
+        Parallel.ForEach(entries, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 4) },
+            m => RuntimeHelpers.PrepareMethod(m.MethodHandle));
     }
 
     internal void OnImage(uint slot, uint generation, bool hot, uint kind, uint escalation, ulong serverUs, byte[] pe, byte[] pdb)

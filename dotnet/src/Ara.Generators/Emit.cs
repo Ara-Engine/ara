@@ -51,13 +51,19 @@ public static class Emit
 
     static string Short(Shell s) => s.Header.Split(' ').Last();
 
-    static void Offsets(Code c, string type, IEnumerable<string> fields, string method = "__AraOffsets")
+    /// <summary>
+    /// <c>__AraLayout()</c>: the struct's size followed by its measured field offsets. It
+    /// lives in the type (private fields stay accessible) and is not generic, so the
+    /// loader can JIT every one in parallel before <c>Register</c> runs.
+    /// </summary>
+    static void Layout(Code c, string type, IEnumerable<string> fields, string method = "__AraLayout")
     {
         c.Line(Hidden);
         c.Open($"internal static unsafe int[] {method}()");
         c.Line($"var v = default({type});");
         c.Line("var b = (byte*)" + Unsafe + ".AsPointer(ref v);");
-        c.Line("return [" + string.Join(", ", fields.Select(f => $"(int)((byte*){Unsafe}.AsPointer(ref v.{f}) - b)")) + "];");
+        var items = new[] { $"sizeof({type})" }.Concat(fields.Select(f => $"(int)((byte*){Unsafe}.AsPointer(ref v.{f}) - b)"));
+        c.Line("return [" + string.Join(", ", items) + "];");
         c.Close();
     }
 
@@ -76,7 +82,7 @@ public static class Emit
             c.Line(Hidden).Line("internal static uint __araIndex = uint.MaxValue;");
             c.Line("/// <summary>Script index, assigned by the host when the module registers.</summary>");
             c.Line($"public static uint {prop} => __araIndex;");
-            Offsets(c, self, m.Fields);
+            Layout(c, self, m.Fields);
         });
     }
 
@@ -134,7 +140,7 @@ public static class Emit
         c.Line(Hidden).Line("internal static uint __araIndex = uint.MaxValue;");
         c.Line("/// <summary>Script component index, assigned by the host when the module registers.</summary>");
         c.Line("public static uint TypeIndex => __araIndex;");
-        Offsets(c, "Data", m.Props.Select(p => p.Name));
+        Layout(c, "Data", m.Props.Select(p => p.Name));
         c.Close();
         foreach (var p in m.Props)
         {
@@ -157,7 +163,7 @@ public static class Emit
             c.Line($"public {p.CsType} {Schema.Pascal(p.Name)};");
         }
         c.Close();
-        Offsets(c, "Params", values.Select(p => Schema.Pascal(p.Name)), "__AraParamsOffsets");
+        Layout(c, "Params", values.Select(p => Schema.Pascal(p.Name)), "__AraParamsLayout");
         c.Line("/// <summary>Runs one call: binds params and components, then maps the result to an ABI status.</summary>");
         c.Line(Hidden);
         c.Open("internal static unsafe int __AraInvoke(global::Ara.Hosting.CommandCall* call)");
@@ -222,12 +228,12 @@ public static class Emit
         foreach (var d in data.OrderBy(d => d.SchemaName, StringComparer.Ordinal))
         {
             var t = d.Shell.FullName;
-            c.Line($"b.{d.Role}<{t}>({Lit(d.SchemaName)}, {t}.__AraOffsets(), static i => {t}.__araIndex = i);");
+            c.Line($"b.{d.Role}({Lit(d.SchemaName)}, {t}.__AraLayout(), static i => {t}.__araIndex = i);");
         }
         foreach (var bm in behaviours.OrderBy(b => b.SchemaName, StringComparer.Ordinal))
         {
             var t = bm.Shell.FullName + ".Data";
-            c.Line($"b.Component<{t}>({Lit(bm.SchemaName)}, {t}.__AraOffsets(), static i => {t}.__araIndex = i);");
+            c.Line($"b.Component({Lit(bm.SchemaName)}, {t}.__AraLayout(), static i => {t}.__araIndex = i);");
         }
         foreach (var s in systems.OrderBy(s => s.Order).ThenBy(s => s.Name, StringComparer.Ordinal))
         {
@@ -236,14 +242,14 @@ public static class Emit
             c.Line($"b.System({Lit(s.Name)}, &{s.Shell.FullName}.__AraRun_{s.Method}, {s.Order}, {cols}, {res}, {Strings(s.With)}, {Strings(s.Without)});");
         }
         foreach (var bm in behaviours.OrderBy(b => b.SchemaName, StringComparer.Ordinal))
-            c.Line($"b.Behaviour<{bm.Shell.FullName}, {bm.Shell.FullName}.Data>({Lit(bm.SchemaName)}, {Lit(bm.SchemaName)}, static () => new {bm.Shell.FullName}());");
+            c.Line($"b.Behaviour({Lit(bm.SchemaName)}, {Lit(bm.SchemaName)}, sizeof({bm.Shell.FullName}.Data), static () => new {bm.Shell.FullName}());");
         foreach (var cm in commands.OrderBy(x => x.Name, StringComparer.Ordinal))
         {
             var comps = cm.Params.Where(p => p.Kind == "component").ToList();
             var reads = Strings(comps.Where(p => p.RefKind != "ref").Select(p => p.SchemaName));
             var writes = Strings(comps.Where(p => p.RefKind == "ref").Select(p => p.SchemaName));
             var expose = cm.Expose is null ? "null" : Lit(cm.Expose);
-            c.Line($"b.Command<{cm.Shell.FullName}.Params>({Lit(cm.Name)}, {Lit(cm.Summary)}, {Lit(cm.ParamsType)}, {cm.Shell.FullName}.__AraParamsOffsets(), &{cm.Shell.FullName}.__AraInvoke, {reads}, {writes}, {expose}, {Strings(cm.Examples)});");
+            c.Line($"b.Command({Lit(cm.Name)}, {Lit(cm.Summary)}, {Lit(cm.ParamsType)}, {cm.Shell.FullName}.__AraParamsLayout(), &{cm.Shell.FullName}.__AraInvoke, {reads}, {writes}, {expose}, {Strings(cm.Examples)});");
         }
         c.Close().Close();
     }
