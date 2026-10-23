@@ -50,6 +50,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
+  ModelVertex retains UV0/UV1; ModelMaterial retains independent slot transforms,
+  emissive strength (folded once), transmission and occlusion factors/textures.
 - `plugin::RuntimePlugin` (`Send + Sync`): seams for C# scripts (`ara-runtime-script`),
   networked play (`ara-runtime-net`), world streaming (`ara-runtime-world`), audio and
   VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,

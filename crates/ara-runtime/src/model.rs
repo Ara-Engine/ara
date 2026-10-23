@@ -7,6 +7,10 @@ use ara_asset_format::{Lod, Mesh, QuantizedVertex, SkinExtra};
 use glam::{Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
+mod material;
+mod uv;
+pub use material::ModelMaterial;
+pub use uv::TextureTransform;
 
 /// A decoded model-space vertex with up to eight skin influences.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -17,6 +21,8 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
     /// First texture coordinate.
     pub uv: [f32; 2],
+    /// Second texture coordinate, selected independently by each material slot.
+    pub uv1: [f32; 2],
     /// Tangent xyz and bitangent handedness.
     pub tangent: [f32; 4],
     /// Skin-local joint indices (the owning skin's joint order).
@@ -48,33 +54,6 @@ pub struct ModelLod {
     pub indices: Vec<u32>,
     /// meshoptimizer's relative simplification error (fraction of the mesh extent).
     pub error: f32,
-}
-
-/// Metallic-roughness material factors and texture slots.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ModelMaterial {
-    /// Linear base color factor.
-    pub base_color: [f32; 4],
-    /// Metalness factor.
-    pub metallic: f32,
-    /// Roughness factor.
-    pub roughness: f32,
-    /// Emissive factor (multiplied by the entity's emissive radiance scale).
-    pub emissive: [f32; 3],
-    /// Base color texture, an index into [`Model::textures`].
-    pub base_color_texture: Option<usize>,
-    /// Tangent-space normal map (BC5 XY), an index into [`Model::textures`].
-    pub normal_texture: Option<usize>,
-    /// Normal map strength (`normalTexture.scale`).
-    pub normal_scale: f32,
-    /// Metallic (B) / roughness (G) texture, an index into [`Model::textures`].
-    pub metallic_roughness_texture: Option<usize>,
-    /// Emissive color texture, an index into [`Model::textures`].
-    pub emissive_texture: Option<usize>,
-    /// Alpha mode: 0 opaque, 1 mask, 2 blend.
-    pub alpha_mode: u32,
-    /// Mask cutoff.
-    pub alpha_cutoff: f32,
 }
 
 /// How a cooked texture's texels are interpreted (the importer's cook usage).
@@ -173,8 +152,12 @@ impl Model {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|m| material(m, &gltf_textures, &texture_by_image))
-            .collect::<Vec<_>>();
+            .enumerate()
+            .map(|(i, m)| {
+                material::decode(m, &gltf_textures, &texture_by_image)
+                    .map_err(|e| RuntimeError(format!("{asset}: material {i}: {}", e.0)))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut skins = Vec::new();
         for entry in manifest["skeletons"].as_array().into_iter().flatten() {
@@ -278,41 +261,6 @@ fn floats<const N: usize>(value: &Value, default: [f32; N]) -> [f32; N] {
         }
     }
     out
-}
-
-fn material(
-    m: &Value,
-    textures: &[Value],
-    by_image: &BTreeMap<(usize, TextureUsage), usize>,
-) -> ModelMaterial {
-    let pbr = &m["pbrMetallicRoughness"];
-    // A glTF texture slot → the cooked texture of its image with the slot's usage.
-    let slot = |info: &Value, usage: TextureUsage| {
-        info["index"]
-            .as_u64()
-            .and_then(|t| textures.get(t as usize))
-            .and_then(|t| t["source"].as_u64())
-            .and_then(|image| by_image.get(&(image as usize, usage)).copied())
-    };
-    ModelMaterial {
-        base_color: floats(&pbr["baseColorFactor"], [1.0; 4]),
-        metallic: pbr["metallicFactor"].as_f64().map_or(1.0, |v| v as f32),
-        roughness: pbr["roughnessFactor"].as_f64().map_or(1.0, |v| v as f32),
-        emissive: floats(&m["emissiveFactor"], [0.0; 3]),
-        base_color_texture: slot(&pbr["baseColorTexture"], TextureUsage::Color),
-        normal_texture: slot(&m["normalTexture"], TextureUsage::Normal),
-        normal_scale: m["normalTexture"]["scale"]
-            .as_f64()
-            .map_or(1.0, |v| v as f32),
-        metallic_roughness_texture: slot(&pbr["metallicRoughnessTexture"], TextureUsage::Linear),
-        emissive_texture: slot(&m["emissiveTexture"], TextureUsage::Color),
-        alpha_mode: match m["alphaMode"].as_str() {
-            Some("MASK") => 1,
-            Some("BLEND") => 2,
-            _ => 0,
-        },
-        alpha_cutoff: m["alphaCutoff"].as_f64().map_or(0.5, |v| v as f32),
-    }
 }
 
 /// Node → parent node.
@@ -435,6 +383,7 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
                 position: transform.transform_point3(p).to_array(),
                 normal: n.to_array(),
                 uv: [half(q.uv[0]), half(q.uv[1])],
+                uv1: [half(q.uv[2]), half(q.uv[3])],
                 tangent: [t.x, t.y, t.z, if q.tangent[3] < 0 { -1.0 } else { 1.0 }],
                 joints,
                 weights,

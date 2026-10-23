@@ -4200,6 +4200,11 @@ expression: out
           "type": "bool",
           "doc": "Cook a versioned virtual-geometry DAG for each static material primitive. Skinned and morph-deformed meshes retain the classic path.",
           "default": true
+        },
+        "opacityMaps": {
+          "type": "map<string>",
+          "doc": "glTF base-color image URI (or #image-index) to companion opacity image URI. The mask's red channel multiplies existing alpha; paths are relative to the model.",
+          "default": {}
         }
       }
     },

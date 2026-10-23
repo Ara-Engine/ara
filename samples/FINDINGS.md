@@ -165,6 +165,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     an up vector, handles parent transforms and deterministic pole fallbacks.
 25. **The landscape renderer requires an origin-anchored square terrain**, so a level
     centred in a terrain has to be offset by hand (`outpost::SHIFT`).
+    **Fixed (`4a50664`, `9a27a8f`):** CPU extraction supports nonzero origins and
+    signed tile bounds; parented scene translation reaches render, foliage, nav
+    and collision data. GPU translation/streaming and collision tests pass.
 26. **A scripted agent build cannot finish its own review.** Every agent edit enters
     review and `ara accept --all` from the same agent fails (`ARA1813`), so a freshly
     built project shows every entity as "unreviewed" in the editor until a human

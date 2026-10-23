@@ -22,6 +22,9 @@ requests; running children hold their slot until reaped. The cold-batch process
 test is `cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
+Settings-selected source files use Importer::dependencies_with_settings and
+ProcessWorker::discover_with_settings. snapshot includes their exact bytes, so
+companion edits participate in action identity and filesystem invalidation.
 
 Sidecars are import documents with one i_settings record. Commands return kernel
 Edits; submit these through ara-ops with author/revision metadata. Persist only the

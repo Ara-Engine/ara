@@ -33,7 +33,7 @@ impl Importer for FbxImporter {
         "ara.fbx"
     }
     fn version(&self) -> &str {
-        "4-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1"
+        "5-ufbx0115-meshopt070-ispc050-tiled-f32text-arag1-opacity-settings"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -56,6 +56,11 @@ impl Importer for FbxImporter {
         } else {
             serde_json::from_value(input.settings.clone())?
         };
+        if !settings.opacity_maps.is_empty() {
+            return Err(invalid(
+                "opacityMaps currently names glTF images; FBX does not support this setting",
+            ));
+        }
         let mut output = ImportOutput::default();
         let mut meshes = Vec::new();
         let mut mesh_jobs = Vec::new();
@@ -165,12 +170,12 @@ impl Importer for FbxImporter {
             .map(|(name, vertices, indices, deformed, materials)| {
                 cancellation.check()?;
                 let (virtual_artifact, virtual_metadata) = crate::virtual_geometry::cook(
-                    &name, &vertices, &indices, settings, deformed, materials,
+                    &name, &vertices, &indices, &settings, deformed, materials,
                 )?;
                 let artifact = Artifact {
                     name: name.clone(),
                     kind: ArtifactKind::Mesh,
-                    bytes: cook_mesh(&vertices, &indices, settings)?,
+                    bytes: cook_mesh(&vertices, &indices, &settings)?,
                 };
                 Ok((artifact, virtual_artifact, virtual_metadata))
             })
