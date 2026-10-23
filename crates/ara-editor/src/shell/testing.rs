@@ -44,7 +44,7 @@ impl Shell {
                         menu.open.truncate(level);
                         menu.open.push(i);
                     }
-                    self.walk_level(editor, format!("{path} ▸ {title}"), out)?;
+                    self.walk_level(editor, format!("{path} › {title}"), out)?;
                     if let Some(menu) = &mut self.menu {
                         menu.open.truncate(level);
                     }
@@ -135,6 +135,17 @@ impl Shell {
         editor: &mut Editor,
         id: &str,
     ) -> ara_ui::Result<Vec<String>> {
+        if !self.open_context_at(editor, id)? {
+            return Ok(Vec::new());
+        }
+        let ids = self.rows(editor).into_iter().map(|r| r.0).collect();
+        self.menu = None;
+        self.rebuild(editor)?;
+        Ok(ids)
+    }
+    /// Right-click control `id` (`hierarchy-row` is the first visible row) and leave
+    /// its context menu open; false when the control has no menu.
+    pub fn open_context_at(&mut self, editor: &mut Editor, id: &str) -> ara_ui::Result<bool> {
         let index = if id == "hierarchy-row" {
             self.hierarchy_view
                 .as_ref()
@@ -145,12 +156,6 @@ impl Shell {
         .ok_or("control not found")?;
         let r = self.ui.nodes[index].rect;
         self.pointer = [r.x + r.w.min(60.) * 0.5, r.y + r.h * 0.5];
-        if !self.open_context(editor)? {
-            return Ok(Vec::new());
-        }
-        let ids = self.rows(editor).into_iter().map(|r| r.0).collect();
-        self.menu = None;
-        self.rebuild(editor)?;
-        Ok(ids)
+        self.open_context(editor)
     }
 }

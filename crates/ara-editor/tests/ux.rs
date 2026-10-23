@@ -2,6 +2,7 @@
 //! Editor UX v2: the command registry walk, menus, detach/redock, settings undo
 //! and empty states, through the real shell and protocol.
 use ara_editor::{Editor, shell::Shell, world::EditWorldView};
+use ara_ui::paint::Draw;
 use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
@@ -398,4 +399,19 @@ fn context_menus_open_for_rows_fields_tabs_and_empty_space() {
         rows.iter().any(|r| r == "window.float") && rows.iter().any(|r| r == "window.maximize"),
         "{rows:?}"
     );
+    // Paint-time decorations (the colour swatch) stay beneath an open menu.
+    assert!(
+        shell
+            .open_context_at(&mut editor, "field-MeshRenderer-color")
+            .unwrap()
+    );
+    let paints = |id: &str| {
+        let id = ara_ui::source::stable_id(id);
+        let commands = &shell.ui.display.commands;
+        (0..commands.len()).filter(move |i| {
+            matches!(&commands[*i], Draw::Rect { node, .. } | Draw::RoundedRect { node, .. } if *node == id)
+        })
+    };
+    let swatch = paints("swatch-MeshRenderer-color").next_back().unwrap();
+    assert!(swatch < paints("menu-pop-0").next().unwrap());
 }

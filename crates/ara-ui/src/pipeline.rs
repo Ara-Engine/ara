@@ -11,9 +11,21 @@ impl Ui {
     pub fn frame(&mut self, text_system: &mut TextSystem) -> Result<Work> {
         let before = text_system.shapes;
         let mut work = Work::default();
-        for node in &mut self.nodes {
+        // Parents precede children, so an inherited color is final when a child restyles.
+        for index in 0..self.nodes.len() {
+            let parent_color = self.nodes[index]
+                .element
+                .parent
+                .map(|p| self.nodes[p].computed.color);
+            let node = &mut self.nodes[index];
             if node.dirty.style {
-                let computed = self.sheet.compute(&node.element, node.state)?;
+                let mut computed = self.sheet.compute(&node.element, node.state)?;
+                if computed.inherit_color
+                    && let Some(color) = parent_color
+                {
+                    computed.color = color;
+                }
+                let color_changed = computed.color != node.computed.color;
                 let mut layout = computed.layout.clone();
                 if !node.visible {
                     layout.display = Display::None;
@@ -45,6 +57,14 @@ impl Ui {
                 node.dirty.style = false;
                 node.dirty.paint = true;
                 work.restyled += 1;
+                if color_changed {
+                    let children = node.element.children.clone();
+                    for child in children {
+                        if self.nodes[child].computed.inherit_color {
+                            self.nodes[child].dirty.style = true;
+                        }
+                    }
+                }
             }
         }
         self.sync_choices()?;
@@ -132,6 +152,7 @@ impl Ui {
             self.display.commands.clear();
             self.display.glyphs.clear();
             self.paint_order.clear();
+            self.paint_starts.clear();
             for n in &mut self.nodes {
                 n.rect = Box2::default();
                 n.clip = Box2::default();

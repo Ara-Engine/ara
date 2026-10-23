@@ -97,7 +97,7 @@ impl Service for AuthoringService {
         }
         let p: CreateParams = parse(params)?;
         if p.domain == "scene" {
-            // An empty scene document; File ▸ New Scene opens it.
+            // An empty scene document; File › New Scene opens it.
             let doc = cx.create_document(&p.path, "scene").map_err(|d| vec![d])?;
             return Ok(json!({"doc":doc,"path":p.path}));
         }

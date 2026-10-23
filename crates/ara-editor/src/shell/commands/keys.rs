@@ -161,7 +161,7 @@ pub(crate) fn parse_list(text: &str) -> Vec<Chord> {
     text.split(" / ").filter_map(Chord::parse).collect()
 }
 
-/// Keymap preset chosen in Settings ▸ Keyboard shortcuts.
+/// Keymap preset chosen in Settings › Keyboard shortcuts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum Preset {

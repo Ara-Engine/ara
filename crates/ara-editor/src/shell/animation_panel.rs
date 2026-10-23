@@ -17,7 +17,7 @@ impl Shell {
                 ara_ui::source::stable_id(id),
                 Binding::Protocol("editor.workspace", json!({"blends":blends})),
             );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' action='Dispatch' text='{label}' />",if editor.state.animation_blends == blends {" selected"} else {""}));
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.animation_blends == blends {" selected"} else {""}));
         }
         out.push_str("</panel><panel id='animation-sep' class='toolbar-sep' />");
         for (id, label, kind) in [
@@ -468,7 +468,7 @@ impl Shell {
         out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' />",escape(label)));
         if let Some(v) = value.as_bool() {
             out.push_str(&format!(
-                "<toggle id='{id}' checked='{v}' text='Enabled' action='Dispatch' />"
+                "<toggle id='{id}' checked='{v}' action='Dispatch' />"
             ));
         } else {
             out.push_str(&format!(

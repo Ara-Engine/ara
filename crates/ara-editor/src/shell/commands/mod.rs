@@ -126,7 +126,7 @@ pub(crate) fn all() -> &'static [Spec] {
 pub(crate) fn get(id: &str) -> Option<&'static Spec> {
     table::COMMANDS.iter().find(|c| c.id == id)
 }
-/// The menu path of a command, e.g. `Edit ▸ Snapping`, or empty.
+/// The menu path of a command, e.g. `Edit › Snapping`, or empty.
 pub(crate) fn menu_path(id: &str) -> String {
     fn walk(items: &[menus::Item], id: &str, path: &mut Vec<&'static str>) -> bool {
         for item in items {
@@ -147,7 +147,7 @@ pub(crate) fn menu_path(id: &str) -> String {
     for menu in menus::MENUS {
         let mut path = vec![menu.title];
         if walk(menu.items, id, &mut path) {
-            return path.join(" ▸ ");
+            return path.join(" › ");
         }
     }
     String::new()

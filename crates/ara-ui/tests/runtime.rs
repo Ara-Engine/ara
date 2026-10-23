@@ -297,3 +297,33 @@ fn choice_pages_popup_layers_and_rounded_clip_hits() -> Result<()> {
     assert!(!ui.paint_order.contains(&popup));
     Ok(())
 }
+#[test]
+fn inherited_label_color_follows_its_button_state() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='r'><button id='b' class='item'><text id='label' text='Delete' /></button><text id='plain' text='Other' /></ui>",
+        "text { color:inherit; } .item { color:var(--foreground); } .item:disabled { color:var(--muted-foreground); }",
+        [200., 60.],
+    )?;
+    ui.frame(&mut text)?;
+    let label = ui.find("label").ok_or("label")?;
+    let button = ui.find("b").ok_or("button")?;
+    assert_eq!(
+        ui.nodes[label].computed.color,
+        ui.nodes[button].computed.color
+    );
+    let mut state = ui.nodes[button].state;
+    state.disabled = true;
+    ui.set_state(button, state);
+    ui.frame(&mut text)?;
+    let muted = ui
+        .sheet
+        .color_token("--muted-foreground")
+        .ok_or("muted token")?;
+    assert_eq!(ui.nodes[button].computed.color, muted);
+    assert_eq!(
+        ui.nodes[label].computed.color, muted,
+        "the label restyles with its parent"
+    );
+    Ok(())
+}

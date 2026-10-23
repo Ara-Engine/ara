@@ -135,7 +135,7 @@ impl Shell {
                     ara_ui::source::stable_id("dialog-field"),
                     Binding::DialogText,
                 );
-                out.push_str(&format!("<text id='dialog-title' class='title' text='Save layout as' /><text id='dialog-line' class='dialog-text' text='Saves panels, sizes and floating windows to .ara/layouts. Load it from Window ▸ Layouts.' /><field id='dialog-field' text='{}' label='Layout name' action='Dispatch' />",escape(name)));
+                out.push_str(&format!("<text id='dialog-title' class='title' text='Save layout as' /><text id='dialog-line' class='dialog-text' text='Saves panels, sizes and floating windows to .ara/layouts. Load it from Window › Layouts.' /><field id='dialog-field' text='{}' label='Layout name' action='Dispatch' />",escape(name)));
                 out.push_str("<panel id='dialog-actions' class='row' style='justify-content:end'>");
                 out.push_str(&self.bind_button(
                     "dialog-cancel",

@@ -521,6 +521,7 @@ fn build() -> Vec<Spec> {
     // View
     c.extend([
         later("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "The renderer's camera is perspective-only; orthographic projection needs ara-render support."),
+        cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
         cmd("view.camera.top", "Top", "", "Num7", "Look straight down.", |_, e, _| camera(e, 0., 1.54)),
         cmd("view.camera.bottom", "Bottom", "", "Ctrl+Num7", "Look straight up.", |_, e, _| camera(e, 0., -1.54)),
         cmd("view.camera.front", "Front", "", "Num1", "Look along −Z.", |_, e, _| camera(e, 0., 0.)),
@@ -1370,7 +1371,7 @@ fn build() -> Vec<Spec> {
                 commands.push(json!({"cmd": "component.add", "args": {"entity": entity, "component": name}}));
             }
             apply(e, commands, &format!("Reset {name}"))
-        }).when(|c| if matches!(c.target, Target::Component(n) if n == "Transform") { Avail::Blocked("Use Transform ▸ Reset Position, Rotation and Scale".into()) } else { Avail::Ready }),
+        }).when(|c| if matches!(c.target, Target::Component(n) if n == "Transform") { Avail::Blocked("Use Transform › Reset Position, Rotation and Scale".into()) } else { Avail::Ready }),
         cmd("component.remove", "Remove Component", "trash", "", "Remove the component from the selection.", |_, e, t| {
             let Target::Component(name) = t else { return Err("choose a component".into()) };
             let commands = e.state.selection.iter().map(|entity| json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}})).collect();

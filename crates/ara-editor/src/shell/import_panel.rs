@@ -92,7 +92,7 @@ impl Shell {
                     );
                     if let Some(v) = value.as_bool() {
                         out.push_str(&format!(
-                            "<toggle id='{id}' checked='{v}' text='Enabled' action='Dispatch' />"
+                            "<toggle id='{id}' checked='{v}' action='Dispatch' />"
                         ));
                     } else if let Some(crate::inspector::Widget::Enum { options }) =
                         desc.map(|d| crate::inspector::widget(db, d))

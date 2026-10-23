@@ -129,8 +129,10 @@ impl Shell {
                 }
             }
         }
-        if mode == '@' {
-            if let Ok(resolved) = crate::world::resolve(editor.host.store(), &editor.state.doc) {
+        if mode == '@'
+            && let Ok(resolved) = crate::world::resolve(editor.host.store(), &editor.state.doc)
+        {
+            {
                 for (id, e) in &resolved {
                     let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
                     let Some(s) = score(name).or_else(|| score(id)) else {

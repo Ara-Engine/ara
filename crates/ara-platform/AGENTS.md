@@ -10,6 +10,12 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
   physical pixels. It is intentionally neither Send nor Sync.
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
+- Multi-window: `Window::floating(title, rect, parent)` opens an owned tool window
+  (above its parent, minimizes with it). `poll_tagged()` drains every window's
+  events tagged with `id()` (0 = application; a close request is `Quit` for its
+  window); `poll()` keeps the single-window shape. `rect`/`set_position`/`raise`/
+  `toggle_fullscreen`/`display_scale`, `displays()` (usable bounds, for off-screen
+  recovery) and `global_mouse()` (cross-window drags). `raw()` is for host adapters.
 - `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
 

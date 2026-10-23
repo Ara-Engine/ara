@@ -282,7 +282,7 @@ impl Shell {
                             let path = if path.is_empty() {
                                 title.to_owned()
                             } else {
-                                format!("{path} ▸ {title}")
+                                format!("{path} › {title}")
                             };
                             flatten(shell, editor, children, &path, out);
                         }
@@ -394,7 +394,7 @@ impl Shell {
                     Row::Sep => out.push_str(&format!("<panel id='{id}' class='menu-sep'><panel id='{id}-line' class='menu-line' /></panel>")),
                     Row::Sub(title, _) => {
                         self.bindings.insert(ara_ui::source::stable_id(&id), Binding::MenuSub(level, i));
-                        out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' action='Dispatch'><panel id='{id}-check' class='menu-check' /><text id='{id}-label' class='menu-label' text='{}' />{}</button>",if active==Some(i){" menu-active"}else{""},escape(title),escape(title),icons::icon(&id,"chevron-right")));
+                        out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' action='Dispatch'><panel id='{id}-check' class='menu-check' /><text id='{id}-label' class='menu-label' text='{}' />{}</button>",if active==Some(i){" menu-active"}else{""},escape(title),escape(title),if active==Some(i){icons::icon_in(&id,"chevron-right","on-selection")}else{icons::icon(&id,"chevron-right")}));
                     }
                     Row::Command { id: command, target, label, path, checked } => {
                         let Some(spec) = commands::get(command) else { continue };
@@ -404,10 +404,11 @@ impl Shell {
                         let check = checked.or(match avail { Avail::Checked(v) => Some(v), _ => None });
                         let reason = match &avail { Avail::Blocked(r) => r.clone(), _ => spec.summary.to_owned() };
                         self.bindings.insert(ara_ui::source::stable_id(&id), Binding::Command(command, target.clone()));
+                        let tint = if active == Some(i) { "on-selection" } else if check == Some(true) { "accent" } else { "" };
                         let icon = if check == Some(true) {
-                            icons::icon(&format!("{id}-c"), "check")
+                            icons::icon_in(&format!("{id}-c"), "check", tint)
                         } else if !spec.icon.is_empty() && icons::exists(spec.icon) {
-                            icons::icon(&format!("{id}-c"), spec.icon)
+                            icons::icon_in(&format!("{id}-c"), spec.icon, tint)
                         } else {
                             format!("<panel id='{id}-check' class='menu-check' />")
                         };
@@ -651,10 +652,9 @@ impl Shell {
             if let Some(path) = id
                 .strip_prefix("field-")
                 .or_else(|| id.strip_prefix("prop-"))
+                && let Some(field) = self.fields.keys().find(|f| f.replace('.', "-") == path)
             {
-                if let Some(field) = self.fields.keys().find(|f| f.replace('.', "-") == path) {
-                    return Some((Context::Field, Target::Field(field.clone())));
-                }
+                return Some((Context::Field, Target::Field(field.clone())));
             }
             if let Some(name) = id.strip_prefix("component-") {
                 return Some((Context::Component, Target::Component(name.to_owned())));

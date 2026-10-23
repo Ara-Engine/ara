@@ -107,15 +107,15 @@ impl Controller {
     ) -> Option<String> {
         let drag = self.gizmo.as_ref()?;
         let camera = editor.state.camera;
-        let snap = editor
-            .state
-            .snapping
-            .then(|| match editor.state.tool {
+        let snap = if editor.state.snapping {
+            match editor.state.tool {
                 crate::state::Tool::Translate => format!(" · snap {}", editor.state.move_snap),
                 crate::state::Tool::Rotate => format!(" · snap {}°", editor.state.rotate_snap),
                 crate::state::Tool::Scale => format!(" · snap {}", editor.state.scale_snap),
-            })
-            .unwrap_or_default();
+            }
+        } else {
+            String::new()
+        };
         let gesture = editor.gesture.as_mut()?;
         let typed = drag.typed.parse::<f32>().ok();
         let names = ["X", "Y", "Z"];
@@ -186,7 +186,7 @@ impl Controller {
         let typed = if drag.typed.is_empty() {
             String::new()
         } else {
-            format!("  [{}▏]", drag.typed)
+            format!("  [{}|]", drag.typed)
         };
         Some(format!("{text}{typed}{snap}"))
     }

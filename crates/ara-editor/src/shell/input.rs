@@ -109,10 +109,6 @@ impl Shell {
                             );
                         }
                     }
-                    Binding::ResourceCreate(domain) => {
-                        self.create_resource(editor, domain)?;
-                        rebuild = true;
-                    }
                     Binding::ResourceText(doc, _domain) => {
                         self.resource_text =
                             Some((doc.clone(), action.value.as_str().unwrap_or("").into()));

@@ -40,9 +40,15 @@ impl Shell {
             out.push_str("<panel id='crumb-dirty' class='dirty-dot' description='Unsaved changes; Ctrl+S saves now' />");
         }
         out.push_str("</panel><panel id='menubar-fill' class='fill' />");
-        // The Play cluster sits centred on the window.
-        let width = 216.;
-        out.push_str(&format!("<panel id='play-controls' class='play-cluster{}' style='position:absolute;left:{}px;top:4px;width:{width}px'>",if editor.state.playing.is_some(){" play-live"}else{""},((self.ui.size[0]-width)*0.5).round()));
+        // The Play cluster sits between flexible gaps: centred in the free space.
+        out.push_str(&format!(
+            "<panel id='play-controls' class='play-cluster{}'>",
+            if editor.state.playing.is_some() {
+                " play-live"
+            } else {
+                ""
+            }
+        ));
         let resume = editor.state.playing == Some(false);
         self.bind_command("play", "play.start", Target::None);
         out.push_str(&format!("<button id='play' class='ghost{}' style='height:22px;padding-left:6px;padding-right:8px' label='{}' description='{} · F5' action='Dispatch'>{}<text id='play-label' text='{}' /></button>",if editor.state.playing==Some(true){" selected"}else{""},if resume{"Resume"}else{"Play"},if resume{"Resume"}else{"Play"},icons::icon_in("play","play","tint-play"),if editor.state.playing==Some(true){"Playing"}else if resume{"Resume"}else{"Play"}));
@@ -72,7 +78,7 @@ impl Shell {
             ara_ui::source::stable_id("play-mode"),
             Binding::ContextMenu(commands::menus::Context::Play, Target::None),
         );
-        out.push_str(&format!("<panel id='play-sep' class='toolbar-sep' /><button id='play-mode' class='ghost' style='height:22px;padding-left:6px;padding-right:4px' label='Play mode' description='Play mode, clients and start options' action='Dispatch'><text id='play-mode-label' class='caption' text='{}' />{}</button></panel>",escape(&mode_label),icons::icon("play-mode","chevron-down")));
+        out.push_str(&format!("<panel id='play-sep' class='toolbar-sep' /><button id='play-mode' class='ghost' style='height:22px;padding-left:6px;padding-right:4px' label='Play mode' description='Play mode, clients and start options' action='Dispatch'><text id='play-mode-label' class='caption' text='{}' />{}</button></panel><panel id='menubar-fill-2' class='fill' />",escape(&mode_label),icons::icon("play-mode","chevron-down")));
         self.bind_command("search-box", "edit.palette", Target::None);
         out.push_str(&format!("<button id='search-box' class='search-box' label='Search or run a command' description='Search commands, entities and assets' action='Dispatch'>{}<text id='search-box-text' class='muted' text='Search or run a command…' /><panel id='search-box-fill' class='fill' />{}</button>",icons::icon("search-box","search"),self.keycaps("search-box","edit.palette")));
         // Status chips: each opens the panel it summarizes.

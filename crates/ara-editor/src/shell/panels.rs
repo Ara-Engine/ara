@@ -19,9 +19,11 @@ pub(super) fn button(id: &str, text: &str, class: &str) -> String {
     };
     if name.is_empty() {
         return format!(
-            "<button id='{}' class='{}' text='{}' action='Dispatch' />",
+            "<button id='{}' class='{}' label='{}' action='Dispatch'><text id='{}-label' text='{}' /></button>",
             escape(id),
             class,
+            escape(text),
+            escape(id),
             escape(text)
         );
     }
@@ -109,10 +111,23 @@ impl Shell {
                     out.push_str(&format!("<panel id='header-{panel}' class='panel-header'>{}<text id='header-title-{panel}' class='panel-title' text='{}' /><panel id='header-fill-{panel}' class='fill' />",icons::icon(&format!("header-{panel}"),panel_icon(&panel)),escape(title(&panel))));
                 } else {
                     out.push_str(&format!("<panel id='tabs-{}' class='tabbar'>", escape(id)));
+                    // Narrow areas show inactive tabs as icons; the tooltip names them.
+                    let width = self
+                        .ui
+                        .find(&format!("area-{id}"))
+                        .map(|i| self.ui.nodes[i].rect.w)
+                        .unwrap_or(f32::MAX);
+                    let compact = width < tabs.len() as f32 * 96. + 40.;
                     for (index, tab) in tabs.iter().enumerate() {
                         let tab_id = format!("tab-{tab}");
                         self.bind_command(&tab_id, "window.show_panel", Target::Panel(tab.clone()));
-                        out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}<text id='{tab_id}-label' text='{}' /></button>",if index==*active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if index==*active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))},escape(title(tab))));
+                        let active = index == *active;
+                        let label = if active || !compact {
+                            format!("<text id='{tab_id}-label' text='{}' />", escape(title(tab)))
+                        } else {
+                            String::new()
+                        };
+                        out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
                     }
                     out.push_str(&format!(
                         "<panel id='tabs-fill-{}' class='fill' />",
@@ -187,7 +202,7 @@ impl Shell {
                     .first()
                     .map(|c| format!(" · {}", c.text()))
                     .unwrap_or_default();
-                out.push_str(&format!("<button id='{button}' class='{}' label='{}' description='{}{}' action='Dispatch' text='{}' />",if n==0{"primary"}else{""},escape(label),escape(label),escape(&keys),escape(label)));
+                out.push_str(&format!("<button id='{button}' class='{}' label='{}' description='{}{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if n==0{"primary"}else{""},escape(label),escape(label),escape(&keys),escape(label)));
             }
             out.push_str("</panel>");
         }

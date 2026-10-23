@@ -59,6 +59,9 @@ pub struct Ui {
     pub size: [f32; 2],
     /// Current visible traversal order for hit testing and keyboard navigation.
     pub paint_order: Vec<usize>,
+    /// Display-list index where each `paint_order` node's commands begin, so hosts
+    /// can splice paint-time decorations beneath later layers (menus, dialogs).
+    pub paint_starts: Vec<usize>,
 }
 /// Actual incremental work counters for profiling and focused tests.
 #[derive(Default, Debug, Serialize)]
@@ -136,6 +139,7 @@ impl Ui {
             display: DisplayList::default(),
             size,
             paint_order: Vec::new(),
+            paint_starts: Vec::new(),
         })
     }
     /// Resolve an authored ID without panicking when the node is absent.

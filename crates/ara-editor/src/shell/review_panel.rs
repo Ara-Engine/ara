@@ -87,7 +87,7 @@ impl Shell {
         ] {
             let id = format!("policy-{policy:?}");
             self.bind_command(&id, command, commands::Target::None);
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='Apply {label}' action='Dispatch' text='{label}' />",if editor.state.policy == policy {" selected"} else {""}));
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='Apply {label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.policy == policy {" selected"} else {""}));
         }
         out.push_str("</panel>");
         out.push_str(if compact {

@@ -576,9 +576,6 @@ impl Service for EditorService {
                         if state.maximized.as_deref() == Some(p.panel.as_str()) {
                             state.maximized = None;
                         }
-                        if state.focus == p.panel {
-                            state.focus = "scene".into();
-                        }
                     }
                     _ => match p.slot.as_deref() {
                         Some("float") => {
@@ -733,8 +730,7 @@ impl Service for EditorService {
                 sync_settings(&mut state, &self.settings);
             }
             "editor.layout.reset" => {
-                state.layout = default_layout();
-                state.floating.clear();
+                state.set_dock(&DockLayout::new(default_layout()).map_err(ui_error)?);
                 state.maximized = None;
             }
             "editor.layout" => {

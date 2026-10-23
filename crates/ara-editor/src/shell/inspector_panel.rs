@@ -126,7 +126,7 @@ impl Shell {
                     ara_ui::source::stable_id(&id),
                     Binding::Protocol("editor.focus", json!({"panel":"inspector","field":head})),
                 );
-                out.push_str(&format!("<button id='{id}' class='ghost' style='height:20px;padding-left:6px;padding-right:6px;font-size:11px' label='Jump to {head}' action='Dispatch' text='{head}' />"));
+                out.push_str(&format!("<button id='{id}' class='ghost' style='height:20px;padding-left:6px;padding-right:6px;font-size:11px' label='Jump to {head}' action='Dispatch'><text id='{id}-label' text='{head}' /></button>"));
             }
             out.push_str("</panel>");
         }
@@ -264,7 +264,7 @@ impl Shell {
                         ara_ui::source::stable_id(&axis_id),
                         Binding::Scrub(field.path.clone(), axis),
                     );
-                    out.push_str(&format!("<panel id='axis-cell-{id}-{axis}' class='vector-cell'><button id='{axis_id}' class='axis axis-{}' text='{}' description='Drag to scrub. Shift: fine, Ctrl: coarse. Esc cancels.' action='Dispatch' />",["x","y","z","w"][axis],["X","Y","Z","W"][axis]));
+                    out.push_str(&format!("<panel id='axis-cell-{id}-{axis}' class='vector-cell'><button id='{axis_id}' class='axis axis-{}' description='Drag to scrub. Shift: fine, Ctrl: coarse. Esc cancels.' action='Dispatch'><text id='{axis_id}-label' text='{}' /></button>",["x","y","z","w"][axis],["X","Y","Z","W"][axis]));
                     out.push_str(&format!("<field id='{widget}' class='number vector-input' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
                     out.push_str("</panel>");
                 }
@@ -276,7 +276,7 @@ impl Shell {
                     Binding::Field(field.path.clone(), None),
                 );
                 out.push_str(&format!(
-                    "<toggle id='{widget}' checked='{}' text='' label='{}' action='Dispatch' />",
+                    "<toggle id='{widget}' checked='{}' label='{}' action='Dispatch' />",
                     field.value.as_bool().unwrap_or(false),
                     escape(&field.label)
                 ));
@@ -307,7 +307,7 @@ impl Shell {
                             ara_ui::source::stable_id(&button),
                             Binding::Content(calls, format!("Set {}", field.label)),
                         );
-                        out.push_str(&format!("<button id='{button}' class='segment-button{}' style='flex-grow:1' label='{}' action='Dispatch' text='{}' />",if current==*option{" selected"}else{""},escape(option),escape(&sentence(option))));
+                        out.push_str(&format!("<button id='{button}' class='segment-button{}' style='flex-grow:1' label='{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if current==*option{" selected"}else{""},escape(option),escape(&sentence(option))));
                     }
                     out.push_str("</panel>");
                 } else {

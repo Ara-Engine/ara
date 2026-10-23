@@ -36,7 +36,12 @@ pub(super) fn declarations(body: &str) -> Result<Vec<(String, String)>> {
 pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
     match k {
         "background" => c.background = Color::parse(v)?,
-        "color" => c.color = Color::parse(v)?,
+        // `inherit` takes the parent's computed color at frame time (opt-in, as in CSS).
+        "color" if v == "inherit" => c.inherit_color = true,
+        "color" => {
+            c.color = Color::parse(v)?;
+            c.inherit_color = false;
+        }
         "border-color" => c.border_color = Color::parse(v)?,
         "font-size" => c.font_size = scalar(v)?,
         "font-family" => c.font_family = Some(v.to_owned()),

@@ -12,7 +12,10 @@ Public API:
 - `virtualize::{Rows,VirtualList,VirtualTree,VirtualTable,VirtualView}` retains only viewport rows.
 - `input::{InputState,InputEvent}` owns per-player screen/modal focus, capture and drag/drop.
 - `layers::LayerStack` owns tooltip/popup/modal visibility and dismissal/focus restoration.
-- `docking::{DockLayout,DockNode,DockDrop}` moves tabs, creates splits, persists and resets layouts.
+- `docking::{DockLayout,DockNode,DockDrop,Floating}` moves tabs, creates splits, tears panels
+  off into floating windows (`float`, `close`, `set_rect`), persists and resets layouts.
+  Panel/area IDs are unique across every window; emptied areas collapse and emptied
+  windows close. Files without floating windows keep the bare `DockNode` format.
 - `binding::{BindingKey<T>,ReadBinding<T>,Bindings<T>}` initializes subscriptions and pushes changed fields.
 - `Ui::drain_actions` yields named host actions; the host dispatches these at its simulation boundary.
 - `accessibility::accessibility` produces an actual AccessKit tree; `Ui::inspect` produces agent JSON.
@@ -56,3 +59,10 @@ Missing success/info surface tokens derive from the canonical palette colors.
 
 DisplayList supports analytic Line strokes and ScalableGlyphRun labels for graph
 canvases. Per-edge padding properties preserve inspector gutters at narrow widths.
+
+`color: inherit` (opt-in) takes the parent's computed color, and children restyle when
+it changes, so a label follows its button's hover/selected/disabled state. `<image
+tint='true'>` multiplies a white image (icons) by its element's computed color;
+`Draw::Image.tint` is white for ordinary images.
+`paint_order`/`paint_starts` give each painted node's first display-list index, so
+hosts can splice paint-time decorations beneath later layers such as menus.

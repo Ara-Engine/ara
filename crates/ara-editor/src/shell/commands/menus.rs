@@ -150,6 +150,7 @@ pub(crate) const MENUS: &[Menu] = &[
                 "Camera",
                 &[
                     C("view.camera.perspective"),
+                    C("view.camera.default"),
                     S,
                     C("view.camera.top"),
                     C("view.camera.bottom"),
@@ -661,6 +662,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Camera => &[
             C("view.camera.perspective"),
+            C("view.camera.default"),
             S,
             C("view.camera.top"),
             C("view.camera.bottom"),

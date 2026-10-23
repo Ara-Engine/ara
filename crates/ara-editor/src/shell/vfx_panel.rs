@@ -88,7 +88,7 @@ impl Shell {
                             super::inspector_panel::sentence(kind).to_lowercase()
                         )
                     };
-                    out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='height:14px;background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{}' style='font-size:11px' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),if selected{"on-selection"}else{"caption"},escape(&summary)));
+                    out.push_str(&format!("<panel id='{id}-card' class='module-row{}'><panel id='{id}-rail' class='stage-rail' style='height:14px;background:var(--{rail})' /><button id='{id}' class='module-title' label='{}' description='{}' action='Dispatch'><text id='{id}-name' class='{}' text='{}' /><panel id='{id}-gap' class='fill' /><text id='{id}-summary' class='{}' style='font-size:11px;flex-shrink:1;min-width:0px;overflow:hidden' text='{}' /></button>",if selected{" module-selected"}else{""},escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module")),if selected{"on-selection"}else{"fg"},escape(&title),if selected{"on-selection"}else{"caption"},escape(&summary)));
                     if selected {
                         for (command, icon, label) in [
                             ("vfx.module.up", "chevron-up", "Move up · Alt+Up"),
@@ -116,7 +116,7 @@ impl Shell {
             Binding::VfxPlayback(!editor.state.preview_playing),
         );
         out.push_str(&format!("<button id='vfx-preview-play' class='ghost' label='{}' description='Run or pause the fixed-tick preview' action='Dispatch'>{}<text id='vfx-preview-play-label' text='{}' /></button>",if editor.state.preview_playing{"Pause"}else{"Play"},icons::icon("vfx-preview-play",if editor.state.preview_playing{"pause"}else{"play"}),if editor.state.preview_playing{"Pause"}else{"Play"}));
-        out.push_str(&format!("<text id='vfx-preview-title' class='heading' text='{}' /><panel id='vfx-preview-fill' class='fill' /><text id='vfx-preview-rate' class='chip-success' text='fixed {} Hz ✓' /></panel>",escape(&effect.name),effect.hz));
+        out.push_str(&format!("<text id='vfx-preview-title' class='heading' text='{}' /><panel id='vfx-preview-fill' class='fill' /><text id='vfx-preview-rate' class='chip-success' text='fixed {} Hz' /></panel>",escape(&effect.name),effect.hz));
         if self.vfx_ready {
             let size = self
                 .ui
@@ -156,7 +156,13 @@ impl Shell {
         )
         .map_err(|d| d.to_string())?;
         let effect = ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())?;
-        out.push_str("<scroll id='vfx-inspector' class='body'><text id='vfx-inspector-title' class='heading' text='Module parameters' />");
+        let width = self
+            .ui
+            .find("vfx-inspector")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(300.);
+        let label = self.label_px(width);
+        out.push_str("<scroll id='vfx-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding-top:6px;padding-bottom:12px'>");
         if let Some(item) = editor.state.resource_item.as_deref() {
             let parts = item.split('|').collect::<Vec<_>>();
             if let [emitter, stage, module] = parts.as_slice() {
@@ -175,30 +181,39 @@ impl Shell {
                 if let Some(module) = modules.iter().find(|m| m.name == *module) {
                     let value = ara_json::to_value(&module.module)?;
                     let kind = value["op"].as_str().unwrap_or("");
-                    out.push_str(&format!("<text id='vfx-module-name' text='{}' /><text id='vfx-module-doc' class='muted' text='{}' style='white-space:normal' />",escape(&module.name),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module"))));
+                    out.push_str(&format!("<panel id='vfx-module-header' class='component-header'>{}<text id='vfx-module-name' class='component-title' text='{}' /><text id='vfx-module-kind' class='caption' text='{}' /></panel><text id='vfx-module-doc' class='dialog-text' style='padding:6px;padding-left:12px' text='{}' />",icons::icon("vfx-module-header","sparkles"),escape(&module.name),escape(&super::inspector_panel::sentence(kind).to_lowercase()),escape(ara_vfx::library::MODULES.iter().find(|k|k.name==kind).map(|k|k.doc).unwrap_or("Typed VFX module"))));
                     if let Some(fields) = value.as_object() {
                         for (key, v) in fields {
                             if key == "op" {
                                 continue;
                             }
                             let id = format!("vfx-param-{key}");
-                            out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' />",escape(key)));
+                            out.push_str(&format!("<panel id='{id}-row' class='prop-row'><panel id='{id}-label-cell' class='prop-label' style='width:{label}px'><text id='{id}-label' text='{}' /></panel><panel id='{id}-value' class='prop-value'>",escape(&super::inspector_panel::sentence(key))));
                             self.bindings.insert(
                                 ara_ui::source::stable_id(&id),
                                 Binding::VfxField(doc.clone(), item.into(), key.clone()),
                             );
                             if let Some(v) = v.as_bool() {
-                                out.push_str(&format!("<toggle id='{id}' checked='{v}' text='Enabled' action='Dispatch' />"));
+                                out.push_str(&format!(
+                                    "<toggle id='{id}' checked='{v}' action='Dispatch' />"
+                                ));
                             } else {
-                                out.push_str(&format!("<field id='{id}' class='number' text='{}' label='{}' action='Dispatch' />",escape(&panels::display(v)),escape(key)));
+                                out.push_str(&format!("<field id='{id}' class='number' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' action='Dispatch' />",escape(&panels::display(v)),escape(key)));
                             }
-                            out.push_str("</panel>");
+                            out.push_str("</panel></panel>");
                         }
                     }
                 }
             }
         } else {
-            out.push_str("<text id='vfx-module-empty' class='muted' text='Select a module to edit its parameters.' style='white-space:normal' />");
+            self.empty(
+                out,
+                "vfx-module-empty",
+                "sparkles",
+                "No module selected",
+                "Click a module in the stack to edit its parameters.",
+                &[],
+            );
         }
         out.push_str("</scroll>");
         Ok(())
@@ -258,7 +273,10 @@ fn short(v: &Value) -> String {
                 format!("{f:.2}").trim_end_matches('0').to_owned()
             }
         }
-        Value::Array(a) => a.iter().map(short).collect::<Vec<_>>().join(","),
+        Value::Array(a) if a.iter().any(|v| v.is_object() || v.is_array()) => {
+            format!("{} keys", a.len())
+        }
+        Value::Array(a) => a.iter().map(short).collect::<Vec<_>>().join(", "),
         Value::String(s) => s.clone(),
         Value::Bool(b) => {
             if *b {

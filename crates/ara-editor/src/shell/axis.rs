@@ -15,19 +15,19 @@ impl Shell {
         let mut caps = caps(&camera);
         caps.sort_by(|a, b| a.2.total_cmp(&b.2));
         let c = SIZE * 0.5;
-        self.bindings.insert(stable_id("view-iso"), Binding::Protocol("editor.camera", json!({"target":camera.target.to_array(),"yaw":0.6,"pitch":0.4,"distance":camera.distance})));
+        self.bind_command("view-iso", "view.camera.default", commands::Target::None);
         out.push_str(&format!("<button id='view-iso' class='view-sphere' style='position:absolute;left:{}px;top:{}px;width:10px;height:10px' label='Perspective view' description='Return to the default perspective' action='Dispatch' />",c-5.,c-5.));
         for (axis, sign, _, p) in &caps {
             let id = cap_id(*axis, *sign);
-            let (yaw, pitch) = match (*axis, *sign) {
-                (0, true) => (std::f32::consts::FRAC_PI_2, 0.),
-                (0, false) => (-std::f32::consts::FRAC_PI_2, 0.),
-                (1, true) => (0., 1.54),
-                (1, false) => (0., -1.54),
-                (2, true) => (0., 0.),
-                _ => (std::f32::consts::PI, 0.),
+            let command = match (*axis, *sign) {
+                (0, true) => "view.camera.right",
+                (0, false) => "view.camera.left",
+                (1, true) => "view.camera.top",
+                (1, false) => "view.camera.bottom",
+                (2, true) => "view.camera.front",
+                _ => "view.camera.back",
             };
-            self.bindings.insert(stable_id(&id), Binding::Protocol("editor.camera",json!({"target":camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":camera.distance})));
+            self.bind_command(&id, command, commands::Target::None);
             let label = ["X", "Y", "Z"][*axis];
             let size = if *sign { 14. } else { 10. };
             let class = if *sign {
@@ -35,7 +35,7 @@ impl Shell {
             } else {
                 format!("view-cap cap-negative cap-neg-{}", ["x", "y", "z"][*axis])
             };
-            out.push_str(&format!("<button id='{id}' class='{class}' style='position:absolute;left:{}px;top:{}px;width:{size}px;height:{size}px' text='{}' label='{}{label} view' description='Look along {}{label}' action='Dispatch' />",p[0]-size*0.5,p[1]-size*0.5,if *sign {label} else {""},if *sign {"+"} else {"−"},if *sign {"−"} else {"+"}));
+            out.push_str(&format!("<button id='{id}' class='{class}' style='position:absolute;left:{}px;top:{}px;width:{size}px;height:{size}px' label='{}{label} view' description='Look along {}{label}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",p[0]-size*0.5,p[1]-size*0.5,if *sign {label} else {""},if *sign {"+"} else {"−"},if *sign {"−"} else {"+"}));
         }
         out.push_str("</panel>");
     }
@@ -67,9 +67,10 @@ impl Shell {
         let Some(i) = self.ui.find("view-cube") else {
             return;
         };
+        // Stems draw inside the widget's paint transform: use its layout position.
         let root = &self.ui.nodes[i];
-        let x = root.rect.x;
-        let y = root.rect.y;
+        let x = root.rect.x - root.paint_offset[0];
+        let y = root.rect.y - root.paint_offset[1];
         let mut stems = Vec::new();
         for (axis, sign, _, p) in caps(&self.axis_camera) {
             if !sign {
@@ -93,25 +94,15 @@ impl Shell {
                 color,
             });
         }
-        // Stems sit under the caps: insert before the first cap draw.
-        let first_cap = [
-            "view-x",
-            "view-y",
-            "view-z",
-            "view-x-negative",
-            "view-y-negative",
-            "view-z-negative",
-            "view-iso",
-        ]
-        .iter()
-        .map(|id| stable_id(id))
-        .collect::<Vec<_>>();
+        // Stems sit under the caps. Insert them before the centre button, which has no
+        // paint transform; the caps carry per-camera offsets.
+        let centre = stable_id("view-iso");
         let at = self
             .ui
             .display
             .commands
             .iter()
-            .position(|d| matches!(d, Draw::Rect { node, .. } | Draw::RoundedRect { node, .. } | Draw::Border { node, .. } if first_cap.contains(node)))
+            .position(|d| matches!(d, Draw::Rect { node, .. } | Draw::RoundedRect { node, .. } | Draw::Border { node, .. } if *node == centre))
             .unwrap_or(self.ui.display.commands.len());
         self.ui.display.commands.splice(at..at, stems);
     }

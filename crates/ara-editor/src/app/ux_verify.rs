@@ -49,12 +49,21 @@ pub(super) struct UxVerification {
     output: PathBuf,
     report: Vec<Value>,
     pub finished_at: Option<Instant>,
+    /// Material, effect and controller documents opened by the tool-tab steps.
+    resources: [String; 3],
 }
 impl UxVerification {
     pub fn new(editor: &mut Editor, output: &std::path::Path) -> ara_ui::Result<Self> {
         editor.action("editor.preferences", json!({"reduceMotion": true}))?;
         editor.action("editor.theme", json!({"light": false}))?;
         editor.action("editor.layout.reset", json!({}))?;
+        // Real documents for the tool tabs: a material, an effect and a controller.
+        let material = super::panels_verify::resource(editor, "material")?;
+        let vfx = super::panels_verify::resource(editor, "vfx")?;
+        let animation = super::panels_verify::resource(editor, "animation")?;
+        let controller = json!({"initial":"Idle","parameters":{"speed":{}},"nodes":{"idle":{"clip":null},"run":{"clip":null},"locomotion":{"kind":"blend1d","parameterX":"speed","samples":[{"node":"idle","x":0},{"node":"run","x":1}]}},"states":{"Idle":{"node":"idle","duration":48000},"Run":{"node":"run","duration":24000},"Locomotion":{"node":"locomotion","duration":48000}},"transitions":[{"id":"idle_to_run","from":"Idle","to":"Run","duration":4800,"conditions":[{"parameter":"speed","comparison":"greater","floatValue":0.2}]},{"id":"run_to_idle","from":"Run","to":"Idle","duration":4800}]});
+        editor.apply_to(&animation, vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":controller}})], "Prepare UX verification controller")?;
+        editor.action("profile.start", json!({}))?;
         std::fs::create_dir_all(output)?;
         Ok(Self {
             step: 0,
@@ -62,6 +71,7 @@ impl UxVerification {
             output: output.into(),
             report: Vec::new(),
             finished_at: None,
+            resources: [material, vfx, animation],
         })
     }
     pub fn finished(&self) -> bool {
@@ -169,6 +179,39 @@ impl UxVerification {
         editor.action("editor.select", json!({"entities": select}))?;
         match setup {
             Setup::Tab(panel) => {
+                let resource = match panel {
+                    "material" => Some(&self.resources[0]),
+                    "vfx" => Some(&self.resources[1]),
+                    "animation" => Some(&self.resources[2]),
+                    _ => None,
+                };
+                if let Some(doc) = resource {
+                    editor.action("editor.workspace", json!({"resource": doc}))?;
+                }
+                if panel == "vfx" {
+                    // Show a module's parameters and its row actions.
+                    let graph = ara_graph::Graph::from_document(
+                        editor
+                            .host
+                            .store()
+                            .workspace()
+                            .doc(&self.resources[1])
+                            .ok_or("effect")?,
+                    )
+                    .map_err(|d| d.to_string())?;
+                    let effect = ara_vfx::Effect::from_graph(&graph).map_err(|d| d.to_string())?;
+                    if let Some(emitter) = effect.emitters.first()
+                        && let Some(module) = emitter.stacks.update.first()
+                    {
+                        editor.action(
+                            "editor.workspace",
+                            json!({"item": format!("{}|update|{}", emitter.name, module.name)}),
+                        )?;
+                    }
+                }
+                if panel == "profiler" && editor.profile_current.is_none() {
+                    editor.action("editor.profile.freeze", json!({}))?;
+                }
                 editor.action("editor.focus", json!({"panel": panel}))?;
             }
             Setup::Float(panel) => {

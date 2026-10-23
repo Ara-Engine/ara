@@ -148,7 +148,7 @@ pub struct Shell {
     /// OS window work for the window owner (full screen, raise, import dialog, quit).
     pub window_request: Option<WindowRequest>,
     pub(crate) status_note: Option<String>,
-    /// GPU, driver and Vulkan summary for Help ▸ System Info.
+    /// GPU, driver and Vulkan summary for Help › System Info.
     pub device_info: String,
     pub(crate) entity_clipboard: Option<Vec<Value>>,
     pub(crate) field_clipboard: Option<Value>,
@@ -180,7 +180,6 @@ pub(crate) enum Binding {
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
     ImportChoice(String, String, Value),
-    ResourceCreate(String),
     ResourceText(String, String),
     ResourceApply,
     PreviewShape(bool),
@@ -668,13 +667,36 @@ impl Shell {
         }
         self.after_mount(editor)
     }
-    /// Paint-time decorations shared by every surface.
-    fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+    /// Paint-time decorations shared by every surface. They are spliced in under the
+    /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
+    fn paint_decorations(&mut self) {
+        let start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        self.paint_axis();
         self.paint_graph();
         self.paint_drop_preview();
+        if let Some(at) = self.popup_start()
+            && at < start
+        {
+            let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
+            self.ui.display.commands.splice(at..at, decorations);
+        }
+        // The axis triad splices its stems in under its own caps.
+        self.paint_axis();
+    }
+    /// Display-list index of the first node painted after the dock tree: the
+    /// status bar, then menus, the palette, dialogs and tooltips.
+    fn popup_start(&self) -> Option<usize> {
+        let ui = &self.ui;
+        let root = ui.find("dock-root").or_else(|| ui.find("float-root"))?;
+        let siblings = &ui.nodes[ui.nodes[root].element.parent?].element.children;
+        let later = &siblings[siblings.iter().position(|c| *c == root)? + 1..];
+        let at = ui.paint_order.iter().position(|i| later.contains(i))?;
+        ui.paint_starts.get(at).copied()
+    }
+    /// Run after every mount: decorations, a pending Inspector field reveal, motion.
+    fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.ui.find("inspector-scroll").is_some()
         {
@@ -762,11 +784,7 @@ impl Shell {
         }
         let mut work = self.ui.frame(&mut self.text)?;
         if work.paint_nodes > 0 {
-            self.paint_swatches();
-            self.paint_polish();
-            self.paint_axis();
-            self.paint_graph();
-            self.paint_drop_preview();
+            self.paint_decorations();
         }
         if self.motion.apply(
             &mut self.ui.display,

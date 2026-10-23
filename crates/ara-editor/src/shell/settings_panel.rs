@@ -29,7 +29,7 @@ impl Shell {
                 ara_ui::source::stable_id(id),
                 Binding::SettingChoice("@view".into(), json!({"scope": value, "category": ""})),
             );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='{}' action='Dispatch' text='{label}' />",if on{" selected"}else{""},if value=="user"{"Your editor preferences, on every project"}else{"Settings shared by everyone on this project"}));
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='{}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""},if value=="user"{"Your editor preferences, on every project"}else{"Settings shared by everyone on this project"}));
         }
         out.push_str("</panel>");
         self.search(out, "settings", editor);
@@ -114,10 +114,17 @@ impl Shell {
             .cloned()
             .unwrap_or(Value::Null);
         let modified = value != default_of(d);
-        out.push_str(&format!("<panel id='setting-{id}' class='setting' description='{}'><panel id='setting-head-{id}' class='setting-head'>",escape(d.description)));
+        out.push_str(&format!(
+            "<panel id='setting-{id}' class='setting' description='{}'>",
+            escape(d.description)
+        ));
         if modified {
-            out.push_str(&format!("<panel id='setting-mark-{id}' class='prop-marker' style='left:0px;top:9px;height:14px' />"));
+            // In the row's left padding, clear of the label (as in the Inspector).
+            out.push_str(&format!("<panel id='setting-mark-{id}' class='prop-marker' style='left:4px;top:11px;height:14px' />"));
         }
+        out.push_str(&format!(
+            "<panel id='setting-head-{id}' class='setting-head'>"
+        ));
         out.push_str(&format!(
             "<text id='setting-label-{id}' class='setting-label' text='{}' />",
             escape(d.label)
@@ -129,13 +136,8 @@ impl Shell {
                     Binding::Setting(key.into()),
                 );
                 out.push_str(&format!(
-                    "<toggle id='set-{id}' checked='{}' text='{}' label='{}' action='Dispatch' />",
+                    "<toggle id='set-{id}' checked='{}' label='{}' action='Dispatch' />",
                     value.as_bool().unwrap_or(false),
-                    if value.as_bool().unwrap_or(false) {
-                        "On"
-                    } else {
-                        "Off"
-                    },
                     escape(d.label)
                 ));
             }
@@ -147,7 +149,7 @@ impl Shell {
                         ara_ui::source::stable_id(&button),
                         Binding::SettingChoice(key.into(), json!(option)),
                     );
-                    out.push_str(&format!("<button id='{button}' class='segment-button{}' label='{}' action='Dispatch' text='{}' />",if value.as_str()==Some(option){" selected"}else{""},escape(label),escape(label)));
+                    out.push_str(&format!("<button id='{button}' class='segment-button{}' label='{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if value.as_str()==Some(option){" selected"}else{""},escape(label),escape(label)));
                 }
                 out.push_str("</panel>");
             }
@@ -192,7 +194,7 @@ impl Shell {
                 ara_ui::source::stable_id(&id),
                 Binding::SettingChoice("input.keymap".into(), json!(p.name())),
             );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{} keymap' action='Dispatch' text='{}' />",if p==preset{" selected"}else{""},p.title(),p.title()));
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{} keymap' action='Dispatch'><text id='{id}-label' text='{}' /></button>",if p==preset{" selected"}else{""},p.title(),p.title()));
         }
         out.push_str(
             "</panel></panel><panel id='shortcut-tools' class='toolbar' style='padding-left:6px'>",
@@ -240,7 +242,7 @@ impl Shell {
                 && !format!("{} {} {}", spec.title, path, spec.id)
                     .to_lowercase()
                     .contains(&query)
-                && !keys_text.iter().any(|k| *k == query)
+                && !keys_text.contains(&query)
             {
                 continue;
             }

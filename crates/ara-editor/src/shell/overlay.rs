@@ -343,8 +343,8 @@ pub fn build(
         });
     }
     if state.tool == Tool::Rotate {
-        for axis in 0..3 {
-            let c = faded(tints[axis], Handle::Axis(axis));
+        for (axis, tint) in tints.iter().enumerate() {
+            let c = faded(*tint, Handle::Axis(axis));
             let width = if gizmo.hover == Some(Handle::Axis(axis)) {
                 1.5
             } else {
@@ -358,9 +358,9 @@ pub fn build(
         }
         return Ok(overlays);
     }
-    for axis in 0..3 {
+    for (axis, tint) in tints.iter().enumerate() {
         let handle = Handle::Axis(axis);
-        let c = faded(tints[axis], handle);
+        let c = faded(*tint, handle);
         let width = if gizmo.hover == Some(handle) { 1.5 } else { 1. };
         let end = handles.ends[axis];
         let o = Vec2::from(handles.origin);
@@ -387,31 +387,22 @@ pub fn build(
         }
     }
     if state.tool == Tool::Translate {
-        for axis in 0..3 {
+        // Plane handles: small solid chips 30% along both arms, tinted by their normal.
+        for (axis, tint) in tints.iter().enumerate() {
             let handle = Handle::Plane(axis);
             let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
             let o = Vec2::from(handles.origin);
-            let corner = Vec2::from(handles.plane_corner(axis));
-            let pa = o + (Vec2::from(handles.ends[a]) - o) * 0.3;
-            let pb = o + (Vec2::from(handles.ends[b]) - o) * 0.3;
-            if (pa - o).length() < 6. || (pb - o).length() < 6. {
+            if (Vec2::from(handles.ends[a]) - o).length() < 20.
+                || (Vec2::from(handles.ends[b]) - o).length() < 20.
+            {
                 continue;
             }
-            let c = faded(tints[axis], handle);
-            let mut fill = c;
-            fill[3] *= if gizmo.hover == Some(handle) {
-                0.45
-            } else {
-                0.22
-            };
-            overlays.push(Overlay::Line {
-                from: ((pa + corner) * 0.5).into(),
-                to: ((pb + corner) * 0.5).into(),
-                width: (corner - pa).length().min((corner - pb).length()) * 0.9,
-                color: fill,
-            });
-            stroke(&mut overlays, pa.into(), corner.into(), 0.75, c);
-            stroke(&mut overlays, pb.into(), corner.into(), 0.75, c);
+            let corner = handles.plane_corner(axis);
+            let mut c = faded(*tint, handle);
+            if gizmo.hover != Some(handle) && gizmo.active != Some(handle) {
+                c[3] *= 0.7;
+            }
+            stroke(&mut overlays, corner, corner, 4., c);
         }
     }
     // 10 px screen-space centre handle.

@@ -7,7 +7,7 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
 
 - `Graph`: declared resource accesses, stable topological ordering, barriers,
   explicit queue release/acquire pairs, timeline dependencies, transient images.
-- `Renderer::new`, `render`, `resize`, `capture`: cooked Vulkan rendering; read-only
+- `Renderer::new`, `render`, `render_view` (live debug view mode), `resize`, `capture`: cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Resize resets history.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and
   camera pose/bounds requests. Materials use bindless texture indices.

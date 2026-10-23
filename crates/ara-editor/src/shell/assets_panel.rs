@@ -2,46 +2,66 @@
 use super::*;
 impl Shell {
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
+        // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
         self.bindings.insert(
             ara_ui::source::stable_id("asset-create"),
             Binding::ContextMenu(commands::menus::Context::Assets, commands::Target::None),
         );
         out.push_str(&format!("<button id='asset-create' class='ghost' style='padding-left:4px;padding-right:2px' label='Create' description='Create folders, materials, effects and controllers' action='Dispatch'>{}{}</button>",icons::icon("asset-create","plus"),icons::icon_in("asset-create-more","chevron-down","icon-sm")));
-        self.tool_text(
-            out,
-            "asset-import",
-            "assets.import",
-            "file-plus",
-            "Import",
-            "ghost",
-        );
-        // Breadcrumb of the current folder; each crumb opens its folder.
-        let folder = editor.state.asset_folder.clone();
-        self.bindings.insert(
-            ara_ui::source::stable_id("asset-crumb-root"),
-            Binding::Protocol("editor.workspace", json!({"folder":""})),
-        );
-        out.push_str(&format!("<panel id='asset-crumbs' class='row' style='gap:2px;padding-left:4px;overflow:hidden;flex-shrink:1'><button id='asset-crumb-root' class='ghost' label='Project' action='Dispatch' text='Project' />"));
-        let mut path = String::new();
-        for (n, part) in folder.split('/').filter(|p| !p.is_empty()).enumerate() {
-            if !path.is_empty() {
-                path.push('/');
-            }
-            path.push_str(part);
-            let id = format!("asset-crumb-{n}");
-            self.bindings.insert(
-                ara_ui::source::stable_id(&id),
-                Binding::Protocol("editor.workspace", json!({"folder":path})),
+        let content = self
+            .ui
+            .find("assets-content")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(self.ui.size[0]);
+        // Narrow docks show Import as an icon and drop the breadcrumb and folder column.
+        let narrow = content < 420.;
+        if narrow {
+            self.tool_icon(
+                out,
+                "asset-import",
+                "assets.import",
+                "file-plus",
+                editor,
+                false,
             );
-            out.push_str(&format!(
-                "{}<button id='{id}' class='ghost' label='{}' action='Dispatch' text='{}' />",
-                icons::icon(&format!("{id}-sep"), "chevron-right"),
-                escape(part),
-                escape(part)
-            ));
+        } else {
+            self.tool_text(
+                out,
+                "asset-import",
+                "assets.import",
+                "file-plus",
+                "Import",
+                "ghost",
+            );
         }
-        out.push_str("</panel>");
+        let folder = editor.state.asset_folder.clone();
+        if !narrow {
+            self.bindings.insert(
+                ara_ui::source::stable_id("asset-crumb-root"),
+                Binding::Protocol("editor.workspace", json!({"folder":""})),
+            );
+            out.push_str("<panel id='asset-crumbs' class='row' style='gap:2px;padding-left:4px;overflow:hidden;flex-shrink:1'><button id='asset-crumb-root' class='ghost' label='Project' action='Dispatch'><text id='asset-crumb-root-label' text='Project' /></button>");
+            let mut path = String::new();
+            for (n, part) in folder.split('/').filter(|p| !p.is_empty()).enumerate() {
+                if !path.is_empty() {
+                    path.push('/');
+                }
+                path.push_str(part);
+                let id = format!("asset-crumb-{n}");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::Protocol("editor.workspace", json!({"folder":path})),
+                );
+                out.push_str(&format!(
+                    "{}<button id='{id}' class='ghost' label='{}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",
+                    icons::icon(&format!("{id}-sep"), "chevron-right"),
+                    escape(part),
+                    escape(part)
+                ));
+            }
+            out.push_str("</panel>");
+        }
         self.search(out, "assets", editor);
         for (id, label, icon, grid) in [
             ("assets-grid", "Grid", "layout-grid", true),
@@ -54,12 +74,6 @@ impl Shell {
             let on = editor.state.asset_grid == grid;
             out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
         }
-        // Narrow docks drop the folder column; the breadcrumb still navigates.
-        let content = self
-            .ui
-            .find("assets-content")
-            .map(|i| self.ui.nodes[i].rect.w)
-            .unwrap_or(self.ui.size[0]);
         let side = if content < 420. {
             0.
         } else if content < 720. {

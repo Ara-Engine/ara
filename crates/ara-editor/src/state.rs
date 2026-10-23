@@ -368,10 +368,14 @@ impl EditorState {
     pub fn dock(&self) -> ara_ui::Result<DockLayout> {
         DockLayout::with_floating(self.layout.clone(), self.floating.clone())
     }
-    /// Store a dock model back into navigation state.
+    /// Store a dock model back into navigation state. Focus returns to the Scene
+    /// when the focused panel is no longer open.
     pub fn set_dock(&mut self, dock: &DockLayout) {
         self.layout = dock.root().clone();
         self.floating = dock.floating().to_vec();
+        if !dock.contains(&self.focus) {
+            self.focus = "scene".into();
+        }
     }
 }
 /// Whether a panel is open in the main window or a floating window.
@@ -501,7 +505,7 @@ fn split(axis: Axis, ratio: f32, first: DockNode, second: DockNode) -> DockNode 
         second: Box::new(second),
     }
 }
-/// Built-in layouts (Window ▸ Layouts). The viewport keeps the full window height
+/// Built-in layouts (Window › Layouts). The viewport keeps the full window height
 /// in every preset; Assets and Console share the left column under Hierarchy.
 pub fn preset_layout(name: &str) -> Option<DockNode> {
     use Axis::{Horizontal as H, Vertical as V};
@@ -692,7 +696,7 @@ impl Navigation {
 pub(crate) fn persist_layout(root: &Path, state: &EditorState) -> anyhow::Result<()> {
     write_layout(&root.join(".ara/editor-layout.json"), state)
 }
-/// Save a named layout (Window ▸ Layouts ▸ Save Layout As…).
+/// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
     let text = state
         .dock()

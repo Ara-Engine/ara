@@ -67,3 +67,26 @@ captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 drag and graph create/connect/undo, then captures every panel in both themes and
 measures 1,000 warm input-to-present samples with 500 nodes open.
 
+
+UX v2 (D23). `shell/commands` is the one command registry: `table.rs` specs (id,
+title, icon, keys, availability, label, run), `menus.rs` the nine menus and every
+context menu, `keys.rs` chords and the Ara/Unreal/Unity/Blender presets. Menus,
+palette, context menus, shortcuts, toolbar buttons and `editor.commands` (MCP) all
+read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one is
+`Run::Later(reason)`. New buttons bind `Binding::Command`; `tests/ux.rs` rejects
+uncommanded buttons. Context-menu sources are `Shell::context_at`.
+`settings.rs` holds the settings table; edits are ops on a private store (undoable,
+`editor.settings.*`), user scope persists to `%APPDATA%\Ara\editor-settings.json`
+and project scope to `ara.project.json`. `Editor::open` keeps user settings in
+memory; the app passes the real path via `open_with`.
+Floating windows: `DockLayout` floating roots map to owned OS windows
+(`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
+`enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
+the layout and off-screen windows are recovered at startup. Tab drags cross
+windows through the global mouse; Esc cancels.
+Density: compact by default (`editor-comfortable.css` adds the other density),
+22 px tree rows, 24 px property rows. CSS colors come from theme tokens; labels use
+`color:inherit` and icons `tint` so state colors reach them.
+`verify-ux.ps1` runs `--verify-ux`: menus, context menus, palette, settings,
+float, tool tabs and empty states in both themes, plus `ux-report.json`
+(viewport share, uncommanded buttons) and `commands.json`.

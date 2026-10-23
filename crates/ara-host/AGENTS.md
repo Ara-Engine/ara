@@ -16,7 +16,7 @@ ara-why, ara-profile, ara-collab.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads
   documents, replays `.ara/journal`. `call(conn, method, params)`,
   `handle_text(conn, json)`, `tick()` (watch + debounced flush + service ticks),
-  `flush()`, `closed(conn)`, `drain_outbox()`, `stopping()`, `catalog()`,
+  `flush()`, `unsaved()`, `closed(conn)`, `drain_outbox()`, `stopping()`, `catalog()`,
   `register(Box<dyn Service>)`, `set_approval`, `kill()` (drop without flushing;
   crash tests). Implements `ara_proto::Endpoint` as `ConnId::LOCAL`.
 - `Service { name, methods(db), call(cx, method, params), tick(cx) }`;
