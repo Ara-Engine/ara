@@ -14,7 +14,7 @@ impl Reservoirs {
         let mut allocated = Vec::new();
         for i in 0..6 {
             let result = gpu.create_buffer(
-                pixels * if i < 3 { 32 } else { 64 },
+                pixels * if i < 3 { 16 } else { 48 },
                 vk::BufferUsageFlags::STORAGE_BUFFER,
                 false,
             );

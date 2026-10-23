@@ -83,38 +83,48 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
 }
 // Three 3x3 wavelet iterations stage incident radiance and geometric guides.
 // Plane distance preserves slanted walls; roughness controls normal rejection.
-groupshared float4 filterColour[256];
-groupshared float4 filterGuide[256];
-groupshared float4 filterWorld[256];
-groupshared float4 filterSpecular[256];
+static const uint FILTER_CAPACITY=256;
+groupshared float3 filterColour[FILTER_CAPACITY];
+groupshared float4 filterGuide[FILTER_CAPACITY];
+groupshared float4 filterWorld[FILTER_CAPACITY];
+groupshared float3 filterSpecular[FILTER_CAPACITY];
 [shader("compute")][numthreads(8,8,1)]
 void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
     uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
-    int step=splitSignals?(root.pass==0?1:root.pass==1?3:4):1<<root.pass;uint width=8+2*step;
+    int step=splitSignals?(root.pass==0?1:root.pass==1?3:8):1<<root.pass;uint width=8+2*step;
     uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
-    for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at);filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at);}
-    GroupMemoryBarrierWithGroupSync();
+    // At step 8 the nine 8x8 footprints do not overlap within a group. Direct
+    // coalesced texture gathers avoid staging 576 values with no shared reuse.
+    bool wide=step>4;
+    if(!wide){
+        for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at).rgb;filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at).rgb;}
+        GroupMemoryBarrierWithGroupSync();
+    }
     if(any(p>=f.sizes.xy))return;
     uint2 local=tid.xy-group.xy*8+step;uint centerIndex=local.y*width+local.x;
-    float3 center=filterColour[centerIndex].rgb;float4 guide=filterGuide[centerIndex];float3 sum=0;float total=0;
+    float3 center,specCenter=0;float4 guide,world;
+    if(wide){world=pixel(f,WORLD+slot,p);center=pixel(f,source,p).rgb;guide=float4(pixel(f,NORMAL+slot,p).xyz,length(world.xyz-f.camera.xyz));if(splitSignals)specCenter=extraPixel(f,specSource,p).rgb;}
+    else{world=filterWorld[centerIndex];center=filterColour[centerIndex];guide=filterGuide[centerIndex];if(splitSignals)specCenter=filterSpecular[centerIndex];}
+    float3 sum=0;float total=0;
     float2 temporalMoments=pixel(f,MOMENTS+slot,p).xy;float sigma=sqrt(max(temporalMoments.y-temporalMoments.x*temporalMoments.x,0.00001));float l=luminance(center);float historyCount=pixel(f,HISTORY+slot,p).w;
-    float scale=max(guide.w*0.001,0.003)*step;float roughness=pixel(f,NORMAL+slot,p).w;float4 world=filterWorld[centerIndex];
-    float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(filterSpecular[centerIndex].rgb):0;
+    float scale=max(guide.w*0.001,0.003)*step;float roughness=pixel(f,NORMAL+slot,p).w;
+    float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter):0;
     float4 specMoments=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p):float4(0);float2 specMom=specMoments.xy;float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
-        uint at=(int(local.y)+y*step)*width+int(local.x)+x*step;
-        float4 g=filterGuide[at];float3 c=filterColour[at].rgb;
+        float3 n,c,spec=0;float4 neighborWorld;
+        if(wide){int2 q=int2(p)+int2(x,y)*step;neighborWorld=pixel(f,WORLD+slot,q);n=pixel(f,NORMAL+slot,q).xyz;c=pixel(f,source,q).rgb;if(splitSignals)spec=extraPixel(f,specSource,q).rgb;}
+        else{uint at=(int(local.y)+y*step)*width+int(local.x)+x*step;neighborWorld=filterWorld[at];n=filterGuide[at].xyz;c=filterColour[at];if(splitSignals)spec=filterSpecular[at];}
         float weight=(x==0?2:1)*(y==0?2:1);
         // Rough incident irradiance is smooth: a centre-dependent luminance
         // rejection biases rare bright bounce samples back toward darkness.
         float radianceWeight=historyCount<4?1:lerp(exp(-abs(luminance(c)-l)/(4*sigma+0.1)),1,smoothstep(0.1,0.3,roughness));
-        weight*=exp(-abs(dot(filterWorld[at].xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(g.xyz,guide.xyz),0),splitSignals?lerp(64.,8.,roughness):lerp(128.,32.,roughness))*radianceWeight*float(filterWorld[at].w==world.w);
+        weight*=exp(-abs(dot(neighborWorld.xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(n,guide.xyz),0),splitSignals?lerp(64.,8.,roughness):lerp(128.,32.,roughness))*radianceWeight*float(neighborWorld.w==world.w);
         if(splitSignals && mixedCoverage(specMoments.z) && (x!=0 || y!=0))weight=0;
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
         if(splitSignals){
-            float3 spec=filterSpecular[at].rgb;float sw=weight*exp(-abs(luminance(spec)-specL)/(4*specSigma+0.02))*pow(max(dot(g.xyz,guide.xyz),0),lerp(256.,16.,roughness));
+            float sw=weight*exp(-abs(luminance(spec)-specL)/(4*specSigma+0.02))*pow(max(dot(n,guide.xyz),0),lerp(256.,16.,roughness));
             if(x==0 && y==0)sw=max(sw,1);specSum+=spec*sw;specTotal+=sw;
         }
     }uint packed=asuint(pixel(f,MOMENTS+slot,p).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));

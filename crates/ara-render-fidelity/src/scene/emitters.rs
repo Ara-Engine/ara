@@ -17,6 +17,22 @@ pub(super) fn append(
         if power <= 0. {
             continue;
         }
+        // Constant emission bypasses dependent material/texture descriptor loads
+        // at every RIS candidate. Textured emission retains its exact evaluation.
+        let texture = &scene.textures[scene.materials[mesh.material].textures[3] as usize];
+        let mut emission = [0.; 4];
+        if texture.size == [1, 1] {
+            for (channel, value) in emission[..3].iter_mut().enumerate() {
+                let encoded = f32::from(texture.rgba[channel]) / 255.;
+                let linear = if texture.srgb {
+                    super::mips::decode(encoded)
+                } else {
+                    encoded
+                };
+                *value = m.emissive_roughness[channel] * linear;
+            }
+            emission[3] = 1.;
+        }
         for (primitive, triangle) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
             let p: [Vec3; 3] = std::array::from_fn(|i| {
                 Vec3::from_array(mesh.vertices[triangle[i] as usize].position)
@@ -37,9 +53,11 @@ pub(super) fn append(
             out.extend_from_slice(bytemuck::cast_slice(&[
                 ids[&mesh.entity],
                 primitive as u32,
-                0,
+                mesh.material as u32,
                 0,
             ]));
+            // Private 80-byte emitter record; public mesh/material layouts stay fixed.
+            out.extend_from_slice(bytemuck::cast_slice(&emission));
             count += 1;
         }
     }

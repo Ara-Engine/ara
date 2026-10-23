@@ -33,6 +33,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
                 }
             }
         }
+        let frame_samples = totals.to_vec();
         totals.sort_by(f64::total_cmp);
         let passes = passes
             .into_iter()
@@ -46,7 +47,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
             "{name} {}p: p50 {:.3}, p95 {:.3} ms",
             render[1], totals[120], totals[227]
         );
-        report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":totals[120],"p95":totals[227],"passes":passes,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"point_lights":scene.lights.len(),"background_before":before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"exposure":exposure,"shared_gpu":true,"async_overlap":false}));
+        report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"frames":240,"warmup":96,"p50":totals[120],"p95":totals[227],"maximum_ms":totals.last(),"frame_samples_ms":frame_samples,"passes":passes,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"point_lights":scene.lights.len(),"background_before":before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"exposure":exposure,"shared_gpu":true,"async_overlap":false}));
         view.set_post(PostSettings {
             ev100: Some(ev),
             ..large::fixed_post()

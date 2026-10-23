@@ -21,57 +21,31 @@ struct Frame {
     float4 camera;float4 previousCamera;uint4 sizes;uint4 scene;
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
-    uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;uint4 read[7];uint4 write[7];
-#ifdef FULL_FRAME
-    uint4 reservoirs[2];uint4 extraRead[3];uint4 extraWrite[3];uint4 shadow;
-#endif
+    uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;
 };
-#ifdef CACHE_EXTENSION
-struct ShaderExtension {uint4 rows[9];};
-// Invocation-private, read-only parameter cache; no state crosses dispatches.
-static ShaderExtension parameterExtension;
-#endif
-Frame frame(){
-#ifdef CACHE_EXTENSION
-    parameterExtension=buffers[root.frame].Load<ShaderExtension>(sizeof(Frame));
-#endif
-    return buffers[root.frame].Load<Frame>(0);
-}
-// Keep optional rows out of the by-value Frame passed through classic transport.
-// The Rust upload appends two reservoir, three read, three write and one shadow row.
+Frame frame(){return buffers[root.frame].Load<Frame>(0);}
+// Rust retains seven read rows, seven write rows, then nine private rows.
+// Fetch uniform descriptors by byte offset instead of passing these dynamically
+// indexed arrays by value through every material/path/denoiser call.
 uint4 extensionRow(uint row){
-#ifdef CACHE_EXTENSION
-    return parameterExtension.rows[row];
-#else
-#ifdef FULL_FRAME
-    return buffers[root.frame].Load<uint4>(sizeof(Frame)-144+row*16);
-#else
-    return buffers[root.frame].Load<uint4>(sizeof(Frame)+row*16);
-#endif
-#endif
+    return buffers[root.frame].Load<uint4>(sizeof(Frame)+224+row*16);
 }
-uint ri(Frame f,uint i){return f.read[i/4][i%4];}
-uint wi(Frame f,uint i){return f.write[i/4][i%4];}
+uint ri(Frame f,uint i){return buffers[root.frame].Load(sizeof(Frame)+i*4);}
+uint wi(Frame f,uint i){return buffers[root.frame].Load(sizeof(Frame)+112+i*4);}
 float4 extraPixel(Frame f,uint i,int2 p){
-#ifdef FULL_FRAME
-    uint index=f.extraRead[(i-28)/4][(i-28)%4];
-#else
     uint index=extensionRow(2+(i-28)/4)[(i-28)%4];
-#endif
-    return textures[NonUniformResourceIndex(index)].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));
+    return textures[index].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));
 }
 void extraStore(Frame f,uint i,uint2 p,float4 v){
-#ifdef FULL_FRAME
-    uint index=f.extraWrite[(i-28)/4][(i-28)%4];
-#else
     uint index=extensionRow(5+(i-28)/4)[(i-28)%4];
-#endif
-    images[NonUniformResourceIndex(index)][p]=v;
+    images[index][p]=v;
 }
 #include "history.slangh"
-float4 pixel(Frame f,uint i,int2 p){return textures[NonUniformResourceIndex(ri(f,i))].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
-float4 sampleImage(Frame f,uint i,float2 uv){return textures[NonUniformResourceIndex(ri(f,i))].SampleLevel(samplers[2],uv,0);}
-void store(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(wi(f,i))][p]=v;}
+// Frame target indices are dynamically uniform across this dispatch. Material
+// texture indices remain explicitly non-uniform at their per-hit call sites.
+float4 pixel(Frame f,uint i,int2 p){return textures[ri(f,i)].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
+float4 sampleImage(Frame f,uint i,float2 uv){return textures[ri(f,i)].SampleLevel(samplers[2],uv,0);}
+void store(Frame f,uint i,uint2 p,float4 v){images[wi(f,i)][p]=v;}
 uint hash(uint x){x^=x>>16;x*=0x7feb352d;x^=x>>15;x*=0x846ca68b;x^=x>>16;return x;}
 float random(inout uint state){state=hash(state+0x9e3779b9);return float(state>>8)*(1./16777216.);}
 float3 basis(float3 n,float3 v){float3 t=normalize(cross(abs(n.y)<0.99?float3(0,1,0):float3(1,0,0),n));return t*v.x+cross(n,t)*v.y+n*v.z;}
@@ -117,10 +91,10 @@ bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){Material 
 // Only primary motion-vector extraction needs the preceding vertex table.
 float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 current){
     if(f.scene.x==f.scene.w)return current;float3 w=float3(1-bary.x-bary.y,bary);
-    uint previousCount=buffers[NonUniformResourceIndex(f.scene.w)].Load(0);
-    if(id<previousCount){uint4 previousMesh=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint4>(32+id*16);
-        if(previousMesh.z>primitive*3+2){uint3 previousIndices=buffers[NonUniformResourceIndex(f.scene.w)].Load<uint3>(previousMesh.y+primitive*12);
-            Vertex pa=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.x*48),pb=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.y*48),pc=buffers[NonUniformResourceIndex(f.scene.w)].Load<Vertex>(previousMesh.x+previousIndices.z*48);
+    uint previousCount=buffers[f.scene.w].Load(0);
+    if(id<previousCount){uint4 previousMesh=buffers[f.scene.w].Load<uint4>(32+id*16);
+        if(previousMesh.z>primitive*3+2){uint3 previousIndices=buffers[f.scene.w].Load<uint3>(previousMesh.y+primitive*12);
+            Vertex pa=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.x*48),pb=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.y*48),pc=buffers[f.scene.w].Load<Vertex>(previousMesh.x+previousIndices.z*48);
             return pa.position*w.x+pb.position*w.y+pc.position*w.z;
         }
     }
@@ -157,12 +131,12 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
     // Internal instance masks partition opaque and alpha-tested geometry. The
     // opaque traversal stays in hardware even in a forest or a masked interior.
     uint terminate=shadow?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:0;
-    RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],RAY_FLAG_FORCE_OPAQUE|terminate,1,ray);
+    RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_OPAQUE|terminate,1,ray);
     while(opaque.Proceed()){}
     bool found=opaque.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
     if(found){hit.distance=opaque.CommittedRayT();hit.id=opaque.CommittedInstanceID();hit.primitive=opaque.CommittedPrimitiveIndex();hit.bary=opaque.CommittedTriangleBarycentrics();hit.front=opaque.CommittedTriangleFrontFace();if(shadow)return true;}
     if(buffers[f.scene.x].Load(16)==0){
-        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],RAY_FLAG_FORCE_NON_OPAQUE|terminate,2,ray);
+        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE|terminate,2,ray);
         while(masked.Proceed()){if(masked.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,masked.CandidateInstanceID(),masked.CandidatePrimitiveIndex(),masked.CandidateTriangleBarycentrics(),rng))masked.CommitNonOpaqueTriangleHit();}
         if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
     }return found;

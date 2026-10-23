@@ -318,10 +318,10 @@ Jacobian and retests visibility. Glossy secondary vertices and extreme Jacobians
 limit reuse; rejected spatial proposals retain their effective sample counts.
 This is an approximate, bounded path-reconnection estimator inspired by
 [ReSTIR GI](https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing),
-not an unbiased implementation of its full path-space MIS. Stationary rough
-diffuse hits can terminate in previous screen-space radiance after ID, depth,
-normal, maturity and lighting checks; off-screen/disoccluded hits trace paths.
-This includes indirect energy and avoids a direct-only screen cache. Glossy
+not an unbiased implementation of its full path-space MIS. Secondary paths use
+next-event light sampling and Russian roulette through the same twelve total
+surface events as the reference. Temporal path ancestry is capped at one
+effective candidate to limit correlated low-frequency noise. Glossy
 primary pixels retain full-rate GGX samples. Complex coat/sheen/
 transmission materials retain full shared-BRDF path sampling instead of an
 unsupported diffuse reconnection. The reference never uses reservoirs or caches.
@@ -333,16 +333,43 @@ sampling. Private albedo/geometric-normal guides avoid repeating textured vertex
 evaluation at each reservoir stage. Public G-buffer slots and `FILTER0=12` remain
 unchanged; the feature/bloom integration test exercises the same HDR composition.
 
-Diffuse and GGX specular signals have separate histories and moments. Two
-variance-guided geometry-aware a-trous iterations use steps 1 and 3 in reservoir
+Diffuse and GGX specular signals have separate histories and moments. Three
+variance-guided geometry-aware a-trous iterations use steps 1, 3 and 8 in reservoir
 mode; classic mode retains steps 1/2/4. Motion/light changes clamp
 history to compatible current neighborhoods; static histories preserve rare
-energy. Low-light histories use float32 because a long half-float EMA can lose
-small corrections. Reprojection rejects disocclusions; lighting flags discard
+energy. Half-float histories carry a quantized RGB rounding residual in unused
+float32 moment channels: this preserves small EMA corrections without adding
+float32 colour-image bandwidth. Residual encoding uses portable 32-bit operations,
+so it requires neither shaderFloat16 nor shaderInt16. The independent furnace
+test checks absolute energy through the complete resolve.
+Reprojection rejects disocclusions; lighting flags discard
 reservoir reuse and use responsive weights. This is an Ara implementation, not
 NRD/ReBLUR/ReLAX integration or a claim of equivalent quality. Reservoir resources
 and extra guides are allocated on selection; a native view requires substantial
-additional memory (six reservoirs alone use 288 bytes per render pixel).
+additional memory (six packed reservoirs use 192 bytes per render pixel).
+Direct IDs/seeds/weights remain exact; count, visibility and age occupy 18 bits.
+GI retains float32 positions, radiance and normalization, an integer source pixel,
+and an oct16 geometric normal. The independent physical GPU tests exercise this
+packing through actual tracing and temporal reuse.
+
+The wide wavelet pass uses coalesced texture gathers. At step 8 the nine 8x8
+footprints are disjoint within a workgroup, so shared-memory staging provides no
+reuse and reduces occupancy. Narrow passes keep their compact shared tile.
+Dispatch-uniform frame descriptors are indexed uniformly; per-hit material
+texture indices remain explicitly non-uniform. Shader helpers fetch descriptor
+rows by offset rather than passing arrays by value. The uploaded seven read/write
+rows and every legacy target slot remain byte-compatible. The private emitter table caches
+exact constant-texture linear emission in an 80-byte record, avoiding repeated
+material and texture queries; varying emission retains full texture evaluation.
+
+Specular accumulation includes explicit zero samples on skipped frames and weights
+traced samples by their inverse inclusion probability. Dividing by the number of
+traced samples instead would change subpixel material coverage where dense glossy
+and coarse rough materials share a pixel. The mixed-material half-plane GPU test
+compares this boundary against independently sampled pixel-area ground truth.
+The transport phase folds frame-index digits to avoid locking the 2x2 pattern to
+one Halton subpixel quadrant. Stationary mixed-coverage pixels retain temporal
+integration but reject spatial smoothing; camera motion rejects that history.
 
 ## VSM sun source
 

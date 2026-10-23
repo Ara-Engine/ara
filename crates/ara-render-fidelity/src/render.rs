@@ -216,10 +216,6 @@ impl FidelityView {
                         WORLD0 + previous,
                         NORMAL0 + previous,
                         DIRECT_HISTORY0 + previous,
-                        HISTORY0 + previous,
-                        MOMENTS0 + previous,
-                        SPEC_HISTORY0 + previous,
-                        SPEC_MOMENTS0 + previous,
                     ]
                     .map(|i| (ids[i], Access::ShaderRead)),
                 );
@@ -266,7 +262,7 @@ impl FidelityView {
                     [render[0].div_ceil(16), render[1].div_ceil(16), 1]
                 } else {
                     [
-                        render[0].div_ceil(16 * self.transport_stride),
+                        render[0].div_ceil(16 * (self.transport_stride / 2).max(1)),
                         render[1].div_ceil(16),
                         1,
                     ]
@@ -478,8 +474,8 @@ impl FidelityView {
                 if reference {
                     "Reference.Copy"
                 } else {
-                    if resampling && i == 1 {
-                        "SVGF.Atrous.3"
+                    if resampling {
+                        ["SVGF.Atrous.1", "SVGF.Atrous.3", "SVGF.Atrous.8"][i]
                     } else {
                         ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
                     }

@@ -22,6 +22,9 @@ Use `-Mode Smoke` for a bounded 160x90 hardware/validation integration check.
 `-Mode Beauty` is the main authored-content golden; `-Mode Many-Lights` traces
 the 1000-light corridor independently. Matching *-Timings modes measure full frames.
 `-Mode Night-Noise` records 16x16 block and per-pixel luminance deltas and a strip.
+Night references use 32768 spp; the 1000-light reference uses 65536 spp and 32 RIS
+candidates per vertex. Report lower-half residuals as well as whole-image error.
+Timing reports retain chronological frame samples, median, p95, maximum and load.
 Goldens update only with `ARA_UPDATE_FIDELITY_GOLDENS=1`; regular tests compare.
 All output/provenance goes under this crate; root files/docs remain untouched.
 Runtime shader cooking is forbidden. Recook fidelity offline before testing edits.

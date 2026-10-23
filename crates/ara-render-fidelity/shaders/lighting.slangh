@@ -17,7 +17,7 @@ uint chooseLight(Frame f,inout uint rng){
     if(h.w>0 && (e.z==0 || random(rng)<0.5))return min(uint(random(rng)*h.w),h.w-1);
     if(e.z==0)return 0xffffffff;
     float choice=random(rng)*asfloat(e.w);uint low=0,high=e.z-1;
-    while(low<high){uint mid=(low+high)/2;if(buffers[f.scene.x].Load<float>(e.y+mid*64+12)<choice)low=mid+1;else high=mid;}
+    while(low<high){uint mid=(low+high)/2;if(buffers[f.scene.x].Load<float>(e.y+mid*80+12)<choice)low=mid+1;else high=mid;}
     return low|0x80000000;
 }
 LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
@@ -42,7 +42,7 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
     }
 #ifdef EMISSIVE_LIGHTS
     else{
-        uint id=light&0x7fffffff;if(id>=e.z)return c;uint at=e.y+id*64;
+        uint id=light&0x7fffffff;if(id>=e.z)return c;uint at=e.y+id*80;
         float4 a=buffers[f.scene.x].Load<float4>(at),b=buffers[f.scene.x].Load<float4>(at+16),d=buffers[f.scene.x].Load<float4>(at+32);
         uint4 record=buffers[f.scene.x].Load<uint4>(at+48);
         float u=sqrt(random(seed)),t=random(seed);float2 bary=float2(u*(1-t),u*t);
@@ -52,12 +52,15 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
         if(distance<0.003)return c;
         if(e.x==0){if(!accept(f,record.x,record.y,bary,seed))return c;}
         float cosine=abs(dot(normalize(cross(b.xyz-a.xyz,d.xyz-a.xyz)),-c.direction));
-        Material emitter=material(f,mesh(f,record.x).w);
+        float4 cached=buffers[f.scene.x].Load<float4>(at+64);float3 emission=cached.rgb;
+        if(cached.w==0){
+        Material emitter=material(f,record.z);
         uint width,height;textures[NonUniformResourceIndex(emitter.textures.w)].GetDimensions(width,height);
         float3 colour;
         if(width==1 && height<=2)colour=textures[NonUniformResourceIndex(emitter.textures.w)].Load(int3(0,0,0)).rgb;
         else colour=tex(emitter.textures.w,hitUv(f,record.x,record.y,bary)).rgb;
-        float3 emission=emitter.emissiveRoughness.rgb*colour;
+        emission=emitter.emissiveRoughness.rgb*colour;
+        }
         c.value=evaluate(s,v,c.direction,bsdfPdf)*emission*cosine/max(distance*distance,1e-12);
     }
 #endif

@@ -19,6 +19,7 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         view.render(gpu, &f)?;
     }
     let hybrid = view.capture_radiance(gpu)?;
+    large::save_hdr(&root.join(".sn/night-trial-hybrid.f32"), &hybrid)?;
     let direct = view.capture_direct_radiance(gpu)?;
     view.destroy(gpu)?;
     let mut reference = Reference::new(gpu, &scene, size, 4096, 1, s.post)?;
@@ -39,6 +40,12 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         })
         .collect::<Vec<_>>();
     anyhow::ensure!(ground.len() == hybrid.len(), "Reference dimensions differ");
+    let lower = hybrid.len() / 2;
+    let error = ara_pathtrace::metrics::radiance(&hybrid[lower..], &ground[lower..])?;
+    println!(
+        "Night trial lower-half relative RMSE: {:.6}",
+        error.relative_rmse
+    );
     let indirect = hybrid
         .iter()
         .zip(&direct)

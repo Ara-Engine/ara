@@ -58,18 +58,24 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let hash = view.scene_hash().to_owned();
         let revision = view.shader_revision().to_owned();
         view.destroy(gpu)?;
-        let mut reference = Reference::new(gpu, &scene, SIZE, 4096, 12, post)?;
+        let samples = if name == "night_interior" {
+            32768
+        } else {
+            4096
+        };
+        let batches = samples / 8;
+        let mut reference = Reference::new(gpu, &scene, SIZE, samples, 12, post)?;
         if name == "outdoor_day" {
             reference.set_atmosphere(Some(Default::default()))?;
         }
         let mut half = Vec::new();
-        for batch in 0..512 {
+        for batch in 0..batches {
             reference.step(gpu, &camera, false)?;
-            if batch == 255 {
+            if batch + 1 == batches / 2 {
                 half = reference.radiance(gpu)?;
             }
             if batch % 64 == 63 {
-                println!("{name} reference: {} / 4096 spp", (batch + 1) * 8);
+                println!("{name} reference: {} / {samples} spp", (batch + 1) * 8);
             }
         }
         let ground = reference.radiance(gpu)?;
@@ -88,6 +94,11 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         large::save_hdr(&root.join(format!(".sn/{name}-hybrid.f32")), &hdr)?;
         large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
+        let surface_roi_convergence = metrics::radiance(&half[lower..], &ground[lower..])?;
+        println!(
+            "{name}: surface ROI {:.5}, reference ROI residual {:.5}",
+            surface_roi_error.relative_rmse, surface_roi_convergence.relative_rmse
+        );
         let golden = root.join(format!("tests/goldens/{name}.png"));
         if update {
             hybrid.save(&golden)?;
@@ -101,7 +112,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             "{name}: relative RMSE {:.5}; convergence {:.5}",
             error.relative_rmse, convergence.relative_rmse
         );
-        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":if name=="outdoor_day"{"lower half: terrain and foliage"}else{"lower half: floor and sphere bases"},"surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
+        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":if name=="outdoor_day"{"lower half: terrain and foliage"}else{"lower half: floor and sphere bases"},"surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":samples,"surface_roi_convergence":surface_roi_convergence,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
         reference.destroy(gpu)?;
     }
     write_json(&root.join("measurements/robust-quality.json"), &report)?;
@@ -114,10 +125,13 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
 }
 
 /// Measure complete native/upscaled frames; new fixtures have no historical baseline.
-pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
+pub fn timings(gpu: &mut VulkanDevice, root: &Path, night_only: bool) -> Result<()> {
     let mut report = Vec::new();
     let mut budgets_passed = true;
     for (name, scene, camera, ev) in cases()? {
+        if night_only && name != "night_interior" {
+            continue;
+        }
         for render in [[2560, 1440], [1707, 960]] {
             let mut s = settings(render, [2560, 1440]);
             s.post = PostSettings {
@@ -154,8 +168,17 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             view.render(gpu, &input(&camera, 156, false))?;
             view.capture(gpu)?
                 .save(root.join(format!("captures/{name}-{}p.png", render[1])))?;
+            let frame_samples = totals.to_vec();
             totals.sort_by(f64::total_cmp);
-            budgets_passed &= totals[56] <= if render[1] == 1440 { 10. } else { 5. };
+            let budget = if render[1] == 1440 {
+                10.
+            } else if name == "night_interior" {
+                // Accepted round-2 p95 plus the explicitly allowed 1 ms increment.
+                3.533664 + 1.
+            } else {
+                5.
+            };
+            budgets_passed &= totals[56] <= budget;
             let passes = passes
                 .into_iter()
                 .map(|(name, mut times)| {
@@ -167,11 +190,16 @@ pub fn timings(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
                 "{name} {}p: p50 {:.3}, p95 {:.3} ms",
                 render[1], totals[30], totals[56]
             );
-            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"budget_ms":if render[1]==1440 {10.} else {5.},"budget_passed":totals[56]<=if render[1]==1440 {10.} else {5.},"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_before":background_before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
+            report.push(serde_json::json!({"scene":name,"render_size":render,"display_size":[2560,1440],"p50":totals[30],"p95":totals[56],"maximum_ms":totals.last(),"frame_samples_ms":frame_samples,"budget_ms":budget,"budget_passed":totals[56]<=budget,"warmup":96,"frames":60,"passes":passes,"exposure":exposure,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"background_before":background_before,"background_after":content::background_load(),"cpu_before":cpu_before,"cpu_after":content::cpu_load(),"background_load":"shared GPU with approximately ten other agents; no forced clocks or exclusive access","async_overlap":false}));
             view.destroy(gpu)?;
         }
     }
-    write_json(&root.join("measurements/robust-timings.json"), &report)?;
+    let destination = if night_only {
+        ".sn/night-trial-timings.json"
+    } else {
+        "measurements/robust-timings.json"
+    };
+    write_json(&root.join(destination), &report)?;
     write_json(
         &root.join("measurements/validation.json"),
         &gpu.diagnostics(),

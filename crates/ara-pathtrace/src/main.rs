@@ -24,7 +24,6 @@ fn main() -> Result<()> {
     let mut gpu = VulkanDevice::new(&[], root.join(".sn/pipeline-cache"))?;
     let command = std::env::args().nth(1).unwrap_or_else(|| "smoke".into());
     match command.as_str() {
-        "night-probe" => round3::night_probe(&mut gpu, root)?,
         "night-components" => night_components::run(&mut gpu, root)?,
         "night-noise" => night_noise::run(&mut gpu, root, false)?,
         "many-noise" => night_noise::run(&mut gpu, root, true)?,
@@ -40,7 +39,8 @@ fn main() -> Result<()> {
         "corridor" => corridor::run(&mut gpu, root)?,
         "lighting-sequence" => lighting_sequence::run(&mut gpu, root)?,
         "robust-quality" => robust::quality(&mut gpu, root)?,
-        "robust-timings" => robust::timings(&mut gpu, root)?,
+        "robust-timings" => robust::timings(&mut gpu, root, false)?,
+        "night-timings" => robust::timings(&mut gpu, root, true)?,
         "capture" => verification::captures(&mut gpu, root)?,
         "timings" => verification::timings(&mut gpu, root)?,
         "smoke" => {
@@ -87,7 +87,7 @@ fn main() -> Result<()> {
             println!("RT hybrid, baked Raster, reference: validation and sync validation clean");
         }
         _ => anyhow::bail!(
-            "Usage: ara-pathtrace [smoke|capture|timings|quality|content|sponza-reference|sponza-quality|corridor|lighting-sequence|robust-quality|robust-timings|night-noise|many-lights|many-timings|beauty|beauty-timings]"
+            "Usage: ara-pathtrace [smoke|capture|timings|quality|content|sponza-reference|sponza-quality|corridor|lighting-sequence|robust-quality|robust-timings|night-noise|many-noise|many-lights|many-timings|beauty|beauty-timings]"
         ),
     }
     gpu.assert_clean()?;

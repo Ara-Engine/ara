@@ -1,4 +1,4 @@
-param([ValidateSet('Check','Smoke','Capture','Timings','Quality','Content','Sponza-Reference','Sponza-Quality','Robust-Quality','Robust-Timings','Corridor','Lighting-Sequence','Night-Noise','Many-Lights','Many-Timings','Beauty','Beauty-Timings')][string]$Mode='Check')
+param([ValidateSet('Check','Smoke','Capture','Timings','Quality','Content','Sponza-Reference','Sponza-Quality','Robust-Quality','Robust-Timings','Corridor','Lighting-Sequence','Night-Noise','Many-Noise','Many-Lights','Many-Timings','Beauty','Beauty-Timings')][string]$Mode='Check')
 $ErrorActionPreference='Stop'
 $repo=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Push-Location $repo

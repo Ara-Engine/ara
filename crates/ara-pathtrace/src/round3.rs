@@ -4,33 +4,6 @@ use ara_gpu::cooked::write_json;
 use ara_pathtrace::metrics;
 const SIZE: [u32; 2] = [480, 270];
 
-fn hdr(path: &Path) -> Result<Vec<[f32; 4]>> {
-    let bytes = std::fs::read(path)?;
-    anyhow::ensure!(
-        bytes.len() == (SIZE[0] * SIZE[1] * 16) as usize,
-        "HDR size differs"
-    );
-    Ok(bytes
-        .as_chunks::<16>()
-        .0
-        .iter()
-        .map(|p| {
-            std::array::from_fn(|i| {
-                f32::from_le_bytes([p[i * 4], p[i * 4 + 1], p[i * 4 + 2], p[i * 4 + 3]])
-            })
-        })
-        .collect())
-}
-fn save_hdr(path: &Path, data: &[[f32; 4]]) -> Result<()> {
-    std::fs::write(
-        path,
-        data.iter()
-            .flatten()
-            .flat_map(|f| f.to_le_bytes())
-            .collect::<Vec<_>>(),
-    )?;
-    Ok(())
-}
 pub(crate) fn configure(
     gpu: &mut VulkanDevice,
     view: &mut FidelityView,
@@ -42,40 +15,6 @@ pub(crate) fn configure(
     if !reservoirs {
         view.set_atmosphere(Some(Default::default()))?;
     }
-    Ok(())
-}
-/// Short cached-reference probe; results are explicitly prototype diagnostics.
-pub fn night_probe(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
-    let scene = ara_pathtrace::robust_scenes::night();
-    let camera = ara_pathtrace::robust_scenes::camera(false);
-    let mut settings = settings(SIZE, SIZE);
-    settings.post = PostSettings {
-        ev100: Some(5.),
-        ..large::fixed_post()
-    };
-    let mut view = FidelityView::new(gpu, &scene, settings, None)?;
-    configure(gpu, &mut view, true)?;
-    for tick in 0..256 {
-        let mut frame = input(&camera, tick, false);
-        frame.deterministic = false;
-        view.render(gpu, &frame)?;
-    }
-    let hybrid = view.capture_radiance(gpu)?;
-    let reference = hdr(&root.join(".sn/night_interior-reference.f32"))?;
-    let lower = (SIZE[0] * SIZE[1] / 2) as usize;
-    let error = metrics::radiance(&hybrid[lower..], &reference[lower..])?;
-    println!("Night prototype floor ROI: {:.5}", error.relative_rmse);
-    view.capture(gpu)?
-        .save(root.join(".sn/night-reservoir-prototype.png"))?;
-    save_hdr(&root.join(".sn/night-reservoir-prototype.f32"), &hybrid)?;
-    let direct = view.capture_direct_radiance(gpu)?;
-    save_hdr(&root.join(".sn/night-reservoir-direct.f32"), &direct)?;
-    write_json(
-        &root.join(".sn/night-reservoir-prototype.json"),
-        &serde_json::json!({"error":error,"reference":"prototype cache: final comparison must regenerate independent reference","shader_revision":view.shader_revision()}),
-    )?;
-    view.destroy(gpu)?;
-    gpu.assert_clean()?;
     Ok(())
 }
 /// Independently path trace and enforce the main beauty/stress display golden.
@@ -125,7 +64,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
     let shader = view.shader_revision().to_owned();
     hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
     view.destroy(gpu)?;
-    let samples = if many { 16384 } else { 4096 };
+    let samples = if many { 65536 } else { 4096 };
     let batches = samples / 8;
     let mut reference = Reference::new(gpu, &scene, size, samples, 12, s.post)?;
     if !many {
@@ -170,7 +109,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
         &root.join(format!("measurements/{name}-quality.json")),
         &serde_json::json!({"size":size,"reference_samples":samples,"bounces":12,"ev100":ev,"scene_hash":hash,"shader_revision":shader,"error":error,"convergence":convergence,"surface_roi":"lower half","surface_roi_error":surface_roi_error,"surface_roi_convergence":surface_roi_convergence,"point_lights":scene.lights.len(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"source":if many{"500 points + 500 emissive panels, 1000 semantic lights"}else{"CC0 Poly Haven PBR furniture; see THIRD_PARTY_NOTICES.md"},"reference_model":if many {"independent surface path transport"} else {"independent surface transport; shared sky/froxel composition, HDR error before fog"}}),
     )?;
-    save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
+    large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
     reference.destroy(gpu)?;
     gpu.assert_clean()?;
     Ok(())
