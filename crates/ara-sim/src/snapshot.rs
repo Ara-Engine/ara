@@ -43,6 +43,8 @@ impl std::fmt::Display for StateHash {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct EntityState {
     pub id: String,
+    #[serde(default)]
+    pub mapped: bool,
     pub metadata: Option<SceneMetadata>,
     pub parent: Option<String>,
     pub components: BTreeMap<String, Value>,
@@ -357,9 +359,15 @@ impl Session {
         self.edit.workspace = projected.workspace;
         self.edit.scene = projected.scene;
         self.edit.resolved = projected.resolved;
+        let mapped: BTreeSet<_> = snapshot
+            .entities
+            .iter()
+            .filter(|row| row.mapped)
+            .map(|row| row.id.as_str())
+            .collect();
         self.edit.mapping = current
             .into_iter()
-            .filter(|(id, _)| self.edit.resolved.contains_key(id))
+            .filter(|(id, _)| self.edit.resolved.contains_key(id) || mapped.contains(id.as_str()))
             .collect();
         Ok(())
     }
@@ -411,6 +419,7 @@ impl Session {
                 })
                 .transpose()?;
             entities.push(EntityState {
+                mapped: self.edit.mapping.contains_key(&id),
                 id,
                 metadata: self.world().get::<SceneMetadata>(entity).cloned(),
                 parent,

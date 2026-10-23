@@ -42,6 +42,7 @@ pub struct SimRegistry {
     pub(crate) resources: BTreeMap<String, ResourceCodec>,
     pub(crate) dynamic: BTreeMap<String, DynamicLayout>,
     pub(crate) handlers: BTreeMap<String, CommandCodec>,
+    pub(crate) stream_signature: [u8; 32],
 }
 
 impl SimRegistry {
@@ -62,6 +63,7 @@ impl SimRegistry {
             resources: BTreeMap::new(),
             dynamic,
             handlers: BTreeMap::new(),
+            stream_signature: [0; 32],
         };
         registry.register_component::<ara_components::Transform>()?;
         Ok(registry)
@@ -232,6 +234,11 @@ impl SimRegistry {
                     .insert(desc.name.clone(), DynamicLayout::new(desc)?);
             }
         }
+        self.stream_signature = *blake3::hash(
+            ara_json::to_canonical_string(&ara_json::sort_keys(&self.schema.reflection()))
+                .as_bytes(),
+        )
+        .as_bytes();
         Ok(())
     }
 

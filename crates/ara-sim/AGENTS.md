@@ -34,6 +34,12 @@ Depends on the authoring kernel and Bevy ECS/tasks 0.20, never ara-proto or netc
 - `SessionAdapter`: optional ara-net seam for Listen/Dedicated. The adapter owns
   authentication, ownership checks, limits, codecs and connection state. Local has
   no adapter, replica, transport, per-connection allocation or network serialization.
+- `SimRegistry::prepare_stream_entity` validates cell rows on workers.
+  `Session::step_with_streaming` supplies an exclusive `StreamingBoundary` before
+  tick systems. Spawn parents first; despawn children first (no cascading unload).
+  Streamed IDs share the stable mapping; snapshots preserve it, and hash/history
+  sampling records actual arrivals in `TickRecord::streaming` for replay.
+  Host timing, range planning, memory limits and I/O belong in ara-world.
 - `SimContext`: fixed tick/dt, active inputs, stable per-system/entity RNG streams,
   deterministic runtime identity allocator. Gameplay lives in components; resources
   are service/infrastructure state. No global current player or camera.

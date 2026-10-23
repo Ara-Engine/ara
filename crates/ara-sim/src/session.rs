@@ -51,6 +51,9 @@ pub struct TickRecord {
     pub commands: Vec<BoundaryCommand>,
     /// Committed authoring ops applied before gameplay systems.
     pub ops: Vec<Op>,
+    /// Host streaming arrivals actually applied before this tick's systems.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub streaming: Vec<crate::StreamChange>,
     /// Hash after this tick; absent when history/hash sampling is disabled.
     pub hash: Option<StateHash>,
 }
@@ -288,19 +291,32 @@ impl Session {
     /// Executes exactly one fixed boundary, independently of a host clock.
     /// A handler/patch failure faults the session; restore a checkpoint before continuing.
     pub fn step(&mut self) -> Result<TickRecord> {
+        self.step_with_streaming(|_| Ok(()))
+    }
+
+    /// Runs bounded host activation at a fixed boundary, before gameplay systems.
+    /// The host owns timing decisions; recorded changes make replay independent of
+    /// worker completion and frame timing. Errors fault the session like any command.
+    pub fn step_with_streaming(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<TickRecord> {
         if let Some(error) = &self.fault {
             return Err(SimError(format!(
                 "session is faulted; restore a checkpoint: {error}"
             )));
         }
-        let result = self.step_inner();
+        let result = self.step_inner(activate);
         if let Err(error) = &result {
             self.fault = Some(error.clone());
         }
         result
     }
 
-    fn step_inner(&mut self) -> Result<TickRecord> {
+    fn step_inner(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<TickRecord> {
         let tick = self
             .tick()
             .checked_add(1)
@@ -336,6 +352,12 @@ impl Session {
             true
         });
         self.edit.apply_ops(&ops)?;
+        let mut streaming = Vec::new();
+        activate(&mut crate::StreamingBoundary {
+            edit: &mut self.edit,
+            changes: &mut streaming,
+            recording: self.record_hashes,
+        })?;
         {
             let mut context = self.edit.world.resource_mut::<SimContext>();
             context.inputs.apply(&self.actions, tick, &inputs)?;
@@ -373,6 +395,7 @@ impl Session {
             inputs,
             commands,
             ops,
+            streaming,
             hash,
         })
     }

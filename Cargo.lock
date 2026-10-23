@@ -618,6 +618,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-world"
+version = "0.0.0"
+dependencies = [
+ "ara-asset",
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-merge",
+ "ara-ops",
+ "ara-pack",
+ "ara-schema",
+ "ara-sim",
+ "blake3",
+ "ciborium",
+ "glam 0.30.9",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
