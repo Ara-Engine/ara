@@ -267,6 +267,14 @@ impl Report {
                 s.push_str(&format!("- {r}\n"));
             }
         }
+        let commands = self
+            .causes
+            .iter()
+            .flat_map(|c| &c.fixes)
+            .any(|f| matches!(f.action, FixAction::Command { .. }));
+        if commands {
+            s.push_str("run a fix: ara_apply {cmd, args}, or `ara do <cmd> --args '<args>'`\n");
+        }
         if let Some(doc) = &self.doc {
             s.push('\n');
             s.push_str(doc.trim_end());
@@ -281,7 +289,7 @@ pub fn fix_line(f: &Fix) -> String {
     let compact = |v: &Value| serde_json::to_string(v).unwrap_or_default();
     match &f.action {
         FixAction::Command { command, params } => {
-            format!("{} — ara_apply {command} {}", f.title, compact(params))
+            format!("{}: {command} {}", f.title, compact(params))
         }
         FixAction::Call { method, params } => {
             format!("{} — call {method} {}", f.title, compact(params))

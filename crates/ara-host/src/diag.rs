@@ -261,7 +261,7 @@ fn answer(st: &State, f: &Filter, group: bool, budget: u32, limit: Option<u32>) 
         .find(|g| g.severity == Severity::Error)
         .map(|g| g.code);
     match worst {
-        Some(code) => text.push_str(&format!("cursor {cursor} · explain: ara_why {code}\n")),
+        Some(code) => text.push_str(&format!("cursor {cursor} · explain: ara why {code}\n")),
         None => text.push_str(&format!("cursor {cursor}\n")),
     }
     json!({

@@ -93,7 +93,7 @@ fn logs_are_grouped_budgeted_and_attributed() {
         text.contains("error ARA1204") && text.contains("×3 [entity:e_nope01"),
         "{text}"
     );
-    assert!(text.contains("explain: ara_why ARA1204"), "{text}");
+    assert!(text.contains("explain: ara why ARA1204"), "{text}");
     assert_eq!(r["summary"]["groups"][0]["records"], 2);
 
     let mine = call(
