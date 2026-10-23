@@ -168,7 +168,10 @@ impl Model {
         for entry in manifest["meshes"].as_array().into_iter().flatten() {
             by_mesh.insert(
                 (index(&entry["mesh"])?, index(&entry["primitive"])?),
-                (string(&entry["artifact"])?, entry["material"].as_u64().map(|m| m as usize)),
+                (
+                    string(&entry["artifact"])?,
+                    entry["material"].as_u64().map(|m| m as usize),
+                ),
             );
         }
         let mut primitives = Vec::new();
@@ -179,7 +182,11 @@ impl Model {
                 continue;
             };
             let skin = nodes[node]["skin"].as_u64().map(|s| s as usize);
-            let transform = if skin.is_some() { Mat4::IDENTITY } else { world(node) };
+            let transform = if skin.is_some() {
+                Mat4::IDENTITY
+            } else {
+                world(node)
+            };
             for (&(_, primitive), &(name, material)) in by_mesh.range((mesh, 0)..(mesh + 1, 0)) {
                 let _ = primitive;
                 let mut decoded = decode_mesh(artifact(name)?, transform)?;
@@ -196,7 +203,9 @@ impl Model {
             }
         }
         if primitives.is_empty() {
-            return Err(RuntimeError(format!("{asset}: model has no drawable meshes")));
+            return Err(RuntimeError(format!(
+                "{asset}: model has no drawable meshes"
+            )));
         }
         Ok(Self {
             asset: asset.to_owned(),
@@ -334,18 +343,31 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
     let normals = transform.inverse().transpose();
     let vertices = mesh
         .vertices
-        .chunks_exact(52)
-        .zip(mesh.skin_extra.chunks_exact(16))
+        .as_chunks::<52>()
+        .0
+        .iter()
+        .zip(mesh.skin_extra.as_chunks::<16>().0)
         .map(|(raw, extra)| {
             let q: QuantizedVertex = bytemuck::pod_read_unaligned(raw);
             let x: SkinExtra = bytemuck::pod_read_unaligned(extra);
             let unorm = |v: u16| f32::from(v) / 65535.0;
             let snorm = |v: i16| (f32::from(v) / 32767.0).max(-1.0);
-            let p = min + Vec3::new(unorm(q.position[0]), unorm(q.position[1]), unorm(q.position[2])) * extent;
+            let p = min
+                + Vec3::new(
+                    unorm(q.position[0]),
+                    unorm(q.position[1]),
+                    unorm(q.position[2]),
+                ) * extent;
             let n = Vec3::new(snorm(q.normal[0]), snorm(q.normal[1]), snorm(q.normal[2]));
-            let t = Vec3::new(snorm(q.tangent[0]), snorm(q.tangent[1]), snorm(q.tangent[2]));
+            let t = Vec3::new(
+                snorm(q.tangent[0]),
+                snorm(q.tangent[1]),
+                snorm(q.tangent[2]),
+            );
             let n = normals.transform_vector3(n).normalize_or(Vec3::Y);
-            let t = transform.transform_vector3(t).normalize_or(n.any_orthonormal_vector());
+            let t = transform
+                .transform_vector3(t)
+                .normalize_or(n.any_orthonormal_vector());
             let mut weights = [0.0; 8];
             let mut joints = [0u16; 8];
             for i in 0..4 {
@@ -375,8 +397,10 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
     );
     let first = lod.first_index as usize * 4;
     let indices = mesh.indices[first..first + lod.index_count as usize * 4]
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     Ok(Primitive {
         vertices,

@@ -1,0 +1,12 @@
+[package]
+name = "ara-player"
+description = "The play process: a pooled, single-use player that runs a scene for the edit-world owner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

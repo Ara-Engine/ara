@@ -41,8 +41,10 @@ impl Skin {
         let cooked = CookedSkeleton::read(skeleton)?;
         let joints: Vec<Joint> = cooked
             .joints
-            .chunks_exact(112)
-            .map(bytemuck::pod_read_unaligned)
+            .as_chunks::<112>()
+            .0
+            .iter()
+            .map(|raw| bytemuck::pod_read_unaligned(raw))
             .collect();
         let names: Vec<&str> = cooked.joint_names().collect();
         let count = joints.len();
@@ -95,7 +97,8 @@ impl Skin {
             joints: order
                 .iter()
                 .map(|&i| {
-                    let (s, r, t) = (prefixes[i] * rest(&joints[i])).to_scale_rotation_translation();
+                    let (s, r, t) =
+                        (prefixes[i] * rest(&joints[i])).to_scale_rotation_translation();
                     AnimJoint {
                         id: format!("node{}", node_of[i]),
                         name: names.get(i).copied().unwrap_or_default().to_owned(),
@@ -156,7 +159,7 @@ fn convert_clip(
     };
     let mut tracks = vec![JointTrack::default(); joints];
     let mut end = 0.0f32;
-    for raw in clip.channels.chunks_exact(32) {
+    for raw in clip.channels.as_chunks::<32>().0 {
         let ch: Channel = bytemuck::pod_read_unaligned(raw);
         let Some(&skin) = joint_nodes.get(&(ch.node as usize)) else {
             continue;
@@ -184,7 +187,15 @@ fn convert_clip(
                     if rigid {
                         v = prefix_translation + prefix_rotation * v;
                     }
-                    push(&mut track.translations, tick, |k| k.tick, VectorKey { tick, value: v.to_array() });
+                    push(
+                        &mut track.translations,
+                        tick,
+                        |k| k.tick,
+                        VectorKey {
+                            tick,
+                            value: v.to_array(),
+                        },
+                    );
                     track.translation_interpolation = mode;
                 }
                 1 => {
@@ -192,12 +203,25 @@ fn convert_clip(
                     if rigid {
                         q = (prefix_rotation * q).normalize();
                     }
-                    push(&mut track.rotations, tick, |k| k.tick, RotationKey { tick, value: q.to_array() });
+                    push(
+                        &mut track.rotations,
+                        tick,
+                        |k| k.tick,
+                        RotationKey {
+                            tick,
+                            value: q.to_array(),
+                        },
+                    );
                     track.rotation_interpolation = mode;
                 }
                 2 => {
                     let v = [value(0), value(1), value(2)];
-                    push(&mut track.scales, tick, |k| k.tick, VectorKey { tick, value: v });
+                    push(
+                        &mut track.scales,
+                        tick,
+                        |k| k.tick,
+                        VectorKey { tick, value: v },
+                    );
                     track.scale_interpolation = mode;
                 }
                 _ => {}

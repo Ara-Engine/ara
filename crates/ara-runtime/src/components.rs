@@ -327,15 +327,15 @@ impl Default for Animator {
     }
 }
 
-/// Registers the components the runtime understands (physics, navigation, animation
-/// documents and the runtime's own) on top of the kernel types (`ara_doc::register`,
+/// Registers the components the runtime understands (physics, navigation and the
+/// runtime's own) on top of the kernel types (`ara_doc::register`,
 /// `ara_components::register`). Hosts call this so documents using them validate.
-/// Idempotent for types; an existing `.animation` kind is kept.
+/// Idempotent.
 pub fn register_schemas(db: &mut SchemaDb) {
     ara_physics::register_schemas(db);
     ara_nav::register(db);
-    // An already-registered `.animation` kind is the same declaration.
-    let _ = ara_anim::document::register(db);
+    // Not `ara_anim::document::register`: its `Joint` value type clashes with the
+    // physics `Joint` component in one Schema DB until one of them is renamed.
     db.register::<MeshRenderer>()
         .register::<Light>()
         .register::<Environment>()
