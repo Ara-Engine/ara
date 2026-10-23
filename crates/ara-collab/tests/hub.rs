@@ -197,6 +197,52 @@ fn late_joiners_replay_a_snapshot_plus_the_op_log() {
 }
 
 #[test]
+#[allow(clippy::unwrap_used)]
+fn branch_document_lifecycle_survives_persistence_merge_and_undo() {
+    let mut live = store();
+    let mut hub = Hub::new(0, IdGen::seeded(3));
+    let bot = pid("ses_bot");
+    hub.join(bot.clone(), agent("bot"), None, None, 0);
+    let info = hub
+        .branch_open(&live, &bot, Some("New level".into()))
+        .unwrap();
+    let created = ara_doc::AssetId::parse("sc_newlevel").unwrap();
+    hub.branch_store(&info.id, &bot)
+        .unwrap()
+        .transact(
+            TxnMeta::by(agent("bot")),
+            [
+                Edit::Document {
+                    doc: created.clone(),
+                    path: "levels/new.scene".into(),
+                    kind: Some("scene".into()),
+                },
+                Edit::Create {
+                    doc: created.clone(),
+                    id: rid("e_root"),
+                    record: json!({"name":"Root"}).as_object().unwrap().clone(),
+                },
+            ],
+        )
+        .unwrap();
+    let saved = hub.branch(&info.id).unwrap().save();
+    assert!(saved.base.is_empty());
+    let mut restored = Hub::new(0, IdGen::seeded(4));
+    restored.join(bot.clone(), agent("bot"), None, None, 0);
+    restored.restore_branch(saved, &live).unwrap();
+    let changes = restored.branch(&info.id).unwrap().changes();
+    assert_eq!(changes[0].doc, "levels/new.scene");
+    assert_eq!(changes[0].created, [rid("e_root")]);
+    restored
+        .branch_submit(&mut live, &bot, &info.id, None, 1)
+        .unwrap();
+    assert!(live.workspace().doc(created.as_str()).is_some());
+    let txn = live.history().last().unwrap().id.clone();
+    live.undo(&txn, agent("bot")).unwrap();
+    assert!(live.workspace().doc(created.as_str()).is_none());
+}
+
+#[test]
 fn branch_sessions_stay_isolated_until_merged_with_a_conflict_report() {
     let mut store = store();
     let mut hub = Hub::new(0, IdGen::seeded(3));

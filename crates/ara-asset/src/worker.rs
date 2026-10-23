@@ -13,6 +13,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod limit;
+use limit::Permit;
+
 const MAX_FRAME: u64 = 512 * 1024 * 1024;
 pub(crate) fn background_priority() {
     #[cfg(windows)]
@@ -62,6 +65,8 @@ enum Request {
         version: String,
         #[serde(with = "serde_bytes")]
         source: Vec<u8>,
+        #[serde(default)]
+        settings: serde_json::Value,
     },
     Versions,
 }
@@ -114,12 +119,13 @@ pub fn serve_worker(registry: &ImporterRegistry) -> Result<()> {
             importer,
             version,
             source,
+            settings,
         } => {
             let result = registry.get(&importer).and_then(|i| {
                 if i.version() != version {
                     return Err(Error::Invalid("importer version mismatch".into()));
                 }
-                i.dependencies(&source)
+                i.dependencies_with_settings(&source, &settings)
             });
             return write_frame(
                 &mut std::io::stdout().lock(),
@@ -200,7 +206,9 @@ impl ProcessWorker {
     pub fn executable(&self) -> &Path {
         &self.executable
     }
-    /// Spawns a below-normal-priority, hidden child and pumps both pipes off-thread.
+    /// Queues a hidden, below-normal-priority child, pumping its pipes off-thread.
+    /// Admission is process-wide: `ARA_IMPORT_WORKERS` defaults to four, capped by
+    /// available CPU parallelism. Polling starts queued work as slots become free.
     pub fn start(&self, input: ImportInput) -> Result<ImportJob> {
         self.start_request(Request::Import(input))
     }
@@ -212,10 +220,29 @@ impl ProcessWorker {
         source: Vec<u8>,
         cancellation: &Cancellation,
     ) -> Result<Vec<String>> {
+        self.discover_with_settings(
+            importer,
+            version,
+            source,
+            serde_json::Value::Null,
+            cancellation,
+        )
+    }
+    /// Discovers source and settings-selected companion files out of process.
+    /// Use this for source snapshots so companion changes invalidate the cook.
+    pub fn discover_with_settings(
+        &self,
+        importer: &str,
+        version: &str,
+        source: Vec<u8>,
+        settings: serde_json::Value,
+        cancellation: &Cancellation,
+    ) -> Result<Vec<String>> {
         let mut job = self.start_request(Request::Discover {
             importer: importer.into(),
             version: version.into(),
             source,
+            settings,
         })?;
         loop {
             cancellation.check()?;
@@ -231,18 +258,15 @@ impl ProcessWorker {
     /// The installed version of every importer in this worker executable (`id` →
     /// version). Blocks for one short worker launch; call off the frame thread.
     pub fn versions(&self) -> Result<BTreeMap<String, String>> {
-        let job = self.start_request(Request::Versions)?;
-        match job
-            .events
-            .recv_timeout(self.timeout.min(Duration::from_secs(30)))
-        {
-            Ok(Ok(Message::Versions(versions))) => Ok(versions),
-            Ok(Ok(Message::Failed(error))) => Err(Error::Worker(error)),
-            Ok(Ok(_)) => Err(Error::Worker("unexpected worker reply".into())),
-            Ok(Err(error)) => Err(error),
-            Err(_) => Err(Error::Worker(
-                "worker did not report importer versions".into(),
-            )),
+        let mut job = self.start_request(Request::Versions)?;
+        job.timeout = self.timeout.min(Duration::from_secs(30));
+        loop {
+            match job.message()? {
+                Some(Message::Versions(versions)) => return Ok(versions),
+                Some(Message::Failed(error)) => return Err(Error::Worker(error)),
+                Some(_) => return Err(Error::Worker("unexpected worker reply".into())),
+                None => thread::sleep(Duration::from_millis(2)),
+            }
         }
     }
     fn start_request(&self, request: Request) -> Result<ImportJob> {
@@ -260,7 +284,57 @@ impl ProcessWorker {
                     | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
             );
         }
-        let mut child = command.spawn()?;
+        let (tx, rx) = mpsc::channel();
+        let mut job = ImportJob {
+            child: None,
+            permit: None,
+            pending: Some(Pending {
+                command,
+                request,
+                events: tx,
+            }),
+            events: rx,
+            started: Instant::now(),
+            timeout: self.timeout,
+            finished: false,
+        };
+        job.try_launch()?;
+        Ok(job)
+    }
+}
+
+struct Pending {
+    command: Command,
+    request: Request,
+    events: mpsc::Sender<Result<Message>>,
+}
+
+/// A nonblocking queued/process job. Dropping cancels queued work or kills/reaps
+/// its child without joining on UI. Worker deadlines exclude time in the queue.
+pub struct ImportJob {
+    child: Option<Child>,
+    permit: Option<Permit>,
+    pending: Option<Pending>,
+    events: Receiver<Result<Message>>,
+    started: Instant,
+    timeout: Duration,
+    finished: bool,
+}
+impl ImportJob {
+    fn try_launch(&mut self) -> Result<()> {
+        if self.pending.is_none() {
+            return Ok(());
+        }
+        let Some(permit) = Permit::try_acquire() else {
+            return Ok(());
+        };
+        let Some(mut pending) = self.pending.take() else {
+            return Ok(());
+        };
+        self.started = Instant::now();
+        self.child = Some(pending.command.spawn()?);
+        self.permit = Some(permit);
+        let child = self.child.as_mut().expect("child was just spawned");
         let mut stdin = child
             .stdin
             .take()
@@ -269,7 +343,8 @@ impl ProcessWorker {
             .stdout
             .take()
             .ok_or_else(|| Error::Worker("missing stdout".into()))?;
-        let (tx, rx) = mpsc::channel();
+        let tx = pending.events;
+        let request = pending.request;
         let writer_tx = tx.clone();
         thread::spawn(move || {
             background_priority();
@@ -302,24 +377,8 @@ impl ProcessWorker {
                 }
             }
         });
-        Ok(ImportJob {
-            child: Some(child),
-            events: rx,
-            started: Instant::now(),
-            timeout: self.timeout,
-            finished: false,
-        })
+        Ok(())
     }
-}
-/// A nonblocking process job. Dropping kills/reaps the child without joining on UI.
-pub struct ImportJob {
-    child: Option<Child>,
-    events: Receiver<Result<Message>>,
-    started: Instant,
-    timeout: Duration,
-    finished: bool,
-}
-impl ImportJob {
     /// Adds a nonblocking worker activity sample to the given CPU frame. Duration
     /// includes process startup/transport, so it is kept separate from CPU self time.
     #[cfg(feature = "profiling")]
@@ -329,7 +388,11 @@ impl ImportJob {
             frame,
             "asset.import",
             worker,
-            self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+            if self.pending.is_some() {
+                0
+            } else {
+                self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+            },
             self.finished,
         )
     }
@@ -337,7 +400,24 @@ impl ImportJob {
     pub fn poll(&mut self) -> Result<Option<JobEvent>> {
         #[cfg(feature = "profiling")]
         ara_profile::scope!("jobs.asset.poll");
+        match self.message()? {
+            Some(Message::Progress(p)) => Ok(Some(JobEvent::Progress(p))),
+            Some(Message::Complete(output)) => Ok(Some(JobEvent::Complete(output))),
+            Some(Message::Dependencies(deps)) => Ok(Some(JobEvent::Dependencies(deps))),
+            Some(Message::Failed(error)) => Err(Error::Worker(error)),
+            Some(Message::Versions(_)) => Err(Error::Worker("unexpected importer versions".into())),
+            None => Ok(None),
+        }
+    }
+    fn message(&mut self) -> Result<Option<Message>> {
         if self.finished {
+            return Ok(None);
+        }
+        if let Err(error) = self.try_launch() {
+            self.cancel();
+            return Err(error);
+        }
+        if self.pending.is_some() {
             return Ok(None);
         }
         if self.started.elapsed() > self.timeout {
@@ -345,30 +425,15 @@ impl ImportJob {
             return Err(Error::Worker("deadline exceeded".into()));
         }
         match self.events.try_recv() {
-            Ok(Ok(Message::Progress(p))) => Ok(Some(JobEvent::Progress(p))),
-            Ok(Ok(Message::Complete(output))) => {
-                self.finished = true;
-                Ok(Some(JobEvent::Complete(output)))
-            }
-            Ok(Ok(Message::Dependencies(deps))) => {
-                self.finished = true;
-                Ok(Some(JobEvent::Dependencies(deps)))
-            }
-            Ok(Ok(Message::Failed(error))) => {
-                self.finished = true;
-                Err(Error::Worker(error))
-            }
-            Ok(Ok(Message::Versions(_))) => {
-                self.finished = true;
-                Err(Error::Worker("unexpected importer versions".into()))
-            }
-            Ok(Err(error)) => {
-                self.finished = true;
-                Err(error)
+            Ok(message) => {
+                if !matches!(message, Ok(Message::Progress(_))) {
+                    self.cancel();
+                }
+                message.map(Some)
             }
             Err(TryRecvError::Empty) => Ok(None),
             Err(TryRecvError::Disconnected) => {
-                self.finished = true;
+                self.cancel();
                 Err(Error::Worker("worker transport disconnected".into()))
             }
         }
@@ -376,10 +441,13 @@ impl ImportJob {
     /// Kills a crashed, hung or superseded native importer immediately.
     pub fn cancel(&mut self) {
         self.finished = true;
+        self.pending = None;
         if let Some(mut child) = self.child.take() {
+            let permit = self.permit.take();
             let _ = child.kill();
             thread::spawn(move || {
                 let _ = child.wait();
+                drop(permit);
             });
         }
     }

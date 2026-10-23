@@ -21,7 +21,7 @@ pub(crate) struct Pages {
 }
 impl Pages {
     pub fn new(data: &LandscapeData, eye: [f32; 2]) -> Result<Self> {
-        let tiles = data.header.max.x as u32;
+        let tiles = crate::space::Space::new(&data.header)?.tiles;
         let cells = data.header.cells;
         let coarse_side = (data.side - 1) / COARSE_STEP + 1;
         let table = 8;

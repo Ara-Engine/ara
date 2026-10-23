@@ -175,9 +175,7 @@ impl Replica {
     fn rewind(&mut self) {
         for p in self.pending.iter_mut().rev() {
             for op in p.ops.drain(..).rev() {
-                if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
-                    doc.revert(&op, &self.db);
-                }
+                self.ws.revert(&op, &self.db);
             }
         }
     }
@@ -195,20 +193,12 @@ impl Replica {
     fn apply_all(&mut self, edits: &[Edit]) -> Result<Vec<Op>, Diagnostic> {
         let mut ops: Vec<Op> = Vec::new();
         for edit in edits {
-            let result = match self.ws.doc_mut(edit.doc().as_str()) {
-                Some(doc) => doc.apply(edit.clone(), &self.db),
-                None => Err(Diagnostic::error(
-                    kernel::DOC_NOT_FOUND,
-                    format!("no document `{}` is loaded", edit.doc()),
-                )),
-            };
+            let result = self.ws.apply(edit.clone(), &self.db);
             match result {
                 Ok(op) => ops.push(op),
                 Err(d) => {
                     for op in ops.iter().rev() {
-                        if let Some(doc) = self.ws.doc_mut(op.doc().as_str()) {
-                            doc.revert(op, &self.db);
-                        }
+                        self.ws.revert(op, &self.db);
                     }
                     return Err(d);
                 }

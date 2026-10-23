@@ -478,6 +478,7 @@ dependencies = [
 name = "ara-anim"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-cmd",
  "ara-diag",
  "ara-doc",
  "ara-json",
@@ -666,6 +667,7 @@ dependencies = [
  "ara-json",
  "ara-ops",
  "ara-schema",
+ "glam 0.34.1",
  "insta",
  "serde",
  "serde_json",
@@ -958,6 +960,7 @@ dependencies = [
  "ara-profile",
  "ara-proto",
  "ara-schema",
+ "ara-ui-document",
  "ara-why",
  "insta",
  "serde",
@@ -1042,8 +1045,13 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
+ "ara-audio",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
  "ara-geo",
  "ara-json",
+ "ara-ops",
  "ara-schema",
  "base64 0.22.1",
  "bcdec_rs",
@@ -1186,9 +1194,11 @@ name = "ara-music"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-audio",
+ "ara-cmd",
  "ara-diag",
  "ara-doc",
  "ara-json",
+ "ara-ops",
  "ara-schema",
  "serde",
  "serde_json",
@@ -1390,6 +1400,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-host",
+ "ara-importers",
  "ara-json",
  "ara-ops",
  "ara-play",
@@ -1733,6 +1744,7 @@ dependencies = [
  "ara-doc",
  "ara-foliage",
  "ara-gpu",
+ "ara-json",
  "ara-ops",
  "ara-play",
  "ara-play-host",

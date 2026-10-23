@@ -4,6 +4,7 @@
 
 #[cfg(test)]
 mod codec_tests;
+pub mod commands;
 mod compile;
 mod compression;
 mod controller;

@@ -38,6 +38,9 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   `subtree()`; helpers `parent_of`, `order_of`, `prefab_of`, `is_component_key`.
 - `Edit` → `doc.apply(edit, &db) -> Result<Op, Diagnostic>`; `Op::inverse()`,
   `Op::to_edit()`, `Op::touches()`; `doc.revert(&op, &db)` (rollback).
+- `Workspace::apply` / `revert` handle ordinary edits plus `Edit::Document`
+  lifecycle ops. Create/remove empty documents inside the transaction; paths must
+  be canonical relative paths. Windows document paths also reject case aliases.
 - `refs::{AssetIndex, resolve, repair_record, record_ref}` (`AssetIndex::imports`:
   imported media `(id, path)`, what a copy of the documents needs to resolve
   references; `AssetIndex::closest`: the
@@ -57,7 +60,7 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
 
 ## Rules and gotchas
 
-- Mutate documents only through `Document::apply` from an ara-ops transaction.
+- Mutate documents only through `Workspace::apply` from an ara-ops transaction.
   `insert_unchecked` is for readers and merges.
 - `apply` checks only what holds regardless of the other ops in the transaction
   (existence, path, value type) and leaves the document unchanged on error.

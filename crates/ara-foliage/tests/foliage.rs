@@ -137,6 +137,27 @@ fn manual_paint_and_rules_use_kernel_undo_and_canonical_files() {
         },
     ]);
     reg.apply(&mut store, &initial, &Session::human()).unwrap();
+    let mut exclusion = batch(vec![Call {
+        command: "foliage.exclude".into(),
+        params: serde_json::json!({"id":"x_compound","zone":{"center":[0,0],"radius":4}}),
+    }]);
+    exclusion.dry_run = true;
+    let preview = reg
+        .apply(&mut store, &exclusion, &Session::human())
+        .unwrap();
+    exclusion.dry_run = false;
+    let applied = reg
+        .apply(&mut store, &exclusion, &Session::human())
+        .unwrap();
+    assert_eq!(preview.ops, applied.ops);
+    assert!(
+        store
+            .workspace()
+            .doc("fo_grass001")
+            .unwrap()
+            .record("x_compound")
+            .is_some()
+    );
     let before = ara_doc::write(
         store.workspace().doc("fo_grass001").unwrap(),
         store.schema(),

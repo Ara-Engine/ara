@@ -127,6 +127,61 @@ fn agent(scopes: &[&str]) -> Session {
     }
 }
 
+#[test]
+fn look_at_uses_world_targets_under_parents_and_writes_prefab_overrides() {
+    use glam::{EulerRot, Quat, Vec3};
+    let (mut store, registry) = setup();
+    let batch = Batch::new(
+        "sc_level001",
+        [
+            (
+                "entity.create",
+                json!({"id":"e_parent","components":{"Transform":{"position":[10,0,0],"rotation":[0,90,0]}}}),
+            ),
+            (
+                "prefab.instantiate",
+                json!({"id":"e_camera","prefab":"@prefabs/crate.prefab","parent":"e_parent"}),
+            ),
+            (
+                "entity.create",
+                json!({"id":"e_target","components":{"Transform":{"position":[10,0,5]}}}),
+            ),
+            (
+                "transform.lookAt",
+                json!({"entity":"e_camera","target":"e_target"}),
+            ),
+        ],
+    );
+    let result = registry
+        .apply(&mut store, &batch, &Session::human())
+        .expect("aim batch");
+    let record = store
+        .workspace()
+        .doc("sc_level001")
+        .expect("scene")
+        .record("e_camera")
+        .expect("camera");
+    let rotation: [f32; 3] =
+        serde_json::from_value(record["overrides"]["Transform.rotation"].clone())
+            .expect("rotation override");
+    let [x, y, z] = rotation.map(f32::to_radians);
+    let world =
+        Quat::from_rotation_y(90_f32.to_radians()) * Quat::from_euler(EulerRot::XYZ, x, y, z);
+    assert!((world * Vec3::NEG_Z).abs_diff_eq(Vec3::Z, 1e-5));
+    assert!((world * Vec3::Y).abs_diff_eq(Vec3::Y, 1e-5));
+    store
+        .undo(result.txn.as_ref().expect("transaction"), Author::Human)
+        .expect("undo");
+    assert!(
+        store
+            .workspace()
+            .doc("sc_level001")
+            .expect("scene")
+            .records()
+            .is_empty()
+    );
+}
+
 fn script() -> Batch {
     let mut b = Batch::new(
         "levels/level.scene",

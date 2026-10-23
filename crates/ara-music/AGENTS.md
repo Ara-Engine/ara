@@ -9,6 +9,8 @@ voice scheduled at an exact output frame, so live play and offline captures agre
 
 - `register(db)`: `MusicSegment` (`sg_`), `MusicTransition` (`tn_`), `MusicStinger`
   (`st_`), `MusicSettings` (`ms_`) records and the `music` kind (`.music`, `mu_` IDs).
+- `commands::register`: segment/transition/stinger upserts and music-wide settings
+  through the shared CLI/MCP/editor registry, with ordinary transaction undo.
 - `SegmentDesc { name, bars, tempo: [TempoChange {bar, bpm, beatsPerBar}], stems:
   [StemDesc {name, clip, intensity: [lo, hi], gainDb}], next: [NextDesc {segment,
   weight}], loudness }`; `TransitionDesc { from ("" any), to, sync, fade, bridge }`;

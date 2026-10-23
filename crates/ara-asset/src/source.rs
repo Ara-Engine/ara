@@ -53,10 +53,11 @@ pub fn snapshot(
         .parent()
         .ok_or_else(|| Error::Invalid("source has no parent".into()))?;
     let mut dependencies = BTreeMap::new();
-    for uri in worker.discover(
+    for uri in worker.discover_with_settings(
         &asset.importer,
         &asset.version,
         source.clone(),
+        asset.settings.clone(),
         cancellation,
     )? {
         cancellation.check()?;

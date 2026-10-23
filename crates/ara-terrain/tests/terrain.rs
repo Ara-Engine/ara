@@ -58,6 +58,30 @@ fn init(s: &mut Store, r: &Registry) {
 fn terrain(s: &Store) -> Terrain {
     Terrain::from_document(s.workspace().doc("tr_world001").unwrap()).unwrap()
 }
+
+#[test]
+fn explicit_stroke_ids_make_independent_rebuilds_identical() {
+    let build = || {
+        let (mut store, registry) = setup();
+        init(&mut store, &registry);
+        for (command, id) in [("terrain.raise", "s_hill"), ("terrain.paint", "s_soil")] {
+            apply(
+                &mut store,
+                &registry,
+                command,
+                json!({"id":id,"layer":"l_base","dabs":[{"center":[0,0],"radius":4,"amount":1}]}),
+            );
+        }
+        let t = terrain(&store);
+        assert!(t.strokes.contains_key("s_hill"));
+        assert!(t.tiles.contains_key("t_n1zn1"));
+        ara_doc::write(
+            store.workspace().doc("tr_world001").unwrap(),
+            store.schema(),
+        )
+    };
+    assert_eq!(build(), build());
+}
 #[test]
 fn gesture_dryrun_atomic_undo_redo_and_canonical_roundtrip() {
     let (mut s, r) = setup();

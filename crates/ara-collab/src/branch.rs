@@ -249,13 +249,33 @@ impl Branch {
 
     /// `doc` as it was when the branch was forked (its history reverted).
     pub fn base_doc(&self, doc: &AssetId) -> Option<Document> {
-        let mut d = self.store.workspace().doc(doc.as_str())?.clone();
+        let mut workspace = self.store.workspace().clone();
         for t in self.store.history().iter().rev() {
-            for op in t.ops.iter().rev().filter(|op| op.doc() == doc) {
-                d.revert(op, self.store.schema());
+            for op in t.ops.iter().rev() {
+                workspace.revert(op, self.store.schema());
             }
         }
-        Some(d)
+        workspace.doc(doc.as_str()).cloned()
+    }
+
+    fn path(&self, doc: &AssetId) -> String {
+        self.store
+            .workspace()
+            .path_of(doc.as_str())
+            .map(str::to_owned)
+            .or_else(|| {
+                self.store
+                    .history()
+                    .iter()
+                    .flat_map(|txn| &txn.ops)
+                    .find_map(|op| match op {
+                        ara_doc::Op::Document { doc: id, path, .. } if id == doc => {
+                            Some(path.clone())
+                        }
+                        _ => None,
+                    })
+            })
+            .unwrap_or_else(|| doc.to_string())
     }
 
     /// What the branch changed, per touched document.
@@ -263,17 +283,31 @@ impl Branch {
         let ws = self.store.workspace();
         self.touched()
             .into_iter()
-            .filter_map(|doc| {
-                let base = self.base_doc(&doc)?;
-                let now = ws.doc(doc.as_str())?;
+            .map(|doc| {
+                let base = self.base_doc(&doc);
+                let now = ws.doc(doc.as_str());
                 let mut c = DocChanges {
-                    doc: ws.path_of(doc.as_str()).unwrap_or(doc.as_str()).to_owned(),
+                    doc: self.path(&doc),
                     created: Vec::new(),
                     modified: Vec::new(),
                     deleted: Vec::new(),
                 };
-                for edit in diff(&base, now) {
+                let edits = match (base.as_ref(), now) {
+                    (Some(base), Some(now)) => diff(base, now),
+                    (None, Some(now)) => {
+                        c.created.extend(now.records().keys().cloned());
+                        Vec::new()
+                    }
+                    (Some(base), None) => {
+                        c.deleted.extend(base.records().keys().cloned());
+                        Vec::new()
+                    }
+                    (None, None) => Vec::new(),
+                };
+                for edit in edits {
                     match edit {
+                        // `diff` compares records of two existing documents.
+                        Edit::Document { .. } => {}
                         Edit::Create { id, .. } => c.created.push(id),
                         Edit::Delete { id, .. } => c.deleted.push(id),
                         Edit::Set { id, .. } | Edit::Move { id, .. } => {
@@ -283,7 +317,7 @@ impl Branch {
                         }
                     }
                 }
-                Some(c)
+                c
             })
             .collect()
     }
@@ -314,11 +348,57 @@ impl Branch {
         let mut edits = Vec::new();
         let mut conflicts = Vec::new();
         for doc in self.touched() {
-            let (Some(base), Some(ours), Some(theirs)) = (
-                self.base_doc(&doc),
-                live.workspace().doc(doc.as_str()).cloned(),
-                self.store.workspace().doc(doc.as_str()),
-            ) else {
+            let base = self.base_doc(&doc);
+            let ours = live.workspace().doc(doc.as_str()).cloned();
+            let theirs = self.store.workspace().doc(doc.as_str());
+            if base.is_none() && ours.is_none() {
+                if let Some(theirs) = theirs {
+                    let path = self
+                        .store
+                        .workspace()
+                        .path_of(doc.as_str())
+                        .expect("loaded document has a path");
+                    edits.push(Edit::Document {
+                        doc: doc.clone(),
+                        path: path.into(),
+                        kind: Some(theirs.kind.clone()),
+                    });
+                    edits.extend(theirs.records().iter().map(|(id, record)| Edit::Create {
+                        doc: doc.clone(),
+                        id: id.clone(),
+                        record: record.clone(),
+                    }));
+                }
+                continue;
+            }
+            if base.is_none() {
+                if ours.as_ref() == theirs {
+                    continue;
+                }
+                return Err(vec![Diagnostic::error(
+                    kernel::STALE_BASE,
+                    "a document with this identity was created concurrently",
+                )]);
+            }
+            if theirs.is_none() && ours.as_ref() == base.as_ref() {
+                if let Some(ours) = &ours {
+                    edits.extend(ours.records().keys().map(|id| Edit::Delete {
+                        doc: doc.clone(),
+                        id: id.clone(),
+                    }));
+                    let path = live
+                        .workspace()
+                        .path_of(doc.as_str())
+                        .expect("loaded document has a path");
+                    edits.push(Edit::Document {
+                        doc: doc.clone(),
+                        path: path.into(),
+                        kind: None,
+                    });
+                }
+                continue;
+            }
+            let (Some(base), Some(ours), Some(theirs)) = (base, ours, theirs) else {
                 return Err(vec![Diagnostic::error(
                     kernel::DOC_NOT_FOUND,
                     format!("`{doc}` is no longer loaded; the branch cannot merge"),
@@ -369,14 +449,13 @@ impl Branch {
 
     /// The persisted form.
     pub fn save(&self) -> SavedBranch {
-        let ws = self.store.workspace();
         let base = self
             .touched()
             .into_iter()
             .filter_map(|doc| {
                 let d = self.base_doc(&doc)?;
                 Some(SavedDoc {
-                    path: ws.path_of(doc.as_str())?.to_owned(),
+                    path: self.path(&doc),
                     text: write(&d, self.store.schema()),
                 })
             })
@@ -399,6 +478,19 @@ impl Branch {
     /// documents go back to their fork state, then its transactions are replayed.
     pub fn load(saved: SavedBranch, live: &Store) -> Result<Branch, Vec<Diagnostic>> {
         let mut ws = live.workspace().clone();
+        for txn in &saved.txns {
+            for op in &txn.ops {
+                if let ara_doc::Op::Document {
+                    doc,
+                    kind: Some(_),
+                    prev: None,
+                    ..
+                } = op
+                {
+                    ws.remove(doc.as_str());
+                }
+            }
+        }
         for d in &saved.base {
             let read = read(&d.text, &d.path, live.schema(), Some(ws.index()));
             let doc = read.doc.ok_or(read.diags)?;

@@ -1,5 +1,4 @@
-//! Review state ("applied but unreviewed", A4): each agent transaction starts
-//! `applied`; a human accepts or reverts it per transaction or per entity.
+//! Legacy review API over immediately accepted agent transactions (D24).
 //!
 //! Status lives per (transaction, entity). A transaction is `applied` while any of
 //! its entities is, `reverted` when all are, `accepted` otherwise. Human edits and
@@ -35,11 +34,11 @@ pub struct Review {
 }
 
 impl Review {
-    /// Starts tracking an agent transaction: every touched entity is `applied`.
+    /// Tracks attribution and revert state without creating a review requirement.
     pub fn track(&mut self, txn: &Transaction) {
         let entities = touched(txn)
             .into_iter()
-            .map(|e| (e, ReviewStatus::Applied))
+            .map(|e| (e, ReviewStatus::Accepted))
             .collect();
         self.txns.insert(txn.id.clone(), entities);
     }
@@ -113,9 +112,9 @@ mod tests {
         r.track(&t);
         let id = TxnId("tx_a".into());
         assert_eq!(touched(&t), ["sc_a0000001/e_aaaa", "sc_a0000001/e_bbbb"]);
-        assert_eq!(r.status(&id), Some(ReviewStatus::Applied));
+        assert_eq!(r.status(&id), Some(ReviewStatus::Accepted));
         r.set(&id, Some("sc_a0000001/e_aaaa"), ReviewStatus::Reverted);
-        assert_eq!(r.status(&id), Some(ReviewStatus::Applied));
+        assert_eq!(r.status(&id), Some(ReviewStatus::Accepted));
         r.set(&id, Some("sc_a0000001/e_bbbb"), ReviewStatus::Accepted);
         assert_eq!(r.status(&id), Some(ReviewStatus::Accepted));
         r.set(&id, None, ReviewStatus::Reverted);

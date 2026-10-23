@@ -6,6 +6,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-audio = { path = "../ara-audio" }
+ara-cmd.workspace = true
+ara-doc.workspace = true
+ara-diag.workspace = true
 rayon = "1.11"
 ara-asset = { path = "../ara-asset" }
 ara-geo = { path = "../ara-geo" }
@@ -26,6 +30,7 @@ serde_json.workspace = true
 urlencoding = "2.1"
 
 [dev-dependencies]
+ara-ops.workspace = true
 texture2ddecoder = "0.1.2"
 bcdec_rs = "0.2.1"
 tempfile = "3.23"
