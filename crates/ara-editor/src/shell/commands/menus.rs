@@ -281,6 +281,7 @@ pub(crate) const MENUS: &[Menu] = &[
             ),
             S,
             C("create.prefab"),
+            C("assets.create.script"),
         ],
     },
     Menu {

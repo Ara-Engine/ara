@@ -18,6 +18,7 @@ mod motion;
 mod notices;
 mod ops;
 mod polish;
+pub(crate) mod scripts;
 mod scrub;
 mod settings_panel;
 mod testing;

@@ -830,7 +830,7 @@ fn build() -> Vec<Spec> {
         cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, _| s.create_resource(e, "material")),
         cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, _| s.create_resource(e, "vfx")),
         cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, _| s.create_resource(e, "animation")),
-        later("assets.create.script", "C# Script", "file-code", "", "Create scripts in your IDE; the C# host hot-reloads them."),
+        cmd("assets.create.script", "C# Behaviour", "file-code", "", "Create a behaviour script in the project's C# module and open it in your IDE; Play compiles it and saving hot-reloads it.", |s, e, _| s.create_behaviour(e)),
         cmd("assets.create.prefab", "Prefab from Selection", "package", "", "Turn the selected entity and its children into a prefab under prefabs/.", |s, e, t| s.prefab_from_selection(e, t)).when(prefab_source),
         cmd("assets.reimport", "Reimport", "refresh-cw", "", "Run the importer again for the selected asset.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
@@ -1082,7 +1082,10 @@ fn build() -> Vec<Spec> {
         later("tools.physics_debugger", "Physics Debugger", "", "", "Needs an ara-physics debug-draw feed into the editor."),
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
-        later("tools.cs.solution", "Open Solution in IDE", "file-code", "", "Generate the solution with `ara script` and open it in your IDE."),
+        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |_, e, _| {
+            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Behaviour")?;
+            crate::shell::scripts::open_in_ide(&dir, &dir)
+        }).when(|_| Avail::Ready),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
