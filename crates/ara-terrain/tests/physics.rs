@@ -16,7 +16,7 @@ fn native_heightfields_and_cell_holes_match_terrain_coordinates()
         max: TileCoord { x: 2, z: 1 },
         materials: vec![],
     };
-    let mut backend = JoltBackend::new(PhysicsConfig {
+    let mut backend = JoltBackend::new(&PhysicsConfig {
         threads: 1,
         ..PhysicsConfig::default()
     })?;
@@ -54,7 +54,7 @@ fn native_heightfields_and_cell_holes_match_terrain_coordinates()
         assert!((hit.fraction - 0.35).abs() < 0.001);
     }
 
-    let mut backend = JoltBackend::new(PhysicsConfig {
+    let mut backend = JoltBackend::new(&PhysicsConfig {
         threads: 1,
         ..PhysicsConfig::default()
     })?;
