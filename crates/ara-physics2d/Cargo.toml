@@ -1,0 +1,37 @@
+[package]
+name = "ara-physics2d"
+description = "Deterministic Rapier2D boundary, ECS sync and rollback for Ara."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+autoexamples = false
+
+[dependencies]
+ara-2d = { path = "../ara-2d" }
+ara-sim = { path = "../ara-sim" }
+ara-schema = { path = "../ara-schema" }
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+rapier2d = { version = "0.36.1", features = ["serde-serialize", "enhanced-determinism"] }
+serde.workspace = true
+serde_json.workspace = true
+bincode = "1.3"
+anyhow = "1"
+bevy_ecs = { version = "0.20", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+ara-doc = { path = "../ara-doc" }
+ara-ops = { path = "../ara-ops" }
+tempfile = "3"
+
+[[test]]
+name = "process_determinism"
+harness = false
+
+[[example]]
+name = "physics2d-timings"
+path = "examples/timings.rs"
+
+[lints]
+workspace = true

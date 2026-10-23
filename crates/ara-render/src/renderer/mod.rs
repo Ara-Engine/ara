@@ -3,6 +3,7 @@ mod edit;
 mod frame;
 mod hash;
 mod passes;
+pub mod post;
 mod transfer;
 mod upload;
 use crate::{
