@@ -33,7 +33,7 @@ impl Models {
 impl Ctx {
     /// Registers a model file: writes its glTF sidecar and records its bounds.
     pub fn model(&self, models: &mut Models, name: &str, path: &str, id: &str) -> Result<()> {
-        self.sidecar(path, id, "ara.gltf", Value::Null)?;
+        self.sidecar(path, id, Value::Null)?;
         let (min, max) =
             gltf_bounds(&self.root.join(path)).with_context(|| format!("bounds of {path}"))?;
         models.0.insert(

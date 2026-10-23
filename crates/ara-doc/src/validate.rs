@@ -141,7 +141,7 @@ pub fn check_structure(
             );
         }
     }
-    if kind.single_root {
+    if kind.single_root && !records.is_empty() {
         let roots = doc.children(None).len();
         if roots != 1 {
             out.push(
