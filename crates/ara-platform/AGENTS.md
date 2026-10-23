@@ -20,14 +20,24 @@ The windowed example recreates on resize and OUT_OF_DATE; minimized windows wait
 
 ## Setup and test
 
-On Windows run `./setup.ps1` once, or provide `SDL3_LIB_DIR` at compile time.
-`native/` is ignored. Put its SDL3.dll on PATH for native executables/tests.
-On Linux/macOS install the matching system SDL3 development/runtime library.
+SDL 3.4.18 is built statically by `ara-sdl3-src` with parallel `cc`; no setup,
+download, CMake, Python, `native/` directory or SDL3.dll is required. Audio uses
+the same library. Consumers alias `ara-sdl3-src` as `sdl3-sys`; its explicit link
+metadata survives workspace `no-link` feature unification.
+`SDL3_LIB_DIR` is an opt-in dynamic prebuilt override (then provide its runtime).
+Linux desktop/audio backends load host libraries dynamically; headers are vendored.
+Android uses the NDK. Apple source builds remain TODO(D15), with a clear diagnostic
+and the same prebuilt override available meanwhile.
 
-Set `CARGO_BUILD_JOBS=4`. Run `cargo check -p ara-platform`,
+Set `CARGO_BUILD_JOBS=2`. Run `cargo check -p ara-platform`,
 `cargo test -p ara-platform`,
 `cargo clippy -p ara-platform --all-targets -- -D warnings`, and
 `cargo fmt -p ara-platform -- --check`.
+
+`cargo test -p ara-platform --test native -- --ignored` opens a short-lived native
+window/audio stream and checks injected key/mouse events, virtual gamepad
+enumeration, recovery, and independent audio/video subsystem references.
+Run `cargo test --workspace --no-run` after changing SDL linkage.
 
 Behavioral gate from repository root:
 `cargo run -p ara-render --example windowed -- --frames=120 --resize-test`.

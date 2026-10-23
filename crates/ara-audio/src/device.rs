@@ -5,14 +5,17 @@ use crate::{AudioEngine, AudioError, QUANTUM, Result};
 use libloading::Library;
 use sdl3_sys::{
     audio::{
-        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, SDL_AUDIO_F32, SDL_AudioDeviceID, SDL_AudioSpec,
-        SDL_AudioStream, SDL_AudioStreamCallback,
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, SDL_AUDIO_F32, SDL_AudioSpec, SDL_AudioStream,
+        SDL_DestroyAudioStream, SDL_GetAudioDeviceFormat, SDL_GetAudioDeviceName,
+        SDL_GetAudioStreamDevice, SDL_GetAudioStreamQueued, SDL_GetCurrentAudioDriver,
+        SDL_OpenAudioDeviceStream, SDL_PutAudioStreamData, SDL_ResumeAudioStreamDevice,
     },
-    init::{SDL_INIT_AUDIO, SDL_InitFlags},
+    error::SDL_GetError,
+    hints::SDL_SetHint,
+    init::{SDL_INIT_AUDIO, SDL_InitSubSystem, SDL_QuitSubSystem},
 };
 use std::{
-    ffi::{CStr, c_char, c_int, c_void},
-    path::Path,
+    ffi::{CStr, c_int},
     ptr,
 };
 
@@ -174,70 +177,13 @@ pub fn pump(
     Ok(event)
 }
 
-type Init = unsafe extern "C" fn(SDL_InitFlags) -> bool;
-type Quit = unsafe extern "C" fn(SDL_InitFlags);
-type Open = unsafe extern "C" fn(
-    SDL_AudioDeviceID,
-    *const SDL_AudioSpec,
-    SDL_AudioStreamCallback,
-    *mut c_void,
-) -> *mut SDL_AudioStream;
-type Destroy = unsafe extern "C" fn(*mut SDL_AudioStream);
-type Resume = unsafe extern "C" fn(*mut SDL_AudioStream) -> bool;
-type Put = unsafe extern "C" fn(*mut SDL_AudioStream, *const c_void, c_int) -> bool;
-type Queued = unsafe extern "C" fn(*mut SDL_AudioStream) -> c_int;
-type GetDevice = unsafe extern "C" fn(*mut SDL_AudioStream) -> SDL_AudioDeviceID;
-type Format = unsafe extern "C" fn(SDL_AudioDeviceID, *mut SDL_AudioSpec, *mut c_int) -> bool;
-type Name = unsafe extern "C" fn(SDL_AudioDeviceID) -> *const c_char;
-type GetError = unsafe extern "C" fn() -> *const c_char;
-type SetHint = unsafe extern "C" fn(*const c_char, *const c_char) -> bool;
-type Driver = unsafe extern "C" fn() -> *const c_char;
-
-struct SdlApi {
-    init: Init,
-    quit: Quit,
-    open: Open,
-    destroy: Destroy,
-    resume: Resume,
-    put: Put,
-    queued: Queued,
-    device: GetDevice,
-    format: Format,
-    name: Name,
-    error: GetError,
-    hint: SetHint,
-    driver: Driver,
-    _library: Library,
-}
-impl SdlApi {
-    fn load(path: &Path) -> Result<Self> {
-        // SAFETY: caller selects a trusted SDL3 runtime; all loaded symbols use SDL3's C ABI.
-        let library =
-            unsafe { Library::new(path) }.map_err(|e| AudioError::Backend(e.to_string()))?;
-        Ok(Self {
-            init: symbol(&library, b"SDL_InitSubSystem\0")?,
-            quit: symbol(&library, b"SDL_QuitSubSystem\0")?,
-            open: symbol(&library, b"SDL_OpenAudioDeviceStream\0")?,
-            destroy: symbol(&library, b"SDL_DestroyAudioStream\0")?,
-            resume: symbol(&library, b"SDL_ResumeAudioStreamDevice\0")?,
-            put: symbol(&library, b"SDL_PutAudioStreamData\0")?,
-            queued: symbol(&library, b"SDL_GetAudioStreamQueued\0")?,
-            device: symbol(&library, b"SDL_GetAudioStreamDevice\0")?,
-            format: symbol(&library, b"SDL_GetAudioDeviceFormat\0")?,
-            name: symbol(&library, b"SDL_GetAudioDeviceName\0")?,
-            error: symbol(&library, b"SDL_GetError\0")?,
-            hint: symbol(&library, b"SDL_SetHint\0")?,
-            driver: symbol(&library, b"SDL_GetCurrentAudioDriver\0")?,
-            _library: library,
-        })
-    }
-    fn error(&self) -> AudioError {
-        // SAFETY: SDL_GetError returns a thread-local, NUL-terminated string valid until the next SDL call.
-        let message = unsafe { CStr::from_ptr((self.error)()) }
-            .to_string_lossy()
-            .into_owned();
-        AudioError::Backend(message)
-    }
+/// Copy the SDL thread-local error before the next SDL call.
+fn sdl_error() -> AudioError {
+    // SAFETY: SDL_GetError returns a live, NUL-terminated thread-local string.
+    let message = unsafe { CStr::from_ptr(SDL_GetError()) }
+        .to_string_lossy()
+        .into_owned();
+    AudioError::Backend(message)
 }
 /// Loads one C ABI symbol. Kept private so each use is type-checked against the audited signature.
 pub(crate) fn symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T> {
@@ -245,10 +191,9 @@ pub(crate) fn symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T> {
     unsafe { library.get::<T>(name).map(|s| *s) }.map_err(|e| AudioError::Backend(e.to_string()))
 }
 
-/// SDL3 default output stream, loaded through sdl3-sys ABI types without a platform-crate dependency.
+/// SDL3 default output stream sharing the statically linked SDL instance with ara-platform.
 /// It owns one SDL audio subsystem reference and never calls process-wide SDL_Quit.
 pub struct SdlBackend {
-    api: SdlApi,
     stream: *mut SDL_AudioStream,
     rate: u32,
     format: DeviceFormat,
@@ -256,22 +201,22 @@ pub struct SdlBackend {
 }
 impl SdlBackend {
     /// Opens stereo f32 output. SDL follows default-device migrations and performs rate conversion.
-    pub fn open(library_path: impl AsRef<Path>, sample_rate: u32) -> Result<Self> {
+    /// Coordinate subsystem initialization and Drop with the main-thread platform owner;
+    /// SDL subsystem lifecycle calls are not thread-safe.
+    pub fn open(sample_rate: u32) -> Result<Self> {
         if !(8000..=192000).contains(&sample_rate) {
             return Err(AudioError::Invalid("SDL sample rate"));
         }
-        let api = SdlApi::load(library_path.as_ref())?;
         // SAFETY: static NUL-terminated hint strings. Environment overrides remain authoritative.
         // SDL's WASAPI backend negotiates IAudioClient3's nearest supported engine period.
         unsafe {
-            (api.hint)(c"SDL_AUDIO_DEVICE_SAMPLE_FRAMES".as_ptr(), c"128".as_ptr());
+            SDL_SetHint(c"SDL_AUDIO_DEVICE_SAMPLE_FRAMES".as_ptr(), c"128".as_ptr());
         }
         // SAFETY: balanced by this backend's Drop; only the audio subsystem is initialized.
-        if !unsafe { (api.init)(SDL_INIT_AUDIO) } {
-            return Err(api.error());
+        if !unsafe { SDL_InitSubSystem(SDL_INIT_AUDIO) } {
+            return Err(sdl_error());
         }
         let mut backend = Self {
-            api,
             stream: ptr::null_mut(),
             rate: sample_rate,
             format: DeviceFormat {
@@ -291,9 +236,9 @@ impl SdlBackend {
     /// Active SDL driver name, for distinguishing WASAPI from fallback device paths.
     pub fn driver(&self) -> Result<String> {
         // SAFETY: SDL retains the driver name while the initialized subsystem is owned here.
-        let name = unsafe { (self.api.driver)() };
+        let name = unsafe { SDL_GetCurrentAudioDriver() };
         if name.is_null() {
-            return Err(self.api.error());
+            return Err(sdl_error());
         }
         // SAFETY: non-null SDL-owned NUL-terminated name.
         Ok(unsafe { CStr::from_ptr(name) }
@@ -306,9 +251,9 @@ impl SdlBackend {
             return Err(AudioError::Backend("device lost".into()));
         }
         // SAFETY: stream is live; SDL owns the NUL-terminated name returned for its device.
-        let name = unsafe { (self.api.name)((self.api.device)(self.stream)) };
+        let name = unsafe { SDL_GetAudioDeviceName(SDL_GetAudioStreamDevice(self.stream)) };
         if name.is_null() {
-            return Err(self.api.error());
+            return Err(sdl_error());
         }
         // SAFETY: non-null name returned by SDL_GetAudioDeviceName.
         Ok(unsafe { CStr::from_ptr(name) }
@@ -318,7 +263,7 @@ impl SdlBackend {
     fn reopen(&mut self) -> Result<()> {
         if !self.stream.is_null() {
             // SAFETY: stream is uniquely owned here; SDL closes its associated logical device.
-            unsafe { (self.api.destroy)(self.stream) };
+            unsafe { SDL_DestroyAudioStream(self.stream) };
             self.stream = ptr::null_mut();
         }
         self.lost = true;
@@ -329,7 +274,7 @@ impl SdlBackend {
         };
         // SAFETY: spec lives for this call; no callback/userdata is registered.
         self.stream = unsafe {
-            (self.api.open)(
+            SDL_OpenAudioDeviceStream(
                 SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                 &spec,
                 None,
@@ -337,11 +282,11 @@ impl SdlBackend {
             )
         };
         if self.stream.is_null() {
-            return Err(self.api.error());
+            return Err(sdl_error());
         }
         // SAFETY: newly opened stream is live and initially paused.
-        if !unsafe { (self.api.resume)(self.stream) } {
-            return Err(self.api.error());
+        if !unsafe { SDL_ResumeAudioStreamDevice(self.stream) } {
+            return Err(sdl_error());
         }
         self.format = self.read_format()?;
         self.lost = false;
@@ -355,8 +300,14 @@ impl SdlBackend {
         };
         let mut frames = 0;
         // SAFETY: stream is live and both output pointers reference writable stack values.
-        if !unsafe { (self.api.format)((self.api.device)(self.stream), &mut spec, &mut frames) } {
-            return Err(self.api.error());
+        if !unsafe {
+            SDL_GetAudioDeviceFormat(
+                SDL_GetAudioStreamDevice(self.stream),
+                &mut spec,
+                &mut frames,
+            )
+        } {
+            return Err(sdl_error());
         }
         if spec.freq <= 0 || spec.channels <= 0 || frames < 0 {
             return Err(AudioError::Backend("invalid SDL device format".into()));
@@ -409,9 +360,9 @@ impl DeviceBackend for SdlBackend {
         let bytes = c_int::try_from(std::mem::size_of_val(samples))
             .map_err(|_| AudioError::Capacity("SDL submission"))?;
         // SAFETY: SDL copies bytes before returning, and samples contains exactly bytes initialized bytes.
-        if !unsafe { (self.api.put)(self.stream, samples.as_ptr().cast(), bytes) } {
+        if !unsafe { SDL_PutAudioStreamData(self.stream, samples.as_ptr().cast(), bytes) } {
             self.lost = true;
-            return Err(self.api.error());
+            return Err(sdl_error());
         }
         Ok(())
     }
@@ -420,9 +371,9 @@ impl DeviceBackend for SdlBackend {
             return Err(AudioError::Backend("device lost".into()));
         }
         // SAFETY: live, uniquely owned stream; SDL synchronizes its internal hardware consumer.
-        let bytes = unsafe { (self.api.queued)(self.stream) };
+        let bytes = unsafe { SDL_GetAudioStreamQueued(self.stream) };
         if bytes < 0 {
-            return Err(self.api.error());
+            return Err(sdl_error());
         }
         Ok(bytes as usize / 8)
     }
@@ -442,12 +393,12 @@ impl DeviceBackend for SdlBackend {
 }
 impl Drop for SdlBackend {
     fn drop(&mut self) {
-        // SAFETY: destroy only our stream, then release exactly our audio subsystem reference before unloading SDL.
+        // SAFETY: destroy only our stream, then release exactly our audio subsystem reference without touching other SDL owners.
         unsafe {
             if !self.stream.is_null() {
-                (self.api.destroy)(self.stream);
+                SDL_DestroyAudioStream(self.stream);
             }
-            (self.api.quit)(SDL_INIT_AUDIO);
+            SDL_QuitSubSystem(SDL_INIT_AUDIO);
         }
     }
 }
