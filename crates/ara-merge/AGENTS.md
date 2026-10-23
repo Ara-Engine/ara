@@ -12,6 +12,9 @@ ara-json, ara-diag.
   entries, so `ara_doc::write` emits a complete file.
 - `Conflict { record, path, base, ours, theirs, reason }`, `to_json()`,
   `to_diagnostic(file)` (`ARA1701`).
+- `diff(from, to) -> Vec<Edit>`: the edits that turn one version of a document
+  into another (create, delete, one move for parent/order, field-level sets inside
+  components). Branch merges (ara-collab) replay merged documents with it.
 
 ## Rules
 

@@ -345,6 +345,11 @@ impl Hub {
         self.merge_due(store, now);
     }
 
+    /// The last revision [`publish`](Self::publish) broadcast.
+    pub fn published(&self) -> u64 {
+        self.published
+    }
+
     /// The participant behind a transaction, if known.
     pub fn owner(&self, txn: &TxnId) -> Option<&ParticipantId> {
         self.origins.get(txn).and_then(|o| o.participant.as_ref())

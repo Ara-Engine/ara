@@ -97,6 +97,7 @@ impl PlayService {
             dry_run: None,
             base: None,
             idempotency_key: None,
+            branch: None,
         })?;
         Ok(json!({"kept": kept, "conflicts": conflicts, "skipped": skipped, "transaction": result}))
     }

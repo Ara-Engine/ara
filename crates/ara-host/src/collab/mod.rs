@@ -142,6 +142,19 @@ impl State {
             self.collab.hub.leave(&mut self.store, &id, now);
             self.collab.conns.remove(&id);
         }
+        // Whoever commits is present: sessions that edited join on their first commit.
+        let committers: BTreeSet<String> = self
+            .store
+            .since(self.collab.hub.published())
+            .iter()
+            .filter_map(|t| self.txn_session.get(&t.id).cloned())
+            .filter(|s| self.collab.hub.roster().get(&pid(s)).is_none())
+            .collect();
+        for s in committers {
+            if self.sessions.live(&s).is_some() {
+                let _ = self.ensure_joined(&s, None, None);
+            }
+        }
         let sessions = &self.txn_session;
         self.collab
             .hub
