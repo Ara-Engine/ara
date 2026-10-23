@@ -133,7 +133,12 @@ impl RunWorker {
             .map_err(|e| worker_error(format!("write to worker: {e}")))
     }
 
-    /// The worker's peak memory, when the platform reports it.
+    /// The worker's current committed memory, when the platform reports it.
+    pub fn memory(&self) -> Option<u64> {
+        self.job.as_ref().and_then(|j| j.committed(&self.child))
+    }
+
+    /// The most memory the worker has committed, when the platform reports it.
     pub fn peak_memory(&self) -> Option<u64> {
         self.job.as_ref().and_then(|j| j.peak(&self.child))
     }
@@ -171,13 +176,13 @@ impl RunWorker {
                     limits.wall.as_millis()
                 )));
             }
-            if let Some(peak) = self.peak_memory()
-                && peak > limits.memory.min(self.memory)
+            if let Some(used) = self.memory()
+                && used > limits.memory.min(self.memory)
             {
                 self.kill();
                 return Err(limit(format!(
                     "the worker used {} MiB, past its {} MiB limit, and was killed",
-                    peak >> 20,
+                    used >> 20,
                     limits.memory >> 20
                 )));
             }

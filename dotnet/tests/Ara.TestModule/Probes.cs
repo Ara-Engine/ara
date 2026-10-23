@@ -27,6 +27,18 @@ public partial struct Marker
     public int Value;
 }
 
+/// <summary>A running total commands add to (resource journaling).</summary>
+[Resource]
+public partial struct Tally
+{
+    /// <summary>The total.</summary>
+    public int Total;
+}
+
+/// <summary>A marker without data (tag inserts through command buffers).</summary>
+[Component]
+public partial struct Frozen { }
+
 /// <summary>Counter systems.</summary>
 public static partial class Counting
 {
@@ -64,6 +76,40 @@ public sealed partial class Bomb : Behaviour
     }
 }
 
+/// <summary>Counts <c>OnSpawn</c> calls: a fault and its L1 fix must not respawn the object.</summary>
+public sealed partial class Greeter : Behaviour
+{
+    /// <summary><c>OnSpawn</c> calls.</summary>
+    [Property] public partial int Spawns { get; set; }
+
+    /// <summary>Ticks seen.</summary>
+    [Property] public partial int Seen { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnSpawn() => Spawns += 1;
+
+    /// <inheritdoc/>
+    protected override void OnTick(in Tick t)
+    {
+        Seen++;
+    }
+}
+
+/// <summary>Adds to the tally, then rejects if asked: a rejection must restore the tally.</summary>
+[Command("test.Tally")]
+public static partial class AddTally
+{
+    /// <summary>Adds <paramref name="add"/> to <see cref="Tally"/>.</summary>
+    /// <param name="ctx">The command context.</param>
+    /// <param name="add">How much to add.</param>
+    /// <param name="reject">Reject after writing.</param>
+    public static CommandResult Execute(ref CommandContext ctx, [Range(-100, 100)] int add, bool reject)
+    {
+        World.Resource<Tally>().Total += add;
+        return reject ? ctx.Reject("asked_to") : CommandResult.Ok;
+    }
+}
+
 /// <summary>Always throws (fault containment for commands).</summary>
 [Command("test.Fail")]
 public static partial class Fail
@@ -79,21 +125,24 @@ public static partial class Fail
     }
 }
 
-/// <summary>Spawns `count` entities with counters and despawns `victim`.</summary>
+/// <summary>Spawns `count` frozen entities with counters, then overwrites and despawns `victim`.</summary>
 [Command("test.Shuffle")]
 public static partial class Shuffle
 {
     /// <summary>Structural changes for the undo tests.</summary>
     /// <param name="ctx">The command context.</param>
     /// <param name="victim">An entity to despawn.</param>
+    /// <param name="c">Its counter, written before the despawn (undo restores it on the respawned entity).</param>
     /// <param name="count">How many entities to spawn.</param>
-    public static CommandResult Execute(ref CommandContext ctx, Entity victim, [Range(0, 64)] int count)
+    public static CommandResult Execute(ref CommandContext ctx, Entity victim, ref Counter c, [Range(0, 64)] int count)
     {
         for (int i = 0; i < count; i++)
         {
             var e = ctx.Commands.Spawn();
             ctx.Commands.Add(e, new Counter { Value = 100 + i });
+            ctx.Commands.Add(e, new Frozen());
         }
+        c.Value = -5;
         ctx.Commands.Despawn(victim);
         return CommandResult.Ok;
     }

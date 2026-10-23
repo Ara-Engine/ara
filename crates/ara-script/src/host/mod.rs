@@ -29,7 +29,7 @@ use bevy_tasks::{ComputeTaskPool, TaskPoolBuilder};
 use serde_json::{Value, json};
 
 pub use bindings::EngineBindings;
-pub use command::{CommandRecord, ComponentWrite, Cue};
+pub use command::{CommandRecord, ComponentWrite, Cue, ResourceWrite};
 pub use ctx::LogSink;
 
 use crate::abi::{self, Frame, HostInit, PHASE_FRAME, PHASE_TICK, ReloadReport, ScriptApi, Tick};
@@ -123,7 +123,7 @@ unsafe impl Send for PhaseScratch {}
 
 /// The C# runtime attached to a world. One per process (one .NET runtime).
 pub struct ScriptHost {
-    ctx: Box<HostCtx>,
+    ctx: &'static HostCtx,
     api: ScriptApi,
     registry: Registry,
     /// Never dropped: a .NET runtime cannot be unloaded from a process.
@@ -177,9 +177,10 @@ impl ScriptHost {
                 owner: Owner::Engine,
             });
         }
-        let ctx = Box::new(HostCtx::new(
+        // Leaked on purpose: see `HostCtx` (one per process, a few hundred bytes).
+        let ctx: &'static HostCtx = Box::leak(Box::new(HostCtx::new(
             config.log.unwrap_or_else(|| Box::new(default_log)),
-        ));
+        )));
         if !config.boost_ticks {
             ctx.boost.disable();
         }
@@ -189,12 +190,12 @@ impl ScriptHost {
             abi_version: abi::ABI_VERSION,
             flags: if enc { abi::INIT_ENC } else { 0 },
             layout_hash: abi::layout_hash(&layouts),
-            ctx: std::ptr::from_ref::<HostCtx>(&ctx).cast_mut().cast(),
+            ctx: std::ptr::from_ref::<HostCtx>(ctx).cast_mut().cast(),
             api: HostCtx::api(),
         };
         let mut api = MaybeUninit::<ScriptApi>::uninit();
         // SAFETY: `init` is `ara_script_init`; `host` and `api` are valid for the call, and
-        // `ctx` (boxed, owned by the returned host) outlives the runtime's use of it.
+        // `ctx` is leaked, so it outlives the runtime's use of it.
         let rc = unsafe { init(&host, api.as_mut_ptr()) };
         if rc != 0 {
             let mut problems = std::mem::take(
@@ -380,12 +381,14 @@ impl ScriptHost {
                 ));
                 continue;
             };
+            let serial = s.structural || s.resources.iter().any(|(_, w)| *w);
             let plan = SystemPlan {
                 id: s.id,
                 columns,
                 resources,
                 with,
                 without,
+                serial,
                 api: self.api,
             };
             let state: SystemState<(ScriptQuery<'static, 'static>, Res<'static, ScriptTick>)> =
@@ -402,7 +405,11 @@ impl ScriptHost {
                 clash(&a.columns, &b.columns) || clash(&a.resources, &b.resources)
             };
             let mut config = system.in_set(ScriptSet(s.id)).into_configs();
-            for earlier in systems[..k].iter().filter(|e| conflicts(e, s)) {
+            // Structural systems never overlap: their entity reservations stay in a deterministic order.
+            for earlier in systems[..k]
+                .iter()
+                .filter(|e| conflicts(e, s) || (e.structural && s.structural))
+            {
                 config = config.after(ScriptSet(earlier.id));
             }
             schedule.add_systems(config);
@@ -636,6 +643,7 @@ impl Drop for ScriptHost {
     fn drop(&mut self) {
         self.stop();
         // A .NET runtime cannot be unloaded from a process (JIT or NativeAOT), so the
-        // library stays mapped; C# no longer holds a live pointer to `ctx` after `stop`.
+        // library stays mapped. `stop` detaches C# from the host; `ctx` is leaked, so a
+        // callback racing the detach still finds it.
     }
 }

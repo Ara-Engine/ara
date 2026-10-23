@@ -28,7 +28,8 @@ public sealed unsafe class ModuleBuilder
         internal static LayoutEntry Of(string name, int[] layout, Action<uint> setIndex) =>
             new(name, layout.Length > 0 ? layout[0] : 0, layout.Length > 1 ? layout[1..] : [], setIndex);
     }
-    internal sealed record SystemDecl(string Name, nint Run, int Order, ColumnAccess[] Columns, ColumnAccess[] Resources, string[] With, string[] Without);
+    internal sealed record SystemDecl(string Name, nint Run, int Order, ColumnAccess[] Columns, ColumnAccess[] Resources,
+        string[] With, string[] Without, bool Structural);
     internal sealed record BehaviourDecl(string Name, string Data, int DataSize, Func<Behaviour> Create);
     internal sealed record CommandDecl(string Name, string Summary, string Params, LayoutEntry ParamsLayout, nint Invoke,
         string[] Reads, string[] Writes, string? Expose, string[] Examples);
@@ -54,10 +55,13 @@ public sealed unsafe class ModuleBuilder
     public void Cue(string name, int[] layout, Action<uint> setIndex) =>
         Cues.Add(LayoutEntry.Of(name, layout, setIndex));
 
-    /// <summary>A chunk-batched system: <paramref name="run"/> processes one <see cref="SystemCall"/>.</summary>
+    /// <summary>
+    /// A chunk-batched system: <paramref name="run"/> processes one <see cref="SystemCall"/>.
+    /// <paramref name="structural"/> is true when it takes <c>ref Commands</c>.
+    /// </summary>
     public void System(string name, delegate*<SystemCall*, void> run, int order, ColumnAccess[] columns,
-        ColumnAccess[] resources, string[] with, string[] without) =>
-        Systems.Add(new(name, (nint)run, order, columns, resources, with, without));
+        ColumnAccess[] resources, string[] with, string[] without, bool structural) =>
+        Systems.Add(new(name, (nint)run, order, columns, resources, with, without, structural));
 
     /// <summary>A behaviour type whose per-entity data lives in component <paramref name="data"/> (<paramref name="dataSize"/> bytes per row).</summary>
     public void Behaviour(string name, string data, int dataSize, Func<Behaviour> create) =>
@@ -107,6 +111,7 @@ public sealed unsafe class ModuleBuilder
                 WriteAccess(w, "resources", s.Resources);
                 WriteStrings(w, "with", s.With);
                 WriteStrings(w, "without", s.Without);
+                w.WriteBoolean("structural", s.Structural);
                 w.WriteEndObject();
             }
             w.WriteEndArray();

@@ -13,7 +13,6 @@ use ara_diag::Diagnostic;
 use ara_schema::{SchemaDb, StructLayout, type_from_json};
 use bevy_ecs::component::{ComponentCloneBehavior, ComponentDescriptor, ComponentId, StorageType};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::query::QueryBuilder;
 use bevy_ecs::resource::IsResource;
 use bevy_ecs::world::World;
 use serde::Deserialize;
@@ -61,6 +60,8 @@ pub(crate) struct SystemDecl {
     pub resources: Vec<(u32, bool)>,
     pub with: Vec<u32>,
     pub without: Vec<u32>,
+    /// The system takes `ref Commands` (structural changes).
+    pub structural: bool,
 }
 
 /// One behaviour type.
@@ -114,6 +115,7 @@ impl ModuleRecord {
                         s.resources.clone(),
                         s.with.clone(),
                         s.without.clone(),
+                        s.structural,
                     )
                 })
                 .collect()
@@ -174,6 +176,8 @@ struct SystemDesc {
     resources: Vec<Access>,
     with: Vec<String>,
     without: Vec<String>,
+    #[serde(default)]
+    structural: bool,
 }
 
 #[derive(Deserialize)]
@@ -249,7 +253,14 @@ fn register_bevy_component(
 
 /// Field-by-field conversion: fields with the same name and type keep their bytes;
 /// the rest take their new defaults.
-fn convert(db: &SchemaDb, old: &StructLayout, new: &StructLayout, bytes: &[u8]) -> Vec<u8> {
+/// Re-lays `bytes` from `old` to `new`: fields with the same name and type keep their
+/// value, the rest take defaults.
+pub(crate) fn convert(
+    db: &SchemaDb,
+    old: &StructLayout,
+    new: &StructLayout,
+    bytes: &[u8],
+) -> Vec<u8> {
     let mut out = value::default_bytes(db, new);
     for nf in &new.fields {
         if let Some(of) = old
@@ -454,6 +465,13 @@ impl Registry {
                 }
             }
             let mut seen = std::collections::BTreeSet::new();
+            if s.resources.iter().any(|a| !seen.insert(&a.name)) {
+                problems.push(error(
+                    codes::BAD_DESCRIPTOR,
+                    format!("system `{}` takes the same resource twice", s.name),
+                ));
+            }
+            let mut seen = std::collections::BTreeSet::new();
             if s.columns.iter().any(|a| !seen.insert(&a.name)) {
                 problems.push(error(
                     codes::BAD_DESCRIPTOR,
@@ -581,6 +599,7 @@ impl Registry {
                         .collect(),
                     with: s.with.iter().map(|n| resolve(n)).collect(),
                     without: s.without.iter().map(|n| resolve(n)).collect(),
+                    structural: s.structural,
                 })
                 .collect(),
             behaviours: d
@@ -652,8 +671,14 @@ fn migrate(
     id: ComponentId,
     layout: &StructLayout,
 ) {
-    let mut q = QueryBuilder::<Entity>::new(world).with_id(old.id).build();
-    let entities: Vec<Entity> = q.iter(world).collect();
+    // Every archetype with the old component, including disabled entities (a query would
+    // apply the default `Disabled` filter).
+    let entities: Vec<Entity> = world
+        .archetypes()
+        .iter()
+        .filter(|a| a.contains(old.id))
+        .flat_map(|a| a.entities().iter().map(|e| e.id()))
+        .collect();
     for e in entities {
         let Some(bytes) = cmdbuf::component_bytes(world, e, old.id, old.layout.size) else {
             continue;
@@ -666,7 +691,8 @@ fn migrate(
     }
 }
 
-fn resource_bytes(world: &World, id: ComponentId, size: usize) -> Option<Vec<u8>> {
+/// The bytes of a dynamic resource, if present.
+pub(crate) fn resource_bytes(world: &World, id: ComponentId, size: usize) -> Option<Vec<u8>> {
     let ptr = world.get_resource_by_id(id)?;
     // SAFETY: the resource's storage holds `size` initialized bytes (its layout size).
     Some(unsafe { std::slice::from_raw_parts(ptr.as_ptr(), size) }.to_vec())
@@ -674,7 +700,7 @@ fn resource_bytes(world: &World, id: ComponentId, size: usize) -> Option<Vec<u8>
 
 /// Inserts (or replaces) a dynamic resource's value. Resources are entities in bevy
 /// 0.20: the `IsResource` marker's hook makes the entity findable by resource id.
-fn insert_resource_bytes(world: &mut World, id: ComponentId, bytes: &[u8]) {
+pub(crate) fn insert_resource_bytes(world: &mut World, id: ComponentId, bytes: &[u8]) {
     let entity = match world.resource_entities().get(id) {
         Some(e) => e,
         None => world.spawn(IsResource::new(id)).id(),

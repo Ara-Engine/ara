@@ -330,11 +330,25 @@ fn faults_are_contained_and_structural_commands_undo() {
         )
         .expect_err("throws");
     assert_eq!(err.code, codes::COMMAND_FAULT);
+    assert!(
+        err.message.contains("command failed on purpose"),
+        "{}",
+        err.message
+    );
     assert_eq!(
         host.read_component(&world, calm[0], "Counter")
             .expect("counter")["value"],
         3
     );
+    let err = host
+        .execute_command(
+            &mut world,
+            "test.Fail",
+            &json!({ "target": actor(calm[0]) }),
+            None,
+        )
+        .expect_err("disabled");
+    assert!(err.message.contains("disabled"), "{}", err.message);
 
     // Structural ops apply after the command and undo in reverse.
     let before = world.entities().count_spawned();
@@ -350,5 +364,109 @@ fn faults_are_contained_and_structural_commands_undo() {
     assert!(world.get_entity(calm[1]).is_err());
     host.undo(&mut world, &record).expect("undo");
     assert_eq!(world.entities().count_spawned(), before);
+    assert_eq!(host.shutdown(), 0, "every module generation unloaded");
+}
+
+/// Every entity whose `Counter` value is `value`.
+fn counters(host: &ScriptHost, world: &mut World, value: i64) -> Vec<Entity> {
+    let all: Vec<Entity> = world.query::<Entity>().iter(world).collect();
+    all.into_iter()
+        .filter(|e| {
+            host.read_component(world, *e, "Counter")
+                .is_some_and(|c| c["value"] == value)
+        })
+        .collect()
+}
+
+#[test]
+fn commands_journal_resources_and_undo_all_or_nothing() {
+    let _clr = support::clr_lock();
+    let mut world = World::new();
+    let mut host = host(&mut world, &[("Ara.TestModule", "tests/Ara.TestModule")]);
+    let tally = |host: &mut ScriptHost, world: &mut World, reject: bool| {
+        host.execute_command(
+            world,
+            "test.Tally",
+            &json!({ "add": 5, "reject": reject }),
+            None,
+        )
+    };
+
+    // A rejected call restores the resource it wrote; an applied one undoes.
+    let err = tally(&mut host, &mut world, true).expect_err("rejects");
+    assert_eq!(err.code, codes::COMMAND_REJECTED);
+    let record = tally(&mut host, &mut world, false).expect("adds");
+    let set = json!({ "op": "set_resource", "resource": "Tally", "before": { "total": 0 }, "after": { "total": 5 } });
+    assert_eq!(host.describe(&record)["ops"], json!([set]));
+    host.undo(&mut world, &record).expect("undo");
+    let again = tally(&mut host, &mut world, false).expect("adds");
+    assert_eq!(host.describe(&again)["ops"], json!([set]));
+
+    // Undo respawns the despawned victim and restores the write made before the despawn.
+    let victim = world.spawn_empty().id();
+    host.insert_component(&mut world, victim, "Counter", &json!({ "value": 9 }))
+        .expect("counter");
+    let before = world.entities().count_spawned();
+    let record = host
+        .execute_command(
+            &mut world,
+            "test.Shuffle",
+            &json!({ "victim": actor(victim), "count": 2 }),
+            None,
+        )
+        .expect("shuffles");
+    let spawned: Vec<Entity> = record
+        .structural
+        .iter()
+        .filter_map(|a| match a {
+            ara_script::Applied::Spawn { entity } => Entity::try_from_bits(*entity),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(spawned.len(), 2);
+    for e in &spawned {
+        assert_eq!(
+            host.read_component(&world, *e, "Frozen"),
+            Some(json!({})),
+            "tag inserted"
+        );
+    }
+    host.undo(&mut world, &record).expect("undo");
+    assert_eq!(world.entities().count_spawned(), before);
+    let restored = counters(&host, &mut world, 9);
+    assert_eq!(
+        restored.len(),
+        1,
+        "the victim came back with its old counter"
+    );
+
+    // An undo that cannot finish changes nothing.
+    let record = host
+        .execute_command(
+            &mut world,
+            "test.Shuffle",
+            &json!({ "victim": actor(restored[0]), "count": 2 }),
+            None,
+        )
+        .expect("shuffles");
+    let gone = record
+        .structural
+        .iter()
+        .find_map(|a| match a {
+            ara_script::Applied::Spawn { entity } => Entity::try_from_bits(*entity),
+            _ => None,
+        })
+        .expect("a spawn");
+    world.despawn(gone);
+    let now = world.entities().count_spawned();
+    let err = host
+        .undo(&mut world, &record)
+        .expect_err("a spawned entity is gone");
+    assert_eq!(err.code, codes::UNDO_FAILED);
+    assert_eq!(world.entities().count_spawned(), now);
+    assert!(
+        counters(&host, &mut world, 9).is_empty(),
+        "the victim was not respawned"
+    );
     assert_eq!(host.shutdown(), 0, "every module generation unloaded");
 }

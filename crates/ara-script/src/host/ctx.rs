@@ -8,7 +8,7 @@
 use core::ffi::c_void;
 use std::collections::BTreeSet;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
 use std::thread::ThreadId;
 use std::time::Instant;
 
@@ -21,15 +21,20 @@ use crate::codes;
 use crate::ecs::cmdbuf::{CmdBuf, Op};
 use crate::host::registry::Registry;
 
+/// What C# points at for a tag (zero-sized) component, whose C# struct is 1 byte:
+/// bevy's pointer to zero-sized storage is dangling. The contents mean nothing.
+static TAG_BYTES: AtomicU64 = AtomicU64::new(0);
+
 /// Receives C# log lines: level (0 info, 1 warning, 2 error) and text.
 pub type LogSink = Box<dyn Fn(u32, &str) + Send + Sync>;
 
-/// Component writes a command made, for undo and rejection: first-seen bytes per
-/// `(entity, script component)`.
+/// What a command opened for writing, for undo and rejection: first-seen bytes per
+/// `(entity, script component)` and per script resource.
 #[derive(Default)]
 pub(crate) struct Journal {
     pub seen: BTreeSet<(u64, u32)>,
     pub before: Vec<(u64, u32, Vec<u8>)>,
+    pub resources: Vec<(u32, Vec<u8>)>,
 }
 
 /// Exclusive access published to C# callbacks.
@@ -42,8 +47,9 @@ pub(crate) struct Scope<'w> {
     pub register: bool,
 }
 
-/// State C# reaches through `HostInit::ctx`. Lives in a `Box` owned by the
-/// `ScriptHost`, so its address is stable for the runtime's lifetime.
+/// State C# reaches through `HostInit::ctx`. Leaked by `ScriptHost::start`: the .NET
+/// runtime outlives the host (it cannot be unloaded), so a late callback from a C#
+/// thread still finds a live context.
 pub(crate) struct HostCtx {
     pub start: Instant,
     pub diagnostics: Mutex<Vec<Diagnostic>>,
@@ -70,6 +76,23 @@ impl HostCtx {
         if let Ok(mut v) = self.diagnostics.lock() {
             v.push(d);
         }
+    }
+
+    /// How many diagnostics are queued (a mark for [`HostCtx::take_since`]).
+    pub fn diagnostic_count(&self) -> usize {
+        self.diagnostics.lock().map_or(0, |d| d.len())
+    }
+
+    /// Removes and returns the diagnostics with `code` queued after mark `start`; the
+    /// rest stay queued.
+    pub fn take_since(&self, start: usize, code: ara_diag::Code) -> Vec<Diagnostic> {
+        let Ok(mut all) = self.diagnostics.lock() else {
+            return Vec::new();
+        };
+        let start = start.min(all.len());
+        let (taken, kept): (Vec<_>, Vec<_>) = all.drain(start..).partition(|d| d.code == code);
+        all.extend(kept);
+        taken
     }
 
     /// Runs `f` with `scope` published to C# callbacks on this thread.
@@ -227,6 +250,13 @@ unsafe extern "C" fn host_component_ptr(
     let Ok(cell) = scope.world.get_entity(e) else {
         return std::ptr::null_mut();
     };
+    if comp.layout.size == 0 {
+        return if cell.contains_id(comp.id) {
+            TAG_BYTES.as_ptr().cast()
+        } else {
+            std::ptr::null_mut()
+        };
+    }
     if write == 0 {
         // SAFETY: exclusive phase; the pointer is used only until the callback returns.
         return unsafe { cell.get_by_id(comp.id) }
@@ -257,23 +287,33 @@ unsafe extern "C" fn host_resource_ptr(c: *mut c_void, resource: u32, write: u32
     };
     // SAFETY: the registry is live for the scope.
     let registry = unsafe { &*scope.registry };
-    let Some(id) = registry.resources.get(resource as usize).and_then(|r| r.id) else {
+    let Some((r, id)) = registry
+        .resources
+        .get(resource as usize)
+        .and_then(|r| Some((r, r.id?)))
+    else {
         return std::ptr::null_mut();
     };
-    // SAFETY: exclusive phase; the pointer is used only until the callback returns.
-    unsafe {
-        if write == 0 {
-            scope
-                .world
-                .get_resource_by_id(id)
-                .map_or(std::ptr::null_mut(), |p| p.as_ptr().cast_mut())
-        } else {
-            scope
-                .world
-                .get_resource_mut_by_id(id)
-                .map_or(std::ptr::null_mut(), |m| m.into_inner().as_ptr())
+    if write == 0 {
+        // SAFETY: exclusive phase; the pointer is used only until the callback returns.
+        return unsafe { scope.world.get_resource_by_id(id) }
+            .map_or(std::ptr::null_mut(), |p| p.as_ptr().cast_mut());
+    }
+    // SAFETY: exclusive phase: no Rust reference to this resource exists while C# runs.
+    let Some(m) = (unsafe { scope.world.get_resource_mut_by_id(id) }) else {
+        return std::ptr::null_mut();
+    };
+    let ptr = m.into_inner().as_ptr();
+    if let Some(journal) = scope.journal {
+        // SAFETY: the journal is live for the scope and only touched on this thread.
+        let journal = unsafe { &mut *journal };
+        if !journal.resources.iter().any(|(i, _)| *i == resource) {
+            // SAFETY: `ptr` points at `layout.size` initialized bytes of the resource.
+            let before = unsafe { std::slice::from_raw_parts(ptr, r.layout.size) }.to_vec();
+            journal.resources.push((resource, before));
         }
     }
+    ptr
 }
 
 unsafe extern "C" fn host_entity_alive(c: *mut c_void, entity: u64) -> u32 {

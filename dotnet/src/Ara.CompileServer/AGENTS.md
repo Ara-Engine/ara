@@ -14,7 +14,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
     L3 that makes it hot. Errors (compiler, generator, analyzers) are sent as diagnostics
     and the last good state stays applied. Logs per-phase timings at info level.
 - `EditClassifier`: S2's conservative body-only diff, plus: constructors/initializers,
-  state machines, closures, doc-comment changes and generated-code changes escalate.
+  body edits in primary-constructor types (a new capture is a new field), state machines,
+  closures, doc-comment changes and generated-code changes escalate.
 - `ModuleCompiler`: references (ref pack), options, emit, EnC baselines from the PDB.
 - `AnalyzerSet`: the Ara analyzers over changed trees. `Diagnostics`: Roslyn → ara-diag JSON
   (`CSxxxx` errors become ARA0900 with the id in the message).

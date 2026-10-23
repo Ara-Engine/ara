@@ -28,7 +28,11 @@ internal enum Escalation : uint
     /// crashed the process with an AccessViolationException after ApplyUpdate.
     /// </summary>
     Closure = 7,
-    /// <summary>A constructor or a field/property initializer changed (initializers are inlined into constructors; consts fold into call sites).</summary>
+    /// <summary>
+    /// A constructor or a field/property initializer changed (initializers are inlined into
+    /// constructors; consts fold into call sites), or a body changed in a type with a primary
+    /// constructor (a newly captured parameter becomes a new field).
+    /// </summary>
     Constructor = 8,
     /// <summary>The Ara generator's output changed (attributes, partial properties, registration).</summary>
     Generated = 9,
@@ -75,6 +79,7 @@ internal static class EditClassifier
                 if (SyntaxFactory.AreEquivalent(a[i], b[i], topLevel: false)) continue;
                 if (IsStateMachine(a[i]) || IsStateMachine(b[i])) return (Escalation.StateMachine, edits);
                 if (HasClosure(a[i]) || HasClosure(b[i])) return (Escalation.Closure, edits);
+                if (InPrimaryConstructorType(b[i])) return (Escalation.Constructor, edits);
                 edits.Add(new BodyEdit(oldTree, a[i], newTree, b[i]));
             }
         }
@@ -131,6 +136,9 @@ internal static class EditClassifier
     static bool IsStateMachine(SyntaxNode n) =>
         (n is MethodDeclarationSyntax m && m.Modifiers.Any(SyntaxKind.AsyncKeyword))
         || n.DescendantNodes().Any(d => d is YieldStatementSyntax or AwaitExpressionSyntax);
+
+    static bool InPrimaryConstructorType(SyntaxNode n) =>
+        n.Ancestors().OfType<TypeDeclarationSyntax>().Any(t => t.ParameterList is not null);
 
     static bool HasClosure(SyntaxNode n) =>
         n.DescendantNodes().Any(d => d is AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax or QueryExpressionSyntax);

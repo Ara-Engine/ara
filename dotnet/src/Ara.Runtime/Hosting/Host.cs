@@ -9,12 +9,23 @@ namespace Ara.Hosting;
 public static unsafe class Host
 {
     static HostInit s_init;
+    static volatile bool s_detached;
     [ThreadStatic] static bool t_exclusive;
 
-    internal static void Attach(in HostInit init) => s_init = init;
+    internal static void Attach(in HostInit init)
+    {
+        s_init = init;
+        s_detached = false;
+    }
 
-    /// <summary>True once <see cref="ScriptRuntime.Init"/> has attached a host.</summary>
-    public static bool Attached => s_init.Api.Log != null;
+    /// <summary>
+    /// Called by <see cref="ScriptRuntime.Shutdown"/>: later logs, diagnostics and compile
+    /// notifications become no-ops (the host leaks its context, so a call racing this is safe).
+    /// </summary>
+    internal static void Detach() => s_detached = true;
+
+    /// <summary>True while a host is attached (after <see cref="ScriptRuntime.Init"/>, before shutdown).</summary>
+    public static bool Attached => !s_detached && s_init.Api.Log != null;
 
     /// <summary>
     /// Marks the current thread as running an exclusive phase (behaviours, commands),
@@ -59,6 +70,7 @@ public static unsafe class Host
 
     internal static void ReportReload(in ReloadReport report)
     {
+        if (!Attached) return;
         fixed (ReloadReport* p = &report) s_init.Api.ReportReload(s_init.Ctx, p);
     }
 

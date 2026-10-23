@@ -239,7 +239,8 @@ public static class Emit
         {
             var cols = Access(s.Params.Where(p => p.Kind == "column"));
             var res = Access(s.Params.Where(p => p.Kind == "resource"));
-            c.Line($"b.System({Lit(s.Name)}, &{s.Shell.FullName}.__AraRun_{s.Method}, {s.Order}, {cols}, {res}, {Strings(s.With)}, {Strings(s.Without)});");
+            var structural = s.Params.Any(p => p.Kind == "commands") ? "true" : "false";
+            c.Line($"b.System({Lit(s.Name)}, &{s.Shell.FullName}.__AraRun_{s.Method}, {s.Order}, {cols}, {res}, {Strings(s.With)}, {Strings(s.Without)}, {structural});");
         }
         foreach (var bm in behaviours.OrderBy(b => b.SchemaName, StringComparer.Ordinal))
             c.Line($"b.Behaviour({Lit(bm.SchemaName)}, {Lit(bm.SchemaName)}, sizeof({bm.Shell.FullName}.Data), static () => new {bm.Shell.FullName}());");

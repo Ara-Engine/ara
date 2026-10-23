@@ -33,6 +33,11 @@ internal sealed class BehaviourEntry(string name, int dataSize, Func<Behaviour> 
     internal HashSet<ulong> Reloaded = [];
     internal ulong SweptFrame = ulong.MaxValue;
     internal int Faulted;
+    /// <summary>
+    /// Set when a fault is cleared: nothing was seen while the type was disabled, so the
+    /// next sweep keeps every object (they must not get <c>OnSpawn</c> again).
+    /// </summary>
+    internal bool Resume;
     readonly List<ulong> _gone = [];
 
     /// <summary>Drops objects for entities not seen since before <paramref name="frame"/> (despawned, or the component was removed).</summary>
@@ -41,6 +46,13 @@ internal sealed class BehaviourEntry(string name, int dataSize, Func<Behaviour> 
         if (SweptFrame == frame) return;
         SweptFrame = frame;
         _gone.Clear();
+        if (Resume)
+        {
+            Resume = false;
+            _gone.AddRange(Live.Keys);
+            foreach (var e in _gone) Live[e] = (Live[e].Obj, frame);
+            return;
+        }
         foreach (var (e, (_, seen)) in Live)
             if (seen + 1 < frame) _gone.Add(e);
         foreach (var e in _gone) Live.Remove(e);
@@ -65,7 +77,8 @@ internal sealed class ModuleTables(SystemEntry[] systems, BehaviourEntry[] behav
     internal void ClearFaults()
     {
         foreach (var s in Systems) Volatile.Write(ref s.Faulted, 0);
-        foreach (var b in Behaviours) Volatile.Write(ref b.Faulted, 0);
+        foreach (var b in Behaviours)
+            if (Interlocked.Exchange(ref b.Faulted, 0) != 0) b.Resume = true;
         foreach (var c in Commands) Volatile.Write(ref c.Faulted, 0);
     }
 }

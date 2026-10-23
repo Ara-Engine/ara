@@ -42,12 +42,17 @@ ara-diag, ara-components, bevy_ecs 0.20, netcorehost, libloading, windows-sys.
 - C# systems: `ecs::system::ScriptQuery`, a custom `SystemParam` built from the declared
   columns/resources. It registers that access with bevy's scheduler, walks matched tables
   for column base pointers, marks written rows changed, splits tables into chunks and runs
-  one `run_system` call per chunk on the compute task pool. Conflicting systems are
-  ordered by `(Order, name)`. Structural ops go to per-chunk `CmdBuf`s applied by
-  `SystemParam::apply` at bevy sync points.
+  one `run_system` call per chunk on the compute task pool. Chunks run serially, in
+  order, when the system writes a resource (shared by every chunk) or takes `Commands`
+  (entity reservation stays deterministic); `Commands` systems are also ordered among
+  themselves. Conflicting systems are ordered by `(Order, name)`. Structural ops go to
+  per-chunk `CmdBuf`s applied by `SystemParam::apply` at bevy sync points.
 - Behaviours and commands run with exclusive world access, published to C# as a `Scope`
   (`host/ctx.rs`); `World.Get<T>()` is only valid there. Commands journal first-seen bytes
-  of every component they open for writing; rejection or a fault restores them.
+  of every component and resource they open for writing; rejection or a fault restores
+  them. `undo` checks every step before applying any (all or nothing), follows a
+  despawned entity to its respawned replacement, and converts saved bytes across layout
+  migrations (records keep the layouts they were made with).
 - Rust never holds pointers into module code: systems/behaviours/commands are ids
   (`slot << 16 | index`) into C# tables swapped at tick boundaries.
 
@@ -79,6 +84,11 @@ ara-diag, ara-components, bevy_ecs 0.20, netcorehost, libloading, windows-sys.
   on load (S2 finding 4). A Defender exclusion for the editor removes it; it is the user's call.
 - NativeAOT publish on this machine needs `vswhere.exe` on PATH (VS 2026's `vcvarsall`);
   `tests/support::publish_aot` adds the VS Installer directory.
+- `HostCtx` is leaked (one per process): the runtime outlives the host, and C# threads may
+  call back after `shutdown` (C# `Host.Detach` turns those calls into no-ops).
+- Tags (empty structs) are zero-sized in bevy but 1 byte in C#: `component_ptr` hands C# a
+  scratch byte for them, command buffers accept 1-byte inserts, and the generator rejects
+  tags as system columns (filter with `[With<T>]`).
 - Per-frame code must not allocate or lock: chunk scratch (`Scratch`, `PhaseScratch`) is
   reused; the only mutexes are on diagnostic/report queues.
 

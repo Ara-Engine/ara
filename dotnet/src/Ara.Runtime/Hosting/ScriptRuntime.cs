@@ -261,7 +261,6 @@ public static unsafe class ScriptRuntime
                     created = true;
                 }
                 var obj = live.Obj;
-                if (tick) entry.Live[bits] = (obj, frame);
                 obj.DataPtr = data + (long)r * entry.DataSize;
                 obj.CommandBuffer = call->Commands;
                 obj.SetRng(Rng.For(in *call->Tick, entry.RngKey, obj.Entity));
@@ -269,9 +268,11 @@ public static unsafe class ScriptRuntime
                 {
                     if (created)
                     {
-                        if (entry.Reloaded.Remove(bits)) obj.OnReload();
+                        if (entry.Reloaded.Contains(bits)) obj.OnReload();
                         else obj.OnSpawn();
+                        entry.Reloaded.Remove(bits);
                     }
+                    if (tick) entry.Live[bits] = (obj, frame);
                     if (tick) obj.OnTick(in *call->Tick);
                     else obj.OnFrame(in *call->Frame);
                 }
@@ -330,6 +331,8 @@ public static unsafe class ScriptRuntime
         // Drop the tables (delegates, behaviour objects) first: they keep module ALCs alive.
         s_slots = [];
         s_pending.Clear();
-        return s_loader?.Shutdown() ?? 0;
+        var leaked = s_loader?.Shutdown() ?? 0;
+        Host.Detach();
+        return leaked;
     }
 }

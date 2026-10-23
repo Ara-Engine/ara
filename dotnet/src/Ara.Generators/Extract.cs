@@ -83,7 +83,10 @@ public static class Extract
             else if (Schema.IsAraType(p.Type, "Tick") && refKind != "ref") ps.Add(new("tick", ty, "in", ""));
             else if (Schema.IsAraType(p.Type, "Rng") && refKind == "ref") ps.Add(new("rng", ty, "ref", ""));
             else if (Schema.IsAraType(p.Type, "Commands")) ps.Add(new("commands", ty, refKind, ""));
-            else if (Schema.IsComponent(p.Type, out var c)) ps.Add(new("column", ty, refKind, c));
+            else if (Schema.IsComponent(p.Type, out var c) && p.Type is INamedTypeSymbol tag && Schema.Fields(tag).Count == 0)
+                diags.Add(DiagInfo.At(Descriptors.BadSystemParam, p,
+                    $"`{p.Type.Name}` has no fields (a tag), so it has no column to read; filter on it with [With<{p.Type.Name}>] instead"));
+            else if (Schema.IsComponent(p.Type, out c)) ps.Add(new("column", ty, refKind, c));
             else if (Schema.IsResource(p.Type, out var r)) ps.Add(new("resource", ty, refKind, r));
             else
                 diags.Add(DiagInfo.At(Descriptors.BadSystemParam, p,

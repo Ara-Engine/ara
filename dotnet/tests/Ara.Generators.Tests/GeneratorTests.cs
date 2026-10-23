@@ -99,7 +99,7 @@ public class GeneratorTests
         var module = sources["AraModule.g.cs"];
         Assert.Contains("[assembly: global::Ara.Hosting.AraModule(\"Game.Module\", typeof(global::Ara.Generated.AraModule_Game_Module))]", module);
         Assert.Contains("""b.Type("Health", "{\"kind\":\"component\",\"doc\":\"Hit points.\",\"fields\":{\"value\":{\"type\":\"f32\",\"doc\":\"Current value.\",\"unit\":\"%\",\"replicate\":{\"audience\":\"owner\",\"rollback\":true},\"range\":[0,100]},\"lastHit\":{\"type\":\"entity\",\"doc\":\"Who last hit it.\"}}}");""", module);
-        Assert.Contains("b.System(\"Regen\", &global::Game.Regen.__AraRun_Run, 3, [new global::Ara.Hosting.ColumnAccess(\"Health\", true)], [new global::Ara.Hosting.ColumnAccess(\"Tuning\", false)], [], []);", module);
+        Assert.Contains("b.System(\"Regen\", &global::Game.Regen.__AraRun_Run, 3, [new global::Ara.Hosting.ColumnAccess(\"Health\", true)], [new global::Ara.Hosting.ColumnAccess(\"Tuning\", false)], [], [], false);", module);
         Assert.Contains("b.Behaviour(\"Lamp\", \"Lamp\", sizeof(global::Game.Lamp.Data), static () => new global::Game.Lamp());", module);
         Assert.Contains("b.Command(\"game.Toggle\", \"Switches a lamp.\", \"ToggleParams\", global::Game.Toggle.__AraParamsLayout()", module);
         Assert.Contains("[\"Health\"], [],", module); // reads Health, writes nothing
@@ -128,6 +128,7 @@ public class GeneratorTests
     [InlineData("ARA0703", "[Component] public partial struct Undocumented { public int V; }")]
     [InlineData("ARA0704", "/// <summary>X.</summary>\n[Component] public partial struct Named { /// <summary>N.</summary>\n public string N; }")]
     [InlineData("ARA0702", "/// <summary>X.</summary>\n[Component] public partial struct C { /// <summary>V.</summary>\n public int V; }\npublic static partial class S { [Query] static void Run(ref C c, string s) { } }")]
+    [InlineData("ARA0702", "/// <summary>X.</summary>\n[Component] public partial struct T { }\n/// <summary>X.</summary>\n[Component] public partial struct C { /// <summary>V.</summary>\n public int V; }\npublic static partial class S { [Query] static void Run(in T t, ref C c) { } }")]
     [InlineData("ARA0705", "/// <summary>X.</summary>\n[Command] public static partial class Bad { public static void Execute() { } }")]
     [InlineData("ARA0706", "/// <summary>X.</summary>\npublic sealed partial class B : Behaviour { /// <summary>P.</summary>\n [Property] public bool P { get; set; } }")]
     public void Reports_invalid_declarations(string id, string source)

@@ -30,6 +30,7 @@ linked into the NativeAOT image (shipping). AOT-safe: `IsAotCompatible`, no refl
 - Tables (`ModuleTables`) are swapped only at tick boundaries; `RunSystem` runs
   concurrently on task-pool threads and must stay lock-free.
 - A fault disables the system/behaviour/command until the next reload (ARA0910–0912).
+  A re-enabled behaviour keeps its objects (`BehaviourEntry.Resume`): no second `OnSpawn`.
 
 ## Testing
 

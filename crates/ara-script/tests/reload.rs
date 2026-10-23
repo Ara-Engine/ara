@@ -1,7 +1,8 @@
 //! Hot reload through the out-of-process compile server: L3 (a cold module's first
 //! edit), L1 (EnC body edits), escalation of closures, a component layout change with
 //! column migration, compile and analyzer errors (the last good code keeps running),
-//! and a faulted system re-enabled by its L1 fix. ECS state survives every reload.
+//! and a faulted system and behaviour re-enabled by their L1 fixes (the behaviour keeps
+//! its objects). ECS state survives every reload.
 
 mod support;
 
@@ -24,6 +25,7 @@ struct Session {
     reports: Vec<ReloadReport>,
     counter: Entity,
     marker: Entity,
+    greeter: Entity,
 }
 
 impl Session {
@@ -51,6 +53,9 @@ impl Session {
         let marker = world.spawn_empty().id();
         host.insert_component(&mut world, marker, "Marker", &json!({}))
             .expect("marker");
+        let greeter = world.spawn_empty().id();
+        host.insert_component(&mut world, greeter, "Greeter", &json!({}))
+            .expect("greeter");
         let file = dir.join("Probes.cs");
         Session {
             host,
@@ -60,6 +65,7 @@ impl Session {
             reports: Vec::new(),
             counter,
             marker,
+            greeter,
         }
     }
 
@@ -233,6 +239,31 @@ fn reloads_keep_state_and_escalate_conservatively() {
         "m.Value = 8;",
     );
     s.until("the fix", |s| s.marker() == 8);
+
+    // A throwing behaviour resumes after its L1 fix with its objects intact.
+    s.edit(
+        "Seen++;",
+        "throw new InvalidOperationException(\"greeter\");",
+    );
+    s.until("the behaviour fault", |s| {
+        s.host
+            .take_diagnostics()
+            .iter()
+            .any(|d| d.code == codes::BEHAVIOUR_FAULT)
+    });
+    let seen = s.read(s.greeter, "Greeter")["seen"].as_i64();
+    s.edit(
+        "throw new InvalidOperationException(\"greeter\");",
+        "Seen++;",
+    );
+    s.until("the behaviour fix", |s| {
+        s.read(s.greeter, "Greeter")["seen"].as_i64() > seen
+    });
+    assert_eq!(
+        s.read(s.greeter, "Greeter")["spawns"],
+        1,
+        "no second OnSpawn"
+    );
 
     let dir = dir_of(&s.file).to_path_buf();
     assert_eq!(s.host.shutdown(), 0, "every generation unloaded");

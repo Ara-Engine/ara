@@ -115,14 +115,17 @@ pub enum Applied {
     },
 }
 
-/// Inserts raw component bytes; false if the entity is missing. `bytes` must be the
-/// component's full layout.
+/// Inserts raw component bytes; false if the entity is missing or `bytes` is not exactly
+/// the component's registered size (so a stale buffer is never read past its end).
 pub(crate) fn insert_bytes(
     world: &mut World,
     entity: Entity,
     id: ComponentId,
     bytes: &[u8],
 ) -> bool {
+    if world.components().get_info(id).map(|i| i.layout().size()) != Some(bytes.len()) {
+        return false;
+    }
     let Ok(mut e) = world.get_entity_mut(entity) else {
         return false;
     };
@@ -217,12 +220,15 @@ pub(crate) fn apply(
                     problems.push(bad("despawn of a missing entity".into()));
                 }
             }
-            (CMD_INSERT, Some((id, size))) if size == op.data.len() => {
+            // Tags (empty structs) are 1 byte in C# and zero-sized in bevy.
+            (CMD_INSERT, Some((id, size)))
+                if size == op.data.len() || (size == 0 && op.data.len() == 1) =>
+            {
                 let previous = applied
                     .is_some()
                     .then(|| component_bytes(world, entity, id, size))
                     .flatten();
-                if insert_bytes(world, entity, id, &op.data) {
+                if insert_bytes(world, entity, id, &op.data[..size]) {
                     if let Some(a) = applied.as_deref_mut() {
                         a.push(Applied::Insert {
                             entity: op.entity,

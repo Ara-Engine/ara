@@ -34,6 +34,13 @@ public class ClassifierTests
     [Fact] public void Constructors_escalate() => Assert.Equal(Escalation.Constructor, Classify(Before.Replace("V = 1;", "V = 2;")).Item1);
     [Fact] public void State_machines_escalate() => Assert.Equal(Escalation.StateMachine, Classify(Before.Replace("yield return 1;", "yield return 2;")).Item1);
     [Fact] public void Closures_escalate() => Assert.Equal(Escalation.Closure, Classify(Before.Replace("return f(x);", "return f(x) + 1;")).Item1);
+    [Fact]
+    public void Body_edits_in_primary_constructor_types_escalate()
+    {
+        const string before = "public class P(int seed) { public int F() { return 1; } }";
+        Assert.Equal(Escalation.Constructor, Classify(before.Replace("return 1;", "return seed;"), before).Item1);
+    }
+
     [Fact] public void Adding_a_lambda_escalates() => Assert.Equal(Escalation.Closure, Classify(Before.Replace("return x + 1;", "System.Func<int> g = () => x; return g();")).Item1);
 
     [Fact]

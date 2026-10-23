@@ -40,6 +40,10 @@ pub(crate) struct SystemPlan {
     pub with: Vec<ComponentId>,
     /// Components the entity must not have.
     pub without: Vec<ComponentId>,
+    /// Run chunks one after another on the calling thread: the system writes a resource
+    /// (shared by every chunk) or makes structural changes (entity ids must be reserved in
+    /// a deterministic order).
+    pub serial: bool,
     /// The C# entry points.
     pub api: ScriptApi,
 }
@@ -316,9 +320,12 @@ impl ScriptQuery<'_, '_> {
         }
         st.used = chunk;
         let run = st.plan.api.run_system;
-        if scratch.calls.len() == 1 {
-            // SAFETY: the call describes live columns within this system's access.
-            unsafe { run(&scratch.calls[0]) };
+        if scratch.calls.len() == 1 || st.plan.serial {
+            for call in &scratch.calls {
+                // SAFETY: the call describes live columns within this system's access;
+                // calls run one at a time, in chunk order.
+                unsafe { run(call) };
+            }
             return;
         }
         scratch
@@ -329,7 +336,8 @@ impl ScriptQuery<'_, '_> {
             for &call in sends {
                 s.spawn(async move {
                     // SAFETY: each call covers rows no other task touches, within the
-                    // system's declared access; its buffer is its own.
+                    // system's declared access; its buffer is its own; resources are
+                    // read-only here (writers run serially, above).
                     unsafe { run(call.get()) };
                 });
             }
