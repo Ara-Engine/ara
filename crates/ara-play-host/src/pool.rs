@@ -36,6 +36,8 @@ pub struct Player {
     pub grace: Instant,
     /// `play.event` notifications (C# reloads, diagnostics, restarts) not yet drained.
     pub events: Vec<ara_play::Event>,
+    /// Embedded players' surface and frame notices not yet drained.
+    pub embed: Vec<crate::embed::Notice>,
 }
 
 impl Drop for Player {
@@ -62,6 +64,17 @@ impl Player {
                 && let Ok(event) = serde_json::from_value(params.clone())
             {
                 self.events.push(event);
+            } else if method == crate::embed::method::FRAME
+                && let Ok(ready) = serde_json::from_value(params.clone())
+            {
+                self.embed.push(crate::embed::Notice::Frame {
+                    ready,
+                    received_at_us: ara_gpu::shared::now_us(),
+                });
+            } else if method == crate::embed::method::SURFACE
+                && let Ok(desc) = serde_json::from_value(params.clone())
+            {
+                self.embed.push(crate::embed::Notice::Surface(desc));
             }
         }
     }
@@ -423,6 +436,7 @@ impl Pool {
             status: None,
             grace: Instant::now(),
             events: Vec::new(),
+            embed: Vec::new(),
         })
     }
 
