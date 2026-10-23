@@ -16,8 +16,8 @@
       ],
       "stems": [
         {
-          "name": "calm",
-          "clip": "@assets/third_party/oga_calm_track/calm_track-loop.ogg#as_calmtrack",
+          "name": "lonelyhood",
+          "clip": "@assets/third_party/oga_lonelyhood/Lonelyhood.ogg#as_lonelyhood",
           "gainDb": -10
         }
       ]

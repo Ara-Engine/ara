@@ -309,6 +309,38 @@ impl<'a> Scene<'a> {
     pub fn physics_id(&mut self) -> u64 {
         next(&mut self.physics)
     }
+
+    /// Moves every created entity by `by` (layout → world): `Transform.position` and
+    /// world-space `NavMeshSurface` bounds. Terrain entities stay put (their grid
+    /// places them).
+    pub fn shift(&mut self, by: Vec3) {
+        let add = |v: &mut Value| {
+            if let Some(a) = v.as_array_mut().filter(|a| a.len() == 3) {
+                for (c, d) in a.iter_mut().zip(by.to_array()) {
+                    *c = json!(c.as_f64().unwrap_or(0.0) + f64::from(d));
+                }
+            }
+        };
+        for (cmd, args) in &mut self.commands {
+            if *cmd != "entity.create" {
+                continue;
+            }
+            let components = &mut args["components"];
+            if components.get("Terrain").is_some() {
+                continue;
+            }
+            if let Some(t) = components.get_mut("Transform") {
+                if t.get("position").is_none() {
+                    t["position"] = json!([0.0, 0.0, 0.0]);
+                }
+                add(&mut t["position"]);
+            }
+            if let Some(nav) = components.get_mut("NavMeshSurface") {
+                add(&mut nav["min"]);
+                add(&mut nav["max"]);
+            }
+        }
+    }
 }
 
 /// An `entity.create` call with a concrete record ID.
@@ -355,9 +387,11 @@ pub fn merge(a: &mut Value, b: Value) {
     }
 }
 
-/// Evaluated terrain heights for placing things on the ground.
+/// Evaluated terrain heights for placing things on the ground, sampled in layout
+/// coordinates (world = layout + `shift`).
 pub struct Ground {
     data: ara_runtime::terrain::TerrainData,
+    shift: Vec3,
 }
 
 impl Ground {
@@ -387,12 +421,21 @@ impl Ground {
                 tiles,
                 foliage: Vec::new(),
             },
+            shift: Vec3::ZERO,
         })
     }
 
-    /// Ground height at world X/Z (0 outside the terrain).
+    /// Samples layout coordinates `shift` away from the terrain's world coordinates.
+    pub fn shifted(mut self, shift: Vec3) -> Self {
+        self.shift = shift;
+        self
+    }
+
+    /// Ground height at layout X/Z (0 outside the terrain).
     pub fn height(&self, x: f32, z: f32) -> f32 {
-        self.data.height(x, z).unwrap_or(0.0)
+        self.data
+            .height(x + self.shift.x, z + self.shift.z)
+            .map_or(0.0, |h| h - self.shift.y)
     }
 
     /// A point on the ground.

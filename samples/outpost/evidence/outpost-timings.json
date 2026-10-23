@@ -1,0 +1,230 @@
+{
+  "scene": "levels/outpost.scene",
+  "name": "outpost",
+  "budgetMs": {
+    "native1440p": 16.0,
+    "upscaled": 8.0
+  },
+  "content": {
+    "objects": 8281,
+    "meshes": 91,
+    "triangles": 11029426,
+    "finestTriangles": 39497946,
+    "foliageInstances": 5543,
+    "texturesWanted": 224,
+    "textures": 67,
+    "atlasedMaterials": 61,
+    "texels": 217186306,
+    "uploadMib": 2948.8808059692383,
+    "lights": 8,
+    "emissiveMaterials": 6,
+    "breakdown": [
+      [
+        "Stones",
+        2511384
+      ],
+      [
+        "Dry shrub",
+        2378616
+      ],
+      [
+        "Rooibos bush",
+        2115504
+      ],
+      [
+        "Ice plant",
+        1085406
+      ],
+      [
+        "Quiver tree",
+        995826
+      ],
+      [
+        "Boulder",
+        825920
+      ],
+      [
+        "Dead branches",
+        372233
+      ],
+      [
+        "Terrain",
+        294912
+      ],
+      [
+        "Stores",
+        60208
+      ],
+      [
+        "Utility pole",
+        45080
+      ],
+      [
+        "Dead log",
+        38166
+      ],
+      [
+        "Road barrier",
+        27138
+      ],
+      [
+        "Radio",
+        27000
+      ],
+      [
+        "Generator",
+        26411
+      ],
+      [
+        "Fence",
+        25520
+      ],
+      [
+        "Scree",
+        23904
+      ],
+      [
+        "Floodlight",
+        23460
+      ],
+      [
+        "Supplies",
+        21893
+      ],
+      [
+        "Compressor",
+        19938
+      ],
+      [
+        "Seat",
+        17704
+      ],
+      [
+        "Hand truck",
+        13220
+      ],
+      [
+        "Covered car",
+        12592
+      ],
+      [
+        "Gas mask",
+        9450
+      ],
+      [
+        "Trash bags",
+        8964
+      ]
+    ]
+  },
+  "modes": [
+    {
+      "mode": "native",
+      "renderSize": [
+        2560,
+        1440
+      ],
+      "displaySize": [
+        2560,
+        1440
+      ],
+      "upscaler": "Taau",
+      "viewCreateMs": 12182.1661,
+      "processGpuMemoryMiB": {
+        "beforeView": null,
+        "afterCaptures": null
+      },
+      "timing": {
+        "shot": "gate",
+        "frames": 10,
+        "p50": 10.283136,
+        "p95": 10.32192,
+        "max": 10.32192,
+        "frameSamplesMs": [
+          10.301216,
+          10.301215999999998,
+          10.207168000000001,
+          10.262656,
+          10.199488,
+          10.230591999999998,
+          10.228031999999997,
+          10.308672000000001,
+          10.32192,
+          10.283136
+        ],
+        "passes": {
+          "Atmosphere.Froxels.AerialPerspective": {
+            "p50": 0.157536,
+            "p95": 0.159328
+          },
+          "Atmosphere.SkyView": {
+            "p50": 0.016288,
+            "p95": 0.01776
+          },
+          "Bloom.Horizontal": {
+            "p50": 0.20848,
+            "p95": 0.208896
+          },
+          "Bloom.Vertical": {
+            "p50": 0.10816,
+            "p95": 0.10848
+          },
+          "DDGI.Trace.Relocate.Classify.Integrate": {
+            "p50": 0.262784,
+            "p95": 0.301632
+          },
+          "Exposure.EV100.Meter.Adapt": {
+            "p50": 0.0256,
+            "p95": 0.026464
+          },
+          "Output.SDR": {
+            "p50": 0.047456,
+            "p95": 0.0488
+          },
+          "Post.Atmosphere.Lens.ToneMap.LUT": {
+            "p50": 0.414368,
+            "p95": 0.444992
+          },
+          "RT.Reflections.SoftShadows.DDGI": {
+            "p50": 2.732768,
+            "p95": 2.762752
+          },
+          "SVGF.Atrous.1": {
+            "p50": 0.476512,
+            "p95": 0.52032
+          },
+          "SVGF.Atrous.2": {
+            "p50": 0.50912,
+            "p95": 0.534432
+          },
+          "SVGF.Atrous.4": {
+            "p50": 0.566912,
+            "p95": 0.590848
+          },
+          "SVGF.Reproject.Reject.Moments": {
+            "p50": 0.79904,
+            "p95": 0.822272
+          },
+          "Upscale.TAAU.Resolve": {
+            "p50": 0.428608,
+            "p95": 0.487904
+          },
+          "Viewport.Ready": {
+            "p50": 0.000096,
+            "p95": 0.000096
+          },
+          "Visibility.Motion": {
+            "p50": 3.485248,
+            "p95": 3.491232
+          }
+        },
+        "gpuBefore": "97 %, 9313 MiB, 12282 MiB, 163.90 W, 2820 MHz",
+        "gpuAfter": "19 %, 9313 MiB, 12282 MiB, 180.18 W, 2820 MHz"
+      },
+      "exposure": "ExposureState { multiplier: 0.019571304, previous_multiplier: 0.019961752, target_ev100: 5.0120816, metered_luminance: 6.970128 }",
+      "sceneHash": "b1222c9023b627a7511cddc7688e58f3c4ea10911096ec660d25067a02e72b39",
+      "shaderRevision": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce"
+    }
+  ],
+  "sharedGpu": "other agents share this RTX 4070 SUPER; gpuBefore/gpuAfter record nvidia-smi load around each window"
+}

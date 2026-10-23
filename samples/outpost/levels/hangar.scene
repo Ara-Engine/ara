@@ -941,7 +941,7 @@
       "AudioListener": {},
       "CharacterController": {},
       "MeshRenderer": {
-        "model": "@assets/third_party/m2m_human/human-base-animations.glb#as_m2mhuman"
+        "model": "@assets/kit/human.gltf#as_kithuman"
       },
       "PhysicsId": {
         "value": 7

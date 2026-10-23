@@ -32,10 +32,22 @@ pub struct Primitive {
     pub vertices: Vec<ModelVertex>,
     /// Finest-LOD triangle indices.
     pub indices: Vec<u32>,
+    /// Coarser cooked LODs, finest first, sharing `vertices` (empty when the cook
+    /// produced none).
+    pub lods: Vec<ModelLod>,
     /// Index into [`Model::materials`].
     pub material: Option<usize>,
     /// Index into [`Model::skins`] for skinned primitives.
     pub skin: Option<usize>,
+}
+
+/// A simplified level of detail of a primitive.
+#[derive(Debug, Clone)]
+pub struct ModelLod {
+    /// Triangle indices into the primitive's vertices.
+    pub indices: Vec<u32>,
+    /// meshoptimizer's relative simplification error (fraction of the mesh extent).
+    pub error: f32,
 }
 
 /// Metallic-roughness material factors and texture slots.
@@ -429,21 +441,40 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
             }
         })
         .collect();
-    let lod: Lod = bytemuck::pod_read_unaligned(
-        mesh.lods
-            .get(..16)
-            .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?,
-    );
-    let first = lod.first_index as usize * 4;
-    let indices = mesh.indices[first..first + lod.index_count as usize * 4]
-        .as_chunks::<4>()
+    let read = |lod: &Lod| -> Result<Vec<u32>> {
+        let first = lod.first_index as usize * 4;
+        Ok(mesh
+            .indices
+            .get(first..first + lod.index_count as usize * 4)
+            .ok_or_else(|| RuntimeError("LOD outside the index stream".into()))?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
+            .collect())
+    };
+    let mut lods = mesh
+        .lods
+        .as_chunks::<16>()
         .0
         .iter()
-        .map(|b| u32::from_le_bytes(*b))
-        .collect();
+        .map(|raw| bytemuck::pod_read_unaligned::<Lod>(raw));
+    let finest = lods
+        .next()
+        .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?;
+    let indices = read(&finest)?;
+    let lods = lods
+        .map(|lod| {
+            Ok(ModelLod {
+                indices: read(&lod)?,
+                error: lod.error,
+            })
+        })
+        .collect::<Result<_>>()?;
     Ok(Primitive {
         vertices,
         indices,
+        lods,
         material: None,
         skin: None,
     })

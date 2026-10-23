@@ -81,9 +81,9 @@ lighting and the generated kit geometry are original Ara work.
 | Namaqualand Boulder 05 (`namaqualand_boulder_05`) | model | Jenelle van Heerden, Dario Barresi | outpost | <https://polyhaven.com/a/namaqualand_boulder_05> |
 | Namaqualand Rocks 01 (`namaqualand_rocks_01`) | model | Greg Zaal, Jenelle van Heerden | outpost | <https://polyhaven.com/a/namaqualand_rocks_01> |
 | Namaqualand Stones 01 (`namaqualand_stones_01`) | model | Greg Zaal, Jenelle van Heerden | outpost | <https://polyhaven.com/a/namaqualand_stones_01> |
-| Calm Track (`oga_calm_track`) | audio | pmiller | outpost, showcase | <https://opengameart.org/node/98635> |
 | Fireplace Sound loop (`oga_fireplace`) | audio | PagDev | outpost | <https://opengameart.org/content/fireplace-sound-loop> |
 | Abandoned passages horror ambience loop (`oga_freezer`) | audio | congusbongus | outpost | <https://opengameart.org/content/abandoned-passages-horror-ambience-loop> |
+| Lonelyhood (`oga_lonelyhood`) | audio | yd | outpost | <https://opengameart.org/content/lonelyhood> |
 | wind woosh loop (`oga_wind`) | audio | SketchMan3 | outpost | <https://opengameart.org/content/wind-whoosh-loop> |
 | Old Drill Press (`old_drill_press`) | model | Harsh Vardhan Singh | outpost | <https://polyhaven.com/a/old_drill_press> |
 | Old Gas Mask (`old_gas_mask`) | model | Michał Wiśniewski | outpost, showcase | <https://polyhaven.com/a/old_gas_mask> |

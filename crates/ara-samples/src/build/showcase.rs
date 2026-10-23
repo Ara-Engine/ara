@@ -87,7 +87,6 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     ctx.project_settings("Material and character showcase", SCENE.0)?;
     let mut models = Models::default();
     for (name, asset) in [
-        ("human", "m2m_human"),
         ("flight_helmet", "khronos_flight_helmet"),
         ("scifi_helmet", "khronos_scifi_helmet"),
         ("antique_camera", "khronos_antique_camera"),
@@ -102,6 +101,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     ] {
         ctx.third_party(&mut models, name, asset)?;
     }
+    super::outpost::human(ctx, &mut models)?;
     let lock = &ctx.lock;
     let root = &ctx.root;
     // Stage pieces.

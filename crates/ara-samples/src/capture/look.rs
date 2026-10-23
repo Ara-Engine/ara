@@ -13,6 +13,9 @@ pub struct Look {
     /// Simulated ticks before capturing (physics settles, animation poses).
     #[serde(default = "default_ticks")]
     pub ticks: u32,
+    /// Shot and target heights are metres above the terrain at their X/Z.
+    #[serde(default)]
+    pub ground_relative: bool,
     /// Sky and image-based lighting.
     pub sky: Sky,
     /// Exposure, tone mapping and lens.
@@ -38,7 +41,12 @@ fn default_ticks() -> u32 {
 
 /// Where sky radiance comes from.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields, tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields,
+    tag = "kind"
+)]
 pub enum Sky {
     /// Physical sky, aerial perspective and height fog lit by the scene's sun.
     Atmosphere {
@@ -110,7 +118,8 @@ fn default_bloom() -> f32 {
     0.04
 }
 
-/// The terrain's tiled ground material.
+/// The terrain's tiled ground material, plus an optional rock material for cells
+/// painted rocky (splat channel 1) or steep.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Ground {
@@ -119,6 +128,11 @@ pub struct Ground {
     /// Colour multiplier.
     #[serde(default = "white")]
     pub tint: [f32; 3],
+    /// Lock ID of the rock texture set.
+    pub rock: Option<String>,
+    /// Rock colour multiplier.
+    #[serde(default = "white")]
+    pub rock_tint: [f32; 3],
 }
 
 fn white() -> [f32; 3] {

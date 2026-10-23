@@ -14,8 +14,12 @@ use anyhow::Result;
 use glam::{Vec2, Vec3};
 use serde_json::{Value, json};
 
-/// Compound centre.
+/// Compound centre, in layout coordinates.
 const C: Vec2 = Vec2::new(96.0, 96.0);
+/// Layout coordinates → world: the 384 m terrain (12 × 12 tiles, origin-anchored as
+/// the landscape renderer requires) puts the layout in its middle, with a ring of
+/// rocky mountains at the rim.
+pub const SHIFT: Vec3 = Vec3::new(96.0, 0.0, 96.0);
 /// Level scene.
 pub const SCENE: (&str, &str) = ("levels/outpost.scene", "sc_outpost1");
 const TERRAIN: (&str, &str) = ("terrain/outpost.terrain", "tr_outpost1");
@@ -48,7 +52,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     ctx.project_settings("Outpost", SCENE.0)?;
     let models = models(ctx)?;
     terrain(ctx)?;
-    let ground = Ground::load(ctx, TERRAIN.0)?;
+    let ground = Ground::load(ctx, TERRAIN.0)?.shifted(SHIFT);
     let mut models = models;
     road(ctx, &mut models, &ground)?;
     foliage(ctx, &models)?;
@@ -122,9 +126,6 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("car", "covered_car"),
         ("tyre", "old_tyre"),
         ("rim", "rusted_wheel_rim_01"),
-        ("floodlight", "street_lamp_01"),
-        ("wall_lamp", "street_lamp_02"),
-        ("security_light", "security_light"),
         ("searchlight", "portable_searchlight"),
         ("utility_box", "utility_box_01"),
         ("utility_box_wide", "utility_box_02"),
@@ -145,7 +146,6 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("log", "dead_tree_trunk"),
         ("radio", "vintage_radio_transceiver"),
         ("gas_mask", "old_gas_mask"),
-        ("human", "m2m_human"),
         // Hangar interior.
         ("shelves", "steel_frame_shelves_03"),
         ("tool_chest", "metal_tool_chest"),
@@ -159,7 +159,6 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("rack", "worn_metal_rack"),
         ("crane", "overhead_crane"),
         ("hanging_lamp", "hanging_industrial_lamp"),
-        ("caged_light", "caged_hanging_light"),
         ("pipes", "modular_industrial_pipes_01"),
         ("power_box", "power_box_01"),
         ("wrench", "adjustable_wrench"),
@@ -252,30 +251,12 @@ fn models(ctx: &Ctx) -> Result<Models> {
             "namaqualand_rocks_01",
             vec![p("namaqualand_rocks_02_d")],
         ),
-        // Chain-link: one 2 m section is a post plus a double panel.
         (
-            "fence_section",
-            "modular_chainlink_fence",
+            "iceplant",
+            "crystalline_iceplant",
             vec![
-                p("modular_chainlink_fence_post"),
-                part("modular_chainlink_fence_double", [1.0, 0.0, 0.0], 0.0),
-            ],
-        ),
-        (
-            "fence_post",
-            "modular_chainlink_fence",
-            vec![p("modular_chainlink_fence_post")],
-        ),
-        (
-            "fence_gate",
-            "modular_chainlink_fence",
-            vec![
-                p("modular_chainlink_fence_door_frame"),
-                part(
-                    "modular_chainlink_fence_door_gate",
-                    [0.4, 1.08, -0.45],
-                    -70.0,
-                ),
+                p("crystalline_iceplant_a_LOD0"),
+                part("crystalline_iceplant_c_LOD0", [0.35, 0.0, 0.2], 40.0),
             ],
         ),
         // A 7 m utility pole with a cross-arm and insulators.
@@ -291,7 +272,81 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ),
     ];
     for (name, asset, parts) in &variants {
-        let path = kit::variant(&ctx.root, &ctx.lock, asset, name, parts)?;
+        let cutout = match *asset {
+            "shrub_03" => Some(kit::cutout(
+                &ctx.root,
+                &ctx.lock,
+                asset,
+                "_diff_",
+                "_alpha_",
+                "shrub_03_cutout",
+            )?),
+            "crystalline_iceplant" => Some(kit::cutout(
+                &ctx.root,
+                &ctx.lock,
+                asset,
+                "_diff_",
+                "_alpha_",
+                "iceplant_cutout",
+            )?),
+            "wild_rooibos_bush" => Some(kit::cutout(
+                &ctx.root,
+                &ctx.lock,
+                asset,
+                "_diff_",
+                "_alpha_",
+                "rooibos_cutout",
+            )?),
+            _ => None,
+        };
+        let lit: &[&str] = match *name {
+            "fluorescent" => &["mounted_fluorescent_lights_glass"],
+            "sconce" => &["industrial_caged_sconce"],
+            _ => &[],
+        };
+        let overrides = kit::Overrides {
+            cutout: cutout.as_deref(),
+            emissive: lit,
+            images: &[],
+        };
+        let path = kit::variant(&ctx.root, &ctx.lock, asset, name, Some(parts), &overrides)?;
+        ctx.model(
+            &mut m,
+            name,
+            &path,
+            &format!("as_kit{}", super::place::short(name)),
+        )?;
+    }
+    human(ctx, &mut m)?;
+    // Lamps, with their bulbs and lenses switched on (the sources ship them off).
+    for (name, asset, lit) in [
+        (
+            "floodlight",
+            "street_lamp_01",
+            &["street_lamp_01_bulb", "street_lamp_01_glass"][..],
+        ),
+        (
+            "wall_lamp",
+            "street_lamp_02",
+            &["street_lamp_02_bulb", "street_lamp_02_glass"][..],
+        ),
+        (
+            "security_light",
+            "security_light",
+            &["security_light_bulb", "security_light_glass"][..],
+        ),
+        (
+            "caged_light",
+            "caged_hanging_light",
+            &["caged_hanging_light"][..],
+        ),
+    ] {
+        let overrides = kit::Overrides {
+            cutout: None,
+            emissive: lit,
+            images: &[],
+        };
+        let path = kit::variant(&ctx.root, &ctx.lock, asset, name, None, &overrides)?;
         ctx.model(
             &mut m,
             name,
@@ -310,7 +365,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
                 lock,
                 "container_green",
                 "container_side",
-                [1.0, 1.0, 1.0],
+                [0.6, 0.68, 0.62],
             )?,
         ),
         (
@@ -330,7 +385,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
                 lock,
                 "container_blue",
                 "container_side",
-                [0.55, 0.75, 1.25],
+                [0.42, 0.55, 0.68],
             )?,
         ),
         ("guard_hut", kits::guard_hut(root, lock, "guard_hut")?),
@@ -342,7 +397,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
                 root,
                 lock,
                 "pad",
-                "hangar_concrete_floor",
+                "concrete_floor_worn_001",
                 Vec3::new(48.0, 0.3, 30.0),
             )?,
         ),
@@ -374,7 +429,13 @@ fn models(ctx: &Ctx) -> Result<Models> {
             kits::window(root, lock, "window", Vec2::new(1.4, 1.0))?,
         ),
         ("festoon", super::hangar::festoon(root, lock)?),
+        ("embers", kits::embers(root, lock, "embers")?),
         ("cables", super::hangar::cables(root, lock)?),
+        (
+            "fence_section",
+            kits::fence_section(root, lock, "fence_section")?,
+        ),
+        ("fence_gate", kits::fence_gate(root, lock, "fence_gate")?),
     ];
     for (name, path) in kits {
         ctx.model(
@@ -387,14 +448,85 @@ fn models(ctx: &Ctx) -> Result<Models> {
     Ok(m)
 }
 
+/// The CC0 mannequin with its colour palette recast as a graphite work suit.
+pub fn human(ctx: &Ctx, models: &mut Models) -> Result<()> {
+    let palette = kit::recolor(
+        &ctx.root,
+        &ctx.lock,
+        "m2m_human",
+        "color-palette",
+        [0.52, 0.54, 0.56],
+        "human_suit",
+    )?;
+    let overrides = kit::Overrides {
+        images: &[("color-palette", &palette)],
+        ..Default::default()
+    };
+    let path = kit::variant(&ctx.root, &ctx.lock, "m2m_human", "human", None, &overrides)?;
+    ctx.model(models, "human", &path, "as_kithuman")
+}
+
 /// Sculpts the terrain: flat ground under the compound, rolling scrubland, hills at the
 /// rim. Paints soil everywhere, rock on the hills, sparse dry grass patches.
 fn terrain(ctx: &Ctx) -> Result<()> {
     ctx.new_document(TERRAIN.0, "terrain", TERRAIN.1)?;
-    let dab = |x: f32, z: f32, radius: f32, amount: f32| json!({"center": [x, z], "radius": radius, "amount": amount});
+    let dab = |x: f32, z: f32, radius: f32, amount: f32| json!({"center": [x + SHIFT.x, z + SHIFT.z], "radius": radius, "amount": amount});
+    // Deterministic jitter for the mountain ring and ground bumps.
+    let mut seed = 0x9e37_79b9u32;
+    let mut rand = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed as f32 / u32::MAX as f32
+    };
+    let mut mountains = Vec::new();
+    for i in 0..28 {
+        let a = i as f32 / 28.0 * std::f32::consts::TAU + rand() * 0.15;
+        // A pass to the south (−Z) lets the road out of the basin.
+        let pass = (a - 1.5 * std::f32::consts::PI).abs() < 0.28;
+        let r = 172.0 + rand() * 18.0;
+        let height = if pass { 6.0 } else { 26.0 + rand() * 30.0 };
+        mountains.push((
+            C.x + a.cos() * r,
+            C.y + a.sin() * r,
+            34.0 + rand() * 16.0,
+            height,
+        ));
+    }
+    let mut bumps = Vec::new();
+    for _ in 0..160 {
+        let (x, z) = (C.x - 150.0 + rand() * 300.0, C.y - 150.0 + rand() * 300.0);
+        if (Vec2::new(x, z) - C).length() > 46.0 {
+            bumps.push((x, z, 3.0 + rand() * 7.0, (rand() - 0.45) * 0.9));
+        }
+    }
+    for &(x, z, r, h) in &mountains.clone() {
+        if h > 10.0 {
+            // Secondary peaks, gullies running down toward the basin, fine roughness.
+            for _ in 0..5 {
+                mountains.push((
+                    x + (rand() - 0.5) * 50.0,
+                    z + (rand() - 0.5) * 50.0,
+                    8.0 + rand() * 10.0,
+                    (rand() - 0.3) * 6.0,
+                ));
+            }
+            let inward = (C - Vec2::new(x, z)).normalize();
+            for g in 0..6 {
+                let side = Vec2::new(-inward.y, inward.x) * (g as f32 - 2.5) * r * 0.28;
+                let along = inward * r * (0.35 + rand() * 0.45);
+                let p = Vec2::new(x, z) + side + along;
+                mountains.push((p.x, p.y, 4.0 + rand() * 4.0, -(2.0 + rand() * 4.0)));
+            }
+            for _ in 0..8 {
+                let p = Vec2::new(x, z) + Vec2::new(rand() - 0.5, rand() - 0.5) * r * 1.6;
+                mountains.push((p.x, p.y, 3.0 + rand() * 4.0, (rand() - 0.5) * 3.0));
+            }
+        }
+    }
     let hills = [
-        (14.0, 30.0, 30.0, 9.0),
-        (8.0, 110.0, 34.0, 13.0),
+        (14.0, 30.0, 30.0, 5.0),
+        (8.0, 110.0, 34.0, 6.0),
         (36.0, 178.0, 30.0, 10.0),
         (110.0, 186.0, 34.0, 15.0),
         (176.0, 160.0, 30.0, 11.0),
@@ -414,11 +546,22 @@ fn terrain(ctx: &Ctx) -> Result<()> {
     ];
     let mut raise: Vec<Value> = hills.iter().map(|&(x, z, r, a)| dab(x, z, r, a)).collect();
     raise.extend(swells.iter().map(|&(x, z, r, a)| dab(x, z, r, a)));
-    let rock: Vec<Value> = hills
+    raise.extend(bumps.iter().map(|&(x, z, r, a)| dab(x, z, r, a)));
+    let peaks: Vec<Value> = mountains
+        .iter()
+        .map(|&(x, z, r, a)| dab(x, z, r, a))
+        .collect();
+    let mut rock: Vec<Value> = hills
         .iter()
         .filter(|h| h.3 > 6.0)
         .map(|&(x, z, r, _)| dab(x, z, r * 0.45, 0.9))
         .collect();
+    rock.extend(
+        mountains
+            .iter()
+            .filter(|m| m.3 > 10.0)
+            .map(|&(x, z, r, _)| dab(x, z, r * 0.9, 1.0)),
+    );
     let grass = [
         (60.0, 120.0),
         (132.0, 70.0),
@@ -431,19 +574,20 @@ fn terrain(ctx: &Ctx) -> Result<()> {
     .collect::<Vec<_>>();
     ctx.apply(
         TERRAIN.0,
-        "Outpost terrain: flat compound ground, rolling scrubland and rim hills",
+        "Outpost terrain: flat compound ground, rolling scrubland, foothills and a rocky mountain rim",
         vec![
             (
                 "terrain.create",
                 json!({"grid": {"origin": [0, 0], "spacing": 1, "cells": 32,
-                    "min": {"x": 0, "z": 0}, "max": {"x": 6, "z": 6}, "materials": []}}),
+                    "min": {"x": 0, "z": 0}, "max": {"x": 12, "z": 12}, "materials": []}}),
             ),
             (
                 "terrain.layer.add",
                 json!({"id": "l_sculpt", "layer": {"name": "Sculpt", "priority": 0, "enabled": true, "opacity": 1}}),
             ),
             ("terrain.raise", json!({"layer": "l_sculpt", "dabs": raise})),
-            ("terrain.paint", json!({"layer": "l_sculpt", "channel": 2, "dabs": [dab(96.0, 96.0, 160.0, 1.0)]})),
+            ("terrain.raise", json!({"layer": "l_sculpt", "dabs": peaks})),
+            ("terrain.paint", json!({"layer": "l_sculpt", "channel": 2, "dabs": [dab(96.0, 96.0, 320.0, 1.0)]})),
             ("terrain.paint", json!({"layer": "l_sculpt", "channel": 1, "dabs": rock})),
             ("terrain.paint", json!({"layer": "l_sculpt", "channel": 0, "dabs": grass})),
         ],
@@ -459,13 +603,17 @@ fn road_path() -> Vec<Vec2> {
         Vec2::new(104.0, 38.0),
         Vec2::new(107.0, 24.0),
         Vec2::new(106.0, 10.0),
-        Vec2::new(102.0, -2.0),
+        Vec2::new(101.0, -14.0),
+        Vec2::new(97.0, -40.0),
+        Vec2::new(96.0, -72.0),
     ]
 }
 
 fn road(ctx: &Ctx, models: &mut Models, ground: &Ground) -> Result<()> {
     let set = "rocky_trail";
-    let mut kit = Kit::new(vec![Material::textured("trail", set)]);
+    let mut kit = Kit::new(vec![
+        Material::textured("trail", set).tinted([0.9, 0.76, 0.64]),
+    ]);
     kit.ribbon(
         0,
         &road_path(),
@@ -492,7 +640,7 @@ fn foliage(ctx: &Ctx, models: &Models) -> Result<()> {
                 channel: u32,
                 scale: [f32; 2]| {
         json!({"name": name, "species": species, "asset": models.get(model).reference, "seed": seed,
-            "cellSize": cell, "density": density, "height": [-5.0, 20.0], "slope": slope,
+            "cellSize": cell, "density": density, "height": [-5.0, 14.0], "slope": slope,
             "channel": channel, "minWeight": 0.3, "noise": 0.6, "scale": scale, "enabled": true})
     };
     let mut calls = vec![
@@ -502,35 +650,39 @@ fn foliage(ctx: &Ctx, models: &Models) -> Result<()> {
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_shrub", "rule": rule("Dry shrub", "grass", "shrub_a", 21, 2.0, 0.1, [0.0, 35.0], 2, [1.4, 2.6])}),
+            json!({"id": "r_shrub", "rule": rule("Dry shrub", "grass", "shrub_a", 21, 2.0, 0.05, [0.0, 35.0], 2, [1.4, 2.6])}),
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_shrubb", "rule": rule("Dry shrub (sparse)", "grass", "shrub_b", 22, 3.0, 0.05, [0.0, 35.0], 2, [1.6, 2.8])}),
+            json!({"id": "r_shrubb", "rule": rule("Dry shrub (sparse)", "grass", "shrub_b", 22, 3.0, 0.03, [0.0, 35.0], 2, [1.6, 2.8])}),
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_rooibos", "rule": rule("Rooibos bush", "grass", "rooibos_c", 23, 5.0, 0.03, [0.0, 30.0], 2, [1.2, 2.2])}),
+            json!({"id": "r_rooibos", "rule": rule("Rooibos bush", "grass", "rooibos_c", 23, 5.0, 0.02, [0.0, 30.0], 2, [1.2, 2.2])}),
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_branch", "rule": rule("Dead branches", "rock", "branches", 24, 8.0, 0.012, [0.0, 25.0], 2, [0.8, 1.3])}),
+            json!({"id": "r_branch", "rule": rule("Dead branches", "rock", "branches", 24, 8.0, 0.008, [0.0, 25.0], 2, [0.8, 1.3])}),
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_rocks", "rule": rule("Scree", "rock", "rock_a", 25, 4.0, 0.04, [6.0, 60.0], 1, [1.5, 4.0])}),
+            json!({"id": "r_rocks", "rule": rule("Scree", "rock", "rock_a", 25, 4.0, 0.025, [6.0, 60.0], 1, [1.5, 4.0])}),
         ),
         (
             "foliage.rule.set",
-            json!({"id": "r_stones", "rule": rule("Stones", "rock", "rock_d", 26, 4.0, 0.03, [0.0, 60.0], 2, [1.0, 2.5])}),
+            json!({"id": "r_stones", "rule": rule("Stones", "rock", "rock_d", 26, 4.0, 0.02, [0.0, 60.0], 2, [1.0, 2.5])}),
+        ),
+        (
+            "foliage.rule.set",
+            json!({"id": "r_iceplant", "rule": rule("Ice plant", "grass", "iceplant", 27, 2.0, 0.08, [0.0, 25.0], 0, [0.8, 1.6])}),
         ),
     ];
-    let mut zones = vec![(C.x, C.y + 4.0, 44.0)];
+    let mut zones = vec![(C.x, C.y + 4.0, 37.0)];
     zones.extend(road_path().iter().map(|p| (p.x, p.y, 5.0)));
     for (x, z, r) in zones {
         calls.push((
             "foliage.exclude",
-            json!({"zone": {"center": [x, z], "radius": r}}),
+            json!({"zone": {"center": [x + SHIFT.x, z + SHIFT.z], "radius": r}}),
         ));
     }
     ctx.apply(
@@ -548,9 +700,9 @@ fn audio(ctx: &Ctx) -> Result<()> {
         ("oga_fireplace", "fire.wav", "as_fire", sfx.clone()),
         ("oga_freezer", "freezer.ogg", "as_drone", sfx.clone()),
         (
-            "oga_calm_track",
-            "calm_track-loop.ogg",
-            "as_calmtrack",
+            "oga_lonelyhood",
+            "Lonelyhood.ogg",
+            "as_lonelyhood",
             json!({"usage": "music"}),
         ),
     ] {
@@ -564,7 +716,7 @@ fn audio(ctx: &Ctx) -> Result<()> {
 /// (no command authors `.music` documents yet).
 fn music(ctx: &Ctx) -> Result<()> {
     let schema = ara_runtime::schema(&[]).map_err(|e| anyhow::anyhow!("{e:?}"))?;
-    let track = ctx.lock.get("oga_calm_track").expect("music pinned");
+    let track = ctx.lock.get("oga_lonelyhood").expect("music pinned");
     let mut doc = ara_doc::Document::new(
         "music",
         ara_doc::AssetId::parse(MUSIC.1).map_err(anyhow::Error::msg)?,
@@ -577,7 +729,7 @@ fn music(ctx: &Ctx) -> Result<()> {
     doc.insert_unchecked(
         ara_doc::RecordId::parse("sg_dusk").map_err(anyhow::Error::msg)?,
         record(json!({"name": "dusk", "bars": 64, "tempo": [{"bpm": 60}],
-            "stems": [{"name": "calm", "clip": format!("@{}#as_calmtrack", track.relative("calm_track-loop.ogg")), "gainDb": -10}]})),
+            "stems": [{"name": "lonelyhood", "clip": format!("@{}#as_lonelyhood", track.relative("Lonelyhood.ogg")), "gainDb": -10}]})),
     );
     let file = ctx.root.join(MUSIC.0);
     std::fs::create_dir_all(file.parent().expect("music dir"))?;
@@ -622,12 +774,12 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         "Dusk sky",
         json!({"Environment": {"sky": [0.16, 0.22, 0.42, 1], "horizon": [1.0, 0.56, 0.32, 1], "ground": [0.16, 0.12, 0.09, 1], "intensity": 420, "exposure": 0.0028}}),
     );
-    let sun_toward = Vec3::new(-0.93, 0.105, 0.35).normalize();
+    let sun_toward = Vec3::new(-0.93, 0.05, 0.36).normalize();
     s.commands.push(light(
         "e_sun",
         "Setting sun",
         Vec3::new(96.0, 40.0, 96.0),
-        json!({"kind": "directional", "color": [1.0, 0.58, 0.34, 1], "intensity": 9000}),
+        json!({"kind": "directional", "color": [1.0, 0.62, 0.4, 1], "intensity": 7000}),
         Some(-sun_toward),
     ));
     s.entity(
@@ -690,7 +842,6 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
             .decor(),
     );
     for (i, (name, x, z, yaw)) in [
-        ("puddle_c", 97.4, 60.0, 20.0),
         ("puddle_a", 101.8, 44.0, 70.0),
         ("puddle_b", 99.0, 84.0, 0.0),
         ("puddle_a", 106.0, 101.0, 130.0),
@@ -890,6 +1041,18 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
     // Campfire circle (west of the pad).
     let fire = on_pad(84.0, 91.5);
     s.prop(Prop::new("e_firepit", "Fire pit", "fire_pit", fire, 0.0).decor());
+    s.prop(
+        Prop::new(
+            "e_embers",
+            "Embers",
+            "embers",
+            fire + Vec3::new(0.0, 0.05, 0.0),
+            30.0,
+        )
+        .at_origin()
+        .decor()
+        .renderer(json!({"emissive": [3200, 3200, 3200]})),
+    );
     s.entity(
         "e_fire",
         "Campfire",
@@ -1118,6 +1281,7 @@ fn exterior(ctx: &Ctx, models: &Models, ground: &Ground) -> Result<()> {
         json!({"MusicSource": {"music": reference(MUSIC)}}),
     );
 
+    s.shift(SHIFT);
     let calls = std::mem::take(&mut s.commands);
     ctx.apply(
         SCENE.0,
@@ -1185,26 +1349,21 @@ fn fence(s: &mut Scene<'_>, ground: &Ground) {
     run(s, Vec2::new(x0, z1), Vec2::new(x0, z0), &|i| {
         (14..17).contains(&i)
     });
-    s.prop(
-        Prop::new(
-            "e_gatepost",
-            "Fence post",
-            "fence_post",
-            Vec3::new(92.0, ground.height(92.0, z0) - 0.05, z0),
-            0.0,
-        )
-        .at_origin()
-        .decor(),
-    );
-    s.prop(
-        Prop::new(
-            "e_gate",
-            "Gate",
-            "fence_gate",
-            Vec3::new(100.0, ground.height(100.0, z0) - 0.05, z0),
-            180.0,
-        )
-        .at_origin()
-        .decor(),
-    );
+    // The gate: a closing post, then two leaves swung open into the compound.
+    for (i, (x, yaw)) in [(92.0f32, -70.0f32), (100.0, -110.0)]
+        .into_iter()
+        .enumerate()
+    {
+        s.prop(
+            Prop::new(
+                &format!("e_gate{i}"),
+                "Gate",
+                "fence_gate",
+                Vec3::new(x, ground.height(x, z0) - 0.05, z0),
+                yaw,
+            )
+            .at_origin()
+            .decor(),
+        );
+    }
 }

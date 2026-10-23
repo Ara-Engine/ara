@@ -1,6 +1,6 @@
 {
   "$schema": "ara://schema/import/1",
-  "id": "as_m2mhuman",
+  "id": "as_kitfloodlight",
   "records": {
     "i_settings": {
       "importer": "ara.gltf",

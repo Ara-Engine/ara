@@ -26,6 +26,8 @@ pub struct Material {
     pub textures: Option<String>,
     /// Alpha-blended (glass).
     pub blend: bool,
+    /// A cut-out RGBA colour image in `assets/kit/` (alpha-masked).
+    pub image: Option<String>,
 }
 
 impl Material {
@@ -39,6 +41,7 @@ impl Material {
             emissive: [0.0; 3],
             textures: Some(set.into()),
             blend: false,
+            image: None,
         }
     }
     /// An untextured material.
@@ -51,6 +54,14 @@ impl Material {
             emissive: [0.0; 3],
             textures: None,
             blend: false,
+            image: None,
+        }
+    }
+    /// An alpha-masked material sampling a cut-out image written to `assets/kit/`.
+    pub fn cutout(name: &str, image: &str, roughness: f32, metallic: f32) -> Self {
+        Self {
+            image: Some(image.into()),
+            ..Self::flat(name, [1.0; 3], roughness, metallic)
         }
     }
     /// A pure emitter (light panels, bulbs); colour is the emission tint.
@@ -67,6 +78,11 @@ impl Material {
             blend: true,
             ..Self::flat(name, tint, 0.04, 0.0)
         }
+    }
+    /// The same material, alpha-blended instead of masked.
+    pub fn blended(mut self) -> Self {
+        self.blend = true;
+        self
     }
     /// The same material with a colour multiplier.
     pub fn tinted(mut self, color: [f32; 3]) -> Self {
@@ -452,6 +468,13 @@ impl Kit {
                     pbr["metallicFactor"] = json!(0.0);
                 }
             }
+            if let Some(file) = &m.image {
+                pbr["baseColorTexture"] = json!({"index": image_index(file.clone())});
+                // Blended cut-outs keep partial coverage in distant mips (wire mesh).
+                out["alphaMode"] = json!(if m.blend { "BLEND" } else { "MASK" });
+                out["alphaCutoff"] = json!(0.5);
+                out["doubleSided"] = json!(true);
+            }
             out["pbrMetallicRoughness"] = pbr;
             if m.emissive.iter().any(|v| *v > 0.0) {
                 out["emissiveFactor"] = json!(m.emissive);
@@ -528,25 +551,36 @@ pub fn part(node: &str, at: [f32; 3], yaw: f32) -> Part<'_> {
 /// Writes `assets/kit/<name>.gltf`: the meshes of selected nodes of a fetched glTF
 /// (a variant sheet or a modular kit), re-placed, sharing the source's buffer and
 /// textures. Only referenced meshes are kept, so the importer cooks just the variant.
+/// `parts: None` keeps the source's own node layout.
 pub fn variant(
     project: &Path,
     lock: &Lock,
     asset: &str,
     name: &str,
-    parts: &[Part<'_>],
+    parts: Option<&[Part<'_>]>,
+    overrides: &Overrides<'_>,
 ) -> Result<String> {
+    let cutout = overrides.cutout;
     let entry = lock
         .get(asset)
         .with_context(|| format!("{asset} is not in the lock"))?;
     let file = entry
         .files
         .iter()
-        .find(|f| f.path.ends_with(".gltf"))
-        .with_context(|| format!("{asset} has no .gltf"))?;
+        .find(|f| f.path.ends_with(".gltf") || f.path.ends_with(".glb"))
+        .with_context(|| format!("{asset} has no glTF"))?;
     let source = entry.dir(project).join(&file.path);
-    let mut doc: Value = serde_json::from_slice(
-        &std::fs::read(&source).with_context(|| format!("{} (run fetch)", source.display()))?,
-    )?;
+    let bytes =
+        std::fs::read(&source).with_context(|| format!("{} (run fetch)", source.display()))?;
+    let (mut doc, binary) = split_glb(&bytes)?;
+    let glb = binary.is_some();
+    if let Some(bin) = binary {
+        // A GLB's embedded buffer becomes a sibling .bin of the derived glTF.
+        let dir = project.join("assets/kit");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(dir.join(format!("{name}.bin")), bin)?;
+        doc["buffers"][0]["uri"] = json!(format!("{name}.bin"));
+    }
     let base = Path::new(&file.path)
         .parent()
         .map(|p| p.to_string_lossy().replace('\\', "/"));
@@ -556,11 +590,52 @@ pub fn variant(
     };
     for key in ["buffers", "images"] {
         for item in doc[key].as_array_mut().into_iter().flatten() {
-            if let Some(uri) = item["uri"].as_str().map(str::to_owned) {
+            if let Some(uri) = item["uri"].as_str().map(str::to_owned)
+                && !(glb && key == "buffers")
+            {
                 item["uri"] = json!(rebase(&uri));
             }
         }
     }
+    for (key, uri) in overrides.images {
+        for image in doc["images"].as_array_mut().into_iter().flatten() {
+            let named = image["name"].as_str().is_some_and(|n| n.contains(key));
+            let at = image["uri"].as_str().is_some_and(|u| u.contains(key));
+            if named || at {
+                *image = json!({"uri": uri, "mimeType": "image/png"});
+            }
+        }
+    }
+    if let Some(png) = cutout {
+        // The colour maps every material samples become the merged RGBA image.
+        let colour: Vec<u64> = doc["materials"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m["pbrMetallicRoughness"]["baseColorTexture"]["index"].as_u64())
+            .filter_map(|t| doc["textures"][t as usize]["source"].as_u64())
+            .collect();
+        for image in colour {
+            doc["images"][image as usize] = json!({"uri": png, "mimeType": "image/png"});
+        }
+        for m in doc["materials"].as_array_mut().into_iter().flatten() {
+            if m["pbrMetallicRoughness"]["baseColorTexture"].is_object() {
+                m["alphaMode"] = json!("MASK");
+                m["alphaCutoff"] = json!(0.5);
+            }
+        }
+    }
+    for m in doc["materials"].as_array_mut().into_iter().flatten() {
+        if m["name"]
+            .as_str()
+            .is_some_and(|n| overrides.emissive.contains(&n))
+        {
+            m["emissiveFactor"] = json!([1.0, 1.0, 1.0]);
+        }
+    }
+    let Some(parts) = parts else {
+        return write_variant(project, name, doc);
+    };
     let nodes = doc["nodes"].as_array().cloned().unwrap_or_default();
     let meshes = doc["meshes"].as_array().cloned().unwrap_or_default();
     let mut new_meshes: Vec<Value> = Vec::new();
@@ -601,10 +676,174 @@ pub fn variant(
             map.remove(key);
         }
     }
+    write_variant(project, name, doc)
+}
+
+/// Material changes a derived glTF applies.
+#[derive(Default)]
+pub struct Overrides<'a> {
+    /// An RGBA colour image in `assets/kit/` (see [`cutout`]) replacing the source
+    /// colour map; materials sampling it become alpha-masked.
+    pub cutout: Option<&'a str>,
+    /// Materials to light: their emissive factor becomes 1 (the source ships lamps
+    /// off), so the entity's `MeshRenderer.emissive` sets the radiance.
+    pub emissive: &'a [&'a str],
+    /// Images to replace: (name or URI fragment, new URI in `assets/kit/`).
+    pub images: &'a [(&'a str, &'a str)],
+}
+
+/// A glTF's JSON and, for GLB, its binary chunk.
+fn split_glb(bytes: &[u8]) -> Result<(Value, Option<Vec<u8>>)> {
+    if !bytes.starts_with(b"glTF") {
+        return Ok((serde_json::from_slice(bytes)?, None));
+    }
+    let u32_at = |o: usize| -> Result<usize> {
+        let b = bytes.get(o..o + 4).context("short GLB")?;
+        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let json_len = u32_at(12)?;
+    let doc = serde_json::from_slice(bytes.get(20..20 + json_len).context("short GLB")?)?;
+    let at = 20 + json_len;
+    let bin = if at + 8 <= bytes.len() {
+        let len = u32_at(at)?;
+        Some(
+            bytes
+                .get(at + 8..at + 8 + len)
+                .context("short GLB")?
+                .to_vec(),
+        )
+    } else {
+        None
+    };
+    Ok((doc, bin))
+}
+
+/// Writes `assets/kit/<name>.png`: an image embedded in a fetched GLB (by image
+/// name), its colours replaced by luminance x `tint`. Recolours a palette-textured
+/// model without touching its UVs.
+pub fn recolor(
+    project: &Path,
+    lock: &Lock,
+    asset: &str,
+    image: &str,
+    tint: [f32; 3],
+    name: &str,
+) -> Result<String> {
+    let entry = lock
+        .get(asset)
+        .with_context(|| format!("{asset} is not in the lock"))?;
+    let file = entry
+        .entry(&[".glb"])
+        .with_context(|| format!("{asset} has no GLB"))?;
+    let (doc, bin) = split_glb(&std::fs::read(entry.dir(project).join(&file.path))?)?;
+    let bin = bin.context("GLB without a binary chunk")?;
+    let found = doc["images"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|i| i["name"].as_str().is_some_and(|n| n.contains(image)))
+        .with_context(|| format!("{asset} has no image {image}"))?;
+    let view = &doc["bufferViews"][found["bufferView"]
+        .as_u64()
+        .context("image is not embedded")? as usize];
+    let offset = view["byteOffset"].as_u64().unwrap_or(0) as usize;
+    let length = view["byteLength"].as_u64().context("view length")? as usize;
+    let mut rgba = image::load_from_memory(&bin[offset..offset + length])?.to_rgba8();
+    for p in rgba.pixels_mut() {
+        let luma = (0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]))
+            / 255.0;
+        // Compress the palette's range so suits stay mid-grey, joints a little lighter.
+        let v = 0.35 + 0.65 * luma;
+        for c in 0..3 {
+            p[c] = (v * tint[c] * 255.0).clamp(0.0, 255.0) as u8;
+        }
+    }
+    let out = format!("{name}.png");
+    let dir = project.join("assets/kit");
+    std::fs::create_dir_all(&dir)?;
+    rgba.save(dir.join(&out))?;
+    Ok(out)
+}
+
+fn write_variant(project: &Path, name: &str, doc: Value) -> Result<String> {
     let dir = project.join("assets/kit");
     std::fs::create_dir_all(&dir)?;
     let mut text = serde_json::to_string_pretty(&doc)?;
     text.push('\n');
     std::fs::write(dir.join(format!("{name}.gltf")), text)?;
     Ok(format!("assets/kit/{name}.gltf"))
+}
+
+/// Writes `assets/kit/<name>.png`: a fetched colour map with a separate opacity map
+/// (Poly Haven ships glTF colour maps as JPG) merged into its alpha channel.
+pub fn cutout(
+    project: &Path,
+    lock: &Lock,
+    asset: &str,
+    colour: &str,
+    alpha: &str,
+    name: &str,
+) -> Result<String> {
+    let entry = lock
+        .get(asset)
+        .with_context(|| format!("{asset} is not in the lock"))?;
+    let find = |key: &str| -> Result<std::path::PathBuf> {
+        let f = entry
+            .files
+            .iter()
+            .find(|f| f.path.contains(key))
+            .with_context(|| format!("{asset} has no {key}"))?;
+        Ok(entry.dir(project).join(&f.path))
+    };
+    let mut rgba = image::open(find(colour)?)?.to_rgba8();
+    let mask = image::open(find(alpha)?)?.to_luma8();
+    let mask = image::imageops::resize(
+        &mask,
+        rgba.width(),
+        rgba.height(),
+        image::imageops::FilterType::Triangle,
+    );
+    for (p, m) in rgba.pixels_mut().zip(mask.pixels()) {
+        p[3] = m[0];
+    }
+    let file = format!("{name}.png");
+    let dir = project.join("assets/kit");
+    std::fs::create_dir_all(&dir)?;
+    rgba.save(dir.join(&file))?;
+    Ok(file)
+}
+
+/// Writes `assets/kit/<name>.png`: a chain-link wire texture (galvanised wire on
+/// transparent texels), one repeat covering a 6 cm diamond, as a cut-out RGBA image.
+pub fn chainlink_texture(project: &Path, name: &str) -> Result<String> {
+    let size = 256u32;
+    let mut image = image::RgbaImage::new(size, size);
+    let wire = 0.07; // wire width as a fraction of the diamond
+    for y in 0..size {
+        for x in 0..size {
+            let u = x as f32 / size as f32;
+            let v = y as f32 / size as f32;
+            // Two diagonal wire families form the diamond lattice.
+            let d1 = ((u + v).fract() - 0.5).abs();
+            let d2 = ((u - v + 1.0).fract() - 0.5).abs();
+            let w = d1.min(d2);
+            let covered = w > 0.5 - wire;
+            let shade = (0.55 + 0.35 * ((w - (0.5 - wire)) / wire).clamp(0.0, 1.0)) * 255.0;
+            image.put_pixel(
+                x,
+                y,
+                image::Rgba([
+                    shade as u8,
+                    (shade * 0.98) as u8,
+                    (shade * 0.95) as u8,
+                    if covered { 255 } else { 0 },
+                ]),
+            );
+        }
+    }
+    let file = format!("{name}.png");
+    let dir = project.join("assets/kit");
+    std::fs::create_dir_all(&dir)?;
+    image.save(dir.join(&file))?;
+    Ok(file)
 }

@@ -737,6 +737,44 @@
       ]
     },
     {
+      "id": "concrete_floor_worn_001",
+      "title": "Concrete Floor Worn 001",
+      "kind": "texture",
+      "source": "https://polyhaven.com/a/concrete_floor_worn_001",
+      "license": "CC0-1.0",
+      "authors": [
+        "Dimitrios Savva",
+        "Rico Cilliers"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "meters": [
+        3.0,
+        3.0000002
+      ],
+      "files": [
+        {
+          "path": "concrete_floor_worn_001_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_worn_001/concrete_floor_worn_001_arm_1k.jpg",
+          "size": 152919,
+          "blake3": "063f21d9b5191cb1f3d96121f0c7b22446c26a1a9e205aaa10b52a21ec8e24f6"
+        },
+        {
+          "path": "concrete_floor_worn_001_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_worn_001/concrete_floor_worn_001_diff_1k.jpg",
+          "size": 118806,
+          "blake3": "9ecba0f96cd613c02405a51b28b3795b63edd1e7b13206654b54ec1587976111"
+        },
+        {
+          "path": "concrete_floor_worn_001_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_worn_001/concrete_floor_worn_001_nor_gl_1k.jpg",
+          "size": 110906,
+          "blake3": "d55f71401c61f421778562f5f44adf860293825052c90b4cd41068272ed973bd"
+        }
+      ]
+    },
+    {
       "id": "concrete_road_barrier",
       "title": "Concrete Road Barrier",
       "kind": "model",
@@ -988,6 +1026,58 @@
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/crowbar_01/crowbar_01_nor_gl_1k.jpg",
           "size": 523819,
           "blake3": "7e4d93e367f6ba0080772c06ceb654881de1119d9d7c396e48c5381146603dfa"
+        }
+      ]
+    },
+    {
+      "id": "crystalline_iceplant",
+      "title": "Crystalline Iceplant",
+      "kind": "model",
+      "source": "https://polyhaven.com/a/crystalline_iceplant",
+      "license": "CC0-1.0",
+      "authors": [
+        "James Ray Cock",
+        "Jenelle van Heerden"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "crystalline_iceplant.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/crystalline_iceplant/crystalline_iceplant.bin",
+          "size": 330436,
+          "blake3": "70a1f417e76d9cd6ba481eeb68b574388683fef9266601aeda039dd6fd8e9a91"
+        },
+        {
+          "path": "crystalline_iceplant_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/crystalline_iceplant/crystalline_iceplant_1k.gltf",
+          "size": 13607,
+          "blake3": "0acf848687a3de6ecea29c4cf4ee9e7e0a85261056341a4a460cab8fef23b9f7"
+        },
+        {
+          "path": "textures/crystalline_iceplant_alpha_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/crystalline_iceplant/crystalline_iceplant_alpha_1k.png",
+          "size": 37709,
+          "blake3": "73ce8ddbaecfdabd3dcef5e4bf08113eb554264fb82a3500334e5595e64d8d02"
+        },
+        {
+          "path": "textures/crystalline_iceplant_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/crystalline_iceplant/crystalline_iceplant_arm_1k.jpg",
+          "size": 850713,
+          "blake3": "e93ab1fa73d3952bd7ccd48cb68d4843e51c503d8c97bec1c511ec5aab77d571"
+        },
+        {
+          "path": "textures/crystalline_iceplant_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/crystalline_iceplant/crystalline_iceplant_diff_1k.jpg",
+          "size": 510658,
+          "blake3": "2c53697037dce5adf2edafea2f447e7425e1b81a45fde2b803182b7a40d0ecd6"
+        },
+        {
+          "path": "textures/crystalline_iceplant_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/crystalline_iceplant/crystalline_iceplant_nor_gl_1k.jpg",
+          "size": 907570,
+          "blake3": "06340bf4a5b77282ad52587c56d491e9e9375ae9e35e8248b9afb9babba87fd8"
         }
       ]
     },
@@ -1380,6 +1470,12 @@
           "blake3": "a00b8050bc7e1e99650f5231270f9855c5abc835007194cfdd4842546b1a1a6e"
         },
         {
+          "path": "textures/exterior_aircon_unit_01_opacity_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/exterior_aircon_unit/exterior_aircon_unit_01_opacity_1k.png",
+          "size": 129471,
+          "blake3": "0e7d2ccaedd8e687ca64a4ed15536e92cb455a4cb9c8e13a2daf692c4d796223"
+        },
+        {
           "path": "textures/exterior_aircon_unit_02_arm_1k.jpg",
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/exterior_aircon_unit/exterior_aircon_unit_02_arm_1k.jpg",
           "size": 484026,
@@ -1426,6 +1522,12 @@
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/exterior_aircon_unit/exterior_aircon_unit_rusted_02_opacity_1k.jpg",
           "size": 357558,
           "blake3": "aa47bc872a2ae2c4e888236ab9bd3e706a1e9e0ca3b9b334fc4c5e623529c0d6"
+        },
+        {
+          "path": "textures/exterior_aircon_unit_rusted_02_opacity_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/exterior_aircon_unit/exterior_aircon_unit_rusted_02_opacity_1k.png",
+          "size": 147529,
+          "blake3": "290e50980cd45d93688b62eb2b552920b51efed1939c146285aa744cc0da6620"
         }
       ]
     },
@@ -2665,70 +2767,6 @@
       ]
     },
     {
-      "id": "modular_chainlink_fence",
-      "title": "Modular Chainlink Fence",
-      "kind": "model",
-      "source": "https://polyhaven.com/a/modular_chainlink_fence",
-      "license": "CC0-1.0",
-      "authors": [
-        "James Ray Cock",
-        "Amal Kumar"
-      ],
-      "projects": [
-        "outpost"
-      ],
-      "files": [
-        {
-          "path": "modular_chainlink_fence.bin",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/modular_chainlink_fence/modular_chainlink_fence.bin",
-          "size": 3168016,
-          "blake3": "8921accc0e6094d65689c7aa1d50ff7aa1aa6a38ede25977552174e2879ca2b8"
-        },
-        {
-          "path": "modular_chainlink_fence_1k.gltf",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
-          "size": 41838,
-          "blake3": "ba118f501923b0326f5cda6f5206ae86d38c69b49d5572ca9a58d2b446e1aa0e"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_posts_arm_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_arm_1k.jpg",
-          "size": 839858,
-          "blake3": "1aff2908fab9dea6010fe588a54b2f3dfef6f45e12339914973b301f57ecfb78"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_posts_diff_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_diff_1k.jpg",
-          "size": 707116,
-          "blake3": "e719285d59d75bf95bdf034fefe186a80583a607733b400627cdf951072cd708"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_posts_nor_gl_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_nor_gl_1k.jpg",
-          "size": 505743,
-          "blake3": "72fa650622f61bfac236b6c929722696be9e7ded4f2f1304b0ae45043cae5923"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_wire_arm_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_arm_1k.jpg",
-          "size": 694743,
-          "blake3": "bd5aecb23a1118d634f7439e0d3b169c439c60bf429d64facdda5472e8e40032"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_wire_diff_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_diff_1k.jpg",
-          "size": 670536,
-          "blake3": "11a82b66197b39fd50da92f784cc2e5445a11b207fcac0f4f85906f46e4c2029"
-        },
-        {
-          "path": "textures/modular_chainlink_fence_wire_nor_gl_1k.jpg",
-          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_nor_gl_1k.jpg",
-          "size": 664165,
-          "blake3": "f7739cf089f8ec945485d2bbbeca9b9a1b6fd2942a4129d72927d084d747ac60"
-        }
-      ]
-    },
-    {
       "id": "modular_electric_cables",
       "title": "Modular Electric Cables",
       "kind": "model",
@@ -3244,28 +3282,6 @@
       ]
     },
     {
-      "id": "oga_calm_track",
-      "title": "Calm Track",
-      "kind": "audio",
-      "source": "https://opengameart.org/node/98635",
-      "license": "CC0-1.0",
-      "authors": [
-        "pmiller"
-      ],
-      "projects": [
-        "outpost",
-        "showcase"
-      ],
-      "files": [
-        {
-          "path": "calm_track-loop.ogg",
-          "url": "https://opengameart.org/sites/default/files/calm_track-loop.ogg",
-          "size": 3415564,
-          "blake3": "0ac0b64357d53cfd3469d7429ccce7277ea24e66b61bdc4c1bb15f36ee1f2557"
-        }
-      ]
-    },
-    {
       "id": "oga_fireplace",
       "title": "Fireplace Sound loop",
       "kind": "audio",
@@ -3304,6 +3320,27 @@
           "url": "https://opengameart.org/sites/default/files/freezer_0.ogg",
           "size": 409138,
           "blake3": "901bbfd110b38a2db65f964cc46d5022790a4b4f1d0eadd91d29bc875bc8872a"
+        }
+      ]
+    },
+    {
+      "id": "oga_lonelyhood",
+      "title": "Lonelyhood",
+      "kind": "audio",
+      "source": "https://opengameart.org/content/lonelyhood",
+      "license": "CC0-1.0",
+      "authors": [
+        "yd"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "Lonelyhood.ogg",
+          "url": "https://opengameart.org/sites/default/files/Lonelyhood.ogg",
+          "size": 2113603,
+          "blake3": "98621e2a777b24043c025f47287036da7b9e91a67506f189ece78be89b885703"
         }
       ]
     },
@@ -4225,6 +4262,43 @@
       ]
     },
     {
+      "id": "rocky_terrain_02",
+      "title": "Rocky Terrain 02",
+      "kind": "texture",
+      "source": "https://polyhaven.com/a/rocky_terrain_02",
+      "license": "CC0-1.0",
+      "authors": [
+        "Amal Kumar"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "meters": [
+        90.0,
+        90.0
+      ],
+      "files": [
+        {
+          "path": "rocky_terrain_02_arm_2k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rocky_terrain_02/rocky_terrain_02_arm_2k.jpg",
+          "size": 1960945,
+          "blake3": "b924600ed649e1ad0d375c6ac9ad415bbacc319139d5460af68ff2a18a1abad5"
+        },
+        {
+          "path": "rocky_terrain_02_diff_2k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rocky_terrain_02/rocky_terrain_02_diff_2k.jpg",
+          "size": 3232826,
+          "blake3": "fddecb752ab7eb67ab6ad742301d648c66bcc18f5e126f4393f59e041a59138e"
+        },
+        {
+          "path": "rocky_terrain_02_nor_gl_2k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rocky_terrain_02/rocky_terrain_02_nor_gl_2k.jpg",
+          "size": 4149208,
+          "blake3": "b2f0a18fc2f8c417034eda24453efeefaff0947469888fee46126323301da427"
+        }
+      ]
+    },
+    {
       "id": "rocky_trail",
       "title": "Rocky Trail",
       "kind": "texture",
@@ -4538,6 +4612,12 @@
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_03/shrub_03_1k.gltf",
           "size": 7296,
           "blake3": "d18d8f2e717c29e3ba91c8cd60fcb352441afe09c9e201ced96645f73914fb94"
+        },
+        {
+          "path": "textures/shrub_03_alpha_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/shrub_03/shrub_03_alpha_1k.png",
+          "size": 79069,
+          "blake3": "d9b55dfe1606be20d0e46f926ba4166456683b8f73544afac2c5012f30ded3c4"
         },
         {
           "path": "textures/shrub_03_arm_1k.jpg",
@@ -5240,6 +5320,12 @@
         "outpost"
       ],
       "files": [
+        {
+          "path": "textures/wild_rooibos_bush_alpha_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/wild_rooibos_bush/wild_rooibos_bush_alpha_1k.png",
+          "size": 90888,
+          "blake3": "d3341ce256086dd9438c597cf09c1c79284b7ac4485cbec287454f4c628d589d"
+        },
         {
           "path": "textures/wild_rooibos_bush_arm_1k.jpg",
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wild_rooibos_bush/wild_rooibos_bush_arm_1k.jpg",

@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod build;
+mod capture;
 mod credits;
 mod fetch;
 mod kit;
@@ -90,6 +91,19 @@ enum Command {
     Build {
         /// Project folder name.
         project: String,
+    },
+    /// Fidelity captures and GPU timings of one look (`<project>/look/<look>.look.json`).
+    Capture {
+        /// Project folder name.
+        project: String,
+        /// Look name.
+        look: String,
+        /// First shot only, native only (look iteration).
+        #[arg(long)]
+        quick: bool,
+        /// Frames per timing window.
+        #[arg(long, default_value_t = 240)]
+        timing_frames: u32,
     },
 }
 
@@ -207,6 +221,21 @@ fn main() -> Result<()> {
             }
             println!("built {project}");
         }
+        Command::Capture {
+            project,
+            look,
+            quick,
+            timing_frames,
+        } => capture::run(
+            &samples,
+            &read_lock()?,
+            &capture::Request {
+                project: &project,
+                look: &look,
+                quick,
+                timing_frames,
+            },
+        )?,
     }
     Ok(())
 }
