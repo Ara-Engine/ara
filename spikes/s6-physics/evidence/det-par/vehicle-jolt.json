@@ -1,0 +1,30 @@
+{
+  "scenario": "vehicle",
+  "flavor": {
+    "deterministic_build": true,
+    "jolt_cross_platform_deterministic": true,
+    "rapier_parallel": true,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": true,
+    "rust_avx2": false
+  },
+  "result": {
+    "engine": "jolt",
+    "speed_at_5s": 17.411057,
+    "distance_at_5s": 48.652203,
+    "lateral_drift_at_5s": 0.0024108507,
+    "heading_change_turn_deg": -96.25596,
+    "turn_direction": "right",
+    "turn_radius_m": 48.842693,
+    "min_up_dot": 0.9996918,
+    "mean_wheels_in_contact": 4.0,
+    "pass": true,
+    "step_ms": {
+      "samples": 600,
+      "p50": 0.0045000000000000005,
+      "p95": 0.0066,
+      "max": 0.0415,
+      "mean": 0.004971999999999993
+    }
+  }
+}

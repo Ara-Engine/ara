@@ -1,0 +1,11 @@
+﻿{
+    "flavor":  "fast-st",
+    "before_pct":  53.4,
+    "runs":  [
+                 {
+                     "run":  "determinism --threads 1",
+                     "seconds":  10.9,
+                     "load_after_pct":  71.3
+                 }
+             ]
+}

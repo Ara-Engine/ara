@@ -1,0 +1,11 @@
+﻿{
+    "flavor":  "fast-par-simd8-avx2",
+    "before_pct":  46,
+    "runs":  [
+                 {
+                     "run":  "determinism --threads 1,8",
+                     "seconds":  17,
+                     "load_after_pct":  71.3
+                 }
+             ]
+}

@@ -1,0 +1,36 @@
+﻿{
+    "flavor":  "fast-st",
+    "before_pct":  31,
+    "runs":  [
+                 {
+                     "run":  "character",
+                     "seconds":  0.1,
+                     "load_after_pct":  43.3
+                 },
+                 {
+                     "run":  "stacking",
+                     "seconds":  0.3,
+                     "load_after_pct":  37.1
+                 },
+                 {
+                     "run":  "vehicle",
+                     "seconds":  0.1,
+                     "load_after_pct":  40.9
+                 },
+                 {
+                     "run":  "queries",
+                     "seconds":  12.6,
+                     "load_after_pct":  43.9
+                 },
+                 {
+                     "run":  "determinism --threads 1",
+                     "seconds":  10.1,
+                     "load_after_pct":  45.3
+                 },
+                 {
+                     "run":  "scale --count 5000,20000 --threads 1",
+                     "seconds":  180,
+                     "load_after_pct":  69
+                 }
+             ]
+}

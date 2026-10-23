@@ -1,0 +1,27 @@
+{
+  "scenario": "queries",
+  "flavor": {
+    "deterministic_build": false,
+    "jolt_cross_platform_deterministic": false,
+    "rapier_parallel": false,
+    "rapier_simd8": false,
+    "rapier_enhanced_determinism": false,
+    "rust_avx2": false
+  },
+  "result": {
+    "noop_call_ns": 1.098995,
+    "queries": {
+      "engine": "jolt",
+      "bodies": 5000,
+      "single_position_read_ns": 8.8065,
+      "bulk_read_ns_per_body": 10.8473,
+      "raycast_ns": 552.24,
+      "raycast_hits": 9720,
+      "raycast_mean_distance": 24.702944,
+      "raycast_mean_normal_y": 0.7669444,
+      "sphere_cast_ns": 1758.29,
+      "sphere_cast_hits": 9740,
+      "sphere_cast_mean_distance": 24.385233
+    }
+  }
+}

@@ -1,0 +1,21 @@
+﻿{
+    "flavor":  "fast-par-simd8-avx2",
+    "before_pct":  34.9,
+    "runs":  [
+                 {
+                     "run":  "queries",
+                     "seconds":  11.3,
+                     "load_after_pct":  87.1
+                 },
+                 {
+                     "run":  "determinism --threads 1,8",
+                     "seconds":  14.4,
+                     "load_after_pct":  75.4
+                 },
+                 {
+                     "run":  "scale --count 5000,20000 --threads 1,4,8",
+                     "seconds":  239.1,
+                     "load_after_pct":  34.4
+                 }
+             ]
+}
