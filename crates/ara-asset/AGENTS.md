@@ -13,6 +13,13 @@ Run `cargo check -p ara-asset`, `cargo test -p ara-asset`,
 
 Importers are installed only in worker executables. Do not invoke importer code on
 an editor frame. Source snapshots and cache I/O belong on background threads.
+`ProcessWorker` admits at most four native child processes per host process,
+shared across handles, discovery and cooks. Set `ARA_IMPORT_WORKERS` before startup
+to override (positive integer, always capped by `available_parallelism`; invalid or
+zero uses four). Excess jobs stay queued in `ImportJob` and launch when polled;
+queued time does not consume the native worker deadline. Cancellation drops queued
+requests; running children hold their slot until reaped. The cold-batch process
+test is `cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
 
