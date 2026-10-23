@@ -123,7 +123,9 @@ pub struct DiagReportParams {
     /// Session handle from `session.begin`; its author is the diagnostics' origin
     /// unless the reporter is the engine (`engine: true`).
     pub session: String,
-    /// Diagnostics as JSON (`{code, severity, message, location?, subjects?, fixes?}`).
+    /// Diagnostics as JSON (`{code, severity, message, location?, subjects?, fixes?,
+    /// data?}`), each optionally with `causedBy`: the index of an earlier diagnostic
+    /// in this batch that caused it.
     pub diagnostics: Vec<Value>,
     /// Simulation tick they happened on.
     pub tick: Option<u64>,
@@ -291,23 +293,35 @@ fn report(st: &mut State, origin: Origin, p: DiagReportParams) -> R {
     let origin = if p.engine.unwrap_or(false) { Origin::Engine } else { origin };
     let mut recorded = Vec::new();
     let mut skipped = Vec::new();
-    for (i, v) in p.diagnostics.into_iter().enumerate() {
+    let mut ids = Vec::new();
+    for (i, mut v) in p.diagnostics.into_iter().enumerate() {
+        let cause = v
+            .as_object_mut()
+            .and_then(|o| o.remove("causedBy"))
+            .and_then(|c| c.as_u64())
+            .and_then(|c| ids.get(c as usize).copied().flatten());
         match serde_json::from_value::<Diagnostic>(v) {
             Ok(d) => {
                 let meta = Meta {
                     origin: Some(origin.clone()),
                     tick: p.tick,
+                    cause,
                     ..Meta::default()
                 };
-                recorded.push(st.diag.push(d, meta).seq);
+                let r = st.diag.push(d, meta);
+                ids.push(Some(r.id));
+                recorded.push(r.seq);
             }
-            Err(e) => skipped.push(
+            Err(e) => {
+                ids.push(None);
+                skipped.push(
                 Diagnostic::warning(
                     codes::DIAG_INVALID_REPORT,
                     format!("reported diagnostic #{i} is not a diagnostic: {e}"),
                 )
                 .path(format!("params.diagnostics[#{i}]")),
-            ),
+                )
+            }
         }
     }
     for d in &skipped {

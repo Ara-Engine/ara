@@ -15,15 +15,15 @@ use serde_json::{Value, json};
 
 use crate::Explainer;
 
-/// Every built-in explainer, fallback first (later ones win ties).
+/// Every built-in explainer; the fallback (`subject`) last.
 pub(crate) fn builtin() -> Vec<Box<dyn Explainer>> {
     vec![
-        Box::new(subject::Subject),
-        Box::new(asset::AssetExplainer),
-        Box::new(visibility::Visibility::default()),
+        Box::new(visibility::Visibility),
+        Box::new(code::CodeExplainer),
         Box::new(reload::Reload),
         Box::new(frame::Frame),
-        Box::new(code::CodeExplainer),
+        Box::new(asset::AssetExplainer),
+        Box::new(subject::Subject),
     ]
 }
 

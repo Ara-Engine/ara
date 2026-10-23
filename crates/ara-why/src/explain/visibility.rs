@@ -93,7 +93,7 @@ impl Explainer for Visibility {
         match (!q.entities.is_empty(), topic) {
             (true, true) => 90,
             (true, false) if q.other_words(WORDS).is_empty() && q.codes.is_empty() => 40,
-            (false, true) if !q.names.is_empty() => 70,
+            (false, true) if !q.name_candidates(WORDS).is_empty() => 70,
             _ => 0,
         }
     }
@@ -126,6 +126,9 @@ impl Explainer for Visibility {
         passes(&cx, &mut f);
         f.collect(extra, &Target::Entity(&e), facts);
         related(&cx, &[mesh, material].concat(), &mut f);
+        if f.causes.is_empty() {
+            elsewhere(&cx, &mut f);
+        }
         let answer = Report::verdict(
             &f,
             "nothing in the documents or on the bus explains it; checks marked ? need the running renderer",
@@ -142,7 +145,7 @@ pub(crate) fn resolve(q: &Question, facts: &dyn Facts) -> Result<Entity, Vec<Dia
         return facts.entity(sel, q.doc.as_deref());
     }
     let mut last = None;
-    for n in &q.names {
+    for n in q.name_candidates(WORDS) {
         match facts.entity(&format!("name:{n}"), q.doc.as_deref()) {
             Ok(e) => return Ok(e),
             Err(d) => last = Some(d),
@@ -826,6 +829,26 @@ fn passes(cx: &Ctx<'_>, f: &mut Findings) {
             r,
             cx.facts,
         ));
+    }
+}
+
+/// When nothing explains this entity: the errors the bus has about other
+/// entities, in case the question named the wrong one.
+fn elsewhere(cx: &Ctx<'_>, f: &mut Findings) {
+    let errors = cx.facts.diagnostics(&Filter {
+        severity: Some(Severity::Error),
+        ..Filter::default()
+    });
+    for r in errors.iter().rev().take(3) {
+        let others: Vec<String> = r
+            .subjects()
+            .into_iter()
+            .filter(|s| s.kind == ara_diag::SubjectKind::Entity && s.value != cx.e.address)
+            .map(|s| s.to_string())
+            .collect();
+        if !others.is_empty() {
+            f.related.push(format!("elsewhere: {} — ara why {} not visible", line(r), others[0]));
+        }
     }
 }
 

@@ -97,7 +97,7 @@ impl Why {
         why
     }
 
-    /// Adds an explainer. Later ones win score ties.
+    /// Adds an explainer. Earlier ones win score ties.
     pub fn register(&mut self, explainer: Box<dyn Explainer>) {
         self.explainers.push(explainer);
     }
@@ -118,12 +118,13 @@ impl Why {
     /// Answers `question` with the best-fitting explainer.
     pub fn explain(&self, question: &str, facts: &dyn Facts) -> Result<Report, Vec<Diagnostic>> {
         let q = Question::parse(question);
-        let best = self
-            .explainers
-            .iter()
-            .map(|e| (e.matches(&q), e))
-            .filter(|(score, _)| *score > 0)
-            .max_by_key(|(score, _)| *score);
+        let mut best: Option<(u32, &Box<dyn Explainer>)> = None;
+        for e in &self.explainers {
+            let score = e.matches(&q);
+            if score > 0 && best.is_none_or(|(b, _)| score > b) {
+                best = Some((score, e));
+            }
+        }
         let Some((_, explainer)) = best else {
             return Err(vec![self.unanswered(question)]);
         };

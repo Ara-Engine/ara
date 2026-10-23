@@ -10,7 +10,8 @@ const STOP: &[&str] = &[
     "my", "this", "that", "these", "those", "in", "on", "at", "of", "to", "for", "from", "with",
     "so", "still", "anymore", "any", "more", "can't", "cant", "cannot", "i", "we", "me", "be",
     "being", "been", "and", "or", "what", "when", "how", "where", "has", "have", "had",
-    "entity", "object", "thing", "about", "there", "here", "now", "all",
+    "entity", "object", "thing", "about", "there", "here", "now", "all", "game", "level",
+    "scene", "world", "anymore", "after", "since", "someone", "suddenly", "up", "out", "any",
 ];
 
 /// A parsed `ara why` question.
@@ -136,6 +137,25 @@ impl Question {
             .collect()
     }
 
+    /// Words that may name an entity, best first: capitalized words, then adjacent
+    /// pairs joined in title case (`gate crate` → `GateCrate`), then single words in
+    /// title case (`workbench` → `Workbench`). Topic words (`stems`) are left out.
+    pub fn name_candidates(&self, stems: &[&str]) -> Vec<String> {
+        let title = |w: &str| {
+            let mut c = w.chars();
+            c.next()
+                .map(|f| f.to_uppercase().chain(c).collect::<String>())
+                .unwrap_or_default()
+        };
+        let words = self.other_words(stems);
+        let mut out: Vec<String> = self.names.clone();
+        out.extend(words.windows(2).map(|w| format!("{}{}", title(w[0]), title(w[1]))));
+        out.extend(words.iter().map(|w| title(w)));
+        let mut seen = std::collections::BTreeSet::new();
+        out.retain(|c| seen.insert(c.clone()));
+        out
+    }
+
     /// The first subject of `kind`.
     pub fn subject(&self, kind: SubjectKind) -> Option<&Subject> {
         self.subjects.iter().find(|s| s.kind == kind)
@@ -179,5 +199,7 @@ mod tests {
 
         let q = Question::parse("why is Crate invisible");
         assert_eq!(q.names, ["Crate"]);
+        let q = Question::parse("why is the gate crate not rendering in game");
+        assert_eq!(q.name_candidates(&["render"]), ["GateCrate", "Gate", "Crate"]);
     }
 }
