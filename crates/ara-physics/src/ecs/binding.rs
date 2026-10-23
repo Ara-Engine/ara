@@ -47,6 +47,9 @@ pub(super) fn validate(world: &World, e: Entity) -> Result<()> {
 }
 
 impl Binding {
+    pub fn incomplete(&self) -> bool {
+        self.rigid.is_some() && self.body.is_none()
+    }
     pub fn body(&self) -> Option<BodyHandle> {
         self.body
     }
@@ -65,6 +68,7 @@ impl Binding {
         e: Entity,
         id: u64,
         backend: &mut B,
+        pending: &mut Vec<BodyDesc>,
     ) -> Result<Self> {
         let pose = world.get::<PhysicsPose>(e).copied().unwrap_or_default();
         let velocity = world.get::<Velocity>(e).copied().unwrap_or_default();
@@ -108,19 +112,14 @@ impl Binding {
                         .0
                 }
             };
-            let mut ids = Vec::with_capacity(1);
-            backend.create_bodies(
-                &[BodyDesc {
-                    shape,
-                    user_data: id,
-                    pose,
-                    body,
-                    collider: c.clone(),
-                    velocity,
-                }],
-                &mut ids,
-            )?;
-            b.body = ids.first().copied();
+            pending.push(BodyDesc {
+                shape,
+                user_data: id,
+                pose,
+                body,
+                collider: c.clone(),
+                velocity,
+            });
         }
         if let Some(controller) = controller {
             b.character = Some(backend.create_character(CharacterDesc {

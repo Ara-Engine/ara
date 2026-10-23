@@ -6,8 +6,8 @@ No CMake, bindgen, build-time download, or prebuilt library is involved.
 
 ## API and ownership
 
-- `src/lib.rs` and `src/types.rs` are the ABI declaration sources. Run `python generate_abi.py` after
-  changing it, then rustfmt. This regenerates the C header and layout probes.
+- `src/lib.rs` and `src/types.rs` are the ABI declaration sources. Keep the C
+  header and layout probes in sync when changing them; builds need no generator.
 - A world owns every shape, character, vehicle and constraint. Body handles carry
   Jolt's generation. Character/vehicle/joint slots are never reused.
 - Pointer/count pairs are borrowed only for a synchronous call. No callback enters Rust.
@@ -15,6 +15,9 @@ No CMake, bindgen, build-time download, or prebuilt library is involved.
   Contact callbacks use bounded, preallocated atomic-index storage without allocation.
 - World mutation requires exclusive ownership. Read-only extraction/queries can share
   a world between ticks; never query concurrently with an update.
+- The host-job ABI is the exception: Begin/End bracket an exclusive update, and
+  Run borrows only the job queue on Bevy workers. Join every worker before another
+  boundary, extraction, restore or destruction. No native callback enters Rust.
 - A failed capacity/update faults the session; restore a valid checkpoint or rebuild.
   Allocation/process exhaustion and upstream fatal assertions are not recoverable errors.
 
@@ -28,6 +31,10 @@ No CMake, bindgen, build-time download, or prebuilt library is involved.
 - Default `cross-platform-deterministic` enables `JPH_CROSS_PLATFORM_DETERMINISTIC`,
   precise floating point and no FMA. S6 measured a 7–12% cost. Disabling defaults
   selects fast local simulation; peers/replays must agree on flags.
+- `bench` adds the direct C++ Update harness; `profile` also instruments copies in
+  OUT_DIR, never vendor/. Phase counters sum exclusive worker elapsed scopes,
+  including descheduling; they are not on-CPU or additive wall time. They are
+  deliberately absent from ordinary game builds.
 - Use the MSVC C++ tools installed with VS 18 on Windows.
 
 ## Validation
@@ -47,4 +54,11 @@ Behavioral/rollback tests live in `ara-physics-jolt` and exercise this ABI.
   the correct capsule before restoring the character's contacts and motion state.
 - Jolt contact callback and broadphase iteration order are not deterministic. Sort
   results before simulation consumes them. Contact stop also means body deactivation.
+- Virtual-character candidates use a refitted AABB tree and stable CharacterID
+  order, then Jolt's exact collision implementation. Sweeps honor the collector's
+  fraction (which can exceed one for padding). Conservative bounds retain padding
+  at large coordinates. Rebuild this cache after restore.
+- Body creation/removal and column extraction reuse world-owned scratch. The temp
+  allocator retains Jolt's fallback; benchmark its peak and fallback count when
+  changing contact capacity. The 20k fixture needs more than 128 MiB.
 - Keep upstream headers/license intact. Ara-owned shim code is under `shim/`.

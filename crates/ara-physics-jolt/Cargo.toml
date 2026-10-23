@@ -9,10 +9,13 @@ publish.workspace = true
 [features]
 default = ["cross-platform-deterministic"]
 cross-platform-deterministic = ["ara-jolt-sys/cross-platform-deterministic"]
+bench = ["ara-jolt-sys/bench", "ara-physics/bench"]
+profile = ["bench", "ara-jolt-sys/profile"]
 
 [dependencies]
 ara-physics = { path = "../ara-physics" }
 ara-jolt-sys = { path = "../ara-jolt-sys", default-features = false }
+bevy_tasks = { version = "0.20", features = ["multi_threaded"] }
 
 [dev-dependencies]
 bevy_ecs = "0.20"
@@ -24,6 +27,16 @@ ara-json = { path = "../ara-json" }
 [[bench]]
 name = "scale"
 harness = false
+
+[[bench]]
+name = "performance"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "ecs_bowl"
+harness = false
+required-features = ["bench"]
 
 [lints]
 workspace = true

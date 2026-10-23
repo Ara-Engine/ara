@@ -64,6 +64,18 @@ pub struct PhysicsConfig {
     pub layer_masks: [u32; 16],
     /// Gravity vector in meters per second squared.
     pub gravity: [f32; 3],
+    /// Speculative contact envelope in meters; larger values can produce ghost contacts.
+    pub speculative_contact_distance: f32,
+    /// Quiet time before a sleep-eligible body can deactivate, in seconds.
+    pub time_before_sleep: f32,
+    /// Maximum point speed considered quiet, in meters per second.
+    pub sleep_velocity_threshold: f32,
+    /// Split large contact islands into parallel solver batches.
+    pub large_island_splitter: bool,
+    /// Keep Jolt's deterministic ordering (independent of compiler floating-point flags).
+    pub deterministic_simulation: bool,
+    /// Execute native jobs on the host's Bevy compute pool instead of dedicated workers.
+    pub shared_job_pool: bool,
 }
 impl Default for PhysicsConfig {
     fn default() -> Self {
@@ -81,6 +93,42 @@ impl Default for PhysicsConfig {
             event_capacity: 65536,
             layer_masks,
             gravity: [0.0, -9.81, 0.0],
+            speculative_contact_distance: 0.02,
+            time_before_sleep: 0.5,
+            sleep_velocity_threshold: 0.03,
+            large_island_splitter: true,
+            deterministic_simulation: true,
+            shared_job_pool: false,
+        }
+    }
+}
+
+impl PhysicsConfig {
+    /// General gameplay: retains the S6 tower's 15/2 solver and deterministic ordering.
+    /// Contacts are opt-in through a nonzero `event_capacity`. CCD remains per body.
+    pub fn game_default() -> Self {
+        Self {
+            event_capacity: 0,
+            scratch_mb: 256,
+            ..Self::default()
+        }
+    }
+
+    /// Throughput experiment: 8/2 iterations; unsuitable for S6's slender tower.
+    /// Sleeping, the 2 cm speculative envelope and deterministic ordering stay enabled.
+    pub fn stress() -> Self {
+        Self {
+            velocity_steps: 8,
+            ..Self::game_default()
+        }
+    }
+
+    /// Replay/network profile: S6 15/2 solver, deterministic ordering and contact effects.
+    /// Cross-platform FP also requires the backend's deterministic build feature.
+    pub fn deterministic_network() -> Self {
+        Self {
+            scratch_mb: 256,
+            ..Self::default()
         }
     }
 }
@@ -101,10 +149,31 @@ pub trait PhysicsBackend: Send + Sync + Sized + 'static {
     fn create_bodies(&mut self, bodies: &[BodyDesc], out: &mut Vec<BodyHandle>) -> Result<()>;
     /// Removes a body, rejecting attached joints/vehicle ownership.
     fn destroy_body(&mut self, body: BodyHandle) -> Result<()>;
+    /// Removes a batch in caller order. Backends may prevalidate and use native batching.
+    fn destroy_bodies(&mut self, bodies: &[BodyHandle]) -> Result<()> {
+        for &body in bodies {
+            self.destroy_body(body)?;
+        }
+        Ok(())
+    }
     /// Applies runtime commands in their defined slice order.
     fn apply(&mut self, commands: &[BodyCommand], dt: f32) -> Result<()>;
     /// Reads exactly the requested bodies, in order, replacing `out`.
     fn read_bodies(&mut self, bodies: &[BodyHandle], out: &mut Vec<BodyState>) -> Result<()>;
+    /// Extracts directly into reusable component columns; native backends can avoid
+    /// intermediate AoS conversion. The default adapter reuses its own scratch.
+    fn read_body_columns(&mut self, bodies: &[BodyHandle], out: &mut BodyColumns) -> Result<()> {
+        self.read_bodies(bodies, &mut out.fallback)?;
+        out.resize(bodies.len());
+        for (i, state) in out.fallback.iter().enumerate() {
+            out.positions[i] = state.pose.position;
+            out.rotations[i] = state.pose.rotation.0;
+            out.linear[i] = state.velocity.linear;
+            out.angular[i] = state.velocity.angular;
+            out.active[i] = u32::from(state.active);
+        }
+        Ok(())
+    }
     /// Reads one body's authoritative state.
     fn body_state(&self, body: BodyHandle) -> Result<BodyState>;
     /// Number of currently active bodies (order is never used in simulation).

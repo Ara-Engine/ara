@@ -1140,6 +1140,7 @@ dependencies = [
  "ara-physics",
  "ara-schema",
  "bevy_ecs",
+ "bevy_tasks",
  "glam 0.33.12",
  "serde_json",
 ]
