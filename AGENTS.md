@@ -60,6 +60,7 @@ There is no CI (D9). These local commands are the only gates, so run them before
   - In per-frame code, never silence the borrow checker with `Arc<Mutex<_>>`, `Rc<RefCell<_>>` or `.clone()`. Use owned types, handles and short ECS borrows.
   - Measure (Tracy or a benchmark) before and after any hot-path change.
 - **No `unwrap()` outside tests.** Use `expect("…")` only to state a real invariant. Every `unsafe` block gets a `// SAFETY:` comment.
+- **Build prerequisites are fixed.** A fresh clone must `cargo check`/`cargo test` with only Rust, the MSVC/Clang C/C++ compiler, the Vulkan SDK (shader cooking) and the .NET 10 SDK (C# host). Vendored C/C++ is built with `cc` from `build.rs`, following the Jolt shim pattern. No CMake, Python or other build-time tools. Optional runtime downloads, such as the Steam Audio runtime, must be clearly diagnosed setup steps, never build requirements.
 - **Keep crates and files small**, split along real dependency boundaries. Each crate has an `AGENTS.md` of 150 lines or fewer: purpose, public API, how to test, gotchas.
 - **Comments:** short doc comments on types and functions explaining how they are used. Update them whenever you change the behaviour.
 - **Spikes:** `spikes/<id>-<name>/`, own `Cargo.toml` (not a workspace member), throwaway. They finish with `RESULT.md` (numbers, findings, recommendation) and an entry in `docs/decisions.md`.
