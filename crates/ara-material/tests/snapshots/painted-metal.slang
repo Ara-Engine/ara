@@ -143,12 +143,12 @@ AraSurface ara_evaluate(AraMaterialInput input) {
     result.color = float3(1);
     result.opacity = 1;
     result.clip = 1;
-    float n_metal = float(1.0);
-    uint n_normal = uint(ara_load(0u).x);
-    uint n_paint = uint(ara_load(1u).x);
+    uint n_normal = uint(ara_load(1u).x);
+    uint n_paint = uint(ara_load(0u).x);
     float n_rough = ara_load(2u).x;
     float2 n_uv = input.uv;
     float3 n_color = ara_sample_color(n_paint, n_uv);
+    float n_metal = float(1.0);
     float3 n_nrm = ara_sample_normal(n_normal, n_uv);
     result.baseColor = n_color;
     result.metallic = n_metal;

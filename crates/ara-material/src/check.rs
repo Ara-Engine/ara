@@ -4,7 +4,7 @@ use ara_diag::{Diagnostic, FixAction};
 use ara_schema::grammar::split_id;
 use serde_json::json;
 
-use crate::{Expr, Material, Type, codes, library};
+use crate::{Expr, Material, ParameterValue, TextureDefault, TextureSource, Type, codes, library};
 
 /// A checked AST with deterministic scheduling and output-reachable node IDs.
 #[derive(Debug)]
@@ -25,15 +25,51 @@ pub(crate) fn identifier(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+pub(crate) fn value_name(name: &str) -> bool {
+    identifier(name)
+        && !matches!(
+            name,
+            "true"
+                | "false"
+                | "white"
+                | "black"
+                | "flat_normal"
+                | "material"
+                | "param"
+                | "let"
+                | "static"
+                | "output"
+                | "custom"
+                | "budget"
+                | "cost"
+                | "doc"
+                | "slang"
+        )
+}
+
 pub(crate) fn valid_values(ty: Type, values: &[f64]) -> bool {
-    values.len() == ty.lanes()
+    !ty.is_texture()
+        && values.len() == ty.lanes()
         && values
             .iter()
             .all(|v| v.is_finite() && (*v as f32).is_finite())
-        && (!ty.is_texture()
-            || values
-                .iter()
-                .all(|v| v.fract() == 0.0 && (0.0..16.0).contains(v)))
+        && (ty != Type::Bool || matches!(values, [0.0] | [1.0]))
+}
+
+pub(crate) fn valid_value(ty: Type, value: &ParameterValue) -> bool {
+    match value {
+        ParameterValue::Numeric(v) => ty != Type::Bool && valid_values(ty, v),
+        ParameterValue::Bool(_) => ty == Type::Bool,
+        ParameterValue::Texture(TextureSource::Asset(reference)) => {
+            ty.is_texture() && ara_schema::grammar::parse_ref(&reference.0).is_ok()
+        }
+        ParameterValue::Texture(TextureSource::Default(default)) => match default {
+            TextureDefault::FlatNormal => ty == Type::TextureNormal,
+            TextureDefault::White | TextureDefault::Black => {
+                matches!(ty, Type::TextureColor | Type::TextureData)
+            }
+        },
+    }
 }
 
 fn literal_fix(m: &Material, id: &str, message: impl Into<String>) -> Diagnostic {
@@ -47,7 +83,7 @@ fn literal_fix(m: &Material, id: &str, message: impl Into<String>) -> Diagnostic
     )
 }
 
-fn schedule(m: &Material) -> Result<Vec<String>, Diagnostic> {
+pub(crate) fn schedule(m: &Material) -> Result<Vec<String>, Diagnostic> {
     let mut degree: BTreeMap<&str, usize> = m
         .parameters
         .keys()
@@ -72,18 +108,24 @@ fn schedule(m: &Material) -> Result<Vec<String>, Diagnostic> {
             }
         }
     }
-    let mut ready: BTreeSet<&str> = degree
+    let priority = |id: &str| {
+        m.bindings
+            .get(id)
+            .map_or((0, 0, id.to_owned()), |b| (1, b.order, id.to_owned()))
+    };
+    let mut ready: BTreeSet<_> = degree
         .iter()
-        .filter_map(|(&id, &n)| (n == 0).then_some(id))
+        .filter(|(_, n)| **n == 0)
+        .map(|(&id, _)| priority(id))
         .collect();
     let mut result = Vec::new();
-    while let Some(id) = ready.pop_first() {
-        result.push(id.to_owned());
-        for next in successors.get(id).into_iter().flatten() {
+    while let Some((_, _, id)) = ready.pop_first() {
+        result.push(id.clone());
+        for next in successors.get(id.as_str()).into_iter().flatten() {
             if let Some(n) = degree.get_mut(next) {
                 *n -= 1;
                 if *n == 0 {
-                    ready.insert(next);
+                    ready.insert(priority(next));
                 }
             }
         }
@@ -116,10 +158,13 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
             );
         }
         let name = m.node_name(id).unwrap_or("");
-        if !identifier(name) || !names.insert(name) {
+        if !value_name(name) || !names.insert(name) {
             diags.push(
-                Diagnostic::error(codes::SYNTAX, "binding names must be unique identifiers")
-                    .record(id),
+                Diagnostic::error(
+                    codes::SYNTAX,
+                    "binding names must be unique, nonreserved identifiers",
+                )
+                .record(id),
             );
         }
     }
@@ -129,15 +174,15 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
                 Diagnostic::error(codes::SYNTAX, "parameter and expression IDs overlap").record(id),
             );
         }
-        if !valid_values(p.ty, &p.default) || p.variants.iter().any(|v| !valid_values(p.ty, v)) {
+        if !valid_value(p.ty, &p.default) {
             diags.push(
                 Diagnostic::error(
                     codes::TYPE,
-                    "parameter requires finite f32 lanes; S1 texture indices are 0..15",
+                    "parameter needs finite typed values, a boolean, or a semantic texture asset/default",
                 )
                 .record(id)
                 .with_fix(
-                    "Reset the parameter default and static choices",
+                    "Reset to a valid typed default",
                     FixAction::Command {
                         command: "material.parameter.reset".into(),
                         params: json!({"node":id}),
@@ -145,17 +190,11 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
                 ),
             );
         }
-        if !p.variants.is_empty()
-            && (!p.variants.contains(&p.default)
-                || p.variants
-                    .iter()
-                    .enumerate()
-                    .any(|(i, v)| p.variants[..i].contains(v)))
-        {
+        if p.is_static && p.ty != Type::Bool {
             diags.push(
                 Diagnostic::error(
                     codes::OVERRIDE,
-                    "static choices must be unique and include the default",
+                    "static switches must have type bool; their variant set is false/true",
                 )
                 .record(id),
             );
@@ -163,7 +202,9 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
     }
     for (name, f) in &m.functions {
         let mut args = BTreeSet::new();
-        if !identifier(name)
+        if !value_name(name)
+            || library::get(name).is_some()
+            || names.contains(name.as_str())
             || f.doc.trim().is_empty()
             || f.body.trim().is_empty()
             || f.inputs
@@ -172,7 +213,7 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
         {
             diags.push(Diagnostic::error(
                 codes::REFERENCE,
-                format!("custom `{name}` needs unique identifier inputs, docs and a nonempty body"),
+                format!("custom `{name}` needs a unique, nonreserved function name, identifier inputs, docs and a nonempty body"),
             ));
         }
     }
@@ -301,8 +342,8 @@ pub fn check(m: &Material) -> Result<CheckedMaterial<'_>, Vec<Diagnostic>> {
     let combinations = m
         .parameters
         .values()
-        .filter(|p| !p.variants.is_empty())
-        .fold(1u64, |n, p| n.saturating_mul(p.variants.len() as u64));
+        .filter(|p| p.is_static)
+        .fold(1u64, |n, _| n.saturating_mul(2));
     if combinations > u64::from(m.variant_budget) {
         diags.push(
             Diagnostic::error(
@@ -413,7 +454,7 @@ fn fold(op: &str, a: &[&[f64]], ty: Type) -> Option<Vec<f64>> {
                 ((x + 0.055) / 1.055).powf(2.4)
             }
         }),
-        "srgb" | "color" => Some(first.to_vec()),
+        "copy" | "srgb" | "color" => Some(first.to_vec()),
         "rgb" => Some(first[..3].to_vec()),
         "alpha" => Some(vec![first[3]]),
         "dot" => Some(vec![f64::from(

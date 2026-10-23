@@ -143,8 +143,8 @@ AraSurface ara_evaluate(AraMaterialInput input) {
     result.color = float3(1);
     result.opacity = 1;
     result.clip = 1;
-    float n_gain = ara_load(0u).x;
-    uint n_screen = uint(ara_load(1u).x);
+    float n_gain = ara_load(1u).x;
+    uint n_screen = uint(ara_load(0u).x);
     float2 n_uv = input.uv;
     float3 n_sample = ara_sample_color(n_screen, n_uv);
     float3 n_glow = (n_sample * n_gain);

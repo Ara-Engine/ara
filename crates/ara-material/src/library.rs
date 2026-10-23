@@ -24,6 +24,8 @@ macro_rules! nodes {
 }
 
 nodes! {
+    "copy" => (0,0,0) "Named value alias: a typed reference without additional shader work.",
+    "float" => (0,1,0) "float(bool) -> float: explicit false/true to zero/one conversion.",
     "add" => (0,4,0) "add(T,T) -> T: componentwise numeric addition.",
     "sub" => (0,4,0) "sub(T,T) -> T: componentwise numeric subtraction.",
     "mul" => (0,16,0) "mul(T,T|float) -> T: numeric multiplication; matrices use matrix multiplication.",
@@ -127,6 +129,8 @@ pub fn infer(op: &str, a: &[Type]) -> Option<Type> {
             .filter(|t| t.is_vector() && a.iter().all(|x| x == t))
     };
     match (op, a) {
+        ("copy", [ty]) => Some(*ty),
+        ("float", [Bool]) => Some(Float),
         ("add" | "sub", [a, b]) if a == b && a.is_numeric() => Some(*a),
         ("mul", [a, b]) if a == b && a.is_numeric() => Some(*a),
         ("mul" | "div", [a, Float]) if a.is_numeric() => Some(*a),

@@ -9,7 +9,7 @@ use ara_schema::{AssetRef, DocKindDesc, FieldPath, Schema, SchemaDb};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::{Instance, Material, codes};
+use crate::{Instance, Material, ParameterValue, codes};
 
 /// A saved material instance; all authoritative overrides are document fields.
 #[derive(Debug, Clone, PartialEq, Schema, Serialize, Deserialize)]
@@ -19,9 +19,9 @@ pub struct InstanceAsset {
     /// Definition graph as a full project-relative `@path#gr_id` reference.
     #[ara(asset_kind = "graph")]
     pub definition: AssetRef,
-    /// Parameter identity to scalar/vector/matrix lanes; defaults stay in the graph.
+    /// Typed numeric, boolean and symbolic texture overrides; defaults stay in the graph.
     #[serde(default)]
-    pub overrides: BTreeMap<String, Vec<f64>>,
+    pub overrides: BTreeMap<String, ParameterValue>,
 }
 
 /// Registers graph storage and the `materialinstance` document kind.
@@ -106,8 +106,8 @@ fn record_id() -> Result<RecordId, Diagnostic> {
 pub struct SetOverrideParams {
     /// Stable definition parameter ID.
     pub node: String,
-    /// New finite typed lanes; static choices must belong to their declared set.
-    pub values: Vec<f64>,
+    /// Numeric, boolean or symbolic texture value; static switches require booleans.
+    pub values: ParameterValue,
 }
 
 /// Removes a saved override, restoring the definition default.
@@ -131,7 +131,9 @@ impl Command for SetOverride {
     }
     fn run(ctx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
         let mut asset = InstanceAsset::from_document(ctx.read().doc())?;
-        asset.overrides.insert(p.node.clone(), p.values.clone());
+        let mut values = p.values;
+        crate::assets::repair(&mut values, ctx.read().workspace().index())?;
+        asset.overrides.insert(p.node.clone(), values.clone());
         let read = ctx.read();
         let id = read.workspace().find(&asset.definition.0).ok_or_else(|| {
             error("load the material definition before editing instance overrides")
@@ -154,7 +156,7 @@ impl Command for SetOverride {
         ctx.set(
             &record_id()?,
             FieldPath::field("overrides").key(p.node),
-            Some(json!(p.values)),
+            Some(json!(values)),
         )?;
         Ok(Value::Null)
     }

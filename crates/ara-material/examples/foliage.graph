@@ -22,11 +22,15 @@
         }
       },
       "params": {
-        "value": [2],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/leaf.png#tx_leaf001"
+        }
       },
       "payload": {
         "name": "albedo",
+        "order": 0,
         "ty": "TextureColor"
       }
     },
@@ -46,6 +50,7 @@
       },
       "payload": {
         "name": "leafMask",
+        "order": 3,
         "ty": "float"
       }
     },
@@ -70,6 +75,7 @@
       },
       "payload": {
         "name": "leafColor",
+        "order": 1,
         "ty": "ColorLinear"
       }
     },
@@ -94,6 +100,7 @@
       },
       "payload": {
         "name": "leafData",
+        "order": 2,
         "ty": "vec4"
       }
     },
@@ -107,11 +114,15 @@
         }
       },
       "params": {
-        "value": [3],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/leaf-mask.png#tx_leafmask1"
+        }
       },
       "payload": {
         "name": "mask",
+        "order": 1,
         "ty": "TextureData"
       }
     },
@@ -170,6 +181,7 @@
       },
       "payload": {
         "name": "roughness",
+        "order": 4,
         "ty": "float"
       }
     },
@@ -183,11 +195,12 @@
         }
       },
       "params": {
-        "value": [0.65],
-        "variants": []
+        "isStatic": false,
+        "value": [0.65]
       },
       "payload": {
         "name": "transmission",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -202,6 +215,7 @@
       },
       "payload": {
         "name": "uv0",
+        "order": 0,
         "ty": "vec2"
       }
     },

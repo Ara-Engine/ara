@@ -22,11 +22,12 @@
         }
       },
       "params": {
-        "value": [3],
-        "variants": []
+        "isStatic": false,
+        "value": [3]
       },
       "payload": {
         "name": "intensity",
+        "order": 1,
         "ty": "float"
       }
     },
@@ -51,6 +52,7 @@
       },
       "payload": {
         "name": "glow",
+        "order": 2,
         "ty": "ColorLinear"
       }
     },
@@ -92,6 +94,7 @@
       },
       "payload": {
         "name": "image",
+        "order": 1,
         "ty": "ColorLinear"
       }
     },
@@ -105,11 +108,15 @@
         }
       },
       "params": {
-        "value": [4],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/screen.png#tx_screen01"
+        }
       },
       "payload": {
         "name": "screen",
+        "order": 0,
         "ty": "TextureColor"
       }
     },
@@ -124,6 +131,7 @@
       },
       "payload": {
         "name": "uv0",
+        "order": 0,
         "ty": "vec2"
       }
     },

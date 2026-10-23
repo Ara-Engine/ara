@@ -43,6 +43,7 @@
       },
       "payload": {
         "name": "grassColor",
+        "order": 2,
         "ty": "ColorLinear"
       }
     },
@@ -77,6 +78,7 @@
       },
       "payload": {
         "name": "rockColor",
+        "order": 3,
         "ty": "ColorLinear"
       }
     },
@@ -106,6 +108,7 @@
       },
       "payload": {
         "name": "terrainColor",
+        "order": 6,
         "ty": "ColorLinear"
       }
     },
@@ -119,11 +122,15 @@
         }
       },
       "params": {
-        "value": [5],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/grass.png#tx_grass001"
+        }
       },
       "payload": {
         "name": "grass",
+        "order": 0,
         "ty": "TextureColor"
       }
     },
@@ -143,6 +150,7 @@
       },
       "payload": {
         "name": "blend",
+        "order": 5,
         "ty": "float"
       }
     },
@@ -157,6 +165,7 @@
       },
       "payload": {
         "name": "normal",
+        "order": 1,
         "ty": "vec3"
       }
     },
@@ -211,11 +220,15 @@
         }
       },
       "params": {
-        "value": [6],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/rock.png#tx_rock0001"
+        }
       },
       "payload": {
         "name": "rock",
+        "order": 1,
         "ty": "TextureColor"
       }
     },
@@ -233,6 +246,7 @@
       },
       "payload": {
         "name": "roughness",
+        "order": 7,
         "ty": "float"
       }
     },
@@ -246,11 +260,12 @@
         }
       },
       "params": {
-        "value": [0.25],
-        "variants": []
+        "isStatic": false,
+        "value": [0.25]
       },
       "payload": {
         "name": "scale",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -265,6 +280,7 @@
       },
       "payload": {
         "name": "uv0",
+        "order": 4,
         "ty": "vec2"
       }
     },
@@ -279,6 +295,7 @@
       },
       "payload": {
         "name": "world",
+        "order": 0,
         "ty": "vec3"
       }
     },

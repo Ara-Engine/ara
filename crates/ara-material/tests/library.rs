@@ -37,8 +37,13 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
                 Parameter {
                     name: format!("arg{i}"),
                     ty,
-                    default,
-                    variants: vec![],
+                    default: if ty.is_texture() || ty == Type::Bool {
+                        ParameterValue::zero(ty)
+                    } else {
+                        ParameterValue::Numeric(default)
+                    },
+                    order: i as u32,
+                    is_static: false,
                 },
             );
             id
@@ -48,6 +53,7 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
     m.bindings.insert(
         "n_result".into(),
         Binding {
+            order: m.bindings.len() as u32,
             name: "result".into(),
             ty,
             expr: Expr::Call {
@@ -63,6 +69,7 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
         m.bindings.insert(
             id.clone(),
             Binding {
+                order: m.bindings.len() as u32,
                 name: format!("aux{}", m.bindings.len()),
                 ty,
                 expr: Expr::Call {
@@ -100,8 +107,9 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
             Parameter {
                 name: "vector".into(),
                 ty: vector_ty,
-                default: vec![0.5; vector_ty.lanes()],
-                variants: vec![],
+                default: ParameterValue::Numeric(vec![0.5; vector_ty.lanes()]),
+                order: m.parameters.len() as u32,
+                is_static: false,
             },
         );
     }
@@ -110,6 +118,7 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
         m.bindings.insert(
             id.clone(),
             Binding {
+                order: m.bindings.len() as u32,
                 name: "rgbValue".into(),
                 ty: Type::Vec3,
                 expr: Expr::Call {
@@ -126,6 +135,7 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
         m.bindings.insert(
             id.clone(),
             Binding {
+                order: m.bindings.len() as u32,
                 name: "squaredLength".into(),
                 ty: Type::Float,
                 expr: Expr::Call {
@@ -147,6 +157,7 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
         m.bindings.insert(
             id.clone(),
             Binding {
+                order: m.bindings.len() as u32,
                 name: "linearColor".into(),
                 ty: Type::ColorLinear,
                 expr: Expr::Call {
@@ -170,12 +181,15 @@ fn material(op: &str, types: &[Type], domain: Domain) -> Material {
         "color"
     };
     m.outputs.insert(output.into(), current);
+    m.normalize_order().unwrap();
     m
 }
 
 fn inputs(op: &str) -> Vec<Type> {
     use Type::*;
     match op {
+        "copy" => vec![Vec3],
+        "float" => vec![Bool],
         "add" | "sub" | "mul" | "div" | "min" | "max" | "pow" | "step" => vec![Vec3, Vec3],
         "clamp" | "smoothstep" => vec![Vec3, Vec3, Vec3],
         "lerp" => vec![ColorLinear, ColorLinear, Float],
@@ -215,7 +229,7 @@ fn every_starter_node_roundtrips_and_compiles_both_targets() {
         let m = material(builtin.name, &inputs(builtin.name), domain);
         check(&m).unwrap();
         let text = dsl::print(&m).unwrap();
-        assert_eq!(m, dsl::parse(&text).unwrap());
+        assert_eq!(m, dsl::reconcile(&text, &m).unwrap().material);
         assert_eq!(
             m,
             Material::from_graph(&m.to_graph(Editor::default()).unwrap()).unwrap()
@@ -234,7 +248,7 @@ fn matrix_overloads_packing_and_all_domain_contracts() {
     let compiler = ShaderCompiler::discover();
     for ty in [Type::Mat3, Type::Mat4] {
         let m = material("mul", &[ty, ty], Domain::Surface);
-        let packed = Instance::default().pack(&m).unwrap();
+        let packed = Instance::default().pack(&m, |_, _| Ok(0)).unwrap();
         assert_eq!(packed.slots[0].rows, if ty == Type::Mat3 { 3 } else { 4 });
         if ty == Type::Mat3 {
             assert_eq!(packed.rows[0], [1.0, 0.0, 0.0, 0.0]);

@@ -129,8 +129,8 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
 
-float ara_custom_coat(float value) {
-return saturate(value);
+float ara_custom_coatCoverage(bool enabled) {
+return enabled ? 1.0 : 0.0;
 }
 
 AraSurface ara_evaluate(AraMaterialInput input) {
@@ -147,12 +147,12 @@ AraSurface ara_evaluate(AraMaterialInput input) {
     result.color = float3(1);
     result.opacity = 1;
     result.clip = 1;
-    float n_coat = float(1.0);
-    float n_clear = ara_custom_coat(n_coat);
-    float n_coatr = float(0.07999999821186066);
+    bool n_coat = true;
     float3 n_color = ara_load(0u).xyz;
-    float n_metal = float(0.8999999761581421);
     float n_rough = ara_load(1u).x;
+    float n_clear = ara_custom_coatCoverage(n_coat);
+    float n_coatr = float(0.07999999821186066);
+    float n_metal = float(0.8999999761581421);
     result.baseColor = n_color;
     result.clearCoat = n_clear;
     result.clearCoatRoughness = n_coatr;

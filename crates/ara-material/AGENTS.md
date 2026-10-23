@@ -1,101 +1,128 @@
 # ara-material
 
-One material program with text and graph authoring views (A8). No renderer or ECS
-dependency. Authoring errors can be saved/repaired; generation requires a checked
-AST. Slang compilation is offline and external, never a render-thread activity.
+One typed material program, with name-based text and a graph projection (A8).
+No renderer/ECS dependency. All live authoring uses ara-cmd/ara-ops; offline
+compilation runs externally and only checked programs can generate shaders.
+
+## Language and identity
+
+- `.material` never contains semantic or material asset IDs. The file/asset index
+  supplies material identity to `dsl::parse(source, asset_id)`.
+- Values have unique names. `dsl::reconcile(source, &previous)` matches names to
+  the graph's existing IDs. Use it when loading edits alongside an existing graph;
+  parsing as a new asset intentionally creates a fresh name-to-ID mapping.
+  dsl::reconcile_graph reads identity metadata directly, including draft sidecars.
+- `material.rename { from, to }` changes a name without changing ID, connections,
+  layout or overrides. Plain text renames are delete + create. ARA3208 offers an
+  undoable rename recovery; its restoreId field is diagnostic-only.
+- Optional `name #n_id` annotations can disambiguate identity. Canonical printing
+  always omits them. Graph/layout data is authoritative for semantic identity.
+- Parameters print in declaration order; lets use dependency order with author
+  order as the ready-node tie-break; outputs use Domain::output_order. Custom
+  functions print after parameters, before their call sites. Aliases use `let b
+  : float = a;`. Whitespace/comments normalize; program and order round-trip.
+- Numeric literals are plain numbers, vec2/vec3/vec4 or row-major mat3/mat4
+  constructors. `linear(r,g,b)` means scene-linear RGB; `srgb(r,g,b)` and #RRGGBB
+  mean encoded sRGB. Convert a named encoded color with `linear(encodedColor)`.
+  No implicit color-space conversion or numeric-to-texture coercion occurs.
+- Texture defaults/overrides are symbolic ParameterValue::Texture values:
+  @textures/paint.png, @textures/paint.png#tx_id, white, black or flat_normal.
+  `Material::resolve_assets` uses ara-doc's AssetIndex and reference repair on
+  save: missing IDs fill from paths, authoritative IDs repair moved paths.
+- Static switches are `static param coat : bool = true;`; the variant set is the
+  Cartesian product of false/true choices. Ordinary parameters stay runtime values.
+- Inline Slang functions retain typed I/O, docs and `cost(alu: N, samples: N,
+  branches: N)` estimates. Calls use their ordinary function name.
+- ARA3207 rejects draft IDs, array literals, texture slot numbers, variants arrays,
+  custom.* calls and positional cost arrays with executable source fixes. Slot
+  migration deliberately suggests a semantic fallback; it cannot infer an asset.
 
 ## Public API
 
-- `Material`, `Binding`, `Expr`, `Parameter`, `CustomFunction`, `Type`, `Domain`.
-  Named SSA expressions refer to explicit persistent node IDs; no hidden graph IR.
-- `dsl::{parse,print}`: bounded expressions, finite literals, typed resources,
-  explicit domains and JSON-escaped opaque Slang bodies. Printing normalizes
-  whitespace/comments; parse/print preserves the AST exactly, not original trivia.
-- `Material::{to_graph,from_graph}`: same AST and supplied `ara_graph::Editor`.
-  Material edge IDs derive from destination sockets, so rewiring preserves routing.
-  Use `material.connect`, not arbitrary graph edge IDs, for material wiring.
-- `check`, `CheckedMaterial`, `fold_constants`: types, domains, cycles, values,
-  static budgets and reachable dependency scheduling. Constants use f32 arithmetic.
-- `library::{BUILTINS,get,infer,registry}`: 47 documented operations with shared
-  signatures, graph search metadata and work estimates.
-- `Instance`, `InstanceAsset`, `VariantKey`, `ParameterSlot`, `PackedParameters`:
-  definition defaults, saved/runtime overrides, static selections and uploads.
-- `register(&mut SchemaDb)`: graph storage plus `materialinstance` document kind.
-  Instance files contain `i_values` and an `@path#gr_id` definition reference.
-- `commands::register`: typed text/graph apply, annotation/literal fixes, parameter
-  reset, output reset, budget, rewiring and saved instance override/clear commands.
-  Every live edit goes through EditCtx, yielding attributed undoable kernel ops.
-- `generate`: checked, folded Slang source, node/line mappings, estimated sample/
-  ALU/branch cost, parameter layout and a content-derived specialization key.
-- `ShaderCompiler::{discover,compile}`: external slangc SPIR-V / SM6.6 DXIL;
-  binary magic validation and compiler version/messages. Windows compiler work
-  starts below normal priority without opening a console window.
+- Material/Binding/Expr/Parameter/Type/Domain are the single AST, with graph IDs
+  internal and declaration order explicit. ParameterValue distinguishes numeric,
+  boolean and symbolic texture values. TextureSource/TextureDefault never store
+  heap indices. Graph::Editor is separate and excluded from compilation hashes.
+- Material::{to_graph,from_graph}: typed projections with deterministic destination
+  edge IDs. Use material.connect for wiring; generic graph edge IDs are not the
+  material format. Rename recovery can retain layout tombstones for deleted names.
+- check/CheckedMaterial/fold_constants: types, domains, finite f32 values, cycles,
+  static budgets, dependency scheduling and reachable constant folding.
+- library::{BUILTINS,get,infer,registry}: 49 documented operations, signatures,
+  generic graph search metadata and cost estimates (including named aliases).
+- register: graph and materialinstance Schema DB document kinds. InstanceAsset
+  saves a definition @path#id and typed overrides, including symbolic textures.
+- commands::register: text/graph apply, rename, wiring, typed fixes, budget and
+  instance override/clear commands. All mutations produce invertible kernel ops.
+- Instance::{validate,variant_key,pack}, parameter_layout: typed overrides, static
+  selection and GPU uploads. Runtime artistic/texture overrides do not add variants.
+- generate/Generated/ENGINE_TEMPLATE: Slang, node/line mappings, sample/ALU/branch
+  estimates, runtime layout and variant identity. ShaderCompiler spawns slangc
+  below normal priority with no console, retaining compiler identity/diagnostics.
 
-## ara-render integration (after the renderer merges)
+## ara-render adoption (after the renderer merges)
 
-1. Register material schemas and graph/material commands in the engine's shared
-   SchemaDb/Registry. Load definitions with `Graph::read` then `Material::from_graph`.
-   Run `check`; forward the returned ARA diagnostics/fix commands to the problems UI.
-2. Resolve saved `InstanceAsset`s against their definition. Runtime `Instance`
-   overrides are cheap uniforms unless the definition lists static `variants`.
-   `variant_key` ignores runtime override values. Enforce the definition's variant
-   budget before scheduling reachable pass/tier/vertex-layout PSOs.
-3. In a background cook worker, call `generate`, then invoke slangc externally.
-   The provided `fragmentMain` is a compilation/preview harness. Renderer passes
-   call generated `ara_evaluate(AraMaterialInput)` and consume `AraSurface`; select
-   the renderer's real entry point when compiling its pass module. Use the same
-   evaluation for depth/shadow opacity masking, decals and reference/RT shading.
-   Derivative-dependent roundedPanel is restricted to the UI fragment domain.
-4. The engine-owned `shaders/engine.slang` provides bindings/helpers and a compact
-   GGX metallic/roughness + clear coat template. Renderer lighting passes supply
-   actual lights/probes/shadows via `ara_engine_light`, rather than the validation
-   entry's fixed light. Transmission is a bounded foliage extension field; richer
-   scattering can extend engine lighting without creating a second material AST.
-5. Keep S1 ABI v1: 32 bytes/eight words, in order `materialIndex`, `textureIndex`,
-   `bufferIndex`, `flags`, `phase`, `aspect`, `padding0`, `padding1`.
-   Vulkan push constants; DXIL b0/space0. Set 0: textures binding 0 (t0/space1,
-   16 entries), RW float4 buffers binding 1 (u0/space2, 4 entries), sampler binding 2
-   (s0/space0). Binding 3 remains available for the renderer TLAS.
-6. `Instance::pack` returns row-major float4 rows plus slot metadata. Upload rows
-   to buffers[bufferIndex] starting at materialIndex (a ROW offset, not a material
-   ordinal). Mat3 has three padded rows, Mat4 four. Texture parameters store exact
-   0..15 integer descriptor indices in x lanes. Compile with row-major matrix layout.
-   Provide explicit normalized tangent/bitangent/world-normal and surface-to-camera
-   vectors in AraMaterialInput; material normal outputs are tangent-space XYZ.
-7. Bind TextureColor as raw UNORM: sampleColor performs sRGB decoding exactly once.
-   TextureNormal uses RGB UNORM normals; TextureData is linear RGBA. Post-process
-   sceneColor samples an already-linear scene image at draw.textureIndex. Collect
-   resource reachability from texture-typed parameter slots/static values, plus the
-   scene-color root index, and declare reads to the render graph. Descriptor count,
-   residency, buffer bounds and safe retirement remain renderer responsibilities.
-8. UI consumes linear premultiplied RGB/alpha and explicit clip coverage, with no
-   surface lighting variants. Unlit/post return linear color; decals provide PBR
-   channels and opacity. Surface exposes baseColor, metallic, roughness, normal,
-   emissive, opacityMask, clearCoat, clearCoatRoughness and transmission.
-9. Cache cooked modules by variant + ENGINE_TEMPLATE hash + compiler identity,
-   target/profile/options and ABI version. Cache driver PSOs separately with device,
-   driver, pass, render state and vertex-layout keys. DXIL still requires Metal
-   Shader Converter and converter reflection before it is a Metal runtime artifact.
-10. Build/validate replacement pipelines off the frame thread, then swap at a frame
-    boundary subject to human apply policy. Keep last-good shader/layout/instance
-    rows on failure. Opaque Slang is compiled in a disposable worker; the host owns
-    cancellation/time limits. Neither successful compilation nor estimates prove
-    visual quality or custom shader execution cost; preview in renderer integration.
+1. Register schemas and commands in the engine's shared SchemaDb/Registry. For a
+   new material, parse with its asset ID. For edits, load its .graph, reconstruct
+   its identity metadata with dsl::reconcile_graph (draft sidecars retain their
+   IDs/layout too). Save through material.text.apply or
+   material.graph.apply; these normalize ordering and resolve asset references.
+   Present all ARA diagnostics/fix commands; compile only after check succeeds.
+2. Resolve InstanceAsset against the referenced definition. Overrides are typed
+   values keyed by graph identity; the source editor displays names. Static bools
+   derive two variants each; enforce budget before pass/tier/vertex-layout PSOs.
+   Instance::variant_key excludes runtime override values.
+3. Cook via generate in a background worker, then run slangc externally. The
+   supplied fragmentMain is a compile/preview harness. Renderer passes call
+   ara_evaluate(AraMaterialInput) and consume AraSurface with their real entry
+   points. Depth/shadow masking, decal, reference and RT paths share evaluation;
+   derivative-dependent roundedPanel is UI-fragment-only.
+4. shaders/engine.slang owns the bindings/helpers and GGX metallic/roughness plus
+   clear coat lighting. Supply actual lights/probes/shadows to ara_engine_light;
+   the validation entry's fixed light is not the renderer integration. Foliage
+   transmission is an extension field, leaving room for richer engine scattering.
+5. Keep S1 ABI v1: eight words / 32 bytes, in order materialIndex, textureIndex,
+   bufferIndex, flags, phase, aspect, padding0, padding1. Vulkan push constants;
+   DXIL b0/space0. Set 0 textures binding 0 (t0/space1, 16 entries), RW float4
+   buffers binding 1 (u0/space2, 4 entries), sampler binding 2 (s0/space0).
+   Binding 3 remains available for the renderer TLAS.
+6. At bind time call Instance::pack(material, resolve_texture). The renderer maps
+   each TextureSource asset/default plus semantic Type to a resident heap index;
+   the callback may fail for missing assets or descriptor exhaustion. Only the
+   resulting GPU upload contains indices. Never write them back to defaults,
+   overrides, .material, .graph or instance files. The S1 table permits indices
+   0..15. Declare the resolved image reads to the render graph and retire heap
+   slots/resources only after GPU use. Changing allocation never edits the asset.
+7. Upload PackedParameters.rows into buffers[bufferIndex] at materialIndex, a ROW
+   offset rather than material ordinal. Runtime parameter layout follows declaration
+   order; static bools are compiled into source. Mat3 uses three padded rows,
+   Mat4 four; compile row-major. Supply normalized tangent/bitangent/world-normal
+   and surface-to-camera directions; material normal outputs are tangent-space XYZ.
+8. TextureColor binds raw UNORM; sampleColor decodes sRGB once. TextureNormal is
+   RGB UNORM normals; TextureData is linear RGBA. Post sceneColor is already-linear
+   at draw.textureIndex, resolved by the renderer. Include it in resource reads.
+   UI outputs premultiplied linear RGB/alpha plus clipping, without surface variants.
+   Unlit/post output linear color; decals provide PBR channels and opacity.
+9. Cache modules by variant + template hash + compiler identity/options/target/ABI;
+   driver PSOs additionally need device/driver/pass/state/vertex-layout keys. DXIL
+   still needs Metal Shader Converter plus its reflection before Metal runtime use.
+10. Build replacement pipelines off the frame thread, then swap at a permitted
+    frame boundary (D20). Keep last-good shader/layout/rows on failure. The host
+    owns worker cancellation/time limits and human apply policy. Opaque Slang costs
+    are declarations, not GPU measurements; renderer integration must verify visuals.
 
 ## Testing
 
-PowerShell setup: `$env:CARGO_BUILD_JOBS='2'` and
-`$env:SLANGC='C:\VulkanSDK\1.4.363.0\Bin\slangc.exe'` (or set VULKAN_SDK/PATH).
-`cargo check -p ara-material`
-`cargo test -p ara-material` (compiler tests are required, never silently skipped)
-`cargo clippy -p ara-material --all-targets -- -D warnings`
-`cargo fmt -p ara-material -- --check`
+Set CARGO_BUILD_JOBS=2. On this Windows machine set SLANGC to
+C:\VulkanSDK\1.4.363.0\Bin\slangc.exe (or use VULKAN_SDK/PATH).
+Run cargo check/test -p ara-material, cargo clippy -p ara-material --all-targets
+-- -D warnings, and cargo fmt -p ara-material -- --check.
 
-Six starter DSLs + canonical graph JSON live in examples/. Source snapshots live
-in tests/snapshots/. Every library operation and every domain is compiled to both
-targets, including matrix overloads and opaque custom code. Snapshot refresh:
-set ARA_UPDATE_FIXTURES=1 for example_roundtrips_and_codegen_snapshots, inspect the
-diff, then clear it before running the final gates. Source trivia is not retained.
-Diagnostic codes 3200-3206 are local pending central catalog integration.
-The workspace owner should regenerate Cargo.lock when integrating these new crates;
-this track owns only its crate directories and leaves root files unchanged.
+Six canonical DSL/graph pairs live in examples/. Slang snapshots live under
+tests/snapshots/. Every operation and domain compiles to SPIR-V and DXIL; no
+compiler tests silently skip. ARA_UPDATE_FIXTURES=1 refreshes the example round-trip
+fixtures: inspect the diff, then clear it before final gates. Tests also cover
+name matching, rename/recovery/undo, source ordering, literal types, draft fixes,
+asset reference repair and renderer-only heap allocation. Codes 3200-3208 remain
+local pending central catalog integration. The workspace owner regenerates
+Cargo.lock during integration; this track leaves root files unchanged.

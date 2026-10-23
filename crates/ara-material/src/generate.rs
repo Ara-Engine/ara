@@ -4,8 +4,8 @@ use ara_diag::Diagnostic;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Cost, Domain, Expr, Instance, Material, ParameterSlot, Type, VariantKey, check, fold_constants,
-    library,
+    Cost, Domain, Expr, Instance, Material, ParameterSlot, ParameterValue, Type, VariantKey, check,
+    fold_constants, library, parameter_layout,
 };
 
 /// Engine-owned bindings, bounded helpers and lighting template, ABI version 1.
@@ -49,8 +49,8 @@ impl Generated {
 }
 
 fn literal(ty: Type, values: &[f64]) -> String {
-    if ty.is_texture() {
-        return format!("{}u", values[0] as u32);
+    if ty == Type::Bool {
+        return if values == [1.0] { "true" } else { "false" }.into();
     }
     let lanes = values
         .iter()
@@ -70,6 +70,7 @@ fn literal(ty: Type, values: &[f64]) -> String {
 fn parameter(slot: &ParameterSlot) -> String {
     let offset = slot.offset;
     match slot.ty {
+        Type::Bool => format!("(ara_load({offset}u).x != 0.0)"),
         Type::Mat3 => format!(
             "float3x3(ara_load({offset}u).xyz, ara_load({}u).xyz, ara_load({}u).xyz)",
             offset + 1,
@@ -97,6 +98,7 @@ fn parameter(slot: &ParameterSlot) -> String {
 fn expression(op: &str, args: &[String], types: &[Type]) -> String {
     let a = args.join(", ");
     match op {
+        "copy" => args[0].clone(),
         "add" => format!("({} + {})", args[0], args[1]),
         "sub" => format!("({} - {})", args[0], args[1]),
         "mul" if matches!(types[0], Type::Mat3 | Type::Mat4) && types[0] == types[1] => {
@@ -140,7 +142,7 @@ pub fn generate(m: &Material, instance: &Instance) -> Result<Generated, Vec<Diag
     check(m)?;
     instance.validate(m)?;
     let variant = instance.variant_key(m)?;
-    let parameters = instance.pack(m)?.slots;
+    let parameters = parameter_layout(m);
     let folded = fold_constants(m)?;
     let checked = check(&folded)?;
     let slots: BTreeMap<_, _> = parameters.iter().map(|p| (p.node.as_str(), p)).collect();
@@ -191,10 +193,13 @@ pub fn generate(m: &Material, instance: &Instance) -> Result<Generated, Vec<Diag
             .node_type(id)
             .expect("checked schedule refers only to existing typed nodes");
         let expression = if let Some(p) = m.parameters.get(id) {
-            if p.variants.is_empty() {
+            if !p.is_static {
                 parameter(slots[id.as_str()])
             } else {
-                literal(ty, instance.overrides.get(id).unwrap_or(&p.default))
+                match instance.overrides.get(id).unwrap_or(&p.default) {
+                    ParameterValue::Bool(v) => v.to_string(),
+                    _ => unreachable!("type checking accepts only boolean static parameters"),
+                }
             }
         } else {
             match &folded.bindings[id].expr {

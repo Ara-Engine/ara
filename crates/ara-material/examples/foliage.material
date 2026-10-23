@@ -1,14 +1,14 @@
-material gr_foliage Foliage : surface budget 1 {
-  param n_albedo albedo : TextureColor = [2];
-  param n_mask mask : TextureData = [3];
-  param n_trans transmission : float = [0.65];
-  let n_alpha leafMask : float = alpha(leafData);
-  let n_color leafColor : ColorLinear = sampleColor(albedo, uv0);
-  let n_data leafData : vec4 = sampleData(mask, uv0);
-  let n_rough roughness : float = [0.7];
-  let n_uv uv0 : vec2 = uv();
+material Foliage : surface budget 1 {
+  param albedo : TextureColor = @textures/leaf.png#tx_leaf001;
+  param mask : TextureData = @textures/leaf-mask.png#tx_leafmask1;
+  param transmission : float = 0.65;
+  let uv0 : vec2 = uv();
+  let leafColor : ColorLinear = sampleColor(albedo, uv0);
+  let leafData : vec4 = sampleData(mask, uv0);
+  let leafMask : float = alpha(leafData);
+  let roughness : float = 0.7;
   output baseColor = leafColor;
-  output opacityMask = leafMask;
   output roughness = roughness;
+  output opacityMask = leafMask;
   output transmission = transmission;
 }

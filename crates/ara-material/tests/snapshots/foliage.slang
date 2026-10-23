@@ -145,12 +145,12 @@ AraSurface ara_evaluate(AraMaterialInput input) {
     result.clip = 1;
     uint n_albedo = uint(ara_load(0u).x);
     uint n_mask = uint(ara_load(1u).x);
-    float n_rough = float(0.699999988079071);
     float n_trans = ara_load(2u).x;
     float2 n_uv = input.uv;
     float3 n_color = ara_sample_color(n_albedo, n_uv);
     float4 n_data = ara_sample_data(n_mask, n_uv);
     float n_alpha = n_data.a;
+    float n_rough = float(0.699999988079071);
     result.baseColor = n_color;
     result.opacityMask = n_alpha;
     result.roughness = n_rough;

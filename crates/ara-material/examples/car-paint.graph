@@ -7,18 +7,18 @@
       "payload": {
         "domain": "surface",
         "functions": {
-          "coat": {
-            "body": "return saturate(value);",
+          "coatCoverage": {
+            "body": "return enabled ? 1.0 : 0.0;",
             "cost": {
               "alu": 2,
               "branches": 0,
               "textureSamples": 0
             },
-            "doc": "Bound clear-coat coverage without exposing lighting internals.",
+            "doc": "Enable or disable the clear coat layer.",
             "inputs": [
               [
-                "value",
-                "float"
+                "enabled",
+                "bool"
               ]
             ],
             "output": "float"
@@ -33,7 +33,7 @@
       "kind": "material.custom",
       "ports": {
         "in0": {
-          "ty": "float",
+          "ty": "bool",
           "doc": "Ordered function argument.",
           "required": true
         },
@@ -44,8 +44,9 @@
         }
       },
       "payload": {
-        "function": "coat",
+        "function": "coatCoverage",
         "name": "clear",
+        "order": 0,
         "ty": "float"
       }
     },
@@ -53,21 +54,19 @@
       "kind": "material.parameter",
       "ports": {
         "out": {
-          "ty": "float",
+          "ty": "bool",
           "direction": "output",
           "doc": "Typed expression result."
         }
       },
       "params": {
-        "value": [1],
-        "variants": [
-          [0],
-          [1]
-        ]
+        "isStatic": true,
+        "value": true
       },
       "payload": {
-        "name": "coatEnabled",
-        "ty": "float"
+        "name": "coat",
+        "order": 1,
+        "ty": "bool"
       }
     },
     "n_coatr": {
@@ -84,6 +83,7 @@
       },
       "payload": {
         "name": "coatRoughness",
+        "order": 1,
         "ty": "float"
       }
     },
@@ -97,11 +97,12 @@
         }
       },
       "params": {
-        "value": [0.02, 0.06, 0.4],
-        "variants": []
+        "isStatic": false,
+        "value": [0.02, 0.06, 0.4]
       },
       "payload": {
         "name": "paint",
+        "order": 0,
         "ty": "ColorLinear"
       }
     },
@@ -119,6 +120,7 @@
       },
       "payload": {
         "name": "metal",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -173,11 +175,12 @@
         }
       },
       "params": {
-        "value": [0.22],
-        "variants": []
+        "isStatic": false,
+        "value": [0.22]
       },
       "payload": {
         "name": "roughness",
+        "order": 2,
         "ty": "float"
       }
     },

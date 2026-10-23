@@ -33,6 +33,7 @@
       },
       "payload": {
         "name": "tint",
+        "order": 1,
         "ty": "ColorLinear"
       }
     },
@@ -50,6 +51,7 @@
       },
       "payload": {
         "name": "metallic",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -63,11 +65,15 @@
         }
       },
       "params": {
-        "value": [1],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "default",
+          "value": "flat_normal"
+        }
       },
       "payload": {
         "name": "normalMap",
+        "order": 1,
         "ty": "TextureNormal"
       }
     },
@@ -92,6 +98,7 @@
       },
       "payload": {
         "name": "tangentNormal",
+        "order": 3,
         "ty": "vec3"
       }
     },
@@ -146,11 +153,15 @@
         }
       },
       "params": {
-        "value": [0],
-        "variants": []
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@textures/paint.png#tx_paint001"
+        }
       },
       "payload": {
         "name": "paint",
+        "order": 0,
         "ty": "TextureColor"
       }
     },
@@ -164,11 +175,12 @@
         }
       },
       "params": {
-        "value": [0.35],
-        "variants": []
+        "isStatic": false,
+        "value": [0.35]
       },
       "payload": {
         "name": "roughness",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -183,6 +195,7 @@
       },
       "payload": {
         "name": "uv0",
+        "order": 0,
         "ty": "vec2"
       }
     },

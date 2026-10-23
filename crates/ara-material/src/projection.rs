@@ -21,6 +21,7 @@ struct Metadata {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NodeData {
     name: String,
+    order: u32,
     ty: Type,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     function: Option<String>,
@@ -49,9 +50,75 @@ pub fn edge_id(node: &str, port: &str) -> String {
 }
 
 impl Material {
+    /// Reads only identity metadata for text reconciliation, including draft graphs
+    /// and unavailable node kinds. This context must never be compiled or persisted.
+    pub(crate) fn name_context(g: &Graph) -> Result<Self, Diagnostic> {
+        if g.header.domain != "material" {
+            return Err(Diagnostic::error(codes::DOMAIN, "expected material graph"));
+        }
+        #[derive(Deserialize)]
+        struct Identity {
+            name: String,
+            ty: Type,
+        }
+        let metadata: Metadata = decode(g.header.payload.clone())?;
+        let mut context = Self {
+            id: g.id.to_string(),
+            name: metadata.name,
+            domain: metadata.domain,
+            variant_budget: metadata.variant_budget,
+            functions: metadata.functions,
+            parameters: BTreeMap::new(),
+            bindings: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+        };
+        for (id, node) in &g.nodes {
+            if id == "n_output" {
+                continue;
+            }
+            let identity: Identity = decode(node.payload.clone()).map_err(|d| d.record(id))?;
+            if node.kind == "material.parameter" {
+                context.parameters.insert(
+                    id.clone(),
+                    Parameter {
+                        name: identity.name,
+                        ty: identity.ty,
+                        order: context.parameters.len() as u32,
+                        default: crate::ParameterValue::zero(identity.ty),
+                        is_static: false,
+                    },
+                );
+            } else {
+                context.bindings.insert(
+                    id.clone(),
+                    Binding {
+                        name: identity.name,
+                        ty: identity.ty,
+                        order: context.bindings.len() as u32,
+                        expr: Expr::Literal {
+                            values: vec![0.0; identity.ty.lanes()],
+                        },
+                    },
+                );
+            }
+        }
+        Ok(context)
+    }
+
     /// Projects this AST into typed graph records, preserving supplied editor state.
     /// Calls have one output and ordered `in0`, `in1`, ... sockets; no second program.
     pub fn to_graph(&self, editor: Editor) -> Result<Graph, Diagnostic> {
+        if self.node_type("n_output").is_some()
+            || self
+                .parameters
+                .keys()
+                .any(|id| self.bindings.contains_key(id))
+        {
+            return Err(Diagnostic::error(
+                codes::SYNTAX,
+                "material nodes overlap each other or the reserved output identity",
+            ));
+        }
         let id = AssetId::parse(&self.id).map_err(|e| Diagnostic::error(codes::SYNTAX, e))?;
         let mut g = Graph::new(id, "material");
         g.editor = editor;
@@ -63,6 +130,7 @@ impl Material {
         })?;
         let make = |kind: String,
                     name: &str,
+                    order: u32,
                     ty: Type,
                     function: Option<String>,
                     params: BTreeMap<String, Value>|
@@ -77,6 +145,7 @@ impl Material {
                 params,
                 payload: value(&NodeData {
                     name: name.into(),
+                    order,
                     ty,
                     function,
                 })?,
@@ -89,11 +158,12 @@ impl Material {
                 make(
                     "material.parameter".into(),
                     &p.name,
+                    p.order,
                     p.ty,
                     None,
                     BTreeMap::from([
                         ("value".into(), value(&p.default)?),
-                        ("variants".into(), value(&p.variants)?),
+                        ("isStatic".into(), value(&p.is_static)?),
                     ]),
                 )?,
             );
@@ -110,7 +180,7 @@ impl Material {
                     None => (format!("material.{op}"), None, BTreeMap::new()),
                 },
             };
-            let mut node = make(kind, &b.name, b.ty, function, params)?;
+            let mut node = make(kind, &b.name, b.order, b.ty, function, params)?;
             if let Expr::Call { args, .. } = &b.expr {
                 for (i, arg) in args.iter().enumerate() {
                     let ty = self.node_type(arg).ok_or_else(|| {
@@ -233,10 +303,11 @@ impl Material {
                     id.clone(),
                     Parameter {
                         name: data.name,
+                        order: data.order,
                         ty: data.ty,
                         default: decode(node.params.get("value").cloned().unwrap_or(json!([])))?,
-                        variants: decode(
-                            node.params.get("variants").cloned().unwrap_or(json!([])),
+                        is_static: decode(
+                            node.params.get("isStatic").cloned().unwrap_or(json!(false)),
                         )?,
                     },
                 );
@@ -294,6 +365,7 @@ impl Material {
                     id.clone(),
                     Binding {
                         name: data.name,
+                        order: data.order,
                         ty: data.ty,
                         expr,
                     },

@@ -22,11 +22,12 @@
         }
       },
       "params": {
-        "value": [0.025, 0.04, 0.07],
-        "variants": []
+        "isStatic": false,
+        "value": [0.025, 0.04, 0.07]
       },
       "payload": {
         "name": "panelColor",
+        "order": 0,
         "ty": "ColorLinear"
       }
     },
@@ -56,6 +57,7 @@
       },
       "payload": {
         "name": "coverage",
+        "order": 1,
         "ty": "float"
       }
     },
@@ -86,11 +88,12 @@
         }
       },
       "params": {
-        "value": [12],
-        "variants": []
+        "isStatic": false,
+        "value": [12]
       },
       "payload": {
         "name": "radius",
+        "order": 2,
         "ty": "float"
       }
     },
@@ -104,11 +107,12 @@
         }
       },
       "params": {
-        "value": [320, 160],
-        "variants": []
+        "isStatic": false,
+        "value": [320, 160]
       },
       "payload": {
         "name": "size",
+        "order": 1,
         "ty": "vec2"
       }
     },
@@ -123,6 +127,7 @@
       },
       "payload": {
         "name": "uv0",
+        "order": 0,
         "ty": "vec2"
       }
     },

@@ -8,7 +8,7 @@ use ara_schema::{Schema, SchemaDb};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::{Binding, Expr, Material, check, codes, dsl};
+use crate::{Binding, Expr, Material, ParameterValue, check, codes, dsl};
 
 /// Replaces the text view, retaining layout for surviving semantic IDs.
 #[derive(Schema, Deserialize)]
@@ -83,6 +83,19 @@ pub struct ConnectParams {
     pub port: String,
 }
 
+/// Renames an authored value while retaining its graph identity and layout.
+#[derive(Schema, Deserialize)]
+#[ara(params, module = "material", name = "MaterialRenameParams")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenameParams {
+    /// Existing authored name.
+    pub from: String,
+    /// New unique authored name.
+    pub to: String,
+    /// Diagnostic-only recovery identity after a plain-text delete/create rename.
+    pub restore_id: Option<String>,
+}
+
 fn load(ctx: &EditCtx<'_, '_>) -> Result<Material, Diagnostic> {
     let g = Graph::from_document(ctx.read().doc())?;
     Material::from_graph(&g).map_err(first)
@@ -94,8 +107,35 @@ fn first(d: Vec<Diagnostic>) -> Diagnostic {
 }
 fn save(ctx: &mut EditCtx<'_, '_>, m: &Material) -> Result<Value, Diagnostic> {
     let editor = Graph::from_document(ctx.read().doc())?.editor;
+    persist(ctx, m, editor, Vec::new())
+}
+fn persist(
+    ctx: &mut EditCtx<'_, '_>,
+    m: &Material,
+    editor: ara_graph::Editor,
+    mut diagnostics: Vec<Diagnostic>,
+) -> Result<Value, Diagnostic> {
+    let mut m = m.clone();
+    m.normalize_order()?;
+    match m.resolve_assets(ctx.read().workspace().index()) {
+        Ok(notes) => diagnostics.extend(notes),
+        Err(errors) => {
+            for diagnostic in &errors {
+                if let Some(id) = &diagnostic.location.record
+                    && let Some(parameter) = m.parameters.get_mut(id)
+                {
+                    parameter.default = ParameterValue::zero(parameter.ty);
+                }
+            }
+            let replacement = dsl::print(&m)?;
+            let mut diagnostic = first(errors);
+            diagnostic.fixes.clear();
+            return Err(dsl::source_fix(diagnostic, replacement));
+        }
+    }
+    diagnostics.extend(check(&m).err().unwrap_or_default());
     apply_snapshot(ctx, &m.to_graph(editor)?)?;
-    Ok(json!({"diagnostics":check(m).err().unwrap_or_default()}))
+    Ok(json!({"diagnostics":diagnostics}))
 }
 fn missing() -> Diagnostic {
     Diagnostic::error(codes::REFERENCE, "material node or field does not exist")
@@ -118,10 +158,11 @@ command!(
     TextParams,
     "material.text.apply",
     "Apply the text view as undoable material ops.",
-    json!({"text":"material gr_demo Demo : unlit budget 1 { let n_a color : ColorLinear = [1, 1, 1]; output color = color; }"}),
+    json!({"text":"material Demo : unlit budget 1 { let color : ColorLinear = linear(1, 1, 1); output color = color; }"}),
     |ctx, p| {
-        let m = dsl::parse(&p.text).map_err(first)?;
-        save(ctx, &m)
+        let graph = Graph::from_document(ctx.read().doc())?;
+        let parsed = dsl::reconcile_graph(&p.text, &graph).map_err(first)?;
+        persist(ctx, &parsed.material, graph.editor, parsed.diagnostics)
     }
 );
 command!(
@@ -133,9 +174,7 @@ command!(
     |ctx, p| {
         let graph = Graph::read(&p.json, ctx.read().schema()).map_err(first)?;
         let m = Material::from_graph(&graph).map_err(first)?;
-        let diags = check(&m).err().unwrap_or_default();
-        apply_snapshot(ctx, &graph)?;
-        Ok(json!({"diagnostics":diags}))
+        persist(ctx, &m, graph.editor, Vec::new())
     }
 );
 command!(
@@ -180,8 +219,10 @@ command!(
     |ctx, p| {
         let mut m = load(ctx)?;
         let b = m.parameters.get_mut(&p.node).ok_or_else(missing)?;
-        b.default = vec![0.0; b.ty.lanes()];
-        b.variants.clear();
+        b.default = ParameterValue::zero(b.ty);
+        if b.ty != crate::Type::Bool {
+            b.is_static = false;
+        }
         save(ctx, &m)
     }
 );
@@ -204,6 +245,7 @@ command!(
             id.clone(),
             Binding {
                 name,
+                order: m.bindings.len() as u32,
                 ty,
                 expr: Expr::Literal {
                     values: vec![0.0; ty.lanes()],
@@ -261,7 +303,70 @@ command!(
     }
 );
 
-/// Registers material text/graph edits and all machine-applicable fix commands.
+command!(
+    Rename,
+    RenameParams,
+    "material.rename",
+    "Rename a value while retaining its graph identity and layout.",
+    json!({"from":"paint","to":"basePaint"}),
+    |ctx, p| {
+        if !crate::check::value_name(&p.to) {
+            return Err(Diagnostic::error(
+                codes::SYNTAX,
+                "new name must be an identifier",
+            ));
+        }
+        let mut m = load(ctx)?;
+        let id = if let Some(id) = m.node_id(&p.from) {
+            if p.from != p.to && m.node_id(&p.to).is_some() {
+                return Err(Diagnostic::error(
+                    codes::SYNTAX,
+                    "new material name already exists",
+                ));
+            }
+            id.to_owned()
+        } else {
+            let current = m.node_id(&p.to).ok_or_else(missing)?.to_owned();
+            let restored = p.restore_id.ok_or_else(missing)?;
+            if ara_schema::grammar::split_id(&restored).is_none_or(|(prefix, _)| prefix != "n")
+                || m.node_type(&restored).is_some()
+            {
+                return Err(Diagnostic::error(
+                    codes::SYNTAX,
+                    "recovery identity is invalid or already occupied",
+                ));
+            }
+            if let Some(value) = m.parameters.remove(&current) {
+                m.parameters.insert(restored.clone(), value);
+            } else if let Some(value) = m.bindings.remove(&current) {
+                m.bindings.insert(restored.clone(), value);
+            }
+            for binding in m.bindings.values_mut() {
+                if let Expr::Call { args, .. } = &mut binding.expr {
+                    for arg in args {
+                        if *arg == current {
+                            *arg = restored.clone();
+                        }
+                    }
+                }
+            }
+            for output in m.outputs.values_mut() {
+                if *output == current {
+                    *output = restored.clone();
+                }
+            }
+            restored
+        };
+        if let Some(value) = m.parameters.get_mut(&id) {
+            value.name = p.to;
+        } else if let Some(value) = m.bindings.get_mut(&id) {
+            value.name = p.to;
+        }
+        save(ctx, &m)
+    }
+);
+
+/// Registers material text/graph edits, renames and machine-applicable fixes.
 pub fn register(registry: &mut Registry, db: &mut SchemaDb) {
     crate::instance_asset::register_commands(registry, db);
     registry
@@ -272,5 +377,6 @@ pub fn register(registry: &mut Registry, db: &mut SchemaDb) {
         .command::<ResetParameter>(db)
         .command::<DefaultOutput>(db)
         .command::<SetBudget>(db)
-        .command::<Connect>(db);
+        .command::<Connect>(db)
+        .command::<Rename>(db);
 }

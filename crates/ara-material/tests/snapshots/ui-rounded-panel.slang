@@ -144,8 +144,8 @@ AraSurface ara_evaluate(AraMaterialInput input) {
     result.opacity = 1;
     result.clip = 1;
     float3 n_color = ara_load(0u).xyz;
-    float n_radius = ara_load(1u).x;
-    float2 n_size = ara_load(2u).xy;
+    float n_radius = ara_load(2u).x;
+    float2 n_size = ara_load(1u).xy;
     float2 n_uv = input.uv;
     float n_mask = ara_rounded_panel(n_uv, n_size, n_radius);
     result.color = n_color;

@@ -1,6 +1,7 @@
 //! One typed material AST with text and graph views (A8), cooked offline (D20).
 //! Authoring commands reconcile either view into the same attributed kernel ops.
 
+mod assets;
 mod ast;
 mod check;
 pub mod commands;
@@ -37,4 +38,8 @@ pub mod codes {
     pub const OVERRIDE: Code = Code(3205);
     /// Slang process, target generation or artifact validation failed.
     pub const COMPILER: Code = Code(3206);
+    /// Draft syntax is rejected with a canonical replacement source fix.
+    pub const LEGACY_SYNTAX: Code = Code(3207);
+    /// A plain text rename deleted/created identity; offers material.rename recovery.
+    pub const PLAIN_RENAME: Code = Code(3208);
 }
