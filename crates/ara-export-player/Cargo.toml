@@ -21,7 +21,7 @@ dev-bridge = ["dep:ara-bridge"]
 ara-pack = { path = "../ara-pack", default-features = false }
 ara-bridge = { path = "../ara-bridge", optional = true }
 bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
-blake3 = { version = "=1.8.7", default-features = false, features = ["std", "pure"] }
+blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
 libloading = "0.8.9"
 serde.workspace = true
 serde_json.workspace = true

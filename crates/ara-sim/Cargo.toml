@@ -18,7 +18,7 @@ bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std", "
 bevy_tasks = { version = "=0.20.0", features = ["multi_threaded"] }
 serde.workspace = true
 serde_json.workspace = true
-blake3 = "=1.8.2"
+blake3 = "1.8"
 ciborium = "=0.2.2"
 
 [dev-dependencies]
