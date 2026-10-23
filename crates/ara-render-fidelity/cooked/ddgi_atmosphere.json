@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
   "stages": [
     {
-      "dxil": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/ddgiAtmosphereMain.dxil",
-      "dxil_hash": "50ee48ed5f0388ca8f1dff0b8efed259f432a3d4d3720a1d5ac5caf17b637197",
+      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/ddgiAtmosphereMain.dxil",
+      "dxil_hash": "e96138a20149fb719ea45ffe7329aea61fce62a53dc6919fa6690ec5a91b6491",
       "source_entry": "ddgiAtmosphereMain",
-      "spirv": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/ddgiAtmosphereMain.spv",
+      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/ddgiAtmosphereMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "c09128f2be261c931ac6959c716ff5c6091f14cc0c689ddfae9ccadf8aefcbff",
+      "spirv_hash": "5088781b65f64e5c75bd81474f2745b87c23dc7308b8ceca3dc018ced30977f0",
       "stage": "compute"
     }
   ],

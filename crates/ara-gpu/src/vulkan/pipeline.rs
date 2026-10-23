@@ -1,7 +1,7 @@
 use super::Context;
 use crate::{
     GpuError, Result,
-    cooked::{CookedPipeline, Stage, binding_layout_hash},
+    cooked::{CookedPipeline, Stage, binding_layout_hash, legacy_preview_layout_hash},
 };
 use ash::vk::{self, TaggedStructure};
 use sha2::{Digest, Sha256};
@@ -23,7 +23,17 @@ pub(super) fn create(
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
-    if cooked.version != 1 || cooked.binding_layout_hash != binding_layout_hash() {
+    let legacy_preview = cooked.stages.len() == 2
+        && cooked.stages.iter().all(|stage| {
+            matches!(
+                (stage.stage, stage.source_entry.as_str()),
+                (Stage::Vertex, "previewVertex") | (Stage::Fragment, "previewFragment")
+            )
+        });
+    if cooked.version != 1
+        || (cooked.binding_layout_hash != binding_layout_hash()
+            && !(legacy_preview && cooked.binding_layout_hash == legacy_preview_layout_hash()))
+    {
         return Err(GpuError::Contract(
             "Cooked layout/schema mismatch; recook shaders".into(),
         ));

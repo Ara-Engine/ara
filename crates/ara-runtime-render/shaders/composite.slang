@@ -7,7 +7,7 @@ struct Root { uint scene; uint depth; uint landscape; uint landscapeDepth; uint 
 #define BIND(n)
 ConstantBuffer<Root> root : register(b0,space0);
 #endif
-BIND(0) Texture2D<float4> textures[128] : register(t0,space1);
+BIND(5) Texture2D<float4> textures[] : register(t0,space1);
 BIND(3) RWTexture2D<float4> images[64] : register(u0,space3);
 // Landscape publishes gamma-2.2 display color. Undo its ACES fitted curve so the
 // shared exposure/post pass and transparent blending operate in linear HDR.

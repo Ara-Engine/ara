@@ -171,6 +171,8 @@ impl Gpu {
                     && v12.timeline_semaphore != 0
                     && v12.buffer_device_address != 0
                     && v12.descriptor_indexing != 0
+                    && v12.runtime_descriptor_array != 0
+                    && v12.descriptor_binding_variable_descriptor_count != 0
                     && v12.shader_sampled_image_array_non_uniform_indexing != 0
                     && v12.shader_storage_buffer_array_non_uniform_indexing != 0
                     && v12.descriptor_binding_sampled_image_update_after_bind != 0
@@ -205,6 +207,8 @@ impl Gpu {
                 .timeline_semaphore(true)
                 .buffer_device_address(true)
                 .descriptor_indexing(true)
+                .runtime_descriptor_array(true)
+                .descriptor_binding_variable_descriptor_count(true)
                 .shader_sampled_image_array_non_uniform_indexing(true)
                 .shader_storage_buffer_array_non_uniform_indexing(true)
                 .descriptor_binding_sampled_image_update_after_bind(true)
@@ -226,6 +230,7 @@ impl Gpu {
                 // Enabling the reported core feature also permits that interface
                 // when the producer is a mesh stage rather than geometry stage.
                 .geometry_shader(core_supported.geometry_shader != 0)
+                .texture_compression_bc(core_supported.texture_compression_bc != 0)
                 .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
@@ -272,11 +277,37 @@ impl Gpu {
             let memory = instance.get_physical_device_memory_properties(physical);
             let mut as_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
             let mut mesh_properties = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+            let mut indexing = vk::PhysicalDeviceDescriptorIndexingProperties::default();
             instance.get_physical_device_properties2(
                 physical,
                 &mut vk::PhysicalDeviceProperties2::default()
                     .push(&mut as_properties)
+                    .push(&mut indexing)
                     .push(&mut mesh_properties),
+            );
+            // Retain bindings 0..4 for existing material-preview cooks. Both the
+            // legacy alias and the new runtime array count against native limits.
+            let sampled_image_capacity = [
+                65_536,
+                indexing
+                    .max_per_stage_descriptor_update_after_bind_sampled_images
+                    .saturating_sub(128),
+                indexing
+                    .max_descriptor_set_update_after_bind_sampled_images
+                    .saturating_sub(128),
+                indexing
+                    .max_per_stage_update_after_bind_resources
+                    .saturating_sub(275),
+                indexing
+                    .max_update_after_bind_descriptors_in_all_pools
+                    .saturating_sub(275),
+            ]
+            .into_iter()
+            .min()
+            .unwrap_or(0);
+            ensure!(
+                sampled_image_capacity >= 128,
+                "Insufficient update-after-bind sampled-image capacity"
             );
             let info = DeviceInfo {
                 name: CStr::from_ptr(properties.device_name.as_ptr())
@@ -291,6 +322,8 @@ impl Gpu {
                 vendor_id: properties.vendor_id,
                 device_id: properties.device_id,
                 ray_tracing,
+                texture_compression_bc: core_supported.texture_compression_bc != 0,
+                sampled_image_capacity,
                 mesh_shading,
                 mesh_dispatch: [
                     mesh_properties.max_mesh_work_group_count[0],

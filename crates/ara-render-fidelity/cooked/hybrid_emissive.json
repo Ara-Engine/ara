@@ -1,15 +1,15 @@
 {
-  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce",
+  "key": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978",
   "stages": [
     {
-      "dxil": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/hybridEmissiveMain.dxil",
-      "dxil_hash": "d49f8083a4bf22d8ef6b4a6b3aaaa98e2f66c444241fc94f34db65a00d6b35fa",
+      "dxil": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/hybridEmissiveMain.dxil",
+      "dxil_hash": "c3f0d495611c5e28d55208de1e76de1247e09653f2a2b276908f00179ae95f5f",
       "source_entry": "hybridEmissiveMain",
-      "spirv": "aaca1410d7d2d9203a854b71bde69d4fb770220db3d2db6010befbd5cfccc3ce/hybridEmissiveMain.spv",
+      "spirv": "d9e6ec189cc0cfa70ce3f94800577b67b6a81bfab20c16f42554f62cc8140978/hybridEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ba4a642b2e7629c3fa4f60dd62dd7fe963b14be0f691320bf9d00d4575eb2af0",
+      "spirv_hash": "9783ece242b03ccff2d31620e28585f93bd005054e9c8365779d8107df4e3e00",
       "stage": "compute"
     }
   ],

@@ -20,6 +20,7 @@ pub(crate) struct ImageAllocation {
     pub view: vk::ImageView,
     pub width: u32,
     pub height: u32,
+    pub mip_levels: u32,
     pub format: vk::Format,
     pub aspect: vk::ImageAspectFlags,
     pub usage: vk::ImageUsageFlags,
@@ -142,12 +143,13 @@ impl Gpu {
         }
     }
 
-    /// Allocate a single-mip 2D image and its matching view.
+    /// Allocate a 2D image and a view spanning its complete resident mip chain.
     pub(crate) fn image(
         &mut self,
         width: u32,
         height: u32,
         format: vk::Format,
+        mip_levels: u32,
         usage: vk::ImageUsageFlags,
         aspect: vk::ImageAspectFlags,
     ) -> Result<ImageAllocation> {
@@ -162,7 +164,7 @@ impl Gpu {
                         height,
                         depth: 1,
                     })
-                    .mip_levels(1)
+                    .mip_levels(mip_levels)
                     .array_layers(1)
                     .samples(vk::SampleCountFlags::TYPE_1)
                     .tiling(vk::ImageTiling::OPTIMAL)
@@ -189,7 +191,7 @@ impl Gpu {
                         .image(handle)
                         .view_type(vk::ImageViewType::TYPE_2D)
                         .format(format)
-                        .subresource_range(range(aspect)),
+                        .subresource_range(range(aspect).level_count(mip_levels)),
                     None,
                 )?;
                 Ok(ImageAllocation {
@@ -198,6 +200,7 @@ impl Gpu {
                     view,
                     width,
                     height,
+                    mip_levels,
                     format,
                     aspect,
                     usage,
