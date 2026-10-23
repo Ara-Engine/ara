@@ -19,7 +19,7 @@ type R = Result<Value, Vec<Diagnostic>>;
 
 /// Rewrites registry locations (`params.x` of call `i`) as `commands[i].args.x`, in
 /// the location and in the paths of `set`/`remove`/`rename` fixes.
-fn relocate(diags: Vec<Diagnostic>) -> Vec<Diagnostic> {
+pub(crate) fn relocate(diags: Vec<Diagnostic>) -> Vec<Diagnostic> {
     let moved = |i: usize, path: &str| {
         path.strip_prefix("params")
             .map(|rest| format!("commands[{i}].args{rest}"))
@@ -101,7 +101,12 @@ fn label(record: Option<&Record>) -> String {
 
 /// The text form of a `cmd.apply` result: what was applied where, and every created,
 /// modified and deleted record with its name and symbol.
-fn apply_text(st: &State, doc: &AssetId, r: &BatchResult, checkpoint: Option<&str>) -> String {
+pub(crate) fn apply_text(
+    st: &State,
+    doc: &AssetId,
+    r: &BatchResult,
+    checkpoint: Option<&str>,
+) -> String {
     let path = path_of(st, doc);
     let current = st.store.workspace().doc(doc.as_str());
     let symbols: BTreeMap<&str, &str> = r
@@ -160,7 +165,7 @@ fn apply_text(st: &State, doc: &AssetId, r: &BatchResult, checkpoint: Option<&st
 }
 
 /// Created, modified and deleted records, in first-touch order.
-fn diff_summary(ops: &[Op]) -> Value {
+pub(crate) fn diff_summary(ops: &[Op]) -> Value {
     let (mut created, mut modified, mut deleted) = (Vec::new(), Vec::new(), Vec::new());
     for op in ops {
         let id = op.id().to_string();
@@ -182,14 +187,9 @@ fn diff_summary(ops: &[Op]) -> Value {
 }
 
 impl State {
-    /// `cmd.apply` for session `sid`: one atomic transaction with `why`. Agent turns
-    /// get an automatic checkpoint at the revision before them.
-    pub(crate) fn apply(&mut self, sid: &str, p: ApplyParams) -> R {
-        let session = self
-            .sessions
-            .live(sid)
-            .cloned()
-            .ok_or_else(|| vec![session_not_found(sid)])?;
+    /// The document and batch a `cmd.apply` call runs: document inference, `as`
+    /// symbols and their checks. Branch applies (`collab`) share it.
+    pub(crate) fn batch(&self, p: &ApplyParams) -> Result<(AssetId, Batch), Vec<Diagnostic>> {
         let db = self.store.schema();
         let dry_run = p.dry_run.unwrap_or(false);
         let refs: Vec<String> = p
@@ -250,14 +250,31 @@ impl State {
         if !problems.is_empty() {
             return Err(problems);
         }
-        let mut batch = Batch {
+        let batch = Batch {
             doc: doc.to_string(),
             calls,
             why: p.why.clone(),
-            idempotency_key: p.idempotency_key,
+            idempotency_key: p.idempotency_key.clone(),
             base: p.base,
             dry_run,
         };
+        Ok((doc, batch))
+    }
+
+    /// `cmd.apply` for session `sid`: one atomic transaction with `why`. Agent turns
+    /// get an automatic checkpoint at the revision before them. With `branch`, the
+    /// batch runs in that branch session instead (`collab`).
+    pub(crate) fn apply(&mut self, sid: &str, p: ApplyParams) -> R {
+        if let Some(branch) = p.branch.clone() {
+            return crate::collab::branch_apply(self, sid, &branch, &p);
+        }
+        let session = self
+            .sessions
+            .live(sid)
+            .cloned()
+            .ok_or_else(|| vec![session_not_found(sid)])?;
+        let (doc, mut batch) = self.batch(&p)?;
+        let dry_run = batch.dry_run;
         let missing_why = p.why.as_deref().is_none_or(|w| w.trim().is_empty());
         if matches!(session.author, Author::Agent(_)) && !dry_run && missing_why {
             // Report every problem at once: what a dry run finds, then the `why`.

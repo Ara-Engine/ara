@@ -1,0 +1,27 @@
+[package]
+name = "ara-collab"
+description = "Collaboration foundations (D21): presence, claims and soft locks, live op sync with field-level last-writer-wins, per-participant undo, replicas and agent branch sessions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-json.workspace = true
+ara-merge.workspace = true
+ara-ops.workspace = true
+ara-schema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+ara-components.workspace = true
+ara-host.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

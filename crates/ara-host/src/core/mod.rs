@@ -24,8 +24,8 @@ use ara_proto::Scope;
 use ara_schema::SchemaDb;
 use serde_json::Value;
 
-pub(crate) use edit::list_commands;
-pub(crate) use pick::{find_doc, pick};
+pub(crate) use edit::{apply_text, diff_summary, list_commands, relocate};
+pub(crate) use pick::{find_doc, path_of, pick};
 pub(crate) use read::inspect_target;
 
 use crate::params::*;

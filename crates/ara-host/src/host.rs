@@ -96,6 +96,8 @@ pub(crate) struct State {
     pub(crate) why: ara_why::Why,
     /// The engine's runtime diagnostics on disk (`.ara/diagnostics.jsonl`).
     pub(crate) diag_file: crate::diag::Persist,
+    /// Collaboration: participants, presence, claims, branch sessions (D21).
+    pub(crate) collab: crate::collab::Collab,
     pub(crate) jobs: Jobs,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -228,6 +230,7 @@ impl Host {
             diag_subs: BTreeMap::new(),
             why: ara_why::Why::builtin(),
             diag_file,
+            collab: crate::collab::Collab::new(state_dir.clone()),
             jobs: Jobs::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -245,6 +248,7 @@ impl Host {
             _lock: lock,
         };
         st.recover(&entries);
+        st.collab_open(config.seed);
         drop(entries);
         st.flush(true);
         let mut host = Host {
@@ -256,6 +260,7 @@ impl Host {
         host.register(Box::new(crate::profile::ProfileService))?;
         host.register(Box::new(crate::diag::DiagService))?;
         host.register(Box::new(crate::why::WhyService))?;
+        host.register(Box::new(crate::collab::CollabService))?;
         Ok(host)
     }
 
@@ -351,6 +356,7 @@ impl Host {
             }
         }
         self.st.calling = None;
+        self.st.store.set_origin(None);
         result.map_err(RpcError::from_diagnostics)
     }
 
@@ -386,6 +392,8 @@ impl Host {
             return Err(problems);
         }
         self.st.calling = session.clone();
+        // The claim guard tells the caller's own claims from everyone else's.
+        self.st.store.set_origin(session.clone());
         // Subsystems that emit onto the bus while serving the call are attributed to
         // the caller.
         let _origin = self.st.calling_origin().map(bus::scope);
@@ -461,6 +469,7 @@ impl Host {
     pub fn closed(&mut self, conn: ConnId) {
         self.st.subs.remove(&conn);
         self.st.diag_subs.retain(|_, s| s.conn != conn);
+        self.st.collab_closed(conn);
     }
 
     /// Notifications waiting for their connections.
@@ -670,6 +679,7 @@ impl State {
             self.notify(Topic::History, summary);
             self.notify(Topic::Ops, json!({ "txn": txn }));
         }
+        self.collab_after();
     }
 
     fn track_review(&mut self, txn: &Transaction) {

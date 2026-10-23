@@ -12,6 +12,7 @@
 //!   merged in and reported, never silently overwritten.
 //! - [`docs`] generates `llms.txt` and per-type pages from the registries.
 
+pub mod collab;
 mod core;
 pub mod diag;
 pub mod docs;
@@ -36,14 +37,15 @@ pub use service::{Cx, Method, Service, parse};
 pub use session::{Approval, ApprovalRequest, Decision, DefaultPolicy};
 
 /// The method catalog of the services every host registers (core, profile, diag,
-/// why), without opening a host (offline docs generation, MCP tests).
+/// why, collab), without opening a host (offline docs generation, MCP tests).
 pub fn core_methods() -> Vec<ara_proto::MethodInfo> {
     let mut db = ara_schema::SchemaDb::new();
-    let services: [Box<dyn Service>; 4] = [
+    let services: [Box<dyn Service>; 5] = [
         Box::new(core::Core),
         Box::new(profile::ProfileService),
         Box::new(diag::DiagService),
         Box::new(why::WhyService),
+        Box::new(collab::CollabService),
     ];
     let mut out = Vec::new();
     for service in services {
