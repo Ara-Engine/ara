@@ -72,6 +72,7 @@ pub struct Shell {
     material_sources: BTreeMap<String, String>,
     thumbnail_uploads: Vec<(u32, ara_ui_render::gpu::Image)>,
     asset_grid_extent: f32,
+    asset_grid_size: [f32; 2],
     asset_grid_dirty: bool,
     drafts: BTreeMap<String, String>,
     pub(crate) context: bool,
@@ -185,6 +186,7 @@ impl Shell {
             material_sources: BTreeMap::new(),
             thumbnail_uploads: Vec::new(),
             asset_grid_extent: 0.,
+            asset_grid_size: [0.; 2],
             asset_grid_dirty: false,
             drafts: BTreeMap::new(),
             context: false,
@@ -225,6 +227,13 @@ impl Shell {
     }
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.rebuild_layout(editor, true)
+    }
+    fn rebuild_layout(
+        &mut self,
+        editor: &mut Editor,
+        allow_asset_reflow: bool,
+    ) -> ara_ui::Result<()> {
         let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
         let focus = self.input.focused();
         self.reduce_motion = editor.state.reduce_motion;
@@ -424,6 +433,16 @@ impl Shell {
         {
             self.edit_graph_layout(editor, "frame")?;
             self.ui.frame(&mut self.text)?;
+        }
+        if allow_asset_reflow
+            && self.ui.find("asset-grid").is_some_and(|i| {
+                let rect = self.ui.nodes[i].rect;
+                (rect.w - self.asset_grid_size[0]).abs() > 0.5
+                    || (rect.h - self.asset_grid_size[1]).abs() > 0.5
+            })
+        {
+            // One measured reflow handles first-open, splitter and monitor-size changes.
+            return self.rebuild_layout(editor, false);
         }
         let canvas_modal = editor.state.canvas_add
             && !editor.state.palette

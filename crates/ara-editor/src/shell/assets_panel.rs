@@ -92,6 +92,7 @@ impl Shell {
             .find("assets-content")
             .map(|i| self.ui.nodes[i].rect.h)
             .unwrap_or(190.);
+        self.asset_grid_size = [width, height];
         // Short drawers keep filenames visible beside the thumbnail.
         let compact = height < 124.;
         let (card_width, card_height, thumbnail) = if compact {
