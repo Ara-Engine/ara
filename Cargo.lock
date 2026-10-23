@@ -780,6 +780,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-editor-gpu",
+ "ara-export",
  "ara-gpu",
  "ara-graph",
  "ara-host",

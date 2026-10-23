@@ -33,6 +33,18 @@ pub struct Options {
     /// Start Play (in the Game view) once the window is up.
     pub play: bool,
 }
+impl Options {
+    /// Bounded and automated runs (a frame limit, captures, verification routes) keep
+    /// every window hidden and capture offscreen.
+    pub fn offscreen(&self) -> bool {
+        self.frames.is_some()
+            || self.screenshot
+            || self.verify
+            || self.verify_panels
+            || self.verify_ux
+            || self.headless
+    }
+}
 impl Default for Options {
     fn default() -> Self {
         Self {

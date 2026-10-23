@@ -58,6 +58,15 @@ impl Window {
     /// Open a native resizable Vulkan window; creation is confined to the SDL main thread.
     /// The window starts with the Ara app icon; games replace it with [`Window::set_icon`].
     pub fn new(title: &str, size: [u32; 2]) -> Result<Self> {
+        Self::create(title, size, false)
+    }
+    /// Like [`Window::new`], but never shown: automated runs (captures, verification)
+    /// render into offscreen targets and read pixels back, without putting a window on
+    /// the user's desktop.
+    pub fn hidden(title: &str, size: [u32; 2]) -> Result<Self> {
+        Self::create(title, size, true)
+    }
+    fn create(title: &str, size: [u32; 2], hidden: bool) -> Result<Self> {
         let title = CString::new(title)?;
         ensure!(
             !size.contains(&0) && size.iter().all(|n| *n <= i32::MAX as u32),
@@ -70,7 +79,14 @@ impl Window {
                 title.as_ptr(),
                 size[0] as i32,
                 size[1] as i32,
-                SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY,
+                SDL_WINDOW_VULKAN
+                    | SDL_WINDOW_RESIZABLE
+                    | SDL_WINDOW_HIGH_PIXEL_DENSITY
+                    | if hidden {
+                        SDL_WINDOW_HIDDEN
+                    } else {
+                        SDL_WindowFlags(0)
+                    },
             );
             if handle.is_null() {
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
@@ -160,7 +176,18 @@ impl Window {
     /// and minimizes with it (D23 floating panels). `rect` is x, y, width, height
     /// in desktop logical pixels.
     pub fn floating(title: &str, rect: [i32; 4], parent: &Window) -> Result<Self> {
-        let window = Self::new(title, [rect[2].max(64) as u32, rect[3].max(48) as u32])?;
+        Self::floating_with(title, rect, parent, false)
+    }
+    /// A floating window that is never shown (see [`Window::hidden`]).
+    pub fn floating_hidden(title: &str, rect: [i32; 4], parent: &Window) -> Result<Self> {
+        Self::floating_with(title, rect, parent, true)
+    }
+    fn floating_with(title: &str, rect: [i32; 4], parent: &Window, hidden: bool) -> Result<Self> {
+        let window = Self::create(
+            title,
+            [rect[2].max(64) as u32, rect[3].max(48) as u32],
+            hidden,
+        )?;
         // SAFETY: Both windows are live on this (main) thread.
         unsafe {
             ensure!(
@@ -216,11 +243,14 @@ impl Window {
         }
         Ok(())
     }
-    /// Bring the window to the front and give it keyboard focus.
+    /// Bring the window to the front and give it keyboard focus (hidden windows stay
+    /// hidden).
     pub fn raise(&self) {
         // SAFETY: Live window on its owning thread.
         unsafe {
-            SDL_RaiseWindow(self.handle);
+            if SDL_GetWindowFlags(self.handle) & SDL_WINDOW_HIDDEN == SDL_WindowFlags(0) {
+                SDL_RaiseWindow(self.handle);
+            }
         }
     }
     /// Toggle desktop full screen.

@@ -476,6 +476,27 @@ impl Editor {
         self.sync();
         result
     }
+    /// Log a failed UI action: an engine error keeps its own diagnostics (code,
+    /// location, fixes, so Problems can explain it); anything else is `ARA4500`.
+    pub(crate) fn report_failure(&mut self, error: &(dyn std::error::Error + 'static)) {
+        if let Some(EditorError(rpc)) = error.downcast_ref::<EditorError>()
+            && let Some(diagnostics) = rpc
+                .data
+                .as_ref()
+                .and_then(|d| d.get("diagnostics"))
+                .and_then(Value::as_array)
+                .filter(|d| !d.is_empty())
+        {
+            let diagnostics = diagnostics.clone();
+            if self
+                .action("diag.report", json!({"diagnostics": diagnostics}))
+                .is_ok()
+            {
+                return;
+            }
+        }
+        self.report_error(&error.to_string());
+    }
     /// Log an editor action failure to the diagnostics bus (Console, Problems, `ara logs`).
     pub(crate) fn report_error(&mut self, message: &str) {
         self.report("action", message, None);

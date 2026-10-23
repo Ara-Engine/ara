@@ -64,7 +64,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             .unwrap_or_default()
             .to_string_lossy()
     );
-    let window = Window::new(&title, options.size)?;
+    // Bounded runs (captures, verification routes) never put a window on the desktop:
+    // they render offscreen and read the UI target back.
+    let offscreen = options.offscreen();
+    let window = if offscreen {
+        Window::hidden(&title, options.size)?
+    } else {
+        Window::new(&title, options.size)?
+    };
     let mut native = Native::attach(&title)?;
     if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
         native.verification_extent(options.size)?;
@@ -97,6 +104,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     shell.device_info =
         serde_json::to_string_pretty(&renderer.gpu().context().info).unwrap_or_default();
     let mut floats = windows::Floats::default();
+    floats.hidden = offscreen;
     let mut game = game::GameView::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
@@ -210,7 +218,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     }
                     Err(error) => {
                         shell.leave();
-                        editor.report_error(&error.to_string());
+                        editor.report_failure(&*error);
                         dirty = true;
                     }
                 }
@@ -239,12 +247,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             match native.input(&mut shell.ui, &mut shell.input) {
                 Ok(changed) => dirty |= changed,
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             shell.leave();
             match shell.dispatch(&mut editor) {
                 Ok(changed) => dirty |= changed,
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             for id in floats
                 .windows
@@ -257,7 +265,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     shell.leave();
                     match result {
                         Ok(changed) => dirty |= changed,
-                        Err(error) => editor.report_error(&error.to_string()),
+                        Err(error) => editor.report_failure(&*error),
                     }
                 }
             }
@@ -277,7 +285,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             for path in imports.try_iter() {
                 if let Err(error) = import_file(&mut editor, &path) {
-                    editor.report_error(&error.to_string());
+                    editor.report_failure(&*error);
                 }
                 dirty = true;
             }
@@ -291,7 +299,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     dirty |= changed;
                     scene_dirty |= changed;
                 }
-                Err(error) => editor.report_error(&error.to_string()),
+                Err(error) => editor.report_failure(&*error),
             }
             if (verification.as_ref().is_some_and(|v| v.finished())
                 || ux_verification.as_ref().is_some_and(|v| v.finished()))
@@ -368,6 +376,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut gpu,
                     last_dpi,
                 )?;
+            }
+            if shell.poll_build(&mut editor) {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
             }
             let assets_changed = shell.poll_assets();
             for (kind, message) in std::mem::take(&mut shell.pending_reports) {

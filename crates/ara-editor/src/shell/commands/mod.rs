@@ -71,6 +71,8 @@ pub(crate) struct Ctx<'a> {
     pub assets_show_all: bool,
     /// Game view: stats overlay on, aspect preset, a frame is showing.
     pub game: (bool, &'static str, bool),
+    /// The project has an export preset; an export is running.
+    pub build: (bool, bool),
 }
 /// Whether a command can run now.
 #[derive(Clone, Debug, PartialEq)]
@@ -212,6 +214,13 @@ impl Shell {
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),
+            build: (
+                self.browser
+                    .items
+                    .iter()
+                    .any(|a| a.path.starts_with("presets/") && a.path.ends_with(".export.json")),
+                self.build.is_some(),
+            ),
         }
     }
     /// Run a registry command if it is available, then rebuild; disabled commands
@@ -252,7 +261,7 @@ impl Shell {
         let ran = !queued.is_empty();
         for (id, target) in queued {
             if let Err(error) = self.run_command(editor, &id, &target) {
-                editor.report_error(&error.to_string());
+                editor.report_failure(&*error);
             }
         }
         ran

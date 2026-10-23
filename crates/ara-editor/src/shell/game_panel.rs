@@ -48,12 +48,6 @@ impl Shell {
             "Aspect ratio of the Game view",
         );
         out.push_str("<panel id='game-fill' class='fill' />");
-        if self.game_live && self.game_size[0] > 0 {
-            out.push_str(&format!(
-                "<text id='game-resolution' class='caption' text='{} × {}' />",
-                self.game_size[0], self.game_size[1]
-            ));
-        }
         self.tool_icon(
             out,
             "game-stats",

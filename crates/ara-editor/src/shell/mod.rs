@@ -6,6 +6,7 @@
 //! know which OS window hosts them.
 mod assets;
 mod axis;
+mod build;
 mod chrome;
 pub mod commands;
 mod dialog;
@@ -104,6 +105,8 @@ pub struct Shell {
     pub(crate) game_captured: bool,
     pub(crate) game_aspect: &'static str,
     pub(crate) game_stats: bool,
+    /// The running export (Build > Build Current Profile).
+    pub(crate) build: Option<build::BuildJob>,
     /// Assets lists every file, including glTF buffers and project files.
     pub(crate) assets_show_all: bool,
     /// Console and Problems filters.
@@ -269,6 +272,7 @@ impl Shell {
             pending_reports: Vec::new(),
             log_view: LogView::default(),
             assets_show_all: false,
+            build: None,
             game_players: Vec::new(),
             game_client: 0,
             game_live: false,

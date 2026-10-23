@@ -281,6 +281,7 @@ impl EditorService {
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),
+                build: (false, false),
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }

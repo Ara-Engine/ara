@@ -439,7 +439,11 @@ fn build() -> Vec<Spec> {
         }),
         later("file.export_selection", "Export Selection…", "file", "", "Selection export lands with ara-export presets in the editor."),
         later("build.profiles", "Build Profiles…", "package", "", "Export presets run from `ara export`; the in-editor Build window is not built yet."),
-        later("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Run `ara export` for now; the in-editor Build window is not built yet."),
+        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the project with its preset (presets/<name>.export.json); progress shows in the status bar, problems in Problems, and the build opens when done.", |s, e, _| s.build_current(e)).when(|c| match c.build {
+            (_, true) => Avail::Blocked("An export is running; see the status bar".into()),
+            (false, _) => Avail::Blocked("Add an export preset first: presets/windows-portable.export.json (`ara-export preset --kind windows-portable`)".into()),
+            _ => Avail::Ready,
+        }),
         later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
         cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the project's build output folder.", |_, e, _| {
             let root = e.host.root().join("build");
