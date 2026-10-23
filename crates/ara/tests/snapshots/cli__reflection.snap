@@ -4152,6 +4152,16 @@ expression: out
             "mesh"
           ]
         },
+        "node": {
+          "type": "option<string>",
+          "doc": "Source node name or numeric glTF index. `name:3` selects a numeric name. The drawable subtree retains source rotation/scale and restores its pivot to the entity origin. Absent selects the complete default scene.",
+          "default": null
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Zero-based primitive within the selected subtree (or whole model).",
+          "default": null
+        },
         "color": {
           "type": "color",
           "doc": "Linear base color multiplier and opacity.",
@@ -4174,8 +4184,30 @@ expression: out
         },
         "emissive": {
           "type": "vec3",
-          "doc": "Emitted radiance in candela per square metre (linear RGB).",
+          "doc": "Procedural emitted radiance, or the RGB multiplier of a model's emission. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
           "default": [0, 0, 0]
+        },
+        "emissiveEnabled": {
+          "type": "bool",
+          "doc": "Enables emission without modifying the source model or its materials.",
+          "default": true
+        },
+        "emissiveStrength": {
+          "type": "f32",
+          "doc": "Emission multiplier, applied once after the source or overridden factor.",
+          "default": 1,
+          "range": [0, null]
+        },
+        "emissiveFactor": {
+          "type": "option<vec3>",
+          "doc": "Optional linear RGB replacement for the source emissive factor, useful for lamps.",
+          "default": null,
+          "range": [0, null]
+        },
+        "emissiveMaterials": {
+          "type": "list<string>",
+          "doc": "Source material names or numeric indices affected by `emissiveFactor`. Empty targets all; `name:3` disambiguates a numeric material name.",
+          "default": []
         }
       }
     },

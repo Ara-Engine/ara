@@ -88,6 +88,8 @@ through SDL (`AUDIO_WATERMARK` queued frames); without a device play stays silen
 `tests/streamed_music.rs` imports a 181-second score through MCP and captures its
 headless music playback deterministically. It also renders past the end and loops
 through bounded producers, checking aggregate queue accounting and late audibility.
+`tests/model_authoring.rs` selects source kit nodes through MCP and captures lamp
+factor edits, source-pivot changes and enable/disable transitions in headless Play.
 `tests/csharp.rs` (builds `dotnet/Ara.slnx`) plays a demo copy with the Outpost C#
 module (`demo-scripts/Outpost`: Door, UseMedkit, Gravity/Movement): published types,
 agent-added C# components, `play.command`, an agent `script.write` hot reload while
