@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e",
+  "key": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2",
   "stages": [
     {
-      "dxil": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e/primaryRasterMain.dxil",
-      "dxil_hash": "287d78ad13b0599ee5e1c81334a2ec84b11d3a4141f9aa73a6765d706ef08af4",
+      "dxil": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/primaryRasterMain.dxil",
+      "dxil_hash": "e0b94b5eb7be4730aafdef6a74d0312a51cd8f20648358afa46d81eb74755475",
       "source_entry": "primaryRasterMain",
-      "spirv": "89d3aceb9b263b95ddbaf5cc263b2d8dbfb4a8df74ef8e8149ccbec33e1f953e/primaryRasterMain.spv",
+      "spirv": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/primaryRasterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "ec5fc98b6876220dd86d6909c7e78777bf018392185b19def5234ccfbbad723a",
+      "spirv_hash": "aeea87e05e1c6fdbc5f61778580a81ab4eb32a5c22e5f61d9770ecaefe1bff50",
       "stage": "compute"
     }
   ],
