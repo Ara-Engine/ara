@@ -1,0 +1,4 @@
+/bench-results-portable/
+/bench-results/chunks/
+/bench-results/simd-v1/
+*.stdout.txt

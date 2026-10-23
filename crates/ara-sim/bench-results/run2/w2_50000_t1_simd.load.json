@@ -1,0 +1,616 @@
+{
+    "samples":  [
+                    {
+                        "at":  "2026-10-23T00:27:11.4816387Z",
+                        "cpuPercent":  44,
+                        "freeKiB":  5413204,
+                        "processes":  [
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  121
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  9612,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "link#1",
+                                              "IDProcess":  13996,
+                                              "PercentProcessorTime":  52
+                                          },
+                                          {
+                                              "Name":  "link",
+                                              "IDProcess":  61072,
+                                              "PercentProcessorTime":  47
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  43
+                                          },
+                                          {
+                                              "Name":  "svchost#37",
+                                              "IDProcess":  25684,
+                                              "PercentProcessorTime":  39
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:13.3696319Z",
+                        "cpuPercent":  64,
+                        "freeKiB":  5500344,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  247
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  102
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  9612,
+                                              "PercentProcessorTime":  102
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  38
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  29
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  93620,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  17
+                                          },
+                                          {
+                                              "Name":  "cargo",
+                                              "IDProcess":  47932,
+                                              "PercentProcessorTime":  8
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:15.2454606Z",
+                        "cpuPercent":  54,
+                        "freeKiB":  5771172,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  120
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  102
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  100408,
+                                              "PercentProcessorTime":  98
+                                          },
+                                          {
+                                              "Name":  "WerFault",
+                                              "IDProcess":  82412,
+                                              "PercentProcessorTime":  94
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  38
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#3",
+                                              "IDProcess":  13004,
+                                              "PercentProcessorTime":  25
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:17.1180370Z",
+                        "cpuPercent":  52,
+                        "freeKiB":  5908440,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  329
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  104
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  63508,
+                                              "PercentProcessorTime":  39
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "claude#3",
+                                              "IDProcess":  63100,
+                                              "PercentProcessorTime":  26
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "cargo",
+                                              "IDProcess":  47932,
+                                              "PercentProcessorTime":  13
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:19.0215961Z",
+                        "cpuPercent":  45,
+                        "freeKiB":  5803360,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  105
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "rustc#3",
+                                              "IDProcess":  42404,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  73904,
+                                              "PercentProcessorTime":  92
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  63508,
+                                              "PercentProcessorTime":  71
+                                          },
+                                          {
+                                              "Name":  "claude#3",
+                                              "IDProcess":  63100,
+                                              "PercentProcessorTime":  67
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  37
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  29
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:20.9085012Z",
+                        "cpuPercent":  68,
+                        "freeKiB":  5728700,
+                        "processes":  [
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  101
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  58360,
+                                              "PercentProcessorTime":  96
+                                          },
+                                          {
+                                              "Name":  "rustc#2",
+                                              "IDProcess":  48244,
+                                              "PercentProcessorTime":  92
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  58
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  33
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  29
+                                          },
+                                          {
+                                              "Name":  "NVDisplay.Container",
+                                              "IDProcess":  3220,
+                                              "PercentProcessorTime":  21
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:22.8063641Z",
+                        "cpuPercent":  46,
+                        "freeKiB":  5549912,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  327
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  70
+                                          },
+                                          {
+                                              "Name":  "clippy-driver",
+                                              "IDProcess":  23980,
+                                              "PercentProcessorTime":  62
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  33
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  29
+                                          },
+                                          {
+                                              "Name":  "cargo#2",
+                                              "IDProcess":  90748,
+                                              "PercentProcessorTime":  29
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:24.7206692Z",
+                        "cpuPercent":  71,
+                        "freeKiB":  5030208,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  120
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  90
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  51
+                                          },
+                                          {
+                                              "Name":  "T3 Code (Nightly)#4",
+                                              "IDProcess":  47716,
+                                              "PercentProcessorTime":  51
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "cargo#2",
+                                              "IDProcess":  90748,
+                                              "PercentProcessorTime":  34
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:26.6575861Z",
+                        "cpuPercent":  59,
+                        "freeKiB":  5113832,
+                        "processes":  [
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  155
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  100
+                                          },
+                                          {
+                                              "Name":  "rustc#3",
+                                              "IDProcess":  98576,
+                                              "PercentProcessorTime":  96
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  38312,
+                                              "PercentProcessorTime":  96
+                                          },
+                                          {
+                                              "Name":  "rustc#2",
+                                              "IDProcess":  51428,
+                                              "PercentProcessorTime":  67
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  62
+                                          },
+                                          {
+                                              "Name":  "NZXT CAM#4",
+                                              "IDProcess":  100472,
+                                              "PercentProcessorTime":  33
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:28.5281000Z",
+                        "cpuPercent":  59,
+                        "freeKiB":  5045264,
+                        "processes":  [
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  38312,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "rustc#2",
+                                              "IDProcess":  51428,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "rustc#3",
+                                              "IDProcess":  58132,
+                                              "PercentProcessorTime":  98
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  38
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "relay_win#3",
+                                              "IDProcess":  86896,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:30.3783650Z",
+                        "cpuPercent":  37,
+                        "freeKiB":  4964500,
+                        "processes":  [
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  51428,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "rustc#2",
+                                              "IDProcess":  58132,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  99
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  54920,
+                                              "PercentProcessorTime":  94
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  60
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  51
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE",
+                                              "IDProcess":  4748,
+                                              "PercentProcessorTime":  34
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:32.2440269Z",
+                        "cpuPercent":  34,
+                        "freeKiB":  5527988,
+                        "processes":  [
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  133
+                                          },
+                                          {
+                                              "Name":  "ecs-5b7d058d952e496f",
+                                              "IDProcess":  42116,
+                                              "PercentProcessorTime":  103
+                                          },
+                                          {
+                                              "Name":  "rustc#2",
+                                              "IDProcess":  95356,
+                                              "PercentProcessorTime":  56
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  51
+                                          },
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  38
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  30
+                                          },
+                                          {
+                                              "Name":  "cam_helper#1",
+                                              "IDProcess":  73648,
+                                              "PercentProcessorTime":  21
+                                          },
+                                          {
+                                              "Name":  "rustc#1",
+                                              "IDProcess":  82332,
+                                              "PercentProcessorTime":  17
+                                          }
+                                      ]
+                    },
+                    {
+                        "at":  "2026-10-23T00:27:34.1370669Z",
+                        "cpuPercent":  35,
+                        "freeKiB":  5626652,
+                        "processes":  [
+                                          {
+                                              "Name":  "System",
+                                              "IDProcess":  4,
+                                              "PercentProcessorTime":  174
+                                          },
+                                          {
+                                              "Name":  "rustc",
+                                              "IDProcess":  95356,
+                                              "PercentProcessorTime":  156
+                                          },
+                                          {
+                                              "Name":  "MsMpEng",
+                                              "IDProcess":  5604,
+                                              "PercentProcessorTime":  121
+                                          },
+                                          {
+                                              "Name":  "iGameCenter.Service",
+                                              "IDProcess":  5512,
+                                              "PercentProcessorTime":  43
+                                          },
+                                          {
+                                              "Name":  "WmiPrvSE#2",
+                                              "IDProcess":  104760,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "bash#4",
+                                              "IDProcess":  55692,
+                                              "PercentProcessorTime":  34
+                                          },
+                                          {
+                                              "Name":  "NVDisplay.Container",
+                                              "IDProcess":  3220,
+                                              "PercentProcessorTime":  13
+                                          },
+                                          {
+                                              "Name":  "csrss#1",
+                                              "IDProcess":  81156,
+                                              "PercentProcessorTime":  8
+                                          }
+                                      ]
+                    }
+                ],
+    "priority":  "AboveNormal"
+}
