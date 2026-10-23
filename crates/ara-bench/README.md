@@ -119,3 +119,19 @@ sampling or system tracing. Its Windows helper reported `SymInitialize` error 87
 in `src/dbghelp.rs`. This run measures explicit zones, without call stacks.
 The machine is shared, so retain the raw round samples and load alongside results
 instead of treating these medians as isolated-machine limits.
+
+## Local validation
+
+`./crates/ara-bench/run.ps1 -Mode Gate` runs profiler allocation/GPU/Tracy tests,
+the real Vulkan correlation test, tests for every instrumented subsystem and the
+host/CLI, strict Clippy across all targets, and formatting checks. It scopes its
+environment and always uses two Cargo jobs. Pass `-TargetDir` to reuse a cache.
+
+The fixture scene `ara-host/tests/fixtures/project/levels/arena.scene`, seed 1,
+completed four AB/BA rounds of 120 measured ticks after eight warmup ticks per
+variant. The 960-frame binary capture and canonical summaries had no dropped
+records or hitches. CPU frame p50/p95/p99 were 500/1500/3600 ns; both measured
+systems allocated zero requested bytes. A/B comparison passed: frame p95 changed
+1100 -> 1500 ns, below the 1000 ns absolute threshold; system p95s were unchanged.
+This tiny calibration completed below the OS sampling interval, so its load fields
+are explicitly unavailable. The longer overhead runs above include measured load.
