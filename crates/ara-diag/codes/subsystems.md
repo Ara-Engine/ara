@@ -267,6 +267,91 @@ Fixes:
 - Increase query capacity before concluding that a truncated search proves disconnection.
 - Leave a successful informational result unchanged.
 
+## ARA7300 play::PLAY: Player call failed
+owner: ara-play-host
+
+A request to a play-mode `ara-player` process failed: the link timed out, the player rejected the call, or a reply could not be decoded. The editor and its documents are unaffected; the world keeps its last good state.
+
+Causes:
+- The player is busy past the request timeout (a long step or a blocking load).
+- The player binary is older or newer than the host and speaks a different play protocol.
+- The shared-memory or JSON-RPC link was closed mid-call.
+
+Fixes:
+- Retry the call; use `ara_play` with `action: status` to see whether the world is still alive.
+- Rebuild `ara-player` together with the editor so both use the same protocol.
+- Stop the world and start a new one from the pool.
+
+## ARA7301 play::PLAYER_FAULT: Player crashed or hung
+owner: ara-play-host
+
+The player process for a world panicked, crashed, hung or exited. Play runs out of process (S5), so the editor kept running; the host restarts players from the pool and reports the fault here.
+
+Causes:
+- A gameplay system or script panicked (the message carries the panic text when available).
+- Native code faulted (access violation) in a plugin or driver.
+- A system looped without yielding and the hang watchdog fired.
+
+Fixes:
+- Read the panic message and `ara why` evidence; fix the failing system, then press Play again.
+- Run the scene headless with `ara_play` and `ara_test` to reproduce deterministically from the recorded seed and inputs.
+- Check driver and validation diagnostics (`ARA_GPU_*`) for native faults.
+
+## ARA7302 play::UNKNOWN_WORLD: Unknown play world
+owner: ara-play-host
+
+A play call named a world ID that the play service does not know. Worlds end when they are stopped or their player exits.
+
+Causes:
+- The world was stopped, or its player crashed and was not restarted.
+- The ID belongs to another editor session or daemon.
+
+Fixes:
+- List live worlds with `ara_play` (`action: status`) and use one of their IDs, or omit `world` to target the latest world.
+- Start a new world with `play.start`.
+
+## ARA7303 play::ASSETS: Play assets not ready
+owner: ara-play-host
+
+The scene references assets that are not imported yet or failed to import, so the player cannot load them.
+
+Causes:
+- An import is still running for a referenced asset.
+- An import failed (see the related `ARA21xx` asset diagnostic).
+- A referenced asset's source is missing.
+
+Fixes:
+- Wait for `jobs` to finish, then press Play again.
+- Fix the failing import named in the message and re-import it.
+- Point the referencing field at an asset that exists (`property.set`).
+
+## ARA7304 play::TEST_FAILED: Playtest assertion failed
+owner: ara-play-host
+
+An `ara_test` playtest ran and one of its assertions did not hold. The test report lists the failing assertion, the tick and the observed values.
+
+Causes:
+- Gameplay behaviour changed (intended or a regression).
+- The test's expectation or timing window is wrong for the scene.
+
+Fixes:
+- Re-run the test and inspect its captures and the failing tick's state with `ara_inspect`.
+- Fix the regression, or update the assertion if the new behaviour is intended.
+
+## ARA7305 play::REQUEST: Invalid play request
+owner: ara-play-host
+
+The play request itself is invalid: an unknown scene, an unsupported mode, or a malformed spec (player count, window options, ticks).
+
+Causes:
+- The scene path or ID does not exist.
+- The mode or player configuration is not supported by this build.
+- A parameter has the wrong type or range.
+
+Fixes:
+- Use `ara_query` to find the scene, then pass its path or ID.
+- Check the `ara_play` tool description for the supported modes and parameters, and resend.
+
 ## ARA7401 l10n::MISSING_KEY: Missing localization key
 owner: ara-l10n
 
