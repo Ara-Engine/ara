@@ -6,6 +6,7 @@
 pub extern crate glam34 as glam;
 #[cfg(test)]
 mod codec_tests;
+pub mod commands;
 mod compile;
 mod compression;
 mod controller;

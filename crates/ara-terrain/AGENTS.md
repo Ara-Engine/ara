@@ -10,6 +10,8 @@ Public API: `register`, `commands::register`, `Terrain`, `Tile`, `FileCache`,
 Every live edit goes through ara-cmd. A batch is one gesture/undo step; include all
 dabs in that gesture. Each touched tile stores a small ordered stroke-reference
 delta, not its sample array. Layers sort by (priority, ID); gestures by (sequence, ID).
+Stroke commands accept stable `id` values or batch symbols. Newly touched tiles
+derive IDs from their signed coordinates, making scripted rebuilds reproducible.
 Imported bases/stamps are immutable ARTH v1 little-endian binary payloads keyed by
 BLAKE3. Canonical manifests use ara-doc, never a custom JSON writer.
 

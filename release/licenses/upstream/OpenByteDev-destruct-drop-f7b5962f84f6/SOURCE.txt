@@ -1,0 +1,4 @@
+Original license texts for:
+destruct-drop 0.2.0
+
+https://raw.githubusercontent.com/OpenByteDev/destruct-drop/f7b5962f84f6de89c272fd6b4547f17da44324b0/LICENSE

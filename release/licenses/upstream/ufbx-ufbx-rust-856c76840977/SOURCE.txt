@@ -1,0 +1,4 @@
+Original license texts for:
+ufbx 0.11.5
+
+https://raw.githubusercontent.com/ufbx/ufbx-rust/856c76840977cd504f053bf17ab4948b675b981a/LICENSE

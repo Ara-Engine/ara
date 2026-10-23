@@ -58,9 +58,15 @@ player link only; never logged), status heartbeats carry `HostStats`/`MirrorStat
   Scene contacts still come from authoritative Jolt corrections.
 - The mirror still builds the full world (physics, navmesh, C# host for the schema
   hash); only the session never steps.
+- Scene/cell rows have one lifecycle owner: projection/streaming. A baseline that
+  arrives first waits for its local row; only runtime-created entities get network
+  fallbacks. Bindings are re-resolved after local cell unload/reload.
 
 ## Testing
 
 `cargo test -p ara-runtime-net` (motor math). Process-level host + client with
 captures: `cargo test -p ara-player --test net -- --nocapture`.
 `cargo clippy -p ara-runtime-net --all-targets -- -D warnings`.
+`mirror::entities` tests both baseline/cell arrival orders, unload/re-entry and
+runtime-created fallbacks against the strict snapshot identity check. Its ignored
+`profile_resident_replica_bindings` probe measures the binding hot path.

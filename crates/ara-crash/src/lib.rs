@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod capture;
+pub mod desktop;
 mod report;
 #[cfg(any(windows, target_os = "linux"))]
 mod snapshot;

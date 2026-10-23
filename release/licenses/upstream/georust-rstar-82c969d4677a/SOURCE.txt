@@ -1,0 +1,5 @@
+Original license texts for:
+rstar 0.13.0
+
+https://raw.githubusercontent.com/georust/rstar/82c969d4677a6f624900056e044d7e7ec8439c18/LICENSE-MIT
+https://raw.githubusercontent.com/georust/rstar/82c969d4677a6f624900056e044d7e7ec8439c18/LICENSE-APACHE

@@ -1,0 +1,95 @@
+{
+  "scene": "levels/outpost.scene",
+  "ticks": 90,
+  "sky": {
+    "kind": "atmosphere",
+    "fogExtinction": 0.0035,
+    "fogHeight": 18,
+    "fogAlbedo": 0.9,
+    "cloudCoverage": 0.12
+  },
+  "post": {
+    "compensation": -0.4,
+    "bloom": 0.05,
+    "neutral": true
+  },
+  "terrain": {
+    "texture": "dry_ground_rocks",
+    "tint": [
+      0.86,
+      0.8,
+      0.74
+    ],
+    "rock": "rocky_terrain_02",
+    "rockTint": [
+      0.9,
+      0.86,
+      0.82
+    ]
+  },
+  "shots": [
+    {
+      "name": "gate",
+      "position": [
+        188.0,
+        1.6,
+        153.0
+      ],
+      "target": [
+        194.0,
+        2.8,
+        196.0
+      ],
+      "fov": 54
+    },
+    {
+      "name": "campfire",
+      "position": [
+        175.6,
+        1.5,
+        184.6
+      ],
+      "target": [
+        181.0,
+        1.0,
+        188.5
+      ],
+      "fov": 55
+    },
+    {
+      "name": "yard",
+      "position": [
+        200.0,
+        1.6,
+        172.5
+      ],
+      "target": [
+        214.0,
+        6.0,
+        192.0
+      ],
+      "fov": 55
+    },
+    {
+      "name": "vista",
+      "position": [
+        136.0,
+        9.0,
+        148.0
+      ],
+      "target": [
+        196.0,
+        0.0,
+        200.0
+      ],
+      "fov": 45
+    }
+  ],
+  "sequence": {
+    "from": "vista",
+    "to": "gate",
+    "frames": 6,
+    "step": 10
+  },
+  "groundRelative": true
+}

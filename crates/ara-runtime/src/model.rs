@@ -7,6 +7,10 @@ use ara_asset_format::{Lod, Mesh, QuantizedVertex, SkinExtra};
 use glam::{Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
+mod material;
+mod uv;
+pub use material::ModelMaterial;
+pub use uv::TextureTransform;
 
 /// A decoded model-space vertex with up to eight skin influences.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -17,6 +21,8 @@ pub struct ModelVertex {
     pub normal: [f32; 3],
     /// First texture coordinate.
     pub uv: [f32; 2],
+    /// Second texture coordinate, selected independently by each material slot.
+    pub uv1: [f32; 2],
     /// Tangent xyz and bitangent handedness.
     pub tangent: [f32; 4],
     /// Skin-local joint indices (the owning skin's joint order).
@@ -32,29 +38,33 @@ pub struct Primitive {
     pub vertices: Vec<ModelVertex>,
     /// Finest-LOD triangle indices.
     pub indices: Vec<u32>,
+    /// Coarser cooked LODs, finest first, sharing `vertices` (empty when the cook
+    /// produced none).
+    pub lods: Vec<ModelLod>,
     /// Index into [`Model::materials`].
     pub material: Option<usize>,
     /// Index into [`Model::skins`] for skinned primitives.
     pub skin: Option<usize>,
 }
 
-/// Metallic-roughness material factors and texture slots.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ModelMaterial {
-    /// Linear base color factor.
-    pub base_color: [f32; 4],
-    /// Metalness factor.
-    pub metallic: f32,
-    /// Roughness factor.
-    pub roughness: f32,
-    /// Emissive factor (multiplied by the entity's emissive radiance scale).
-    pub emissive: [f32; 3],
-    /// Base color texture, an index into [`Model::textures`].
-    pub base_color_texture: Option<usize>,
-    /// Alpha mode: 0 opaque, 1 mask, 2 blend.
-    pub alpha_mode: u32,
-    /// Mask cutoff.
-    pub alpha_cutoff: f32,
+/// A simplified level of detail of a primitive.
+#[derive(Debug, Clone)]
+pub struct ModelLod {
+    /// Triangle indices into the primitive's vertices.
+    pub indices: Vec<u32>,
+    /// meshoptimizer's relative simplification error (fraction of the mesh extent).
+    pub error: f32,
+}
+
+/// How a cooked texture's texels are interpreted (the importer's cook usage).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TextureUsage {
+    /// sRGB color (base color, emissive), BC7 sRGB.
+    Color,
+    /// Linear data (metallic/roughness), BC7 UNORM.
+    Linear,
+    /// Tangent-space normal XY, BC5.
+    Normal,
 }
 
 /// A cooked KTX2 texture, decoded by the presentation layer.
@@ -62,6 +72,8 @@ pub struct ModelMaterial {
 pub struct ModelTexture {
     /// Artifact name, stable within the generation.
     pub name: String,
+    /// Cook usage, which decides the encoding and color space.
+    pub usage: TextureUsage,
     /// Complete KTX2 bytes.
     pub ktx2: Arc<[u8]>,
 }
@@ -121,22 +133,31 @@ impl Model {
         let mut textures = Vec::new();
         let mut texture_by_image = BTreeMap::new();
         for entry in manifest["textures"].as_array().into_iter().flatten() {
-            if entry["usage"] == "color" {
-                let name = string(&entry["artifact"])?;
-                texture_by_image.insert(index(&entry["image"])?, textures.len());
-                textures.push(ModelTexture {
-                    name: name.to_owned(),
-                    ktx2: Arc::from(artifact(name)?),
-                });
-            }
+            let usage = match entry["usage"].as_str() {
+                Some("color") => TextureUsage::Color,
+                Some("linear") => TextureUsage::Linear,
+                Some("normal") => TextureUsage::Normal,
+                _ => continue,
+            };
+            let name = string(&entry["artifact"])?;
+            texture_by_image.insert((index(&entry["image"])?, usage), textures.len());
+            textures.push(ModelTexture {
+                name: name.to_owned(),
+                usage,
+                ktx2: Arc::from(artifact(name)?),
+            });
         }
         let gltf_textures = document["textures"].as_array().cloned().unwrap_or_default();
         let materials = document["materials"]
             .as_array()
             .into_iter()
             .flatten()
-            .map(|m| material(m, &gltf_textures, &texture_by_image))
-            .collect::<Vec<_>>();
+            .enumerate()
+            .map(|(i, m)| {
+                material::decode(m, &gltf_textures, &texture_by_image)
+                    .map_err(|e| RuntimeError(format!("{asset}: material {i}: {}", e.0)))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut skins = Vec::new();
         for entry in manifest["skeletons"].as_array().into_iter().flatten() {
@@ -240,28 +261,6 @@ fn floats<const N: usize>(value: &Value, default: [f32; N]) -> [f32; N] {
         }
     }
     out
-}
-
-fn material(m: &Value, textures: &[Value], by_image: &BTreeMap<usize, usize>) -> ModelMaterial {
-    let pbr = &m["pbrMetallicRoughness"];
-    let base_color_texture = pbr["baseColorTexture"]["index"]
-        .as_u64()
-        .and_then(|t| textures.get(t as usize))
-        .and_then(|t| t["source"].as_u64())
-        .and_then(|image| by_image.get(&(image as usize)).copied());
-    ModelMaterial {
-        base_color: floats(&pbr["baseColorFactor"], [1.0; 4]),
-        metallic: pbr["metallicFactor"].as_f64().map_or(1.0, |v| v as f32),
-        roughness: pbr["roughnessFactor"].as_f64().map_or(1.0, |v| v as f32),
-        emissive: floats(&m["emissiveFactor"], [0.0; 3]),
-        base_color_texture,
-        alpha_mode: match m["alphaMode"].as_str() {
-            Some("MASK") => 1,
-            Some("BLEND") => 2,
-            _ => 0,
-        },
-        alpha_cutoff: m["alphaCutoff"].as_f64().map_or(0.5, |v| v as f32),
-    }
 }
 
 /// Node → parent node.
@@ -384,27 +383,47 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
                 position: transform.transform_point3(p).to_array(),
                 normal: n.to_array(),
                 uv: [half(q.uv[0]), half(q.uv[1])],
+                uv1: [half(q.uv[2]), half(q.uv[3])],
                 tangent: [t.x, t.y, t.z, if q.tangent[3] < 0 { -1.0 } else { 1.0 }],
                 joints,
                 weights,
             }
         })
         .collect();
-    let lod: Lod = bytemuck::pod_read_unaligned(
-        mesh.lods
-            .get(..16)
-            .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?,
-    );
-    let first = lod.first_index as usize * 4;
-    let indices = mesh.indices[first..first + lod.index_count as usize * 4]
-        .as_chunks::<4>()
+    let read = |lod: &Lod| -> Result<Vec<u32>> {
+        let first = lod.first_index as usize * 4;
+        Ok(mesh
+            .indices
+            .get(first..first + lod.index_count as usize * 4)
+            .ok_or_else(|| RuntimeError("LOD outside the index stream".into()))?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
+            .collect())
+    };
+    let mut lods = mesh
+        .lods
+        .as_chunks::<16>()
         .0
         .iter()
-        .map(|b| u32::from_le_bytes(*b))
-        .collect();
+        .map(|raw| bytemuck::pod_read_unaligned::<Lod>(raw));
+    let finest = lods
+        .next()
+        .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?;
+    let indices = read(&finest)?;
+    let lods = lods
+        .map(|lod| {
+            Ok(ModelLod {
+                indices: read(&lod)?,
+                error: lod.error,
+            })
+        })
+        .collect::<Result<_>>()?;
     Ok(Primitive {
         vertices,
         indices,
+        lods,
         material: None,
         skin: None,
     })

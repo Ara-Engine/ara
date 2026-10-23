@@ -22,6 +22,9 @@ pub struct Spawn {
     pub id: NetId,
     /// Stable simulation identity used for commands and replay.
     pub identity: String,
+    /// The receiver's scene projection or cell streamer owns this row's lifetime.
+    /// Bind it when resident; replication must not create a fallback entity for it.
+    pub projected: bool,
     /// Cooked prefab reference (`@path#id`), or the scene's authored reference.
     pub prefab: String,
     /// Cooked prefab content/version digest.

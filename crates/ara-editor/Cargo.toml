@@ -12,6 +12,7 @@ workspace = true
 embed-resource = "3"
 
 [dependencies]
+ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-importers = { path = "../ara-importers" }

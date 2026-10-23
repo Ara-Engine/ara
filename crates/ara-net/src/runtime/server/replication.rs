@@ -54,6 +54,12 @@ fn refresh_inner<F: SimulationFeature>(
             let spawn = Spawn {
                 id,
                 identity: identity.clone(),
+                projected: state
+                    .session
+                    .session()
+                    .projection()
+                    .entity(&identity)
+                    .is_some(),
                 prefab: identity.clone(),
                 version: policies.hash(),
                 owner: None,

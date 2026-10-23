@@ -1,6 +1,9 @@
 # ara-crash
 
 Local crash artifacts, isolated native dump monitor, and offline symbolization.
+`desktop::start` shares LOCALAPPDATA/Ara/crashes for editor/Hub and offers to open
+new reports at the next interactive launch. Bounded/headless runs do not prompt.
+`ara-crash archive <pdb> <store>` converts matching private release symbols offline.
 Windows/Linux capture uses crash-handler + minidumper (MiniDumpWriteDump on
 Windows, ptrace/Breakpad minidumps on Linux). No SDK download or build tool.
 

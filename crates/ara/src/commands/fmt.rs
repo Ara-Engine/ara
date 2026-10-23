@@ -3,7 +3,6 @@
 use std::fs;
 use std::path::PathBuf;
 
-use ara_doc::{read, write};
 use serde_json::json;
 
 use super::print_text;
@@ -18,7 +17,7 @@ pub fn fmt(project: &Project, files: &[PathBuf], check: bool, json: bool) -> Res
     for file in files {
         let rel = project.rel(file);
         let text = fs::read_to_string(file).map_err(|e| format!("cannot read `{rel}`: {e}"))?;
-        let result = read(&text, &rel, &project.db, Some(&project.index));
+        let result = project.read_document(&text, &rel);
         let errors: Vec<_> = result
             .diags
             .iter()
@@ -34,7 +33,7 @@ pub fn fmt(project: &Project, files: &[PathBuf], check: bool, json: bool) -> Res
             ok = false;
             continue;
         };
-        let formatted = write(&doc, &project.db);
+        let formatted = project.write_document(&doc).map_err(|d| d.to_string())?;
         if formatted == text {
             continue;
         }

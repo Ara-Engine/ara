@@ -31,6 +31,8 @@ pub struct PaintParams {
 #[ara(params, name = "FoliageExcludeParams", module = "foliage")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExcludeParams {
+    /// Optional concrete or symbolic exclusion ID for reproducible authoring.
+    pub id: Option<String>,
     /// Circular exclusion zone.
     pub zone: Exclusion,
 }
@@ -164,7 +166,7 @@ impl Command for Exclude {
         {
             return Err(invalid("invalid exclusion zone"));
         }
-        let id = ctx.new_id(None, "x")?;
+        let id = ctx.new_id(p.id.as_deref(), "x")?;
         ctx.create(id.clone(), rec(&p.zone)?)?;
         Ok(json!({"id":id}))
     }

@@ -22,6 +22,65 @@ fn png(red: u8) -> Vec<u8> {
         .unwrap();
     bytes
 }
+
+#[test]
+fn settings_selected_opacity_is_snapshotted_in_process_and_invalidates_cooked_alpha() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("panel.gltf"),
+        include_bytes!("../../ara-importers/tests/fixtures/material-extensions.gltf"),
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("opacity.png"),
+        include_bytes!("../../ara-importers/tests/fixtures/companion-opacity.png"),
+    )
+    .unwrap();
+    let worker = worker();
+    let installed = worker.versions().unwrap();
+    let source = SourceAsset {
+        preset: CookPreset::Fast,
+        thread_budget: 4,
+        id: "as_panel".into(),
+        path: "panel.gltf".into(),
+        importer: "ara.gltf".into(),
+        version: installed["ara.gltf"].clone(),
+        settings: json!({"virtualGeometry":false,"opacityMaps":{"#0":"opacity.png"}}),
+        target: TargetPlatform::Windows,
+        asset_dependencies: BTreeMap::new(),
+    };
+    let cancel = Cancellation::default();
+    let first = snapshot(root.path(), &source, &worker, &cancel).unwrap();
+    assert_eq!(
+        first
+            .dependencies
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["opacity.png"]
+    );
+    let first_key = first.key().unwrap();
+    let first = worker.start(first).unwrap().wait(&cancel, |_| {}).unwrap();
+    std::fs::write(root.path().join("opacity.png"), png(255)).unwrap();
+    let second = snapshot(root.path(), &source, &worker, &cancel).unwrap();
+    assert_ne!(first_key, second.key().unwrap());
+    let second = worker.start(second).unwrap().wait(&cancel, |_| {}).unwrap();
+    let alpha = |output: &ImportOutput| {
+        let bytes = &output
+            .artifacts
+            .iter()
+            .find(|a| a.name == "textures/0-Color.ktx2")
+            .unwrap()
+            .bytes;
+        let texture = ara_asset_format::Texture::read(bytes).unwrap();
+        let mut pixels = [0u32; 64];
+        texture2ddecoder::decode_bc7(texture.levels().next().unwrap(), 8, 8, &mut pixels).unwrap();
+        (pixels[0] >> 24) as i32
+    };
+    assert!(alpha(&first) <= 4);
+    assert!((alpha(&second) - 128).abs() <= 4);
+}
+
 fn input(red: u8) -> ImportInput {
     ImportInput {
         preset: Default::default(),

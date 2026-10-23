@@ -1112,3 +1112,16 @@ Causes:
 Fixes:
 - Run `ara schema` to validate the definitions on disk, then restart the daemon with `ara serve` to load them.
 - Refresh `ara_schema` or MCP `tools/list` after reconnecting so subsequent edits use the new schema.
+
+## ARA1913 TEMPLATE_INCOMPLETE: Project template needs setup
+owner: ara-hub-service
+
+`hub.create` refused a template because files pinned by its `assets.lock.json` are not present. The real-art samples keep third-party binaries out of git; a checkout or a build packaged without them lists the template but cannot create a working project from it. The Hub shows the same message on the template tile.
+
+Causes:
+- The sample's third-party art was never downloaded, or a download was interrupted.
+- The engine package was built on a machine that had not fetched the sample art.
+
+Fixes:
+- In an Ara source checkout, run the command in the message (`ara-samples fetch <sample>`), then create the project again.
+- Pick another template, such as `blank`.

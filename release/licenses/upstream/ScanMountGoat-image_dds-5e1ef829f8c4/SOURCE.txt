@@ -1,0 +1,4 @@
+Original license texts for:
+bcdec_rs 0.2.1
+
+https://raw.githubusercontent.com/ScanMountGoat/image_dds/5e1ef829f8c44980e21bdcda2e1ffb574b81b57b/LICENSE

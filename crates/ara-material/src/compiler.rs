@@ -33,7 +33,7 @@ pub struct CompiledShader {
 /// Explicit external compiler. No render/editor thread should call this synchronously.
 #[derive(Debug)]
 pub struct ShaderCompiler {
-    /// slangc executable; discovery uses SLANGC, VULKAN_SDK, then PATH.
+    /// slangc executable; discovery prefers bundled tools, then SLANGC, SDK and PATH.
     pub executable: PathBuf,
 }
 
@@ -65,8 +65,16 @@ impl ShaderCompiler {
 
     /// Resolves the installed offline compiler; does not launch it.
     pub fn discover() -> Self {
-        let executable = std::env::var_os("SLANGC")
-            .map(PathBuf::from)
+        let executable = std::env::current_exe()
+            .ok()
+            .and_then(|exe| {
+                exe.parent().map(|dir| {
+                    dir.join("tools")
+                        .join(format!("slangc{}", std::env::consts::EXE_SUFFIX))
+                })
+            })
+            .filter(|path| path.is_file())
+            .or_else(|| std::env::var_os("SLANGC").map(PathBuf::from))
             .or_else(|| {
                 std::env::var_os("VULKAN_SDK").map(|sdk| {
                     PathBuf::from(sdk)

@@ -21,10 +21,10 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 const NEAR: f32 = 0.1;
 
 fn cooked_root() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../ara-landscape/cooked"
-    ))
+    ara_gpu::cooked::resource_dir(
+        "ara-landscape",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-landscape/cooked"),
+    )
 }
 
 /// One built landscape: for this terrain data at this capture size.
@@ -42,25 +42,37 @@ pub struct Landscapes {
 }
 
 /// The single sample atlas ara-landscape draws from: heights, packed splat weights
-/// and holes over the whole (square, origin-anchored) terrain.
-fn landscape_data(data: &TerrainData) -> Result<LandscapeData> {
+/// and holes over the whole square terrain. Atlas coordinates start at Header.min;
+/// authored world coordinates stay in the header for ara-landscape's CPU rebase.
+pub(super) fn landscape_data(data: &TerrainData) -> Result<LandscapeData> {
     let header = &data.header;
+    let width = i64::from(header.max.x) - i64::from(header.min.x);
+    let height = i64::from(header.max.z) - i64::from(header.min.z);
     ensure!(
-        header.origin == [0.0, 0.0]
-            && header.min.x == 0
-            && header.min.z == 0
-            && header.max.x == header.max.z,
-        "the landscape renderer draws square terrains anchored at the origin (min 0, max x == max z)"
+        width > 0 && width == height,
+        "the landscape renderer draws square terrain extents"
     );
     let cells = header.cells as usize;
-    let side = header.max.x as usize * cells + 1;
-    let mut samples = vec![[0u32; 3]; side * side];
+    let side = usize::try_from(width)?
+        .checked_mul(cells)
+        .and_then(|n| n.checked_add(1))
+        .context("terrain atlas extent overflow")?;
+    let sample_count = side
+        .checked_mul(side)
+        .context("terrain atlas size overflow")?;
+    let mut samples = vec![[0u32; 3]; sample_count];
     for (coord, tile) in &data.tiles {
+        ensure!(
+            header.contains(*coord),
+            "terrain tile is outside its header extent"
+        );
+        let tile_x = usize::try_from(i64::from(coord.x) - i64::from(header.min.x))? * cells;
+        let tile_z = usize::try_from(i64::from(coord.z) - i64::from(header.min.z))? * cells;
         for tz in 0..=cells {
             for tx in 0..=cells {
                 let src = tz * (cells + 1) + tx;
-                let x = coord.x as usize * cells + tx;
-                let z = coord.z as usize * cells + tz;
+                let x = tile_x + tx;
+                let z = tile_z + tz;
                 let mut weights = tile.weights[src];
                 // The atlas requires weights summing to 255; the remainder goes to 0.
                 let sum: u32 = weights.iter().map(|w| u32::from(*w)).sum();
@@ -83,7 +95,7 @@ fn landscape_data(data: &TerrainData) -> Result<LandscapeData> {
         header: header.clone(),
         samples,
         instances: data.foliage.clone(),
-        side: side as u32,
+        side: u32::try_from(side)?,
     })
 }
 

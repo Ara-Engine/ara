@@ -1,13 +1,26 @@
 # ara-importers
 
-Production pure glTF/GLB, FBX and image importers for ara-import-worker.
-Public API: registry, the three Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
+Production pure glTF/GLB, FBX, image and audio importers for ara-import-worker.
+Public API: registry, Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
+`commands::register` exposes `import.initialize` and `import.configure` to the
+shared CLI/MCP registry. It selects the importer from the source extension and
+records its installed version; callers provide source, optional stable ID and settings.
+Audio settings include `usage`, `codec`, `opusBitrate` and `decodedBudget` (resident
+PCM bytes, 64 MiB default, 64 KiB minimum). Music/dialogue cook incrementally to
+Opus; effects remain resident. Compressed data and codec/meter scratch are separate.
 The builtin registry also installs ara-geo::GeoImporter (`ara.geo`) for extracted
 single-material SourceMesh snapshots. glTF/FBX also emit one ARAG v1 Custom
 artifact per static material primitive automatically; MeshSettings.virtualGeometry
 opts out. Scene mesh entries link virtualGeometry artifact/cacheVersion/diagnostics.
 Skin and morph deformation retain the classic path with a manifest note.
+glTF generation 5 retains per-slot KHR_texture_transform (including UV selection),
+emissive strength and transmission; transmission/AO cook as linear data. Missing
+tangents use the normal slot's selected/transformed UVs; supplied tangents survive.
+MeshSettings.opacityMaps maps a glTF image URI (or #index) to a companion URI.
+Its red channel multiplies existing color alpha, resized with triangle filtering;
+opaque materials become masked, while authored blend/mask modes remain. Discovery
+includes these inputs. FBX rejects this glTF-only setting (shared settings ABI v5).
 ARAG Custom artifacts are
 validated by ara-geo; its reflected settings are VirtualGeometrySettings.
 

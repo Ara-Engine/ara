@@ -132,13 +132,28 @@ impl TileSource for NoBases {
     }
 }
 
-/// Evaluates the level's terrain (the first `Terrain` component) on worker threads and
-/// scatters its foliage. `None` without a terrain.
+/// Evaluates and scatters in authored terrain space, then applies the scene entity's
+/// world translation to heights, grid origin and foliage. `None` without a terrain.
 pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainState>> {
-    let mut query = world.query::<&Terrain>();
-    let Some(component) = query.iter(world).find(|t| t.terrain.is_some()).cloned() else {
+    let mut query = world.query::<(Entity, &Terrain)>();
+    let Some((entity, component)) = query
+        .iter(world)
+        .find(|(_, t)| t.terrain.is_some())
+        .map(|(e, t)| (e, t.clone()))
+    else {
         return Ok(None);
     };
+    let matrix = crate::sync::world_matrices(world)
+        .get(&entity)
+        .copied()
+        .unwrap_or(glam::Mat4::IDENTITY);
+    let offset = matrix.w_axis.truncate();
+    if !matrix.is_finite() || !matrix.abs_diff_eq(glam::Mat4::from_translation(offset), 1e-5) {
+        return Err(RuntimeError(
+            "Terrain scene transforms support translation; bake rotation and scale into its grid"
+                .into(),
+        ));
+    }
     let document = |reference: &AssetRef, kind: &str| {
         let id = asset_id(reference)?;
         workspace
@@ -200,17 +215,48 @@ pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainS
     if let Some(reference) = &component.foliage {
         data.foliage = scatter(&data, document(reference, "foliage")?)?;
     }
+    translate(&mut data, offset)?;
     Ok(Some(TerrainState(Arc::new(data))))
 }
 
-/// Every enabled foliage rule over every tile (renderer input, deterministic).
+fn translate(data: &mut TerrainData, offset: glam::Vec3) -> Result<()> {
+    data.header.origin[0] += offset.x;
+    data.header.origin[1] += offset.z;
+    data.header
+        .validate()
+        .map_err(|d| RuntimeError(d.message))?;
+    for tile in data.tiles.values_mut() {
+        for height in &mut tile.heights {
+            *height += offset.y;
+        }
+        tile.validate().map_err(|d| RuntimeError(d.message))?;
+    }
+    for instance in &mut data.foliage {
+        for (lane, delta) in instance.position_scale[..3]
+            .iter_mut()
+            .zip(offset.to_array())
+        {
+            *lane += delta;
+        }
+    }
+    Ok(())
+}
+
+/// Every enabled foliage rule over every tile, minus the document's exclusion zones
+/// (renderer input, deterministic).
 fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>> {
     let mut rules: Vec<(String, Rule)> = Vec::new();
+    let mut exclusions: Vec<ara_foliage::Exclusion> = Vec::new();
     for (id, record) in doc.records() {
+        let value = || serde_json::Value::Object(record.clone());
+        if id.as_str().starts_with("x_") {
+            exclusions.push(serde_json::from_value(value())?);
+            continue;
+        }
         if !id.as_str().starts_with("r_") {
             continue;
         }
-        let rule: Rule = serde_json::from_value(serde_json::Value::Object(record.clone()))?;
+        let rule: Rule = serde_json::from_value(value())?;
         if rule.enabled {
             rules.push((id.to_string(), rule));
         }
@@ -229,7 +275,7 @@ fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>>
         };
         for (index, (_, rule)) in rules.iter().enumerate() {
             instances.extend(
-                ara_foliage::scatter(index as u64, rule, bounds, &surface, &[])
+                ara_foliage::scatter(index as u64, rule, bounds, &surface, &exclusions)
                     .map_err(|d| RuntimeError(format!("foliage: {}", d.message)))?,
             );
         }
@@ -313,6 +359,14 @@ pub fn cook_chunks(world: &mut World) -> Result<()> {
             },
             PhysicsPose::default(),
         ));
+        // The immutable heightfield already contains the complete world offset.
+        // Mark the chunk's local transform synchronized so its parent does not
+        // teleport that baked geometry a second time on the first physics push.
+        if let Some(transform) = world.get::<ara_components::Transform>(entity).copied() {
+            world
+                .entity_mut(entity)
+                .insert(crate::sync::SyncedTransform(transform));
+        }
     }
     Ok(())
 }
@@ -346,6 +400,114 @@ pub fn navigation_geometry(state: &TerrainState, geometry: &mut ara_nav::Geometr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parented_terrain_translation_reaches_heights_foliage_navigation_and_collision() {
+        use ara_components::Transform;
+        use ara_doc::{AssetId, Document, RecordId};
+        use ara_physics::{PhysicsConfig, Query, QueryFilter};
+
+        let header = Header {
+            origin: [125., -300.],
+            spacing: 2.,
+            cells: 32,
+            min: TileCoord { x: -2, z: 3 },
+            max: TileCoord { x: -1, z: 4 },
+            materials: Vec::new(),
+        };
+        let terrain = ara_terrain::Terrain::new(AssetId::parse("tr_ground").expect("ID"), header)
+            .expect("terrain")
+            .to_document()
+            .expect("document");
+        let mut foliage = Document::new("foliage", AssetId::parse("fo_ground").expect("ID"));
+        let rule = Rule {
+            name: "Grass".into(),
+            species: ara_foliage::Species::Grass,
+            asset: AssetRef("@grass.glb#as_grass".into()),
+            seed: 7,
+            cell_size: 4.,
+            density: 0.05,
+            height: [-10., 10.],
+            slope: [0., 90.],
+            channel: 0,
+            min_weight: 0.,
+            noise: 0.,
+            scale: [1., 1.],
+            enabled: true,
+        };
+        let value = serde_json::to_value(rule)
+            .expect("rule")
+            .as_object()
+            .expect("object")
+            .clone();
+        foliage.insert_unchecked(RecordId::parse("r_grass").expect("ID"), value);
+        let mut workspace = Workspace::default();
+        workspace.insert("ground.terrain", terrain);
+        workspace.insert("ground.foliage", foliage);
+        let mut world = World::new();
+        let parent = world
+            .spawn(Transform {
+                position: [10., 7., -20.],
+                ..Default::default()
+            })
+            .id();
+        let terrain_entity = world
+            .spawn((
+                Terrain {
+                    terrain: Some(AssetRef("@ground.terrain#tr_ground".into())),
+                    foliage: Some(AssetRef("@ground.foliage#fo_ground".into())),
+                },
+                Transform::default(),
+                ChildOf(parent),
+            ))
+            .id();
+        let chunk = world
+            .spawn((
+                TerrainChunk { x: -2, z: 3 },
+                Transform::default(),
+                ChildOf(terrain_entity),
+            ))
+            .id();
+        let state = build(&mut world, &workspace)
+            .expect("translated build")
+            .expect("terrain");
+        assert_eq!(state.0.header.origin, [135., -320.]);
+        assert_eq!(state.0.height(20., -110.), Some(7.));
+        assert!(!state.0.foliage.is_empty());
+        assert!(state.0.foliage.iter().all(|i| i.position_scale[1] == 7.
+            && (7. ..71.).contains(&i.position_scale[0])
+            && (-128. ..-64.).contains(&i.position_scale[2])));
+        let mut nav = ara_nav::Geometry::default();
+        navigation_geometry(&state, &mut nav).expect("navigation geometry");
+        assert!(!nav.vertices.is_empty());
+        assert!(
+            nav.vertices.iter().all(|p| p[1] == 7.
+                && (7. ..=71.).contains(&p[0])
+                && (-128. ..=-64.).contains(&p[2]))
+        );
+        world.insert_resource(state);
+        crate::physics::install(&mut world, &PhysicsConfig::default(), &[]).expect("physics");
+        crate::sync::resolve_poses(&mut world);
+        let mut schedule = Schedule::default();
+        schedule.add_systems(crate::sync::push_poses);
+        schedule.run(&mut world);
+        assert_eq!(
+            *world.get::<PhysicsPose>(chunk).expect("pose"),
+            PhysicsPose::default()
+        );
+        ara_physics::tick_ecs::<JoltBackend>(&mut world).expect("physics tick");
+        let hit = world
+            .resource::<PhysicsWorld<JoltBackend>>()
+            .query_first(Query::Ray {
+                origin: [20., 30., -110.],
+                displacement: [0., -50., 0.],
+                filter: QueryFilter::default(),
+            })
+            .expect("ray")
+            .expect("translated terrain collision");
+        assert!((hit.point[1] - 7.).abs() < 0.01, "{hit:?}");
+        assert_eq!(hit.user_data, tile_physics_id(TileCoord { x: -2, z: 3 }));
+    }
 
     #[test]
     fn tile_physics_ids_are_unique_per_coordinate() {

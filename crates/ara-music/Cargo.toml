@@ -7,6 +7,8 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-cmd.workspace = true
+ara-json = { path = "../ara-json" }
 ara-audio = { path = "../ara-audio" }
 ara-diag = { path = "../ara-diag" }
 ara-doc = { path = "../ara-doc" }
@@ -15,7 +17,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
-ara-json = { path = "../ara-json" }
+ara-ops = { path = "../ara-ops" }
 
 [lints]
 workspace = true

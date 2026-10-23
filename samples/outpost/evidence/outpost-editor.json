@@ -1,0 +1,66 @@
+{
+  "scene": "levels/outpost.scene",
+  "camera": [
+    [
+      194.0,
+      2.0,
+      190.0
+    ],
+    -2.549999952316284,
+    0.41999998688697815,
+    75.0
+  ],
+  "logs": {
+    "cursor": 2,
+    "total": 2,
+    "summary": {
+      "errors": 0,
+      "warnings": 0,
+      "info": 2,
+      "occurrences": 2,
+      "groups": [
+        {
+          "code": "ARA1812",
+          "severity": "info",
+          "title": "Session approved",
+          "records": 2,
+          "count": 2,
+          "subjects": [],
+          "latest": "session `ses_j6ng5stt` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]",
+          "latestSeq": 2
+        }
+      ]
+    },
+    "entries": [
+      {
+        "seq": 1,
+        "first": 1,
+        "count": 1,
+        "id": 0,
+        "origin": "engine",
+        "at": 1792779244242,
+        "firstAt": 1792779244242,
+        "diagnostic": {
+          "code": "ARA1812",
+          "severity": "info",
+          "message": "session `ses_x19aws47` for `ara-editor` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
+        }
+      },
+      {
+        "seq": 2,
+        "first": 2,
+        "count": 1,
+        "id": 1,
+        "origin": "engine",
+        "at": 1792779249926,
+        "firstAt": 1792779249926,
+        "diagnostic": {
+          "code": "ARA1812",
+          "severity": "info",
+          "message": "session `ses_j6ng5stt` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]"
+        }
+      }
+    ],
+    "text": "0 errors · 0 warnings · 2 info (2 occurrences)\ninfo ARA1812 Session approved ×2\n  session `ses_j6ng5stt` for `ara-samples` (human) approved by policy: [read, edit:scene, edit:assets, edit:code, play, run, import, bake, build, generate:$, fs:outside-project, net]\ncursor 2\n"
+  }
+}

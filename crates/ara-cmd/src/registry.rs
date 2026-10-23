@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use ara_diag::{Diagnostic, codes, did_you_mean};
-use ara_doc::Op;
+use ara_doc::{AssetId, Op};
 use ara_ops::{Author, Commit, Store, TxnId, TxnMeta};
 use ara_schema::{Schema, SchemaDb, Validator};
 use serde::de::DeserializeOwned;
@@ -124,6 +124,10 @@ type EditFn = fn(&mut EditCtx<'_, '_>, Value) -> Result<Value, Diagnostic>;
 type ReadFn = fn(&ReadCtx<'_>, Value) -> Result<Value, Diagnostic>;
 type JobFn = fn(&mut JobCtx<'_, '_>, Value) -> Result<Value, Diagnostic>;
 
+/// Initializes a format's canonical document skeleton using ordinary staged edits.
+pub type DocumentTemplate =
+    fn(&mut EditCtx<'_, '_>, &str, Option<&str>) -> Result<AssetId, Diagnostic>;
+
 enum Exec {
     Edit(EditFn),
     Read(ReadFn),
@@ -140,6 +144,7 @@ struct Entry {
 #[derive(Default)]
 pub struct Registry {
     entries: BTreeMap<&'static str, Entry>,
+    document_templates: BTreeMap<&'static str, DocumentTemplate>,
 }
 
 fn params_of<P: DeserializeOwned>(v: Value) -> Result<P, Diagnostic> {
@@ -169,6 +174,16 @@ fn parse_fn<P: DeserializeOwned>(v: Value) -> Result<(), String> {
 }
 
 impl Registry {
+    /// Registers a document format/template for `doc.create`; it must create and
+    /// initialize its documents through the supplied edit context, without file I/O.
+    pub fn document_template(
+        &mut self,
+        kind: &'static str,
+        template: DocumentTemplate,
+    ) -> &mut Self {
+        self.document_templates.insert(kind, template);
+        self
+    }
     /// An empty registry.
     pub fn new() -> Self {
         Self::default()
@@ -388,6 +403,7 @@ impl Registry {
                         staged: &mut staged,
                         doc: doc.clone(),
                         symbols: &mut symbols,
+                        templates: &self.document_templates,
                     },
                     params,
                 ),
@@ -399,6 +415,7 @@ impl Registry {
                         staged: &mut staged,
                         doc: doc.clone(),
                         symbols: &mut symbols,
+                        templates: &self.document_templates,
                     };
                     f(&mut JobCtx { edit, progress }, params)
                 }

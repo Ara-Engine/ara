@@ -1,4 +1,5 @@
 //! A networked client's presentation world.
+mod entities;
 use super::*;
 use ara_input::Injection;
 use ara_net::{Client, ClientConfig, JoinToken, NetId, PolicyRegistry};
@@ -198,28 +199,13 @@ impl NetMirror {
     }
 
     fn apply(&mut self, runtime: &mut Runtime, ticks: u64) -> Result<()> {
-        let spawns = self.client.spawns();
+        let mut spawns = self.client.spawns();
+        entities::reconcile(
+            runtime.play_mut().session_mut(),
+            &mut spawns,
+            &mut self.entities,
+        );
         let world = runtime.play_mut().session_mut().world_mut();
-        if spawns.iter().any(|s| !self.entities.contains_key(&s.id)) {
-            for spawn in &spawns {
-                if !world
-                    .query::<&Identity>()
-                    .iter(world)
-                    .any(|id| id.0 == spawn.identity)
-                {
-                    world.spawn((Identity(spawn.identity.clone()), Transform::default()));
-                }
-            }
-            let by_identity: BTreeMap<String, Entity> = world
-                .query::<(Entity, &Identity)>()
-                .iter(world)
-                .map(|(e, id)| (id.0.clone(), e))
-                .collect();
-            self.entities = spawns
-                .iter()
-                .filter_map(|s| Some((s.id, *by_identity.get(&s.identity)?)))
-                .collect();
-        }
         let now = Instant::now();
         for spawn in &spawns {
             let Some(&entity) = self.entities.get(&spawn.id) else {

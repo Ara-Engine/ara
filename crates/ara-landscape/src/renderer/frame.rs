@@ -54,6 +54,7 @@ impl Landscape {
         if self.pending_uploads != 0 {
             return Ok(false);
         }
+        let coord = self.space.local_tile(coord)?;
         self.upload_words.clear();
         let old_next = self.pages.next;
         let slot = self
@@ -89,7 +90,13 @@ impl Landscape {
                 && view.near > 0.,
             "invalid landscape view"
         );
-        let forward = (view.target - view.eye).normalize();
+        let eye = view.eye - self.space.offset;
+        let target = view.target - self.space.offset;
+        ensure!(
+            eye.is_finite() && target.is_finite(),
+            "landscape view rebase overflow"
+        );
+        let forward = (target - eye).normalize();
         let camera_up = if forward.dot(Vec3::Y).abs() > 0.99 {
             Vec3::Z
         } else {
@@ -105,15 +112,15 @@ impl Landscape {
             view.fov_y,
             self.size[0] as f32 / self.size[1] as f32,
             view.near,
-        ) * Mat4::look_at_rh(view.eye, view.target, camera_up);
-        let center = view.eye + (view.target - view.eye).normalize() * 350.;
+        ) * Mat4::look_at_rh(eye, target, camera_up);
+        let center = eye + forward * 350.;
         let light_vp = Mat4::orthographic_rh(-650., 650., -650., 650., 1800., 0.1)
             * Mat4::look_at_rh(center + sun * 1200., center, sun_up);
         let frame = Frame {
             vp,
             light_vp,
             inverse_vp: vp.inverse(),
-            camera: view.eye.extend(0.).to_array(),
+            camera: eye.extend(0.).to_array(),
             sun: sun.extend(0.).to_array(),
             sun_color: view.sun_color.extend(0.).to_array(),
             grid: [self.side, self.cells, self.tiles, self.count],

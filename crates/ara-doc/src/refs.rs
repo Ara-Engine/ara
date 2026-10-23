@@ -230,7 +230,10 @@ impl Walker<'_> {
             (ValueType::Asset(Some(kind)), Value::String(s))
                 if self.db.records_addressable(kind) && record_ref(s, kind, self.index) => {}
             (ValueType::Asset(kind), Value::String(s)) => {
-                match resolve(s, kind.as_deref(), self.index) {
+                // Document kinds are checked against the index; other kinds (`audio`)
+                // name imported media, which the index does not classify.
+                let kind = kind.as_deref().filter(|k| self.db.kind(k).is_some());
+                match resolve(s, kind, self.index) {
                     Ok((canonical, note)) => {
                         if let Some(note) = note {
                             let fix = FixAction::Set {
@@ -248,7 +251,7 @@ impl Walker<'_> {
                     }
                     Err(mut d) => {
                         let near = if d.code == codes::UNRESOLVED_REF {
-                            self.index.closest(s, kind.as_deref())
+                            self.index.closest(s, kind)
                         } else {
                             Vec::new()
                         };

@@ -1,0 +1,4 @@
+Original license texts for:
+rapier2d 0.36.1
+
+https://raw.githubusercontent.com/dimforge/rapier/475caa3ff4646fd9a796b67d14116256f4962bc7/LICENSE

@@ -1,0 +1,4 @@
+Original license texts for:
+httlib-huffman 0.3.4
+
+https://raw.githubusercontent.com/xpepermint/httlib-rs/b7e958aa0f7e0a9a10d8b31f1a782863e85542f8/LICENSE

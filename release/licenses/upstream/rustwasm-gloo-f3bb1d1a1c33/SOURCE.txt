@@ -1,0 +1,5 @@
+Original license texts for:
+gloo-timers 0.3.0
+
+https://raw.githubusercontent.com/rustwasm/gloo/f3bb1d1a1c33dbcccaf26446aca7d0cea8e9d574/LICENSE-MIT
+https://raw.githubusercontent.com/rustwasm/gloo/f3bb1d1a1c33dbcccaf26446aca7d0cea8e9d574/LICENSE-APACHE

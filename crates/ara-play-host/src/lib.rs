@@ -337,13 +337,9 @@ impl PlayService {
     ) -> Result<(String, Vec<u8>), Vec<Diagnostic>> {
         let store = cx.store();
         let workspace = store.workspace();
-        let main = std::fs::read_to_string(self.root.join("ara.project.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v["main"].as_str().map(str::to_owned));
         let wanted = scene
+            .or_else(|| cx.main_scene())
             .map(str::to_owned)
-            .or(main)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
         let (_, doc) = workspace
             .docs()
@@ -372,7 +368,10 @@ impl PlayService {
         let scene = PlayScene {
             format: 1,
             scene: scene_id.clone(),
-            documents: PlayScene::documents(workspace),
+            documents: PlayScene::documents(workspace)
+                .into_iter()
+                .filter(|d| !matches!(d.kind.as_str(), "project" | "import"))
+                .collect(),
             types,
             seed,
             tick_hz,
@@ -1031,8 +1030,11 @@ impl Service for PlayService {
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
     ara_host::Project::open_with(root, |db, registry| {
-        let problems = ara_runtime::engine::register_schemas(db);
+        let mut problems = ara_runtime::engine::register_schemas(db);
         ara_runtime::engine::register_commands(registry, db);
+        if let Err(d) = ara_importers::commands::register(registry, db) {
+            problems.push(d);
+        }
         problems
     })
 }

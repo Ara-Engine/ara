@@ -1,0 +1,1760 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_hangar1",
+  "records": {
+    "e_bench0": {
+      "name": "Workbench",
+      "order": "aW",
+      "MeshRenderer": {
+        "model": "@assets/third_party/woodentable_03/WoodenTable_03_1k.gltf#as_woodentable03"
+      },
+      "Transform": {
+        "position": [9.307, 0.05, -4.205],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_bench0c": {
+      "name": "Workbench collider",
+      "order": "aX",
+      "Collider": {
+        "halfExtents": [0.6634264588356018, 0.4150408208370209, 0.287638783454895]
+      },
+      "PhysicsId": {
+        "value": 9
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [9.3, 0.465, -4.2],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_bench1": {
+      "name": "Workbench",
+      "order": "aY",
+      "MeshRenderer": {
+        "model": "@assets/third_party/woodentable_03/WoodenTable_03_1k.gltf#as_woodentable03"
+      },
+      "Transform": {
+        "position": [9.307, 0.05, -2.805],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_bench1c": {
+      "name": "Workbench collider",
+      "order": "aZ",
+      "Collider": {
+        "halfExtents": [0.6634264588356018, 0.4150408208370209, 0.287638783454895]
+      },
+      "PhysicsId": {
+        "value": 10
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [9.3, 0.465, -2.8],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_bench2": {
+      "name": "Workbench",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@assets/third_party/woodentable_03/WoodenTable_03_1k.gltf#as_woodentable03"
+      },
+      "Transform": {
+        "position": [9.307, 0.05, 1.995],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_bench2c": {
+      "name": "Workbench collider",
+      "order": "ab",
+      "Collider": {
+        "halfExtents": [0.6634264588356018, 0.4150408208370209, 0.287638783454895]
+      },
+      "PhysicsId": {
+        "value": 11
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [9.3, 0.465, 2],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_benchlight": {
+      "name": "Bench fluorescent",
+      "order": "ap",
+      "MeshRenderer": {
+        "model": "@assets/kit/fluorescent.gltf#as_kitfluorescent",
+        "emissive": [7000, 7000, 6600]
+      },
+      "Transform": {
+        "position": [9.4, 2.4, -3.3],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_benchlightl": {
+      "name": "Workbench task light",
+      "order": "aq",
+      "Light": {
+        "kind": "spot",
+        "color": [0.95, 0.97, 1, 1],
+        "intensity": 1800,
+        "range": 6,
+        "innerAngle": 45,
+        "outerAngle": 75
+      },
+      "Transform": {
+        "position": [9.2, 2.3, -3.3],
+        "rotation": [-90, 16.699, 90]
+      }
+    },
+    "e_cables": {
+      "name": "Power cables",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@assets/kit/cables.gltf#as_kitcables"
+      },
+      "Transform": {}
+    },
+    "e_camera": {
+      "name": "Follow camera",
+      "order": "aB",
+      "Camera": {
+        "fov": 60
+      },
+      "FollowCamera": {
+        "target": "e_player",
+        "distance": 3.6,
+        "height": 1.55,
+        "pitch": 10
+      },
+      "Transform": {
+        "position": [1.5, 2, -14]
+      }
+    },
+    "e_car": {
+      "name": "Covered car",
+      "order": "aQ",
+      "MeshRenderer": {
+        "model": "@assets/third_party/covered_car/covered_car_1k.gltf#as_coveredcar"
+      },
+      "Transform": {
+        "position": [-2.958, 0.05, -1.467],
+        "rotation": [0, 168, 0]
+      }
+    },
+    "e_carc": {
+      "name": "Covered car collider",
+      "order": "aR",
+      "Collider": {
+        "halfExtents": [0.8944814801216125, 0.7055565118789673, 2.19012713432312]
+      },
+      "PhysicsId": {
+        "value": 8
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-3, 0.756, -1.5],
+        "rotation": [0, 168, 0]
+      }
+    },
+    "e_crane": {
+      "name": "Overhead crane",
+      "order": "b0g",
+      "MeshRenderer": {
+        "model": "@assets/third_party/overhead_crane/overhead_crane_1k.gltf#as_overheadcrane"
+      },
+      "Transform": {
+        "position": [0, 5.4, 6]
+      }
+    },
+    "e_desk": {
+      "name": "Office desk",
+      "order": "b0N",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_office_desk/metal_office_desk_1k.gltf#as_metalofficedesk"
+      },
+      "Transform": {
+        "position": [-8.604, 0.05, 8.4],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_deskc": {
+      "name": "Office desk collider",
+      "order": "b0O",
+      "Collider": {
+        "halfExtents": [1.000000238418579, 0.39375001192092896, 0.47360676527023315]
+      },
+      "PhysicsId": {
+        "value": 23
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-8.6, 0.444, 8.4],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_deskstool": {
+      "name": "Stool",
+      "order": "b0R",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_stool_01/metal_stool_01_1k.gltf#as_metalstool01"
+      },
+      "Transform": {
+        "position": [-7.5, 0.05, 8.6]
+      }
+    },
+    "e_deskstoolc": {
+      "name": "Stool collider",
+      "order": "b0S",
+      "Collider": {
+        "halfExtents": [0.17599545419216156, 0.4413871467113495, 0.1772851049900055]
+      },
+      "PhysicsId": {
+        "value": 24
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-7.5, 0.491, 8.6]
+      }
+    },
+    "e_drillpress": {
+      "name": "Bench drill press",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@assets/third_party/drill_press_01/drill_press_01_1k.gltf#as_drillpress01"
+      },
+      "Transform": {
+        "position": [9.296, 0.88, -4.377],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_drillpressc": {
+      "name": "Bench drill press collider",
+      "order": "ad",
+      "Collider": {
+        "halfExtents": [0.18293142318725586, 0.45078256726264954, 0.2993926405906677]
+      },
+      "PhysicsId": {
+        "value": 12
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [9.35, 1.331, -4.4],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_drone": {
+      "name": "Hangar drone",
+      "order": "b1H",
+      "AudioSource": {
+        "clip": "@assets/third_party/oga_freezer/freezer.ogg#as_drone",
+        "gain": 0.3,
+        "looping": true,
+        "referenceDistance": 10,
+        "maxDistance": 60
+      },
+      "Transform": {
+        "position": [0, 4, 0]
+      }
+    },
+    "e_duct0": {
+      "name": "Air duct",
+      "order": "b0T",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, -9],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct1": {
+      "name": "Air duct",
+      "order": "b0U",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, -6.3],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct2": {
+      "name": "Air duct",
+      "order": "b0V",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, -3.6],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct3": {
+      "name": "Air duct",
+      "order": "b0W",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, -0.9],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct4": {
+      "name": "Air duct",
+      "order": "b0X",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, 1.8],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct5": {
+      "name": "Air duct",
+      "order": "b0Y",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, 4.5],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_duct6": {
+      "name": "Air duct",
+      "order": "b0Z",
+      "MeshRenderer": {
+        "model": "@assets/kit/duct.gltf#as_kitduct"
+      },
+      "Transform": {
+        "position": [-8.9, 5.6, 7.2],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_env": {
+      "name": "Night sky",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.01, 0.015, 0.035, 1],
+        "horizon": [0.04, 0.045, 0.06, 1],
+        "ground": [0.01, 0.01, 0.01, 1],
+        "intensity": 30,
+        "exposure": 0.02
+      }
+    },
+    "e_festoon": {
+      "name": "Festoon work lights",
+      "order": "aO",
+      "MeshRenderer": {
+        "model": "@assets/kit/festoon.gltf#as_kitfestoon",
+        "emissive": [22000, 22000, 22000]
+      },
+      "Transform": {}
+    },
+    "e_floorc": {
+      "name": "Floor collider",
+      "order": "a3",
+      "Collider": {
+        "halfExtents": [11, 0.15, 14]
+      },
+      "PhysicsId": {
+        "value": 900
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0, -0.1, 0]
+      }
+    },
+    "e_hangar": {
+      "name": "Hangar",
+      "order": "a2",
+      "MeshRenderer": {
+        "model": "@assets/kit/hangar.gltf#as_kithangar"
+      },
+      "Transform": {}
+    },
+    "e_hangarwall0": {
+      "name": "Hangar wall collider",
+      "order": "a4",
+      "Collider": {
+        "halfExtents": [0.10000000149011612, 3.5, 13]
+      },
+      "PhysicsId": {},
+      "RigidBody": {},
+      "Transform": {
+        "position": [-10, 3.5, 0]
+      }
+    },
+    "e_hangarwall1": {
+      "name": "Hangar wall collider",
+      "order": "a5",
+      "Collider": {
+        "halfExtents": [0.10000000149011612, 3.5, 13]
+      },
+      "PhysicsId": {
+        "value": 2
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [10, 3.5, 0]
+      }
+    },
+    "e_hangarwall2": {
+      "name": "Hangar wall collider",
+      "order": "a6",
+      "Collider": {
+        "halfExtents": [10, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 3
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0, 3.5, 13]
+      }
+    },
+    "e_hangarwall3": {
+      "name": "Hangar wall collider",
+      "order": "a7",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 4
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-7.5, 3.5, -13]
+      }
+    },
+    "e_hangarwall4": {
+      "name": "Hangar wall collider",
+      "order": "a8",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 5
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [7.5, 3.5, -13]
+      }
+    },
+    "e_hangarwall5": {
+      "name": "Hangar wall collider",
+      "order": "a9",
+      "Collider": {
+        "halfExtents": [2.5, 3.5, 0.10000000149011612]
+      },
+      "PhysicsId": {
+        "value": 6
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-2.5, 3.5, -13.25]
+      }
+    },
+    "e_hlamp0": {
+      "name": "Hanging lamp",
+      "order": "aS",
+      "MeshRenderer": {
+        "model": "@assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf#as_hangingindustriallamp",
+        "emissive": [9000, 7600, 5600]
+      },
+      "Transform": {
+        "position": [-3, 6.8, -4]
+      }
+    },
+    "e_hlamp1": {
+      "name": "Hanging lamp",
+      "order": "aU",
+      "MeshRenderer": {
+        "model": "@assets/third_party/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf#as_hangingindustriallamp",
+        "emissive": [9000, 7600, 5600]
+      },
+      "Transform": {
+        "position": [-3, 6.8, 1]
+      }
+    },
+    "e_hlampl0": {
+      "name": "Hanging lamp light",
+      "order": "aT",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.82, 0.6, 1],
+        "intensity": 2600,
+        "range": 12,
+        "innerAngle": 40,
+        "outerAngle": 70
+      },
+      "Transform": {
+        "position": [-3, 5.35, -4],
+        "rotation": [-90, 0, 180]
+      }
+    },
+    "e_hlampl1": {
+      "name": "Hanging lamp light",
+      "order": "aV",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.82, 0.6, 1],
+        "intensity": 2600,
+        "range": 12,
+        "innerAngle": 40,
+        "outerAngle": 70
+      },
+      "Transform": {
+        "position": [-3, 5.35, 1],
+        "rotation": [-90, 0, 180]
+      }
+    },
+    "e_ladder": {
+      "name": "Ladder",
+      "order": "b0e",
+      "MeshRenderer": {
+        "model": "@assets/third_party/ladder_sectioned_01/ladder_sectioned_01_1k.gltf#as_laddersectioned01"
+      },
+      "Transform": {
+        "position": [-9.293, 0.05, -8.57],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_ladderc": {
+      "name": "Ladder collider",
+      "order": "b0f",
+      "Collider": {
+        "halfExtents": [0.33075132966041565, 1.0672792196273804, 0.08881066739559174]
+      },
+      "PhysicsId": {
+        "value": 25
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-9.3, 1.117, -8.6],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_laptop": {
+      "name": "Laptop",
+      "order": "b0P",
+      "MeshRenderer": {
+        "model": "@assets/third_party/classic_laptop/classic_laptop_1k.gltf#as_classiclaptop"
+      },
+      "Transform": {
+        "position": [-8.701, 0.841, 8.2],
+        "rotation": [0, 100, 0]
+      }
+    },
+    "e_misc0": {
+      "name": "Clutter",
+      "order": "b0h",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_01/Barrel_01_1k.gltf#as_barrel01"
+      },
+      "Transform": {
+        "position": [-8.8, 0.057, -11.2]
+      }
+    },
+    "e_misc0c": {
+      "name": "Clutter collider",
+      "order": "b0i",
+      "Collider": {
+        "halfExtents": [0.28151756525039673, 0.4399999976158142, 0.2815176248550415]
+      },
+      "PhysicsId": {
+        "value": 26
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-8.8, 0.49, -11.2]
+      }
+    },
+    "e_misc1": {
+      "name": "Clutter",
+      "order": "b0j",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_02/Barrel_02_1k.gltf#as_barrel02"
+      },
+      "Transform": {
+        "position": [-8.1, 0.045, -11.6],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_misc10": {
+      "name": "Clutter",
+      "order": "b11",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf#as_woodencrate02"
+      },
+      "Transform": {
+        "position": [2.9, 0.06, 1.6],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_misc10c": {
+      "name": "Clutter collider",
+      "order": "b12",
+      "Collider": {
+        "halfExtents": [0.26455047726631165, 0.23197726905345917, 0.5831629037857056]
+      },
+      "PhysicsId": {
+        "value": 36
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [2.9, 0.282, 1.6],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_misc11": {
+      "name": "Clutter",
+      "order": "b13",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_03/barrel_03_1k.gltf#as_barrel03"
+      },
+      "Transform": {
+        "position": [-0.6, 0.05, 3.2]
+      }
+    },
+    "e_misc11c": {
+      "name": "Clutter collider",
+      "order": "b14",
+      "Collider": {
+        "halfExtents": [0.3169717490673065, 0.4652368128299713, 0.31929975748062134]
+      },
+      "PhysicsId": {
+        "value": 37
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-0.6, 0.515, 3.2]
+      }
+    },
+    "e_misc12": {
+      "name": "Clutter",
+      "order": "b15",
+      "MeshRenderer": {
+        "model": "@assets/third_party/barrel_01/Barrel_01_1k.gltf#as_barrel01"
+      },
+      "Transform": {
+        "position": [-0.1, 0.057, 3.7],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_misc12c": {
+      "name": "Clutter collider",
+      "order": "b16",
+      "Collider": {
+        "halfExtents": [0.28151756525039673, 0.4399999976158142, 0.2815176248550415]
+      },
+      "PhysicsId": {
+        "value": 38
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-0.1, 0.49, 3.7],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_misc13": {
+      "name": "Clutter",
+      "order": "b17",
+      "MeshRenderer": {
+        "model": "@assets/third_party/small_lpg_tank/small_lpg_tank_1k.gltf#as_smalllpgtank"
+      },
+      "Transform": {
+        "position": [0.5, 0.05, 3]
+      }
+    },
+    "e_misc13c": {
+      "name": "Clutter collider",
+      "order": "b18",
+      "Collider": {
+        "halfExtents": [0.2050096094608307, 0.3209874927997589, 0.2045956403017044]
+      },
+      "PhysicsId": {
+        "value": 39
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0.5, 0.371, 3]
+      }
+    },
+    "e_misc14": {
+      "name": "Clutter",
+      "order": "b19",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf#as_metaljerrycan"
+      },
+      "Transform": {
+        "position": [0.901, 0.05, 1.406],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_misc14c": {
+      "name": "Clutter collider",
+      "order": "b1A",
+      "Collider": {
+        "halfExtents": [0.17516493797302246, 0.2275799810886383, 0.08587194979190826]
+      },
+      "PhysicsId": {
+        "value": 40
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0.9, 0.278, 1.4],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_misc15": {
+      "name": "Clutter",
+      "order": "b1B",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [3.588, 0.057, 2.769],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_misc15c": {
+      "name": "Clutter collider",
+      "order": "b1C",
+      "Collider": {
+        "halfExtents": [0.19351179897785187, 0.17089977860450745, 0.25793522596359253]
+      },
+      "PhysicsId": {
+        "value": 41
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.6, 0.221, 2.8],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_misc16": {
+      "name": "Clutter",
+      "order": "b1D",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [3.868, 0.057, 3.292],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_misc16c": {
+      "name": "Clutter collider",
+      "order": "b1E",
+      "Collider": {
+        "halfExtents": [0.19351179897785187, 0.17089977860450745, 0.25793522596359253]
+      },
+      "PhysicsId": {
+        "value": 42
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.9, 0.221, 3.3],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_misc1c": {
+      "name": "Clutter collider",
+      "order": "b0k",
+      "Collider": {
+        "halfExtents": [0.24408778548240662, 0.4399999976158142, 0.24230822920799255]
+      },
+      "PhysicsId": {
+        "value": 27
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-8.1, 0.49, -11.6],
+        "rotation": [0, 40, 0]
+      }
+    },
+    "e_misc2": {
+      "name": "Clutter",
+      "order": "b0l",
+      "MeshRenderer": {
+        "model": "@assets/third_party/propane_tank/propane_tank_1k.gltf#as_propanetank"
+      },
+      "Transform": {
+        "position": [-9.2, 0.05, -10.4]
+      }
+    },
+    "e_misc2c": {
+      "name": "Clutter collider",
+      "order": "b0m",
+      "Collider": {
+        "halfExtents": [0.1686808466911316, 0.27689751982688904, 0.1686808466911316]
+      },
+      "PhysicsId": {
+        "value": 28
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-9.2, 0.327, -10.4]
+      }
+    },
+    "e_misc3": {
+      "name": "Clutter",
+      "order": "b0n",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_military_compressor/old_military_compressor_1k.gltf#as_oldmilitarycompressor"
+      },
+      "Transform": {
+        "position": [3.381, 0.052, 9.422],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_misc3c": {
+      "name": "Clutter collider",
+      "order": "b0o",
+      "Collider": {
+        "halfExtents": [0.2991413176059723, 0.5895431637763977, 0.8377721309661865]
+      },
+      "PhysicsId": {
+        "value": 29
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [7.6, 0.64, 9],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_misc4": {
+      "name": "Clutter",
+      "order": "b0p",
+      "MeshRenderer": {
+        "model": "@assets/third_party/portable_generator/portable_generator_1k.gltf#as_portablegenerator"
+      },
+      "Transform": {
+        "position": [2.795, 0.05, 10.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_misc4c": {
+      "name": "Clutter collider",
+      "order": "b0q",
+      "Collider": {
+        "halfExtents": [0.40917038917541504, 0.2884616255760193, 0.28200000524520874]
+      },
+      "PhysicsId": {
+        "value": 30
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [2.8, 0.338, 10.6],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_misc5": {
+      "name": "Clutter",
+      "order": "b0r",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [-1, 0.05, 10.8],
+        "rotation": [0, 5, 0]
+      }
+    },
+    "e_misc5c": {
+      "name": "Clutter collider",
+      "order": "b0s",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 31
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-1, 0.282, 10.8],
+        "rotation": [0, 5, 0]
+      }
+    },
+    "e_misc6": {
+      "name": "Clutter",
+      "order": "b0t",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_crate_02/wooden_crate_02_1k.gltf#as_woodencrate02"
+      },
+      "Transform": {
+        "position": [-2.6, 0.06, 11.1],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_misc6c": {
+      "name": "Clutter collider",
+      "order": "b0u",
+      "Collider": {
+        "halfExtents": [0.26455047726631165, 0.23197726905345917, 0.5831629037857056]
+      },
+      "PhysicsId": {
+        "value": 32
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-2.6, 0.282, 11.1],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_misc7": {
+      "name": "Clutter",
+      "order": "b0v",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_drill_press/old_drill_press_1k.gltf#as_olddrillpress"
+      },
+      "Transform": {
+        "position": [3.468, 0.05, 3.717],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_misc7c": {
+      "name": "Clutter collider",
+      "order": "b0w",
+      "Collider": {
+        "halfExtents": [0.2635977566242218, 0.5249999761581421, 0.30475881695747375]
+      },
+      "PhysicsId": {
+        "value": 33
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.6, 0.575, 3.8],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_misc8": {
+      "name": "Clutter",
+      "order": "b0x",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [1.6, 0.05, 2.4],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_misc8c": {
+      "name": "Clutter collider",
+      "order": "b0y",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 34
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [1.6, 0.282, 2.4],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_misc9": {
+      "name": "Clutter",
+      "order": "b0z",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_military_crate/wooden_military_crate_1k.gltf#as_woodenmilitarycrate"
+      },
+      "Transform": {
+        "position": [1.7, 0.05, 2.5],
+        "rotation": [0, 95, 0]
+      }
+    },
+    "e_misc9c": {
+      "name": "Clutter collider",
+      "order": "b10",
+      "Collider": {
+        "halfExtents": [0.6210327744483948, 0.2324075996875763, 0.25988930463790894]
+      },
+      "PhysicsId": {
+        "value": 35
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [1.7, 0.282, 2.5],
+        "rotation": [0, 95, 0]
+      }
+    },
+    "e_moon": {
+      "name": "Moonlight",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [0.55, 0.65, 1, 1],
+        "intensity": 0.25
+      },
+      "Transform": {
+        "position": [0, 30, 0],
+        "rotation": [-122.005, -17.641, -154.132]
+      }
+    },
+    "e_panel0": {
+      "name": "Ceiling light panel",
+      "order": "aC",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [-6, 6.35, -7],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel1": {
+      "name": "Ceiling light panel",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel",
+        "emissive": [3600, 3528, 3312]
+      },
+      "Transform": {
+        "position": [-2, 6.35, -7],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel10": {
+      "name": "Ceiling light panel",
+      "order": "aM",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel",
+        "emissive": [3600, 3528, 3312]
+      },
+      "Transform": {
+        "position": [2, 6.35, 8],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel11": {
+      "name": "Ceiling light panel",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [6, 6.35, 8],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel2": {
+      "name": "Ceiling light panel",
+      "order": "aE",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [2, 6.35, -7],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel3": {
+      "name": "Ceiling light panel",
+      "order": "aF",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [6, 6.35, -7],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel4": {
+      "name": "Ceiling light panel",
+      "order": "aG",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel",
+        "emissive": [700, 686, 644]
+      },
+      "Transform": {
+        "position": [-6, 6.35, 0.5],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel5": {
+      "name": "Ceiling light panel",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [-2, 6.35, 0.5],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel6": {
+      "name": "Ceiling light panel",
+      "order": "aI",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel",
+        "emissive": [3600, 3528, 3312]
+      },
+      "Transform": {
+        "position": [2, 6.35, 0.5],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel7": {
+      "name": "Ceiling light panel",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [6, 6.35, 0.5],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel8": {
+      "name": "Ceiling light panel",
+      "order": "aK",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [-6, 6.35, 8],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_panel9": {
+      "name": "Ceiling light panel",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@assets/kit/light_panel.gltf#as_kitlightpanel"
+      },
+      "Transform": {
+        "position": [-2, 6.35, 8],
+        "rotation": [0, 90, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_pipes": {
+      "name": "Wall pipes",
+      "order": "as",
+      "MeshRenderer": {
+        "model": "@assets/third_party/modular_industrial_pipes_01/modular_industrial_pipes_01_1k.gltf#as_modularindustrialpipes01"
+      },
+      "Transform": {
+        "position": [9.85, 2.2, 6],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_player": {
+      "name": "Salvager",
+      "order": "aA",
+      "Animator": {
+        "controller": "@anim/human.animation#an_locomotion"
+      },
+      "AudioListener": {},
+      "CharacterController": {},
+      "MeshRenderer": {
+        "model": "@assets/kit/human.gltf#as_kithuman"
+      },
+      "PhysicsId": {
+        "value": 7
+      },
+      "PlayerControl": {
+        "walkSpeed": 1.5,
+        "runSpeed": 5,
+        "camera": "e_camera"
+      },
+      "Transform": {
+        "position": [-5.5, 0.05, -10],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_powerbox": {
+      "name": "Power box",
+      "order": "ar",
+      "MeshRenderer": {
+        "model": "@assets/third_party/power_box_01/power_box_01_1k.gltf#as_powerbox01"
+      },
+      "Transform": {
+        "position": [9.88, 1.4, -6.5],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_puddle0": {
+      "name": "Oil puddle",
+      "order": "b1F",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_b.gltf#as_kitpuddleb"
+      },
+      "Transform": {
+        "position": [-0.4, 0.05, -3.8],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_puddle1": {
+      "name": "Oil puddle",
+      "order": "b1G",
+      "MeshRenderer": {
+        "model": "@assets/kit/puddle_a.gltf#as_kitpuddlea"
+      },
+      "Transform": {
+        "position": [4, 0.05, 5.5],
+        "rotation": [0, 140, 0]
+      }
+    },
+    "e_rack0": {
+      "name": "Rack",
+      "order": "b0J",
+      "MeshRenderer": {
+        "model": "@assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf#as_wornmetalrack"
+      },
+      "Transform": {
+        "position": [-9.4, 0.05, -1.002],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_rack0c": {
+      "name": "Rack collider",
+      "order": "b0K",
+      "Collider": {
+        "halfExtents": [0.45770832896232605, 0.949999988079071, 0.30000001192092896]
+      },
+      "PhysicsId": {
+        "value": 21
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-9.4, 1, -1],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_rack1": {
+      "name": "Rack",
+      "order": "b0L",
+      "MeshRenderer": {
+        "model": "@assets/third_party/worn_metal_rack/worn_metal_rack_1k.gltf#as_wornmetalrack"
+      },
+      "Transform": {
+        "position": [-9.4, 0.05, 1.198],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_rack1c": {
+      "name": "Rack collider",
+      "order": "b0M",
+      "Collider": {
+        "halfExtents": [0.45770832896232605, 0.949999988079071, 0.30000001192092896]
+      },
+      "PhysicsId": {
+        "value": 22
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-9.4, 1, 1.2],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_radio": {
+      "name": "Radio",
+      "order": "b0Q",
+      "MeshRenderer": {
+        "model": "@assets/third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [-8.65, 0.841, 9.131],
+        "rotation": [0, 70, 0]
+      }
+    },
+    "e_sconce0": {
+      "name": "Caged sconce",
+      "order": "b0a",
+      "MeshRenderer": {
+        "model": "@assets/kit/sconce.gltf#as_kitsconce",
+        "emissive": [6000, 5000, 3600]
+      },
+      "Transform": {
+        "position": [-9.85, 3.2, -5],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_sconce1": {
+      "name": "Caged sconce",
+      "order": "b0c",
+      "MeshRenderer": {
+        "model": "@assets/kit/sconce.gltf#as_kitsconce",
+        "emissive": [6000, 5000, 3600]
+      },
+      "Transform": {
+        "position": [-9.85, 3.2, 5],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_sconcel0": {
+      "name": "Sconce light",
+      "order": "b0b",
+      "Light": {
+        "color": [1, 0.8, 0.55, 1],
+        "intensity": 900,
+        "range": 8
+      },
+      "Transform": {
+        "position": [-9.5, 3.1, -5]
+      }
+    },
+    "e_sconcel1": {
+      "name": "Sconce light",
+      "order": "b0d",
+      "Light": {
+        "color": [1, 0.8, 0.55, 1],
+        "intensity": 900,
+        "range": 8
+      },
+      "Transform": {
+        "position": [-9.5, 3.1, 5]
+      }
+    },
+    "e_shelf0": {
+      "name": "Shelving",
+      "order": "b01",
+      "MeshRenderer": {
+        "model": "@assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf#as_steelframeshelves03"
+      },
+      "Transform": {
+        "position": [-7.069, 0.05, 12.552],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf0c": {
+      "name": "Shelving collider",
+      "order": "b02",
+      "Collider": {
+        "halfExtents": [1.1755385398864746, 1.155916452407837, 0.3606230616569519]
+      },
+      "PhysicsId": {
+        "value": 17
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-7.2, 1.206, 12.55],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf1": {
+      "name": "Shelving",
+      "order": "b03",
+      "MeshRenderer": {
+        "model": "@assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf#as_steelframeshelves03"
+      },
+      "Transform": {
+        "position": [-4.469, 0.05, 12.552],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf1c": {
+      "name": "Shelving collider",
+      "order": "b04",
+      "Collider": {
+        "halfExtents": [1.1755385398864746, 1.155916452407837, 0.3606230616569519]
+      },
+      "PhysicsId": {
+        "value": 18
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-4.6, 1.206, 12.55],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf2": {
+      "name": "Shelving",
+      "order": "b05",
+      "MeshRenderer": {
+        "model": "@assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf#as_steelframeshelves03"
+      },
+      "Transform": {
+        "position": [4.731, 0.05, 12.552],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf2c": {
+      "name": "Shelving collider",
+      "order": "b06",
+      "Collider": {
+        "halfExtents": [1.1755385398864746, 1.155916452407837, 0.3606230616569519]
+      },
+      "PhysicsId": {
+        "value": 19
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [4.6, 1.206, 12.55],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf3": {
+      "name": "Shelving",
+      "order": "b07",
+      "MeshRenderer": {
+        "model": "@assets/third_party/steel_frame_shelves_03/steel_frame_shelves_03_1k.gltf#as_steelframeshelves03"
+      },
+      "Transform": {
+        "position": [7.331, 0.05, 12.552],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_shelf3c": {
+      "name": "Shelving collider",
+      "order": "b08",
+      "Collider": {
+        "halfExtents": [1.1755385398864746, 1.155916452407837, 0.3606230616569519]
+      },
+      "PhysicsId": {
+        "value": 20
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [7.2, 1.206, 12.55],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_sparks": {
+      "name": "Welding sparks",
+      "order": "av",
+      "Transform": {
+        "position": [5, 0.6, 7.6]
+      },
+      "VisualEffect": {
+        "effect": "sparks"
+      }
+    },
+    "e_stock0": {
+      "name": "Stock",
+      "order": "b09",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [-7.807, 0.527, 12.468],
+        "rotation": [0, 10, 0]
+      }
+    },
+    "e_stock1": {
+      "name": "Stock",
+      "order": "b0A",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [-7.333, 0.527, 12.595],
+        "rotation": [0, 80, 0]
+      }
+    },
+    "e_stock2": {
+      "name": "Stock",
+      "order": "b0B",
+      "MeshRenderer": {
+        "model": "@assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf#as_plasticcrate03"
+      },
+      "Transform": {
+        "position": [-6.6, 0.52, 12.4]
+      }
+    },
+    "e_stock3": {
+      "name": "Stock",
+      "order": "b0C",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_jerrycan/metal_jerrycan_1k.gltf#as_metaljerrycan"
+      },
+      "Transform": {
+        "position": [-4.897, 1.24, 12.505],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_stock4": {
+      "name": "Stock",
+      "order": "b0D",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_jerrycan_green/metal_jerrycan_green_1k.gltf#as_metaljerrycangreen"
+      },
+      "Transform": {
+        "position": [-4.5, 1.24, 12.485],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_stock5": {
+      "name": "Stock",
+      "order": "b0E",
+      "MeshRenderer": {
+        "model": "@assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf#as_smalloilcan01"
+      },
+      "Transform": {
+        "position": [-4.142, 1.24, 12.5]
+      }
+    },
+    "e_stock6": {
+      "name": "Stock",
+      "order": "b0F",
+      "MeshRenderer": {
+        "model": "@assets/third_party/plastic_crate_03/plastic_crate_03_1k.gltf#as_plasticcrate03"
+      },
+      "Transform": {
+        "position": [4.2, 0.52, 12.4]
+      }
+    },
+    "e_stock7": {
+      "name": "Stock",
+      "order": "b0G",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [4.983, 1.247, 12.472],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_stock8": {
+      "name": "Stock",
+      "order": "b0H",
+      "MeshRenderer": {
+        "model": "@assets/third_party/cardboard_box_01/cardboard_box_01_1k.gltf#as_cardboardbox01"
+      },
+      "Transform": {
+        "position": [7.399, 0.527, 12.467]
+      }
+    },
+    "e_stock9": {
+      "name": "Stock",
+      "order": "b0I",
+      "MeshRenderer": {
+        "model": "@assets/third_party/old_gas_mask/old_gas_mask_2k.gltf#as_oldgasmask"
+      },
+      "Transform": {
+        "position": [7, 2.955, 12.532],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_stool": {
+      "name": "Stool",
+      "order": "an",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_stool_01/metal_stool_01_1k.gltf#as_metalstool01"
+      },
+      "Transform": {
+        "position": [8.2, 0.05, -3.4],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_stoolc": {
+      "name": "Stool collider",
+      "order": "ao",
+      "Collider": {
+        "halfExtents": [0.17599545419216156, 0.4413871467113495, 0.1772851049900055]
+      },
+      "PhysicsId": {
+        "value": 13
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [8.2, 0.491, -3.4],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_storagecart": {
+      "name": "Storage cart",
+      "order": "az",
+      "MeshRenderer": {
+        "model": "@assets/third_party/industrial_storage_cart/industrial_storage_cart_1k.gltf#as_industrialstoragecart"
+      },
+      "Transform": {
+        "position": [-7.6, 0.048, -6],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_storagecartc": {
+      "name": "Storage cart collider",
+      "order": "b00",
+      "Collider": {
+        "halfExtents": [0.8016743659973145, 0.6886922121047974, 0.551372766494751]
+      },
+      "PhysicsId": {
+        "value": 16
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-7.6, 0.739, -6],
+        "rotation": [0, 90, 0]
+      }
+    },
+    "e_tool0": {
+      "name": "Tool",
+      "order": "ag",
+      "MeshRenderer": {
+        "model": "@assets/third_party/retro_multimeter/retro_multimeter_1k.gltf#as_retromultimeter"
+      },
+      "Transform": {
+        "position": [9.057, 0.88, -3.55],
+        "rotation": [0, 250, 0]
+      }
+    },
+    "e_tool1": {
+      "name": "Tool",
+      "order": "ah",
+      "MeshRenderer": {
+        "model": "@assets/third_party/adjustable_wrench/adjustable_wrench_1k.gltf#as_adjustablewrench"
+      },
+      "Transform": {
+        "position": [9.069, 0.929, -2.9]
+      }
+    },
+    "e_tool2": {
+      "name": "Tool",
+      "order": "ai",
+      "MeshRenderer": {
+        "model": "@assets/third_party/pipe_wrench/pipe_wrench_1k.gltf#as_pipewrench"
+      },
+      "Transform": {
+        "position": [9.02, 1.081, -2.1]
+      }
+    },
+    "e_tool3": {
+      "name": "Tool",
+      "order": "aj",
+      "MeshRenderer": {
+        "model": "@assets/third_party/wooden_hammer_01/wooden_hammer_01_1k.gltf#as_woodenhammer01"
+      },
+      "Transform": {
+        "position": [9.098, 1.004, -1.949],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_tool4": {
+      "name": "Tool",
+      "order": "ak",
+      "MeshRenderer": {
+        "model": "@assets/third_party/small_oil_can_01/small_oil_can_01_1k.gltf#as_smalloilcan01"
+      },
+      "Transform": {
+        "position": [9.458, 0.88, 1.6]
+      }
+    },
+    "e_tool5": {
+      "name": "Tool",
+      "order": "al",
+      "MeshRenderer": {
+        "model": "@assets/third_party/spray_paint_bottles_02/spray_paint_bottles_02_1k.gltf#as_spraypaintbottles02"
+      },
+      "Transform": {
+        "position": [9.441, 0.882, 2.304],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_tool6": {
+      "name": "Tool",
+      "order": "am",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox"
+      },
+      "Transform": {
+        "position": [9.268, 0.88, 2],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_toolcart": {
+      "name": "Tool cart",
+      "order": "ax",
+      "MeshRenderer": {
+        "model": "@assets/third_party/tool_cart/tool_cart_1k.gltf#as_toolcart"
+      },
+      "Transform": {
+        "position": [1.022, 0.054, -6.6],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_toolcartc": {
+      "name": "Tool cart collider",
+      "order": "ay",
+      "Collider": {
+        "halfExtents": [0.6367126703262329, 0.4823223650455475, 0.3768153190612793]
+      },
+      "PhysicsId": {
+        "value": 15
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [1, 0.532, -6.6],
+        "rotation": [0, 20, 0]
+      }
+    },
+    "e_toolchest": {
+      "name": "Tool chest",
+      "order": "af",
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_tool_chest/metal_tool_chest_1k.gltf#as_metaltoolchest"
+      },
+      "Transform": {
+        "position": [9.401, 0.879, -3.073],
+        "rotation": [0, 260, 0]
+      }
+    },
+    "e_vice": {
+      "name": "Bench vice",
+      "order": "ae",
+      "MeshRenderer": {
+        "model": "@assets/third_party/bench_vice_01/bench_vice_01_1k.gltf#as_benchvice01"
+      },
+      "Transform": {
+        "position": [9.2, 0.97, -2.4],
+        "rotation": [0, 270, 0]
+      }
+    },
+    "e_welder": {
+      "name": "Welding cart",
+      "order": "at",
+      "MeshRenderer": {
+        "model": "@assets/third_party/portable_welding_cart/portable_welding_cart_1k.gltf#as_portableweldingcart"
+      },
+      "Transform": {
+        "position": [6.176, 0.052, 9.345],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_welderc": {
+      "name": "Welding cart collider",
+      "order": "au",
+      "Collider": {
+        "halfExtents": [0.4191440939903259, 0.7815850973129272, 0.3274519443511963]
+      },
+      "PhysicsId": {
+        "value": 14
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [6.2, 0.832, 9.4],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_weldlight": {
+      "name": "Welding arc",
+      "order": "aw",
+      "Light": {
+        "color": [0.6, 0.75, 1, 1],
+        "intensity": 2400,
+        "range": 9
+      },
+      "Transform": {
+        "position": [5, 0.7, 7.6]
+      }
+    }
+  }
+}

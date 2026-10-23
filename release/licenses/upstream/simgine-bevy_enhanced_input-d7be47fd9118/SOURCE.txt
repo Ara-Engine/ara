@@ -1,0 +1,5 @@
+Original license texts for:
+bevy_enhanced_input_macros 0.27.0
+
+https://raw.githubusercontent.com/simgine/bevy_enhanced_input/d7be47fd91184c1bb1ff1f5a40d073d36a18547e/LICENSE-MIT
+https://raw.githubusercontent.com/simgine/bevy_enhanced_input/d7be47fd91184c1bb1ff1f5a40d073d36a18547e/LICENSE-APACHE

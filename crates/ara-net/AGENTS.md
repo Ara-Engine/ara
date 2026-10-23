@@ -31,6 +31,9 @@ link Lightyear, Replicon, App, sockets, histories or network services.
   bounds, tick window, rate and sequence checks run before Session::submit. No
   document ops, edits or authoritative state messages exist on the client channel.
 - `NetId` includes slot/epoch; Spawn contains prefab version and baseline identity.
+  Its `projected` flag carries scene/streaming lifetime ownership from the
+  authority's projection mapping; clients bind these rows when locally resident.
+  The transport protocol revision rejects peers predating this baseline field.
   `Interest` combines spatial grid, ownership/team predicates. RelevantTo filters
   entire entities; PrivateTo filters only owner fields. Transport budgets use
   Lightyear's packet admission (control/ACK traffic is accounted separately).

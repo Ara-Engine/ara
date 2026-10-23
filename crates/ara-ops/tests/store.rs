@@ -64,6 +64,72 @@ fn get(s: &Store, id: &str, key: &str) -> Value {
 }
 
 #[test]
+#[allow(clippy::unwrap_used)]
+fn document_creation_rejects_path_aliases_and_rolls_back_the_batch() {
+    for path in [
+        "levels/./new.scene",
+        "levels//new.scene",
+        "./new.scene",
+        "levels/../new.scene",
+    ] {
+        let mut s = store();
+        let edits = [
+            Edit::Document {
+                doc: AssetId::parse("sc_first").unwrap(),
+                path: "levels/new.scene".into(),
+                kind: Some("scene".into()),
+            },
+            Edit::Document {
+                doc: AssetId::parse("sc_alias").unwrap(),
+                path: path.into(),
+                kind: Some("scene".into()),
+            },
+        ];
+        assert!(
+            s.transact(TxnMeta::by(Author::Human), edits).is_err(),
+            "{path}"
+        );
+        assert_eq!(s.workspace().docs().count(), 1, "creation rolled back");
+        assert_eq!(s.revision(), 0);
+    }
+    let mut db = SchemaDb::new();
+    ara_doc::register(&mut db);
+    let mut index = AssetIndex::new();
+    index.insert("sc_reserved", "levels/unloaded.scene", Some("scene".into()));
+    let mut s = Store::new(db, Workspace::new(index));
+    assert!(
+        s.transact(
+            TxnMeta::by(Author::Human),
+            [Edit::Document {
+                doc: AssetId::parse("sc_reserved").unwrap(),
+                path: "levels/other.scene".into(),
+                kind: Some("scene".into()),
+            }]
+        )
+        .is_err(),
+        "indexed identities remain reserved even when their document is not loaded"
+    );
+    #[cfg(windows)]
+    {
+        let mut s = store();
+        let edits = [
+            Edit::Document {
+                doc: AssetId::parse("sc_first").unwrap(),
+                path: "levels/new.scene".into(),
+                kind: Some("scene".into()),
+            },
+            Edit::Document {
+                doc: AssetId::parse("sc_alias").unwrap(),
+                path: "levels/NEW.scene".into(),
+                kind: Some("scene".into()),
+            },
+        ];
+        assert!(s.transact(TxnMeta::by(Author::Human), edits).is_err());
+        assert_eq!(s.workspace().docs().count(), 1);
+    }
+}
+
+#[test]
 fn source_path_loading_preserves_transaction_and_undo_save_paths() {
     let mut s = store();
     let doc = s

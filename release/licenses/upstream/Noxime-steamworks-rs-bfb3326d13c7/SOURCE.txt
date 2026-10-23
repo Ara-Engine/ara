@@ -1,0 +1,5 @@
+Original license texts for:
+steamworks-sys 0.13.0
+
+https://raw.githubusercontent.com/Noxime/steamworks-rs/bfb3326d13c7c6d773adbb1d7c731cc131c433c7/LICENSE-MIT
+https://raw.githubusercontent.com/Noxime/steamworks-rs/bfb3326d13c7c6d773adbb1d7c731cc131c433c7/LICENSE-APACHE

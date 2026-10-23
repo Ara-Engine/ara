@@ -12,7 +12,9 @@
 //! prefab instances and the entities inside them become overrides automatically.
 
 mod component;
+mod document;
 mod entity;
+mod look_at;
 mod prefab;
 
 use ara_schema::SchemaDb;
@@ -21,10 +23,14 @@ pub use component::{
     Changed, ComponentAdd, ComponentAddParams, ComponentRemove, ComponentRemoveParams, PropertySet,
     PropertySetParams, TransformSet, TransformSetParams,
 };
+pub use document::{
+    DocCreate, DocCreateParams, ProjectSetMain, ProjectSetMainParams, ProjectSettings,
+};
 pub use entity::{
     Created, Deleted, EntityCreate, EntityCreateParams, EntityDelete, EntityDeleteParams,
     EntityInspect, EntityInspectParams, EntityReparent, EntityReparentParams, Moved,
 };
+pub use look_at::{TransformLookAt, TransformLookAtParams};
 pub use prefab::{
     OverrideRevert, OverrideRevertParams, OverrideSet, OverrideSetParams, PrefabInstantiate,
     PrefabInstantiateParams, Reverted,
@@ -34,6 +40,7 @@ use crate::Registry;
 
 /// Registers the starter set and its params types.
 pub fn register(reg: &mut Registry, db: &mut SchemaDb) {
+    document::register(reg, db);
     reg.command::<EntityCreate>(db)
         .command::<EntityDelete>(db)
         .command::<EntityReparent>(db)
@@ -41,6 +48,7 @@ pub fn register(reg: &mut Registry, db: &mut SchemaDb) {
         .command::<ComponentRemove>(db)
         .command::<PropertySet>(db)
         .command::<TransformSet>(db)
+        .command::<TransformLookAt>(db)
         .command::<PrefabInstantiate>(db)
         .command::<OverrideSet>(db)
         .command::<OverrideRevert>(db)

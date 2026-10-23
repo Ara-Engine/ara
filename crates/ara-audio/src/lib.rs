@@ -12,6 +12,7 @@ pub mod device;
 pub mod diagnose;
 pub mod dsp;
 pub mod effects;
+mod import_stream;
 pub mod importer;
 pub mod loudness;
 pub mod mixer;

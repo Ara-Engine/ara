@@ -1,0 +1,4 @@
+Original license texts for:
+ispc_rt 2.0.4
+
+https://raw.githubusercontent.com/Twinklebear/ispc-rs/5aa6a9b11ee6cfcbc951abab5488fbfa09121d83/LICENSE.md

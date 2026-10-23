@@ -1,0 +1,5 @@
+Original license texts for:
+kira 0.12.5
+
+https://raw.githubusercontent.com/tesselode/kira/74b3ef0fd8bd15f90e3b469208ee741f04374a62/LICENSE-MIT
+https://raw.githubusercontent.com/tesselode/kira/74b3ef0fd8bd15f90e3b469208ee741f04374a62/LICENSE-APACHE

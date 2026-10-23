@@ -33,6 +33,8 @@ pub struct LayerParams {
 #[ara(params, name = "TerrainStrokeParams", module = "terrain")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StrokeParams {
+    /// Optional concrete or symbolic stroke ID for reproducible authoring.
+    pub id: Option<String>,
     /// Existing layer ID.
     pub layer: String,
     /// Ordered gesture samples.
@@ -212,7 +214,7 @@ fn apply(
     if touched.is_empty() {
         return Err(invalid("brush does not touch terrain"));
     }
-    let id = ctx.new_id(None, "s")?;
+    let id = ctx.new_id(p.id.as_deref(), "s")?;
     ctx.create(id.clone(), record(&s)?)?;
     for coord in &touched {
         if let Some((tid, tile)) = t.tiles.iter_mut().find(|(_, tile)| tile.coord == *coord) {
@@ -223,7 +225,9 @@ fn apply(
                 Some(value(&tile.strokes)?),
             )?;
         } else {
-            let tid = ctx.new_id(None, "t")?;
+            let signed = |n: i32| format!("{}{}", if n < 0 { "n" } else { "p" }, n.unsigned_abs());
+            let tile_id = format!("t_{}z{}", signed(coord.x), signed(coord.z));
+            let tid = ctx.new_id(Some(&tile_id), "t")?;
             let tile = TileRecord {
                 coord: *coord,
                 base: None,
@@ -299,6 +303,7 @@ impl Command for Import {
         apply(
             ctx,
             StrokeParams {
+                id: None,
                 layer: p.layer,
                 dabs: vec![Dab {
                     center,

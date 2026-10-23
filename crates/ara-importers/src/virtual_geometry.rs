@@ -9,7 +9,7 @@ pub(crate) fn cook(
     name: &str,
     vertices: &[Vertex],
     indices: &[u32],
-    settings: MeshSettings,
+    settings: &MeshSettings,
     deformed: bool,
     materials: usize,
 ) -> Result<(Option<Artifact>, Value)> {

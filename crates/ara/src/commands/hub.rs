@@ -48,6 +48,12 @@ pub enum HubCommand {
     Status { project: Option<String> },
     /// Installed engine versions.
     Engines,
+    /// Register this installed engine with the running user Hub.
+    RegisterEngine,
+    /// Unregister this exact installed build, preserving projects and other versions.
+    UnregisterEngine,
+    /// Stop the Hub service; project processes remain open.
+    Shutdown,
     /// Attached agents and editors per project.
     Activity,
     /// Print a one-time user-level MCP configuration (no project root).
@@ -80,9 +86,16 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
     if let HubCommand::Serve { port, config_dir } = command {
         let mut config = ara_hub_service::HubConfig::user(executable).map_err(|e| e.to_string())?;
         if let Some(directory) = config_dir {
-            config.templates = Box::new(ara_hub_service::DirectoryTemplates(
-                directory.join("templates"),
-            ));
+            if !config
+                .engine
+                .executable
+                .parent()
+                .is_some_and(|dir| dir.join("templates").is_dir())
+            {
+                config.templates = Box::new(ara_hub_service::DirectoryTemplates(
+                    directory.join("templates"),
+                ));
+            }
             config.directory = directory;
         }
         let log = config.directory.join("hub-start.log");
@@ -120,6 +133,18 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
         HubCommand::Close { project } => ("hub.close", json!({"project":project})),
         HubCommand::Status { project } => ("hub.status", json!({"project":project})),
         HubCommand::Engines => ("hub.engines", json!({})),
+        HubCommand::RegisterEngine | HubCommand::UnregisterEngine => {
+            let config = ara_hub_service::HubConfig::user(executable).map_err(|e| e.to_string())?;
+            (
+                if matches!(command, HubCommand::RegisterEngine) {
+                    "hub.engine.register"
+                } else {
+                    "hub.engine.remove"
+                },
+                json!({"engine":config.engine}),
+            )
+        }
+        HubCommand::Shutdown => ("hub.shutdown", json!({})),
         HubCommand::Activity => ("hub.activity", json!({})),
         HubCommand::InstallMcp { .. } | HubCommand::Serve { .. } => unreachable!("handled above"),
     };

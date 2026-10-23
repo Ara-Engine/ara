@@ -121,12 +121,14 @@ impl Registry {
                 break candidate;
             }
         };
+        // A project's root `thumbnail.png` is its Hub preview until one is set.
+        let thumbnail = Some(path.join("thumbnail.png")).filter(|p| p.is_file());
         let entry = ProjectEntry {
             id,
             name,
             path,
             last_opened: None,
-            thumbnail: None,
+            thumbnail,
             engine_version,
         };
         self.projects.push(entry.clone());

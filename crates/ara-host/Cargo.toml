@@ -19,6 +19,7 @@ ara-ops.workspace = true
 ara-proto.workspace = true
 ara-schema.workspace = true
 ara-why = { path = "../ara-why" }
+ara-ui-document = { path = "../ara-ui-document" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 

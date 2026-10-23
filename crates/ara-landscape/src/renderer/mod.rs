@@ -107,6 +107,7 @@ pub struct Landscape {
     cells: u32,
     tiles: u32,
     spacing: f32,
+    space: crate::space::Space,
     previous: Vec<State>,
     pages: Pages,
     upload_slot: u32,

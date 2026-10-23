@@ -1,10 +1,11 @@
 //! Serialized Hub registry authority.
 mod background;
+mod create;
 mod lifecycle;
 mod transport;
 use crate::{
     DirectoryTemplates, EngineBuild, ProjectEntry, Registry, TemplateSource, invalid, io_error,
-    now, registry::write_json,
+    now, registry::write_json, templates::Layered,
 };
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
@@ -41,7 +42,13 @@ impl HubConfig {
             "ara-editor"
         });
         Ok(Self {
-            templates: Box::new(DirectoryTemplates(directory.join("templates"))),
+            templates: Box::new(DirectoryTemplates(
+                executable
+                    .parent()
+                    .map(|dir| dir.join("templates"))
+                    .filter(|dir| dir.is_dir())
+                    .unwrap_or_else(|| directory.join("templates")),
+            )),
             directory,
             engine: EngineBuild {
                 version: crate::ALPHA_VERSION.into(),
@@ -69,6 +76,7 @@ pub struct Hub {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Params {
+    engine: Option<EngineBuild>,
     project: Option<String>,
     path: Option<PathBuf>,
     name: Option<String>,
@@ -77,6 +85,7 @@ struct Params {
     #[serde(default, deserialize_with = "thumbnail")]
     thumbnail: Option<Option<PathBuf>>,
     engine_version: Option<String>,
+    dry_run: Option<bool>,
 }
 
 fn thumbnail<'de, D: serde::Deserializer<'de>>(
@@ -94,7 +103,7 @@ fn required<T>(value: Option<T>, name: &str) -> Result<T, RpcError> {
 
 impl Hub {
     /// Lock the user registry. A second service for the same user fails without changing it.
-    pub fn open(config: HubConfig) -> Result<Self, RpcError> {
+    pub fn open(mut config: HubConfig) -> Result<Self, RpcError> {
         fs::create_dir_all(&config.directory).map_err(io_error)?;
         let lock = File::create(config.directory.join("hub.lock")).map_err(io_error)?;
         lock.try_lock().map_err(|e| {
@@ -117,6 +126,8 @@ impl Hub {
             *engine = config.engine.clone();
         }
         registry.save(&config.directory)?;
+        config.templates =
+            Layered::with_checkout_samples(config.templates, &config.engine.executable);
         Ok(Self {
             config,
             registry,
@@ -180,6 +191,51 @@ impl Hub {
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
             "hub.templates" => Ok(json!({"templates":self.config.templates.list()?})),
             "hub.engines" => Ok(json!({"engines":self.registry.engines})),
+            "hub.engine.register" => {
+                let engine = required(p.engine, "engine")?;
+                if engine.version.is_empty()
+                    || !engine.executable.is_absolute()
+                    || !engine.executable.is_file()
+                    || engine
+                        .editor
+                        .as_ref()
+                        .is_some_and(|path| !path.is_absolute() || !path.is_file())
+                {
+                    return Err(invalid(
+                        "engine needs a version and existing absolute executable paths",
+                    ));
+                }
+                if let Some(old) = self
+                    .registry
+                    .engines
+                    .iter_mut()
+                    .find(|old| old.version == engine.version)
+                {
+                    *old = engine.clone();
+                } else {
+                    self.registry.engines.push(engine.clone());
+                }
+                self.registry.save(&self.config.directory)?;
+                self.changed("engine", None);
+                Ok(json!(engine))
+            }
+            "hub.engine.remove" => {
+                let engine = required(p.engine, "engine")?;
+                if self.registry.projects.iter().any(|project| {
+                    project.engine_version == engine.version
+                        && self.status_of(project)["state"] == "open"
+                }) {
+                    return Err(invalid(
+                        "close projects using this engine before uninstalling",
+                    ));
+                }
+                self.registry.engines.retain(|old| {
+                    old.version != engine.version || old.executable != engine.executable
+                });
+                self.registry.save(&self.config.directory)?;
+                self.changed("engine", None);
+                Ok(json!({"removed":engine.version}))
+            }
             "hub.register" => {
                 let project =
                     self.registry
@@ -238,25 +294,18 @@ impl Hub {
                 Ok(json!({"removed":entry.id}))
             }
             "hub.create" => {
-                let name = required(p.name, "name")?;
-                self.registry.check_name(&name, None)?;
-                let path = required(p.path, "path")?;
-                let version = p
-                    .engine_version
-                    .unwrap_or_else(|| self.config.engine.version.clone());
-                self.registry.engine(&version)?;
-                let template = required(p.template, "template")?;
-                if !self
-                    .config
-                    .templates
-                    .list()?
-                    .iter()
-                    .any(|t| t.id == template)
-                {
-                    return Err(invalid(format!("no template `{template}`")));
+                let (template, name, path, version) = self.check_create(&p)?;
+                if p.dry_run == Some(true) {
+                    return Ok(json!({"valid":true,"path":path}));
                 }
                 fs::create_dir(&path).map_err(io_error)?;
-                self.config.templates.instantiate(&template, &path)?;
+                self.config.templates.instantiate(&template.id, &path)?;
+                // Keep the template's preview as the new project's (`thumbnail.png`).
+                if let Some(preview) = template.thumbnail
+                    && !path.join("thumbnail.png").exists()
+                {
+                    fs::copy(preview, path.join("thumbnail.png")).map_err(io_error)?;
+                }
                 let marker_path = path.join("ara.project.json");
                 let mut marker: Value =
                     serde_json::from_slice(&fs::read(&marker_path).map_err(io_error)?)

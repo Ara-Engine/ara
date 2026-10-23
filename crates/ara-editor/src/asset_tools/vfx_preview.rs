@@ -13,9 +13,11 @@ pub(super) fn cooked(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<Pa
     let hash = effect
         .content_hash()
         .map_err(|d| anyhow::anyhow!("{d:?}"))?;
-    let bundled = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../ara-vfx-gpu/cooked")
-        .join(&effect.name);
+    let bundled = ara_gpu::cooked::resource_dir(
+        "ara-vfx-gpu",
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-vfx-gpu/cooked"),
+    )
+    .join(&effect.name);
     let matches = |path: &Path| {
         std::fs::read_to_string(path.join("effect.json"))
             .ok()
@@ -55,17 +57,8 @@ pub(super) fn cooked(root: &Path, effect: &ara_vfx::Effect) -> anyhow::Result<Pa
                 &file,
                 ara_json::to_canonical_string(&ara_json::to_value(&manifest)?),
             )?;
-            let sdk = std::env::var_os("VULKAN_SDK")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("C:/VulkanSDK/1.4.363.0"));
-            ara_shader_cook::cook(
-                &file,
-                &cooked,
-                &ara_shader_cook::Toolchain {
-                    slangc: sdk.join("Bin/slangc.exe"),
-                    spirv_val: sdk.join("Bin/spirv-val.exe"),
-                },
-            )?;
+
+            ara_shader_cook::cook(&file, &cooked, &ara_shader_cook::Toolchain::discover())?;
             std::fs::write(
                 cooked.join("effect.json"),
                 ara_json::to_canonical_string(&serde_json::json!({"hash":hash})),

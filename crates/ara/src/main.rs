@@ -54,6 +54,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Check installed editor prerequisites without a project.
+    Doctor,
     /// Local performance regression checks (no daemon or project required).
     Profile {
         #[command(subcommand)]
@@ -400,6 +402,7 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
     let open = |files: &[PathBuf]| project::open(root_flag, files);
     let io = |msg: String| Diagnostic::error(codes::IO, msg);
     match cli.command {
+        Command::Doctor => Ok(commands::doctor::doctor(json)),
         Command::Profile {
             command:
                 ProfileCommand::Compare {
@@ -487,7 +490,27 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
 }
 
 fn main() -> ExitCode {
+    match ara_crash::monitor_from_args() {
+        Ok(true) => return ExitCode::SUCCESS,
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("Ara crash monitor: {error:#}");
+            return ExitCode::from(2);
+        }
+    }
     let cli = Cli::parse();
+    let _capture = if matches!(
+        &cli.command,
+        Command::Hub {
+            command: commands::hub::HubCommand::Serve { .. }
+        }
+    ) {
+        ara_crash::desktop::start("ara-hub-service", false)
+            .map_err(|error| eprintln!("ARA-EXP-CRASH-004: {error:#}"))
+            .ok()
+    } else {
+        None
+    };
     let json = cli.json;
     match run(cli) {
         Ok(true) => ExitCode::SUCCESS,

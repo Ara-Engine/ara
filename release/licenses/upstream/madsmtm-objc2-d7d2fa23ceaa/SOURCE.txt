@@ -1,0 +1,4 @@
+Original license texts for:
+objc2 0.6.5
+
+https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md

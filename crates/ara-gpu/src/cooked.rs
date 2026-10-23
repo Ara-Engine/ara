@@ -2,6 +2,22 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Finds installed cooked resources beside the executable, falling back to a checkout.
+/// Called during renderer setup, never during per-frame rendering.
+pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std::path::PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("resources").join(package)))
+        .filter(|dir| {
+            dir.is_dir()
+                || dir
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .is_some_and(|p| p.join("engine.json").is_file())
+        })
+        .unwrap_or_else(|| checkout.as_ref().to_path_buf())
+}
+
 /// Binding ABI version one. Changes invalidate every cooked pipeline.
 pub const BINDING_LAYOUT: &str = "ara.v1:root32:texture128:buffer64:sampler3:storage64:as16";
 /// Hash of the exact global binding ABI.

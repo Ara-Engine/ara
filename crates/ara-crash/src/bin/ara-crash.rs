@@ -16,6 +16,14 @@ fn run() -> Result<()> {
     }
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        Some("archive") => {
+            let input = PathBuf::from(args.next().context("archive needs <pdb> <symbol-store>")?);
+            let store = PathBuf::from(
+                args.next()
+                    .context("archive needs a symbol-store directory")?,
+            );
+            ara_crash::symbols::archive(&input, &store)?;
+        }
         Some("symbolize") => {
             let dump = PathBuf::from(
                 args.next()

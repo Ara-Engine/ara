@@ -16,7 +16,10 @@ pub struct ToneMap {
 impl ToneMap {
     /// Loads the main renderer's cooked tonemap; never compiles at runtime.
     pub fn new(gpu: &mut VulkanDevice) -> Result<Self> {
-        let artifacts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
+        let artifacts = ara_gpu::cooked::resource_dir(
+            env!("CARGO_PKG_NAME"),
+            concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
+        );
         let metadata = serde_json::from_slice(&std::fs::read(artifacts.join("tonemap.json"))?)?;
         let pipeline = gpu.create_pipeline(&metadata, &artifacts)?;
         let frame = gpu.create_buffer(
