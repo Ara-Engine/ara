@@ -108,6 +108,8 @@ pub enum Access {
     Vertex,
     /// Index input buffer.
     Index,
+    /// GPU-generated non-indexed draw arguments.
+    Indirect,
     /// Sampled image / readonly shader storage.
     ShaderRead,
     /// Compute unordered read/write.

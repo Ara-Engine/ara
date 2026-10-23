@@ -1,0 +1,197 @@
+{
+  "foliage_color": {
+    "entries": {
+      "foliageColor": "fragment",
+      "foliageVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "foliage_cull": {
+    "entries": {
+      "foliageCull": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "foliage_depth": {
+    "entries": {
+      "foliageDepth": "fragment",
+      "foliageVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "foliage_shadow": {
+    "entries": {
+      "foliageDepth": "fragment",
+      "foliageVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "hzb": {
+    "entries": {
+      "hzbMain": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reset": {
+    "entries": {
+      "resetMain": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "select": {
+    "entries": {
+      "selectMain": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "sky": {
+    "entries": {
+      "skyColor": "fragment",
+      "skyVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "terrain_color": {
+    "entries": {
+      "terrainColor": "fragment",
+      "terrainVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        37
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "terrain_cull": {
+    "entries": {
+      "terrainCull": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "terrain_depth": {
+    "entries": {
+      "terrainDepth": "fragment",
+      "terrainDepthVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "terrain_shadow": {
+    "entries": {
+      "terrainDepth": "fragment",
+      "terrainDepthVertex": "vertex"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "tile_upload": {
+    "entries": {
+      "tileUpload": "compute"
+    },
+    "source": "landscape.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  }
+}

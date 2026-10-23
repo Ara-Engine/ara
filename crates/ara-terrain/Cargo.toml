@@ -1,0 +1,23 @@
+[package]
+name = "ara-terrain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-json = { path = "../ara-json" }
+ara-ops = { path = "../ara-ops" }
+ara-schema = { path = "../ara-schema" }
+blake3 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+ara-nav = { path = "../ara-nav" }

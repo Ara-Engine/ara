@@ -51,6 +51,14 @@ pub enum Command {
     },
     /// Indexed mesh draw.
     Draw(Draw),
+    /// One GPU-generated non-indexed instanced draw (four u32 argument words).
+    /// Vertex data is fetched from declared shader storage by SV_VertexID.
+    DrawIndirect {
+        /// Buffer allocated with INDIRECT_BUFFER usage.
+        arguments: Buffer,
+        /// Four-byte-aligned byte offset of one 16-byte draw record.
+        offset: u64,
+    },
     /// Fullscreen triangle without vertex input.
     Fullscreen,
     /// End dynamic rendering.

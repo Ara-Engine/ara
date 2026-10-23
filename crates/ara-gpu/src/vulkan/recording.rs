@@ -26,6 +26,7 @@ pub(super) fn access(
             L::GENERAL,
         ),
         Access::Index => (S::INDEX_INPUT, A::INDEX_READ, L::GENERAL),
+        Access::Indirect => (S::DRAW_INDIRECT, A::INDIRECT_COMMAND_READ, L::GENERAL),
         Access::ShaderRead => (shader, A::SHADER_READ, L::SHADER_READ_ONLY_OPTIMAL),
         Access::Storage => (shader, A::SHADER_READ | A::SHADER_WRITE, L::GENERAL),
         Access::Color => (
@@ -341,6 +342,26 @@ impl VulkanDevice {
                         || (u64::from(d.first_index) + u64::from(d.index_count)) * 4 > i.raw.size
                     {
                         return Err(GpuError::Contract("Invalid indexed draw".into()));
+                    }
+                }
+                Command::DrawIndirect { arguments, offset } => {
+                    self.validate_attachment_formats(bound, &color_formats, depth_format)?;
+                    let buffer = self.buffers.get(*arguments)?;
+                    if !rendering
+                        || pipeline != Some(false)
+                        || bound.is_none_or(|h| {
+                            self.pipelines.get(h).is_ok_and(|p| p.vertex_stride != 0)
+                        })
+                        || offset % 4 != 0
+                        || offset
+                            .checked_add(16)
+                            .is_none_or(|end| end > buffer.raw.size)
+                        || !buffer
+                            .raw
+                            .usage
+                            .contains(vk::BufferUsageFlags::INDIRECT_BUFFER)
+                    {
+                        return Err(GpuError::Contract("Invalid indirect draw".into()));
                     }
                 }
                 Command::Fullscreen => {
