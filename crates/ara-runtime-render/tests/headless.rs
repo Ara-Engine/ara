@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 //! The demo scene rendered headless: labelled captures, motion between frames,
 //! CPU-skinned Fox, live light edits and validation-clean dynamic uploads.
-use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
+use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, Importer, TargetPlatform};
 use ara_doc::Workspace;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_render::capture::{ViewMode, compare};
@@ -24,7 +24,7 @@ fn runtime() -> Runtime {
         source_path: "assets/fox/Fox.glb".into(),
         source: std::fs::read(demo().join("assets/fox/Fox.glb")).unwrap(),
         importer: "ara.gltf".into(),
-        version: "2-gltf14-meshopt070-ispc050-tiled".into(),
+        version: registry.get("ara.gltf").unwrap().version().into(),
         settings: serde_json::Value::Null,
         target: TargetPlatform::Windows,
         dependencies: Default::default(),

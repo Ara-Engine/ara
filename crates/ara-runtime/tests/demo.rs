@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 //! The demo scene end to end in-process: player movement, AI crowds, animation,
 //! determinism, exact checkpoints, portable snapshots, live patches and keep-changes.
-use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, TargetPlatform};
+use ara_asset::{CachedImport, Cancellation, ImportContext, ImportInput, Importer, TargetPlatform};
 use ara_doc::Workspace;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_runtime::{
@@ -29,7 +29,7 @@ fn fox() -> &'static CachedImport {
             source_path: "assets/fox/Fox.glb".into(),
             source: std::fs::read(demo().join("assets/fox/Fox.glb")).unwrap(),
             importer: "ara.gltf".into(),
-            version: "2-gltf14-meshopt070-ispc050-tiled".into(),
+            version: registry.get("ara.gltf").unwrap().version().into(),
             settings: Value::Null,
             target: TargetPlatform::Windows,
             dependencies: Default::default(),

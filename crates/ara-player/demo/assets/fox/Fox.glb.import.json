@@ -4,7 +4,7 @@
   "records": {
     "i_settings": {
       "importer": "ara.gltf",
-      "version": "2-gltf14-meshopt070-ispc050-tiled"
+      "version": "3-gltf14-meshopt070-ispc050-tiled-f32text"
     }
   }
 }

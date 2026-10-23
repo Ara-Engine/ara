@@ -75,7 +75,7 @@ const ASSETS: &[(&str, &str)] = &[
         "circle-play",
         include_str!("../../assets/icons/circle-play.svg"),
     ),
-    ("command",include_str!("../../assets/icons/command.svg")),
+    ("command", include_str!("../../assets/icons/command.svg")),
     (
         "crosshair",
         include_str!("../../assets/icons/crosshair.svg"),
