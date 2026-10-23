@@ -14,15 +14,24 @@ Ara is a Rust game engine. AI agents build it, and agents and humans use it to m
 
 ## Status
 
-M0 is done: every spike decision is in `docs/decisions.md`. M1 and M2 are in progress.
+M0 is done: every spike decision is in `docs/decisions.md`. M1–M4 tracks are being built in parallel.
 
 **Merged:**
 - the kernel (`ara-schema`, `ara-doc`, `ara-ops`, `ara-cmd`, `ara-merge`, `ara-json`, `ara-diag`);
 - the Engine Protocol, daemon and MCP (`ara-proto`, `ara-host`, `ara-rpc`, `ara-mcp`, the `ara` CLI);
-- the UI runtime (`ara-ui-*`);
-- animation (`ara-anim`).
+- `arabench`, the agent-ergonomics benchmark;
+- the simulation core (`ara-sim`, `ara-input`, `ara-components`);
+- the C# host (`ara-script`, `dotnet/`);
+- the renderer (`ara-gpu`, `ara-render`, `ara-platform`, `ara-shader-cook`), fidelity (`ara-render-fidelity`, `ara-pathtrace`), and materials (`ara-graph`, `ara-material`);
+- assets (`ara-asset*`, `ara-importers`);
+- physics (`ara-physics*`), audio (`ara-audio`), navigation (`ara-nav`), animation (`ara-anim`);
+- the UI runtime and tooling (`ara-ui-*`);
+- export (`ara-export*`, `ara-pack`, `ara-bridge`);
+- localization and saves (`ara-l10n`, `ara-save`).
 
-The renderer, simulation, C# host, assets, physics, audio, navigation, materials and export are still being built in parallel worktrees. Run `ara init` in a scratch dir to try the CLI and MCP.
+**In progress:** the editor shell, multiplayer (`ara-net`), runtime integration (`ara-runtime`, `ara-player`), VFX, terrain, 2D, world streaming, profiling, vendored SDL3, and C# host v2. Run `ara init` in a scratch dir to try the CLI and MCP.
+
+GPU tests need `VULKAN_SDK` set (slangc is found through it).
 
 ## Layout
 
