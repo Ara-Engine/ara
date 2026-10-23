@@ -272,7 +272,7 @@ impl Landscape {
                 }
                 "foliage_cull" => {
                     r.push(Command::Constants(constants));
-                    r.push(Command::Dispatch([self.count.div_ceil(64), 1, 1]));
+                    r.push(Command::Dispatch([self.count.max(1).div_ceil(64), 1, 1]));
                 }
                 "sky" => {
                     r.push(Command::Constants(constants));

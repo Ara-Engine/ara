@@ -8,9 +8,7 @@ impl Landscape {
         cooked: &Path,
     ) -> Result<Self> {
         ara_texture_stream::validate_device(gpu)?;
-        data.header
-            .validate()
-            .map_err(|d| anyhow::anyhow!(d.message))?;
+        let space = crate::space::Space::new(&data.header)?;
         ensure!(
             data.instances.iter().all(|i| i.identity[2] < 3
                 && i.position_scale
@@ -33,30 +31,27 @@ impl Landscape {
             "invalid terrain sample atlas"
         );
         ensure!(
-            !size.contains(&0)
-                && data.side > 1
-                && data.header.min.x == 0
-                && data.header.min.z == 0
-                && data.header.origin == [0., 0.]
-                && data.header.max.x == data.header.max.z,
-            "GPU landscape expects a square origin-zero extraction"
+            !size.contains(&0) && data.side > 1,
+            "invalid landscape viewport or sample extent"
         );
         ensure!(
             data.samples.len() == (data.side as usize).pow(2)
-                && data.side == data.header.cells * data.header.max.x as u32 + 1,
+                && data.side == data.header.cells * space.tiles + 1,
             "invalid sample atlas"
         );
         let count = u32::try_from(data.instances.len())?;
-        ensure!(count > 0, "empty instance scene");
         let mut pages = Pages::new(data, [View::noon().eye.x, View::noon().eye.z])?;
-        let tiles = data.header.max.x as u32;
-        ensure!(
-            tiles <= 128 && data.header.cells == 32,
-            "GPU patch ABI requires 32 cells and <=128 tiles per edge"
-        );
+        let tiles = space.tiles;
+        let mut local_instances = data.instances.clone();
+        for instance in &mut local_instances {
+            instance.position_scale[0] -= space.offset.x;
+            instance.position_scale[2] -= space.offset.z;
+        }
         let mut slots = [0; 9];
         let mut storage =
             |bytes: &[u8], extra: vk::BufferUsageFlags, host: bool| -> Result<Buffer> {
+                // Empty foliage still needs valid descriptors; shader counts stay zero.
+                let bytes = if bytes.is_empty() { &[0u8; 64] } else { bytes };
                 let buffer = gpu.create_buffer(
                     bytes.len() as u64,
                     vk::BufferUsageFlags::STORAGE_BUFFER
@@ -108,7 +103,7 @@ impl Landscape {
             false,
         )?;
         let instances = storage(
-            bytemuck::cast_slice(&data.instances),
+            bytemuck::cast_slice(&local_instances),
             vk::BufferUsageFlags::empty(),
             false,
         )?;
@@ -313,6 +308,7 @@ impl Landscape {
             cells: data.header.cells,
             tiles,
             spacing: data.header.spacing,
+            space,
             previous: Vec::new(),
             pages,
             upload_slot,

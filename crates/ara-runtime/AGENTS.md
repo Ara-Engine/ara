@@ -105,6 +105,10 @@ plugin Late → poses.resolve.
 - Terrain: one `Terrain` per level; tiles evaluate on worker threads at load (strokes
   only; imported bases are not available in play yet). Chunk bodies are cooked Jolt
   heightfields, re-cooked after every native rebuild.
+  The Terrain entity's complete parent-resolved translation shifts the evaluated
+  grid, heights and foliage after stroke/exclusion evaluation; navigation and
+  collision consume that same world data. Rotation/scale must be baked into the
+  grid and diagnose if present. Chunk geometry already contains the world offset.
 - Animation: tick rate must divide 48 000. The move-state cycle is the mean of the
   locomotion clip lengths. Cubic glTF channels keep key values; morph channels are
   not animated. A reloaded model restarts its animators (old snapshots are rejected).

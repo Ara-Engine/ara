@@ -27,6 +27,13 @@ Missing pages enforce level >=2 and use a resident 8 m sample fallback. There ar
 per frame, <=13084 upload bytes, including page-table/eviction metadata. The host
 must reject stale completed revisions before queue_tile and honor Play/apply policy.
 
+Authored Header.origin and signed min/max tile coordinates remain world data.
+The sample atlas starts at Header.min; CPU extraction rebases camera/foliage X/Z
+into that bounded grid without changing the shader ABI. queue_tile accepts the
+authored tile coordinate. Empty foliage is valid. tests/origin.rs compares GPU
+pixels before/after world translation and checks streamed signed-grid updates;
+its captures and cache live under target/authoring-tests/landscape-origin.
+
 All passes declare complete bindless reachability. Static scene inputs are device
 local; transient cull buffers are reused. Draw args are reset on GPU, with no count
 readback. Terrain min-depth HZB uses full covered 32x32 blocks; projected sphere

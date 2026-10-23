@@ -138,6 +138,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     must be written by hand as empty canonical skeletons before commands can fill them.
     `ara init` seeds `levels/main.scene` with a random ID; renaming it or pointing
     `main` elsewhere is a hand edit of `ara.project.json`.
+    **Fixed (`27f3523`, `be491fa`):** transactional `doc.create` supports all eight
+    requested kinds, including authoritative material graphs and native UI XML;
+    `project.setMain` updates settings with history/undo and immediate Play defaults.
 20. **Import sidecars have no CLI/MCP command** (`editor.import.initialize` exists only in
     the editor host). An agent with only `ara`/MCP writes `*.import.json` by hand and
     must know the importer's exact version string (the build asks the worker).
