@@ -13,6 +13,9 @@ fn main() {
         build.files(sources);
         println!("cargo:rerun-if-changed=vendor/{module}");
     }
+    // Virtual query filters let the shim block off-mesh links at runtime. Every
+    // Detour translation unit sees the same definition (one cc build).
+    build.define("DT_VIRTUAL_QUERYFILTER", "1");
     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
         build.flag("/fp:strict").flag("/EHsc");
     } else {

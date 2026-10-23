@@ -104,6 +104,14 @@ pub struct NavLink {
     /// Whether the connection is available to the baker.
     #[ara(default = true)]
     pub enabled: bool,
+    /// How agents traverse it: drives traversal motion, gating and animation hooks.
+    pub kind: crate::LinkKind,
+    /// Traversal time in seconds; 0 derives it from length and agent speed.
+    #[ara(default=0,unit=Seconds,range(min=0,max=600))]
+    pub duration: f32,
+    /// Jump apex above the straight start-end line, in metres (jumps only).
+    #[ara(default=0.5,unit=Meters,range(min=0,max=100))]
+    pub arc_height: f32,
 }
 impl Default for NavLink {
     fn default() -> Self {
@@ -115,6 +123,9 @@ impl Default for NavLink {
             area: 0,
             bidirectional: true,
             enabled: true,
+            kind: crate::LinkKind::Walk,
+            duration: 0.0,
+            arc_height: 0.5,
         }
     }
 }
@@ -128,6 +139,9 @@ impl From<&NavLink> for crate::OffMeshLink {
             area: l.area,
             bidirectional: l.bidirectional,
             enabled: l.enabled,
+            kind: l.kind,
+            duration: l.duration,
+            arc_height: l.arc_height,
         }
     }
 }
@@ -174,7 +188,8 @@ pub enum NavStatus {
     Unreachable,
 }
 
-/// Explicit off-mesh interpolation state; lives in ECS for snapshot/replay.
+/// Explicit off-mesh traversal state; lives in ECS for snapshot/replay. Animation
+/// systems read `kind` and `progress()` as the traversal hook (jump, climb, ride).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Traversal {
     /// Connection's starting position.
@@ -185,6 +200,35 @@ pub struct Traversal {
     pub elapsed: f32,
     /// Total traversal duration in seconds.
     pub duration: f32,
+    /// Authored link ID, zero when unknown.
+    #[serde(default)]
+    pub link: u32,
+    /// Traversal style.
+    #[serde(default)]
+    pub kind: crate::LinkKind,
+    /// Jump apex above the straight line in metres.
+    #[serde(default)]
+    pub arc_height: f32,
+}
+impl Traversal {
+    /// Normalised progress in 0..=1.
+    pub fn progress(&self) -> f32 {
+        if self.duration > 0.0 {
+            (self.elapsed / self.duration).clamp(0.0, 1.0)
+        } else {
+            1.0
+        }
+    }
+    /// Position at the current progress, including the jump arc.
+    pub fn position(&self) -> [f32; 3] {
+        let f = self.progress();
+        let mut p: [f32; 3] =
+            std::array::from_fn(|i| self.start[i] + (self.end[i] - self.start[i]) * f);
+        if self.kind == crate::LinkKind::Jump {
+            p[1] += 4.0 * self.arc_height * f * (1.0 - f);
+        }
+        p
+    }
 }
 
 /// Complete authoritative navigation gameplay state; include it in snapshots.
@@ -210,6 +254,24 @@ pub struct NavAgentState {
     pub traversal: Option<Traversal>,
     /// Last movement outcome.
     pub status: NavStatus,
+    /// Path-following velocity before avoidance: the locomotion intent input.
+    #[serde(default)]
+    pub desired: [f32; 3],
+    /// Consecutive ticks with a desired velocity but almost no movement.
+    #[serde(default)]
+    pub stalled: u32,
+    /// Link the agent is waiting at (closed door, absent elevator), with ticks waited.
+    #[serde(default)]
+    pub waiting: Option<(u32, u32)>,
+    /// Link excluded from the next plan after waiting too long at it.
+    #[serde(default)]
+    pub avoid_link: Option<u32>,
+    /// Why the agent is not progressing, for diagnostics and `ara why`.
+    #[serde(default)]
+    pub issue: Option<NavIssue>,
+    /// Long route across clusters when the goal is outside the resident mesh.
+    #[serde(default)]
+    pub route: Option<crate::Route>,
 }
 impl NavAgentState {
     /// Creates idle deterministic state with a stable simulation ID.
@@ -225,8 +287,62 @@ impl NavAgentState {
             planned_filter: None,
             traversal: None,
             status: NavStatus::Idle,
+            desired: [0.0; 3],
+            stalled: 0,
+            waiting: None,
+            avoid_link: None,
+            issue: None,
+            route: None,
         }
     }
+    /// Sets a new goal, clearing the corridor so the next tick plans afresh.
+    pub fn set_target(&mut self, target: Option<[f32; 3]>) {
+        self.target = target;
+        self.path = None;
+        self.route = None;
+        self.corner = 0;
+        self.traversal = None;
+        self.waiting = None;
+        self.avoid_link = None;
+        self.stalled = 0;
+        self.issue = None;
+        self.status = if target.is_some() {
+            NavStatus::Moving
+        } else {
+            NavStatus::Idle
+        };
+    }
+}
+
+/// Structured reason an agent is not progressing; kept in `NavAgentState`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum NavIssue {
+    /// No mesh is published for the agent's profile.
+    NoMesh,
+    /// Agent dimensions or state are invalid for its mesh.
+    InvalidAgent,
+    /// The agent is not on (or near) a permitted polygon.
+    StartOffMesh,
+    /// The goal is not reachable; `reachable` is the nearest reachable point.
+    NoPath {
+        /// Closest point a permitted corridor reaches.
+        reachable: [f32; 3],
+    },
+    /// Waiting at a closed door or absent elevator.
+    WaitingForLink {
+        /// Authored link ID.
+        link: u32,
+    },
+    /// Gave up waiting at a link and replanned without it.
+    LinkTimeout {
+        /// Authored link ID.
+        link: u32,
+    },
+    /// Desired motion but no progress (crowding or an obstacle); replanning.
+    Stalled,
+    /// Goal is outside the resident mesh; following a long route.
+    OutsideResident,
 }
 
 /// Registers navigation authoring components with the kernel Schema DB.
@@ -234,5 +350,7 @@ pub fn register(db: &mut SchemaDb) {
     db.register::<NavAgent>()
         .register::<NavMeshSurface>()
         .register::<NavLink>()
-        .register::<NavArea>();
+        .register::<NavArea>()
+        .register::<crate::NavObstacle>()
+        .register::<crate::NavAgentType>();
 }

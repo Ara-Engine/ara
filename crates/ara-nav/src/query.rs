@@ -24,7 +24,12 @@ impl Default for QueryFilter {
     }
 }
 impl QueryFilter {
-    pub(crate) fn native(&self) -> Result<ara_nav_sys::Filter, NavError> {
+    /// Checks costs are finite and in 1..=1000000 (admissible A*).
+    pub fn validate(&self) -> Result<(), NavError> {
+        self.native(&[]).map(|_| ())
+    }
+    /// Native filter borrowing `blocked` (ascending link IDs) for one call.
+    pub(crate) fn native(&self, blocked: &[u32]) -> Result<ara_nav_sys::Filter, NavError> {
         if self
             .costs
             .iter()
@@ -39,6 +44,12 @@ impl QueryFilter {
             costs: self.costs,
             include: self.include,
             exclude: self.exclude,
+            blocked: if blocked.is_empty() {
+                std::ptr::null()
+            } else {
+                blocked.as_ptr()
+            },
+            blocked_count: blocked.len().min(i32::MAX as usize) as i32,
         })
     }
     /// Whether a particular area can be traversed.
@@ -52,7 +63,11 @@ struct MeshInner {
     profile: crate::AgentProfile,
     hash: CacheKey,
     links: Vec<OffMeshLink>,
+    walls: ara_crowd::Walls,
 }
+/// Wall index cell size: covers the crowd wall look-ahead at up to 9 m/s.
+const WALL_CELL: f32 = 4.0;
+
 /// Cheap shared handle to a fully assembled immutable tiled mesh.
 #[derive(Clone)]
 pub struct NavMesh {
@@ -68,14 +83,32 @@ impl std::fmt::Debug for NavMesh {
 impl NavMesh {
     /// Assembles an artifact OFFLINE/ON A WORKER before a tick-boundary publication.
     pub fn from_artifact(artifact: &BakeArtifact) -> Result<Self, NavError> {
+        let native = native::Mesh::new(artifact)?;
+        // Boundary edges for crowd avoidance, in deterministic tile/polygon order.
+        let walls: Vec<_> = native
+            .walls()
+            .into_iter()
+            .map(|w| ara_crowd::Wall { a: w.a, b: w.b })
+            .collect();
+        let walls = ara_crowd::Walls::new(&walls, WALL_CELL)
+            .map_err(|e| NavError::new("invalidTile", e.0))?;
         Ok(Self {
             inner: Arc::new(MeshInner {
-                native: native::Mesh::new(artifact)?,
+                native,
                 profile: artifact.settings.agent,
                 hash: artifact.content_hash(),
                 links: artifact.links.clone(),
+                walls,
             }),
         })
+    }
+    /// Walkable-surface boundary for crowd avoidance (built with the mesh).
+    pub fn walls(&self) -> &ara_crowd::Walls {
+        &self.inner.walls
+    }
+    /// Authored links baked into this revision, sorted by ID.
+    pub fn links(&self) -> &[OffMeshLink] {
+        &self.inner.links
     }
     /// Content identity suitable for replay/version checks.
     pub fn content_hash(&self) -> CacheKey {
@@ -91,15 +124,29 @@ impl NavMesh {
             native: self.inner.native.query(16384)?,
             extent: [2.0, 4.0, 2.0],
             capacity: 4096,
+            blocked: Vec::new(),
         })
     }
     /// Batches paths on the caller's Rayon pool, retaining input/result order.
     /// Each worker owns its query scratch; the shared mesh is never locked.
     pub fn paths(&self, requests: &[PathRequest]) -> Vec<Result<NavPath, NavError>> {
+        self.paths_blocked(requests, &[])
+    }
+    /// Like [`NavMesh::paths`], never traversing the `blocked` off-mesh link IDs.
+    pub fn paths_blocked(
+        &self,
+        requests: &[PathRequest],
+        blocked: &[u32],
+    ) -> Vec<Result<NavPath, NavError>> {
+        // Each chunk allocates one query; keep chunks large but spread small batches.
+        let chunk = (requests.len() / (rayon::current_num_threads() * 2)).clamp(16, 256);
         let chunks: Vec<_> = requests
-            .par_chunks(256)
+            .par_chunks(chunk)
             .map(|chunk| {
                 let mut query = self.query();
+                if let Ok(q) = &mut query {
+                    q.set_blocked_links(blocked);
+                }
                 chunk
                     .iter()
                     .map(|r| match &mut query {
@@ -114,9 +161,6 @@ impl NavMesh {
     pub(crate) fn native(&self) -> &native::Mesh {
         &self.inner.native
     }
-    pub(crate) fn links(&self) -> &[OffMeshLink] {
-        &self.inner.links
-    }
 }
 
 /// Thread-local mutable scratch borrowing an immutable mesh.
@@ -124,8 +168,17 @@ pub struct NavQuery<'a> {
     native: native::Query<'a>,
     extent: [f32; 3],
     capacity: usize,
+    blocked: Vec<u32>,
 }
 impl NavQuery<'_> {
+    /// Off-mesh link IDs that paths and visibility must not traverse (closed doors,
+    /// absent elevators). Any order; stored ascending without duplicates.
+    pub fn set_blocked_links(&mut self, links: &[u32]) {
+        self.blocked.clear();
+        self.blocked.extend_from_slice(links);
+        self.blocked.sort_unstable();
+        self.blocked.dedup();
+    }
     /// Sets nearest-point search half extents; Y may differ from the horizontal radius.
     pub fn set_extent(&mut self, extent: [f32; 3]) -> Result<(), NavError> {
         if !finite(extent) || extent.iter().any(|v| *v <= 0.0 || *v > 10000.0) {
@@ -155,7 +208,7 @@ impl NavQuery<'_> {
         filter: &QueryFilter,
     ) -> Result<Option<NearestPoint>, NavError> {
         check_points(point, point)?;
-        let f = filter.native()?;
+        let f = filter.native(&self.blocked)?;
         Ok(self
             .native
             .nearest(point, self.extent, &f)
@@ -170,9 +223,13 @@ impl NavQuery<'_> {
         filter: &QueryFilter,
     ) -> Result<NavPath, NavError> {
         check_points(start, end)?;
-        let result = self
-            .native
-            .path(start, end, self.extent, &filter.native()?, self.capacity)?;
+        let result = self.native.path(
+            start,
+            end,
+            self.extent,
+            &filter.native(&self.blocked)?,
+            self.capacity,
+        )?;
         let corners = result
             .corners
             .iter()
@@ -197,9 +254,9 @@ impl NavQuery<'_> {
         filter: &QueryFilter,
     ) -> Result<RaycastHit, NavError> {
         check_points(start, end)?;
-        let (fraction, normal) = self
-            .native
-            .raycast(start, end, self.extent, &filter.native()?)?;
+        let (fraction, normal) =
+            self.native
+                .raycast(start, end, self.extent, &filter.native(&self.blocked)?)?;
         Ok(RaycastHit {
             fraction,
             normal,
@@ -221,7 +278,7 @@ impl NavQuery<'_> {
         check_points(start, end)?;
         Ok(self
             .native
-            .visible(start, end, self.extent, &filter.native()?))
+            .visible(start, end, self.extent, &filter.native(&self.blocked)?))
     }
 }
 fn check_points(a: [f32; 3], b: [f32; 3]) -> Result<(), NavError> {

@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             area: 1,
             bidirectional: true,
             enabled: true,
+            ..OffMeshLink::default()
         }],
         obstacles: vec![Obstacle {
             id: 1,
@@ -57,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 min: [10.0, -1.0, 6.0],
                 max: [14.0, 3.0, 18.0],
             },
+            area: Obstacle::CARVE,
         }],
     };
     let artifact = Baker::new(None).bake(&input, None)?;

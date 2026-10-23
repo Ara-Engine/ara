@@ -156,6 +156,7 @@ fn counterflow_agents_clear_shared_obstacle_corners_and_arrive() {
             min: [10.0, -1.0, 6.0],
             max: [14.0, 3.0, 18.0],
         },
+        area: Obstacle::CARVE,
     });
     let (_, mesh) = bake(&input);
     let mut world = World::new();
@@ -229,6 +230,7 @@ fn published_cutout_invalidates_paths_and_invalid_agent_does_not_block_neighbors
             min: [7.0, -1.0, 0.0],
             max: [9.0, 3.0, 16.0],
         },
+        area: Obstacle::CARVE,
     });
     let changed = baker.bake(&input, Some(&initial)).unwrap();
     world

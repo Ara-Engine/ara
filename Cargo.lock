@@ -954,6 +954,7 @@ dependencies = [
 name = "ara-nav"
 version = "0.0.0"
 dependencies = [
+ "ara-crowd",
  "ara-diag",
  "ara-json",
  "ara-nav-sys",

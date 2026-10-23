@@ -18,9 +18,22 @@ struct Query {
     std::vector<unsigned char> flags;
     ~Query() { dtFreeNavMeshQuery(query); }
 };
-dtQueryFilter filter(const AnFilter& f) {
-    dtQueryFilter result; result.setIncludeFlags(f.include); result.setExcludeFlags(f.exclude);
+// Area filter plus runtime-blocked off-mesh links (closed doors, absent elevators),
+// so gameplay can gate connections without rebaking. Needs DT_VIRTUAL_QUERYFILTER.
+struct LinkFilter : dtQueryFilter {
+    const unsigned int* blocked = nullptr; int count = 0;
+    bool passFilter(const dtPolyRef ref, const dtMeshTile* tile, const dtPoly* poly) const override {
+        if (!dtQueryFilter::passFilter(ref, tile, poly)) return false;
+        if (count == 0 || poly->getType() != DT_POLYTYPE_OFFMESH_CONNECTION) return true;
+        const int index = static_cast<int>(poly - tile->polys) - tile->header->offMeshBase;
+        if (index < 0 || index >= tile->header->offMeshConCount) return true;
+        return !std::binary_search(blocked, blocked + count, tile->offMeshCons[index].userId);
+    }
+};
+LinkFilter filter(const AnFilter& f) {
+    LinkFilter result; result.setIncludeFlags(f.include); result.setExcludeFlags(f.exclude);
     for (int i=0;i<16;++i) result.setAreaCost(i,f.costs[i]);
+    result.blocked = f.blocked; result.count = f.blocked_count > 0 ? f.blocked_count : 0;
     return result;
 }
 // The byte format is private, local-endian, pinned to this Detour revision.
@@ -197,4 +210,57 @@ extern "C" int an_crowd_step(const void* nav,AnAgent* agents,int count,float dt)
         for(int i=0;i<count;++i) { const auto* a=crowd->getAgent(indices[i]); dtVcopy(agents[i].position,a->npos); dtVcopy(agents[i].velocity,a->vel); }
         return 0;
     } catch(...) { return 5; }
+}
+namespace {
+// True when edge `k` of ground polygon `p` has a link (internal neighbour or a
+// stitched neighbouring tile). Unlinked edges bound the walkable surface.
+bool linked(const dtMeshTile* t, const dtPoly& p, int k) {
+    if (!(p.neis[k] & DT_EXT_LINK)) return p.neis[k] != 0;
+    for (unsigned int l = p.firstLink; l != DT_NULL_LINK; l = t->links[l].next)
+        if (t->links[l].edge == k) return true;
+    return false;
+}
+}
+// Boundary edges of every loaded tile, in tile slot then polygon order. Returns the
+// total; writes at most cap entries.
+extern "C" int an_walls(const void* nav, AnWall* out, int cap) {
+    auto* mesh = static_cast<const dtNavMesh*>(nav); int count = 0;
+    for (int i = 0; i < mesh->getMaxTiles(); ++i) {
+        const dtMeshTile* t = mesh->getTile(i); if (!t->header) continue;
+        for (int j = 0; j < t->header->offMeshBase; ++j) {
+            const dtPoly& p = t->polys[j];
+            for (int k = 0; k < p.vertCount; ++k) {
+                if (linked(t, p, k)) continue;
+                if (count < cap) {
+                    std::memcpy(out[count].a, &t->verts[3 * p.verts[k]], 12);
+                    std::memcpy(out[count].b, &t->verts[3 * p.verts[(k + 1) % p.vertCount]], 12);
+                }
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+// Polygon edges lying on tile borders (Detour portal edges), linked or not.
+extern "C" int an_borders(const void* nav, AnBorder* out, int cap) {
+    auto* mesh = static_cast<const dtNavMesh*>(nav); int count = 0;
+    for (int i = 0; i < mesh->getMaxTiles(); ++i) {
+        const dtMeshTile* t = mesh->getTile(i); if (!t->header) continue;
+        for (int j = 0; j < t->header->offMeshBase; ++j) {
+            const dtPoly& p = t->polys[j];
+            for (int k = 0; k < p.vertCount; ++k) {
+                if (!(p.neis[k] & DT_EXT_LINK)) continue;
+                if (count < cap) {
+                    auto& b = out[count];
+                    std::memcpy(b.a, &t->verts[3 * p.verts[k]], 12);
+                    std::memcpy(b.b, &t->verts[3 * p.verts[(k + 1) % p.vertCount]], 12);
+                    b.tile_x = t->header->x; b.tile_z = t->header->y;
+                    b.side = static_cast<unsigned char>(p.neis[k] & 0xff);
+                    b.linked = linked(t, p, k) ? 1 : 0; b.area = p.getArea();
+                }
+                ++count;
+            }
+        }
+    }
+    return count;
 }

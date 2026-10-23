@@ -53,7 +53,7 @@ pub struct Link {
     /// Zero for one-way, one for bidirectional.
     pub bidirectional: u8,
 }
-/// World-space temporary cut-out box.
+/// World-space temporary obstacle box.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Box3 {
@@ -61,8 +61,10 @@ pub struct Box3 {
     pub min: [f32; 3],
     /// Upper bound.
     pub max: [f32; 3],
+    /// Area 0..15 relabels walkable spans inside; 255 carves them out.
+    pub area: u8,
 }
-/// Detour area costs and polygon flag masks.
+/// Detour area costs, polygon flag masks and runtime-blocked links.
 #[repr(C)]
 pub struct Filter {
     /// Finite traversal costs of at least one.
@@ -71,6 +73,10 @@ pub struct Filter {
     pub include: u16,
     /// Forbidden area bits.
     pub exclude: u16,
+    /// Ascending off-mesh link IDs that must not be traversed (may be null).
+    pub blocked: *const u32,
+    /// Number of entries in `blocked`.
+    pub blocked_count: i32,
 }
 /// One Detour funnel corner.
 #[repr(C)]
@@ -105,6 +111,34 @@ pub struct Agent {
     pub include: u16,
     /// Forbidden area bits.
     pub exclude: u16,
+}
+/// One unlinked polygon edge: the boundary of the walkable surface.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct Wall {
+    /// First endpoint.
+    pub a: [f32; 3],
+    /// Second endpoint.
+    pub b: [f32; 3],
+}
+/// One polygon edge lying on a tile border (a Detour portal edge).
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+pub struct Border {
+    /// First endpoint.
+    pub a: [f32; 3],
+    /// Second endpoint.
+    pub b: [f32; 3],
+    /// Owning tile X.
+    pub tile_x: i32,
+    /// Owning tile Z.
+    pub tile_z: i32,
+    /// Portal direction: 0 = +X, 2 = +Z, 4 = -X, 6 = -Z.
+    pub side: u8,
+    /// One when a loaded neighbouring tile is stitched to this edge.
+    pub linked: u8,
+    /// Area of the owning polygon.
+    pub area: u8,
 }
 /// Renderer-independent triangle emitted from the runtime mesh.
 #[repr(C)]
@@ -198,4 +232,8 @@ unsafe extern "C" {
     pub fn an_debug(mesh: *const c_void, out: *mut DebugTriangle, cap: i32) -> i32;
     /// Runs transient DetourCrowd avoidance from complete ECS state, in input order.
     pub fn an_crowd_step(mesh: *const c_void, agents: *mut Agent, count: i32, dt: f32) -> i32;
+    /// Writes at most cap boundary edges; returns the total count.
+    pub fn an_walls(mesh: *const c_void, out: *mut Wall, cap: i32) -> i32;
+    /// Writes at most cap tile-border edges; returns the total count.
+    pub fn an_borders(mesh: *const c_void, out: *mut Border, cap: i32) -> i32;
 }

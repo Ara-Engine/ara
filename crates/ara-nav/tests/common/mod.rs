@@ -100,6 +100,7 @@ pub fn level() -> BakeInput {
         area: 1,
         bidirectional: true,
         enabled: true,
+        ..OffMeshLink::default()
     });
     request
 }

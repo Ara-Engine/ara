@@ -12,8 +12,13 @@ struct AnLink {
     unsigned int id;
     unsigned char area, bidirectional;
 };
-struct AnBox { float min[3], max[3]; };
-struct AnFilter { float costs[16]; unsigned short include, exclude; };
+// area: 0..15 relabels walkable spans; 255 carves them out.
+struct AnBox { float min[3], max[3]; unsigned char area; };
+// blocked: ascending off-mesh link user IDs that queries must not traverse.
+struct AnFilter {
+    float costs[16]; unsigned short include, exclude;
+    const unsigned int* blocked; int blocked_count;
+};
 struct AnCorner { float position[3]; unsigned int polygon; unsigned char flags; };
 struct AnAgent {
     float position[3], velocity[3], desired[3];
@@ -21,6 +26,13 @@ struct AnAgent {
     unsigned short include, exclude;
 };
 struct AnDebug { float a[3], b[3], c[3]; unsigned char area; };
+struct AnWall { float a[3], b[3]; };
+// side: Detour portal direction (0 = +X, 2 = +Z, 4 = -X, 6 = -Z).
+struct AnBorder {
+    float a[3], b[3];
+    int tile_x, tile_z;
+    unsigned char side, linked, area;
+};
 
 extern "C" {
 int an_bake(const AnConfig*, const float*, int, const int*, const unsigned char*, int,
@@ -41,4 +53,6 @@ int an_polygon_area(void*, unsigned int);
 int an_debug_count(const void*);
 int an_debug(const void*, AnDebug*, int);
 int an_crowd_step(const void*, AnAgent*, int, float);
+int an_walls(const void*, AnWall*, int);
+int an_borders(const void*, AnBorder*, int);
 }

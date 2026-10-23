@@ -1,7 +1,7 @@
 //! Worker-side incremental tile baking and content-addressed storage.
 use crate::{
     BakeArtifact, BakeInput, BakeSettings, BakeStats, Bounds, CacheKey, Geometry, NavError,
-    OffMeshLink, TileCoord, TileData, native,
+    Obstacle, OffMeshLink, TileCoord, TileData, native,
 };
 use std::{
     collections::BTreeMap,
@@ -172,7 +172,7 @@ fn canonical_geometry(triangles: &[Triangle]) -> Geometry {
     }
     geometry
 }
-fn tile_annotations(input: &BakeInput, coord: TileCoord) -> (Vec<OffMeshLink>, Vec<Bounds>) {
+fn tile_annotations(input: &BakeInput, coord: TileCoord) -> (Vec<OffMeshLink>, Vec<(Bounds, u8)>) {
     let bounds = input.settings.tile_bounds(coord);
     let halo = bounds.expanded(input.settings.halo());
     let mut links: Vec<_> = input
@@ -193,8 +193,12 @@ fn tile_annotations(input: &BakeInput, coord: TileCoord) -> (Vec<OffMeshLink>, V
         .iter()
         .filter(|b| halo.intersects(b.bounds.expanded(input.settings.agent.radius)))
         .collect();
-    obstacles.sort_by_key(|b| b.id);
-    (links, obstacles.into_iter().map(|b| b.bounds).collect())
+    // Relabelled areas first, cut-outs last, so a carve always wins an overlap.
+    obstacles.sort_by_key(|b| (b.area == Obstacle::CARVE, b.id));
+    (
+        links,
+        obstacles.into_iter().map(|b| (b.bounds, b.area)).collect(),
+    )
 }
 fn cmp_point(a: &[f32; 3], b: &[f32; 3]) -> std::cmp::Ordering {
     a.iter()
@@ -208,12 +212,17 @@ fn tile_key(
     coord: TileCoord,
     g: &Geometry,
     l: &[OffMeshLink],
-    b: &[Bounds],
+    b: &[(Bounds, u8)],
 ) -> Result<CacheKey, NavError> {
-    let bytes = postcard::to_allocvec(&(settings, coord, g, l, b))
+    // Only fields Recast sees: traversal kind/duration changes must not rebake.
+    let links: Vec<_> = l
+        .iter()
+        .map(|l| (l.id, l.start, l.end, l.radius, l.area, l.bidirectional))
+        .collect();
+    let bytes = postcard::to_allocvec(&(settings, coord, g, links, b))
         .map_err(|e| NavError::new("encode", e.to_string()))?;
     let mut h = blake3::Hasher::new();
-    h.update(b"ara-nav-v1-recast-b4554541-strict-fp");
+    h.update(b"ara-nav-v2-recast-b4554541-strict-fp-vfilter");
     h.update(std::env::consts::ARCH.as_bytes());
     h.update(std::env::consts::OS.as_bytes());
     h.update(if cfg!(target_endian = "little") {

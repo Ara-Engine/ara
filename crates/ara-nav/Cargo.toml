@@ -11,6 +11,7 @@ profiling = ["dep:ara-profile"]
 [dependencies]
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 ara-nav-sys = { path = "../ara-nav-sys" }
+ara-crowd = { path = "../ara-crowd" }
 ara-schema = { path = "../ara-schema" }
 ara-diag = { path = "../ara-diag" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
