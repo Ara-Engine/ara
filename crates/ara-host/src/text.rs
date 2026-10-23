@@ -126,6 +126,13 @@ pub fn summary(
         tree.doc,
         tree.path
     );
+    let conflicts = ws.doc(tree.doc.as_str()).map_or(0, |d| d.conflicts.len());
+    if conflicts > 0 {
+        out.push_str(&format!(
+            "! {conflicts} unresolved merge conflicts (ARA1209): `ara check` lists them; `ara resolve {} --pick <record>:<path>=ours|theirs` settles one\n",
+            tree.path
+        ));
+    }
     for (addr, d) in visible.get(offset..end).unwrap_or_default() {
         if let Some(e) = tree.get(addr) {
             let prefab = tree.prefab_name(ws, addr);

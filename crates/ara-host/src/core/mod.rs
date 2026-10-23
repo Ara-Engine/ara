@@ -15,6 +15,7 @@
 //! | `jobs.list/status/start/cancel` | `ara_jobs` (`action`) |
 
 mod edit;
+mod pick;
 mod read;
 mod session;
 
@@ -22,6 +23,8 @@ use ara_diag::Diagnostic;
 use ara_proto::Scope;
 use ara_schema::SchemaDb;
 use serde_json::Value;
+
+pub(crate) use edit::list_commands;
 
 use crate::params::*;
 use crate::service::{Cx, Method, Service, parse};

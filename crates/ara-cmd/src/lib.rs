@@ -9,6 +9,8 @@
 //! - [`Registry::apply`] runs a [`Batch`] of calls as one transaction. Calls can mint
 //!   symbolic IDs (`"id": "$crate"`) that later calls use; the result maps them to
 //!   real IDs. `dryRun` returns the diff and the same errors without applying.
+//! - Entity params take IDs, addresses, symbols or name selectors (`name:Crate`,
+//!   `name:Floor/Crate`); [`select`] resolves selectors before validation.
 //! - Errors are [`Diagnostic`](ara_diag::Diagnostic)s with stable codes, the call
 //!   index and the params path.
 //!
@@ -18,6 +20,7 @@
 pub mod builtin;
 mod ctx;
 mod registry;
+pub mod select;
 
 pub use ctx::{EditCtx, JobCtx, ReadCtx, Target};
 pub use registry::{

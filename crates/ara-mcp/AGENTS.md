@@ -7,12 +7,15 @@ Depends on ara-proto, ara-diag.
 
 ## Public API
 
-- `Adapter::new()`; `handle(&mut dyn Endpoint, msg) -> Option<Value>` (one
-  JSON-RPC message), `tools(ep)`, `call_tool(ep, name, args)`,
+- `Adapter::new()` (stateless: Streamable HTTP) and `Adapter::per_connection()`
+  (one client, stdio: keeps that client's session, so `session` is optional);
+  `handle(&mut dyn Endpoint, msg) -> Option<Value>` (one JSON-RPC message),
+  `tools(ep)`, `call_tool(ep, name, args)`,
   `handle_http(ep, header, body) -> (status, Option<body>)`.
-- `serve_stdio(ep, input, output)`: newline-delimited JSON until EOF.
+- `serve_stdio(ep, input, output)`: newline-delimited JSON until EOF, per
+  connection.
 - `tools::TOOLS` (name, title, description, reserved method family),
-  `tools::definitions(catalog)`, `tools::methods_of(catalog, tool)`.
+  `tools::definitions(catalog, optional_session)`, `tools::methods_of(catalog, tool)`.
 - `tool_result(value)`, `tool_error(&RpcError)`; `SUPPORTED`, `MODERN`.
 
 ## Tools (fixed order)
@@ -40,6 +43,9 @@ Depends on ara-proto, ara-diag.
 - Legacy: `initialize` (negotiates 2025-11-25 and older), `ping`; requests without
   `MCP-Protocol-Version` are treated as legacy.
 - The session is an ordinary tool argument (`session` from `ara_session begin`).
+  Per connection, a call without one uses the session the client began, else one
+  begun on first use (client named after `clientInfo.name`, made author-safe:
+  `Claude Code` → `agent:claude-code`); `session.end` of it clears it.
 
 ## Results
 
@@ -50,6 +56,7 @@ diagnostics plus their JSON (fixes included). Unknown tools are protocol errors
 
 ## Testing
 
-`cargo test -p ara-mcp`: a fake endpoint serving `ara_host::core_methods()`.
+`cargo test -p ara-mcp`: a fake endpoint serving `ara_host::core_methods()`;
+per-connection sessions (optional `session`, one begin, reuse).
 The `tools` snapshot is the whole generated `tools/list`; review its diff whenever
 method params, doc comments or tool descriptions change.

@@ -1,0 +1,24 @@
+[package]
+name = "arabench"
+description = "arabench: the agent-ergonomics benchmark. Drives headless agent CLIs against fresh Ara projects and verifies the results deterministically."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-host.workspace = true
+ara-json.workspace = true
+ara-merge.workspace = true
+ara-ops.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
+ara-schema.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,310 @@
+{
+  "label": "probe2",
+  "agent": "codex:gpt-6-luna",
+  "suite": "v0",
+  "started": "2026-10-23T01:40:50Z",
+  "engine": "d3fa6b3+dirty",
+  "results": [
+    {
+      "task": "scene-floor-crate",
+      "area": "assembly",
+      "pass": false,
+      "checks": [
+        {
+          "what": "one `Floor` in levels/main.scene",
+          "ok": false,
+          "detail": "found 0"
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "shell": 5
+      },
+      "wallMs": 23112,
+      "tokens": {
+        "input": 24285,
+        "cacheRead": 101376,
+        "cacheWrite": 0,
+        "output": 574
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The scene is still empty: `ara do` requires a command name, so it rejected the batch before applying anything. I haven’t changed any files. I’ll need to run the two `entity.create` commands separately, each with a `why`, to build the floor and its child crate."
+    },
+    {
+      "task": "diag-fix-typos",
+      "area": "diagnostics",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Workbench collider keeps its 2 x 1 x 1 m size",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps 1200 lm",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps its 6 m range",
+          "ok": true
+        }
+      ],
+      "turns": 15,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 2,
+        "edit": 3,
+        "shell": 9
+      },
+      "wallMs": 54672,
+      "tokens": {
+        "input": 41957,
+        "cacheRead": 568960,
+        "cacheWrite": 0,
+        "output": 2327
+      },
+      "codes": {
+        "ARA1001": 2,
+        "ARA1101": 2
+      },
+      "rawEdits": [
+        "C:\\Users\\snowy\\AppData\\Local\\Temp\\arabench\\codex-gpt-6-luna-diag-fix-typos-7500-193f7cbc-1\\proj\\levels\\outpost.scene",
+        "C:\\Users\\snowy\\AppData\\Local\\Temp\\arabench\\codex-gpt-6-luna-diag-fix-typos-7500-193f7cbc-1\\proj\\levels\\outpost.scene",
+        "C:\\Users\\snowy\\AppData\\Local\\Temp\\arabench\\codex-gpt-6-luna-diag-fix-typos-7500-193f7cbc-1\\proj\\levels\\outpost.scene"
+      ],
+      "externalEdits": 1,
+      "dryRuns": 0,
+      "finalMessage": "Fixed the two misspelled fields in [outpost.scene](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-diag-fix-typos-7500-193f7cbc-1/proj/levels/outpost.scene): the bench collider retains size `[2, 1, 1]`, and the work light retains intensity `1200`.\n\n`ara check --json` now reports 0 errors and 0 warnings."
+    },
+    {
+      "task": "schema-door-fields",
+      "area": "schema",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_door01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the door opens by itself",
+          "ok": true,
+          "detail": "Some(Bool(true))"
+        },
+        {
+          "what": "trigger radius is 3 m",
+          "ok": true
+        },
+        {
+          "what": "speed halved to 0.6 m/s",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "shell": 5
+      },
+      "wallMs": 18802,
+      "tokens": {
+        "input": 12813,
+        "cacheRead": 124672,
+        "cacheWrite": 0,
+        "output": 635
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Updated GateDoor in [outpost.scene](/C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-schema-door-fields-7500-193fe058-2/proj/levels/outpost.scene): it now opens automatically within 3 m, at 0.6 m/s—half its previous speed. `ara check` passed with no errors or warnings."
+    },
+    {
+      "task": "batch-watchtower",
+      "area": "batch",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Watchtower` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Watchtower` is a child of the scene root",
+          "ok": true,
+          "detail": "parent is None"
+        },
+        {
+          "what": "Watchtower at (10, 0, -6)",
+          "ok": true
+        },
+        {
+          "what": "one `Platform` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Platform` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_x7n1\")"
+        },
+        {
+          "what": "Platform local position",
+          "ok": true
+        },
+        {
+          "what": "one `Ladder` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Ladder` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_x7n1\")"
+        },
+        {
+          "what": "Ladder local position",
+          "ok": true
+        },
+        {
+          "what": "a lamp instance on the Platform",
+          "ok": true
+        },
+        {
+          "what": "all of it was created in one transaction",
+          "ok": true,
+          "detail": "created by [\"tx_c67h2zeg\", \"tx_c67h2zeg\", \"tx_c67h2zeg\", \"tx_c67h2zeg\"]"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 10,
+      "toolCalls": {
+        "ara_apply": 2,
+        "ara_inspect": 1,
+        "ara_schema": 3,
+        "shell": 4
+      },
+      "wallMs": 30409,
+      "tokens": {
+        "input": 26196,
+        "cacheRead": 307968,
+        "cacheWrite": 0,
+        "output": 1443
+      },
+      "codes": {
+        "ARA1101": 1,
+        "ARA1105": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "Added the watchtower in one Ara transaction, `tx_c67h2zeg`, and the scene validates with no errors or warnings.\n\n- **Watchtower** at `(10, 0, -6)`\n  - **Platform** at local `(0, 4, 0)`, with the lamp prefab on it\n  - **Ladder** at local `(1, 2, 0)`\n\nThe Platform and Ladder are named entities with transforms; no matching mesh assets existed in the project. The change remains unreviewed until accepted with `ara accept`."
+    },
+    {
+      "task": "multi-storage-room",
+      "area": "multi-step",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `StorageRoom` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageRoom at (-8, 0, 4)",
+          "ok": true
+        },
+        {
+          "what": "StorageRoom has a box collider",
+          "ok": true,
+          "detail": "Some(String(\"box\"))"
+        },
+        {
+          "what": "collider is 6 x 3 x 6 m",
+          "ok": true
+        },
+        {
+          "what": "three crates inside the room",
+          "ok": true,
+          "detail": "3 crates"
+        },
+        {
+          "what": "a crate at local (-1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (0, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "only the middle crate is red",
+          "ok": true,
+          "detail": "red [false, true, false]"
+        },
+        {
+          "what": "one `StorageLight` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageLight is a point light",
+          "ok": true,
+          "detail": "Some(String(\"point\"))"
+        },
+        {
+          "what": "StorageLight is 600 lm",
+          "ok": true
+        },
+        {
+          "what": "StorageLight 2.5 m above the center",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 9,
+      "toolCalls": {
+        "ara_apply": 3,
+        "shell": 6
+      },
+      "wallMs": 31228,
+      "tokens": {
+        "input": 30135,
+        "cacheRead": 238464,
+        "cacheWrite": 0,
+        "output": 1962
+      },
+      "codes": {
+        "ARA1204": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 2,
+      "finalMessage": "Added the storage room to `levels/outpost.scene` at **(-8, 0, 4)** with a **6 × 3 × 6 m** box collider. It contains three crate prefab instances along X at local **(-1.5, 0, 0)**, **(0, 0, 0)**, and **(1.5, 0, 0)**; the middle crate’s body is red. `StorageLight` is a **600 lm point light** at local **(0, 2.5, 0)**.\n\nThe changes are recorded as transaction `tx_q7f7ecx5` and await human review."
+    }
+  ]
+}

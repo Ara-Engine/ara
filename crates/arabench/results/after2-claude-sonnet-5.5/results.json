@@ -1,0 +1,1349 @@
+{
+  "label": "after2",
+  "agent": "claude:sonnet-5.5",
+  "suite": "v0",
+  "started": "2026-10-23T01:48:01Z",
+  "engine": "09cc127+dirty",
+  "results": [
+    {
+      "task": "scene-floor-crate",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Floor` in levels/main.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Floor has a box collider",
+          "ok": true,
+          "detail": "Some(String(\"box\"))"
+        },
+        {
+          "what": "Floor collider is 20 x 0.5 x 20 m",
+          "ok": true
+        },
+        {
+          "what": "one `Crate` in levels/main.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Crate` is a child of Floor",
+          "ok": true,
+          "detail": "parent is Some(\"e_faak\")"
+        },
+        {
+          "what": "Crate local position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_schema": 2
+      },
+      "wallMs": 14984,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 147876,
+        "cacheWrite": 11937,
+        "output": 837
+      },
+      "costUsd": 0.0710589,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I added both entities to `levels/main.scene`. I haven't inspected the saved scene to double-check the result.\n\n- **Floor:** has a box `Collider` sized 20 × 0.5 × 20 m (`e_faak`).\n- **Crate:** a child of Floor at local position (2, 0.5, 3) (`e_a7rr`).\n\nThe crate has no collider or mesh yet, since you didn't ask for one. Floor has no explicit transform either, so it sits at the default origin.\n\nTo undo, run `ara_session {\"action\": \"rollback\", \"to\": \"cp_razz4qdb\"}`."
+    },
+    {
+      "task": "scene-turn-and-raise",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Generator` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Generator turned 90 degrees about Y",
+          "ok": true,
+          "detail": "rotation [0.0, 90.0, 0.0]"
+        },
+        {
+          "what": "Generator raised 1.5 m",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_query": 1
+      },
+      "wallMs": 14625,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 152574,
+        "cacheWrite": 12913,
+        "output": 755
+      },
+      "costUsd": 0.07460959999999998,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I turned the Generator 90° around the vertical (Y) axis and raised it 1.5 m in the outpost level. Its position went from (6, 0, -4) to (6, 1.5, -4), and its rotation went from (0, 0, 0) to (0, 90, 0).\n\nI didn't check the result in play mode or the viewport.\n\nI assumed \"a quarter turn\" meant 90° with the sign you get from setting Y to +90. If you wanted the other direction, say so and I'll set it to -90°. I didn't touch GeneratorCrate, which sits next to it at (7.5, 0, -4).\n\nTo undo this, run `ara_session {\"action\": \"rollback\", \"to\": \"cp_tcwxqev0\"}`."
+    },
+    {
+      "task": "scene-group-barrels",
+      "area": "assembly",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Barrels` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Barrels` is a child of the scene root",
+          "ok": true,
+          "detail": "parent is None"
+        },
+        {
+          "what": "Barrels holds Barrel, Barrel.001, Barrel.002 in order",
+          "ok": true,
+          "detail": "children [\"Barrel\", \"Barrel.001\", \"Barrel.002\"]"
+        },
+        {
+          "what": "`e_brl001` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` keeps its world position",
+          "ok": true
+        },
+        {
+          "what": "Barrels sits at the origin",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 2,
+        "ara_query": 1
+      },
+      "wallMs": 18358,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 154553,
+        "cacheWrite": 14816,
+        "output": 1005
+      },
+      "costUsd": 0.0849238,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I created an empty `Barrels` entity (`e_fm1y`) at the origin in the outpost scene. It sits where the barrels used to be in the hierarchy. `Barrel`, `Barrel.001` and `Barrel.002` are now its children, in that order.\n\nThe new parent has an identity transform, so the barrels' local positions equal their world positions. They are still at (-3,0,2), (-3,0,3.2) and (-3,5,4.4). I didn't re-query after the edit, so that rests on the identity parent rather than a check.\n\n`Barrel.002` sits at y=5, unlike the other two at y=0. I left it there since you asked for no movement.\n\nTo undo, run `ara_session` w"
+    },
+    {
+      "task": "component-beacon-light",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Beacon` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "Beacon has a Light",
+          "ok": true,
+          "detail": "no Light"
+        },
+        {
+          "what": "the light is a point light",
+          "ok": true,
+          "detail": "Some(String(\"point\"))"
+        },
+        {
+          "what": "intensity is 1500 lm",
+          "ok": true
+        },
+        {
+          "what": "range is 8 m",
+          "ok": true
+        },
+        {
+          "what": "the light is orange",
+          "ok": true,
+          "detail": "color [1.0, 0.25, 0.02, 1.0]"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_query": 1,
+        "ara_schema": 1
+      },
+      "wallMs": 14743,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 118336,
+        "cacheWrite": 13010,
+        "output": 647
+      },
+      "costUsd": 0.0704901,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The Beacon (`e_beacon1` in `levels/outpost.scene`) now has a point light: 1500 lm, 8 m range, orange. I haven't played or rendered the scene, so I haven't checked how it looks.\n\nThe color is `[1, 0.25, 0.02, 1]` in linear space, which is a warm orange. If you want it redder or more yellow, tell me and I'll adjust it."
+    },
+    {
+      "task": "property-halve-lights",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "still four lights",
+          "ok": true,
+          "detail": "4 lights"
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` intensity halved",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "Glob": 1,
+        "Grep": 1,
+        "Read": 3,
+        "ToolSearch": 1,
+        "ara_apply": 2
+      },
+      "wallMs": 26681,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 180891,
+        "cacheWrite": 14166,
+        "output": 1903
+      },
+      "costUsd": 0.0939347,
+      "codes": {
+        "ARA1111": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I halved the intensity of the lights in the outpost level, and the engine applied the change without errors. I didn't run `ara check` or reload the level to look at it.\n\n| Light | Before | After |\n|---|---|---|\n| WorkLight (on the bench) | 1200 | 600 |\n| DoorLamp bulb | 800 | 400 |\n| YardLamp bulb | 800 | 400 |\n| Floodlight | 0 | 0 (halving 0 is still 0) |\n\nThe two lamps share one prefab, so I set the new intensity as an override on each lamp in `outpost.scene`. The prefab itself still says 800, which means any other level using it keeps its current brightness. Nothing else uses it today: `mai"
+    },
+    {
+      "task": "component-remove-rigidbody",
+      "area": "components",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel has no RigidBody",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "Barrel keeps its Collider",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` keeps its RigidBody",
+          "ok": true,
+          "detail": "removed"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_query": 1
+      },
+      "wallMs": 17490,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 118079,
+        "cacheWrite": 12571,
+        "output": 485
+      },
+      "costUsd": 0.0672358,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I removed the `RigidBody` from `Barrel` in the outpost level, and its `Collider` is still there. The change is applied as revision 1 of `levels/outpost.scene`. I didn't check the entity afterwards.\n\nThe removed rigid body had a mass of 30. If you want it back, that's the value to restore. `Barrel.001` and `Barrel.002` still have their rigid bodies."
+    },
+    {
+      "task": "prefab-stack-crates",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "two new crate instances",
+          "ok": true,
+          "detail": "2 new"
+        },
+        {
+          "what": "lower crate at (4, 0, 2)",
+          "ok": true
+        },
+        {
+          "what": "upper crate at (4, 1, 2)",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_query": 1
+      },
+      "wallMs": 19567,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 193501,
+        "cacheWrite": 15499,
+        "output": 1244
+      },
+      "costUsd": 0.093943,
+      "codes": {
+        "ARA1302": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I placed two crate instances in the outpost level. I haven't checked them in play mode.\n\n- **`Crate`** is at (4, 0, 2).\n- **`Crate.001`** is at (4, 1, 2), directly on top of the first.\n\nThe crate prefab's origin appears to sit at its base, because the existing crates sit at y=0 on the floor and the lid is at +0.5. That is why the second crate is at y=1 rather than y=0.5. I did not confirm the collider's centre offset, so the stack could be off by half a metre if the origin is actually at the crate's centre.\n\nTo undo both, roll back to checkpoint `cp_dx9qmwkq` with `ara_session`."
+    },
+    {
+      "task": "prefab-tint-one-crate",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_gcrt01` still exists",
+          "ok": true
+        },
+        {
+          "what": "GeneratorCrate body is red",
+          "ok": true,
+          "detail": "tint [1.0, 0.0, 0.0, 1.0]"
+        },
+        {
+          "what": "`e_gcrt01/e_lid001` still exists",
+          "ok": true
+        },
+        {
+          "what": "its lid keeps the prefab tint",
+          "ok": true
+        },
+        {
+          "what": "`e_gtcrt1` still exists",
+          "ok": true
+        },
+        {
+          "what": "GateCrate is not tinted",
+          "ok": true
+        },
+        {
+          "what": "prefab files unchanged",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 2
+      },
+      "wallMs": 18266,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 154321,
+        "cacheWrite": 13730,
+        "output": 665
+      },
+      "costUsd": 0.0771516,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The crate next to the generator (`GeneratorCrate`, at 7.5, 0, -4) now has a red body. I changed its `MeshRenderer.tint` from white (1,1,1,1) to red (1,0,0,1). I didn't re-inspect the scene or view it in the editor to confirm.\n\nI set the tint as an override on that one instance, not on the shared crate prefab. The Lid child, `GateCrate` and every other crate are unchanged.\n\nTo undo it, run `ara_session` with `{\"action\": \"rollback\", \"to\": \"cp_9zj22c8p\"}`."
+    },
+    {
+      "task": "prefab-revert-keep-position",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "only the position override is left",
+          "ok": true,
+          "detail": "overrides [\"Transform.position\"]"
+        },
+        {
+          "what": "nothing removed from the instance",
+          "ok": true,
+          "detail": "0 removed"
+        },
+        {
+          "what": "`e_gtcrt1` still exists",
+          "ok": true
+        },
+        {
+          "what": "GateCrate stays at (12, 0, 2)",
+          "ok": true
+        },
+        {
+          "what": "GateCrate scale is back to 1",
+          "ok": true
+        },
+        {
+          "what": "`e_gtcrt1/e_lid001` still exists",
+          "ok": true
+        },
+        {
+          "what": "its lid has the prefab tint",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_query": 2
+      },
+      "wallMs": 23925,
+      "tokens": {
+        "input": 16,
+        "cacheRead": 262567,
+        "cacheWrite": 15178,
+        "output": 1458
+      },
+      "costUsd": 0.1017133,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "I reset `GateCrate` (`e_gtcrt1`) in `levels/outpost.scene` to match the crate prefab. I did a dry run first, then applied it, and I haven't re-inspected the crate since.\n\n- **Scale:** it was (2,2,2) and is back to the prefab's (1,1,1).\n- **Lid tint:** the `Lid` child was green (0,1,0,1) and is back to the prefab's value. I didn't read the prefab's lid tint directly, because the prefab inspect only showed the root `Crate` entity.\n- **Position:** untouched, still (12,0,2).\n\nI reverted only those two overrides instead of reverting the whole instance, because a full revert would also have moved th"
+    },
+    {
+      "task": "prefab-blue-bulb",
+      "area": "prefabs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the gate lamp's bulb is blue",
+          "ok": true,
+          "detail": "color [0.0, 0.0, 1.0, 1.0]"
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the yard lamp's bulb stays red",
+          "ok": true
+        },
+        {
+          "what": "prefab files unchanged",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "Glob": 1,
+        "Read": 1,
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 2
+      },
+      "wallMs": 15425,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 156201,
+        "cacheWrite": 14486,
+        "output": 806
+      },
+      "costUsd": 0.0817757,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The bulb on the DoorLamp by the gate now shines blue. I set its light color to (0, 0, 1) in `levels/outpost.scene`. I didn't play the level or check how it looks.\n\nI made the change as an override on that one lamp instance. The `lamp` prefab is untouched, so the YardLamp and every other lamp keep the default white.\n\nYou can undo it with `ara_session {\"action\": \"rollback\", \"to\": \"cp_3nabs0qt\"}`."
+    },
+    {
+      "task": "hierarchy-radio-to-bench",
+      "area": "hierarchy",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`Radio` is a child of Workbench",
+          "ok": true,
+          "detail": "parent is Some(\"e_bench1\")"
+        },
+        {
+          "what": "Radio is the Workbench's first child",
+          "ok": true,
+          "detail": "first child Some(\"Radio\")"
+        },
+        {
+          "what": "Radio local position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "Glob": 1,
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 3,
+        "ara_query": 2
+      },
+      "wallMs": 23134,
+      "tokens": {
+        "input": 14,
+        "cacheRead": 230640,
+        "cacheWrite": 15674,
+        "output": 1066
+      },
+      "costUsd": 0.0965803,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The Radio is now on the Workbench in `levels/outpost.scene`. It's the workbench's first child, ahead of WorkLight and Toolbox, at local position (0, 1, 0). I confirmed the order and position by querying the workbench's children afterward. It used to sit under the Shelf at (0, 1.5, 0).\n\nI changed nothing else. If you want to undo it, the checkpoint is `cp_0gcxhxcs`."
+    },
+    {
+      "task": "hierarchy-order-waypoints",
+      "area": "hierarchy",
+      "pass": true,
+      "checks": [
+        {
+          "what": "Patrol's children are WP1, WP2, WP3, WP4",
+          "ok": true,
+          "detail": "children [\"WP1\", \"WP2\", \"WP3\", \"WP4\"]"
+        },
+        {
+          "what": "`e_wp001` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp001` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp002` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp003` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "`e_wp004` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wp004` keeps its position",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 2,
+        "ara_query": 2
+      },
+      "wallMs": 16684,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 192206,
+        "cacheWrite": 14753,
+        "output": 927
+      },
+      "costUsd": 0.08765879999999998,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The four waypoints under Patrol in the outpost level now run WP1, WP2, WP3, WP4. I re-queried the children afterward and they come back in that order.\n\nI only changed their order under Patrol. Their positions are the same. If you want to undo it, roll back to checkpoint `cp_f9csrwrd`."
+    },
+    {
+      "task": "refs-fix-broken",
+      "area": "references",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "YardLamp is an instance of the lamp prefab again",
+          "ok": true,
+          "detail": "prefab \"@prefabs/lamp.prefab#pf_lamp0001\""
+        },
+        {
+          "what": "`e_ylamp1` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp keeps its position",
+          "ok": true
+        },
+        {
+          "what": "YardLamp keeps its red bulb",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "Generator mesh is the generator mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator.glb#ms_genr0001\"))"
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "Grep": 1,
+        "shell": 4
+      },
+      "wallMs": 78565,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 136051,
+        "cacheWrite": 7268,
+        "output": 1177
+      },
+      "costUsd": 0.0545965,
+      "codes": {},
+      "rawEdits": [
+        "cd \"C:\\Users\\snowy\\AppData\\Local\\Temp\\arabench\\claude-sonnet-5.5-refs-fix-broken-37628-338bd2dc-12\\proj\" && sed -i 's|@meshes/genrator.glb#ms_genr0002|@meshes/g"
+      ],
+      "externalEdits": 1,
+      "dryRuns": 0,
+      "finalMessage": "`ara check` now passes with 0 errors and 0 warnings. I fixed two stale references in `levels/outpost.scene`:\n\n- **Generator mesh:** `@meshes/genrator.glb#ms_genr0002` is now `@meshes/generator.glb#ms_genr0001`. Both the path typo and the ID were stale.\n- **Yard lamp prefab:** `@prefabs/lantern.prefab#pf_lantrn01` is now `@prefabs/lamp.prefab#pf_lamp0001`. `ara check` suggested `crate.prefab` as well as `lamp.prefab`. I chose `lamp.prefab` because the entity is `YardLamp` and its overrides set a `Light` color on `e_bulb01`, which exists only in the lamp prefab. That also cleared the \"prefab is "
+    },
+    {
+      "task": "merge-resolve-conflict",
+      "area": "merge",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "no `$conflicts` left",
+          "ok": true,
+          "detail": "still in the file"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "barrel keeps our name",
+          "ok": true,
+          "detail": "named \"Fuel Barrel\""
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "their floodlight change is kept",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "our generator move is kept",
+          "ok": true
+        },
+        {
+          "what": "git has no unmerged paths",
+          "ok": true
+        },
+        {
+          "what": "the merge is committed",
+          "ok": true,
+          "detail": "MERGE_HEAD still set"
+        },
+        {
+          "what": "HEAD is a merge commit",
+          "ok": true,
+          "detail": "2 parents"
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "edit": 1,
+        "shell": 4
+      },
+      "wallMs": 96635,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 136345,
+        "cacheWrite": 9470,
+        "output": 1044
+      },
+      "costUsd": 0.0621074,
+      "codes": {},
+      "rawEdits": [
+        "pwd; grep -n -E '^(<<<<<<<|=======|>>>>>>>)' levels/outpost.scene; git status --short",
+        "C:\\Users\\snowy\\AppData\\Local\\Temp\\arabench\\claude-sonnet-5.5-merge-resolve-conflict-37628-23774f20-13\\proj\\levels\\outpost.scene"
+      ],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The merge is finished and committed as `74d58d1`, and the working tree is clean.\n\n`levels/outpost.scene` had no conflict markers. The merge had already kept your name, \"Fuel Barrel\", for `e_brl001` and recorded the clash in a `$conflicts` block at the top of the scene file. That block was the only thing still marking the file as conflicted. I removed it and staged the file.\n\nI didn't open the scene in the Ara editor or run any Ara checks on it. I only read the file text: it has \"Fuel Barrel\" and the floodlight from `teammate`, with no markers left."
+    },
+    {
+      "task": "diag-fix-typos",
+      "area": "diagnostics",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Workbench collider keeps its 2 x 1 x 1 m size",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps 1200 lm",
+          "ok": true
+        },
+        {
+          "what": "WorkLight keeps its 6 m range",
+          "ok": true
+        }
+      ],
+      "turns": 2,
+      "toolCalls": {
+        "shell": 2
+      },
+      "wallMs": 59867,
+      "tokens": {
+        "input": 6,
+        "cacheRead": 77504,
+        "cacheWrite": 6305,
+        "output": 536
+      },
+      "costUsd": 0.0384719,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 1,
+      "dryRuns": 0,
+      "finalMessage": "`ara check` now reports 0 errors and 0 warnings. Both errors were typos in `levels/outpost.scene`, and I fixed them with `ara check --fix`.\n\n- **`e_bench1`:** the `Collider` field `sise` is now `size`, and it still holds `[2, 1, 1]`.\n- **`e_wlight1`:** the `Light` field `intensty` is now `intensity`, and it still holds `1200`.\n\nI looked at the file before fixing, and neither entity already had a correctly spelled field, so the renames didn't overwrite anything."
+    },
+    {
+      "task": "schema-door-fields",
+      "area": "schema",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_door01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the door opens by itself",
+          "ok": true,
+          "detail": "Some(Bool(true))"
+        },
+        {
+          "what": "trigger radius is 3 m",
+          "ok": true
+        },
+        {
+          "what": "speed halved to 0.6 m/s",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "Glob": 1,
+        "Read": 1,
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_query": 1,
+        "ara_schema": 1
+      },
+      "wallMs": 17617,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 157120,
+        "cacheWrite": 15208,
+        "output": 922
+      },
+      "costUsd": 0.0859143,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I changed the `GateDoor` in `levels/outpost.scene` so it opens by itself and slides slower. I haven't played the level or run `ara check`.\n\n- **Auto-open:** `Door.autoOpen` is now `true`.\n- **Trigger distance:** `Door.triggerRadius` is now `3` m. The schema describes this as the distance at which the door reacts to a player, measured from the door.\n- **Speed:** `Door.speed` went from 1.2 to 0.6 m/s.\n\nThe change is unreviewed until you accept or revert it."
+    },
+    {
+      "task": "undo-other-agent",
+      "area": "undo",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl001` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl002` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` is back",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the human's light change is kept",
+          "ok": true
+        },
+        {
+          "what": "the other agent's transaction is reverted",
+          "ok": true,
+          "detail": "still applied"
+        }
+      ],
+      "turns": 4,
+      "toolCalls": {
+        "Glob": 1,
+        "ToolSearch": 1,
+        "ara_session": 2
+      },
+      "wallMs": 15704,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 117013,
+        "cacheWrite": 11824,
+        "output": 493
+      },
+      "costUsd": 0.0640744,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I reverted the other agent's barrel move (`tx_qbkxwhmm`). It touched the three barrels, `e_brl001` to `e_brl003`, which are back where they were. I reverted that one transaction on its own, so your \"Brighter work light\" change to `e_wlight1` is still in place.\n\nI didn't open the scene afterwards to check the barrel positions or the light value."
+    },
+    {
+      "task": "docs-cheatsheet",
+      "area": "docs",
+      "pass": true,
+      "checks": [
+        {
+          "what": "CHEATSHEET.md exists",
+          "ok": true
+        },
+        {
+          "what": "says Y is up",
+          "ok": true
+        },
+        {
+          "what": "says rotations are in degrees",
+          "ok": true
+        },
+        {
+          "what": "says Light.range is in meters",
+          "ok": true
+        },
+        {
+          "what": "names `prefab.override.revert`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "Glob": 1,
+        "ToolSearch": 1,
+        "ara_docs": 2,
+        "ara_schema": 1,
+        "edit": 1
+      },
+      "wallMs": 23322,
+      "tokens": {
+        "input": 8,
+        "cacheRead": 119340,
+        "cacheWrite": 18972,
+        "output": 1307
+      },
+      "costUsd": 0.1010438,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I created `CHEATSHEET.md` in the project root. The answers come from the engine's docs and component schemas:\n\n- **Up axis:** +Y. The engine is Y-up and right-handed.\n- **`Transform.rotation`:** degrees, as XYZ Euler angles (e.g. `[0, 90, 0]`).\n- **`Light.range`:** meters. It's the distance at which the light has faded out, and it defaults to 10.\n- **Revert a prefab override:** `prefab.override.revert`. Its counterpart for setting an override is `prefab.override.set`.\n\nI added a short section on the other units (meters, seconds, kilograms, linear colors). I also noted that commands go through "
+    },
+    {
+      "task": "batch-watchtower",
+      "area": "batch",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `Watchtower` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Watchtower` is a child of the scene root",
+          "ok": true,
+          "detail": "parent is None"
+        },
+        {
+          "what": "Watchtower at (10, 0, -6)",
+          "ok": true
+        },
+        {
+          "what": "one `Platform` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Platform` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_k2kh\")"
+        },
+        {
+          "what": "Platform local position",
+          "ok": true
+        },
+        {
+          "what": "one `Ladder` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "`Ladder` is a child of Watchtower",
+          "ok": true,
+          "detail": "parent is Some(\"e_k2kh\")"
+        },
+        {
+          "what": "Ladder local position",
+          "ok": true
+        },
+        {
+          "what": "a lamp instance on the Platform",
+          "ok": true
+        },
+        {
+          "what": "all of it was created in one transaction",
+          "ok": true,
+          "detail": "created by [\"tx_x67d5gk3\", \"tx_x67d5gk3\", \"tx_x67d5gk3\", \"tx_x67d5gk3\"]"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 2,
+        "ara_inspect": 2,
+        "ara_query": 1
+      },
+      "wallMs": 27732,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 191730,
+        "cacheWrite": 15668,
+        "output": 1759
+      },
+      "costUsd": 0.0995944,
+      "codes": {
+        "ARA1302": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I added the watchtower to `levels/outpost.scene` as one transaction (`tx_x67d5gk3`). I haven't opened or played the scene, so the layout is unchecked.\n\n- **Watchtower** (`e_k2kh`): root entity at (10, 0, -6).\n- **Platform** (`e_36fe`): child of Watchtower at local (0, 4, 0), so 4 m up.\n- **Ladder** (`e_58qr`): child of Watchtower at local (1, 2, 0).\n- **Lamp** (`e_htdc`): instance of the lamp prefab (`pf_lamp0001`), child of Platform at local (0, 0, 0).\n\nPlatform and Ladder are empty entities with only a transform, with no mesh or collider. You gave no components, so I added none. The lamp sit"
+    },
+    {
+      "task": "dryrun-clear-ruins",
+      "area": "dry-run",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_ruins1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Ruins is empty",
+          "ok": true,
+          "detail": "0 children left"
+        },
+        {
+          "what": "`e_rwall1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_rubbl1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_stone1` is deleted",
+          "ok": true,
+          "detail": "still there"
+        },
+        {
+          "what": "`e_sign01` still exists",
+          "ok": true
+        },
+        {
+          "what": "a dry run came before the delete",
+          "ok": true,
+          "detail": "dry run at Some(3), delete at Some(4)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 2,
+        "ara_inspect": 1,
+        "ara_query": 1
+      },
+      "wallMs": 12980,
+      "tokens": {
+        "input": 10,
+        "cacheRead": 153086,
+        "cacheWrite": 13993,
+        "output": 957
+      },
+      "costUsd": 0.08100619999999999,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 1,
+      "finalMessage": "I cleared the contents of the Ruins group in `levels/outpost.scene` and kept the group itself.\n\nThe dry run showed only entities under Ruins, so I went ahead. The deleted entities are:\n- `BrokenWall`\n- `Rubble`\n- `Stone`, which was inside `Rubble`\n\n`Ruins` is still there at (-12, 0, -12), now with no children. `RuinsSign` sits next to the group, not inside it, so I left it alone. Nothing else in the level changed.\n\nTo undo it, run `ara_session` with `{\"action\": \"rollback\", \"to\": \"cp_643ey8wd\"}`."
+    },
+    {
+      "task": "multi-storage-room",
+      "area": "multi-step",
+      "pass": true,
+      "checks": [
+        {
+          "what": "one `StorageRoom` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageRoom at (-8, 0, 4)",
+          "ok": true
+        },
+        {
+          "what": "StorageRoom has a box collider",
+          "ok": true,
+          "detail": "Some(String(\"box\"))"
+        },
+        {
+          "what": "collider is 6 x 3 x 6 m",
+          "ok": true
+        },
+        {
+          "what": "three crates inside the room",
+          "ok": true,
+          "detail": "3 crates"
+        },
+        {
+          "what": "a crate at local (-1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (0, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "a crate at local (1.5, 0, 0)",
+          "ok": true
+        },
+        {
+          "what": "only the middle crate is red",
+          "ok": true,
+          "detail": "red [false, true, false]"
+        },
+        {
+          "what": "one `StorageLight` in levels/outpost.scene",
+          "ok": true,
+          "detail": "found 1"
+        },
+        {
+          "what": "StorageLight is a point light",
+          "ok": true,
+          "detail": "Some(String(\"point\"))"
+        },
+        {
+          "what": "StorageLight is 600 lm",
+          "ok": true
+        },
+        {
+          "what": "StorageLight 2.5 m above the center",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 10,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_schema": 3,
+        "ara_session": 1
+      },
+      "wallMs": 23627,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 202819,
+        "cacheWrite": 21440,
+        "output": 2399
+      },
+      "costUsd": 0.130272,
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The storage room is in `levels/outpost.scene`. I didn't open the scene afterward to check the result.\n\n- **StorageRoom:** at (-8, 0, 4) with a 6 × 3 × 6 m box collider. The collider is centered on the entity, so it extends 1.5 m below the floor. I used the dimensions as you gave them.\n- **Crates:** three instances of the crate prefab, named `Crate`, `Crate.001` and `Crate.002`. They are children of the room at local (-1.5, 0, 0), (0, 0, 0) and (1.5, 0, 0).\n- **Red crate:** the middle crate (`Crate.001`) has its body tint set to red (1, 0, 0, 1). It is an override on that instance, so the prefa"
+    },
+    {
+      "task": "multi-qa-fixes",
+      "area": "multi-step",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "Floodlight is 1000 lm",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 is on the ground",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp bulb has the prefab color",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1` still exists",
+          "ok": true
+        },
+        {
+          "what": "YardLamp stays at (0, 0, 8)",
+          "ok": true
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": {
+        "ToolSearch": 1,
+        "ara_apply": 1,
+        "ara_inspect": 3,
+        "ara_query": 2
+      },
+      "wallMs": 24478,
+      "tokens": {
+        "input": 12,
+        "cacheRead": 192074,
+        "cacheWrite": 15034,
+        "output": 1187
+      },
+      "costUsd": 0.0913754,
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "I fixed all three in `levels/outpost.scene` in one transaction. I didn't play the level or re-inspect the entities afterwards. The apply result reports the old and new values for each change.\n\n- **Floodlight:** I raised the light intensity from 0 to 1000 lm.\n- **Barrel.002:** I lowered its height from y=5 to y=0, which matches the other two barrels.\n- **YardLamp bulb:** The bulb was red because of an instance override on its light color. I reverted that override, so it now takes the lamp prefab's color, which is white `(1,1,1,1)`. That is also what the DoorLamp's bulb uses.\n\nTo undo all three,"
+    }
+  ]
+}

@@ -23,7 +23,7 @@ pub const TOOLS: [ToolSpec; 12] = [
     ToolSpec {
         name: "ara_query",
         title: "Query entities",
-        description: "Find entities (or documents) without dumping scenes. Compact syntax in `q`: space-separated terms that must all hold: `Light` (has the component), `!Light`, `name:Crate*`, `parent:e_1c0d`, `under:e_1c0d`, `prefab:crate`, `depth<=1`, comparisons such as `Light.intensity>500` or `Transform.position.y<=0`. Or the JSON form in `filter`. Paginated (`limit`, `cursor`); returns entity handles (`e_8b21`; `e_4f9a/e_m4tz` inside prefab instances) with one scene-to-text line each. `fields` returns chosen values.",
+        description: "Find entities (or documents) without dumping scenes. Compact syntax in `q`: space-separated terms that must all hold: `Light` (has the component), `!Light`, `name:Crate*`, a bare word (`radio`: names containing it), `parent:e_1c0d`, `under:e_1c0d`, `prefab:crate`, `depth<=1`, comparisons such as `Light.intensity>500` or `Transform.position.y<=0`. Or the JSON form in `filter`. Paginated (`limit`, `cursor`); returns entity handles (`e_8b21`; `e_4f9a/e_m4tz` inside prefab instances) with one scene-to-text line each. `fields` returns chosen values.",
         reserved: "query",
     },
     ToolSpec {
@@ -41,7 +41,7 @@ pub const TOOLS: [ToolSpec; 12] = [
     ToolSpec {
         name: "ara_apply",
         title: "Apply commands",
-        description: "Change documents. Runs `commands` (each `{cmd, args, as?}`) in order as one atomic transaction on `doc`, recorded with your `why` for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. `as: \"$name\"` mints a symbolic ID later calls can use (also as `$name/e_inner`); the result maps symbols to real IDs. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session).",
+        description: "Change documents. Runs `commands` (each `{cmd, args, as?}`; the commands and their args are listed under `cmd`) in order as one atomic transaction on `doc` (default: the document holding the entities you name, else the main scene), recorded with your `why` (required) for human review; any error rolls everything back and returns located diagnostics with machine-applicable fixes. Entities: IDs (`e_8b21`, `e_4f9a/e_m4tz` inside a prefab instance), `$name` symbols minted by `as` in an earlier call, or `name:Crate` / `name:Floor/Crate`. The result lists every created, modified and deleted entity with its ID. `dryRun: true` returns the exact diff without applying. Each call is one turn with a checkpoint you can roll back to (ara_session).",
         reserved: "cmd",
     },
     ToolSpec {
@@ -77,7 +77,7 @@ pub const TOOLS: [ToolSpec; 12] = [
     ToolSpec {
         name: "ara_session",
         title: "Session, history and review",
-        description: "Start here: `action: \"begin\"` with your `client` name returns the `session` handle every tool needs, and the scopes granted. Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity), `end`.",
+        description: "Sessions, history and review. `action: \"begin\"` with your `client` name returns the `session` handle the other tools take, the scopes granted and the project's documents (over `ara mcp` a session also begins by itself on first use). Then: `status`, `diff` (what you changed, was → now), `checkpoint`, `rollback` (undo back to a checkpoint), `history`, `undo`, `redo`, `review` (unreviewed changes), `revert` (per transaction or entity, also another agent's), `end`.",
         reserved: "session",
     },
     ToolSpec {
@@ -259,15 +259,28 @@ fn merged(methods: &[&MethodInfo]) -> Map<String, Value> {
     s
 }
 
-/// The tool definitions for `tools/list`, generated from the live catalog.
-pub fn definitions(catalog: &[MethodInfo]) -> Vec<Value> {
+const OPTIONAL_SESSION: &str = "Session handle from ara_session `begin`. Optional: without it, calls use this connection's session (begun on first use).";
+
+/// Makes `session` optional in a tool's input schema (per-connection adapters).
+fn session_optional(schema: &mut Value) {
+    if let Some(req) = schema.get_mut("required").and_then(Value::as_array_mut) {
+        req.retain(|r| r != "session");
+    }
+    if let Some(p) = schema.pointer_mut("/properties/session") {
+        p["description"] = OPTIONAL_SESSION.into();
+    }
+}
+
+/// The tool definitions for `tools/list`, generated from the live catalog. With
+/// `optional_session` (one client per adapter), `session` is not required.
+pub fn definitions(catalog: &[MethodInfo], optional_session: bool) -> Vec<Value> {
     TOOLS
         .iter()
         .map(|spec| {
             let methods = methods_of(catalog, spec.name);
             let single = methods.len() == 1
                 && methods[0].tool.as_ref().is_some_and(|t| t.action.is_none());
-            let (schema, description) = match methods.as_slice() {
+            let (mut schema, description) = match methods.as_slice() {
                 [] => (
                     json!({
                         "type": "object",
@@ -279,6 +292,9 @@ pub fn definitions(catalog: &[MethodInfo]) -> Vec<Value> {
                 [m] if single => (Value::Object(clean(&m.params)), spec.description.to_owned()),
                 many => (Value::Object(merged(many)), spec.description.to_owned()),
             };
+            if optional_session {
+                session_optional(&mut schema);
+            }
             let all = |f: fn(&MethodInfo) -> bool| !methods.is_empty() && methods.iter().all(|m| f(m));
             json!({
                 "name": spec.name,

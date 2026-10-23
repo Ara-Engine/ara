@@ -8,7 +8,7 @@ use ara_ops::{Author, Transaction, TxnId, TxnMeta};
 use ara_proto::Scope;
 use serde_json::{Value, json};
 
-use super::read::find_doc;
+use super::pick::find_doc;
 use crate::host::{State, session_not_found};
 use crate::journal::Entry;
 use crate::params::*;
@@ -89,6 +89,11 @@ pub(super) fn begin(st: &mut State, p: SessionBeginParams) -> R {
             ),
         ));
     }
+    let ws = st.store.workspace();
+    let documents: Vec<Value> = ws
+        .docs()
+        .map(|(path, d)| json!({ "path": path, "kind": d.kind, "id": d.id }))
+        .collect();
     let out = json!({
         "session": session.id,
         "author": session.author,
@@ -96,7 +101,9 @@ pub(super) fn begin(st: &mut State, p: SessionBeginParams) -> R {
         "denied": session.denied,
         "approvedBy": session.approved_by,
         "revision": session.started,
-        "hint": "Pass `session` to every call. Find commands and components with schema.search, entities with query, docs with docs.search. Edit with cmd.apply: atomic batches with a `why`. Y-up, meters, degrees.",
+        "documents": documents,
+        "mainScene": st.main,
+        "hint": "Pass `session` to every call. Find commands and components with schema.search, entities with query, docs with docs.search. Edit with cmd.apply: atomic batches with a `why`; `doc` defaults to the document holding the entities you address, else the main scene. Entities: IDs (`e_8b21`), `$symbols` from earlier calls, or `name:Crate` / `name:Floor/Crate`. Y-up, meters, degrees.",
     });
     st.sessions.insert(session);
     Ok(out)
