@@ -482,6 +482,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-ui-stories"
+version = "0.0.0"
+dependencies = [
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "ara-ui",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-ui-test"
+version = "0.0.0"
+dependencies = [
+ "accesskit",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-stories",
+ "ara-ui-text",
+ "serde",
+ "serde_json",
+ "tiny-skia",
+]
+
+[[package]]
 name = "ara-ui-text"
 version = "0.0.0"
 dependencies = [
