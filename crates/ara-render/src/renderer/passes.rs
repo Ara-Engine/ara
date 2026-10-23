@@ -26,7 +26,7 @@ impl Renderer {
         let frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
         let mut compute_frame = frame;
-        compute_frame.lighting[3] = self.compute_light_index;
+        compute_frame.lighting[3] = self.content.compute_light_index;
         self.gpu
             .upload(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
         let mut graph = Graph::default();
@@ -153,6 +153,7 @@ impl Renderer {
             [(tile, Access::Storage)],
         );
         let mut graphics = self
+            .content
             .graphics_inputs
             .iter()
             .map(|&(resource, access)| {
@@ -174,23 +175,28 @@ impl Renderer {
             },
         );
         graphics.push((frame_id, Access::ShaderRead));
+        // Host-written storage: dynamic vertices and the light list.
+        let host_write = State {
+            access: Access::HostWrite,
+            queue: Queue::Graphics,
+        };
+        for mesh in self.content.meshes.iter().filter(|m| m.host) {
+            let id = graph.import(Resource::Buffer(mesh.vertices), host_write);
+            graphics.push((id, Access::Vertex));
+        }
+        let lights = graph.import(Resource::Buffer(self.content.light_buffer), host_write);
+        graphics.push((lights, Access::ShaderRead));
         for pass in [0, 1, 3, 4, 5, 6] {
             graph.accesses(crate::graph::PassId(pass), graphics.iter().copied())?;
         }
-        let mut compute = self
-            .compute_inputs
-            .iter()
-            .map(|&(resource, access)| {
-                let id = graph.import(
-                    resource,
-                    State {
-                        access,
-                        queue: Queue::Compute,
-                    },
-                );
-                (id, access)
-            })
-            .collect::<Vec<_>>();
+        let compute_lights = graph.import(
+            Resource::Buffer(self.content.compute_lights),
+            State {
+                access: Access::HostWrite,
+                queue: Queue::Compute,
+            },
+        );
+        let mut compute = vec![(compute_lights, Access::ShaderRead)];
         let compute_frame = graph.import(
             Resource::Buffer(self.compute_frame),
             State {
@@ -203,7 +209,16 @@ impl Renderer {
         let compiled = graph.compile()?;
         let mut points = Vec::new();
         let root = RootConstants {
-            words: [self.frame_index, self.material_index, 0, 0, 0, 0, 0, 0],
+            words: [
+                self.frame_index,
+                self.content.material_index,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
         };
         for pass in &compiled.passes {
             let mut recorder = self.gpu.begin(pass.queue);
@@ -226,6 +241,7 @@ impl Renderer {
                             size: [512, 512],
                         });
                         for (index, mesh) in self
+                            .content
                             .meshes
                             .iter()
                             .enumerate()
@@ -258,6 +274,7 @@ impl Renderer {
                         size: self.size,
                     });
                     for (index, mesh) in self
+                        .content
                         .meshes
                         .iter()
                         .enumerate()
@@ -332,6 +349,7 @@ impl Renderer {
                         size: self.size,
                     });
                     let mut transparent = self
+                        .content
                         .meshes
                         .iter()
                         .enumerate()

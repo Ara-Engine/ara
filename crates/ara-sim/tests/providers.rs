@@ -88,8 +88,7 @@ fn control() -> PlayControl {
     .doc
     .unwrap();
     let edit = EditWorld::new(SimRegistry::new(db).unwrap(), doc).unwrap();
-    let mut session =
-        Session::local(edit, TickConfig::default(), 1, ActionMap::default()).unwrap();
+    let mut session = Session::local(edit, TickConfig::default(), 1, ActionMap::default()).unwrap();
     let entity = session.entity("e_0001").unwrap();
     session.world_mut().entity_mut(entity).insert(Odometer(0));
     session.world_mut().init_resource::<NativeCache>();
@@ -109,13 +108,17 @@ fn provider_state_is_snapshotted_hashed_and_restored() {
     play.session_mut().add_provider(OdometerProvider).unwrap();
     assert!(play.session_mut().add_provider(OdometerProvider).is_err());
     play.step(3, &[]).unwrap();
-    let portable = ara_sim::Snapshot::from_bytes(&play.snapshot().unwrap().to_bytes().unwrap())
-        .unwrap();
+    let portable =
+        ara_sim::Snapshot::from_bytes(&play.snapshot().unwrap().to_bytes().unwrap()).unwrap();
     let exact = play.checkpoint().unwrap();
     assert!(exact.is_trusted() && !portable.is_trusted());
     let hash = play.session().state_hash().unwrap();
     play.step(5, &[]).unwrap();
-    assert_ne!(play.session().state_hash().unwrap(), hash, "provider state is hashed");
+    assert_ne!(
+        play.session().state_hash().unwrap(),
+        hash,
+        "provider state is hashed"
+    );
     play.restore(&portable).unwrap();
     assert_eq!(play.session().state_hash().unwrap(), hash);
     play.step(5, &[]).unwrap();
