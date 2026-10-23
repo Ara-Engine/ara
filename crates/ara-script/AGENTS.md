@@ -94,6 +94,7 @@ ara-diag, ara-components, bevy_ecs 0.20, netcorehost, libloading, windows-sys.
 
 ## Measurements (`reload_bench`, 7800X3D, 5.2k-line module, 20k entities)
 
-Machine shared with other agents' builds (CPU 65–99%), so these are upper bounds:
-L1 save→visible p50 26 ms, p95 61 ms; L3 p50 434 ms, p95 542 ms (≈200 ms emit +
-≈150–200 ms AMSI on load). Tick p99 3.8 ms, max 8.5 ms during reloads.
+Machine shared with other agents' builds, so these are upper bounds. Best run: L1
+save→visible p50 25 ms, p95 40 ms; L3 p50 418 ms, p95 495 ms. At 94% CPU: L1 p50 33 ms,
+p95 59 ms; L3 p50 616 ms, p95 726 ms (server ≈400 ms: emit + generator; staging ≈230 ms,
+mostly AMSI). Tick p99 3.6 ms, max 6.5 ms during reloads.
