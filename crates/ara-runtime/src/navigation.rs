@@ -57,7 +57,10 @@ pub fn install(
     if surfaces.is_empty() {
         return Ok(());
     }
-    let geometry = static_geometry(world);
+    let mut geometry = static_geometry(world);
+    if let Some(state) = world.get_resource::<crate::terrain::TerrainState>().cloned() {
+        crate::terrain::navigation_geometry(&state, &mut geometry)?;
+    }
     let baker = Baker::new(cache);
     for (_, surface) in surfaces {
         if surface.geometry.is_some() {

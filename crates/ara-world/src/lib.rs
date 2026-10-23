@@ -7,6 +7,8 @@ mod index;
 mod model;
 mod reference;
 mod runtime;
+#[cfg(feature = "host")]
+pub mod service;
 mod source;
 mod tools;
 mod worker;

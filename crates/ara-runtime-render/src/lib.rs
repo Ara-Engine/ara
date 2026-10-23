@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 
 pub mod geometry;
+pub mod landscape;
 pub mod two_d;
 pub mod vfx;
 
@@ -49,6 +50,7 @@ pub struct PresentStats {
 pub struct Presenter {
     renderer: Option<Renderer>,
     effects: vfx::Effects,
+    landscapes: landscape::Landscapes,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
@@ -108,6 +110,7 @@ impl Presenter {
         Self {
             renderer: None,
             effects: vfx::Effects::default(),
+            landscapes: landscape::Landscapes::default(),
             size,
             extensions,
             cache: cache.into(),
@@ -221,9 +224,15 @@ impl Presenter {
             .as_mut()
             .context("renderer missing after prepare")?;
         let mut capture = renderer.capture(&request)?;
+        let base = frame.terrain.is_some().then(|| capture.image.clone());
         // GPU particles replay over the captured frame before it is resized away.
         self.effects
             .composite(renderer, frame, &request, &mut capture)?;
+        // Terrain and foliage by depth, last: VFX deltas carry onto terrain.
+        if let Some(base) = base {
+            self.landscapes
+                .composite(renderer, frame, &request, &base, &mut capture)?;
+        }
         // Captures resize to the request; return to the presentation size.
         renderer.resize(self.size)?;
         Ok(capture)

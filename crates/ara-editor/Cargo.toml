@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 ara-audio-why = { path = "../ara-audio-why" }
+ara-world = { path = "../ara-world", features = ["host"] }
 ara-cmd = { path = "../ara-cmd" }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }

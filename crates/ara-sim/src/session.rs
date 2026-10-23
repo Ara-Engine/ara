@@ -67,6 +67,12 @@ pub trait SessionAdapter {
     fn before_tick(&mut self, session: &mut Session) -> Result<()>;
     /// Observe a completed tick without allowing presentation to mutate gameplay.
     fn after_tick(&mut self, world: &World, record: &TickRecord) -> Result<()>;
+    /// Host streaming activation at the boundary, as in `step_with_streaming` (an
+    /// authority that also streams its world). Default: nothing streams.
+    fn stream(&mut self, boundary: &mut crate::StreamingBoundary<'_>) -> Result<()> {
+        let _ = boundary;
+        Ok(())
+    }
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -507,11 +513,27 @@ impl Session {
         })
     }
 
+    /// Applies streaming arrivals outside a tick for a presentation mirror (a networked
+    /// client's never-stepped copy of the authority's world): rows spawn and despawn
+    /// exactly as at a boundary, but no systems run and the tick does not advance.
+    /// Authoritative sessions stream only through `step_with_streaming`.
+    pub fn mirror_streaming(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<()> {
+        let mut changes = Vec::new();
+        activate(&mut crate::StreamingBoundary {
+            edit: &mut self.edit,
+            changes: &mut changes,
+            recording: false,
+        })
+    }
+
     /// Drives the same step through an optional external networking adapter.
     pub fn step_with_adapter(&mut self, adapter: &mut impl SessionAdapter) -> Result<TickRecord> {
         self.mode = adapter.mode();
         adapter.before_tick(self)?;
-        let record = self.step()?;
+        let record = self.step_with_streaming(|boundary| adapter.stream(boundary))?;
         adapter.after_tick(self.world(), &record)?;
         Ok(record)
     }

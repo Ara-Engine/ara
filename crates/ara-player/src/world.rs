@@ -17,6 +17,8 @@ use ara_runtime_render::{
     two_d::{self, Presenter2d},
 };
 use ara_runtime_script::{ScriptEvent, ScriptPlugin, ScriptSettings};
+use ara_runtime_world::{CellEvent, WorldStreaming};
+use ara_schema::AssetRef;
 use ara_sim::{TickConfig, Watch};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf, sync::atomic::Ordering, time::Instant};
@@ -48,6 +50,16 @@ pub struct World {
     pub pending: Vec<PendingPatch>,
     /// C# modules and their host's event channel, when the scene runs any.
     scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
+    /// The streamed world's cells, when the snapshot has a world.
+    cells: Option<Cells>,
+}
+
+/// Streamed world cells: the plugin's events, each cell's baked acoustics and the
+/// resident set.
+struct Cells {
+    events: std::sync::mpsc::Receiver<CellEvent>,
+    acoustics: BTreeMap<String, AssetRef>,
+    resident: std::collections::BTreeSet<String>,
 }
 
 fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAssets> {
@@ -91,6 +103,22 @@ impl World {
             plugins.push(Box::new(plugin));
             scripts = Some((settings, events));
         }
+        // Last: the world workers prepare rows against the complete registry.
+        let mut cells = None;
+        if let Some((plugin, events)) = WorldStreaming::from_workspace(&workspace, &schema)? {
+            let acoustics = plugin
+                .manifest()
+                .cells
+                .iter()
+                .filter_map(|(id, cell)| Some((id.clone(), cell.acoustics.clone()?)))
+                .collect();
+            plugins.push(Box::new(plugin));
+            cells = Some(Cells {
+                events,
+                acoustics,
+                resident: Default::default(),
+            });
+        }
         let runtime = Runtime::new(
             schema,
             workspace,
@@ -118,6 +146,7 @@ impl World {
                 pins,
                 pending: Vec::new(),
                 scripts,
+                cells,
             },
             started.elapsed().as_secs_f64() * 1000.0,
         ))
@@ -143,9 +172,41 @@ impl World {
         listener
     }
 
+    /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`), after
+    /// draining the streaming plugin's events.
+    pub fn resident_acoustics(&mut self) -> Vec<(String, AssetRef)> {
+        let Some(cells) = &mut self.cells else {
+            return Vec::new();
+        };
+        for event in cells.events.try_iter() {
+            match event {
+                CellEvent::Ready { cell, .. } => cells.resident.insert(cell),
+                CellEvent::Removed { cell, .. } => cells.resident.remove(&cell),
+            };
+        }
+        cells
+            .resident
+            .iter()
+            .filter_map(|cell| Some((cell.clone(), cells.acoustics.get(cell)?.clone())))
+            .collect()
+    }
+
+    /// Resident streamed cells (any data), for status and tests.
+    pub fn resident_cells(&mut self) -> Vec<String> {
+        let _ = self.resident_acoustics();
+        self.cells
+            .as_ref()
+            .map(|c| c.resident.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// One live audio update (windowed players, every presented frame).
     pub fn audio(&mut self, audio: &mut AudioPresenter, frame: &mut RenderFrame) -> Result<()> {
         let listener = self.listener(frame);
+        let resident = self.resident_acoustics();
+        let source: std::sync::Arc<dyn ara_runtime::assets::AssetSource> =
+            std::sync::Arc::new(assets(&self.cache, &self.pins)?);
+        audio.stream_cells(&resident, &source);
         let assets = assets(&self.cache, &self.pins)?;
         audio.update(self.runtime.world(), &listener, &mut |reference| {
             ara_runtime_audio::clip(&assets, reference)
@@ -169,6 +230,12 @@ impl World {
     ) -> Result<Value> {
         let mut audio = self.audio_presenter()?;
         let listener = self.listener(frame);
+        let resident = self.resident_acoustics();
+        let source: std::sync::Arc<dyn ara_runtime::assets::AssetSource> =
+            std::sync::Arc::new(assets(&self.cache, &self.pins)?);
+        let probes = audio.stream_cells(&resident, &source);
+        audio.wait_cells(std::time::Duration::from_secs(5));
+        let probes = probes.max(audio.stream_cells(&resident, &source));
         let assets = assets(&self.cache, &self.pins)?;
         let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
             ara_runtime_audio::clip(&assets, reference)
@@ -196,6 +263,8 @@ impl World {
             .collect();
         Ok(json!({
             "tick": self.runtime.tick(),
+            "acousticCells": resident.iter().map(|(cell, _)| cell.clone()).collect::<Vec<_>>(),
+            "probes": probes,
             "voices": heard.iter().map(|h| h.entity.clone()).collect::<Vec<_>>(),
             "sources": sources,
             "analysis": serde_json::from_str::<Value>(&analysis)?,

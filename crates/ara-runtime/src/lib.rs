@@ -41,6 +41,7 @@ pub mod physics;
 pub mod plugin;
 pub mod skin;
 pub mod sync;
+pub mod terrain;
 
 use crate::{
     animation::{AnimationProvider, AnimatorSlot, Library},
@@ -185,6 +186,10 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<Wanderer>()?;
     registry.register_component::<Animator>()?;
     registry.register_component::<components::VisualEffect>()?;
+    registry.register_component::<components::MusicSource>()?;
+    registry.register_component::<components::AudioGraphSource>()?;
+    registry.register_component::<terrain::Terrain>()?;
+    registry.register_component::<terrain::TerrainTile>()?;
     // Presentation sound intent; playback cursors never enter the simulation.
     registry.register_component::<ara_audio::AudioSource>()?;
     registry.register_component::<ara_audio::AudioListener>()?;
@@ -210,6 +215,46 @@ fn has_2d_physics(world: &mut World) -> bool {
         .iter(world)
         .next()
         .is_some()
+}
+
+/// Every plugin's streaming at a boundary (runtime errors become a session fault).
+fn stream(
+    plugins: &mut [Box<dyn RuntimePlugin>],
+    boundary: &mut ara_sim::StreamingBoundary<'_>,
+) -> std::result::Result<(), SimError> {
+    for plugin in plugins {
+        plugin.stream(boundary).map_err(|e| SimError(e.0))?;
+    }
+    Ok(())
+}
+
+/// A network adapter with the runtime's plugins streaming at its boundary.
+struct WithPlugins<'a, A> {
+    adapter: &'a mut A,
+    plugins: &'a mut [Box<dyn RuntimePlugin>],
+}
+
+impl<A: ara_sim::SessionAdapter> ara_sim::SessionAdapter for WithPlugins<'_, A> {
+    fn mode(&self) -> ara_sim::SessionMode {
+        self.adapter.mode()
+    }
+    fn before_tick(&mut self, session: &mut Session) -> std::result::Result<(), SimError> {
+        self.adapter.before_tick(session)
+    }
+    fn stream(
+        &mut self,
+        boundary: &mut ara_sim::StreamingBoundary<'_>,
+    ) -> std::result::Result<(), SimError> {
+        stream(self.plugins, boundary)?;
+        self.adapter.stream(boundary)
+    }
+    fn after_tick(
+        &mut self,
+        world: &World,
+        record: &ara_sim::TickRecord,
+    ) -> std::result::Result<(), SimError> {
+        self.adapter.after_tick(world, record)
+    }
 }
 
 fn boxed<M>(system: impl IntoSystem<(), (), M>) -> BoxedSystem {
@@ -273,6 +318,19 @@ impl Runtime {
                 models.insert(asset_id(model)?.to_owned());
             }
         }
+        // Models of every document too: streamed world cells spawn entities after
+        // build, and decoding never happens inside a tick.
+        for (_, doc) in baseline.docs() {
+            for record in doc.records().values() {
+                if let Some(model) = record
+                    .get("MeshRenderer")
+                    .and_then(|r| r.get("model"))
+                    .and_then(serde_json::Value::as_str)
+                {
+                    models.insert(asset_id(&ara_schema::AssetRef(model.to_owned()))?.to_owned());
+                }
+            }
+        }
         for model in &models {
             library.models.load(assets.as_ref(), model)?;
         }
@@ -295,6 +353,10 @@ impl Runtime {
                 world.entity_mut(entity).insert(CharacterInput::default());
             }
         }
+        // Terrain evaluates (worker threads) before physics and navigation use it.
+        if let Some(state) = terrain::build(world, &baseline)? {
+            world.insert_resource(state);
+        }
         let matrices = sync::world_matrices(world);
         let poses: Vec<(Entity, Pose)> = matrices
             .iter()
@@ -315,6 +377,7 @@ impl Runtime {
         sync::resolve_poses(world);
 
         session.add_provider(sync::PoseProvider)?;
+        session.add_provider(terrain::TerrainProvider)?;
         session.add_provider(physics::PhysicsProvider {
             config: config.physics.clone(),
         })?;
@@ -329,12 +392,15 @@ impl Runtime {
             plugin.install(Stage::Gameplay, &mut session)?;
         }
         session.add_system("ai.wander", navigation::wander)?;
+        session.add_system("animation.slots", animation::adopt_slots)?;
         session.add_system("navigation", ara_nav::tick)?;
         session.add_parallel_systems(vec![
             ("animation", boxed(animation::animate)),
             ("navigation.follow", boxed(navigation::follow)),
         ])?;
         session.add_system("animation.root", sync::apply_root_motion)?;
+        session.add_system("terrain.tiles", terrain::adopt_tiles)?;
+        session.add_system("physics.adopt", physics::adopt)?;
         session.add_system("physics.push", sync::push_poses)?;
         session.add_system("physics", physics::step)?;
         session.add_system("physics.pull", sync::pull_poses)?;
@@ -517,7 +583,11 @@ impl Runtime {
         for plugin in &mut self.plugins {
             plugin.before_tick(self.play.session_mut())?;
         }
-        let record = self.play.session_mut().step_with_adapter(adapter)?;
+        let mut adapter = WithPlugins {
+            adapter,
+            plugins: &mut self.plugins,
+        };
+        let record = self.play.session_mut().step_with_adapter(&mut adapter)?;
         self.pending = None;
         if let Some(error) = self.fault() {
             return Err(RuntimeError(error));
@@ -535,6 +605,9 @@ impl Runtime {
     /// reports `tick` (effects replay to it, status shows it).
     pub fn present_mirror(&mut self, tick: u64) -> Result<()> {
         self.presented = Some(tick);
+        for plugin in &mut self.plugins {
+            plugin.mirror(self.play.session_mut(), tick)?;
+        }
         let mirror = self.mirror.get_or_insert_with(|| {
             let mut schedule = Schedule::default();
             schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
@@ -560,7 +633,10 @@ impl Runtime {
             plugin.before_tick(self.play.session_mut())?;
         }
         let paused = self.play.state() == PlayState::Paused;
-        let report = self.play.step(1, &[])?;
+        let plugins = &mut self.plugins;
+        let report = self
+            .play
+            .step_streaming(|boundary| stream(plugins, boundary))?;
         self.pending = None;
         samples.extend(report.samples);
         if let Some(error) = self.fault() {

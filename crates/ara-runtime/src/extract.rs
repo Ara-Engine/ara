@@ -100,6 +100,26 @@ pub struct CameraView {
     pub fov: f32,
 }
 
+/// Terrain for presentation: the shared evaluated tiles and foliage, and the tiles
+/// whose `TerrainTile` entities are resident (detail pages follow them).
+#[derive(Clone)]
+pub struct TerrainView {
+    /// Immutable evaluated terrain (shared, never copied per frame).
+    pub data: std::sync::Arc<crate::terrain::TerrainData>,
+    /// Resident tiles in stable order.
+    pub tiles: Vec<ara_terrain::TileCoord>,
+}
+
+impl std::fmt::Debug for TerrainView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TerrainView")
+            .field("tiles", &self.data.tiles.len())
+            .field("foliage", &self.data.foliage.len())
+            .field("resident", &self.tiles)
+            .finish()
+    }
+}
+
 /// Everything presentation needs for one frame.
 #[derive(Debug, Default)]
 pub struct RenderFrame {
@@ -121,6 +141,8 @@ pub struct RenderFrame {
     pub palettes: Vec<Mat4>,
     /// GPU particle effects in stable order.
     pub effects: Vec<EffectView>,
+    /// The world's terrain and its resident collision tiles (landscape renderer).
+    pub terrain: Option<TerrainView>,
     scratch: Vec<Mat4>,
     palette: Vec<Mat4>,
 }
@@ -137,6 +159,12 @@ impl RenderFrame {
         self.draws.clear();
         self.palettes.clear();
         self.effects.clear();
+        self.terrain = world
+            .get_resource::<crate::terrain::TerrainState>()
+            .map(|state| TerrainView {
+                data: state.0.clone(),
+                tiles: Vec::new(),
+            });
         let library = world.get_resource::<Library>();
         let mut rows: Vec<_> = world
             .iter_entities()
@@ -171,6 +199,14 @@ impl RenderFrame {
             }
             if let Some(light) = entity.get::<Light>() {
                 self.light(light, &pose);
+            }
+            if let (Some(tile), Some(terrain)) =
+                (entity.get::<crate::terrain::TerrainTile>(), &mut self.terrain)
+            {
+                terrain.tiles.push(ara_terrain::TileCoord {
+                    x: tile.x,
+                    z: tile.z,
+                });
             }
             if let Some(effect) = entity.get::<VisualEffect>() {
                 let name = entity

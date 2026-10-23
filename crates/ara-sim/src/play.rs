@@ -229,6 +229,29 @@ impl PlayControl {
         Ok(report)
     }
 
+    /// One boundary with host streaming activation (`Session::step_with_streaming`),
+    /// recorded (arrivals replay exactly) and sampled like `step`.
+    pub fn step_streaming(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<StepReport> {
+        self.active()?;
+        let record = self.session.step_with_streaming(activate)?;
+        if let Some(replay) = &mut self.recording {
+            replay.ticks.push(record);
+        }
+        let mut report = StepReport {
+            ticks: 1,
+            tick: self.session.tick(),
+            reached: false,
+            samples: Vec::new(),
+        };
+        if report.tick.is_multiple_of(u64::from(self.sample_every)) {
+            self.sample(&mut report.samples)?;
+        }
+        Ok(report)
+    }
+
     /// Bounded automatic advancement, recording exactly the same boundaries as step.
     pub fn advance(&mut self, elapsed: Duration) -> Result<FrameAdvance> {
         if self.state != PlayState::Running {

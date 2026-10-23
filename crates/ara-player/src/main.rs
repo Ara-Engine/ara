@@ -258,6 +258,7 @@ impl Player {
                 fault: world.runtime.fault().or_else(|| world.fault.clone()),
                 audio: self.audio.is_some(),
                 net: world.runtime.stats(),
+                cells: world.resident_cells(),
             },
             None => Status {
                 tick: 0,
@@ -268,6 +269,7 @@ impl Player {
                 fault: None,
                 audio: false,
                 net: None,
+                cells: Vec::new(),
             },
         };
         self.link.notify(STATUS, &status)?;
@@ -375,6 +377,7 @@ impl Player {
                     fault: None,
                     audio: false,
                     net: None,
+                cells: Vec::new(),
                 };
                 let _ = link.notify(STATUS, &status);
                 let _ = link.flush();

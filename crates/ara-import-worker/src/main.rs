@@ -1,6 +1,8 @@
 //! Disposable below-normal-priority process hosting the builtin asset importers:
-//! glTF/FBX/textures (`ara-importers`), 2D atlases/tilemaps (`ara-import2d`) and
-//! audio (`ara-audio`'s cooker, adapted in `audio.rs`).
+//! glTF/FBX/textures (`ara-importers`), 2D atlases/tilemaps (`ara-import2d`), audio
+//! (`ara-audio`'s cooker, adapted in `audio.rs`) and baked acoustic probes
+//! (`acoustics.rs`).
+mod acoustics;
 mod audio;
 
 fn registry() -> ara_asset::Result<ara_asset::ImporterRegistry> {
@@ -8,6 +10,7 @@ fn registry() -> ara_asset::Result<ara_asset::ImporterRegistry> {
     registry.register(ara_import2d::AtlasImporter)?;
     registry.register(ara_import2d::TilemapImporter)?;
     registry.register(audio::AudioAsset)?;
+    registry.register(acoustics::AcousticsAsset)?;
     Ok(registry)
 }
 

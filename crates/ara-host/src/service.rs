@@ -197,6 +197,43 @@ impl Cx<'_> {
         self.st.apply(&session, params)
     }
 
+    /// Runs `f` on the mutable kernel store for a service that commits its own typed
+    /// transactions (several documents at once: world cell moves). `meta` carries the
+    /// calling session's author and `why`. Like `cmd.apply`, the host then journals,
+    /// reviews and publishes every commit, and an agent's commit gets a turn checkpoint.
+    pub fn transact<R>(
+        &mut self,
+        why: Option<String>,
+        f: impl FnOnce(&mut Store, ara_ops::TxnMeta) -> R,
+    ) -> Result<R, Vec<Diagnostic>> {
+        let session = self.session.clone().ok_or_else(|| {
+            vec![Diagnostic::error(
+                codes::SESSION_NOT_FOUND,
+                "edits need a session",
+            )]
+        })?;
+        let author = self
+            .st
+            .sessions
+            .live(&session)
+            .map(|s| s.author.clone())
+            .ok_or_else(|| {
+                vec![Diagnostic::error(
+                    codes::SESSION_NOT_FOUND,
+                    format!("no live session `{session}`"),
+                )]
+            })?;
+        let agent = matches!(author, ara_ops::Author::Agent(_));
+        let mut meta = ara_ops::TxnMeta::by(author);
+        meta.why = why.clone();
+        let before = self.st.store.revision();
+        let result = f(&mut self.st.store, meta);
+        if agent && self.st.store.revision() != before {
+            crate::core::checkpoint_at(self.st, &session, before, why, true);
+        }
+        Ok(result)
+    }
+
     /// Publishes the commands `source` currently provides (an ara-cmd catalog object:
     /// name to `Info`-shaped entry), replacing its previous set. `schema.list` and
     /// `schema.describe` show them with the registry's commands, so agents and the

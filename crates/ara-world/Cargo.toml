@@ -11,9 +11,11 @@ ara-asset = { path = "../ara-asset" }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }
 ara-doc = { path = "../ara-doc" }
+ara-host = { workspace = true, optional = true }
 ara-json = { path = "../ara-json" }
 ara-ops = { path = "../ara-ops" }
 ara-pack = { path = "../ara-pack" }
+ara-proto = { workspace = true, optional = true }
 ara-schema = { path = "../ara-schema" }
 ara-sim = { path = "../ara-sim" }
 blake3 = "1.8"
@@ -22,6 +24,10 @@ glam = "0.30"
 serde.workspace = true
 serde_json.workspace = true
 thiserror = "2.0"
+
+[features]
+# The Engine Protocol service (`service::register`) for hosts: CLI daemon, editor.
+host = ["dep:ara-host", "dep:ara-proto"]
 
 [dev-dependencies]
 ara-merge = { path = "../ara-merge" }

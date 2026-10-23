@@ -588,6 +588,9 @@ pub struct Status {
     /// Networked roles: authority traffic or client join/prediction numbers.
     #[serde(default)]
     pub net: Option<Value>,
+    /// Resident cells of the streamed world (empty without one).
+    #[serde(default)]
+    pub cells: Vec<String>,
 }
 
 /// `play.busy` notification.

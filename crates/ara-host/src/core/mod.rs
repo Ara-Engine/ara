@@ -25,6 +25,7 @@ use ara_schema::SchemaDb;
 use serde_json::Value;
 
 pub(crate) use edit::list_commands;
+pub(crate) use session::checkpoint_at;
 pub(crate) use pick::{find_doc, pick};
 pub(crate) use read::inspect_target;
 

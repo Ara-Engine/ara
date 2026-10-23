@@ -352,6 +352,14 @@ pub fn ensure_slots(world: &mut World, hz: u32) -> Result<()> {
     Ok(())
 }
 
+/// Gives streamed-in animators (spawned after build) their slot at the boundary that
+/// spawned them; already-slotted entities are untouched. A program that fails to
+/// compile leaves the entity unanimated and is reported through its next slot fault.
+pub fn adopt_slots(world: &mut World) {
+    let hz = (1.0 / world.resource::<SimContext>().dt()).round() as u32;
+    let _ = ensure_slots(world, hz);
+}
+
 /// Fixed-tick animation: sets `speed` from the entity's ground velocity (navigation
 /// state when present, else physics velocity) and advances one tick, keeping the
 /// extracted root displacement. Entities are independent, so order is irrelevant.

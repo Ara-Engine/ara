@@ -407,6 +407,7 @@ dependencies = [
  "ara-proto",
  "ara-rpc",
  "ara-schema",
+ "ara-world",
  "clap",
  "insta",
  "serde_json",
@@ -725,6 +726,7 @@ dependencies = [
  "ara-ui",
  "ara-ui-render",
  "ara-ui-text",
+ "ara-world",
  "glam 0.30.9",
  "gltf",
  "image",
@@ -868,6 +870,7 @@ dependencies = [
 name = "ara-import-worker"
 version = "0.0.0"
 dependencies = [
+ "ara-acoustics",
  "ara-asset",
  "ara-asset-format",
  "ara-audio",
@@ -1279,6 +1282,7 @@ dependencies = [
  "ara-runtime-net",
  "ara-runtime-render",
  "ara-runtime-script",
+ "ara-runtime-world",
  "ara-schema",
  "ara-sim",
  "clap",
@@ -1444,9 +1448,12 @@ version = "0.0.0"
 dependencies = [
  "ara-acoustics",
  "ara-audio",
+ "ara-audio-graph",
  "ara-audio-mix",
  "ara-diag",
  "ara-doc",
+ "ara-graph",
+ "ara-music",
  "ara-physics",
  "ara-physics-jolt",
  "ara-runtime",
@@ -1482,18 +1489,22 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-doc",
+ "ara-gpu",
  "ara-importers",
  "ara-input",
+ "ara-landscape",
  "ara-render",
  "ara-render2d",
  "ara-runtime",
  "ara-schema",
  "ara-sim",
+ "ara-terrain",
  "ara-vfx",
  "ara-vfx-gpu",
  "bevy_ecs",
  "glam 0.30.9",
  "glam 0.34.1",
+ "image",
  "serde_json",
  "texture2ddecoder",
 ]
@@ -1510,6 +1521,18 @@ dependencies = [
  "ara-sim",
  "bevy_ecs",
  "serde_json",
+]
+
+[[package]]
+name = "ara-runtime-world"
+version = "0.0.0"
+dependencies = [
+ "ara-doc",
+ "ara-physics",
+ "ara-runtime",
+ "ara-schema",
+ "ara-sim",
+ "ara-world",
 ]
 
 [[package]]
@@ -1773,10 +1796,12 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-doc",
+ "ara-host",
  "ara-json",
  "ara-merge",
  "ara-ops",
  "ara-pack",
+ "ara-proto",
  "ara-schema",
  "ara-sim",
  "blake3",

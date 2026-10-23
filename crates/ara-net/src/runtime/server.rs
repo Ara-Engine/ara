@@ -81,6 +81,12 @@ impl SessionAdapter for AdapterRef<'_> {
     ) -> std::result::Result<(), ara_sim::SimError> {
         self.0.after_tick(world, record)
     }
+    fn stream(
+        &mut self,
+        boundary: &mut ara_sim::StreamingBoundary<'_>,
+    ) -> std::result::Result<(), ara_sim::SimError> {
+        self.0.stream(boundary)
+    }
 }
 
 impl Authoritative for Session {
