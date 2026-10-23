@@ -1,0 +1,156 @@
+[
+  {
+    "bbox": [
+      30,
+      129,
+      547,
+      231
+    ],
+    "entity": 100,
+    "mark": 1,
+    "name": "Ground"
+  },
+  {
+    "bbox": [
+      250,
+      154,
+      27,
+      25
+    ],
+    "entity": 200,
+    "mark": 2,
+    "name": "PBR r=0.08 m=0"
+  },
+  {
+    "bbox": [
+      277,
+      161,
+      28,
+      25
+    ],
+    "entity": 201,
+    "mark": 3,
+    "name": "PBR r=0.30 m=0"
+  },
+  {
+    "bbox": [
+      306,
+      169,
+      30,
+      28
+    ],
+    "entity": 202,
+    "mark": 4,
+    "name": "PBR r=0.52 m=0"
+  },
+  {
+    "bbox": [
+      339,
+      177,
+      32,
+      32
+    ],
+    "entity": 203,
+    "mark": 5,
+    "name": "PBR r=0.74 m=0"
+  },
+  {
+    "bbox": [
+      376,
+      187,
+      35,
+      34
+    ],
+    "entity": 204,
+    "mark": 6,
+    "name": "PBR r=0.96 m=0"
+  },
+  {
+    "bbox": [
+      216,
+      166,
+      30,
+      29
+    ],
+    "entity": 205,
+    "mark": 7,
+    "name": "PBR r=0.08 m=1"
+  },
+  {
+    "bbox": [
+      243,
+      174,
+      32,
+      31
+    ],
+    "entity": 206,
+    "mark": 8,
+    "name": "PBR r=0.30 m=1"
+  },
+  {
+    "bbox": [
+      274,
+      184,
+      33,
+      33
+    ],
+    "entity": 207,
+    "mark": 9,
+    "name": "PBR r=0.52 m=1"
+  },
+  {
+    "bbox": [
+      309,
+      194,
+      35,
+      35
+    ],
+    "entity": 208,
+    "mark": 10,
+    "name": "PBR r=0.74 m=1"
+  },
+  {
+    "bbox": [
+      348,
+      206,
+      38,
+      38
+    ],
+    "entity": 209,
+    "mark": 11,
+    "name": "PBR r=0.96 m=1"
+  },
+  {
+    "bbox": [
+      289,
+      138,
+      27,
+      27
+    ],
+    "entity": 300,
+    "mark": 12,
+    "name": "Emissive cyan"
+  },
+  {
+    "bbox": [
+      398,
+      159,
+      38,
+      37
+    ],
+    "entity": 301,
+    "mark": 13,
+    "name": "Forward transparent"
+  },
+  {
+    "bbox": [
+      341,
+      142,
+      27,
+      37
+    ],
+    "entity": 413,
+    "mark": 14,
+    "name": "Avocado Avocado"
+  }
+]

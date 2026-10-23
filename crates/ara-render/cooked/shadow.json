@@ -1,0 +1,34 @@
+{
+  "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f",
+  "stages": [
+    {
+      "dxil": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f/shadowFragment.dxil",
+      "dxil_hash": "2dfe0199981109c3c39ee108b0d75c972a3f929e721e02f9ff911b05b157b0e4",
+      "source_entry": "shadowFragment",
+      "spirv": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f/shadowFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "9a342151f23d18b3ee45848e59ed5f792609e49af72f12d6ffa81fb222aa61cc",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f/shadowVertex.dxil",
+      "dxil_hash": "58ab83f60b1fca754c9919efe2ffb9b67c4307bed7aff48c8d6bff167a593528",
+      "source_entry": "shadowVertex",
+      "spirv": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f/shadowVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "c94128dce9b122fe10ad51279d887e29d94de560600971934a5a628d3d84b0a7",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": true,
+    "vertex_stride": 48
+  },
+  "version": 1
+}

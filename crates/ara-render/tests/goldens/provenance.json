@@ -1,0 +1,196 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      100,
+      "Ground"
+    ],
+    [
+      2,
+      200,
+      "PBR r=0.08 m=0"
+    ],
+    [
+      3,
+      201,
+      "PBR r=0.30 m=0"
+    ],
+    [
+      4,
+      202,
+      "PBR r=0.52 m=0"
+    ],
+    [
+      5,
+      203,
+      "PBR r=0.74 m=0"
+    ],
+    [
+      6,
+      204,
+      "PBR r=0.96 m=0"
+    ],
+    [
+      7,
+      205,
+      "PBR r=0.08 m=1"
+    ],
+    [
+      8,
+      206,
+      "PBR r=0.30 m=1"
+    ],
+    [
+      9,
+      207,
+      "PBR r=0.52 m=1"
+    ],
+    [
+      10,
+      208,
+      "PBR r=0.74 m=1"
+    ],
+    [
+      11,
+      209,
+      "PBR r=0.96 m=1"
+    ],
+    [
+      12,
+      300,
+      "Emissive cyan"
+    ],
+    [
+      13,
+      301,
+      "Forward transparent"
+    ],
+    [
+      14,
+      413,
+      "Avocado Avocado"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "kind": "look_at",
+      "position": [
+        10.0,
+        8.0,
+        14.0
+      ],
+      "target": [
+        0.0,
+        1.0,
+        0.20000000298023224
+      ],
+      "vertical_fov": 0.8726646304130554
+    },
+    "deterministic": true,
+    "exposure": 0.001500000013038516,
+    "marks": 40,
+    "mode": "lit",
+    "seed": 7,
+    "settle_frames": 8,
+    "size": [
+      640,
+      360
+    ],
+    "tick": 0
+  },
+  "scene_hash": "8986a2d23f1704e264c7cb5bf27c00cbc5f6aede564d14d49c9071bd7f6eebac",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.01536,
+      "pass": "ShadowAtlas.4Cascades",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.025152,
+      "pass": "GBuffer",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.00496,
+      "pass": "TiledLightCull",
+      "queue": "Compute"
+    },
+    {
+      "milliseconds": 0.03328,
+      "pass": "DeferredLighting",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.010752,
+      "pass": "ForwardTransparency",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.007872,
+      "pass": "TemporalResolve",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.013024,
+      "pass": "Exposure.ACESFitted.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.068896,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.002784,
+      "pass": "HostReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "TileOwnershipReturn",
+      "queue": "Compute"
+    }
+  ]
+}
