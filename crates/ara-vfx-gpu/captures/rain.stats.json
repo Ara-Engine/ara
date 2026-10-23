@@ -30,7 +30,7 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.040352
+      "milliseconds": 0.042528
     },
     {
       "pass": "Vfx.Prepare",
@@ -90,117 +90,117 @@
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.00224
+      "milliseconds": 0.002304
     },
     {
       "pass": "Vfx.Host",
       "queue": "Graphics",
-      "milliseconds": 0.000128
+      "milliseconds": 0.000064
     },
     {
       "pass": "Visibility.Motion",
       "queue": "Graphics",
-      "milliseconds": 0.11808
+      "milliseconds": 0.119584
     },
     {
       "pass": "DDGI.Trace.Relocate.Classify.Integrate",
       "queue": "Graphics",
-      "milliseconds": 0.069344
+      "milliseconds": 0.068608
     },
     {
       "pass": "RT.Reflections.SoftShadows.DDGI",
       "queue": "Graphics",
-      "milliseconds": 0.216768
+      "milliseconds": 0.228064
     },
     {
       "pass": "RT.Disocclusion.Repair",
       "queue": "Graphics",
-      "milliseconds": 0.026688
+      "milliseconds": 0.027328
     },
     {
       "pass": "SVGF.Reproject.Reject.Outlier.Moments",
       "queue": "Graphics",
-      "milliseconds": 0.0784
+      "milliseconds": 0.074848
     },
     {
       "pass": "SVGF.Atrous.1",
       "queue": "Graphics",
-      "milliseconds": 0.075136
+      "milliseconds": 0.0768
     },
     {
       "pass": "SVGF.Atrous.2",
       "queue": "Graphics",
-      "milliseconds": 0.076288
+      "milliseconds": 0.079264
     },
     {
       "pass": "SVGF.Atrous.4",
       "queue": "Graphics",
-      "milliseconds": 0.099648
+      "milliseconds": 0.102912
     },
     {
       "pass": "Bloom.Horizontal",
       "queue": "Graphics",
-      "milliseconds": 0.054592
+      "milliseconds": 0.056288
     },
     {
       "pass": "Bloom.Vertical",
       "queue": "Graphics",
-      "milliseconds": 0.031296
+      "milliseconds": 0.03184
     },
     {
       "pass": "Exposure.EV100.Meter.Adapt",
       "queue": "Graphics",
-      "milliseconds": 0.006592
+      "milliseconds": 0.00704
     },
     {
       "pass": "Post.Atmosphere.Lens.ToneMap.LUT",
       "queue": "Graphics",
-      "milliseconds": 0.036192
+      "milliseconds": 0.037344
     },
     {
       "pass": "Upscale.TAAU.Resolve",
       "queue": "Graphics",
-      "milliseconds": 0.077312
+      "milliseconds": 0.074368
     },
     {
       "pass": "Output.SDR",
       "queue": "Graphics",
-      "milliseconds": 0.015616
+      "milliseconds": 0.013632
     },
     {
       "pass": "Viewport.Ready",
       "queue": "Graphics",
-      "milliseconds": 0.000128
+      "milliseconds": 0.000096
     },
     {
       "pass": "Feature.Bloom.Horizontal",
       "queue": "Graphics",
-      "milliseconds": 0.054208
+      "milliseconds": 0.056608
     },
     {
       "pass": "Feature.Bloom.Vertical",
       "queue": "Graphics",
-      "milliseconds": 0.030752
+      "milliseconds": 0.032416
     },
     {
       "pass": "Feature.Exposure",
       "queue": "Graphics",
-      "milliseconds": 0.006432
+      "milliseconds": 0.006208
     },
     {
       "pass": "Feature.Post",
       "queue": "Graphics",
-      "milliseconds": 0.030624
+      "milliseconds": 0.033056
     },
     {
       "pass": "Feature.Upscale",
       "queue": "Graphics",
-      "milliseconds": 0.020512
+      "milliseconds": 0.022752
     },
     {
       "pass": "Feature.Output",
       "queue": "Graphics",
-      "milliseconds": 0.011968
+      "milliseconds": 0.011872
     },
     {
       "pass": "Feature.Ready",

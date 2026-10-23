@@ -48,12 +48,12 @@
       "kind": "look_at",
       "position": [
         5.0,
-        3.4000000953674316,
+        3.4,
         6.0
       ],
       "target": [
         0.0,
-        1.399999976158142,
+        1.4,
         0.0
       ],
       "vertical_fov": 0.75
@@ -70,11 +70,11 @@
     ],
     "tick": 100
   },
-  "scene_hash": "52fef00069159ecab563ab6a7f52142f6b5646f6c81c96ddd092e4792911b3e4",
+  "scene_hash": "24375284b827148eeb363269678da0cc9dee31f43e299be11b13d25ce67f014b",
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "6a1b79467acdbfd8a1b44c663c4aecb36900e51b0dc42f07281412c33c8e1e69"
+    "content_key": "60f006d9196201620513a33409db84f52055aa500e1f973c92da4aab3a312a35"
   },
   "timings": [
     {
@@ -83,7 +83,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.020832,
+      "milliseconds": 0.02064,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -133,17 +133,17 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.009216,
+      "milliseconds": 0.006144,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.009216,
+      "milliseconds": 0.006144,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.159776,
+      "milliseconds": 0.15824,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

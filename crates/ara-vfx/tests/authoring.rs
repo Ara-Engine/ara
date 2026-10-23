@@ -135,7 +135,9 @@ fn typed_bindings_and_quality_diagnostics() {
     );
     effect.quality.particles = 10;
     assert!(!effect.diagnostics().is_empty());
-    assert_eq!(effect.capacities(), vec![10]);
+    let capacities = effect.capacities();
+    assert_eq!(capacities[0], 10);
+    assert!(capacities[1..].iter().all(|capacity| *capacity == 0));
     let mut bad = samples::sparks();
     bad.emitters[0].stacks.initialize[0].module = Module::Drag { coefficient: 0. };
     assert!(bad.validate().is_err());

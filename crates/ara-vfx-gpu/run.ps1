@@ -19,7 +19,7 @@ try {
         cargo check -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render -p ara-json -p ara-render-fidelity --all-targets
         if ($LASTEXITCODE -ne 0) {throw 'check failed'}
         $env:ARA_VFX_GPU_TESTS='1'
-        cargo test -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render -p ara-json -p ara-render-fidelity
+        cargo test -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render -p ara-json -p ara-render-fidelity --no-fail-fast
         if ($LASTEXITCODE -ne 0) {throw 'tests failed'}
         cargo clippy -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render -p ara-json -p ara-render-fidelity --all-targets -- -D warnings
         if ($LASTEXITCODE -ne 0) {throw 'clippy failed'}

@@ -177,3 +177,17 @@ change from 0.423 ms to about 0.018 ms under the previous box/camera settings.
 [QUALITY.md](QUALITY.md) records the visual inspection and remaining limits.
 These effects improve the starter baseline but do not yet match Niagara showcase
 art: visible sprite layering and repeated silhouettes still need artist work.
+
+Verification on 2026-10-23: `run.ps1 -Mode Check` passed all-targets check, 35 tests
+with GPU gates enabled, clippy with warnings denied, and formatting for `ara-vfx`,
+`ara-vfx-gpu`, `ara-gpu`, `ara-render`, `ara-render-fidelity` and `ara-json`.
+The twelve gallery goldens passed without update mode, including independent
+byte-exact mid-life replay and CPU/GPU state comparisons. The additional ribbon,
+mesh and depth fixtures were also captured and inspected.
+
+The canonical float migration additionally passed check/clippy on all targets,
+175 tests, and formatting for `ara-schema`, `ara-cmd`, `ara-graph`, `ara-material`,
+`ara-anim`, `ara-asset`, `ara-audio`, `ara-foliage`, `ara-terrain`, `ara-world`,
+`ara-nav`, `ara-ui`, `ara-ui-test`, `ara-importers`, `ara-pack` and `ara-export`.
+Four existing opt-in/documentation tests remained ignored (Steam Audio runtime,
+prepared export/signing toolchains, and the schema documentation example).

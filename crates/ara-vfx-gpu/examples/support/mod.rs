@@ -156,31 +156,30 @@ fn gallery(effect: &Effect, tick: u32) -> Scene {
                 lumens,
                 radius,
             } = m.module
+                && lights.len() <= effect.quality.lights as usize
             {
-                if lights.len() <= effect.quality.lights as usize {
-                    lights.push(Light {
-                        position_range: [
-                            (e.bounds.min[0] + e.bounds.max[0]) * 0.5,
-                            0.7,
-                            (e.bounds.min[2] + e.bounds.max[2]) * 0.5,
-                            radius,
-                        ],
-                        color_lumens: [
-                            color[0],
-                            color[1],
-                            color[2],
-                            lumens
-                                * flicker
-                                * if effect.name == "muzzle_flash" {
-                                    (-(tick as f32) * 0.2).exp()
-                                } else {
-                                    1.
-                                },
-                        ],
-                        direction_outer: [0.; 4],
-                        parameters: [0.; 4],
-                    });
-                }
+                lights.push(Light {
+                    position_range: [
+                        (e.bounds.min[0] + e.bounds.max[0]) * 0.5,
+                        0.7,
+                        (e.bounds.min[2] + e.bounds.max[2]) * 0.5,
+                        radius,
+                    ],
+                    color_lumens: [
+                        color[0],
+                        color[1],
+                        color[2],
+                        lumens
+                            * flicker
+                            * if effect.name == "muzzle_flash" {
+                                (-(tick as f32) * 0.2).exp()
+                            } else {
+                                1.
+                            },
+                    ],
+                    direction_outer: [0.; 4],
+                    parameters: [0.; 4],
+                });
             }
         }
     }
