@@ -56,7 +56,7 @@ pub fn skeleton(scale: f32, count: usize) -> Result<Skeleton, Error> {
     })
 }
 pub fn reference(index: usize) -> AssetRef {
-    AssetRef(format!("@locomotion.animation#an_clip{index}"))
+    AssetRef(format!("@motion-matching.animation#an_clip{index}"))
 }
 pub fn clip(s: &Skeleton, direction: Vec3, speed: f32, turn: f32) -> ClipData {
     let mut clip = ClipData {

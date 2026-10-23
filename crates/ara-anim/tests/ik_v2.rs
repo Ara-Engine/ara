@@ -110,6 +110,38 @@ fn hinge_and_swing_twist_limits_are_geometric() {
             assert!(q.to_scaled_axis().z <= 0.40001);
             assert!(q.x.abs() < 1e-6 && q.y.abs() < 1e-6);
         }
+        let mut chain = Chain::cook(
+            &s,
+            &ChainData {
+                limits: vec![
+                    JointLimit {
+                        kind: LimitKind::Hinge,
+                        axis: [0.0, 0.0, 1.0],
+                        ..Default::default()
+                    };
+                    2
+                ],
+                ..data()
+            },
+        )
+        .unwrap();
+        let mut pose = s.bind_pose().clone();
+        let report = chain
+            .solve(
+                &s,
+                &mut pose,
+                -Vec3::X * 4.0,
+                solver,
+                SolverSettings {
+                    iterations: 128,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(
+            (report.error - 2.4).abs() < 0.001,
+            "opposed hinge target: {solver:?} {report:?}"
+        );
     }
 }
 #[test]
@@ -296,4 +328,37 @@ fn feet_probe_world_space_adjust_pelvis_and_align_slopes() {
         (actor.rotation * rotation * Vec3::Y).distance(Vec3::new(0.0, 1.0, -0.2).normalize())
             < 0.001
     );
+}
+
+#[test]
+fn offline_retarget_bakes_checked_clip_keys_and_preserves_timebase() {
+    let source = human(1.0, false);
+    let target = human(1.4, true);
+    let mut retarget = Retargeter::cook(
+        &source,
+        &RigMap::auto(&source).unwrap(),
+        &target,
+        &RigMap::auto(&target).unwrap(),
+    )
+    .unwrap();
+    let clip = ClipData {
+        duration: 4800,
+        tracks: vec![JointTrack::default(); source.len()],
+        ..Default::default()
+    };
+    let baked = retarget.bake(&source, &clip, &target, 800).unwrap();
+    assert_eq!(baked.duration, clip.duration);
+    assert_eq!(baked.ticks_per_second, clip.ticks_per_second);
+    assert_eq!(baked.tracks[0].translations.len(), 7);
+    let cooked = CookedClip::cook(&baked, &target, CompressionSettings::default())
+        .unwrap()
+        .0;
+    let mut sampler = Sampler::new(&cooked);
+    let mut pose = Pose::new(target.len());
+    sampler
+        .sample(&cooked, &target, 2400, &mut pose, &mut [])
+        .unwrap();
+    let mut model = vec![Mat4::IDENTITY; target.len()];
+    model_matrices(&target, &pose, &mut model).unwrap();
+    assert!(model[3].w_axis.y.abs() < 0.0002);
 }

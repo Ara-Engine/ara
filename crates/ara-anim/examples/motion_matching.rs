@@ -82,6 +82,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "search_exact_us_per_character p50={:.3} p95={:.3}; search_512_us p50={:.3} p95={:.3}",
         exact.0, exact.1, budget.0, budget.1
     );
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build()?;
+    let mut parallel = Vec::new();
+    for frame in 0..frames + 10 {
+        let start = Instant::now();
+        pool.install(|| {
+            queries.par_chunks(16).for_each(|chunk| {
+                for query in chunk {
+                    black_box(db.search(black_box(query), 0).expect("normalized query"));
+                }
+            })
+        });
+        if frame >= 10 {
+            parallel.push(start.elapsed().as_secs_f64() * 1000.0);
+        }
+    }
+    let parallel = median(&mut parallel);
+    println!(
+        "search_exact_1000_8workers_ms p50={:.3} p95={:.3}",
+        parallel.0, parallel.1
+    );
     let names: Vec<_> = (0..config.dimensions())
         .map(|i| format!("feature{i:02}"))
         .collect();
@@ -183,7 +203,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
         })
         .collect::<Result<_, Error>>()?;
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build()?;
     let mut samples = Vec::new();
     for frame in 0..frames + 10 {
         let start = Instant::now();

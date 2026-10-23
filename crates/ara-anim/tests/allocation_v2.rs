@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 mod common;
+use ara_anim::retarget::*;
 use ara_anim::{
     glam::{Vec3, Vec4},
     graph::*,
@@ -77,6 +78,32 @@ fn procedural_ik_matching_inertialization_and_snapshot_replay_allocate_nothing()
         ..Default::default()
     };
     let mut chain = Chain::cook(&s, &chain_data).unwrap();
+    let mut body = FullBody::new(&s, 0, std::slice::from_ref(&chain_data), 1).unwrap();
+    let goals = [BodyGoal {
+        chain: 0,
+        position: Vec3::new(0.1, 0.3, 0.0),
+        rotation: None,
+        priority: 1,
+        pelvis_weight: 0.0,
+    }];
+    let rig = RigMap {
+        bones: vec![
+            RigBone {
+                role: BoneRole::Root,
+                joint: "joint_0".into(),
+            },
+            RigBone {
+                role: BoneRole::Spine,
+                joint: "joint_1".into(),
+            },
+            RigBone {
+                role: BoneRole::Chest,
+                joint: "joint_3".into(),
+            },
+        ],
+    };
+    let mut retarget = Retargeter::cook(&s, &rig, &s, &rig).unwrap();
+    let mut retargeted = Pose::new(s.len());
     let mut pose = s.bind_pose().clone();
     let region = Region::new(GLOBAL);
     for t in 0..90 {
@@ -93,6 +120,12 @@ fn procedural_ik_matching_inertialization_and_snapshot_replay_allocate_nothing()
                 },
                 SolverSettings::default(),
             )
+            .unwrap();
+        body.hips(&s, &mut pose, RootMotion::default()).unwrap();
+        body.solve(&s, &mut pose, &goals, 0.0, SolverSettings::default())
+            .unwrap();
+        retarget
+            .apply(&s, &pose, &s, &mut retargeted, true)
             .unwrap();
         actor.tick(&c, &s, |_| {}).unwrap();
         actor.snapshot_into(&mut snapshot);

@@ -42,6 +42,29 @@ pub struct FullBody {
     order: Vec<usize>,
 }
 impl FullBody {
+    /// Sets an explicit model-space hips target before contact projection. Use zero
+    /// pelvis-shift allowance in solve when this root goal must remain fixed.
+    pub fn hips(
+        &mut self,
+        skeleton: &Skeleton,
+        pose: &mut Pose,
+        target: RootMotion,
+    ) -> Result<(), Error> {
+        ensure(
+            skeleton.signature() == self.skeleton
+                && pose.len() == skeleton.len()
+                && target.translation.is_finite()
+                && target.rotation.is_finite()
+                && target.rotation.is_normalized(),
+            "invalid hips target",
+        )?;
+        model_matrices(skeleton, pose, &mut self.model)?;
+        let parent =
+            skeleton.parents[self.pelvis].map_or(Mat4::IDENTITY, |p| self.model[p as usize]);
+        pose.translations[self.pelvis] =
+            parent.inverse().transform_point3(target.translation).into();
+        apply_model_rotation(skeleton, pose, &self.model, self.pelvis, target.rotation)
+    }
     /// Cooks chains and reserves an explicit maximum number of contacts.
     pub fn new(
         skeleton: &Skeleton,

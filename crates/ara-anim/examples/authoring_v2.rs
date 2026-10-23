@@ -15,7 +15,26 @@ use std::path::PathBuf;
 fn chain(names: &[&str]) -> ChainData {
     ChainData {
         joints: names.iter().map(|s| (*s).into()).collect(),
-        ..Default::default()
+        limits: vec![
+            JointLimit {
+                kind: LimitKind::Cone,
+                axis: [1.0, 0.0, 0.0],
+                swing: 2.0,
+                min: -1.2,
+                max: 1.2,
+            },
+            JointLimit {
+                kind: LimitKind::Hinge,
+                axis: if names[1].contains("Leg") {
+                    [1.0, 0.0, 0.0]
+                } else {
+                    [0.0, 1.0, 0.0]
+                },
+                min: -0.05,
+                max: 2.6,
+                ..Default::default()
+            },
+        ],
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -117,6 +136,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }),
                     record.clone(),
                 )?;
+                for (i, (direction, speed, turn)) in [
+                    (glam::Vec3::Z, 1.2, 0.0),
+                    (glam::Vec3::Z, 3.2, 0.0),
+                    (glam::Vec3::X, 1.2, 0.0),
+                    (-glam::Vec3::X, 1.2, 0.0),
+                    (glam::Vec3::Z, 1.2, 0.8),
+                    (glam::Vec3::Z, 1.2, -0.8),
+                    (-glam::Vec3::Z, 1.0, 0.0),
+                    (glam::Vec3::ZERO, 0.0, 0.0),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let mut clip = v2_support::clip(&s, direction, speed, turn);
+                    // Keep the worked text fixture compact; the benchmark uses every 60 Hz key.
+                    for track in &mut clip.tracks {
+                        track
+                            .translations
+                            .retain(|key| key.tick % (v2_support::STEP * 10) == 0);
+                        track
+                            .rotations
+                            .retain(|key| key.tick % (v2_support::STEP * 10) == 0);
+                    }
+                    apply(
+                        AnimationCommand::Create(AnimAsset {
+                            name: format!("Synthetic locomotion {i}"),
+                            skeleton_ref: Some(ara_schema::AssetRef(
+                                "@motion-matching.animation#an_character".into(),
+                            )),
+                            clip: Some(clip),
+                            ..Default::default()
+                        }),
+                        RecordId::parse(&format!("an_clip{i}"))?,
+                    )?;
+                }
+                let query: Vec<_> = (0..27).map(|i| format!("feature{i:02}")).collect();
+                let mut controller = graph::ControllerData {
+                    initial: "locomotion".into(),
+                    ..Default::default()
+                };
+                controller.parameters = query
+                    .iter()
+                    .map(|n| (n.clone(), graph::Parameter::default()))
+                    .collect();
+                controller.nodes.insert(
+                    "search".into(),
+                    graph::Node {
+                        kind: graph::NodeKind::MotionMatching,
+                        clip: Some(ara_schema::AssetRef(
+                            "@motion-matching.animation#an_character".into(),
+                        )),
+                        matching: Some(MatchNode {
+                            query,
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                );
+                controller.states.insert(
+                    "locomotion".into(),
+                    graph::State {
+                        node: "search".into(),
+                        ..Default::default()
+                    },
+                );
+                apply(AnimationCommand::SetController(controller), record.clone())?;
             }
             _ => {
                 let profile = RagdollProfile {

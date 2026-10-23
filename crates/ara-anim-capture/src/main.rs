@@ -113,8 +113,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         lights: Vec::new(),
         sun_direction: Vec3::new(-0.3, 0.8, 1.0).normalize(),
         sun_lux: Vec3::splat(3000.0),
-        environment: Vec::new(),
-        environment_size: [0; 2],
+        environment: vec![[0.0, 0.0, 0.0, 1.0]],
+        environment_size: [1; 2],
     };
     for color in [
         [0.08, 0.65, 0.9, 1.0],

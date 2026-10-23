@@ -260,6 +260,18 @@ impl Chain {
         let anchor = self.model[self.joints[0]].w_axis.truncate();
         let axis_to_goal = target - anchor;
         let total: f32 = self.lengths.iter().sum();
+        if axis_to_goal.length() >= total {
+            self.positions[0] = anchor;
+            for i in 0..last {
+                self.positions[i + 1] =
+                    self.positions[i] + direction(axis_to_goal) * self.lengths[i];
+            }
+            // Establish the extended branch before tip-to-root descent. Otherwise
+            // an opposed target can fold the middle joint onto the root and stall.
+            for i in 0..last {
+                self.rotate(skeleton, pose, i, self.positions[i + 1], self.joints[i + 1])?;
+            }
+        }
         if last >= 2
             && axis_to_goal.length() < total - settings.tolerance
             && self.joints.iter().skip(1).all(|j| {
@@ -348,7 +360,20 @@ impl Chain {
         if from.length_squared() < 1e-12 || to.length_squared() < 1e-12 {
             return Ok(());
         }
-        let delta = Quat::from_rotation_arc(from.normalize(), to.normalize());
+        let delta = if self.limits[index].kind == LimitKind::Hinge {
+            let parent = skeleton.parents[j].map_or(Quat::IDENTITY, |p| {
+                self.model[p as usize].to_scale_rotation_translation().1
+            });
+            let axis = parent * skeleton.bind.rotations[j] * Vec3::from(self.limits[index].axis);
+            let a = from - axis * from.dot(axis);
+            let b = to - axis * to.dot(axis);
+            if a.length_squared() < 1e-12 || b.length_squared() < 1e-12 {
+                return Ok(());
+            }
+            Quat::from_axis_angle(axis, axis.dot(a.cross(b)).atan2(a.dot(b)))
+        } else {
+            Quat::from_rotation_arc(from.normalize(), to.normalize())
+        };
         let rotation = delta * self.model[j].to_scale_rotation_translation().1;
         let parent = skeleton.parents[j].map_or(Quat::IDENTITY, |p| {
             self.model[p as usize].to_scale_rotation_translation().1

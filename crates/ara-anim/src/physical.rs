@@ -325,7 +325,12 @@ impl PhysicalAnimation {
         out: &mut Pose,
     ) -> Result<(), Error> {
         ensure(
-            self.skeleton == skeleton.signature() && state.valid() && out.len() == skeleton.len(),
+            self.skeleton == skeleton.signature()
+                && state.valid()
+                && out.len() == skeleton.len()
+                && actor.translation.is_finite()
+                && actor.rotation.is_finite()
+                && actor.rotation.is_normalized(),
             "invalid physical pose blend",
         )?;
         self.read(backend)?;

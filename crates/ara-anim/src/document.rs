@@ -53,6 +53,7 @@ pub struct IkSetup {
 /// Registers the animation record, nested data/parameters and `.animation` kind.
 pub fn register(db: &mut SchemaDb) -> Result<(), Error> {
     db.register::<AnimAsset>();
+    db.register::<crate::physical::PhysicalState>();
     db.add_kind(DocKindDesc {
         name: "animation".into(),
         version: 1,
