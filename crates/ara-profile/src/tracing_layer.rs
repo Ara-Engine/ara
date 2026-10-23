@@ -132,14 +132,13 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for ProfileLayer {
                 .iter()
                 .rposition(|e| e.as_ref().is_some_and(|e| e.0 == id.into_u64()))
             {
-                if let Some((_id, scope)) = entered.entries[i].take() {
-                    #[cfg(not(feature = "tracy"))]
-                    if let Some((owner, scope)) = scope {
-                        crate::ring::end(owner, scope);
-                    }
-                    #[cfg(feature = "tracy")]
-                    drop(scope);
+                let entry = entered.entries[i].take();
+                #[cfg(not(feature = "tracy"))]
+                if let Some((_id, Some((owner, scope)))) = entry {
+                    crate::ring::end(owner, scope);
                 }
+                #[cfg(feature = "tracy")]
+                drop(entry);
                 while entered.len > 0 && entered.entries[entered.len - 1].is_none() {
                     entered.len -= 1;
                 }
