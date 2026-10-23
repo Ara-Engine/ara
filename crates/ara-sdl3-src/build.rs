@@ -119,10 +119,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     build.compile("ara_sdl3");
     if os == "windows" {
-        cc::Build::new().cpp(true).std("c++17").warnings(false).opt_level(3)
-            .flag("/utf-8").define("_CRT_SECURE_NO_WARNINGS", None)
-            .define("SDL_STATIC_LIB", None).include("config")
-            .include(format!("{SDL}/include")).include(format!("{SDL}/src"))
+        cc::Build::new()
+            .cpp(true)
+            .std("c++17")
+            .warnings(false)
+            .opt_level(3)
+            .flag("/utf-8")
+            .define("_CRT_SECURE_NO_WARNINGS", None)
+            .define("SDL_STATIC_LIB", None)
+            .include("config")
+            .include(format!("{SDL}/include"))
+            .include(format!("{SDL}/src"))
             .file(format!("{SDL}/src/core/windows/SDL_gameinput.cpp"))
             .file(format!("{SDL}/src/video/windows/SDL_windowsgameinput.cpp"))
             .compile("ara_sdl3_cpp");
@@ -140,8 +147,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             .file(format!("{SDL}/src/hidapi/android/hid.cpp"))
             .compile("ara_sdl3_hid");
     }
-    println!(
-        "cargo:warning=SDL 3.4.18 static compilation: {:.2}s (NUM_JOBS={})",
+    eprintln!(
+        "SDL 3.4.18 static compilation: {:.2}s (NUM_JOBS={})",
         start.elapsed().as_secs_f64(),
         env::var("NUM_JOBS")?
     );

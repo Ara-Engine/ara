@@ -159,6 +159,7 @@ dependencies = [
  "ara-json",
  "ara-opus-sys",
  "ara-schema",
+ "ara-sdl3-src",
  "bevy_ecs",
  "blake3",
  "ebur128",
@@ -167,7 +168,6 @@ dependencies = [
  "ogg",
  "rtrb",
  "rustfft",
- "sdl3-sys",
  "serde",
  "serde_json",
  "symphonia",
@@ -265,6 +265,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "ara-foliage"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "ara-terrain",
+ "bytemuck",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -405,6 +421,30 @@ dependencies = [
  "serde",
  "serde_json",
  "writeable",
+]
+
+[[package]]
+name = "ara-landscape"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset-format",
+ "ara-doc",
+ "ara-foliage",
+ "ara-gpu",
+ "ara-json",
+ "ara-material",
+ "ara-render",
+ "ara-schema",
+ "ara-shader-cook",
+ "ara-terrain",
+ "blake3",
+ "bytemuck",
+ "glam 0.30.9",
+ "half",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -550,9 +590,10 @@ name = "ara-platform"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-audio",
  "ara-gpu",
+ "ara-sdl3-src",
  "ash",
- "sdl3-sys",
 ]
 
 [[package]]
@@ -665,6 +706,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-sdl3-src"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "sdl3-sys",
+]
+
+[[package]]
 name = "ara-shader-cook"
 version = "0.0.0"
 dependencies = [
@@ -693,6 +742,24 @@ dependencies = [
  "ciborium",
  "glam 0.30.9",
  "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-terrain"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-nav",
+ "ara-ops",
+ "ara-physics",
+ "ara-physics-jolt",
+ "ara-schema",
+ "blake3",
  "serde",
  "serde_json",
 ]
