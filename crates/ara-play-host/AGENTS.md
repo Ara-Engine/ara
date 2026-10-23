@@ -1,0 +1,56 @@
+# ara-play-host
+
+The owner side of Play: a `ara_host::Service` serving `play.*` (MCP `ara_play`) and
+`test.run` (MCP `ara_test`). Registered by the `ara` daemon (`ara serve`, `ara mcp`
+when it becomes the daemon). Depends on ara-host, ara-play, ara-asset, ara-runtime
+(component schemas only at runtime; no simulation runs here).
+
+## Public API
+
+- `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
+  `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
+  `ARA_IMPORT_WORKER`); two warm headless players, no warm window by default.
+- `register_engine_schemas(&mut SchemaDb)`: runtime components for the host's DB.
+- `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
+  checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
+- `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
+  (imports in worker processes); `pins` waits for published generations.
+- `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets,
+  7304 test failed, 7305 bad request (local range; reserve centrally later).
+
+## Methods
+
+`play.start {scene?, mode local|host|dedicated, clients, window, startPaused, seed,
+tickHz, hotReload}` → `{world: "play:N", players[], bootMs, prepareMs, transport}`;
+`stop`, `pause`, `resume`, `step`, `until`, `input`, `timescale`, `inspect`, `read`,
+`patch` (acked after the applying tick), `capture` (hash, optional labelled PNG),
+`watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`,
+`debug.crash`, `pool`, `status`. Pause/resume/step/input/patch/timescale broadcast to
+every player of a world; reads go to the authority.
+
+- `play.keep`: diff → drop `driven` values unless `includeDriven` → `prev` check
+  against the current scene (conflicts reported, not applied) → one `property.set`
+  batch through `Cx::apply` (agent edits enter review as usual).
+- Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 1 s silence →
+  `player_panicked | player_crashed | player_unresponsive | player_exited`, logged with a
+  `play.restart` fix; `play.status` holds the structured fault.
+- `test.run {steps, seed, determinism}` runs a spec (`spec.rs`: input, step, until,
+  expect, patch, watch, capture, hash) in fresh headless players; `determinism` runs
+  it twice in separate processes and requires equal final hashes.
+
+## Gotchas
+
+- Host calls are serialized on the daemon thread; long steps block other calls.
+  Players heartbeat between 30-tick chunks so the watchdog never kills a busy step.
+- The first Play of a fresh clone waits for the first cooks (progressive Fast first).
+  Generations published during Play reach a world only with `hotReload`.
+- Multi-instance without `ara-net`: every process runs the same deterministic world
+  from the same snapshot and broadcast inputs; clients do the S5 UDP hello/welcome.
+  `ara-net` replaces this with replication on the same roles.
+- Players inherit the daemon's environment: SDL3.dll (ara-platform) on PATH, and in
+  debug builds the Vulkan validation layer (`VK_LAYER_PATH`) for captures/windows.
+
+## Testing
+
+Unit coverage lives in `ara-play`; the end-to-end gate is `ara-player`'s
+`tests/scenario.rs`. `cargo clippy -p ara-play-host --all-targets -- -D warnings`.

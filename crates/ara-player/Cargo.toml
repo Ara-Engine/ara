@@ -27,10 +27,9 @@ serde_json.workspace = true
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
 
 [dev-dependencies]
-ara-cmd.workspace = true
 ara-host.workspace = true
 ara-mcp.workspace = true
-ara-proto.workspace = true
+ara-play-host = { path = "../ara-play-host" }
 
 [lints]
 workspace = true
