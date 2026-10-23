@@ -88,10 +88,14 @@ impl Computed {
             tag,
             "button" | "field" | "input" | "toggle" | "slider" | "dropdown" | "tab"
         );
+        // Every node is a containing block: an absolute child's insets (including
+        // `right`/`bottom`) resolve against its parent, which is where paint places it.
+        // Taffy's own default is `Static` (CSS), which resolves them against the root.
         let mut layout = Style {
             display: Display::Flex,
             flex_direction: FlexDirection::Column,
             flex_shrink: 0.0,
+            position: Position::Relative,
             ..Style::default()
         };
         if control {

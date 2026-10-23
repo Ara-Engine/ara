@@ -60,6 +60,12 @@ pub struct Editor {
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,
+    /// Embedded Play surfaces for the Game view (taken from the play service).
+    pub(crate) play_surfaces: Option<ara_play_host::embed::Surfaces>,
+    /// The Play world this window started (`play:3`).
+    pub(crate) play_world: Option<String>,
+    /// The Game view's size in physical pixels: the size embedded Play starts at.
+    pub(crate) game_size: [u32; 2],
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -144,7 +150,10 @@ impl Editor {
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
         let mut play = ara_play_host::PlayConfig::for_project(root);
         play.pool.headless = 1;
-        host.register(Box::new(ara_play_host::PlayService::new(root, play)))
+        let mut play = ara_play_host::PlayService::new(root, play);
+        // The Game view shows embedded players through shared GPU surfaces (D19).
+        let play_surfaces = Some(play.surfaces());
+        host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
         let (completed, results) = mpsc::channel();
@@ -192,6 +201,9 @@ impl Editor {
             extraction_revision: 0,
             queued_commands: Vec::new(),
             activity,
+            play_surfaces,
+            play_world: None,
+            game_size: [1280, 720],
         };
         // A scene seen for the first time is framed, like `editor.scene.open` does.
         if editor.state.camera == crate::state::Camera::default()
@@ -209,9 +221,33 @@ impl Editor {
         let result = self.call_for(ConnId::LOCAL, method, params)?;
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
-            return self.action("play.start", result);
+            let mut start = result;
+            self.embed_play(&mut start);
+            return self.action("play.start", start);
+        }
+        if method == "play.start"
+            && let Some(world) = result["world"].as_str()
+        {
+            self.play_world = Some(world.to_owned());
+        } else if method == "play.stop" {
+            self.play_world = None;
         }
         Ok(result)
+    }
+    /// Play in the Game view (setting `play.inGameView`, on by default): no player
+    /// window, an embedded surface at the Game view's size instead.
+    pub(crate) fn embed_play(&self, params: &mut Value) {
+        if self
+            .state
+            .settings
+            .get("play.inGameView")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+        {
+            let [w, h] = self.game_size;
+            params["window"] = false.into();
+            params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});
+        }
     }
     /// Commit an atomic list of content commands as the window's human author.
     pub fn apply(

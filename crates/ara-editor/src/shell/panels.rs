@@ -169,7 +169,7 @@ impl Shell {
         match panel {
             "hierarchy" => self.hierarchy_panel(editor, out)?,
             "scene" => self.scene_panel(editor, out),
-            "game" => self.empty(out, "game-empty", "gamepad-2", "Game view", "Play opens the game in a player window. The in-editor Game view through a shared GPU texture (D19) comes next.", &[("game-play", "Play", "play.start")]),
+            "game" => self.game_panel(editor, out),
             "material" => self.material_panel(editor, out)?,
             "vfx" => self.vfx_panel(editor, out)?,
             "profiler" => self.profiler_panel(editor, out)?,
@@ -180,7 +180,14 @@ impl Shell {
             "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),
             "settings" => self.settings_panel(editor, out),
-            other => self.empty(out, &format!("unknown-{other}"), "square", "Unknown panel", "This layout names a panel this editor does not have.", &[("unknown-reset", "Reset layout", "layout.reset")]),
+            other => self.empty(
+                out,
+                &format!("unknown-{other}"),
+                "square",
+                "Unknown panel",
+                "This layout names a panel this editor does not have.",
+                &[("unknown-reset", "Reset layout", "layout.reset")],
+            ),
         }
         Ok(())
     }

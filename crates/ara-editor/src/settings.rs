@@ -311,6 +311,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(0.),
     ),
     def(
+        "play.inGameView",
+        User,
+        "Viewport",
+        "Play in the Game view",
+        "Play shows inside the editor's Game view (input goes to it while focused). Off opens a separate player window.",
+        Kind::Toggle,
+        Lit::B(true),
+    ),
+    def(
         "play.hotReload",
         Project,
         "Networking & Play",

@@ -69,6 +69,8 @@ pub(crate) struct Ctx<'a> {
     pub logs: crate::shell::LogView,
     /// Assets lists every file (Show All Files).
     pub assets_show_all: bool,
+    /// Game view: stats overlay on, aspect preset, a frame is showing.
+    pub game: (bool, &'static str, bool),
 }
 /// Whether a command can run now.
 #[derive(Clone, Debug, PartialEq)]
@@ -209,6 +211,7 @@ impl Shell {
             clipboard_value: self.field_clipboard.is_some(),
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
+            game: (self.game_stats, self.game_aspect, self.game_live),
         }
     }
     /// Run a registry command if it is available, then rebuild; disabled commands

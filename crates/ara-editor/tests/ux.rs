@@ -732,3 +732,40 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(names(&shell), ["albedo.png"]);
 }
+#[test]
+fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"game"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // Before Play: an empty state with Play; input capture explains what to do first.
+    assert!(shell.ui.find("game-empty").is_some());
+    assert!(shell.ui.find("game-play").is_some());
+    assert!(
+        shell
+            .run_command(&mut editor, "game.capture", &Default::default())
+            .is_err()
+    );
+    // Aspect presets are registry commands with check marks.
+    shell
+        .run_command(&mut editor, "game.aspect.16x9", &Default::default())
+        .unwrap();
+    let label = shell.ui.find("game-aspect-label").unwrap();
+    assert_eq!(shell.ui.nodes[label].text.as_ref().unwrap().value, "16:9");
+    // Play in the Game view (the default) starts an embedded player at the view's size.
+    let mut params = json!({"window": true});
+    ara_editor::testing_embed_play(&editor, &mut params);
+    assert_eq!(params["window"], false);
+    assert!(params["embed"]["width"].as_u64().unwrap() >= 64);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.inGameView","value":false}),
+        )
+        .unwrap();
+    let mut params = json!({"window": true});
+    ara_editor::testing_embed_play(&editor, &mut params);
+    assert_eq!(params["window"], true);
+}

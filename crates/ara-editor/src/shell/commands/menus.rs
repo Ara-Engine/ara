@@ -486,6 +486,8 @@ pub(crate) enum Context {
     ViewModes,
     /// Viewport toolbar: show flags.
     Show,
+    /// Game view toolbar: aspect presets.
+    GameAspect,
 }
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
@@ -699,6 +701,15 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.mode.gi_debug"),
             S,
             C("view.fidelity"),
+        ],
+        Context::GameAspect => &[
+            C("game.aspect.free"),
+            S,
+            C("game.aspect.16x9"),
+            C("game.aspect.16x10"),
+            C("game.aspect.4x3"),
+            C("game.aspect.21x9"),
+            C("game.aspect.9x16"),
         ],
         Context::Show => &[
             C("view.show.grid"),

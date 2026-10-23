@@ -283,3 +283,8 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .type-chips { flex-direction:row; align-items:center; gap:4px; height:28px; flex-shrink:0; padding-left:8px; padding-right:8px; overflow:hidden; }
 .type-chip { height:20px; padding-left:8px; padding-right:8px; border-width:1px; border-color:var(--separator-strong); border-radius:10px; background:transparent; font-size:11px; color:var(--muted-foreground); flex-shrink:0; }
 .type-chip:hover { background:var(--raised); color:var(--foreground); }
+/* Game view. */
+.game-surface { flex-grow:1; flex-basis:0px; min-height:0px; align-items:center; justify-content:center; background:var(--background); }
+.game-frame { padding:0px; border-width:0px; border-radius:0px; background:var(--background); }
+.game-stats { position:absolute; right:10px; top:10px; padding:4px; padding-left:8px; padding-right:8px; border-radius:var(--radius-sm); background:var(--menu-surface); font-size:11px; color:var(--foreground); }
+.game-hint { position:absolute; left:10px; bottom:10px; height:24px; padding-left:8px; padding-right:8px; align-items:center; border-radius:var(--radius-sm); background:var(--menu-surface); font-size:11px; color:var(--muted-foreground); }

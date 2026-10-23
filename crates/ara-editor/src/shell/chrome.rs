@@ -124,7 +124,9 @@ impl Shell {
             "vfx" => "Click a module to edit it · right-click for actions",
             "settings" => "Type to search · Ctrl+Z undoes setting changes",
             "console" | "problems" => "Click a message for details · the link goes to its source",
-            "game" => "Click to play · Esc releases the mouse · Shift+F1 frees the cursor",
+            "game" => {
+                "Click the view to play · Esc gives the keyboard and mouse back · F5-F8 Play controls"
+            }
             _ => "W E R tools · F Frame · Alt+drag Orbit · RMB+WASD Fly · Ctrl+K Commands",
         };
         let saved = self.status_note.clone().unwrap_or_else(|| {

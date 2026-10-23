@@ -30,6 +30,8 @@ pub struct Options {
     pub verify_ux: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
     pub scene: Option<String>,
+    /// Start Play (in the Game view) once the window is up.
+    pub play: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -47,12 +49,18 @@ impl Default for Options {
             verify_panels: false,
             verify_ux: false,
             scene: None,
+            play: false,
         }
     }
 }
 pub(super) fn prepare(editor: &mut Editor, options: &Options) -> ara_ui::Result<()> {
     if let Some(scene) = &options.scene {
         editor.action("editor.scene.open", json!({"scene": scene}))?;
+    }
+    if options.play {
+        editor
+            .queued_commands
+            .push(("play.start".into(), crate::shell::commands::Target::None));
     }
     if options.sample {
         sample(editor)?;

@@ -280,6 +280,7 @@ impl EditorService {
                 clipboard_value: false,
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
+                game: (true, "free", false),
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }

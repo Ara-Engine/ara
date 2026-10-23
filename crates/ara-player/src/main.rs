@@ -336,9 +336,7 @@ impl Player {
                     (Some(window), None, _, Some(presenter)) => {
                         window.present(presenter, &self.frame).map(|()| None)
                     }
-                    (None, _, Some(embed), Some(presenter)) => {
-                        embed.render(presenter, &self.frame)
-                    }
+                    (None, _, Some(embed), Some(presenter)) => embed.render(presenter, &self.frame),
                     _ => Ok(None),
                 };
                 let audio = job.map(|job| {

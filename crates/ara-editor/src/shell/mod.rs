@@ -27,6 +27,7 @@ pub use testing::MenuRow;
 mod agents_panel;
 mod animation_panel;
 mod assets_panel;
+mod game_panel;
 mod graph_annotations;
 mod graph_input;
 mod graph_panel;
@@ -91,6 +92,18 @@ pub struct Shell {
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
+    /// Game view: players of the shown world, the selected one, whether a frame is
+    /// showing, frames per second, the surface size, the wanted size (physical px),
+    /// input capture, aspect preset and the stats overlay.
+    pub(crate) game_players: Vec<usize>,
+    pub(crate) game_client: usize,
+    pub(crate) game_live: bool,
+    pub(crate) game_fps: u32,
+    pub(crate) game_size: [u32; 2],
+    pub(crate) game_target: [u32; 2],
+    pub(crate) game_captured: bool,
+    pub(crate) game_aspect: &'static str,
+    pub(crate) game_stats: bool,
     /// Assets lists every file, including glTF buffers and project files.
     pub(crate) assets_show_all: bool,
     /// Console and Problems filters.
@@ -256,6 +269,15 @@ impl Shell {
             pending_reports: Vec::new(),
             log_view: LogView::default(),
             assets_show_all: false,
+            game_players: Vec::new(),
+            game_client: 0,
+            game_live: false,
+            game_fps: 0,
+            game_size: [0, 0],
+            game_target: [0, 0],
+            game_captured: false,
+            game_aspect: "free",
+            game_stats: true,
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,

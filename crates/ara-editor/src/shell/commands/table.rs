@@ -884,6 +884,10 @@ fn build() -> Vec<Spec> {
                 } else {
                     let mut params = play_params(e);
                     params["scene"] = json!(e.state.doc);
+                    e.embed_play(&mut params);
+                    if params["embed"].is_object() {
+                        act(e, "editor.layout.show", json!({"panel": "game"}))?;
+                    }
                     play(e, "play.start", params)?;
                 }
                 view(e, json!({"play": "playing"}))
@@ -1299,6 +1303,135 @@ fn build() -> Vec<Spec> {
             |_, e, _| act(e, "editor.layout.show", json!({"panel": "game"})),
         )
         .when(|c| panel_open(c, "game")),
+        cmd(
+            "game.aspect.free",
+            "Free Aspect",
+            "monitor",
+            "",
+            "Fill the Game view.",
+            |s, _, _| {
+                s.game_aspect = "free";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "free")),
+        cmd(
+            "game.aspect.16x9",
+            "16:9",
+            "monitor",
+            "",
+            "Letterbox the Game view to 16:9.",
+            |s, _, _| {
+                s.game_aspect = "16x9";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "16x9")),
+        cmd(
+            "game.aspect.16x10",
+            "16:10",
+            "monitor",
+            "",
+            "Letterbox the Game view to 16:10.",
+            |s, _, _| {
+                s.game_aspect = "16x10";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "16x10")),
+        cmd(
+            "game.aspect.4x3",
+            "4:3",
+            "monitor",
+            "",
+            "Letterbox the Game view to 4:3.",
+            |s, _, _| {
+                s.game_aspect = "4x3";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "4x3")),
+        cmd(
+            "game.aspect.21x9",
+            "21:9",
+            "monitor",
+            "",
+            "Letterbox the Game view to 21:9.",
+            |s, _, _| {
+                s.game_aspect = "21x9";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "21x9")),
+        cmd(
+            "game.aspect.9x16",
+            "9:16 Portrait",
+            "monitor",
+            "",
+            "Letterbox the Game view to portrait 9:16.",
+            |s, _, _| {
+                s.game_aspect = "9x16";
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.1 == "9x16")),
+        cmd(
+            "game.stats",
+            "Game Stats",
+            "gauge",
+            "",
+            "Show frames per second and resolution over the Game view.",
+            |s, _, _| {
+                s.game_stats = !s.game_stats;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.game.0)),
+        cmd(
+            "game.client",
+            "Show Client",
+            "users",
+            "",
+            "Show and control this Play client in the Game view.",
+            |s, _, t| {
+                if let Target::Text(n) = t
+                    && let Ok(n) = n.parse()
+                {
+                    s.game_client = n;
+                    s.game_captured = false;
+                }
+                Ok(())
+            },
+        ),
+        cmd(
+            "game.capture",
+            "Play in the Game View",
+            "gamepad-2",
+            "",
+            "Send keyboard and mouse to the game until Esc.",
+            |s, _, _| {
+                s.game_captured = true;
+                Ok(())
+            },
+        )
+        .when(|c| {
+            if c.game.2 {
+                Avail::Ready
+            } else {
+                Avail::Blocked("Press Play first; the game shows in the Game view".into())
+            }
+        }),
+        cmd(
+            "game.release",
+            "Release Game Input",
+            "mouse-pointer",
+            "Esc",
+            "Give the keyboard and mouse back to the editor.",
+            |s, _, _| {
+                s.game_captured = false;
+                Ok(())
+            },
+        ),
         cmd(
             "window.problems",
             "Problems",
