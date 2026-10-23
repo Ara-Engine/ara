@@ -60,6 +60,8 @@ deadline starts inside ara-dev; the Windows helper isolates the bootstrap build.
 Every run checks formatting, exact version pins in changed manifests, all tracked
 and new AGENTS.md files (150 lines), built-in importer version literals in tests,
 pending insta snapshots, and an unchanged working tree after Cargo finishes.
+Formatting covers every workspace package in batches of four, avoiding the
+Windows command-line limit that cargo fmt --all exceeds with many test targets.
 Content comparisons include files that were already dirty when the gate started.
 Source/catalog changes also run ara-diag's diagnostic coverage test. A failed test
 mutation is left visible for inspection; the gate never restores it silently.

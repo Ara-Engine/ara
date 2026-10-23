@@ -138,6 +138,46 @@ impl Logs {
             },
         });
     }
+
+    /// Cargo fmt forwards target paths to rustfmt; batch to stay below Windows' limit.
+    fn formatting(&mut self, root: &Path, metadata: &Metadata) -> Result<bool> {
+        let start = Instant::now();
+        let first = self.rows.len();
+        for (index, packages) in metadata.packages.chunks(4).enumerate() {
+            let mut args = vec!["fmt".into()];
+            for package in packages {
+                args.extend(["-p".into(), package.name.clone()]);
+            }
+            args.extend(["--".into(), "--check".into()]);
+            if !self.command(root, &format!("fmt-{}", index + 1), &args)? {
+                break;
+            }
+        }
+        let batches = self.rows.split_off(first);
+        let passed = batches.iter().all(|row| row.passed);
+        let timed_out = batches.iter().any(|row| row.timed_out);
+        let detail = batches
+            .iter()
+            .find(|row| !row.passed)
+            .map(|row| row.detail.clone())
+            .unwrap_or_else(|| {
+                format!(
+                    "{} packages in {} batches; {}",
+                    metadata.packages.len(),
+                    batches.len(),
+                    self.directory.display()
+                )
+            });
+        self.rows.push(Row {
+            check: "fmt".into(),
+            passed,
+            known_failure: false,
+            timed_out,
+            seconds: start.elapsed().as_secs_f64(),
+            detail,
+        });
+        Ok(passed)
+    }
 }
 
 pub(crate) fn selection(
@@ -262,11 +302,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         "importer versions",
         hygiene::importer_versions(root, &files)?,
     );
-    let fmt = logs.command(
-        root,
-        "fmt",
-        &["fmt".into(), "--all".into(), "--".into(), "--check".into()],
-    )?;
+    let fmt = logs.formatting(root, &metadata)?;
     let ready = fmt && logs.rows.iter().all(|row| row.passed);
     let codes = changed.iter().any(|p| {
         p.starts_with("dotnet") && p.extension().is_some_and(|e| e == "cs")
