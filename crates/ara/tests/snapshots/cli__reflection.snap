@@ -3253,6 +3253,31 @@ expression: out
         }
       }
     },
+    "LinkKind": {
+      "kind": "enum",
+      "doc": "How agents traverse an off-mesh link. Animation reads it from `NavAgentState.traversal` (an intent), never through a call.",
+      "module": "navigation",
+      "variants": {
+        "walk": {
+          "doc": "Straight walk at agent speed (narrow passages, scripted moves)."
+        },
+        "jump": {
+          "doc": "Ballistic arc with `arc_height`; plays a jump animation."
+        },
+        "ladder": {
+          "doc": "Vertical climb at reduced speed; plays a ladder animation."
+        },
+        "door": {
+          "doc": "Passable only while open; agents wait at the start and request opening."
+        },
+        "elevator": {
+          "doc": "Passable only while the cabin is present; riders wait, then ride."
+        },
+        "teleport": {
+          "doc": "Instant relocation (portals, spawn tubes)."
+        }
+      }
+    },
     "LocomotionClip": {
       "kind": "struct",
       "doc": "One clip of a locomotion blend and the ground speed it represents.",
@@ -4000,6 +4025,61 @@ expression: out
         }
       }
     },
+    "NavAgentType": {
+      "kind": "component",
+      "doc": "A named agent type: its own baked mesh (dimensions) and traversal costs. Agents select it through `NavAgent.profile == profile`.",
+      "module": "navigation",
+      "fields": {
+        "profile": {
+          "type": "u32",
+          "doc": "Mesh profile ID shared by the type's agents and its bake.",
+          "default": 0
+        },
+        "name": {
+          "type": "string",
+          "doc": "Inspector name (Humanoid, Brute, Drone).",
+          "default": ""
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Bake radius in metres.",
+          "default": 0.3,
+          "unit": "m",
+          "range": [0.01, 10]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Bake clearance height in metres.",
+          "default": 1.8,
+          "unit": "m",
+          "range": [0.1, 100]
+        },
+        "climb": {
+          "type": "f32",
+          "doc": "Maximum step height in metres.",
+          "default": 0.4,
+          "unit": "m",
+          "range": [0, 10]
+        },
+        "slope": {
+          "type": "f32",
+          "doc": "Steepest walkable slope in degrees.",
+          "default": 45,
+          "unit": "deg",
+          "range": [0, 89]
+        },
+        "areaCosts": {
+          "type": "list<f32>",
+          "doc": "Cost multiplier per area ID (index 0..15); missing entries are 1.",
+          "default": []
+        },
+        "areaMask": {
+          "type": "u16",
+          "doc": "Areas this type may enter (one bit per area).",
+          "default": 65535
+        }
+      }
+    },
     "NavArea": {
       "kind": "component",
       "doc": "Area label and cost policy for the collision-geometry producer and query filters.",
@@ -4068,6 +4148,33 @@ expression: out
           "type": "bool",
           "doc": "Whether the connection is available to the baker.",
           "default": true
+        },
+        "kind": {
+          "type": "LinkKind",
+          "doc": "How agents traverse it: drives traversal motion, gating and animation hooks.",
+          "default": "walk",
+          "options": [
+            "walk",
+            "jump",
+            "ladder",
+            "door",
+            "elevator",
+            "teleport"
+          ]
+        },
+        "duration": {
+          "type": "f32",
+          "doc": "Traversal time in seconds; 0 derives it from length and agent speed.",
+          "default": 0,
+          "unit": "s",
+          "range": [0, 600]
+        },
+        "arcHeight": {
+          "type": "f32",
+          "doc": "Jump apex above the straight start-end line, in metres (jumps only).",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, 100]
         }
       }
     },
@@ -4113,6 +4220,40 @@ expression: out
         }
       }
     },
+    "NavObstacle": {
+      "kind": "component",
+      "doc": "Dynamic obstacle: an axis-aligned box centred on the entity's `NavPosition`. Carve/Area changes publish after `NavConfig::rebake_latency_ticks`; until then (and always for `Avoid`) agents avoid it locally.",
+      "module": "navigation",
+      "fields": {
+        "id": {
+          "type": "u32",
+          "doc": "Stable nonzero ID; changes are canonically ordered by it.",
+          "default": 0
+        },
+        "halfExtents": {
+          "type": "vec3",
+          "doc": "Box half extents in metres.",
+          "default": [0.5, 0.5, 0.5],
+          "unit": "m"
+        },
+        "mode": {
+          "type": "ObstacleMode",
+          "doc": "Carve, relabel or avoid only.",
+          "default": "carve",
+          "options": [
+            "carve",
+            "area",
+            "avoid"
+          ]
+        },
+        "area": {
+          "type": "u8",
+          "doc": "Area applied in `Area` mode, from 0 through 15.",
+          "default": 0,
+          "range": [0, 15]
+        }
+      }
+    },
     "Notify": {
       "kind": "struct",
       "doc": "A discrete animation notify, identified independently of its display name.",
@@ -4137,6 +4278,22 @@ expression: out
           "type": "string",
           "doc": "Schema-addressable event payload encoded as a string.",
           "default": ""
+        }
+      }
+    },
+    "ObstacleMode": {
+      "kind": "enum",
+      "doc": "How the navigation reacts to a dynamic obstacle.",
+      "module": "navigation",
+      "variants": {
+        "carve": {
+          "doc": "Cut the box out of the navmesh (background tile rebake). Paths go around."
+        },
+        "area": {
+          "doc": "Relabel the box with `area`, whose per-type cost decides avoidance."
+        },
+        "avoid": {
+          "doc": "No rebake: local avoidance only (moving carts, temporary crowds)."
         }
       }
     },
