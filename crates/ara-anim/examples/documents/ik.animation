@@ -1,0 +1,314 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_v2demo1",
+  "records": {
+    "an_character": {
+      "name": "Worked ik character",
+      "skeleton": {
+        "joints": [
+          {
+            "id": "root",
+            "name": "root"
+          },
+          {
+            "id": "Hips",
+            "name": "Hips",
+            "parent": 0,
+            "bind": {
+              "translation": [0, 1, 0]
+            }
+          },
+          {
+            "id": "Spine",
+            "name": "Spine",
+            "parent": 1,
+            "bind": {
+              "translation": [0, 0.18000000715255737, 0]
+            }
+          },
+          {
+            "id": "Chest",
+            "name": "Chest",
+            "parent": 2,
+            "bind": {
+              "translation": [0, 0.18000000715255737, 0]
+            }
+          },
+          {
+            "id": "Neck",
+            "name": "Neck",
+            "parent": 3,
+            "bind": {
+              "translation": [0, 0.15000000596046448, 0]
+            }
+          },
+          {
+            "id": "Head",
+            "name": "Head",
+            "parent": 4,
+            "bind": {
+              "translation": [0, 0.14000000059604645, 0]
+            }
+          },
+          {
+            "id": "LeftShoulder",
+            "name": "LeftShoulder",
+            "parent": 3,
+            "bind": {
+              "translation": [-0.11999999731779099, 0.10000000149011612, 0]
+            }
+          },
+          {
+            "id": "LeftUpperArm",
+            "name": "LeftUpperArm",
+            "parent": 6,
+            "bind": {
+              "translation": [-0.11999999731779099, 0, 0]
+            }
+          },
+          {
+            "id": "LeftLowerArm",
+            "name": "LeftLowerArm",
+            "parent": 7,
+            "bind": {
+              "translation": [-0.2800000011920929, 0, 0]
+            }
+          },
+          {
+            "id": "LeftHand",
+            "name": "LeftHand",
+            "parent": 8,
+            "bind": {
+              "translation": [-0.25, 0, 0]
+            }
+          },
+          {
+            "id": "RightShoulder",
+            "name": "RightShoulder",
+            "parent": 3,
+            "bind": {
+              "translation": [0.11999999731779099, 0.10000000149011612, 0]
+            }
+          },
+          {
+            "id": "RightUpperArm",
+            "name": "RightUpperArm",
+            "parent": 10,
+            "bind": {
+              "translation": [0.11999999731779099, 0, 0]
+            }
+          },
+          {
+            "id": "RightLowerArm",
+            "name": "RightLowerArm",
+            "parent": 11,
+            "bind": {
+              "translation": [0.2800000011920929, 0, 0]
+            }
+          },
+          {
+            "id": "RightHand",
+            "name": "RightHand",
+            "parent": 12,
+            "bind": {
+              "translation": [0.25, 0, 0]
+            }
+          },
+          {
+            "id": "LeftUpperLeg",
+            "name": "LeftUpperLeg",
+            "parent": 1,
+            "bind": {
+              "translation": [-0.10000000149011612, -0.05999999865889549, 0]
+            }
+          },
+          {
+            "id": "LeftLowerLeg",
+            "name": "LeftLowerLeg",
+            "parent": 14,
+            "bind": {
+              "translation": [0, -0.44999998807907104, 0]
+            }
+          },
+          {
+            "id": "LeftFoot",
+            "name": "LeftFoot",
+            "parent": 15,
+            "bind": {
+              "translation": [0, -0.44999998807907104, 0]
+            }
+          },
+          {
+            "id": "RightUpperLeg",
+            "name": "RightUpperLeg",
+            "parent": 1,
+            "bind": {
+              "translation": [0.10000000149011612, -0.05999999865889549, 0]
+            }
+          },
+          {
+            "id": "RightLowerLeg",
+            "name": "RightLowerLeg",
+            "parent": 17,
+            "bind": {
+              "translation": [0, -0.44999998807907104, 0]
+            }
+          },
+          {
+            "id": "RightFoot",
+            "name": "RightFoot",
+            "parent": 18,
+            "bind": {
+              "translation": [0, -0.44999998807907104, 0]
+            }
+          }
+        ]
+      },
+      "ik": {
+        "pelvis": "Hips",
+        "chains": [
+          {
+            "joints": [
+              "LeftUpperLeg",
+              "LeftLowerLeg",
+              "LeftFoot"
+            ],
+            "limits": [
+              {
+                "kind": "cone",
+                "swing": 2,
+                "min": -1.2000000476837158,
+                "max": 1.2000000476837158
+              },
+              {
+                "kind": "hinge",
+                "swing": 3.1415927410125732,
+                "min": -0.05000000074505806,
+                "max": 2.5999999046325684
+              }
+            ]
+          },
+          {
+            "joints": [
+              "RightUpperLeg",
+              "RightLowerLeg",
+              "RightFoot"
+            ],
+            "limits": [
+              {
+                "kind": "cone",
+                "swing": 2,
+                "min": -1.2000000476837158,
+                "max": 1.2000000476837158
+              },
+              {
+                "kind": "hinge",
+                "swing": 3.1415927410125732,
+                "min": -0.05000000074505806,
+                "max": 2.5999999046325684
+              }
+            ]
+          },
+          {
+            "joints": [
+              "LeftUpperArm",
+              "LeftLowerArm",
+              "LeftHand"
+            ],
+            "limits": [
+              {
+                "kind": "cone",
+                "swing": 2,
+                "min": -1.2000000476837158,
+                "max": 1.2000000476837158
+              },
+              {
+                "kind": "hinge",
+                "axis": [0, 1, 0],
+                "swing": 3.1415927410125732,
+                "min": -0.05000000074505806,
+                "max": 2.5999999046325684
+              }
+            ]
+          },
+          {
+            "joints": [
+              "RightUpperArm",
+              "RightLowerArm",
+              "RightHand"
+            ],
+            "limits": [
+              {
+                "kind": "cone",
+                "swing": 2,
+                "min": -1.2000000476837158,
+                "max": 1.2000000476837158
+              },
+              {
+                "kind": "hinge",
+                "axis": [0, 1, 0],
+                "swing": 3.1415927410125732,
+                "min": -0.05000000074505806,
+                "max": 2.5999999046325684
+              }
+            ]
+          }
+        ],
+        "feet": [
+          {
+            "chain": {
+              "joints": [
+                "LeftUpperLeg",
+                "LeftLowerLeg",
+                "LeftFoot"
+              ],
+              "limits": [
+                {
+                  "kind": "cone",
+                  "swing": 2,
+                  "min": -1.2000000476837158,
+                  "max": 1.2000000476837158
+                },
+                {
+                  "kind": "hinge",
+                  "swing": 3.1415927410125732,
+                  "min": -0.05000000074505806,
+                  "max": 2.5999999046325684
+                }
+              ]
+            }
+          },
+          {
+            "chain": {
+              "joints": [
+                "RightUpperLeg",
+                "RightLowerLeg",
+                "RightFoot"
+              ],
+              "limits": [
+                {
+                  "kind": "cone",
+                  "swing": 2,
+                  "min": -1.2000000476837158,
+                  "max": 1.2000000476837158
+                },
+                {
+                  "kind": "hinge",
+                  "swing": 3.1415927410125732,
+                  "min": -0.05000000074505806,
+                  "max": 2.5999999046325684
+                }
+              ]
+            }
+          }
+        ],
+        "ground": {
+          "probeUp": 0.30000001192092896,
+          "probeDown": 0.6000000238418579,
+          "soleHeight": 0.03999999910593033,
+          "pelvisLimit": 0.30000001192092896
+        }
+      }
+    }
+  }
+}

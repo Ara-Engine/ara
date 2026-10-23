@@ -95,6 +95,8 @@ pub enum NodeKind {
     Additive,
     /// Blend the second input onto the first through a per-joint mask.
     Layer,
+    /// Bounded search in a normalized pose/trajectory feature database.
+    MotionMatching,
 }
 
 /// A blend sample with a stable child-node identity.
@@ -131,6 +133,8 @@ pub struct Node {
     pub weight: f32,
     /// Per-joint [0,1] weights for layer/additive nodes; empty means every joint.
     pub bone_mask: Vec<f32>,
+    /// Search/query/inertialization settings for a motion-matching node.
+    pub matching: Option<crate::matching::MatchNode>,
 }
 impl Default for Node {
     fn default() -> Self {
@@ -142,6 +146,7 @@ impl Default for Node {
             samples: Vec::new(),
             weight: 1.0,
             bone_mask: Vec::new(),
+            matching: None,
         }
     }
 }

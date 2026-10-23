@@ -1,0 +1,19 @@
+[package]
+name = "ara-anim-physics"
+description = "Narrow Jolt ground-query and powered-ragdoll adapters for Ara animation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-anim = { path = "../ara-anim" }
+ara-physics = { path = "../ara-physics" }
+ara-physics-jolt = { path = "../ara-physics-jolt" }
+
+[dev-dependencies]
+ara-schema = { path = "../ara-schema" }
+stats_alloc = "0.1.10"
+
+[lints]
+workspace = true
