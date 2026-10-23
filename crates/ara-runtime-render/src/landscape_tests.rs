@@ -32,6 +32,7 @@ fn atlas_rebases_signed_tile_coordinates_and_preserves_authored_world_origin() {
         header,
         tiles,
         foliage: Vec::new(),
+        foliage_rules: Vec::new(),
     };
     let atlas = landscape_data(&data).expect("nonzero origin and signed tile bounds");
     assert_eq!(atlas.side, 33);

@@ -30,7 +30,8 @@ pub struct Instance {
     pub position_scale: [f32; 4],
     /// Yaw, wind phase, wind stiffness and bounding sphere radius.
     pub rotation_wind: [f32; 4],
-    /// Stable ID low/high, species (0 grass/1 tree/2 rock), reserved.
+    /// Stable ID low/high, species (0 grass/1 tree/2 rock), caller-owned rule index.
+    /// Standalone scatter writes zero; terrain stamps its immutable rule catalog index.
     pub identity: [u32; 4],
 }
 

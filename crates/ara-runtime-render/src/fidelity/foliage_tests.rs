@@ -18,6 +18,7 @@ fn foliage_uses_the_rule_model_and_respects_exclusion_zones() {
         },
         tiles: BTreeMap::from([(coord, Tile::flat(16).expect("valid tile"))]),
         foliage: Vec::new(),
+        foliage_rules: Vec::new(),
     };
     let source = crate::geometry::shape(ara_runtime::components::MeshShape::Plane, [1.0; 3]);
     let entry = Foliage {

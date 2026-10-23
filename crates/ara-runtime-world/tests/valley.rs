@@ -90,6 +90,7 @@ fn evaluate(doc: &Document) -> TerrainData {
         header: terrain.header.clone(),
         tiles,
         foliage: Vec::new(),
+        foliage_rules: Vec::new(),
     }
 }
 

@@ -61,6 +61,19 @@ pub struct TerrainData {
     pub tiles: BTreeMap<TileCoord, Tile>,
     /// Foliage instances scattered over every tile (renderer input).
     pub foliage: Vec<Instance>,
+    /// Every source rule, including disabled rules, in stable qualified-ID order.
+    /// `Instance.identity[3]` indexes this generation's catalog.
+    pub foliage_rules: Vec<FoliageRule>,
+}
+
+/// Immutable rule identity and authoring data for resolving model/prefab geometry.
+#[derive(Debug, Clone)]
+pub struct FoliageRule {
+    /// Stable document and record identity, for example `fo_meadow#r_shrub`.
+    /// Moving the document or enabling another rule does not change its scatter seed.
+    pub id: String,
+    /// Source authoring rule. Disabled rules retain their catalog slot.
+    pub rule: Rule,
 }
 
 impl TerrainData {
@@ -211,9 +224,12 @@ pub fn build(world: &mut World, workspace: &Workspace) -> Result<Option<TerrainS
         header,
         tiles,
         foliage: Vec::new(),
+        foliage_rules: Vec::new(),
     };
     if let Some(reference) = &component.foliage {
-        data.foliage = scatter(&data, document(reference, "foliage")?)?;
+        let (rules, instances) = scatter(&data, document(reference, "foliage")?)?;
+        data.foliage_rules = rules;
+        data.foliage = instances;
     }
     translate(&mut data, offset)?;
     Ok(Some(TerrainState(Arc::new(data))))
@@ -244,8 +260,11 @@ fn translate(data: &mut TerrainData, offset: glam::Vec3) -> Result<()> {
 
 /// Every enabled foliage rule over every tile, minus the document's exclusion zones
 /// (renderer input, deterministic).
-fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>> {
-    let mut rules: Vec<(String, Rule)> = Vec::new();
+fn scatter(
+    data: &TerrainData,
+    doc: &ara_doc::Document,
+) -> Result<(Vec<FoliageRule>, Vec<Instance>)> {
+    let mut rules = Vec::new();
     let mut exclusions: Vec<ara_foliage::Exclusion> = Vec::new();
     for (id, record) in doc.records() {
         let value = || serde_json::Value::Object(record.clone());
@@ -256,10 +275,10 @@ fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>>
         if !id.as_str().starts_with("r_") {
             continue;
         }
-        let rule: Rule = serde_json::from_value(value())?;
-        if rule.enabled {
-            rules.push((id.to_string(), rule));
-        }
+        rules.push(FoliageRule {
+            id: format!("{}#{id}", doc.id),
+            rule: serde_json::from_value(value())?,
+        });
     }
     let width = data.header.tile_width();
     let surface = |p: [f32; 2]| data.surface(p);
@@ -273,14 +292,24 @@ fn scatter(data: &TerrainData, doc: &ara_doc::Document) -> Result<Vec<Instance>>
             min,
             max: [min[0] + width, min[1] + width],
         };
-        for (index, (_, rule)) in rules.iter().enumerate() {
-            instances.extend(
-                ara_foliage::scatter(index as u64, rule, bounds, &surface, &exclusions)
-                    .map_err(|d| RuntimeError(format!("foliage: {}", d.message)))?,
-            );
+        for (index, source) in rules
+            .iter()
+            .enumerate()
+            .filter(|(_, source)| source.rule.enabled)
+        {
+            let index =
+                u32::try_from(index).map_err(|_| RuntimeError("too many foliage rules".into()))?;
+            let seed = crate::math::stable_id(&source.id);
+            let mut placed =
+                ara_foliage::scatter(seed, &source.rule, bounds, &surface, &exclusions)
+                    .map_err(|d| RuntimeError(format!("foliage: {}", d.message)))?;
+            for instance in &mut placed {
+                instance.identity[3] = index;
+            }
+            instances.extend(placed);
         }
     }
-    Ok(instances)
+    Ok((rules, instances))
 }
 
 /// Owns the build-time terrain resource (not gameplay state: immutable content).
@@ -400,6 +429,86 @@ pub fn navigation_geometry(state: &TerrainState, geometry: &mut ara_nav::Geometr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn foliage_rule_catalog_keeps_sources_without_reseeding_surviving_rules() {
+        use ara_doc::{AssetId, Document, RecordId};
+        let header = Header {
+            origin: [0.; 2],
+            spacing: 1.,
+            cells: 32,
+            min: TileCoord { x: 0, z: 0 },
+            max: TileCoord { x: 1, z: 1 },
+            materials: Vec::new(),
+        };
+        let terrain =
+            ara_terrain::Terrain::new(AssetId::parse("tr_flat").expect("ID"), header.clone())
+                .expect("terrain");
+        let coordinate = TileCoord { x: 0, z: 0 };
+        let data = TerrainData {
+            header,
+            tiles: BTreeMap::from([(
+                coordinate,
+                terrain.evaluate(coordinate, &NoBases).expect("tile"),
+            )]),
+            foliage: Vec::new(),
+            foliage_rules: Vec::new(),
+        };
+        let record = serde_json::json!({
+            "name":"Shrub", "asset":"@shrub.prefab#pf_shrub", "species":"grass",
+            "seed":9, "cellSize":4., "density":0.05, "height":[-1.,1.],
+            "slope":[0.,90.], "scale":[1.,1.], "enabled":true
+        })
+        .as_object()
+        .expect("record")
+        .clone();
+        let mut document = Document::new("foliage", AssetId::parse("fo_meadow").expect("ID"));
+        document.insert_unchecked(RecordId::parse("r_z").expect("ID"), record.clone());
+        let (catalog, original) = scatter(&data, &document).expect("scatter");
+        assert_eq!(catalog[0].id, "fo_meadow#r_z");
+        assert_eq!(catalog[0].rule.asset.0, "@shrub.prefab#pf_shrub");
+        assert!(!original.is_empty());
+        assert!(original.iter().all(|instance| instance.identity[3] == 0));
+
+        let mut disabled = record.clone();
+        disabled.insert("enabled".into(), false.into());
+        document.insert_unchecked(RecordId::parse("r_a").expect("ID"), disabled);
+        let (catalog, mut after) = scatter(&data, &document).expect("disabled rule");
+        assert_eq!(catalog.len(), 2);
+        assert_eq!(catalog[0].id, "fo_meadow#r_a");
+        assert!(!catalog[0].rule.enabled);
+        assert!(after.iter().all(|instance| instance.identity[3] == 1));
+        for instance in &mut after {
+            instance.identity[3] = 0;
+        }
+        assert_eq!(
+            original, after,
+            "inserting a disabled rule must preserve scatter identity and placement"
+        );
+
+        document.insert_unchecked(RecordId::parse("r_a").expect("ID"), record.clone());
+        let (_, after) = scatter(&data, &document).expect("enabled rule");
+        let survivors: Vec<_> = after
+            .into_iter()
+            .filter(|instance| instance.identity[3] == 1)
+            .map(|mut instance| {
+                instance.identity[3] = 0;
+                instance
+            })
+            .collect();
+        assert_eq!(
+            original, survivors,
+            "enabling another rule must preserve survivors"
+        );
+
+        let mut other = Document::new("foliage", AssetId::parse("fo_other").expect("ID"));
+        other.insert_unchecked(RecordId::parse("r_z").expect("ID"), record);
+        let (_, other) = scatter(&data, &other).expect("other document");
+        assert_ne!(
+            original, other,
+            "document identity namespaces rule randomness"
+        );
+    }
 
     #[test]
     fn parented_terrain_translation_reaches_heights_foliage_navigation_and_collision() {
