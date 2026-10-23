@@ -5,7 +5,7 @@ use crate::{
     state::{ApplyPolicy, EditorState, Navigation},
     world::{DocumentView, gesture::Gesture},
 };
-use ara_host::{Host, HostConfig, Project};
+use ara_host::{Host, HostConfig};
 use ara_proto::{ConnId, Endpoint, RpcError};
 use serde_json::{Value, json};
 use std::{
@@ -65,7 +65,9 @@ struct Pending {
 impl Editor {
     /// Open the project, register editor commands/services and create the window's human session.
     pub fn open(root: &Path) -> anyhow::Result<Self> {
-        let mut project = Project::open(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        // One schema world: the editor validates exactly what the player runs.
+        let mut project =
+            ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let main_scene = project.main_scene();
         crate::commands::register(&mut project.registry, &mut project.db);
         let command_schemas = project
@@ -83,6 +85,7 @@ impl Editor {
         }
         let mut host = Host::open(project, HostConfig::default())
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        ara_audio_why::register(host.why());
         let workspace = host.store().workspace();
         let doc = main_scene
             .as_deref()
@@ -327,6 +330,12 @@ impl Editor {
                 | "session.rollback"
                 | "doc.sync"
                 | "jobs.start"
+                // Agent changes to a running game: live patches, C# commands, kept
+                // changes and C# source writes (hot reloads) follow the same policy.
+                | "play.patch"
+                | "play.command"
+                | "play.keep"
+                | "script.write"
         ) && !params["dryRun"].as_bool().unwrap_or(false)
             && self.state.policy != ApplyPolicy::Immediately
         {

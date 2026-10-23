@@ -1,0 +1,122 @@
+{
+  "$schema": "ara://schema/types/1",
+  "types": {
+    "Door": {
+      "kind": "component",
+      "doc": "A door that swings open around its Y axis when `IsOpen` is set.",
+      "module": "Outpost",
+      "fields": {
+        "openAngle": {
+          "type": "f32",
+          "doc": "How far the door opens.",
+          "default": 0,
+          "unit": "deg",
+          "range": [0, 180]
+        },
+        "isOpen": {
+          "type": "bool",
+          "doc": "Whether the door should be open.",
+          "default": false,
+          "replicate": {
+            "audience": "relevant"
+          }
+        }
+      }
+    },
+    "GameRules": {
+      "kind": "resource",
+      "doc": "World tuning shared by every system.",
+      "module": "Outpost",
+      "fields": {
+        "gravity": {
+          "type": "f32",
+          "doc": "Downward acceleration.",
+          "default": 9.81,
+          "unit": "m/s2"
+        },
+        "floor": {
+          "type": "f32",
+          "doc": "Lowest centre height of scripted bodies (unit boxes rest on the ground).",
+          "default": 0.5,
+          "unit": "m"
+        }
+      }
+    },
+    "Mass": {
+      "kind": "component",
+      "doc": "Mass of a body; 0 means it ignores gravity.",
+      "module": "Outpost",
+      "fields": {
+        "value": {
+          "type": "f32",
+          "doc": "Kilograms.",
+          "default": 0,
+          "unit": "kg",
+          "range": [0, null]
+        }
+      }
+    },
+    "MedkitUsed": {
+      "kind": "struct",
+      "doc": "Played when a survivor uses a medkit.",
+      "module": "Outpost",
+      "fields": {
+        "actor": {
+          "type": "entity",
+          "doc": "Who healed.",
+          "default": null
+        }
+      }
+    },
+    "Motion": {
+      "kind": "component",
+      "doc": "Linear velocity of a scripted body (physics bodies use the engine's Velocity).",
+      "module": "Outpost",
+      "fields": {
+        "linear": {
+          "type": "vec3",
+          "doc": "Metres per second.",
+          "default": [0, 0, 0],
+          "unit": "m/s"
+        }
+      }
+    },
+    "UseMedkitParams": {
+      "kind": "params",
+      "doc": "Params of the `game.UseMedkit` command.",
+      "module": "Outpost",
+      "fields": {
+        "actor": {
+          "type": "entity",
+          "doc": "The survivor using the medkit.",
+          "required": true
+        }
+      }
+    },
+    "Vitality": {
+      "kind": "component",
+      "doc": "Health and healing supplies of a survivor.",
+      "module": "Outpost",
+      "fields": {
+        "hp": {
+          "type": "u16",
+          "doc": "Hit points; 0 is downed.",
+          "default": 0,
+          "range": [0, 100],
+          "replicate": {
+            "audience": "relevant"
+          }
+        },
+        "medkits": {
+          "type": "u8",
+          "doc": "Medkits carried.",
+          "default": 0,
+          "range": [0, 9],
+          "replicate": {
+            "audience": "owner"
+          }
+        }
+      }
+    }
+  }
+}

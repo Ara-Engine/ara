@@ -156,6 +156,11 @@ pub fn car(w: &mut JoltWorld, p: Vec3) -> VehicleHandle {
 }
 
 pub fn bowl(w: &mut JoltWorld, center: Vec3, radius: f32, depth: f32) {
+    let shape = bowl_shape(w, center, radius, depth);
+    add_body(w, shape, Vec3::ZERO, Quat::IDENTITY, MotionType::Static);
+}
+/// Cooks the identical bowl geometry for either native or ECS construction.
+pub fn bowl_shape(w: &mut JoltWorld, center: Vec3, radius: f32, depth: f32) -> ShapeHandle {
     let (rings, segments) = (24u32, 48u32);
     let mut vertices = vec![center.to_array()];
     for ring in 1..=rings {
@@ -182,14 +187,12 @@ pub fn bowl(w: &mut JoltWorld, center: Vec3, radius: f32, depth: f32) {
             indices.extend([a, b, d, a, d, c]);
         }
     }
-    let shape = w
-        .backend_mut()
+    w.backend_mut()
         .create_shape(Shape::Mesh {
             vertices: &vertices,
             indices: &indices,
         })
-        .expect("bowl mesh");
-    add_body(w, shape, Vec3::ZERO, Quat::IDENTITY, MotionType::Static);
+        .expect("bowl mesh")
 }
 pub struct Lcg(u64);
 impl Lcg {
@@ -214,6 +217,21 @@ pub fn grid(
     per_row: usize,
     seed: u64,
 ) -> Vec<BodyHandle> {
+    let bodies = grid_descriptions(w, count, center, per_row, seed);
+    let mut ids = Vec::with_capacity(count);
+    w.backend_mut()
+        .create_bodies(&bodies, &mut ids)
+        .expect("grid fits capacity");
+    ids
+}
+/// Uses one seeded description generator for both benchmark integration paths.
+pub fn grid_descriptions(
+    w: &mut JoltWorld,
+    count: usize,
+    center: Vec3,
+    per_row: usize,
+    seed: u64,
+) -> Vec<BodyDesc> {
     let cube = w
         .backend_mut()
         .create_shape(Shape::Box {
@@ -261,11 +279,7 @@ pub fn grid(
             velocity: Velocity::default(),
         });
     }
-    let mut ids = Vec::with_capacity(count);
-    w.backend_mut()
-        .create_bodies(&bodies, &mut ids)
-        .expect("grid fits capacity");
-    ids
+    bodies
 }
 pub fn pyramid(w: &mut JoltWorld) -> Vec<BodyHandle> {
     let mut ids = Vec::new();

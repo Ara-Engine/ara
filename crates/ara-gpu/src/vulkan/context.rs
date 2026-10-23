@@ -118,6 +118,16 @@ pub struct DeviceInfo {
     pub device_id: u32,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
+    /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
+    pub mesh_shading: bool,
+    /// Mesh indirect group limits: x, y, z, and the total group count.
+    pub mesh_dispatch: [u32; 4],
+    /// Task indirect group limits: x, y, z, and the total group count.
+    pub task_dispatch: [u32; 4],
+    /// Enabled core geometry capability (also used by Slang PrimitiveId inputs).
+    pub geometry_shader: bool,
+    /// Enabled 64-bit shader integer operations and buffer atomics.
+    pub buffer_int64_atomics: bool,
     /// Maximum supported 2D extent.
     pub max_image_dimension: u32,
     /// Supported Vulkan version.
@@ -162,6 +172,8 @@ pub struct Gpu {
     pub compute_pool: vk::CommandPool,
     /// Optional RT extension dispatch table; inspect info.ray_tracing before use.
     pub acceleration: ash::khr::acceleration_structure::Device,
+    /// Optional mesh-shader dispatch table; gated by info.mesh_shading.
+    pub mesh: ash::ext::mesh_shader::Device,
     /// Immutable device, driver and capability provenance.
     pub info: DeviceInfo,
     /// Stable callback state, retained through instance teardown.

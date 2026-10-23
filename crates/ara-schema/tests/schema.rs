@@ -380,3 +380,49 @@ fn runtime_types_can_be_replaced_and_resources_round_trip() {
     assert_eq!(get(&db, "Rules").doc, "Game rules, v2.");
     assert!(db.verify().is_empty());
 }
+
+/// A layer record in one kind of document.
+#[derive(Schema)]
+#[ara(record(prefix = "l"), module = "game")]
+#[allow(dead_code)]
+pub struct MapLayer {
+    /// Display name.
+    pub name: String,
+}
+
+/// A locale record in another kind, reusing the `l` prefix.
+#[derive(Schema)]
+#[ara(record(prefix = "l"), module = "game")]
+#[allow(dead_code)]
+pub struct Locale {
+    /// BCP 47 tag.
+    pub tag: String,
+}
+
+#[test]
+fn record_prefixes_are_unique_per_document_kind_only() {
+    let kind = |name: &str, records: &[&str]| ara_schema::DocKindDesc {
+        name: name.into(),
+        version: 1,
+        doc: "Test documents.".into(),
+        id_prefix: "tk".into(),
+        extension: name.into(),
+        records: records.iter().map(|r| r.to_string()).collect(),
+        single_root: false,
+    };
+    let mut db = SchemaDb::new();
+    db.register::<MapLayer>().register::<Locale>();
+    db.add_kind(kind("map", &["MapLayer"])).expect("map kind");
+    db.add_kind(kind("locale", &["Locale"]))
+        .expect("locale kind");
+    assert!(db.verify().is_empty(), "{:?}", db.verify());
+    db.add_kind(kind("mixed", &["MapLayer", "Locale"]))
+        .expect("mixed kind");
+    assert!(
+        db.verify()
+            .iter()
+            .any(|d| d.message.contains("record prefix `l`")),
+        "{:?}",
+        db.verify()
+    );
+}

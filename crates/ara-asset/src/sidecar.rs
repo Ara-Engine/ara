@@ -30,6 +30,34 @@ impl Default for ImportSettings {
         }
     }
 }
+/// How the installed importer relates to the version a sidecar records. A version's
+/// generation is its leading number (`3` in `3-gltf14-…`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VersionCheck {
+    /// Identical: cook as recorded.
+    Current,
+    /// The installed importer is newer (a higher generation, or the same generation
+    /// with other encoder versions): reimport with it and record it
+    /// (`SidecarCommand::Version`).
+    Upgrade,
+    /// The sidecar was written by a newer importer generation than is installed.
+    Newer,
+}
+impl ImportSettings {
+    /// Compares the recorded version with the `installed` importer's version.
+    pub fn check_version(&self, installed: &str) -> VersionCheck {
+        fn generation(version: &str) -> Option<u64> {
+            version.split('-').next()?.parse().ok()
+        }
+        if self.version == installed {
+            return VersionCheck::Current;
+        }
+        match (generation(&self.version), generation(installed)) {
+            (Some(recorded), Some(installed)) if recorded > installed => VersionCheck::Newer,
+            _ => VersionCheck::Upgrade,
+        }
+    }
+}
 /// Registers the import document kind and reflected settings in the kernel DB.
 pub fn register_schema(db: &mut SchemaDb) {
     db.register::<crate::CookPreset>();
@@ -122,6 +150,8 @@ pub enum SidecarCommand {
     Preset(crate::CookPreset),
     /// Replace declared asset dependencies.
     Dependencies(Vec<AssetRef>),
+    /// Record the importer version the asset is cooked with (after an importer upgrade).
+    Version(String),
 }
 impl SidecarCommand {
     /// Produces a validated-op request for `Store::transact` or `Document::apply`.
@@ -156,6 +186,17 @@ impl SidecarCommand {
                 path: FieldPath::field("dependencies"),
                 value: Some(ara_json::to_value(&deps)?),
             },
+            Self::Version(version) => {
+                if version.is_empty() {
+                    return Err(Error::Invalid("version must be set".into()));
+                }
+                Edit::Set {
+                    doc,
+                    id,
+                    path: FieldPath::field("version"),
+                    value: Some(serde_json::Value::String(version)),
+                }
+            }
         })
     }
 }

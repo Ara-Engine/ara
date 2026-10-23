@@ -21,6 +21,13 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   players, `accept` for owners); `poll`, `wait`, `request`, `notify`, `respond`, `flush`,
   `call`. `link::error(code, message, data)` builds error objects.
 
+
+## C# messages
+
+`play.command` (`Command`), `play.commands`, `play.compile` (`Compile`: claim agent
+edits), `play.snapshot` (portable hex CBOR) and `Start.resume`; `play.event`
+notifications (`Event`: `reload`, `diagnostic`, `restart`, `types`);
+`PlayScene.scripts` (`ScriptScene`: host dir, compile server, module folders).
 ## Rules and gotchas
 
 - Players connect back; they never listen. The token travels in `player.hello`, set

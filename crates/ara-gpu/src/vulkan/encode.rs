@@ -197,6 +197,15 @@ impl VulkanDevice {
                     1,
                     16,
                 ),
+                Command::DrawMeshTasksIndirect { arguments, offset } => {
+                    self.context.mesh.cmd_draw_mesh_tasks_indirect(
+                        cmd,
+                        self.buffers.get(*arguments)?.raw.handle,
+                        *offset,
+                        1,
+                        12,
+                    )
+                }
                 Command::Fullscreen => device.cmd_draw(cmd, 3, 1, 0, 0),
                 Command::DrawProcedural {
                     vertices,

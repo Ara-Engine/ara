@@ -40,9 +40,11 @@ pub struct Retarget {
     pub length: f32,
 }
 
-/// A joint in parent-before-child order, with stable importer identity.
+/// A joint in parent-before-child order, with stable importer identity. Reflected as
+/// `AnimJoint` (the physics `Joint` component owns the bare name); documents never name
+/// it, so the rename needs no document migration.
 #[derive(Debug, Clone, Default, PartialEq, Schema, Serialize, Deserialize)]
-#[ara(module = "animation")]
+#[ara(name = "AnimJoint", module = "animation")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Joint {
     /// Stable joint identifier, preserved when its display name changes.

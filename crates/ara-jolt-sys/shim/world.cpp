@@ -39,15 +39,27 @@ AraWorld::AraWorld(const AraWorldDesc& d) : contacts(d.event_capacity) {
         }
     }
     object_bp = std::make_unique<ObjectVsBroadPhaseLayerFilterTable>(bp_layers, 2, pairs, 16);
-    temp = std::make_unique<TempAllocatorImplWithMallocFallback>(d.scratch_mb * 1024 * 1024);
+    require(finite(d.speculative_contact_distance) && d.speculative_contact_distance >= 0
+        && finite(d.time_before_sleep) && d.time_before_sleep > 0
+        && finite(d.sleep_velocity_threshold) && d.sleep_velocity_threshold > 0
+        && d.settings_flags < 8, "invalid physics tuning");
+    temp = std::make_unique<MeasuredTemp>(d.scratch_mb * 1024 * 1024);
     if (d.threads <= 1) jobs = std::make_unique<JobSystemSingleThreaded>(cMaxPhysicsJobs);
+    else if (d.settings_flags & 4) {
+        auto host = std::make_unique<HostJobs>(d.threads);
+        host_jobs = host.get(); jobs = std::move(host);
+    }
     else jobs = std::make_unique<JobSystemThreadPool>(cMaxPhysicsJobs, cMaxPhysicsBarriers, int(d.threads) - 1);
     system.Init(d.max_bodies, 0, d.max_pairs, d.max_contacts, bp_layers, *object_bp, pairs);
     system.SetGravity(v3(d.gravity));
     auto s = system.GetPhysicsSettings();
     s.mNumVelocitySteps = d.velocity_steps;
     s.mNumPositionSteps = d.position_steps;
-    s.mDeterministicSimulation = true;
+    s.mDeterministicSimulation = (d.settings_flags & 1) != 0;
+    s.mUseLargeIslandSplitter = (d.settings_flags & 2) != 0;
+    s.mSpeculativeContactDistance = d.speculative_contact_distance;
+    s.mTimeBeforeSleep = d.time_before_sleep;
+    s.mPointVelocitySleepThreshold = d.sleep_velocity_threshold;
     system.SetPhysicsSettings(s);
     if (d.event_capacity) system.SetContactListener(&contacts);
 }
@@ -62,6 +74,9 @@ AraWorld::~AraWorld() {
 }
 
 extern "C" {
+void ara_jobs_begin(AraWorld* w, uint32_t workers) { w->host_jobs->Begin(workers); }
+void ara_jobs_end(AraWorld* w) { w->host_jobs->End(); }
+void ara_jobs_run(AraWorld* w) { w->host_jobs->Run(); }
 size_t ara_last_error(char* out, size_t capacity) {
     size_t len = std::strlen(last_error) + 1;
     if (out && capacity) { size_t n = std::min(len, capacity); std::memcpy(out, last_error, n); out[n-1] = 0; }
@@ -162,6 +177,7 @@ uint32_t ara_world_restore(AraWorld* w, const uint8_t* data, size_t len) {
             c.character->RestoreState(r);
         }
         require(r.pos == r.len, "snapshot trailing data");
+        w->character_collision.Invalidate();
         w->contacts.count.store(0);
         return 1;
     } ARA_CATCH(0)

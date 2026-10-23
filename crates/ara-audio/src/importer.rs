@@ -68,6 +68,11 @@ pub struct ImportOutput {
     pub sample_rate: u32,
     /// BLAKE3 of the cooked bytes.
     pub hash: String,
+    /// Integrated loudness (LUFS) of the decoded source, for bus loudness normalization.
+    /// None for silence and sources shorter than 400 ms.
+    pub loudness: Option<f32>,
+    /// Largest absolute decoded sample, bounding normalization boosts.
+    pub peak: f32,
 }
 /// Local worker contract mirroring ara-asset's pure importer boundary.
 /// The eventual adapter translates the asset crate's request/artifact envelopes only.
@@ -88,8 +93,8 @@ impl Importer for AudioImporter {
         "ara.audio"
     }
     fn version(&self) -> u32 {
-        // Codec pin/configuration changed; derived-data keys must not reuse v1 Opus cooks.
-        2
+        // v2: codec pin/configuration changed. v3: artifacts carry loudness and peak metadata.
+        3
     }
     fn extensions(&self) -> &'static [&'static str] {
         &["wav", "flac", "ogg", "vorbis", "opus"]
@@ -104,6 +109,8 @@ impl Importer for AudioImporter {
             )?)
         };
         let clip = decode_clip(decoder.as_mut(), input.settings.decoded_budget)?;
+        let loudness = crate::loudness::integrated(clip.sample_rate(), clip.frames())?;
+        let peak = clip.peak();
         let codec = match input.settings.usage {
             AudioUse::Music | AudioUse::Dialogue => CookCodec::Opus,
             AudioUse::ShortEffect => match input.settings.short_codec {
@@ -132,6 +139,8 @@ impl Importer for AudioImporter {
             codec,
             sample_rate,
             hash,
+            loudness,
+            peak,
         })
     }
 }

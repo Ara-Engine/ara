@@ -65,19 +65,26 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
 - Rust never holds pointers into module code: ids (`slot << 16 | index`) into C# tables
   swapped at tick boundaries.
 
-## Integration seams (next task: ara-sim, ara-cmd, ara-host)
+## Integration (ara-runtime-script)
 
-- ara-sim: call `tick_boundary` at the start of each fixed tick, then `run_tick`. The C#
-  schedule is built in `ScriptHost::rebuild` (systems in `ScriptSet(id)` sets with ordering
-  edges); interleaving into ara-sim's schedule means exposing those sets instead of running
-  `self.schedule` (keep `rebuild` as the single place that turns the registry into systems).
-- ara-cmd: merge `command_catalog()` into the registry; `execute_command`/`undo` already
-  produce and revert a `CommandRecord` as one undoable step.
-- ara-host / Engine Protocol: agent file writes call `request_compile(.., Agent)` before
-  writing; forward `Boundary::reports` and `take_diagnostics()` as protocol events; `RELOAD_L4`
-  tells ara-player to restart from a snapshot; `ara_run` goes through `run::RunPool`. D20's
-  "apply agent changes when idle / on approval" is a hold on agent-origin updates in the C#
-  pending queue (reports already carry `origin`); not built yet.
+- The runtime plugin (`crates/ara-runtime-script`) starts the host on the ara-sim world,
+  runs `tick_boundary` before each fixed tick and `run_tick` in the Gameplay slot (one
+  exclusive system; C# systems keep their `(Order, name)` order inside it), hands C#
+  columns to ara-sim as external components and snapshots them by entity identity.
+- Accessors for owners: `module_components`, `module_resources`, `owned_ids(world)`
+  (every ID the host added, for ara-sim storage checks), `read_resource`/`write_resource`
+  (JSON) and `module_types` (each module as a `*.types.json` document; the play service
+  keeps `<module>/<Name>.types.json` current so hosts validate C# components).
+- Commands: `play.command` runs `execute_command` between ticks; the play service
+  publishes `command_catalog()` to the host (`Cx::publish_commands`), so `schema.list`
+  shows C# commands next to the registry's.
+- Agent writes go through `script.write`: players call `request_compile(.., Agent)`
+  before the owner writes the file; reports and diagnostics become `play.event`s;
+  `RELOAD_L4` restarts the player from a snapshot of the current tick. The editor's
+  "apply agent changes" policy holds agent `script.write` and play mutations at the
+  RPC boundary (a hold inside the C# pending queue is not built).
+- Not yet: interleaving individual `ScriptSet`s with Rust systems (parallelism across
+  them), `ara_run` through `run::RunPool` from the daemon.
 
 ## Testing
 

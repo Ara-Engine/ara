@@ -49,6 +49,14 @@ pub struct AraWorldDesc {
     pub layer_masks: [u32; 16],
     /// Gravity in meters per second squared.
     pub gravity: AraVec3,
+    /// Speculative contact distance in meters.
+    pub speculative_contact_distance: f32,
+    /// Sleep delay in seconds.
+    pub time_before_sleep: f32,
+    /// Sleep point-speed threshold in meters per second.
+    pub sleep_velocity_threshold: f32,
+    /// Bit 0: deterministic ordering; bit 1: large-island splitter; bit 2: host jobs.
+    pub settings_flags: u32,
 }
 
 /// Shape construction parameters; geometry arrays are separate borrowed slices.

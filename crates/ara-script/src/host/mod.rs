@@ -14,6 +14,7 @@ mod ctx;
 mod register;
 mod registry;
 
+use std::collections::BTreeMap;
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::path::PathBuf;
 
@@ -634,6 +635,106 @@ impl ScriptHost {
         self.registry
             .component(name)
             .map(|i| self.registry.components[i as usize].id)
+    }
+
+    /// Schema names of the components C# modules declared (engine bindings excluded).
+    pub fn module_components(&self) -> Vec<&str> {
+        self.registry
+            .components
+            .iter()
+            .filter(|c| c.owner != Owner::Engine)
+            .map(|c| c.name.as_str())
+            .collect()
+    }
+
+    /// Each module's reflected types as a project `*.types.json` document (by module
+    /// name), so hosts that never start .NET (the editor, `ara check`) validate C#
+    /// components in scene documents exactly as the play process does.
+    pub fn module_types(&self) -> BTreeMap<String, Value> {
+        self.registry
+            .modules
+            .values()
+            .map(|m| {
+                let types: serde_json::Map<String, Value> = m
+                    .types
+                    .iter()
+                    .filter_map(|n| {
+                        let t = self.registry.schema.get(n)?;
+                        Some((n.clone(), self.registry.schema.type_json(t)))
+                    })
+                    .collect();
+                (
+                    m.name.clone(),
+                    json!({"$schema": ara_schema::TYPES_SCHEMA, "types": types}),
+                )
+            })
+            .collect()
+    }
+
+    /// Schema names of the resources C# modules declared.
+    pub fn module_resources(&self) -> Vec<&str> {
+        self.registry
+            .resources
+            .iter()
+            .map(|r| r.name.as_str())
+            .collect()
+    }
+
+    /// Every component and resource this host added to `world`: C# module columns and
+    /// resources and the host's own bookkeeping resources, for simulation owners that
+    /// validate world storage (ara-sim state providers). Engine bindings are excluded.
+    pub fn owned_ids(&self, world: &World) -> Vec<ComponentId> {
+        let mut ids: Vec<ComponentId> = self
+            .registry
+            .components
+            .iter()
+            .filter(|c| c.owner != Owner::Engine)
+            .map(|c| c.id)
+            .collect();
+        ids.extend(self.registry.resources.iter().filter_map(|r| r.id));
+        ids.extend(
+            [
+                world.component_id::<ScriptCatalog>(),
+                world.component_id::<ScriptEvents>(),
+                world.component_id::<ScriptTick>(),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        ids
+    }
+
+    /// A C# resource's value as JSON.
+    pub fn read_resource(&self, world: &World, name: &str) -> Option<Value> {
+        let r = self.registry.resources.iter().find(|r| r.name == name)?;
+        let bytes = registry::resource_bytes(world, r.id?, r.layout.size)?;
+        Some(value::decode(&self.registry.schema, &r.layout, &bytes))
+    }
+
+    /// Replaces a C# resource from JSON; missing fields take their defaults.
+    pub fn write_resource(
+        &self,
+        world: &mut World,
+        name: &str,
+        v: &Value,
+    ) -> Result<(), Diagnostic> {
+        let r = self
+            .registry
+            .resources
+            .iter()
+            .find(|r| r.name == name)
+            .ok_or_else(|| {
+                Diagnostic::error(
+                    codes::UNKNOWN_COMPONENT,
+                    format!("no script resource `{name}`"),
+                )
+            })?;
+        let id = r.id.ok_or_else(|| {
+            Diagnostic::error(codes::UNKNOWN_COMPONENT, format!("`{name}` has no storage"))
+        })?;
+        let bytes = value::encode(&self.registry.schema, &r.layout, v, name)?;
+        registry::insert_resource_bytes(world, id, &bytes);
+        Ok(())
     }
 
     /// A component's value as JSON (agent inspection).

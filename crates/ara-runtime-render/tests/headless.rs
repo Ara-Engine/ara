@@ -50,6 +50,14 @@ fn runtime() -> Runtime {
     let scene = doc.id.clone();
     let mut workspace = Workspace::default();
     workspace.insert("levels/demo.scene", doc);
+    // The Fox's `.animation` controller documents.
+    for entry in std::fs::read_dir(demo().join("anim")).unwrap() {
+        let path = entry.unwrap().path();
+        let relative = format!("anim/{}", path.file_name().unwrap().to_string_lossy());
+        let text = std::fs::read_to_string(&path).unwrap();
+        let doc = ara_doc::read(&text, &relative, &schema, None).doc.unwrap();
+        workspace.insert(relative, doc);
+    }
     Runtime::new(
         schema,
         workspace,

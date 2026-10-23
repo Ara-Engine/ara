@@ -1,0 +1,15 @@
+graph Wind {
+  param strength = 0.6 range(0, 1) "Wind strength from the weather system";
+  let gust = noise.smooth(0.25, 7);
+  let swell = noise.smooth(1.3, 8);
+  let air = noise.pink(3);
+  let center = map(gust, -1, 1, 250, 1400);
+  let whistle = map(swell, -1, 1, 0.8, 3.5);
+  let band = bandpass(air, center, whistle);
+  let body = lowpass(air, 400, 0.7);
+  let level = map(gust, -1, 1, 0.35, 1);
+  let mixed = mix(band, body);
+  let shaped = mul(mixed, level);
+  let blown = mul(shaped, strength);
+  output out = blown;
+}

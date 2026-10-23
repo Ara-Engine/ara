@@ -1,16 +1,677 @@
 ---
 source: crates/ara/tests/cli.rs
-assertion_line: 93
 expression: out
 ---
 {
   "$schema": "ara://schema/reflection/1",
   "types": {
-    "Animator": {
+    "AcousticMaterial": {
+      "kind": "struct",
+      "doc": "Surface acoustics for reflection, scattering and transmission.",
+      "module": "audio",
+      "fields": {
+        "absorption": {
+          "type": "vec3",
+          "doc": "Fraction of energy absorbed on reflection: low/mid/high bands.",
+          "default": [0.1, 0.2, 0.3],
+          "range": [0, 1]
+        },
+        "scattering": {
+          "type": "f32",
+          "doc": "Fraction of reflected energy scattered diffusely (0 specular, 1 diffuse).",
+          "default": 0.05,
+          "range": [0, 1]
+        },
+        "transmission": {
+          "type": "vec3",
+          "doc": "Fraction of energy transmitted through the surface: low/mid/high bands.",
+          "default": [0.1, 0.05, 0.03],
+          "range": [0, 1]
+        }
+      }
+    },
+    "AcousticPath": {
+      "kind": "struct",
+      "doc": "Acoustic simulation result. Physics/Steam workers publish this at a frame boundary.",
+      "module": "audio",
+      "fields": {
+        "visibility": {
+          "type": "f32",
+          "doc": "Direct path visibility: zero is fully occluded, one is clear.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "transmission": {
+          "type": "vec3",
+          "doc": "Low/mid/high band transmission through occluders.",
+          "default": [0, 0, 0],
+          "range": [0, 1]
+        },
+        "reverbSend": {
+          "type": "f32",
+          "doc": "Per-voice room reverb send amplitude into the bus's routed aux return. Values above one compensate distance attenuation so the diffuse reverberant level stays physical.",
+          "default": 0,
+          "range": [0, 16]
+        },
+        "air": {
+          "type": "vec3",
+          "doc": "Low/mid/high air absorption gain over the propagation distance; one is none.",
+          "default": [1, 1, 1],
+          "range": [0, 1]
+        }
+      }
+    },
+    "AcousticPortal": {
       "kind": "component",
-      "doc": "Skeletal animation for this entity's `MeshRenderer.model`, compiled to an ara-anim program: an `idle` state and a `move` state whose 1D blend tree is driven by the entity's ground speed, cross-faded at `moveThreshold`.",
+      "doc": "An opening (door, window, archway) connecting two zones. An empty zone name is outdoors.",
+      "module": "audio",
+      "fields": {
+        "a": {
+          "type": "string",
+          "doc": "First zone's name; empty means outdoors.",
+          "default": ""
+        },
+        "b": {
+          "type": "string",
+          "doc": "Second zone's name; empty means outdoors.",
+          "default": ""
+        },
+        "position": {
+          "type": "vec3",
+          "doc": "World-space center of the opening, supplied by the bridge.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "width": {
+          "type": "f32",
+          "doc": "Opening width.",
+          "default": 1,
+          "unit": "m",
+          "range": [0.01, 1000]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Opening height.",
+          "default": 2,
+          "unit": "m",
+          "range": [0.01, 1000]
+        },
+        "open": {
+          "type": "f32",
+          "doc": "How open it is: 0 closed (blocks), 1 fully open. Drive from door state.",
+          "default": 1,
+          "range": [0, 1]
+        }
+      }
+    },
+    "AcousticSource": {
+      "kind": "component",
+      "doc": "Per-source acoustic behaviour, alongside `AudioSource`. Optional: sources without it use `AcousticSource::default()`.",
+      "module": "audio",
+      "fields": {
+        "occlusion": {
+          "type": "bool",
+          "doc": "Trace geometry between source and listener for occlusion and transmission.",
+          "default": true
+        },
+        "occlusionRadius": {
+          "type": "f32",
+          "doc": "Radius sampled for partial (volumetric) occlusion; 0 traces only the center ray.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, 50]
+        },
+        "airAbsorption": {
+          "type": "bool",
+          "doc": "Apply frequency-dependent air absorption over the propagation distance.",
+          "default": true
+        },
+        "doppler": {
+          "type": "f32",
+          "doc": "Doppler strength: 0 disables pitch shift, 1 is physical, larger exaggerates.",
+          "default": 1,
+          "range": [0, 4]
+        },
+        "reverbSend": {
+          "type": "f32",
+          "doc": "Room reverb send before zone and portal attenuation.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "distanceCurve": {
+          "type": "list<vec2>",
+          "doc": "Custom distance curve: `[meters, linear gain]` points with increasing distance. Empty uses `AudioSource.attenuation`; cones still apply.",
+          "default": []
+        }
+      }
+    },
+    "AcousticSurface": {
+      "kind": "component",
+      "doc": "Acoustic surface of static geometry or a collider. The physics ray adapter maps hit bodies to this component; absent components read as `generic`.",
+      "module": "audio",
+      "fields": {
+        "preset": {
+          "type": "MaterialPreset",
+          "doc": "Named material; ignored when `custom` is set.",
+          "default": "generic",
+          "options": [
+            "generic",
+            "brick",
+            "concrete",
+            "ceramic",
+            "gravel",
+            "carpet",
+            "glass",
+            "plaster",
+            "wood",
+            "metal",
+            "rock"
+          ]
+        },
+        "custom": {
+          "type": "option<AcousticMaterial>",
+          "doc": "Explicit material values overriding the preset.",
+          "default": null
+        }
+      }
+    },
+    "AcousticsSettings": {
+      "kind": "struct",
+      "doc": "World-wide propagation constants, stored in project/world settings.",
+      "module": "audio",
+      "fields": {
+        "speedOfSound": {
+          "type": "f32",
+          "doc": "Speed of sound, for Doppler and reflection delays.",
+          "default": 343,
+          "unit": "m/s",
+          "range": [1, 2000]
+        },
+        "airCoefficients": {
+          "type": "vec3",
+          "doc": "Air absorption per meter for low/mid/high bands: gain = exp(-coefficient × distance).",
+          "default": [0.0002, 0.0017, 0.0182],
+          "range": [0, 1]
+        },
+        "occlusionRays": {
+          "type": "u32",
+          "doc": "Rays per source for volumetric occlusion, including the center ray.",
+          "default": 9,
+          "range": [1, 64]
+        },
+        "maxPortalDepth": {
+          "type": "u32",
+          "doc": "Maximum portals sound may pass through between zones.",
+          "default": 3,
+          "range": [0, 8]
+        }
+      }
+    },
+    "AnimAsset": {
+      "kind": "record",
+      "doc": "A stable authoring record holding imported data or a controller source graph.",
+      "module": "animation",
+      "prefix": "an",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Human-readable authoring name.",
+          "default": ""
+        },
+        "skeleton": {
+          "type": "option<SkeletonData>",
+          "doc": "Skeleton source data, when this record defines a rig.",
+          "default": null
+        },
+        "skeletonRef": {
+          "type": "option<asset<animation>>",
+          "doc": "Canonical skeleton reference for clip/controller records.",
+          "default": null
+        },
+        "clip": {
+          "type": "option<ClipData>",
+          "doc": "Source clip keys; the derived cooked blob lives in the asset cache.",
+          "default": null
+        },
+        "controller": {
+          "type": "option<AnimController>",
+          "doc": "State-machine and pose-graph source, independent of editor layout.",
+          "default": null
+        },
+        "rig": {
+          "type": "option<RigMap>",
+          "doc": "Humanoid role bindings for import-time or runtime retargeting.",
+          "default": null
+        },
+        "ik": {
+          "type": "option<IkSetup>",
+          "doc": "Procedural contact chains and ground-probe settings.",
+          "default": null
+        },
+        "motionDatabase": {
+          "type": "option<MatchConfig>",
+          "doc": "Offline pose/trajectory feature database configuration.",
+          "default": null
+        },
+        "ragdoll": {
+          "type": "option<RagdollProfile>",
+          "doc": "Powered bodies, constraints and spring gains for physical animation.",
+          "default": null
+        }
+      }
+    },
+    "AnimBlendSample": {
+      "kind": "struct",
+      "doc": "A blend sample with a stable child-node identity.",
       "module": "animation",
       "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable child-node ID in the same controller.",
+          "default": ""
+        },
+        "x": {
+          "type": "f32",
+          "doc": "Scalar coordinate, or horizontal directional coordinate.",
+          "default": 0
+        },
+        "y": {
+          "type": "f32",
+          "doc": "Vertical directional coordinate; zero for a scalar blend.",
+          "default": 0
+        }
+      }
+    },
+    "AnimComparison": {
+      "kind": "enum",
+      "doc": "A typed parameter comparison.",
+      "module": "animation",
+      "variants": {
+        "equal": {
+          "doc": "Exact equality in the parameter's storage type."
+        },
+        "notEqual": {
+          "doc": "Exact inequality in the parameter's storage type."
+        },
+        "greater": {
+          "doc": "Strict numeric greater-than."
+        },
+        "less": {
+          "doc": "Strict numeric less-than."
+        },
+        "trigger": {
+          "doc": "A latched trigger is set."
+        }
+      }
+    },
+    "AnimCondition": {
+      "kind": "struct",
+      "doc": "One transition predicate; all conditions on a transition must match.",
+      "module": "animation",
+      "fields": {
+        "parameter": {
+          "type": "string",
+          "doc": "Stable parameter name.",
+          "default": ""
+        },
+        "comparison": {
+          "type": "AnimComparison",
+          "doc": "Comparison valid for that parameter's type.",
+          "default": "equal",
+          "options": [
+            "equal",
+            "notEqual",
+            "greater",
+            "less",
+            "trigger"
+          ]
+        },
+        "floatValue": {
+          "type": "f32",
+          "doc": "Right-hand side for a float comparison.",
+          "default": 0
+        },
+        "intValue": {
+          "type": "i32",
+          "doc": "Right-hand side for an integer comparison.",
+          "default": 0
+        },
+        "boolValue": {
+          "type": "bool",
+          "doc": "Right-hand side for a boolean comparison.",
+          "default": false
+        }
+      }
+    },
+    "AnimController": {
+      "kind": "struct",
+      "doc": "Canonical controller source, lowered to an immutable program by Controller.",
+      "module": "animation",
+      "fields": {
+        "parameters": {
+          "type": "map<AnimParameter>",
+          "doc": "Stable typed parameter declarations.",
+          "default": {}
+        },
+        "nodes": {
+          "type": "map<AnimNode>",
+          "doc": "Stable graph nodes; child references must form a DAG.",
+          "default": {}
+        },
+        "states": {
+          "type": "map<AnimState>",
+          "doc": "Stable named states.",
+          "default": {}
+        },
+        "transitions": {
+          "type": "list<AnimTransition>",
+          "doc": "Transition list, in descending priority.",
+          "default": []
+        },
+        "initial": {
+          "type": "string",
+          "doc": "Initial state ID.",
+          "default": ""
+        },
+        "fixedStep": {
+          "type": "u32",
+          "doc": "Fixed tick duration in the clips' common timebase.",
+          "default": 800
+        },
+        "extractRootMotion": {
+          "type": "bool",
+          "doc": "Remove the root's animated rigid transform after extraction.",
+          "default": true
+        }
+      }
+    },
+    "AnimJoint": {
+      "kind": "struct",
+      "doc": "A joint in parent-before-child order, with stable importer identity. Reflected as `AnimJoint` (the physics `Joint` component owns the bare name); documents never name it, so the rename needs no document migration.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable joint identifier, preserved when its display name changes.",
+          "default": ""
+        },
+        "name": {
+          "type": "string",
+          "doc": "Human-readable joint name.",
+          "default": ""
+        },
+        "parent": {
+          "type": "option<u32>",
+          "doc": "Index of the parent joint; absent for a root.",
+          "default": null
+        },
+        "bind": {
+          "type": "AnimTransform",
+          "doc": "Local bind transform relative to the parent.",
+          "default": {}
+        },
+        "retarget": {
+          "type": "Retarget",
+          "doc": "Retargeting metadata preserved by the cooked skeleton.",
+          "default": {}
+        }
+      }
+    },
+    "AnimMatrix": {
+      "kind": "struct",
+      "doc": "An explicitly imported inverse-bind matrix, in column-major order.",
+      "module": "animation",
+      "fields": {
+        "x": {
+          "type": "vec4",
+          "doc": "First matrix column.",
+          "default": [0, 0, 0, 0]
+        },
+        "y": {
+          "type": "vec4",
+          "doc": "Second matrix column.",
+          "default": [0, 0, 0, 0]
+        },
+        "z": {
+          "type": "vec4",
+          "doc": "Third matrix column.",
+          "default": [0, 0, 0, 0]
+        },
+        "w": {
+          "type": "vec4",
+          "doc": "Fourth matrix column, including translation.",
+          "default": [0, 0, 0, 0]
+        }
+      }
+    },
+    "AnimNode": {
+      "kind": "struct",
+      "doc": "A typed animation graph node. The compiler validates fields for each kind.",
+      "module": "animation",
+      "fields": {
+        "kind": {
+          "type": "AnimNodeKind",
+          "doc": "Pose operation.",
+          "default": "clip",
+          "options": [
+            "clip",
+            "blend1d",
+            "directional2d",
+            "additive",
+            "layer",
+            "motionMatching"
+          ]
+        },
+        "clip": {
+          "type": "option<asset<animation>>",
+          "doc": "Clip reference in canonical @path#id form, resolved by ara-asset.",
+          "default": null
+        },
+        "parameterX": {
+          "type": "string",
+          "doc": "Float parameter for a scalar axis, horizontal axis or optional layer weight.",
+          "default": ""
+        },
+        "parameterY": {
+          "type": "string",
+          "doc": "Float parameter for a directional vertical axis.",
+          "default": ""
+        },
+        "samples": {
+          "type": "list<AnimBlendSample>",
+          "doc": "Samples; additive/layer nodes use exactly two in base, overlay order.",
+          "default": []
+        },
+        "weight": {
+          "type": "f32",
+          "doc": "Constant additive/layer weight when parameterX is empty.",
+          "default": 1
+        },
+        "boneMask": {
+          "type": "list<f32>",
+          "doc": "Per-joint [0,1] weights for layer/additive nodes; empty means every joint.",
+          "default": []
+        },
+        "matching": {
+          "type": "option<MatchNode>",
+          "doc": "Search/query/inertialization settings for a motion-matching node.",
+          "default": null
+        }
+      }
+    },
+    "AnimNodeKind": {
+      "kind": "enum",
+      "doc": "Runtime pose operation represented by an authoring graph node.",
+      "module": "animation",
+      "variants": {
+        "clip": {
+          "doc": "A referenced cooked clip."
+        },
+        "blend1d": {
+          "doc": "Interpolate adjacent samples on an ordered scalar axis."
+        },
+        "directional2d": {
+          "doc": "Interpolate a center and an angular ring with radial barycentric weights."
+        },
+        "additive": {
+          "doc": "Add the second input's difference from the skeleton bind pose to the first."
+        },
+        "layer": {
+          "doc": "Blend the second input onto the first through a per-joint mask."
+        },
+        "motionMatching": {
+          "doc": "Bounded search in a normalized pose/trajectory feature database."
+        }
+      }
+    },
+    "AnimParameter": {
+      "kind": "struct",
+      "doc": "A typed parameter declaration, addressed by its stable map key.",
+      "module": "animation",
+      "fields": {
+        "kind": {
+          "type": "AnimParameterKind",
+          "doc": "Parameter's storage and comparison type.",
+          "default": "float",
+          "options": [
+            "float",
+            "int",
+            "bool",
+            "trigger"
+          ]
+        },
+        "floatValue": {
+          "type": "f32",
+          "doc": "Initial value for a float parameter.",
+          "default": 0
+        },
+        "intValue": {
+          "type": "i32",
+          "doc": "Initial value for an integer parameter.",
+          "default": 0
+        },
+        "boolValue": {
+          "type": "bool",
+          "doc": "Initial value for a boolean parameter; triggers always start unset.",
+          "default": false
+        }
+      }
+    },
+    "AnimParameterKind": {
+      "kind": "enum",
+      "doc": "A schema-registered gameplay parameter type.",
+      "module": "animation",
+      "variants": {
+        "float": {
+          "doc": "Finite floating-point value."
+        },
+        "int": {
+          "doc": "Signed 32-bit integer."
+        },
+        "bool": {
+          "doc": "Boolean state."
+        },
+        "trigger": {
+          "doc": "Latched trigger, consumed only by a selected transition that tests it."
+        }
+      }
+    },
+    "AnimState": {
+      "kind": "struct",
+      "doc": "A state selecting a pose graph and its normalized phase clock.",
+      "module": "animation",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable pose graph node ID.",
+          "default": ""
+        },
+        "duration": {
+          "type": "u32",
+          "doc": "Duration in clip ticks; zero infers the longest descendant clip.",
+          "default": 0
+        },
+        "looping": {
+          "type": "bool",
+          "doc": "Whether to wrap the phase clock and repeat notifies.",
+          "default": true
+        },
+        "syncGroup": {
+          "type": "string",
+          "doc": "Nonempty group preserves normalized phase on entry and throughout cross-fades.",
+          "default": ""
+        }
+      }
+    },
+    "AnimTransform": {
+      "kind": "struct",
+      "doc": "A local affine transform; rotations use XYZW quaternions.",
+      "module": "animation",
+      "fields": {
+        "translation": {
+          "type": "vec3",
+          "doc": "Translation in meters relative to the parent.",
+          "default": [0, 0, 0]
+        },
+        "rotation": {
+          "type": "vec4",
+          "doc": "Unit rotation quaternion in XYZW order.",
+          "default": [0, 0, 0, 1]
+        },
+        "scale": {
+          "type": "vec3",
+          "doc": "Positive scale relative to the parent.",
+          "default": [1, 1, 1]
+        }
+      }
+    },
+    "AnimTransition": {
+      "kind": "struct",
+      "doc": "A state transition. Serialized list order defines deterministic priority.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable transition ID for tools and graph mapping.",
+          "default": ""
+        },
+        "from": {
+          "type": "string",
+          "doc": "Source state ID.",
+          "default": ""
+        },
+        "to": {
+          "type": "string",
+          "doc": "Target state ID.",
+          "default": ""
+        },
+        "duration": {
+          "type": "u32",
+          "doc": "Fixed cross-fade duration; zero switches before advancing this tick.",
+          "default": 0
+        },
+        "exitTick": {
+          "type": "option<u32>",
+          "doc": "Optional earliest elapsed state tick; duration waits for one complete cycle.",
+          "default": null
+        },
+        "conditions": {
+          "type": "list<AnimCondition>",
+          "doc": "Typed AND predicates; empty means unconditional.",
+          "default": []
+        }
+      }
+    },
+    "Animator": {
+      "kind": "component",
+      "doc": "Skeletal animation for this entity's `MeshRenderer.model`, compiled to an ara-anim program: the `controller` document when set, else an `idle` state and a `move` state whose 1D blend tree is driven by the entity's ground speed, cross-faded at `moveThreshold`.",
+      "module": "animation",
+      "fields": {
+        "controller": {
+          "type": "option<asset<animation>>",
+          "doc": "Controller authored in an `.animation` document (`@anim/fox.animation#an_fox`): its state machine, blend trees and motion matching replace the built-in idle/locomotion graph below. A float `speed` parameter follows ground speed.",
+          "default": null
+        },
         "idle": {
           "type": "string",
           "doc": "Idle clip name.",
@@ -42,6 +703,511 @@ expression: out
         }
       }
     },
+    "Atlas": {
+      "kind": "struct",
+      "doc": "Canonical atlas metadata; the immutable pixel payload lives in the asset cache.",
+      "fields": {
+        "width": {
+          "type": "u32",
+          "doc": "Atlas pixel width.",
+          "default": 0
+        },
+        "height": {
+          "type": "u32",
+          "doc": "Atlas pixel height.",
+          "default": 0
+        },
+        "regions": {
+          "type": "map<SpriteRegion>",
+          "doc": "Stable source/subasset names to regions, never heap slots.",
+          "default": {}
+        }
+      }
+    },
+    "Attenuation": {
+      "kind": "enum",
+      "doc": "Distance rolloff model, evaluated in meters.",
+      "variants": {
+        "inverse": {
+          "doc": "Inverse distance, clamped at the reference distance and silent at the maximum."
+        },
+        "linear": {
+          "doc": "Linear fade between reference and maximum distance."
+        },
+        "inverseSquare": {
+          "doc": "Inverse-square energy falloff with a finite range fade."
+        }
+      }
+    },
+    "AudioBus": {
+      "kind": "record",
+      "doc": "One bus (category) in the mixer tree. `AudioSource.bus` names it.",
+      "module": "audio",
+      "prefix": "b",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique bus name; `master` configures the root bus.",
+          "default": ""
+        },
+        "output": {
+          "type": "string",
+          "doc": "Bus this one mixes into; empty means `master`. (`parent` is reserved by the kernel.)",
+          "default": ""
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Base gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        },
+        "mute": {
+          "type": "bool",
+          "doc": "Silences the bus and its reverb sends.",
+          "default": false
+        },
+        "voiceLimit": {
+          "type": "u32",
+          "doc": "Real-voice cap for this category and its children; 0 is unlimited.",
+          "default": 0
+        },
+        "loudness": {
+          "type": "option<f32>",
+          "doc": "Integrated loudness target for sources on this bus (music and dialogue: -16 LUFS).",
+          "default": null,
+          "unit": "dB"
+        },
+        "reverb": {
+          "type": "bool",
+          "doc": "Route spatial voices on this bus to the listener's room reverb.",
+          "default": false
+        },
+        "duck": {
+          "type": "option<AudioDuck>",
+          "doc": "Sidechain ducking driven by another bus.",
+          "default": null
+        }
+      }
+    },
+    "AudioDuck": {
+      "kind": "struct",
+      "doc": "Sidechain ducking: another bus's level pulls this bus down (dialogue over music).",
+      "module": "audio",
+      "fields": {
+        "by": {
+          "type": "string",
+          "doc": "Name of the bus whose level triggers the duck.",
+          "default": ""
+        },
+        "thresholdDb": {
+          "type": "f32",
+          "doc": "Trigger level of that bus's block peak.",
+          "default": -30,
+          "unit": "dB",
+          "range": [-96, 0]
+        },
+        "amountDb": {
+          "type": "f32",
+          "doc": "Attenuation while ducked.",
+          "default": -9,
+          "unit": "dB",
+          "range": [-60, 0]
+        },
+        "attack": {
+          "type": "f32",
+          "doc": "Seconds to reach the ducked level.",
+          "default": 0.05,
+          "unit": "s",
+          "range": [0.001, 10]
+        },
+        "release": {
+          "type": "f32",
+          "doc": "Seconds to recover.",
+          "default": 0.4,
+          "unit": "s",
+          "range": [0.001, 10]
+        }
+      }
+    },
+    "AudioGraphAddParams": {
+      "kind": "params",
+      "doc": "Adds an operation node.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "New unique node name.",
+          "required": true
+        },
+        "op": {
+          "type": "string",
+          "doc": "Operation (`lowpass`, `random.pick`).",
+          "required": true
+        },
+        "args": {
+          "type": "map<json>",
+          "doc": "Arguments by input name: numbers, `@clip` references or `name`/`name.port` references.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphParamParams": {
+      "kind": "params",
+      "doc": "Edits a parameter's default, range or documentation.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Parameter name.",
+          "required": true
+        },
+        "default": {
+          "type": "option<json>",
+          "doc": "New default: a number, or an `@clip` reference for clip parameters.",
+          "default": null
+        },
+        "range": {
+          "type": "option<vec2>",
+          "doc": "New `[lo, hi]` range for value parameters.",
+          "default": null
+        },
+        "doc": {
+          "type": "option<string>",
+          "doc": "New documentation.",
+          "default": null
+        }
+      }
+    },
+    "AudioGraphRemoveParams": {
+      "kind": "params",
+      "doc": "Removes a node or parameter and every reference to it.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Name to remove.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphRenameParams": {
+      "kind": "params",
+      "doc": "Renames a parameter or node, keeping its identity, wiring and canvas position.",
+      "module": "audio",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Current name.",
+          "required": true
+        },
+        "to": {
+          "type": "string",
+          "doc": "New unique name.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphSetInputParams": {
+      "kind": "params",
+      "doc": "Sets one input of a node, or a graph output, to a literal or a reference.",
+      "module": "audio",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Node name, or `output` for graph outputs.",
+          "required": true
+        },
+        "input": {
+          "type": "string",
+          "doc": "Input name (`cutoff`, `in0`) or output field (`out`, `left`, `right`, `done`).",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "A number, an `@clip` reference or a `name`/`name.port` reference.",
+          "required": true
+        }
+      }
+    },
+    "AudioGraphTextParams": {
+      "kind": "params",
+      "doc": "Replaces the graph with edited `.audiograph` text; surviving names keep their IDs.",
+      "module": "audio",
+      "fields": {
+        "text": {
+          "type": "string",
+          "doc": "Complete `.audiograph` source.",
+          "required": true
+        }
+      }
+    },
+    "AudioListener": {
+      "kind": "component",
+      "doc": "Presentation listener, usually copied from the local player's camera component.",
+      "module": "audio",
+      "fields": {
+        "position": {
+          "type": "vec3",
+          "doc": "Listener world position.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "velocity": {
+          "type": "vec3",
+          "doc": "Listener world velocity in meters per second.",
+          "default": [0, 0, 0]
+        },
+        "forward": {
+          "type": "vec3",
+          "doc": "Forward direction; the default engine basis looks down negative Z.",
+          "default": [0, 0, -1]
+        },
+        "up": {
+          "type": "vec3",
+          "doc": "Up direction; must not be parallel to forward.",
+          "default": [0, 1, 0]
+        },
+        "coneInner": {
+          "type": "f32",
+          "doc": "Listener sensitivity cone inner full angle.",
+          "default": 360,
+          "unit": "deg",
+          "range": [0, 360]
+        },
+        "coneOuter": {
+          "type": "f32",
+          "doc": "Listener sensitivity cone outer full angle.",
+          "default": 360,
+          "unit": "deg",
+          "range": [0, 360]
+        },
+        "coneOuterGain": {
+          "type": "f32",
+          "doc": "Linear sensitivity outside the listener cone.",
+          "default": 1,
+          "range": [0, 1]
+        }
+      }
+    },
+    "AudioMixState": {
+      "kind": "record",
+      "doc": "A named mix (combat, explore, menu): per-bus gain offsets reached over `fade` seconds.",
+      "module": "audio",
+      "prefix": "s",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique state name.",
+          "default": ""
+        },
+        "buses": {
+          "type": "map<f32>",
+          "doc": "Gain offsets in dB added to each named bus's base gain; -96 or below mutes.",
+          "default": {}
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Transition time into this state.",
+          "default": 1,
+          "unit": "s",
+          "range": [0, 60]
+        }
+      }
+    },
+    "AudioMixerSettings": {
+      "kind": "record",
+      "doc": "Mixer-wide settings (one record per mixer document).",
+      "module": "audio",
+      "prefix": "m",
+      "fields": {
+        "initialState": {
+          "type": "string",
+          "doc": "State applied at startup; empty is the base mix.",
+          "default": ""
+        }
+      }
+    },
+    "AudioSource": {
+      "kind": "component",
+      "doc": "Declarative sound intent. Playback cursors and decoder state are presentation only.",
+      "module": "audio",
+      "fields": {
+        "clip": {
+          "type": "option<asset<audio>>",
+          "doc": "Cooked clip reference in `@path#id` form; absent means no clip.",
+          "default": null
+        },
+        "bus": {
+          "type": "string",
+          "doc": "Mixer bus name resolved by the presentation bridge.",
+          "default": "master"
+        },
+        "gain": {
+          "type": "f32",
+          "doc": "Linear source amplitude.",
+          "default": 1,
+          "range": [0, 16]
+        },
+        "pitch": {
+          "type": "f32",
+          "doc": "Playback pitch multiplier before Doppler.",
+          "default": 1,
+          "range": [0.125, 8]
+        },
+        "looping": {
+          "type": "bool",
+          "doc": "Whether the clip repeats.",
+          "default": false
+        },
+        "spatial": {
+          "type": "bool",
+          "doc": "Whether position affects the sound.",
+          "default": true
+        },
+        "priority": {
+          "type": "u8",
+          "doc": "Voice budget priority; larger values are retained first.",
+          "default": 128
+        },
+        "referenceDistance": {
+          "type": "f32",
+          "doc": "Full-volume radius.",
+          "default": 1,
+          "unit": "m",
+          "range": [0.01, 100000]
+        },
+        "maxDistance": {
+          "type": "f32",
+          "doc": "Silent beyond this distance; must exceed referenceDistance.",
+          "default": 100,
+          "unit": "m",
+          "range": [0.02, 1000000]
+        },
+        "attenuation": {
+          "type": "Attenuation",
+          "doc": "Shape of the distance attenuation curve.",
+          "default": "inverse",
+          "options": [
+            "inverse",
+            "linear",
+            "inverseSquare"
+          ]
+        },
+        "position": {
+          "type": "vec3",
+          "doc": "Source position, supplied from the ECS world transform by the bridge.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "velocity": {
+          "type": "vec3",
+          "doc": "Source velocity in meters per second for Doppler.",
+          "default": [0, 0, 0]
+        },
+        "forward": {
+          "type": "vec3",
+          "doc": "Source forward axis; normalized during spatial evaluation.",
+          "default": [0, 0, -1]
+        },
+        "coneInner": {
+          "type": "f32",
+          "doc": "Full angle of the unattenuated source cone.",
+          "default": 360,
+          "unit": "deg",
+          "range": [0, 360]
+        },
+        "coneOuter": {
+          "type": "f32",
+          "doc": "Full angle at which the source reaches coneOuterGain.",
+          "default": 360,
+          "unit": "deg",
+          "range": [0, 360]
+        },
+        "coneOuterGain": {
+          "type": "f32",
+          "doc": "Linear amplitude outside the source cone.",
+          "default": 1,
+          "range": [0, 1]
+        }
+      }
+    },
+    "BoneRole": {
+      "kind": "enum",
+      "doc": "Anatomical roles shared by Mixamo, UE Mannequin and Unity Humanoid rigs.",
+      "module": "animation",
+      "variants": {
+        "root": {
+          "doc": "Locomotion root, possibly separate from the pelvis."
+        },
+        "hips": {
+          "doc": "Pelvis."
+        },
+        "spine": {
+          "doc": "Lower spine."
+        },
+        "chest": {
+          "doc": "Upper spine/chest."
+        },
+        "upperChest": {
+          "doc": "Optional upper chest, above the main chest role."
+        },
+        "neck": {
+          "doc": "Neck."
+        },
+        "head": {
+          "doc": "Head/look joint."
+        },
+        "leftShoulder": {
+          "doc": "Left clavicle."
+        },
+        "leftUpperArm": {
+          "doc": "Left upper arm."
+        },
+        "leftLowerArm": {
+          "doc": "Left forearm."
+        },
+        "leftHand": {
+          "doc": "Left wrist/hand effector."
+        },
+        "rightShoulder": {
+          "doc": "Right clavicle."
+        },
+        "rightUpperArm": {
+          "doc": "Right upper arm."
+        },
+        "rightLowerArm": {
+          "doc": "Right forearm."
+        },
+        "rightHand": {
+          "doc": "Right wrist/hand effector."
+        },
+        "leftUpperLeg": {
+          "doc": "Left thigh."
+        },
+        "leftLowerLeg": {
+          "doc": "Left shin."
+        },
+        "leftFoot": {
+          "doc": "Left ankle/foot effector."
+        },
+        "leftToes": {
+          "doc": "Left ball/toes."
+        },
+        "rightUpperLeg": {
+          "doc": "Right thigh."
+        },
+        "rightLowerLeg": {
+          "doc": "Right shin."
+        },
+        "rightFoot": {
+          "doc": "Right ankle/foot effector."
+        },
+        "rightToes": {
+          "doc": "Right ball/toes."
+        }
+      }
+    },
     "Camera": {
       "kind": "component",
       "doc": "A viewpoint looking along the entity's local -Z axis. The lowest `priority` wins.",
@@ -58,6 +1224,130 @@ expression: out
           "type": "i32",
           "doc": "Selection order when several cameras exist; lower is preferred.",
           "default": 0
+        }
+      }
+    },
+    "Camera2d": {
+      "kind": "component",
+      "doc": "Orthographic view. Pixel mode uses integer zoom and nearest texel sampling.",
+      "module": "twoD",
+      "fields": {
+        "centre": {
+          "type": "vec2",
+          "doc": "View centre in world metres.",
+          "default": [0, 0]
+        },
+        "pixelsPerMetre": {
+          "type": "f32",
+          "doc": "Art pixels per world metre.",
+          "default": 16,
+          "range": [0.001, null]
+        },
+        "zoom": {
+          "type": "f32",
+          "doc": "Screen pixels per art pixel, rounded to an integer in pixel mode.",
+          "default": 2,
+          "range": [0.001, null]
+        },
+        "pixelPerfect": {
+          "type": "bool",
+          "doc": "Snap view and sprite geometry to art pixels and sample nearest texels.",
+          "default": true
+        },
+        "ambient": {
+          "type": "vec3",
+          "doc": "Linear scene ambient illumination.",
+          "default": [0.2, 0.2, 0.25]
+        },
+        "background": {
+          "type": "vec3",
+          "doc": "Linear clear color behind every layer.",
+          "default": [0.012, 0.018, 0.032]
+        }
+      }
+    },
+    "Camera2dSetParams": {
+      "kind": "params",
+      "doc": "Complete typed component authoring update.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "value": {
+          "type": "Camera2d",
+          "doc": "Complete typed component; omitted fields use schema defaults.",
+          "required": true
+        }
+      }
+    },
+    "CaptureAudioParams": {
+      "kind": "params",
+      "doc": "Parameters for the offline `capture_audio` job, run outside the human's audio engine.",
+      "module": "audio",
+      "fields": {
+        "seconds": {
+          "type": "f64",
+          "doc": "Capture duration; bounded so an agent cannot allocate an unbounded buffer.",
+          "default": 1,
+          "unit": "s",
+          "range": [0.001, 60]
+        }
+      }
+    },
+    "Cell": {
+      "kind": "record",
+      "doc": "One grid/layer partition, with a scene plus optional per-entity scene files.",
+      "module": "world",
+      "prefix": "c",
+      "fields": {
+        "x": {
+          "type": "i32",
+          "doc": "Grid X coordinate.",
+          "default": 0
+        },
+        "z": {
+          "type": "i32",
+          "doc": "Grid Z coordinate.",
+          "default": 0
+        },
+        "layer": {
+          "type": "string",
+          "doc": "Stable layer record ID in this manifest.",
+          "default": ""
+        },
+        "slot": {
+          "type": "u32",
+          "doc": "Unique slot differentiating partitions at the same coordinates.",
+          "default": 0
+        },
+        "documents": {
+          "type": "list<string>",
+          "doc": "Cell scene `@path#documentId` references; every file has one owner.",
+          "default": []
+        },
+        "actors": {
+          "type": "list<string>",
+          "doc": "Optional standalone actor scene files, kept at readable stable paths.",
+          "default": []
+        }
+      }
+    },
+    "ChainData": {
+      "kind": "struct",
+      "doc": "Canonical chain setup, addressed by stable skeleton joint IDs.",
+      "module": "animation",
+      "fields": {
+        "joints": {
+          "type": "list<string>",
+          "doc": "Consecutive parent-to-child joints, including the end effector.",
+          "default": []
+        },
+        "limits": {
+          "type": "list<JointLimit>",
+          "doc": "One limit per rotating joint; empty uses unrestricted limits.",
+          "default": []
         }
       }
     },
@@ -137,6 +1427,61 @@ expression: out
         }
       }
     },
+    "CharacterController2d": {
+      "kind": "component",
+      "doc": "Kinematic capsule character: slopes, steps, ground snapping and pushing. The entity needs no RigidBody2d/Collider2d; the controller owns its capsule.",
+      "module": "physics2d",
+      "fields": {
+        "radius": {
+          "type": "f32",
+          "doc": "Capsule radius.",
+          "default": 0.3,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Complete capsule height; must exceed twice the radius.",
+          "default": 1.8,
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "maxSlopeDeg": {
+          "type": "f32",
+          "doc": "Maximum walkable slope angle.",
+          "default": 45,
+          "unit": "deg",
+          "range": [0.1, 89.9]
+        },
+        "stepHeight": {
+          "type": "f32",
+          "doc": "Maximum step height climbed automatically; zero disables stepping.",
+          "default": 0.25,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "stickDown": {
+          "type": "f32",
+          "doc": "Distance searched below the feet to stay on descending ground; zero disables it.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "padding": {
+          "type": "f32",
+          "doc": "Collision padding kept between the capsule and the world.",
+          "default": 0.01,
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "layer": {
+          "type": "u32",
+          "doc": "Collision group used for movement queries.",
+          "default": 1,
+          "range": [1, 15]
+        }
+      }
+    },
     "CharacterInput": {
       "kind": "component",
       "doc": "Per-tick character intent: replay this input exactly once before the rigid-body step.",
@@ -167,6 +1512,34 @@ expression: out
           "type": "bool",
           "doc": "Requested crouch; standing may be blocked by clearance.",
           "default": false,
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "CharacterInput2d": {
+      "kind": "component",
+      "doc": "Per-tick character intent, read exactly once by each boundary. Gameplay writes it before the physics system; it is not cleared, so held input repeats.",
+      "module": "physics2d",
+      "fields": {
+        "desiredVelocity": {
+          "type": "vec2",
+          "doc": "Desired world-space velocity. With gravity it must be perpendicular to gravity (vertical motion comes from gravity and jumps); zero-gravity worlds use both axes.",
+          "default": [0, 0],
+          "unit": "m/s",
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "jumpSpeed": {
+          "type": "f32",
+          "doc": "Jump launch speed, applied only while grounded; zero means no jump this tick.",
+          "default": 0,
+          "unit": "m/s",
+          "range": [0, null],
           "replicate": {
             "audience": "owner",
             "rollback": true
@@ -215,6 +1588,63 @@ expression: out
             "audience": "owner",
             "rollback": true
           }
+        }
+      }
+    },
+    "CharacterMotion2d": {
+      "kind": "component",
+      "doc": "Character support mirrored at every fixed boundary.",
+      "module": "physics2d",
+      "fields": {
+        "grounded": {
+          "type": "bool",
+          "doc": "Walkable ground support after the last move.",
+          "default": false,
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        },
+        "groundNormal": {
+          "type": "vec2",
+          "doc": "Supporting surface normal; zero while airborne.",
+          "default": [0, 0],
+          "replicate": {
+            "audience": "owner",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "ClipData": {
+      "kind": "struct",
+      "doc": "An editable clip. Cook this once in the asset worker, never on a frame thread.",
+      "module": "animation",
+      "fields": {
+        "duration": {
+          "type": "u32",
+          "doc": "Nonzero duration in integer ticks.",
+          "default": 0
+        },
+        "ticksPerSecond": {
+          "type": "u32",
+          "doc": "Clip tick frequency. Controllers require all clips to share this frequency.",
+          "default": 48000
+        },
+        "tracks": {
+          "type": "list<JointTrack>",
+          "doc": "Exactly one sparse track per skeleton joint, in skeleton order.",
+          "default": []
+        },
+        "curves": {
+          "type": "list<Curve>",
+          "doc": "Animated scalar properties, independent of joint channels.",
+          "default": []
+        },
+        "notifies": {
+          "type": "list<Notify>",
+          "doc": "Notifies in increasing time order; equal-time order is preserved.",
+          "default": []
         }
       }
     },
@@ -286,6 +1716,73 @@ expression: out
         }
       }
     },
+    "Collider2d": {
+      "kind": "component",
+      "doc": "Collision geometry, material, layer and trigger settings for a `RigidBody2d`.",
+      "module": "physics2d",
+      "fields": {
+        "kind": {
+          "type": "ColliderKind2d",
+          "doc": "Primitive type or convex polygon.",
+          "default": "box",
+          "options": [
+            "box",
+            "circle",
+            "capsule",
+            "polygon"
+          ]
+        },
+        "halfExtents": {
+          "type": "vec2",
+          "doc": "Box half extents; scale must be baked before physics extraction.",
+          "default": [0.5, 0.5],
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Circle or capsule radius.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "halfHeight": {
+          "type": "f32",
+          "doc": "Capsule segment half height, excluding the end caps.",
+          "default": 0.5,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "points": {
+          "type": "list<vec2>",
+          "doc": "Local convex hull input for polygons, in metres.",
+          "default": []
+        },
+        "layer": {
+          "type": "u32",
+          "doc": "Zero selects static/moving defaults from the body; 1..15 select an explicit group.",
+          "default": 0,
+          "range": [0, 15]
+        },
+        "sensor": {
+          "type": "bool",
+          "doc": "Report overlaps without a collision response.",
+          "default": false
+        },
+        "friction": {
+          "type": "f32",
+          "doc": "Coulomb friction coefficient.",
+          "default": 0.6,
+          "range": [0, null]
+        },
+        "restitution": {
+          "type": "f32",
+          "doc": "Elasticity: zero is inelastic, one is perfectly elastic.",
+          "default": 0,
+          "range": [0, 1]
+        }
+      }
+    },
     "ColliderKind": {
       "kind": "enum",
       "doc": "Primitive or cooked geometry selection. Cooked geometry is resolved by the asset worker.",
@@ -305,6 +1802,25 @@ expression: out
         },
         "cooked": {
           "doc": "Immutable cooked hull, mesh, terrain or compound, attached as `CookedCollider`."
+        }
+      }
+    },
+    "ColliderKind2d": {
+      "kind": "enum",
+      "doc": "Convex 2D geometry selection; 2D never reuses the 3D shape vocabulary.",
+      "module": "physics2d",
+      "variants": {
+        "box": {
+          "doc": "Box using half extents."
+        },
+        "circle": {
+          "doc": "Circle using radius."
+        },
+        "capsule": {
+          "doc": "Y-axis capsule using segment half height and radius."
+        },
+        "polygon": {
+          "doc": "Convex hull of `points` (3 to 64 local-space points)."
         }
       }
     },
@@ -342,6 +1858,59 @@ expression: out
           "type": "string",
           "doc": "Component type name.",
           "required": true
+        }
+      }
+    },
+    "ControlAudioParams": {
+      "kind": "params",
+      "doc": "Schema-discoverable `audio.control` parameters for an existing presentation voice.",
+      "module": "audio",
+      "fields": {
+        "voice": {
+          "type": "u64",
+          "doc": "Session-local runtime voice handle returned by audio.play, never a network entity ID.",
+          "required": true
+        },
+        "atFrame": {
+          "type": "u64",
+          "doc": "Absolute presentation sample frame at which gain/rate automation begins.",
+          "required": true
+        },
+        "parameters": {
+          "type": "VoiceParameters",
+          "doc": "Validated source gain/rate and listener-local acoustic parameters.",
+          "required": true
+        },
+        "rampFrames": {
+          "type": "u32",
+          "doc": "Linear transition length in output frames; zero requests an explicit hard change.",
+          "default": 64
+        }
+      }
+    },
+    "Curve": {
+      "kind": "struct",
+      "doc": "An animation curve addressing the same property path as the inspector.",
+      "module": "animation",
+      "fields": {
+        "property": {
+          "type": "string",
+          "doc": "Stable target property path, such as MorphWeights.smile.",
+          "default": ""
+        },
+        "keys": {
+          "type": "list<ScalarKey>",
+          "doc": "Strictly increasing keys; at least one is required.",
+          "default": []
+        },
+        "interpolation": {
+          "type": "Interpolation",
+          "doc": "Scalar interpolation mode.",
+          "default": "linear",
+          "options": [
+            "linear",
+            "step"
+          ]
         }
       }
     },
@@ -493,6 +2062,273 @@ expression: out
         }
       }
     },
+    "Flipbook": {
+      "kind": "component",
+      "doc": "Tick-driven flipbook state, wholly contained in an ECS component.",
+      "module": "twoD",
+      "fields": {
+        "frames": {
+          "type": "list<FlipbookFrame>",
+          "doc": "Ordered clip frames.",
+          "default": []
+        },
+        "startTick": {
+          "type": "u64",
+          "doc": "Clip's start tick, preserved through snapshots.",
+          "default": 0
+        },
+        "looping": {
+          "type": "bool",
+          "doc": "Repeat rather than hold the final frame.",
+          "default": false
+        }
+      }
+    },
+    "FlipbookFrame": {
+      "kind": "struct",
+      "doc": "One deterministic flipbook frame.",
+      "fields": {
+        "region": {
+          "type": "string",
+          "doc": "Atlas region name.",
+          "default": ""
+        },
+        "ticks": {
+          "type": "u32",
+          "doc": "Frame duration in fixed simulation ticks; must be positive.",
+          "default": 0
+        }
+      }
+    },
+    "FlipbookSetParams": {
+      "kind": "params",
+      "doc": "Complete typed component authoring update.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "value": {
+          "type": "Flipbook",
+          "doc": "Complete typed component; omitted fields use schema defaults.",
+          "required": true
+        }
+      }
+    },
+    "FoliageCreateParams": {
+      "kind": "params",
+      "doc": "Foliage source terrain.",
+      "module": "foliage",
+      "fields": {
+        "header": {
+          "type": "FoliageHeader",
+          "doc": "Source terrain dependency.",
+          "required": true
+        }
+      }
+    },
+    "FoliageEraseParams": {
+      "kind": "params",
+      "doc": "Stable record deletion for erasing manual strokes/rules/zones.",
+      "module": "foliage",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing paint, exclusion or unused rule record ID.",
+          "required": true
+        }
+      }
+    },
+    "FoliageExcludeParams": {
+      "kind": "params",
+      "doc": "Exclusion insertion parameters.",
+      "module": "foliage",
+      "fields": {
+        "zone": {
+          "type": "FoliageExclusion",
+          "doc": "Circular exclusion zone.",
+          "required": true
+        }
+      }
+    },
+    "FoliageExclusion": {
+      "kind": "record",
+      "doc": "Circular exclusion zone, applied identically to procedural and manual foliage.",
+      "module": "foliage",
+      "prefix": "x",
+      "fields": {
+        "center": {
+          "type": "vec2",
+          "doc": "World X/Z centre in metres.",
+          "default": [0, 0]
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Radius in metres.",
+          "default": 0
+        }
+      }
+    },
+    "FoliageHeader": {
+      "kind": "record",
+      "doc": "Terrain dependency for a foliage document.",
+      "module": "foliage",
+      "prefix": "f",
+      "fields": {
+        "terrain": {
+          "type": "asset",
+          "doc": "Canonical terrain asset reference.",
+          "default": null
+        }
+      }
+    },
+    "FoliagePaint": {
+      "kind": "record",
+      "doc": "One manual brush gesture, retained for deterministic regeneration and undo.",
+      "module": "foliage",
+      "prefix": "p",
+      "fields": {
+        "rule": {
+          "type": "string",
+          "doc": "Existing rule ID whose asset and filters supply instance properties.",
+          "default": ""
+        },
+        "seed": {
+          "type": "u64",
+          "doc": "Explicit seed for per-point scale/yaw/wind phase.",
+          "default": 0
+        },
+        "points": {
+          "type": "list<vec2>",
+          "doc": "Manual world X/Z points, ordered within a single gesture.",
+          "default": []
+        }
+      }
+    },
+    "FoliagePaintParams": {
+      "kind": "params",
+      "doc": "One manual brush stroke.",
+      "module": "foliage",
+      "fields": {
+        "stroke": {
+          "type": "FoliagePaint",
+          "doc": "Whole gesture, with all points in order.",
+          "required": true
+        }
+      }
+    },
+    "FoliageRule": {
+      "kind": "record",
+      "doc": "Seeded procedural placement rule, evaluated on workers in global cell space.",
+      "module": "foliage",
+      "prefix": "r",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Display name for editor/agent tools.",
+          "default": ""
+        },
+        "species": {
+          "type": "FoliageSpecies",
+          "doc": "Species/geometry family.",
+          "default": "grass",
+          "options": [
+            "grass",
+            "tree",
+            "rock"
+          ]
+        },
+        "asset": {
+          "type": "asset",
+          "doc": "Source model or foliage asset; resolves to cooked mesh/impostor LODs.",
+          "default": null
+        },
+        "seed": {
+          "type": "u64",
+          "doc": "Explicit deterministic seed, independent of request/iteration order.",
+          "default": 0
+        },
+        "cellSize": {
+          "type": "f32",
+          "doc": "Global candidate-cell width in metres, strictly positive.",
+          "default": 0
+        },
+        "density": {
+          "type": "f32",
+          "doc": "Expected accepted instances per square metre before surface masks.",
+          "default": 0
+        },
+        "height": {
+          "type": "vec2",
+          "doc": "Inclusive elevation range in world metres.",
+          "default": [0, 0]
+        },
+        "slope": {
+          "type": "vec2",
+          "doc": "Inclusive slope range in degrees.",
+          "default": [0, 0]
+        },
+        "channel": {
+          "type": "u32",
+          "doc": "Splat channel controlling density, zero to three.",
+          "default": 0
+        },
+        "minWeight": {
+          "type": "f32",
+          "doc": "Minimum terrain weight required before multiplying density by that weight.",
+          "default": 0
+        },
+        "noise": {
+          "type": "f32",
+          "doc": "Low-frequency deterministic noise modulation (zero disables it).",
+          "default": 0
+        },
+        "scale": {
+          "type": "vec2",
+          "doc": "Inclusive uniform scale range.",
+          "default": [0, 0]
+        },
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether this rule participates in regeneration.",
+          "default": false
+        }
+      }
+    },
+    "FoliageRuleParams": {
+      "kind": "params",
+      "doc": "Rule insertion/replacement parameters.",
+      "module": "foliage",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Optional existing ID or new symbolic ID.",
+          "default": null
+        },
+        "rule": {
+          "type": "FoliageRule",
+          "doc": "Seeded rule and placement filters.",
+          "required": true
+        }
+      }
+    },
+    "FoliageSpecies": {
+      "kind": "enum",
+      "doc": "Vegetation/prop family used by render extraction and impostor selection.",
+      "module": "foliage",
+      "variants": {
+        "grass": {
+          "doc": "Alpha-tested ground cover with vertex wind."
+        },
+        "tree": {
+          "doc": "Trunk/canopy instances with distance impostors."
+        },
+        "rock": {
+          "doc": "Static opaque scattered rocks."
+        }
+      }
+    },
     "FollowCamera": {
       "kind": "component",
       "doc": "Third-person orbit rig: places this entity behind `target`, steered by `Look`.",
@@ -540,6 +2376,307 @@ expression: out
           "type": "u64",
           "doc": "Input owner whose `Look` action steers the rig.",
           "default": 1
+        }
+      }
+    },
+    "Foot": {
+      "kind": "struct",
+      "doc": "A foot chain and its anatomical sole-up direction.",
+      "module": "animation",
+      "fields": {
+        "chain": {
+          "type": "ChainData",
+          "doc": "Hip-to-ankle chain.",
+          "default": {}
+        },
+        "up": {
+          "type": "vec3",
+          "doc": "Unit foot-local sole normal.",
+          "default": [0, 1, 0]
+        }
+      }
+    },
+    "FootSettings": {
+      "kind": "struct",
+      "doc": "Ground-contact setup, serialized in the same animation asset as its chains.",
+      "module": "animation",
+      "fields": {
+        "probeUp": {
+          "type": "f32",
+          "doc": "Probe start above the animated sole in meters.",
+          "default": 0.3
+        },
+        "probeDown": {
+          "type": "f32",
+          "doc": "Probe reach below the animated sole in meters.",
+          "default": 0.6
+        },
+        "soleHeight": {
+          "type": "f32",
+          "doc": "Foot-joint height above the ground in meters.",
+          "default": 0
+        },
+        "pelvisLimit": {
+          "type": "f32",
+          "doc": "Maximum pelvis displacement in either vertical direction.",
+          "default": 0.3
+        },
+        "minNormalY": {
+          "type": "f32",
+          "doc": "Minimum world-up dot ground normal accepted as walkable.",
+          "default": 0.5
+        }
+      }
+    },
+    "GraphComment": {
+      "kind": "struct",
+      "doc": "A graph comment, stored only in the editor section.",
+      "module": "graph",
+      "fields": {
+        "text": {
+          "type": "string",
+          "doc": "Human-readable annotation.",
+          "default": ""
+        },
+        "position": {
+          "type": "vec2",
+          "doc": "Canvas position.",
+          "default": [0, 0]
+        }
+      }
+    },
+    "GraphDirection": {
+      "kind": "enum",
+      "doc": "Direction relative to the owning node.",
+      "module": "graph",
+      "variants": {
+        "input": {
+          "doc": "Receives at most one connection."
+        },
+        "output": {
+          "doc": "Can feed any number of inputs."
+        }
+      }
+    },
+    "GraphEdge": {
+      "kind": "record",
+      "doc": "A directed connection with its own stable document record ID.",
+      "module": "graph",
+      "prefix": "w",
+      "fields": {
+        "from": {
+          "type": "GraphEndpoint",
+          "doc": "Output socket.",
+          "default": {}
+        },
+        "to": {
+          "type": "GraphEndpoint",
+          "doc": "Input socket.",
+          "default": {}
+        }
+      }
+    },
+    "GraphEditor": {
+      "kind": "record",
+      "doc": "Nonsemantic editor state, excluded entirely from `semantic_hash`.",
+      "module": "graph",
+      "prefix": "l",
+      "fields": {
+        "positions": {
+          "type": "map<vec2>",
+          "doc": "Node coordinates keyed by stable semantic ID.",
+          "default": {}
+        },
+        "comments": {
+          "type": "map<GraphComment>",
+          "doc": "Comments keyed by stable comment ID.",
+          "default": {}
+        },
+        "groups": {
+          "type": "map<GraphGroup>",
+          "doc": "Groups keyed by stable group ID.",
+          "default": {}
+        },
+        "reroutes": {
+          "type": "map<list<vec2>>",
+          "doc": "Edge routing points keyed by stable edge ID; not evaluation nodes.",
+          "default": {}
+        }
+      }
+    },
+    "GraphEndpoint": {
+      "kind": "struct",
+      "doc": "An addressed socket; port identity is scoped to the node.",
+      "module": "graph",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable node record ID.",
+          "default": ""
+        },
+        "port": {
+          "type": "string",
+          "doc": "Persistent socket key.",
+          "default": ""
+        }
+      }
+    },
+    "GraphGroup": {
+      "kind": "struct",
+      "doc": "A visual group; membership never changes execution.",
+      "module": "graph",
+      "fields": {
+        "label": {
+          "type": "string",
+          "doc": "Canvas title.",
+          "default": ""
+        },
+        "nodes": {
+          "type": "list<string>",
+          "doc": "Stable node IDs in the group.",
+          "default": []
+        }
+      }
+    },
+    "GraphHeader": {
+      "kind": "record",
+      "doc": "Domain metadata, kept apart from editor state.",
+      "module": "graph",
+      "prefix": "g",
+      "fields": {
+        "domain": {
+          "type": "string",
+          "doc": "Adapter identity (`material`, `animation`, ...).",
+          "default": ""
+        },
+        "payload": {
+          "type": "json",
+          "doc": "Domain-specific semantic metadata.",
+          "default": null
+        }
+      }
+    },
+    "GraphNode": {
+      "kind": "record",
+      "doc": "A versioned node; opaque payloads survive unavailable plugins unchanged.",
+      "module": "graph",
+      "prefix": "n",
+      "fields": {
+        "kind": {
+          "type": "string",
+          "doc": "Registry key, such as `material.add`.",
+          "default": ""
+        },
+        "version": {
+          "type": "u32",
+          "doc": "Exact registry version used by this node.",
+          "default": 1
+        },
+        "ports": {
+          "type": "map<GraphPort>",
+          "doc": "Ports keyed by persistent socket identity, not display order.",
+          "default": {}
+        },
+        "params": {
+          "type": "map<json>",
+          "doc": "Literal input defaults and authorable parameters.",
+          "default": {}
+        },
+        "payload": {
+          "type": "json",
+          "doc": "Domain-owned data, preserved for unknown node kinds.",
+          "default": null
+        },
+        "subgraph": {
+          "type": "option<asset>",
+          "doc": "Optional full `@path#id` subgraph reference.",
+          "default": null
+        }
+      }
+    },
+    "GraphPort": {
+      "kind": "struct",
+      "doc": "A stable named, nominally typed socket. Domains interpret `ty`.",
+      "module": "graph",
+      "fields": {
+        "ty": {
+          "type": "string",
+          "doc": "Domain type name, including semantic distinctions such as sRGB.",
+          "default": ""
+        },
+        "direction": {
+          "type": "GraphDirection",
+          "doc": "Input or output socket.",
+          "default": "input",
+          "options": [
+            "input",
+            "output"
+          ]
+        },
+        "doc": {
+          "type": "string",
+          "doc": "Tooltip and agent-facing documentation.",
+          "default": ""
+        },
+        "required": {
+          "type": "bool",
+          "doc": "Whether compilation requires an incoming edge or a parameter of this name.",
+          "default": false
+        }
+      }
+    },
+    "GridLayout": {
+      "kind": "enum",
+      "doc": "Tile coordinate layout; hex is axial and pointy-topped.",
+      "variants": {
+        "grid": {
+          "doc": "Axis-aligned rectangular cells."
+        },
+        "hex": {
+          "doc": "Axial q/r hexagons with cell size equal to their bounding box."
+        },
+        "isometric": {
+          "doc": "Diamond grid, cell size equal to a diamond's bounding box."
+        }
+      }
+    },
+    "IkSetup": {
+      "kind": "struct",
+      "doc": "Canonical procedural rig setup; goal values are fixed-tick gameplay inputs.",
+      "module": "animation",
+      "fields": {
+        "pelvis": {
+          "type": "string",
+          "doc": "Stable pelvis joint ID for full-body and foot-placement solvers.",
+          "default": ""
+        },
+        "chains": {
+          "type": "list<ChainData>",
+          "doc": "Ordered chains used by body and hand goals.",
+          "default": []
+        },
+        "feet": {
+          "type": "list<Foot>",
+          "doc": "Foot chains and anatomical sole-up vectors.",
+          "default": []
+        },
+        "ground": {
+          "type": "FootSettings",
+          "doc": "Ground probe, slope and pelvis bounds.",
+          "default": {}
+        }
+      }
+    },
+    "Interpolation": {
+      "kind": "enum",
+      "doc": "Interpolation between consecutive keys.",
+      "module": "animation",
+      "variants": {
+        "linear": {
+          "doc": "Linear vectors and shortest-path normalized linear quaternions."
+        },
+        "step": {
+          "doc": "Hold the preceding key until the next key's exact timestamp."
         }
       }
     },
@@ -641,43 +2778,478 @@ expression: out
         }
       }
     },
+    "JointLimit": {
+      "kind": "struct",
+      "doc": "Anatomical angular bounds, in radians around a unit bind-local axis.",
+      "module": "animation",
+      "fields": {
+        "kind": {
+          "type": "LimitKind",
+          "doc": "Constraint primitive.",
+          "default": "free",
+          "options": [
+            "free",
+            "cone",
+            "hinge"
+          ]
+        },
+        "axis": {
+          "type": "vec3",
+          "doc": "Unit hinge or twist axis in the joint's bind-local frame.",
+          "default": [1, 0, 0]
+        },
+        "swing": {
+          "type": "f32",
+          "doc": "Maximum swing angle for a cone.",
+          "default": 3.1415927
+        },
+        "min": {
+          "type": "f32",
+          "doc": "Minimum signed twist or hinge angle.",
+          "default": -3.1415927
+        },
+        "max": {
+          "type": "f32",
+          "doc": "Maximum signed twist or hinge angle.",
+          "default": 3.1415927
+        }
+      }
+    },
+    "JointTrack": {
+      "kind": "struct",
+      "doc": "Sparse local transform channels for one joint; empty channels use bind pose.",
+      "module": "animation",
+      "fields": {
+        "translations": {
+          "type": "list<VectorKey>",
+          "doc": "Translation channel.",
+          "default": []
+        },
+        "rotations": {
+          "type": "list<RotationKey>",
+          "doc": "Rotation channel.",
+          "default": []
+        },
+        "scales": {
+          "type": "list<VectorKey>",
+          "doc": "Scale channel.",
+          "default": []
+        },
+        "translationInterpolation": {
+          "type": "Interpolation",
+          "doc": "Translation interpolation, independent of rotation and scale.",
+          "default": "linear",
+          "options": [
+            "linear",
+            "step"
+          ]
+        },
+        "rotationInterpolation": {
+          "type": "Interpolation",
+          "doc": "Quaternion interpolation, independent of translation and scale.",
+          "default": "linear",
+          "options": [
+            "linear",
+            "step"
+          ]
+        },
+        "scaleInterpolation": {
+          "type": "Interpolation",
+          "doc": "Scale interpolation, independent of translation and rotation.",
+          "default": "linear",
+          "options": [
+            "linear",
+            "step"
+          ]
+        }
+      }
+    },
+    "L10nExtractParams": {
+      "kind": "params",
+      "doc": "Source-scan request. Sources are supplied by the host; no arbitrary filesystem IO.",
+      "module": "l10n",
+      "fields": {
+        "kind": {
+          "type": "L10nSourceKind",
+          "doc": "UI markup or C#.",
+          "required": true,
+          "options": [
+            "markup",
+            "csharp"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "doc": "Complete UTF-8 source text.",
+          "required": true
+        },
+        "prefix": {
+          "type": "string",
+          "doc": "Dotted prefix for generated stable keys, for example `pause`.",
+          "required": true
+        }
+      }
+    },
+    "L10nFindMissingParams": {
+      "kind": "params",
+      "doc": "Source locale for parity checks against the current batch document.",
+      "module": "l10n",
+      "fields": {
+        "sourceLocale": {
+          "type": "string",
+          "doc": "Source locale loaded in the document workspace, normally `en`.",
+          "required": true
+        }
+      }
+    },
+    "L10nFontFace": {
+      "kind": "struct",
+      "doc": "Explicit font resource; never depends on installed OS fonts.",
+      "module": "l10n",
+      "fields": {
+        "family": {
+          "type": "string",
+          "doc": "Family name passed to `ara_ui_text::TextSystem` in fallback order.",
+          "default": ""
+        },
+        "asset": {
+          "type": "option<asset>",
+          "doc": "Font asset, using the standard `@path#id` reference syntax.",
+          "default": null
+        }
+      }
+    },
+    "L10nLocaleConfig": {
+      "kind": "record",
+      "doc": "One locale's configuration, stored as `l_config` in its localization document.",
+      "module": "l10n",
+      "prefix": "l",
+      "fields": {
+        "locale": {
+          "type": "string",
+          "doc": "Canonical BCP-47 locale identifier such as `ar-EG`.",
+          "default": ""
+        },
+        "fallback": {
+          "type": "list<string>",
+          "doc": "Additional fallback locales, followed after the locale's structural parents.",
+          "default": []
+        },
+        "rtl": {
+          "type": "bool",
+          "doc": "Mirror layout boxes; glyph shaping and logical reading order remain intact.",
+          "default": false
+        },
+        "fonts": {
+          "type": "list<L10nFontFace>",
+          "doc": "Ordered family/resources for this locale, inherited through fallback.",
+          "default": []
+        }
+      }
+    },
+    "L10nParamKind": {
+      "kind": "enum",
+      "doc": "Parameter types shared by messages, generated bindings and translation jobs.",
+      "module": "l10n",
+      "variants": {
+        "text": {
+          "doc": "User or application text, inserted with bidi isolation."
+        },
+        "number": {
+          "doc": "Exact decimal, also usable as a plural selector."
+        },
+        "date": {
+          "doc": "ISO calendar date, formatted in the requested locale's calendar."
+        },
+        "currency": {
+          "doc": "Exact decimal and ISO 4217 currency code."
+        }
+      }
+    },
+    "L10nProvenance": {
+      "kind": "struct",
+      "doc": "Reproducible origin of a generated translation; no secrets belong here.",
+      "module": "l10n",
+      "fields": {
+        "provider": {
+          "type": "string",
+          "doc": "Provider identifier chosen by the host.",
+          "default": ""
+        },
+        "model": {
+          "type": "string",
+          "doc": "Provider model/version identifier.",
+          "default": ""
+        },
+        "job": {
+          "type": "string",
+          "doc": "Host-assigned generation job identifier.",
+          "default": ""
+        },
+        "sourceHash": {
+          "type": "string",
+          "doc": "BLAKE3 of source text and typed parameter signature.",
+          "default": ""
+        }
+      }
+    },
+    "L10nPutParams": {
+      "kind": "params",
+      "doc": "Validated insertion/replacement params used by machine-applicable fixes.",
+      "module": "l10n",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Existing record ID, or omit to reuse the key's record or a stable hashed ID.",
+          "default": null
+        },
+        "entry": {
+          "type": "L10nStringEntry",
+          "doc": "Whole message with typed parameters and review metadata.",
+          "required": true
+        }
+      }
+    },
+    "L10nRemoveParams": {
+      "kind": "params",
+      "doc": "Record addressed removal of an obsolete localization message.",
+      "module": "l10n",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable message record ID, starting with `m_`.",
+          "required": true
+        }
+      }
+    },
+    "L10nSourceKind": {
+      "kind": "enum",
+      "doc": "Source language scanned for localization candidates.",
+      "module": "l10n",
+      "variants": {
+        "markup": {
+          "doc": "UI text nodes and human-visible text/label/placeholder/title attributes."
+        },
+        "csharp": {
+          "doc": "C# normal and verbatim string literals, excluding comments and char literals."
+        }
+      }
+    },
+    "L10nStatus": {
+      "kind": "enum",
+      "doc": "Human review state, independent of whether the text can be displayed.",
+      "module": "l10n",
+      "variants": {
+        "reviewed": {
+          "doc": "A human has approved this translation."
+        },
+        "machineTranslated": {
+          "doc": "A translation provider generated this text."
+        },
+        "needsReview": {
+          "doc": "Text requires a translator's attention."
+        }
+      }
+    },
+    "L10nStringEntry": {
+      "kind": "record",
+      "doc": "A mergeable message record; its stable record ID survives translation changes.",
+      "module": "l10n",
+      "prefix": "m",
+      "fields": {
+        "key": {
+          "type": "string",
+          "doc": "Stable dotted lookup key, for example `inventory.items`.",
+          "default": ""
+        },
+        "text": {
+          "type": "string",
+          "doc": "ICU MessageFormat pattern, including nested plural/select expressions.",
+          "default": ""
+        },
+        "params": {
+          "type": "map<L10nParamKind>",
+          "doc": "Exact parameter names and types; every locale must share this signature.",
+          "default": {}
+        },
+        "status": {
+          "type": "L10nStatus",
+          "doc": "Review state visible to agents and translators.",
+          "default": "reviewed",
+          "options": [
+            "reviewed",
+            "machineTranslated",
+            "needsReview"
+          ]
+        },
+        "provenance": {
+          "type": "option<L10nProvenance>",
+          "doc": "Generation origin, or none for human-authored source text.",
+          "default": null
+        },
+        "note": {
+          "type": "string",
+          "doc": "Translator context, never displayed in game.",
+          "default": ""
+        }
+      }
+    },
+    "Layer": {
+      "kind": "record",
+      "doc": "Independently loaded and visible data layer, such as art, night or quest state.",
+      "module": "world",
+      "prefix": "l",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Human-readable label.",
+          "default": ""
+        },
+        "loaded": {
+          "type": "bool",
+          "doc": "Load cells in this layer when a source is within range.",
+          "default": false
+        },
+        "visible": {
+          "type": "bool",
+          "doc": "Presentation visibility; hiding preserves simulation residency.",
+          "default": false
+        },
+        "range": {
+          "type": "f32",
+          "doc": "Distance outside a cell's bounds at which it becomes wanted.",
+          "default": 0,
+          "unit": "m"
+        },
+        "graceTicks": {
+          "type": "u32",
+          "doc": "Fixed host ticks a cell remains resident after leaving the wanted set.",
+          "default": 0
+        }
+      }
+    },
     "Light": {
       "kind": "component",
-      "doc": "A punctual light source.",
+      "doc": "A light at the entity's world position. Edits apply live in play.",
       "module": "render",
       "fields": {
         "kind": {
           "type": "LightKind",
-          "doc": "Shape of the emission.",
+          "doc": "Point, spot or directional.",
           "default": "point",
           "options": [
             "point",
-            "spot"
+            "spot",
+            "directional"
           ]
-        },
-        "intensity": {
-          "type": "f32",
-          "doc": "Luminous power.",
-          "default": 1000,
-          "unit": "lm",
-          "range": [0, null]
         },
         "color": {
           "type": "color",
-          "doc": "Linear color.",
+          "doc": "Linear RGB tint (alpha is ignored).",
           "default": [1, 1, 1, 1]
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Luminous flux in lumens (point/spot) or illuminance in lux (directional).",
+          "default": 800,
+          "range": [0, null]
+        },
+        "range": {
+          "type": "f32",
+          "doc": "Influence radius of point and spot lights.",
+          "default": 10,
+          "unit": "m",
+          "range": [0.01, null]
+        },
+        "innerAngle": {
+          "type": "f32",
+          "doc": "Spot inner cone half-angle.",
+          "default": 20,
+          "unit": "deg",
+          "range": [0, 89]
+        },
+        "outerAngle": {
+          "type": "f32",
+          "doc": "Spot outer cone half-angle.",
+          "default": 30,
+          "unit": "deg",
+          "range": [0.1, 89]
+        }
+      }
+    },
+    "Light2d": {
+      "kind": "component",
+      "doc": "Point light for an explicitly lit sprite; Z provides normal-map elevation.",
+      "module": "twoD",
+      "fields": {
+        "position": {
+          "type": "vec3",
+          "doc": "Position in world metres.",
+          "default": [0, 0, 0]
+        },
+        "color": {
+          "type": "vec3",
+          "doc": "Linear RGB intensity.",
+          "default": [1, 1, 1]
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Finite influence radius in metres.",
+          "default": 5,
+          "range": [0.001, null]
+        },
+        "shadows": {
+          "type": "bool",
+          "doc": "Test tile/sprite occluder segments between light and fragment.",
+          "default": false
+        }
+      }
+    },
+    "Light2dSetParams": {
+      "kind": "params",
+      "doc": "Complete typed component authoring update.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "value": {
+          "type": "Light2d",
+          "doc": "Complete typed component; omitted fields use schema defaults.",
+          "required": true
         }
       }
     },
     "LightKind": {
       "kind": "enum",
-      "doc": "Shape of a light.",
+      "doc": "How a light emits.",
+      "module": "render",
       "variants": {
         "point": {
-          "doc": "Emits in all directions."
+          "doc": "Omnidirectional point light."
         },
         "spot": {
-          "doc": "Emits in a cone."
+          "doc": "Cone light aimed along the entity's local -Z axis."
+        },
+        "directional": {
+          "doc": "Sun-like light shining along the entity's local -Z axis; casts cascaded shadows."
+        }
+      }
+    },
+    "LimitKind": {
+      "kind": "enum",
+      "doc": "Angular constraint relative to the local bind rotation.",
+      "module": "animation",
+      "variants": {
+        "free": {
+          "doc": "Unrestricted rotation."
+        },
+        "cone": {
+          "doc": "Circular swing cone plus signed twist interval."
+        },
+        "hinge": {
+          "doc": "Only rotation about the hinge axis is permitted."
         }
       }
     },
@@ -700,23 +3272,374 @@ expression: out
         }
       }
     },
-    "MeshRenderer": {
-      "kind": "component",
-      "doc": "Draws a mesh.",
-      "module": "render",
-      "aliases": [
-        "Renderer"
-      ],
+    "MatchConfig": {
+      "kind": "struct",
+      "doc": "Cook-time feature schema. Feature order is six floats per bone (position/velocity), three root-velocity floats, then six floats per horizon (position/facing).",
+      "module": "animation",
       "fields": {
-        "mesh": {
-          "type": "asset",
-          "doc": "Mesh to draw.",
+        "clips": {
+          "type": "list<asset<animation>>",
+          "doc": "Ordered canonical source clip references; empty accepts importer-supplied bindings.",
+          "default": []
+        },
+        "bones": {
+          "type": "list<string>",
+          "doc": "Ordered stable joint IDs used for pose position and velocity features.",
+          "default": []
+        },
+        "horizons": {
+          "type": "list<u32>",
+          "doc": "Increasing future root sample times in source clip ticks.",
+          "default": []
+        },
+        "step": {
+          "type": "u32",
+          "doc": "Cook-time sampling interval in source ticks.",
+          "default": 800
+        },
+        "positionWeight": {
+          "type": "f32",
+          "doc": "Normalized position-feature cost weight.",
+          "default": 1
+        },
+        "velocityWeight": {
+          "type": "f32",
+          "doc": "Normalized bone-velocity cost weight.",
+          "default": 1
+        },
+        "trajectoryWeight": {
+          "type": "f32",
+          "doc": "Normalized root-velocity and future-trajectory cost weight.",
+          "default": 2
+        }
+      }
+    },
+    "MatchNode": {
+      "kind": "struct",
+      "doc": "Graph-node search settings. The clip field references a cooked motion database.",
+      "module": "animation",
+      "fields": {
+        "query": {
+          "type": "list<string>",
+          "doc": "Float parameter names in the database's raw feature order.",
+          "default": []
+        },
+        "budget": {
+          "type": "u32",
+          "doc": "Maximum candidate rows examined per search; zero requests an exact full scan.",
+          "default": 0
+        },
+        "halfLife": {
+          "type": "f32",
+          "doc": "Offset decay half-life in seconds.",
+          "default": 0.08
+        },
+        "continuation": {
+          "type": "u32",
+          "doc": "Keep playback when the selected frame is this many ticks from its continuation.",
+          "default": 1600
+        }
+      }
+    },
+    "MaterialBudgetParams": {
+      "kind": "params",
+      "doc": "Sets an explicit material specialization budget.",
+      "module": "material",
+      "fields": {
+        "budget": {
+          "type": "u32",
+          "doc": "Maximum static combinations.",
+          "required": true
+        }
+      }
+    },
+    "MaterialConnectParams": {
+      "kind": "params",
+      "doc": "Rewires an AST argument or output, preserving the destination edge's identity.",
+      "module": "material",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Source semantic node ID.",
+          "required": true
+        },
+        "node": {
+          "type": "string",
+          "doc": "Consumer node ID, or n_output for a domain field.",
+          "required": true
+        },
+        "port": {
+          "type": "string",
+          "doc": "in0/in1/... for function arguments; domain field for n_output.",
+          "required": true
+        }
+      }
+    },
+    "MaterialGraphParams": {
+      "kind": "params",
+      "doc": "Applies an edited graph projection as the same material AST.",
+      "module": "material",
+      "fields": {
+        "json": {
+          "type": "string",
+          "doc": "Canonical graph JSON produced by ara-json.",
+          "required": true
+        }
+      }
+    },
+    "MaterialInstance": {
+      "kind": "record",
+      "doc": "A saved material instance; all authoritative overrides are document fields.",
+      "module": "material",
+      "prefix": "i",
+      "fields": {
+        "definition": {
+          "type": "asset<graph>",
+          "doc": "Definition graph as a full project-relative `@path#gr_id` reference.",
           "default": null
         },
-        "tint": {
+        "overrides": {
+          "type": "map<json>",
+          "doc": "Typed numeric, boolean and symbolic texture overrides; defaults stay in the graph.",
+          "default": {}
+        }
+      }
+    },
+    "MaterialInstanceClearParams": {
+      "kind": "params",
+      "doc": "Removes a saved override, restoring the definition default.",
+      "module": "material",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable definition parameter ID.",
+          "required": true
+        }
+      }
+    },
+    "MaterialInstanceSetParams": {
+      "kind": "params",
+      "doc": "Edits one saved material instance override.",
+      "module": "material",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable definition parameter ID.",
+          "required": true
+        },
+        "values": {
+          "type": "json",
+          "doc": "Numeric, boolean or symbolic texture value; static switches require booleans.",
+          "required": true
+        }
+      }
+    },
+    "MaterialLiteralParams": {
+      "kind": "params",
+      "doc": "Replaces an expression with a typed constant.",
+      "module": "material",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable expression ID.",
+          "required": true
+        },
+        "values": {
+          "type": "list<f64>",
+          "doc": "New literal lanes.",
+          "required": true
+        }
+      }
+    },
+    "MaterialOutputParams": {
+      "kind": "params",
+      "doc": "Identifies a domain output field.",
+      "module": "material",
+      "fields": {
+        "field": {
+          "type": "string",
+          "doc": "Domain field name.",
+          "required": true
+        }
+      }
+    },
+    "MaterialParameterParams": {
+      "kind": "params",
+      "doc": "Identifies a material parameter.",
+      "module": "material",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable parameter ID.",
+          "required": true
+        }
+      }
+    },
+    "MaterialPreset": {
+      "kind": "enum",
+      "doc": "Named surface materials with Steam Audio's published values.",
+      "module": "audio",
+      "variants": {
+        "generic": {
+          "doc": "Average interior surface."
+        },
+        "brick": {
+          "doc": "Brick wall."
+        },
+        "concrete": {
+          "doc": "Poured concrete."
+        },
+        "ceramic": {
+          "doc": "Ceramic tile."
+        },
+        "gravel": {
+          "doc": "Loose gravel."
+        },
+        "carpet": {
+          "doc": "Carpet on concrete."
+        },
+        "glass": {
+          "doc": "Window glass."
+        },
+        "plaster": {
+          "doc": "Plaster on brick."
+        },
+        "wood": {
+          "doc": "Wooden panels."
+        },
+        "metal": {
+          "doc": "Sheet metal."
+        },
+        "rock": {
+          "doc": "Natural rock."
+        }
+      }
+    },
+    "MaterialRenameParams": {
+      "kind": "params",
+      "doc": "Renames an authored value while retaining its graph identity and layout.",
+      "module": "material",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Existing authored name.",
+          "required": true
+        },
+        "to": {
+          "type": "string",
+          "doc": "New unique authored name.",
+          "required": true
+        },
+        "restoreId": {
+          "type": "option<string>",
+          "doc": "Diagnostic-only recovery identity after a plain-text delete/create rename.",
+          "default": null
+        }
+      }
+    },
+    "MaterialTextParams": {
+      "kind": "params",
+      "doc": "Replaces the text view, retaining layout for surviving semantic IDs.",
+      "module": "material",
+      "fields": {
+        "text": {
+          "type": "string",
+          "doc": "Complete bounded material DSL.",
+          "required": true
+        }
+      }
+    },
+    "MaterialTypeParams": {
+      "kind": "params",
+      "doc": "Changes a node's declared type (also used by type annotation fixes).",
+      "module": "material",
+      "fields": {
+        "node": {
+          "type": "string",
+          "doc": "Stable expression/parameter ID.",
+          "required": true
+        },
+        "ty": {
+          "type": "string",
+          "doc": "Exact material type name.",
+          "required": true
+        }
+      }
+    },
+    "MeshRenderer": {
+      "kind": "component",
+      "doc": "Draws geometry at the entity's interpolated world transform.",
+      "module": "render",
+      "fields": {
+        "shape": {
+          "type": "MeshShape",
+          "doc": "Procedural shape, drawn when `model` is empty.",
+          "default": "box",
+          "options": [
+            "box",
+            "sphere",
+            "capsule",
+            "plane"
+          ]
+        },
+        "size": {
+          "type": "vec3",
+          "doc": "Shape size: box extents, sphere/capsule diameter in x and capsule height in y, plane extents in x and z.",
+          "default": [1, 1, 1],
+          "unit": "m",
+          "range": [0.0001, null]
+        },
+        "model": {
+          "type": "option<asset>",
+          "doc": "Imported model (`@path#id` of a glTF/FBX source). Its meshes are drawn instead of the shape; skinned meshes follow this entity's Animator.",
+          "default": null,
+          "aliases": [
+            "mesh"
+          ]
+        },
+        "color": {
           "type": "color",
-          "doc": "Linear tint multiplied with the material.",
-          "default": [1, 1, 1, 1]
+          "doc": "Linear base color multiplier and opacity.",
+          "default": [1, 1, 1, 1],
+          "aliases": [
+            "tint"
+          ]
+        },
+        "roughness": {
+          "type": "f32",
+          "doc": "Perceptual roughness.",
+          "default": 0.6,
+          "range": [0, 1]
+        },
+        "metallic": {
+          "type": "f32",
+          "doc": "Metalness.",
+          "default": 0,
+          "range": [0, 1]
+        },
+        "emissive": {
+          "type": "vec3",
+          "doc": "Emitted radiance in candela per square metre (linear RGB).",
+          "default": [0, 0, 0]
+        }
+      }
+    },
+    "MeshShape": {
+      "kind": "enum",
+      "doc": "Built-in procedural geometry for gray-box levels.",
+      "module": "render",
+      "variants": {
+        "box": {
+          "doc": "Axis-aligned box with `size` extents."
+        },
+        "sphere": {
+          "doc": "Sphere with diameter `size.x`."
+        },
+        "capsule": {
+          "doc": "Upright capsule with diameter `size.x` and total height `size.y`."
+        },
+        "plane": {
+          "doc": "Upward-facing quad spanning `size.x` by `size.z`."
         }
       }
     },
@@ -733,6 +3656,297 @@ expression: out
         },
         "dynamic": {
           "doc": "Finite mass, simulated by the solver."
+        }
+      }
+    },
+    "MotionType2d": {
+      "kind": "enum",
+      "doc": "How a rigid body moves; kinematic bodies follow their written pose.",
+      "module": "physics2d",
+      "variants": {
+        "static": {
+          "doc": "Infinite mass, fixed scenery."
+        },
+        "kinematic": {
+          "doc": "Infinite mass; moves to its `PhysicsPose2d` each tick and pushes dynamic bodies."
+        },
+        "dynamic": {
+          "doc": "Finite mass, simulated by the solver."
+        }
+      }
+    },
+    "MotorGains": {
+      "kind": "struct",
+      "doc": "Position and orientation spring gains in SI units.",
+      "module": "animation",
+      "fields": {
+        "position": {
+          "type": "f32",
+          "doc": "Linear spring stiffness in N/m.",
+          "default": 300
+        },
+        "linearDamping": {
+          "type": "f32",
+          "doc": "Linear damping in N*s/m.",
+          "default": 35
+        },
+        "rotation": {
+          "type": "f32",
+          "doc": "Angular spring stiffness in N*m/rad.",
+          "default": 80
+        },
+        "angularDamping": {
+          "type": "f32",
+          "doc": "Angular damping in N*m*s/rad.",
+          "default": 12
+        },
+        "maxForce": {
+          "type": "f32",
+          "doc": "Maximum applied linear force in N.",
+          "default": 1000
+        },
+        "maxTorque": {
+          "type": "f32",
+          "doc": "Maximum applied torque in N*m.",
+          "default": 250
+        }
+      }
+    },
+    "MusicNext": {
+      "kind": "struct",
+      "doc": "A weighted follow-up for horizontal resequencing.",
+      "module": "audio",
+      "fields": {
+        "segment": {
+          "type": "string",
+          "doc": "Segment to continue with.",
+          "default": ""
+        },
+        "weight": {
+          "type": "f32",
+          "doc": "Relative probability.",
+          "default": 1,
+          "range": [0, 1000]
+        }
+      }
+    },
+    "MusicSegment": {
+      "kind": "record",
+      "doc": "A playable section with synchronized stems on one tempo map.",
+      "module": "audio",
+      "prefix": "sg",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique segment name.",
+          "default": ""
+        },
+        "bars": {
+          "type": "u32",
+          "doc": "Length in bars; the follow-up starts on the last bar line.",
+          "default": 4,
+          "range": [1, 4096]
+        },
+        "tempo": {
+          "type": "list<MusicTempo>",
+          "doc": "Tempo map; empty is 120 BPM in 4/4. The first change must be at bar 0.",
+          "default": []
+        },
+        "stems": {
+          "type": "list<MusicStem>",
+          "doc": "Layers played together.",
+          "default": []
+        },
+        "next": {
+          "type": "list<MusicNext>",
+          "doc": "Weighted follow-ups; empty repeats this segment.",
+          "default": []
+        },
+        "loudness": {
+          "type": "option<f32>",
+          "doc": "Cooked integrated loudness of the full mix (all stems), so a loudness-targeted bus trims every stem equally. Measure with `measure_mix_loudness`.",
+          "default": null,
+          "unit": "dB"
+        }
+      }
+    },
+    "MusicSettings": {
+      "kind": "record",
+      "doc": "Music-wide settings (one record).",
+      "module": "audio",
+      "prefix": "ms",
+      "fields": {
+        "initial": {
+          "type": "string",
+          "doc": "Segment to start with.",
+          "default": ""
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Starting intensity 0..1.",
+          "default": 0.5,
+          "range": [0, 1]
+        },
+        "layerFade": {
+          "type": "f32",
+          "doc": "Seconds for layers to follow an intensity change.",
+          "default": 1,
+          "unit": "s",
+          "range": [0, 30]
+        },
+        "seed": {
+          "type": "u32",
+          "doc": "Seed for weighted follow-ups (deterministic resequencing).",
+          "default": 0
+        }
+      }
+    },
+    "MusicStem": {
+      "kind": "struct",
+      "doc": "A synchronized layer (stem) of a segment, faded in by intensity.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Stem name (`drums`, `strings`).",
+          "default": ""
+        },
+        "clip": {
+          "type": "option<asset<audio>>",
+          "doc": "The stem's audio clip.",
+          "default": null
+        },
+        "intensity": {
+          "type": "vec2",
+          "doc": "Intensity window: silent at or below `[0]`, full at or above `[1]`; equal values make a hard switch, `[0, 0]` is always on.",
+          "default": [0, 0]
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Stem gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        }
+      }
+    },
+    "MusicStinger": {
+      "kind": "record",
+      "doc": "A one-shot played on top of the music, aligned to the grid.",
+      "module": "audio",
+      "prefix": "st",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique stinger name.",
+          "default": ""
+        },
+        "clip": {
+          "type": "option<asset<audio>>",
+          "doc": "The stinger's clip.",
+          "default": null
+        },
+        "sync": {
+          "type": "MusicSync",
+          "doc": "Grid alignment.",
+          "default": "bar",
+          "options": [
+            "bar",
+            "beat",
+            "end",
+            "immediate"
+          ]
+        },
+        "gainDb": {
+          "type": "f32",
+          "doc": "Stinger gain.",
+          "default": 0,
+          "unit": "dB",
+          "range": [-96, 24]
+        }
+      }
+    },
+    "MusicSync": {
+      "kind": "enum",
+      "doc": "Where a transition or stinger may land.",
+      "module": "audio",
+      "variants": {
+        "bar": {
+          "doc": "On the next bar line."
+        },
+        "beat": {
+          "doc": "On the next beat."
+        },
+        "end": {
+          "doc": "When the current segment ends."
+        },
+        "immediate": {
+          "doc": "At the next control update."
+        }
+      }
+    },
+    "MusicTempo": {
+      "kind": "struct",
+      "doc": "A tempo and meter that applies from `bar` until the next change.",
+      "module": "audio",
+      "fields": {
+        "bar": {
+          "type": "u32",
+          "doc": "First bar (0-based) at this tempo.",
+          "default": 0
+        },
+        "bpm": {
+          "type": "f32",
+          "doc": "Beats per minute.",
+          "default": 120,
+          "range": [20, 400]
+        },
+        "beatsPerBar": {
+          "type": "u32",
+          "doc": "Beats in each bar.",
+          "default": 4,
+          "range": [1, 32]
+        }
+      }
+    },
+    "MusicTransition": {
+      "kind": "record",
+      "doc": "How a requested change of segment lands. An empty `from` matches any segment.",
+      "module": "audio",
+      "prefix": "tn",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Segment being left; empty matches any.",
+          "default": ""
+        },
+        "to": {
+          "type": "string",
+          "doc": "Segment requested.",
+          "default": ""
+        },
+        "sync": {
+          "type": "MusicSync",
+          "doc": "Musical boundary to land on.",
+          "default": "bar",
+          "options": [
+            "bar",
+            "beat",
+            "end",
+            "immediate"
+          ]
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Crossfade length in seconds; zero cuts.",
+          "default": 0.5,
+          "unit": "s",
+          "range": [0, 30]
+        },
+        "bridge": {
+          "type": "string",
+          "doc": "Optional bridge segment played between them.",
+          "default": ""
         }
       }
     },
@@ -899,6 +4113,33 @@ expression: out
         }
       }
     },
+    "Notify": {
+      "kind": "struct",
+      "doc": "A discrete animation notify, identified independently of its display name.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable notify ID for prediction event deduplication.",
+          "default": ""
+        },
+        "name": {
+          "type": "string",
+          "doc": "Event name delivered to gameplay.",
+          "default": ""
+        },
+        "tick": {
+          "type": "u32",
+          "doc": "Clip time in ticks, in the half-open range [0, duration).",
+          "default": 0
+        },
+        "payload": {
+          "type": "string",
+          "doc": "Schema-addressable event payload encoded as a string.",
+          "default": ""
+        }
+      }
+    },
     "OverrideRevertParams": {
       "kind": "params",
       "doc": "Parameters of `prefab.override.revert`.",
@@ -933,6 +4174,124 @@ expression: out
           "type": "json",
           "doc": "The overriding value.",
           "required": true
+        }
+      }
+    },
+    "PaintCell": {
+      "kind": "struct",
+      "doc": "A tile-paint sample in a stroke transaction.",
+      "fields": {
+        "x": {
+          "type": "i32",
+          "doc": "Signed column / axial q.",
+          "default": 0
+        },
+        "y": {
+          "type": "i32",
+          "doc": "Signed row / axial r.",
+          "default": 0
+        },
+        "tile": {
+          "type": "u32",
+          "doc": "Tile definition number; zero erases the cell.",
+          "default": 0
+        }
+      }
+    },
+    "PhysicalMode": {
+      "kind": "enum",
+      "doc": "Fixed-tick physical-animation mode.",
+      "module": "animation",
+      "variants": {
+        "animated": {
+          "doc": "Animation target with powered bodies."
+        },
+        "hitReaction": {
+          "doc": "Temporary partial ragdoll, preserving active drives."
+        },
+        "ragdoll": {
+          "doc": "Freely simulated ragdoll."
+        },
+        "gettingUp": {
+          "doc": "Powered recovery and blend toward a caller-selected get-up animation."
+        },
+        "dead": {
+          "doc": "Freely simulated terminal pose; recovery requires an explicit new request."
+        }
+      }
+    },
+    "PhysicalState": {
+      "kind": "struct",
+      "doc": "Complete future-affecting blend state. Store this in the character's ECS component.",
+      "module": "animation",
+      "fields": {
+        "mode": {
+          "type": "PhysicalMode",
+          "doc": "Requested mode.",
+          "default": "animated",
+          "options": [
+            "animated",
+            "hitReaction",
+            "ragdoll",
+            "gettingUp",
+            "dead"
+          ]
+        },
+        "weight": {
+          "type": "f32",
+          "doc": "Current physical pose contribution in [0,1].",
+          "default": 0
+        },
+        "start": {
+          "type": "f32",
+          "doc": "Start contribution for this transition.",
+          "default": 0
+        },
+        "target": {
+          "type": "f32",
+          "doc": "Target contribution.",
+          "default": 0
+        },
+        "elapsed": {
+          "type": "u32",
+          "doc": "Completed transition ticks.",
+          "default": 0
+        },
+        "duration": {
+          "type": "u32",
+          "doc": "Fixed transition duration in ticks.",
+          "default": 0
+        }
+      }
+    },
+    "Physics2dSetParams": {
+      "kind": "params",
+      "doc": "A complete rigid body or character, validated as one unit.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "pose": {
+          "type": "PhysicsPose2d",
+          "doc": "World-space starting pose.",
+          "required": true
+        },
+        "body": {
+          "type": "option<RigidBody2d>",
+          "doc": "Rigid body settings; requires `collider` and excludes `character`.",
+          "default": null
+        },
+        "collider": {
+          "type": "option<Collider2d>",
+          "doc": "Collision geometry and material for `body`.",
+          "default": null
+        },
+        "character": {
+          "type": "option<CharacterController2d>",
+          "doc": "Capsule character controller; excludes `body` and `collider`.",
+          "default": null
         }
       }
     },
@@ -974,6 +4333,52 @@ expression: out
             "interpolate": "slerp",
             "rollback": true
           }
+        }
+      }
+    },
+    "PhysicsPose2d": {
+      "kind": "component",
+      "doc": "World-space 2D pose, written back by the solver at every completed boundary.",
+      "module": "physics2d",
+      "fields": {
+        "position": {
+          "type": "vec2",
+          "doc": "Body origin or character capsule centre, in world space.",
+          "default": [0, 0],
+          "unit": "m",
+          "replicate": {
+            "audience": "relevant",
+            "interpolate": "linear",
+            "rollback": true
+          }
+        },
+        "rotation": {
+          "type": "f32",
+          "doc": "Counter-clockwise rotation about +Z.",
+          "default": 0,
+          "unit": "rad",
+          "replicate": {
+            "audience": "relevant",
+            "interpolate": "linear",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "PlayAudioParams": {
+      "kind": "params",
+      "doc": "Schema-discoverable `audio.play` parameters; protocol resolves asset and entity handles.",
+      "module": "audio",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Source entity address in the current presentation world.",
+          "required": true
+        },
+        "atFrame": {
+          "type": "u64",
+          "doc": "Absolute output frame on the presentation sample clock.",
+          "required": true
         }
       }
     },
@@ -1086,6 +4491,237 @@ expression: out
         }
       }
     },
+    "RagdollBone": {
+      "kind": "struct",
+      "doc": "One capsule and parent constraint in a canonical powered-ragdoll asset.",
+      "module": "animation",
+      "fields": {
+        "joint": {
+          "type": "string",
+          "doc": "Stable skeleton joint ID.",
+          "default": ""
+        },
+        "parent": {
+          "type": "option<u32>",
+          "doc": "Parent body index; absent for a free root. Parents must precede children.",
+          "default": null
+        },
+        "offset": {
+          "type": "AnimTransform",
+          "doc": "Body transform relative to the skeleton joint.",
+          "default": {}
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Capsule radius in meters.",
+          "default": 0.08
+        },
+        "halfHeight": {
+          "type": "f32",
+          "doc": "Capsule cylinder half-height in meters.",
+          "default": 0.15
+        },
+        "mass": {
+          "type": "f32",
+          "doc": "Body mass in kg.",
+          "default": 3
+        },
+        "limit": {
+          "type": "JointLimit",
+          "doc": "Bind-local angular constraint for the parent/body connection.",
+          "default": {}
+        },
+        "motor": {
+          "type": "MotorGains",
+          "doc": "Bounded spring gains.",
+          "default": {}
+        }
+      }
+    },
+    "RagdollProfile": {
+      "kind": "struct",
+      "doc": "Canonical body/constraint/motor configuration, cooked at import or spawn boundaries.",
+      "module": "animation",
+      "fields": {
+        "bones": {
+          "type": "list<RagdollBone>",
+          "doc": "Bodies in stable parent-before-child order.",
+          "default": []
+        }
+      }
+    },
+    "Retarget": {
+      "kind": "struct",
+      "doc": "Bone identity and reference pose used by a retargeting tool.",
+      "module": "animation",
+      "fields": {
+        "role": {
+          "type": "string",
+          "doc": "Semantic role such as hips, leftFoot or head; empty for unspecified.",
+          "default": ""
+        },
+        "reference": {
+          "type": "AnimTransform",
+          "doc": "Reference orientation defining the source bone's anatomical axes.",
+          "default": {}
+        },
+        "length": {
+          "type": "f32",
+          "doc": "Bone length in meters; zero means unspecified.",
+          "default": 0
+        }
+      }
+    },
+    "ReverbZone": {
+      "kind": "component",
+      "doc": "A room or space with its own reverb. The listener's zone drives the room reverb; sources in other zones reach the listener through portals.",
+      "module": "audio",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Unique zone name; portals, traces and diagnostics refer to zones by name.",
+          "default": ""
+        },
+        "shape": {
+          "type": "ZoneShape",
+          "doc": "Volume shape.",
+          "default": "box",
+          "options": [
+            "box",
+            "sphere"
+          ]
+        },
+        "position": {
+          "type": "vec3",
+          "doc": "World-space center, supplied from the entity transform by the bridge.",
+          "default": [0, 0, 0],
+          "unit": "m"
+        },
+        "rotation": {
+          "type": "vec4",
+          "doc": "World rotation as a unit quaternion (x, y, z, w), supplied by the bridge.",
+          "default": [0, 0, 0, 1]
+        },
+        "halfExtents": {
+          "type": "vec3",
+          "doc": "Box half extents.",
+          "default": [5, 3, 5],
+          "unit": "m"
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Sphere radius.",
+          "default": 5,
+          "unit": "m",
+          "range": [0.1, 10000]
+        },
+        "fade": {
+          "type": "f32",
+          "doc": "Width inside the boundary over which the listener crossfades to the outer space.",
+          "default": 1,
+          "unit": "m",
+          "range": [0, 100]
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Nested zones: the highest priority containing zone wins.",
+          "default": 0
+        },
+        "material": {
+          "type": "MaterialPreset",
+          "doc": "Wall material, deriving absorption for the realtime room model.",
+          "default": "generic",
+          "options": [
+            "generic",
+            "brick",
+            "concrete",
+            "ceramic",
+            "gravel",
+            "carpet",
+            "glass",
+            "plaster",
+            "wood",
+            "metal",
+            "rock"
+          ]
+        },
+        "rt60": {
+          "type": "option<vec3>",
+          "doc": "Explicit low/mid/high reverberation times in seconds, overriding derived and baked values.",
+          "default": null
+        },
+        "wet": {
+          "type": "f32",
+          "doc": "Reverb return gain.",
+          "default": 1,
+          "range": [0, 4]
+        },
+        "earlyReflections": {
+          "type": "bool",
+          "doc": "Geometric early reflections from the zone's walls.",
+          "default": true
+        },
+        "useBaked": {
+          "type": "bool",
+          "doc": "Prefer baked probe reverb times inside this zone when cooked cells are loaded.",
+          "default": true
+        }
+      }
+    },
+    "RigBone": {
+      "kind": "struct",
+      "doc": "One semantic bone binding, using a stable importer joint ID.",
+      "module": "animation",
+      "fields": {
+        "role": {
+          "type": "BoneRole",
+          "doc": "Anatomical role, unique within this rig.",
+          "default": "root",
+          "options": [
+            "root",
+            "hips",
+            "spine",
+            "chest",
+            "upperChest",
+            "neck",
+            "head",
+            "leftShoulder",
+            "leftUpperArm",
+            "leftLowerArm",
+            "leftHand",
+            "rightShoulder",
+            "rightUpperArm",
+            "rightLowerArm",
+            "rightHand",
+            "leftUpperLeg",
+            "leftLowerLeg",
+            "leftFoot",
+            "leftToes",
+            "rightUpperLeg",
+            "rightLowerLeg",
+            "rightFoot",
+            "rightToes"
+          ]
+        },
+        "joint": {
+          "type": "string",
+          "doc": "Stable skeleton joint identity.",
+          "default": ""
+        }
+      }
+    },
+    "RigMap": {
+      "kind": "struct",
+      "doc": "Canonical humanoid definition. Partial rigs are legal; ambiguity is never guessed.",
+      "module": "animation",
+      "fields": {
+        "bones": {
+          "type": "list<RigBone>",
+          "doc": "Unique role-to-joint bindings.",
+          "default": []
+        }
+      }
+    },
     "RigidBody": {
       "kind": "component",
       "doc": "Rigid-body authoring settings; simulation state is written to pose and velocity.",
@@ -1117,6 +4753,916 @@ expression: out
           "type": "bool",
           "doc": "Use swept collision detection for fast bodies.",
           "default": false
+        }
+      }
+    },
+    "RigidBody2d": {
+      "kind": "component",
+      "doc": "Rigid-body authoring settings; simulation state is written to pose and velocity.",
+      "module": "physics2d",
+      "fields": {
+        "motion": {
+          "type": "MotionType2d",
+          "doc": "Static, kinematic, or dynamic motion.",
+          "default": "static",
+          "options": [
+            "static",
+            "kinematic",
+            "dynamic"
+          ]
+        },
+        "mass": {
+          "type": "f32",
+          "doc": "Mass in kilograms; zero computes mass from the collider's 1 kg/m2 area density.",
+          "default": 0,
+          "unit": "kg",
+          "range": [0, null]
+        },
+        "allowSleep": {
+          "type": "bool",
+          "doc": "Permit inactive bodies to sleep.",
+          "default": true
+        },
+        "continuous": {
+          "type": "bool",
+          "doc": "Use swept collision detection for fast bodies.",
+          "default": false
+        },
+        "lockRotation": {
+          "type": "bool",
+          "doc": "Prevent physical rotation, for upright props and platforms.",
+          "default": false
+        }
+      }
+    },
+    "RotationKey": {
+      "kind": "struct",
+      "doc": "A unit quaternion key at an exact integer clip time.",
+      "module": "animation",
+      "fields": {
+        "tick": {
+          "type": "u32",
+          "doc": "Clip time in ticks.",
+          "default": 0
+        },
+        "value": {
+          "type": "vec4",
+          "doc": "Unit quaternion in XYZW order.",
+          "default": [0, 0, 0, 1]
+        }
+      }
+    },
+    "SavePersistDeclaration": {
+      "kind": "struct",
+      "doc": "Reflected persistence flag. This extension descriptor references the Schema DB; it does not duplicate fields, defaults, versions or migration implementations.",
+      "module": "save",
+      "fields": {
+        "typeName": {
+          "type": "string",
+          "doc": "Stable reflected type name.",
+          "default": ""
+        },
+        "storage": {
+          "type": "SaveStorage",
+          "doc": "Component or infrastructure resource.",
+          "default": "component",
+          "options": [
+            "component",
+            "resource"
+          ]
+        },
+        "persist": {
+          "type": "bool",
+          "doc": "Explicit opt-in. False declarations document excluded runtime/presentation data.",
+          "default": false
+        }
+      }
+    },
+    "SaveStorage": {
+      "kind": "enum",
+      "doc": "Storage class referenced by a persistence declaration, independent of replication.",
+      "module": "save",
+      "variants": {
+        "component": {
+          "doc": "Authoritative gameplay data attached to a stable entity."
+        },
+        "resource": {
+          "doc": "Registered service state; gameplay state still belongs to components."
+        }
+      }
+    },
+    "ScalarKey": {
+      "kind": "struct",
+      "doc": "A scalar key for a property curve.",
+      "module": "animation",
+      "fields": {
+        "tick": {
+          "type": "u32",
+          "doc": "Clip time in ticks.",
+          "default": 0
+        },
+        "value": {
+          "type": "f32",
+          "doc": "Finite property value in the addressed field's units.",
+          "default": 0
+        }
+      }
+    },
+    "SkeletonData": {
+      "kind": "struct",
+      "doc": "An imported skeleton, ordered for a linear model-space traversal.",
+      "module": "animation",
+      "fields": {
+        "joints": {
+          "type": "list<AnimJoint>",
+          "doc": "Parent-before-child joints; at least one joint is required.",
+          "default": []
+        },
+        "motionRoot": {
+          "type": "u32",
+          "doc": "Root joint whose rigid motion is extracted by the runtime.",
+          "default": 0
+        },
+        "inverseBind": {
+          "type": "list<AnimMatrix>",
+          "doc": "Explicit mesh-space inverse binds, in joint order. Empty derives them from bind transforms; glTF importers preserve the skin accessor here instead.",
+          "default": []
+        }
+      }
+    },
+    "Sprite": {
+      "kind": "component",
+      "doc": "A batched sprite with optional normal-mapped 2D illumination.",
+      "module": "twoD",
+      "fields": {
+        "atlas": {
+          "type": "option<asset>",
+          "doc": "Atlas asset reference, resolved to a resident texture at extraction.",
+          "default": null
+        },
+        "region": {
+          "type": "string",
+          "doc": "Stable region name in the atlas.",
+          "default": ""
+        },
+        "normalAtlas": {
+          "type": "option<asset>",
+          "doc": "Optional normal atlas, using the same rectangles.",
+          "default": null
+        },
+        "size": {
+          "type": "vec2",
+          "doc": "Desired world size in metres; zero selects source size / pixels per metre.",
+          "default": [0, 0]
+        },
+        "tint": {
+          "type": "vec4",
+          "doc": "Linear, straight-alpha tint.",
+          "default": [1, 1, 1, 1]
+        },
+        "sortingLayer": {
+          "type": "i32",
+          "doc": "Painter's sorting layer; lower draws first.",
+          "default": 0
+        },
+        "order": {
+          "type": "i32",
+          "doc": "Painter's order within a layer; stable identity breaks ties.",
+          "default": 0
+        },
+        "flipX": {
+          "type": "bool",
+          "doc": "Mirror horizontally about the pivot.",
+          "default": false
+        },
+        "flipY": {
+          "type": "bool",
+          "doc": "Mirror vertically about the pivot.",
+          "default": false
+        },
+        "nineSlice": {
+          "type": "bool",
+          "doc": "Apply the region's nine-slice borders when resizing.",
+          "default": false
+        },
+        "lit": {
+          "type": "bool",
+          "doc": "Opt into normal-mapped local lights and geometric shadows.",
+          "default": false
+        },
+        "parallax": {
+          "type": "vec2",
+          "doc": "Parallax factor; one follows the world, zero follows the camera.",
+          "default": [1, 1]
+        }
+      }
+    },
+    "SpriteRegion": {
+      "kind": "struct",
+      "doc": "Atlas rectangle and authoring geometry, in source pixels.",
+      "fields": {
+        "x": {
+          "type": "u32",
+          "doc": "Pixel left edge.",
+          "default": 0
+        },
+        "y": {
+          "type": "u32",
+          "doc": "Pixel top edge.",
+          "default": 0
+        },
+        "width": {
+          "type": "u32",
+          "doc": "Source pixel width.",
+          "default": 0
+        },
+        "height": {
+          "type": "u32",
+          "doc": "Source pixel height.",
+          "default": 0
+        },
+        "pivot": {
+          "type": "vec2",
+          "doc": "Normalized pivot, measured from the bottom left.",
+          "default": [0.5, 0.5]
+        },
+        "borders": {
+          "type": "vec4",
+          "doc": "Nine-slice borders in pixels: left, bottom, right, top.",
+          "default": [0, 0, 0, 0]
+        }
+      }
+    },
+    "SpriteSetParams": {
+      "kind": "params",
+      "doc": "Complete typed component authoring update.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "value": {
+          "type": "Sprite",
+          "doc": "Complete typed component; omitted fields use schema defaults.",
+          "required": true
+        }
+      }
+    },
+    "StopAudioParams": {
+      "kind": "params",
+      "doc": "Schema-discoverable `audio.stop` parameters; this stops presentation only.",
+      "module": "audio",
+      "fields": {
+        "voice": {
+          "type": "u64",
+          "doc": "Session-local runtime voice handle.",
+          "required": true
+        },
+        "atFrame": {
+          "type": "u64",
+          "doc": "Absolute presentation sample frame at which stopping begins.",
+          "required": true
+        },
+        "fadeFrames": {
+          "type": "u32",
+          "doc": "Dry-source fade length in output frames; native DSP tails drain afterwards.",
+          "default": 64
+        }
+      }
+    },
+    "TerrainCoord": {
+      "kind": "struct",
+      "doc": "Integer X/Z address in a terrain's fixed grid.",
+      "module": "terrain",
+      "fields": {
+        "x": {
+          "type": "i32",
+          "doc": "Tile index along world X.",
+          "default": 0
+        },
+        "z": {
+          "type": "i32",
+          "doc": "Tile index along world Z.",
+          "default": 0
+        }
+      }
+    },
+    "TerrainCreateParams": {
+      "kind": "params",
+      "doc": "Grid creation parameters for an empty terrain document.",
+      "module": "terrain",
+      "fields": {
+        "grid": {
+          "type": "TerrainHeader",
+          "doc": "Terrain grid dimensions and material channels.",
+          "required": true
+        }
+      }
+    },
+    "TerrainDab": {
+      "kind": "struct",
+      "doc": "One brush dab; the stroke command groups all dabs into one transaction.",
+      "module": "terrain",
+      "fields": {
+        "center": {
+          "type": "vec2",
+          "doc": "World X/Z brush centre in metres.",
+          "default": [0, 0]
+        },
+        "radius": {
+          "type": "f32",
+          "doc": "Brush radius in metres.",
+          "default": 0
+        },
+        "amount": {
+          "type": "f32",
+          "doc": "Signed displacement, paint strength or relaxation strength.",
+          "default": 0
+        }
+      }
+    },
+    "TerrainHeader": {
+      "kind": "record",
+      "doc": "Stable terrain grid settings; adjacent tiles duplicate their shared border.",
+      "module": "terrain",
+      "prefix": "h",
+      "fields": {
+        "origin": {
+          "type": "vec2",
+          "doc": "World X/Z origin in metres.",
+          "default": [0, 0]
+        },
+        "spacing": {
+          "type": "f32",
+          "doc": "Metres between adjacent height samples.",
+          "default": 0
+        },
+        "cells": {
+          "type": "u32",
+          "doc": "Power-of-two cells per tile (16..256); samples are cells + 1.",
+          "default": 0
+        },
+        "min": {
+          "type": "TerrainCoord",
+          "doc": "Inclusive minimum tile X/Z coordinates.",
+          "default": {}
+        },
+        "max": {
+          "type": "TerrainCoord",
+          "doc": "Exclusive maximum tile X/Z coordinates.",
+          "default": {}
+        },
+        "materials": {
+          "type": "list<asset>",
+          "doc": "Up to four surface material references, in weight-channel order.",
+          "default": []
+        }
+      }
+    },
+    "TerrainImportParams": {
+      "kind": "params",
+      "doc": "Imports one immutable source tile, preserving subsequent layer edits.",
+      "module": "terrain",
+      "fields": {
+        "layer": {
+          "type": "string",
+          "doc": "Existing non-destructive layer receiving this source tile.",
+          "required": true
+        },
+        "coord": {
+          "type": "TerrainCoord",
+          "doc": "Destination tile address.",
+          "required": true
+        },
+        "hash": {
+          "type": "string",
+          "doc": "Verified source payload key from the terrain cache.",
+          "required": true
+        }
+      }
+    },
+    "TerrainLayer": {
+      "kind": "record",
+      "doc": "A non-destructive layer; order followed by stable ID defines composition.",
+      "module": "terrain",
+      "prefix": "l",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Display name in terrain tools.",
+          "default": ""
+        },
+        "priority": {
+          "type": "u32",
+          "doc": "Stable ordering independent of record/map iteration order.",
+          "default": 0
+        },
+        "enabled": {
+          "type": "bool",
+          "doc": "Disabled layers are retained for undo and later re-enabling.",
+          "default": false
+        },
+        "opacity": {
+          "type": "f32",
+          "doc": "Blend opacity from zero to one.",
+          "default": 0
+        }
+      }
+    },
+    "TerrainLayerParams": {
+      "kind": "params",
+      "doc": "A non-destructive layer to insert.",
+      "module": "terrain",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Optional concrete or symbolic layer ID.",
+          "default": null
+        },
+        "layer": {
+          "type": "TerrainLayer",
+          "doc": "Layer settings.",
+          "required": true
+        }
+      }
+    },
+    "TerrainLayerSetParams": {
+      "kind": "params",
+      "doc": "Change layer settings while retaining its gesture history.",
+      "module": "terrain",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing layer record ID.",
+          "required": true
+        },
+        "layer": {
+          "type": "TerrainLayer",
+          "doc": "Replacement layer controls.",
+          "required": true
+        }
+      }
+    },
+    "TerrainOperation": {
+      "kind": "enum",
+      "doc": "Operation performed by one recorded brush gesture.",
+      "module": "terrain",
+      "variants": {
+        "raise": {
+          "doc": "Add a smooth radial displacement in metres."
+        },
+        "paint": {
+          "doc": "Paint one normalized splat channel."
+        },
+        "hole": {
+          "doc": "Set or clear holes in the selected area."
+        },
+        "stamp": {
+          "doc": "Add a rotated height stamp sampled from an immutable binary tile."
+        },
+        "erode": {
+          "doc": "Apply a bounded deterministic thermal relaxation kernel."
+        },
+        "import": {
+          "doc": "Replace samples from an imported tile inside an ordered, undoable layer."
+        }
+      }
+    },
+    "TerrainStroke": {
+      "kind": "record",
+      "doc": "A complete gesture, retained as source rather than destructive tile snapshots.",
+      "module": "terrain",
+      "prefix": "s",
+      "fields": {
+        "layer": {
+          "type": "string",
+          "doc": "Owning layer record ID.",
+          "default": ""
+        },
+        "sequence": {
+          "type": "u64",
+          "doc": "Gesture ordering within a layer; stable ID breaks concurrent ties.",
+          "default": 0
+        },
+        "operation": {
+          "type": "TerrainOperation",
+          "doc": "Typed operation.",
+          "default": "raise",
+          "options": [
+            "raise",
+            "paint",
+            "hole",
+            "stamp",
+            "erode",
+            "import"
+          ]
+        },
+        "dabs": {
+          "type": "list<TerrainDab>",
+          "doc": "Brush samples in gesture order (at most 4096).",
+          "default": []
+        },
+        "channel": {
+          "type": "u32",
+          "doc": "Paint channel, from zero to three.",
+          "default": 0
+        },
+        "iterations": {
+          "type": "u32",
+          "doc": "Erosion iterations (1..32), otherwise zero.",
+          "default": 0
+        },
+        "stamp": {
+          "type": "option<string>",
+          "doc": "Immutable stamp payload hash; absent for other operations.",
+          "default": null
+        },
+        "sourceTile": {
+          "type": "option<TerrainCoord>",
+          "doc": "Destination grid tile for an import layer; absent for brush operations.",
+          "default": null
+        },
+        "angle": {
+          "type": "f32",
+          "doc": "Stamp angle in radians.",
+          "default": 0
+        }
+      }
+    },
+    "TerrainStrokeParams": {
+      "kind": "params",
+      "doc": "A whole gesture, including every dab; do not issue one transaction per mouse sample.",
+      "module": "terrain",
+      "fields": {
+        "layer": {
+          "type": "string",
+          "doc": "Existing layer ID.",
+          "required": true
+        },
+        "dabs": {
+          "type": "list<TerrainDab>",
+          "doc": "Ordered gesture samples.",
+          "required": true
+        },
+        "channel": {
+          "type": "option<u32>",
+          "doc": "Material channel for paint; defaults to zero.",
+          "default": null
+        },
+        "iterations": {
+          "type": "option<u32>",
+          "doc": "Thermal iterations, default eight.",
+          "default": null
+        },
+        "stamp": {
+          "type": "option<string>",
+          "doc": "Immutable height stamp hash.",
+          "default": null
+        },
+        "angle": {
+          "type": "option<f32>",
+          "doc": "Stamp rotation in radians.",
+          "default": null
+        }
+      }
+    },
+    "TerrainTile": {
+      "kind": "record",
+      "doc": "Sparse touched-tile delta: a base payload and ordered references to gestures.",
+      "module": "terrain",
+      "prefix": "t",
+      "fields": {
+        "coord": {
+          "type": "TerrainCoord",
+          "doc": "Stable tile coordinate.",
+          "default": {}
+        },
+        "base": {
+          "type": "option<string>",
+          "doc": "Imported base tile in the content-addressed cache; absent means flat ground.",
+          "default": null
+        },
+        "strokes": {
+          "type": "list<string>",
+          "doc": "Gesture IDs touching this tile, in transaction order.",
+          "default": []
+        }
+      }
+    },
+    "TileCell": {
+      "kind": "struct",
+      "doc": "A signed source-cell address. Reflected as `TileCell` (world partition cells own `Cell`).",
+      "fields": {
+        "x": {
+          "type": "i32",
+          "doc": "Signed column / axial q.",
+          "default": 0
+        },
+        "y": {
+          "type": "i32",
+          "doc": "Signed row / axial r.",
+          "default": 0
+        }
+      }
+    },
+    "TileColliderSource2d": {
+      "kind": "component",
+      "doc": "Ownership marker for generated colliders, separate from gameplay body state.",
+      "module": "physics2d",
+      "fields": {
+        "owner": {
+          "type": "entity",
+          "doc": "Map entity whose tiles generated this collider.",
+          "default": null
+        }
+      }
+    },
+    "TileCollidersParams": {
+      "kind": "params",
+      "doc": "Tile collider generation request.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Plain tilemap entity (prefab generation belongs in its source document).",
+          "required": true
+        },
+        "origin": {
+          "type": "vec2",
+          "doc": "World-space map offset in metres.",
+          "required": true
+        },
+        "basis": {
+          "type": "option<vec4>",
+          "doc": "Optional row-major map basis, including hierarchy rotation/scale/shear.",
+          "default": null
+        }
+      }
+    },
+    "TileDefinition": {
+      "kind": "struct",
+      "doc": "A tile's visual, terrain, collision and lighting definition.",
+      "fields": {
+        "region": {
+          "type": "string",
+          "doc": "Stable atlas region name.",
+          "default": ""
+        },
+        "size": {
+          "type": "vec2",
+          "doc": "Drawn size in metres around the region pivot; zero uses the cell size. Taller tiles (walls, trees) overlap their neighbors and draw back to front.",
+          "default": [0, 0],
+          "unit": "m",
+          "range": [0, null]
+        },
+        "terrain": {
+          "type": "u32",
+          "doc": "Auto-tiling terrain group; zero opts out of rules.",
+          "default": 0
+        },
+        "solid": {
+          "type": "bool",
+          "doc": "Generate a static collider and shadow silhouette from this cell.",
+          "default": false
+        },
+        "lit": {
+          "type": "bool",
+          "doc": "Opt into local lights and normal maps.",
+          "default": false
+        }
+      }
+    },
+    "TileEraseParams": {
+      "kind": "params",
+      "doc": "An eraser stroke.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Tilemap entity.",
+          "required": true
+        },
+        "layer": {
+          "type": "string",
+          "doc": "Stable layer ID.",
+          "required": true
+        },
+        "cells": {
+          "type": "list<TileCell>",
+          "doc": "Cells to erase atomically.",
+          "required": true
+        },
+        "autotile": {
+          "type": "option<bool>",
+          "doc": "Re-run terrain rules on the erased cells' neighbors in the same transaction (default false).",
+          "default": null
+        }
+      }
+    },
+    "TileFillParams": {
+      "kind": "params",
+      "doc": "Bounded flood fill of edge-connected cells matching the seed's tile.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Tilemap entity.",
+          "required": true
+        },
+        "layer": {
+          "type": "string",
+          "doc": "Stable layer ID.",
+          "required": true
+        },
+        "seed": {
+          "type": "TileCell",
+          "doc": "Starting cell.",
+          "required": true
+        },
+        "min": {
+          "type": "TileCell",
+          "doc": "Inclusive minimum coordinate; bounds make empty-space fills finite.",
+          "required": true
+        },
+        "max": {
+          "type": "TileCell",
+          "doc": "Inclusive maximum coordinate.",
+          "required": true
+        },
+        "tile": {
+          "type": "u32",
+          "doc": "New tile definition, zero to erase.",
+          "required": true
+        },
+        "autotile": {
+          "type": "option<bool>",
+          "doc": "Re-run terrain rules on the filled region and its border (default false).",
+          "default": null
+        }
+      }
+    },
+    "TileLayer": {
+      "kind": "struct",
+      "doc": "One map layer with stable identity, source cells and independent painter order.",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable layer identity (`l_ground`), used in field paths and cache keys.",
+          "default": ""
+        },
+        "sortingLayer": {
+          "type": "i32",
+          "doc": "Sorting layer shared with sprites.",
+          "default": 0
+        },
+        "order": {
+          "type": "i32",
+          "doc": "Draw order within the sorting layer.",
+          "default": 0
+        },
+        "parallax": {
+          "type": "vec2",
+          "doc": "Parallax factor per world axis.",
+          "default": [1, 1]
+        },
+        "tint": {
+          "type": "vec4",
+          "doc": "Linear, straight-alpha tint applied to every tile, e.g. to darken backgrounds.",
+          "default": [1, 1, 1, 1]
+        },
+        "cells": {
+          "type": "map<u32>",
+          "doc": "Signed `x,y` keys to positive tile numbers; missing cells are empty.",
+          "default": {}
+        }
+      }
+    },
+    "TilePaintParams": {
+      "kind": "params",
+      "doc": "A stroke of explicitly addressed tile samples.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Tilemap entity, including prefab addresses.",
+          "required": true
+        },
+        "layer": {
+          "type": "string",
+          "doc": "Stable layer ID.",
+          "required": true
+        },
+        "cells": {
+          "type": "list<PaintCell>",
+          "doc": "Stroke samples in input order; later duplicates win.",
+          "required": true
+        },
+        "autotile": {
+          "type": "option<bool>",
+          "doc": "Re-run terrain rules on the stroke and its neighbors in the same transaction (default false).",
+          "default": null
+        }
+      }
+    },
+    "TileRule": {
+      "kind": "struct",
+      "doc": "First matching rule wins. Masks use `GridLayout::neighbors` bit order; a neighbor \"matches\" when its tile's definition has the rule's terrain.",
+      "fields": {
+        "terrain": {
+          "type": "u32",
+          "doc": "Terrain group to transform.",
+          "default": 0
+        },
+        "required": {
+          "type": "u32",
+          "doc": "Neighbors which must share this terrain.",
+          "default": 0
+        },
+        "forbidden": {
+          "type": "u32",
+          "doc": "Neighbors which must not share this terrain.",
+          "default": 0
+        },
+        "tile": {
+          "type": "u32",
+          "doc": "Output tile number; its definition must have the same terrain.",
+          "default": 0
+        }
+      }
+    },
+    "TileRuleParams": {
+      "kind": "params",
+      "doc": "Applies all terrain rules to a layer in one transaction.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Tilemap entity.",
+          "required": true
+        },
+        "layer": {
+          "type": "string",
+          "doc": "Stable layer ID.",
+          "required": true
+        }
+      }
+    },
+    "Tilemap": {
+      "kind": "component",
+      "doc": "Canonical text source for a tilemap. Binary chunks are derived cache products.",
+      "module": "twoD",
+      "fields": {
+        "atlas": {
+          "type": "option<asset>",
+          "doc": "Atlas asset reference; never a native descriptor.",
+          "default": null
+        },
+        "normalAtlas": {
+          "type": "option<asset>",
+          "doc": "Optional normal atlas matching the source regions.",
+          "default": null
+        },
+        "layout": {
+          "type": "GridLayout",
+          "doc": "Grid, pointy hex or diamond layout.",
+          "default": "grid",
+          "options": [
+            "grid",
+            "hex",
+            "isometric"
+          ]
+        },
+        "cellSize": {
+          "type": "vec2",
+          "doc": "World dimensions of a cell's bounding box in metres.",
+          "default": [1, 1]
+        },
+        "definitions": {
+          "type": "map<TileDefinition>",
+          "doc": "Tile number text to definitions; zero is reserved for empty cells.",
+          "default": {}
+        },
+        "layers": {
+          "type": "keyed<TileLayer>",
+          "doc": "Stable layers. Their array order never determines painter order.",
+          "default": []
+        },
+        "rules": {
+          "type": "list<TileRule>",
+          "doc": "Ordered auto-tiling rules.",
+          "default": []
+        }
+      }
+    },
+    "TilemapSetParams": {
+      "kind": "params",
+      "doc": "Complete typed component authoring update.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Target entity, including prefab addresses.",
+          "required": true
+        },
+        "value": {
+          "type": "Tilemap",
+          "doc": "Complete typed component; omitted fields use schema defaults.",
+          "required": true
         }
       }
     },
@@ -1190,6 +5736,131 @@ expression: out
           "type": "option<vec3>",
           "doc": "Scale relative to the parent.",
           "default": null
+        }
+      }
+    },
+    "TranslateParams": {
+      "kind": "params",
+      "doc": "Generation request and completed provider output, committed as one undoable job.",
+      "module": "l10n",
+      "fields": {
+        "request": {
+          "type": "TranslationRequest",
+          "doc": "Original generation request, including source and target fingerprints.",
+          "required": true
+        },
+        "response": {
+          "type": "TranslationResponse",
+          "doc": "Completed response from the host's selected provider.",
+          "required": true
+        }
+      }
+    },
+    "TranslationItem": {
+      "kind": "struct",
+      "doc": "One provider input; the source fingerprint makes late responses safe to reject.",
+      "module": "l10n",
+      "fields": {
+        "key": {
+          "type": "string",
+          "doc": "Stable source key.",
+          "default": ""
+        },
+        "source": {
+          "type": "string",
+          "doc": "Complete ICU MessageFormat source text.",
+          "default": ""
+        },
+        "sourceHash": {
+          "type": "string",
+          "doc": "Source text plus parameter signature fingerprint.",
+          "default": ""
+        },
+        "params": {
+          "type": "map<L10nParamKind>",
+          "doc": "Typed parameter signature the provider must preserve.",
+          "default": {}
+        },
+        "note": {
+          "type": "string",
+          "doc": "Human context for the translator/provider.",
+          "default": ""
+        },
+        "targetHash": {
+          "type": "string",
+          "doc": "Existing target fingerprint, or empty if absent; prevents late overwrites.",
+          "default": ""
+        }
+      }
+    },
+    "TranslationRequest": {
+      "kind": "struct",
+      "doc": "Provider-independent generation job, suitable for a background worker or MCP host.",
+      "module": "l10n",
+      "fields": {
+        "job": {
+          "type": "string",
+          "doc": "Stable host job ID used in provenance and response matching.",
+          "default": ""
+        },
+        "sourceLocale": {
+          "type": "string",
+          "doc": "Source table locale.",
+          "default": ""
+        },
+        "targetLocale": {
+          "type": "string",
+          "doc": "Destination table locale.",
+          "default": ""
+        },
+        "items": {
+          "type": "list<TranslationItem>",
+          "doc": "Whole messages to translate without changing keys or signatures.",
+          "default": []
+        }
+      }
+    },
+    "TranslationResponse": {
+      "kind": "struct",
+      "doc": "Provider response; no provider SDK or credentials enter the localization crate.",
+      "module": "l10n",
+      "fields": {
+        "job": {
+          "type": "string",
+          "doc": "Request's exact job ID.",
+          "default": ""
+        },
+        "provider": {
+          "type": "string",
+          "doc": "Provider identifier for provenance.",
+          "default": ""
+        },
+        "model": {
+          "type": "string",
+          "doc": "Model/version identifier for provenance.",
+          "default": ""
+        },
+        "translations": {
+          "type": "map<string>",
+          "doc": "Complete translated ICU patterns keyed by the requested source keys.",
+          "default": {}
+        }
+      }
+    },
+    "VectorKey": {
+      "kind": "struct",
+      "doc": "A vector key at an exact integer clip time.",
+      "module": "animation",
+      "fields": {
+        "tick": {
+          "type": "u32",
+          "doc": "Clip time in ticks.",
+          "default": 0
+        },
+        "value": {
+          "type": "vec3",
+          "doc": "Translation in meters or dimensionless scale.",
+          "default": [0, 0, 0]
         }
       }
     },
@@ -1390,6 +6061,140 @@ expression: out
         }
       }
     },
+    "Velocity2d": {
+      "kind": "component",
+      "doc": "Authoritative velocity, synchronized at tick boundaries.",
+      "module": "physics2d",
+      "fields": {
+        "linear": {
+          "type": "vec2",
+          "doc": "World-space linear velocity.",
+          "default": [0, 0],
+          "unit": "m/s",
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        },
+        "angular": {
+          "type": "f32",
+          "doc": "Counter-clockwise angular velocity.",
+          "default": 0,
+          "unit": "rad/s",
+          "replicate": {
+            "audience": "relevant",
+            "rollback": true
+          }
+        }
+      }
+    },
+    "VfxParameterParams": {
+      "kind": "params",
+      "doc": "Typed default parameter mutation.",
+      "module": "vfx",
+      "fields": {
+        "key": {
+          "type": "string",
+          "doc": "Full namespaced parameter address.",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "Typed value object, e.g. {type:float,value:3}.",
+          "required": true
+        }
+      }
+    },
+    "VfxStackParams": {
+      "kind": "params",
+      "doc": "A structured stack edit; the operation and module are domain-validated.",
+      "module": "vfx",
+      "fields": {
+        "emitter": {
+          "type": "string",
+          "doc": "Stable emitter name.",
+          "required": true
+        },
+        "stage": {
+          "type": "string",
+          "doc": "One of spawn, initialize, update, render.",
+          "required": true
+        },
+        "operation": {
+          "type": "string",
+          "doc": "Insert, remove or move.",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "doc": "Stable existing module name for remove/move.",
+          "required": true
+        },
+        "index": {
+          "type": "option<u32>",
+          "doc": "Destination position for insert/move.",
+          "default": null
+        },
+        "module": {
+          "type": "option<json>",
+          "doc": "Typed StackModule JSON for insertion.",
+          "default": null
+        }
+      }
+    },
+    "VfxTextParams": {
+      "kind": "params",
+      "doc": "Complete ID-free source edit, suitable for agents or a text editor.",
+      "module": "vfx",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Canonical ID-free effect JSON.",
+          "required": true
+        }
+      }
+    },
+    "VisualEffect": {
+      "kind": "component",
+      "doc": "A GPU particle effect drawn at this entity. Presentation only: gameplay reads ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).",
+      "module": "vfx",
+      "fields": {
+        "effect": {
+          "type": "string",
+          "doc": "Cooked library effect name.",
+          "default": "campfire"
+        }
+      }
+    },
+    "VoiceParameters": {
+      "kind": "struct",
+      "doc": "Prepared voice controls. All values must be finite; linear gain is in [0,16].",
+      "module": "audio",
+      "fields": {
+        "gain": {
+          "type": "f32",
+          "doc": "Linear amplitude, normally source gain times distance/cone attenuation.",
+          "default": 1,
+          "range": [0, 16]
+        },
+        "rate": {
+          "type": "f32",
+          "doc": "Playback rate, normally source pitch times Doppler.",
+          "default": 1,
+          "range": [0.03125, 32]
+        },
+        "direction": {
+          "type": "vec3",
+          "doc": "Unit listener-local direction, with forward along negative Z.",
+          "default": [0, 0, -1]
+        },
+        "path": {
+          "type": "AcousticPath",
+          "doc": "Worker-computed occlusion, transmission and reflection send.",
+          "default": {}
+        }
+      }
+    },
     "Wanderer": {
       "kind": "component",
       "doc": "Server-side AI: walks the navmesh to random points inside a box, pausing between.",
@@ -1423,9 +6228,112 @@ expression: out
           "default": 0
         }
       }
+    },
+    "WorldSettings": {
+      "kind": "record",
+      "doc": "Root world settings, kept in the manifest's single `w_` record.",
+      "module": "world",
+      "prefix": "w",
+      "fields": {
+        "cellSize": {
+          "type": "f32",
+          "doc": "Grid cell width and depth.",
+          "default": 0,
+          "unit": "m"
+        }
+      }
+    },
+    "ZoneShape": {
+      "kind": "enum",
+      "doc": "Reverb zone volume shape.",
+      "module": "audio",
+      "variants": {
+        "box": {
+          "doc": "Oriented box with `halfExtents`."
+        },
+        "sphere": {
+          "doc": "Sphere with `radius`."
+        }
+      }
     }
   },
   "documents": {
+    "animation": {
+      "doc": "Animation skeletons, clips and controller graphs.",
+      "schema": "ara://schema/animation/1",
+      "idPrefix": "ac",
+      "extension": "animation",
+      "records": [
+        "AnimAsset"
+      ]
+    },
+    "foliage": {
+      "doc": "Seeded scatter rules and manual foliage strokes.",
+      "schema": "ara://schema/foliage/1",
+      "idPrefix": "fo",
+      "extension": "foliage",
+      "records": [
+        "FoliageHeader",
+        "FoliageRule",
+        "FoliageExclusion",
+        "FoliagePaint"
+      ]
+    },
+    "graph": {
+      "doc": "A domain-typed graph with stable node, edge and socket identities.",
+      "schema": "ara://schema/graph/1",
+      "idPrefix": "gr",
+      "extension": "graph",
+      "records": [
+        "GraphNode",
+        "GraphEdge",
+        "GraphHeader",
+        "GraphEditor"
+      ]
+    },
+    "l10n": {
+      "doc": "One locale's messages, review provenance and explicit font fallback.",
+      "schema": "ara://schema/l10n/1",
+      "idPrefix": "lc",
+      "extension": "l10n",
+      "records": [
+        "L10nLocaleConfig",
+        "L10nStringEntry"
+      ]
+    },
+    "materialinstance": {
+      "doc": "A material definition reference and cheap per-object parameter overrides.",
+      "schema": "ara://schema/materialinstance/1",
+      "idPrefix": "mi",
+      "extension": "materialinstance",
+      "records": [
+        "MaterialInstance"
+      ],
+      "singleRoot": true
+    },
+    "mixer": {
+      "doc": "Audio mixer: bus tree, sends, ducking, voice limits, loudness targets and mix states.",
+      "schema": "ara://schema/mixer/1",
+      "idPrefix": "mx",
+      "extension": "mixer",
+      "records": [
+        "AudioBus",
+        "AudioMixState",
+        "AudioMixerSettings"
+      ]
+    },
+    "music": {
+      "doc": "Interactive music: segments with stems and tempo maps, transitions, stingers.",
+      "schema": "ara://schema/music/1",
+      "idPrefix": "mu",
+      "extension": "music",
+      "records": [
+        "MusicSegment",
+        "MusicTransition",
+        "MusicStinger",
+        "MusicSettings"
+      ]
+    },
     "prefab": {
       "doc": "A reusable entity subtree with exactly one root, instantiated by reference.",
       "schema": "ara://schema/prefab/1",
@@ -1444,9 +6352,148 @@ expression: out
       "records": [
         "Entity"
       ]
+    },
+    "terrain": {
+      "doc": "Streamable layered heightfield manifest.",
+      "schema": "ara://schema/terrain/1",
+      "idPrefix": "tr",
+      "extension": "terrain",
+      "records": [
+        "TerrainHeader",
+        "TerrainLayer",
+        "TerrainStroke",
+        "TerrainTile"
+      ]
+    },
+    "world": {
+      "doc": "Partitioned world manifest.",
+      "schema": "ara://schema/world/1",
+      "idPrefix": "wd",
+      "extension": "world",
+      "records": [
+        "WorldSettings",
+        "Layer",
+        "Cell"
+      ]
     }
   },
   "commands": {
+    "audiograph.input.set": {
+      "kind": "command",
+      "summary": "Wire or set one audio graph input (or graph output) to a literal or another node.",
+      "params": "AudioGraphSetInputParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "filtered",
+          "input": "cutoff",
+          "value": 1200
+        }
+      ]
+    },
+    "audiograph.node.add": {
+      "kind": "command",
+      "summary": "Add an operation node to an audio graph.",
+      "params": "AudioGraphAddParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "filtered",
+          "op": "lowpass",
+          "args": {
+            "in": "osc",
+            "cutoff": 800
+          }
+        }
+      ]
+    },
+    "audiograph.node.remove": {
+      "kind": "command",
+      "summary": "Remove an audio graph node or parameter and every reference to it.",
+      "params": "AudioGraphRemoveParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "filtered"
+        }
+      ]
+    },
+    "audiograph.param.set": {
+      "kind": "command",
+      "summary": "Edit an audio graph parameter's default, range or documentation.",
+      "params": "AudioGraphParamParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "pitch",
+          "default": 220,
+          "range": [20, 2000]
+        }
+      ]
+    },
+    "audiograph.rename": {
+      "kind": "command",
+      "summary": "Rename an audio graph parameter or node without changing its identity.",
+      "params": "AudioGraphRenameParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "from": "osc",
+          "to": "tone"
+        }
+      ]
+    },
+    "audiograph.text.apply": {
+      "kind": "command",
+      "summary": "Replace an audio graph with edited .audiograph text (names keep their IDs).",
+      "params": "AudioGraphTextParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "text": "graph Tone { param pitch = 440; let osc = sine(pitch); output out = osc; }"
+        }
+      ]
+    },
+    "camera2d.set": {
+      "kind": "command",
+      "summary": "Set Camera2d through validated ops.",
+      "params": "Camera2dSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "value": {}
+        }
+      ]
+    },
     "component.add": {
       "kind": "command",
       "summary": "Add a component to an entity, with optional initial values.",
@@ -1560,6 +6607,434 @@ expression: out
         }
       ]
     },
+    "flipbook.set": {
+      "kind": "command",
+      "summary": "Set Flipbook through validated ops.",
+      "params": "FlipbookSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "value": {}
+        }
+      ]
+    },
+    "foliage.create": {
+      "kind": "command",
+      "summary": "Create a foliage document linked to a terrain.",
+      "params": "FoliageCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "header": {
+            "terrain": "@world.terrain#tr_world001"
+          }
+        }
+      ]
+    },
+    "foliage.erase": {
+      "kind": "command",
+      "summary": "Erase a paint gesture, exclusion or unused scatter rule with undo.",
+      "params": "FoliageEraseParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "p_brush"
+        }
+      ]
+    },
+    "foliage.exclude": {
+      "kind": "command",
+      "summary": "Exclude manual and procedural foliage from a circular zone.",
+      "params": "FoliageExcludeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "zone": {
+            "center": [10, 20],
+            "radius": 4
+          }
+        }
+      ]
+    },
+    "foliage.paint": {
+      "kind": "command",
+      "summary": "Record one complete manual foliage brush gesture.",
+      "params": "FoliagePaintParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "stroke": {
+            "rule": "r_grass",
+            "seed": 42,
+            "points": [
+              [0, 0],
+              [1, 2]
+            ]
+          }
+        }
+      ]
+    },
+    "foliage.rule.set": {
+      "kind": "command",
+      "summary": "Add or update a seeded scatter rule; worker regeneration keeps stable identities.",
+      "params": "FoliageRuleParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "rule": {
+            "name": "Grass",
+            "species": "grass",
+            "asset": "@grass.foliage#fo_grass001",
+            "seed": 42,
+            "cellSize": 2,
+            "density": 0.2,
+            "height": [0, 500],
+            "slope": [0, 40],
+            "channel": 0,
+            "minWeight": 0.1,
+            "noise": 0.3,
+            "scale": [0.8, 1.2],
+            "enabled": true
+          }
+        }
+      ]
+    },
+    "l10n.extract": {
+      "kind": "command",
+      "summary": "Scan UI/C# literals into reviewed key proposals and undoable table ops.",
+      "params": "L10nExtractParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:l10n",
+      "examples": [
+        {
+          "kind": "markup",
+          "source": "<ui><label text='Resume'/></ui>",
+          "prefix": "pause"
+        }
+      ]
+    },
+    "l10n.find_missing": {
+      "kind": "query",
+      "summary": "Find missing and extra locale keys with runnable fixes.",
+      "params": "L10nFindMissingParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "read",
+      "examples": [
+        {
+          "sourceLocale": "en"
+        }
+      ]
+    },
+    "l10n.put": {
+      "kind": "command",
+      "summary": "Insert or replace a typed localization message.",
+      "params": "L10nPutParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:l10n",
+      "examples": [
+        {
+          "entry": {
+            "key": "menu.resume",
+            "text": "Resume"
+          }
+        }
+      ]
+    },
+    "l10n.remove": {
+      "kind": "command",
+      "summary": "Remove an obsolete localization message.",
+      "params": "L10nRemoveParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:l10n",
+      "examples": [
+        {
+          "id": "m_1234"
+        }
+      ]
+    },
+    "l10n.translate_job": {
+      "kind": "job",
+      "summary": "Validate and apply a generation job with provenance and review state.",
+      "params": "TranslateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:l10n",
+      "examples": [
+        {
+          "request": {
+            "job": "job1",
+            "sourceLocale": "en",
+            "targetLocale": "ar",
+            "items": []
+          },
+          "response": {
+            "job": "job1",
+            "provider": "local",
+            "model": "translator-v1",
+            "translations": {}
+          }
+        }
+      ]
+    },
+    "light2d.set": {
+      "kind": "command",
+      "summary": "Set Light2d through validated ops.",
+      "params": "Light2dSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "value": {}
+        }
+      ]
+    },
+    "material.budget.set": {
+      "kind": "command",
+      "summary": "Set an explicit static variant budget.",
+      "params": "MaterialBudgetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "budget": 16
+        }
+      ]
+    },
+    "material.connect": {
+      "kind": "command",
+      "summary": "Rewire an argument or output in the shared material AST.",
+      "params": "MaterialConnectParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "n_a",
+          "node": "n_b",
+          "port": "in0"
+        }
+      ]
+    },
+    "material.graph.apply": {
+      "kind": "command",
+      "summary": "Apply an edited graph projection.",
+      "params": "MaterialGraphParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "json": "{}"
+        }
+      ]
+    },
+    "material.instance.clear": {
+      "kind": "command",
+      "summary": "Restore a material definition parameter default.",
+      "params": "MaterialInstanceClearParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "n_rough"
+        }
+      ]
+    },
+    "material.instance.override": {
+      "kind": "command",
+      "summary": "Set a validated material instance override.",
+      "params": "MaterialInstanceSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "n_rough",
+          "values": [0.4]
+        }
+      ]
+    },
+    "material.node.literal": {
+      "kind": "command",
+      "summary": "Replace an expression with a typed literal.",
+      "params": "MaterialLiteralParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "n_a",
+          "values": [0]
+        }
+      ]
+    },
+    "material.node.type": {
+      "kind": "command",
+      "summary": "Change a material type annotation.",
+      "params": "MaterialTypeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "n_a",
+          "ty": "float"
+        }
+      ]
+    },
+    "material.output.default": {
+      "kind": "command",
+      "summary": "Reset an output to a typed zero value.",
+      "params": "MaterialOutputParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "field": "roughness"
+        }
+      ]
+    },
+    "material.parameter.reset": {
+      "kind": "command",
+      "summary": "Reset invalid parameter values and static choices.",
+      "params": "MaterialParameterParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "node": "n_a"
+        }
+      ]
+    },
+    "material.rename": {
+      "kind": "command",
+      "summary": "Rename a value while retaining its graph identity and layout.",
+      "params": "MaterialRenameParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "from": "paint",
+          "to": "basePaint"
+        }
+      ]
+    },
+    "material.text.apply": {
+      "kind": "command",
+      "summary": "Apply the text view as undoable material ops.",
+      "params": "MaterialTextParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "text": "material Demo : unlit budget 1 { let color : ColorLinear = linear(1, 1, 1); output color = color; }"
+        }
+      ]
+    },
+    "physics2d.set": {
+      "kind": "command",
+      "summary": "Set a validated 2D rigid body (body + collider) or capsule character, with its pose.",
+      "params": "Physics2dSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_crate1",
+          "pose": {
+            "position": [2, 1]
+          },
+          "body": {
+            "motion": "dynamic"
+          },
+          "collider": {
+            "halfExtents": [0.5, 0.5]
+          }
+        },
+        {
+          "entity": "e_hero1",
+          "pose": {
+            "position": [0, 1]
+          },
+          "character": {
+            "height": 1.4
+          }
+        }
+      ]
+    },
     "prefab.instantiate": {
       "kind": "command",
       "summary": "Place an instance of a prefab; its content stays linked to the prefab.",
@@ -1635,6 +7110,349 @@ expression: out
         }
       ]
     },
+    "sprite.set": {
+      "kind": "command",
+      "summary": "Set Sprite through validated ops.",
+      "params": "SpriteSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "value": {}
+        }
+      ]
+    },
+    "terrain.create": {
+      "kind": "command",
+      "summary": "Create a tiled terrain grid in an empty terrain document.",
+      "params": "TerrainCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "grid": {
+            "origin": [0, 0],
+            "spacing": 1,
+            "cells": 64,
+            "min": {
+              "x": 0,
+              "z": 0
+            },
+            "max": {
+              "x": 64,
+              "z": 64
+            },
+            "materials": []
+          }
+        }
+      ]
+    },
+    "terrain.erode": {
+      "kind": "command",
+      "summary": "Apply bounded deterministic thermal erosion.",
+      "params": "TerrainStrokeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "dabs": [
+            {
+              "center": [0, 0],
+              "radius": 8,
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    "terrain.hole": {
+      "kind": "command",
+      "summary": "Cut or restore hole cells for a complete gesture.",
+      "params": "TerrainStrokeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "dabs": [
+            {
+              "center": [0, 0],
+              "radius": 8,
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    "terrain.import": {
+      "kind": "command",
+      "summary": "Reference a binary source heightfield without rewriting it into text.",
+      "params": "TerrainImportParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "coord": {
+            "x": 0,
+            "z": 0
+          },
+          "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "terrain.layer.add": {
+      "kind": "command",
+      "summary": "Add an ordered non-destructive terrain layer.",
+      "params": "TerrainLayerParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": {
+            "name": "Sculpt",
+            "priority": 0,
+            "enabled": true,
+            "opacity": 1
+          }
+        }
+      ]
+    },
+    "terrain.layer.set": {
+      "kind": "command",
+      "summary": "Change opacity, visibility or ordering without destroying strokes.",
+      "params": "TerrainLayerSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "l_base",
+          "layer": {
+            "name": "Base",
+            "priority": 0,
+            "enabled": false,
+            "opacity": 1
+          }
+        }
+      ]
+    },
+    "terrain.paint": {
+      "kind": "command",
+      "summary": "Paint normalized material weights for a complete gesture.",
+      "params": "TerrainStrokeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "dabs": [
+            {
+              "center": [0, 0],
+              "radius": 8,
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    "terrain.raise": {
+      "kind": "command",
+      "summary": "Sculpt a radial brush gesture in metres.",
+      "params": "TerrainStrokeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "dabs": [
+            {
+              "center": [0, 0],
+              "radius": 8,
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    "terrain.stamp": {
+      "kind": "command",
+      "summary": "Apply a rotated immutable height stamp.",
+      "params": "TerrainStrokeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "layer": "l_base",
+          "dabs": [
+            {
+              "center": [0, 0],
+              "radius": 8,
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    "tilemap.colliders.generate": {
+      "kind": "command",
+      "summary": "Generate merged static tile colliders as undoable entities.",
+      "params": "TileCollidersParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "origin": [0, 0]
+        }
+      ]
+    },
+    "tilemap.erase": {
+      "kind": "command",
+      "summary": "Erase tile cells as one undoable stroke.",
+      "params": "TileEraseParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "layer": "l_ground",
+          "cells": [
+            {
+              "x": 0,
+              "y": 0
+            }
+          ]
+        }
+      ]
+    },
+    "tilemap.fill": {
+      "kind": "command",
+      "summary": "Flood fill matching cells within explicit bounds.",
+      "params": "TileFillParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "layer": "l_ground",
+          "seed": {
+            "x": 0,
+            "y": 0
+          },
+          "min": {
+            "x": -4,
+            "y": -4
+          },
+          "max": {
+            "x": 4,
+            "y": 4
+          },
+          "tile": 1
+        }
+      ]
+    },
+    "tilemap.paint": {
+      "kind": "command",
+      "summary": "Paint tile cells as one undoable stroke, optionally auto-tiling terrain.",
+      "params": "TilePaintParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "layer": "l_ground",
+          "cells": [
+            {
+              "x": 0,
+              "y": 0,
+              "tile": 1
+            },
+            {
+              "x": 1,
+              "y": 0,
+              "tile": 1
+            }
+          ],
+          "autotile": true
+        }
+      ]
+    },
+    "tilemap.rule.apply": {
+      "kind": "command",
+      "summary": "Apply terrain rules to a whole layer in one transaction.",
+      "params": "TileRuleParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "layer": "l_ground"
+        }
+      ]
+    },
+    "tilemap.set": {
+      "kind": "command",
+      "summary": "Set Tilemap through validated ops.",
+      "params": "TilemapSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_map1",
+          "value": {}
+        }
+      ]
+    },
     "transform.set": {
       "kind": "command",
       "summary": "Set the local position, rotation and/or scale of entities.",
@@ -1651,6 +7469,59 @@ expression: out
           ],
           "position": [2, 0, 3],
           "rotation": [0, 45, 0]
+        }
+      ]
+    },
+    "vfx.parameter.set": {
+      "kind": "command",
+      "summary": "Set a typed VFX parameter default.",
+      "params": "VfxParameterParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "key": "user.intensity",
+          "value": {
+            "type": "float",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "vfx.stack.edit": {
+      "kind": "command",
+      "summary": "Insert, remove or reorder a named VFX module.",
+      "params": "VfxStackParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "emitter": "flame",
+          "stage": "update",
+          "operation": "move",
+          "name": "drag",
+          "index": 0
+        }
+      ]
+    },
+    "vfx.text.apply": {
+      "kind": "command",
+      "summary": "Apply typed effect text as reversible graph ops.",
+      "params": "VfxTextParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "{\n  \"name\": \"campfire\",\n  \"seed\": 17,\n  \"hz\": 60,\n  \"quality\": {\n    \"particles\": 1000000,\n    \"overdraw\": 16,\n    \"lights\": 8,\n    \"events\": 4096\n  },\n  \"emitters\": [\n    {\n      \"name\": \"flame\",\n      \"capacity\": 512,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 65\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 1.25,\n              \"size\": 0.42,\n              \"color\": [5, 0.6, 0.03, 0.5]\n            }\n          },\n          {\n            \"name\": \"hearth\",\n            \"module\": {\n              \"op\": \"sphere\",\n              \"center\": [0, 0.2, 0],\n              \"radius\": 0.22\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 1.15, 0],\n              \"spread\": [0.15, 0.2, 0.15]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 3,\n              \"strength\": 0.65\n            }\n          },\n          {\n            \"name\": \"drag\",\n            \"module\": {\n              \"op\": \"drag\",\n              \"coefficient\": 0.6\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [5, 2, 0.4, 0]\n                },\n                {\n                  \"t\": 0.15,\n                  \"value\": [4, 1.5, 0.25, 0.65]\n                },\n                {\n                  \"t\": 0.65,\n                  \"value\": [3, 0.6, 0.04, 0.5]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.5, 0.03, 0, 0]\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"shrink\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.36\n                },\n                {\n                  \"t\": 0.4,\n                  \"value\": 0.48\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 0.12\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"fire\",\n              \"blend\": \"additive\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          },\n          {\n            \"name\": \"hearth_light\",\n            \"module\": {\n              \"op\": \"light\",\n              \"color\": [1, 0.32, 0.055],\n              \"lumens\": 650,\n              \"radius\": 4\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"smoke\",\n      \"capacity\": 2048,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 16\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 4,\n              \"size\": 0.45,\n              \"color\": [0.2, 0.23, 0.28, 0.14]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"cone\",\n              \"origin\": [0, 0.1, 0],\n              \"height\": 0.4,\n              \"radius\": 0.3\n            }\n          },\n          {\n            \"name\": \"rise\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 0.8, 0],\n              \"spread\": [0.15, 0.2, 0.15]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"curl\",\n            \"module\": {\n              \"op\": \"curl_noise\",\n              \"frequency\": 1.5,\n              \"strength\": 0.45\n            }\n          },\n          {\n            \"name\": \"grow\",\n            \"module\": {\n              \"op\": \"size_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": 0.45\n                },\n                {\n                  \"t\": 1,\n                  \"value\": 1.5\n                }\n              ]\n            }\n          },\n          {\n            \"name\": \"fade\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [0.35, 0.39, 0.44, 0]\n                },\n                {\n                  \"t\": 0.15,\n                  \"value\": [0.55, 0.58, 0.63, 0.55]\n                },\n                {\n                  \"t\": 0.75,\n                  \"value\": [0.55, 0.58, 0.63, 0.2]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [0.55, 0.58, 0.63, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"surface\",\n              \"soft_distance\": 0.3,\n              \"sorting\": \"depth\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"smoke\",\n              \"blend\": \"alpha\",\n              \"alignment\": \"camera\",\n              \"stretch\": 1,\n              \"shutter\": 0\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"name\": \"embers\",\n      \"capacity\": 4096,\n      \"bounds\": {\n        \"min\": [-8, -2, -8],\n        \"max\": [8, 12, 8]\n      },\n      \"stacks\": {\n        \"spawn\": [\n          {\n            \"name\": \"rate\",\n            \"module\": {\n              \"op\": \"rate\",\n              \"per_second\": 18\n            }\n          }\n        ],\n        \"initialize\": [\n          {\n            \"name\": \"lifetime\",\n            \"module\": {\n              \"op\": \"lifetime\",\n              \"seconds\": 2,\n              \"size\": 0.012,\n              \"color\": [14, 4.5, 0.7, 0.85]\n            }\n          },\n          {\n            \"name\": \"source\",\n            \"module\": {\n              \"op\": \"point\",\n              \"position\": [0, 0.7, 0]\n            }\n          },\n          {\n            \"name\": \"spray\",\n            \"module\": {\n              \"op\": \"velocity\",\n              \"value\": [0, 2, 0],\n              \"spread\": [0.4, 0.7, 0.4]\n            }\n          }\n        ],\n        \"update\": [\n          {\n            \"name\": \"gravity\",\n            \"module\": {\n              \"op\": \"gravity\",\n              \"acceleration\": [0, -9.81, 0]\n            }\n          },\n          {\n            \"name\": \"floor\",\n            \"module\": {\n              \"op\": \"plane_collision\",\n              \"normal\": [0, 1, 0],\n              \"offset\": 0,\n              \"restitution\": 0.6\n            }\n          },\n          {\n            \"name\": \"cool\",\n            \"module\": {\n              \"op\": \"color_over_life\",\n              \"keys\": [\n                {\n                  \"t\": 0,\n                  \"value\": [18, 8, 2, 1]\n                },\n                {\n                  \"t\": 0.5,\n                  \"value\": [9, 1.8, 0.1, 0.8]\n                },\n                {\n                  \"t\": 1,\n                  \"value\": [1, 0.05, 0, 0]\n                }\n              ]\n            }\n          }\n        ],\n        \"render\": [\n          {\n            \"name\": \"sprite\",\n            \"module\": {\n              \"op\": \"sprite\",\n              \"domain\": \"unlit\",\n              \"soft_distance\": 0.15,\n              \"sorting\": \"none\"\n            }\n          },\n          {\n            \"name\": \"appearance\",\n            \"module\": {\n              \"op\": \"appearance\",\n              \"texture\": \"spark\",\n              \"blend\": \"additive\",\n              \"alignment\": \"velocity\",\n              \"stretch\": 3,\n              \"shutter\": 0.85\n            }\n          },\n          {\n            \"name\": \"flipbook\",\n            \"module\": {\n              \"op\": \"flipbook\",\n              \"grid\": [4, 4],\n              \"fps\": 16\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n"
         }
       ]
     }

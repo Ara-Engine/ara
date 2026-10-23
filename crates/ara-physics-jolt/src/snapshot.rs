@@ -38,6 +38,7 @@ impl JoltBackend {
         let bytes = unsafe { std::slice::from_raw_parts(data, len) }.to_vec();
         let mut config = self.config.clone();
         config.threads = 0; // Execution topology must not alter physics state.
+        config.shared_job_pool = false;
         Ok(JoltSnapshot {
             bytes,
             structure: self.structure,
@@ -51,6 +52,7 @@ impl JoltBackend {
     pub(crate) fn restore_snapshot(&mut self, snapshot: &JoltSnapshot) -> Result<()> {
         let mut config = self.config.clone();
         config.threads = 0;
+        config.shared_job_pool = false;
         if self.structure != snapshot.structure
             || self.fingerprint != snapshot.fingerprint
             || config != snapshot.config

@@ -3,7 +3,7 @@
 use crate::{
     animation::{AnimatorSlot, Library},
     assets::asset_id,
-    components::{Camera, Environment, Light, LightKind, MeshRenderer, MeshShape},
+    components::{Camera, Environment, Light, LightKind, MeshRenderer, MeshShape, VisualEffect},
     math::{Pose, stable_id},
     model::Model,
     sync::{PreviousPose, WorldPose},
@@ -76,6 +76,19 @@ pub struct LightView {
     pub cone: [f32; 2],
 }
 
+/// A GPU particle effect to composite at an entity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EffectView {
+    /// Stable draw identity of the entity.
+    pub entity: u64,
+    /// `Name (address)` label for capture legends.
+    pub label: String,
+    /// Cooked library effect name.
+    pub effect: String,
+    /// World position (interpolated).
+    pub position: [f32; 3],
+}
+
 /// The active viewpoint.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraView {
@@ -106,6 +119,8 @@ pub struct RenderFrame {
     pub draws: Vec<Draw>,
     /// Flat skinning palettes (model space, skin joint order).
     pub palettes: Vec<Mat4>,
+    /// GPU particle effects in stable order.
+    pub effects: Vec<EffectView>,
     scratch: Vec<Mat4>,
     palette: Vec<Mat4>,
 }
@@ -121,6 +136,7 @@ impl RenderFrame {
         self.lights.clear();
         self.draws.clear();
         self.palettes.clear();
+        self.effects.clear();
         let library = world.get_resource::<Library>();
         let mut rows: Vec<_> = world
             .iter_entities()
@@ -155,6 +171,19 @@ impl RenderFrame {
             }
             if let Some(light) = entity.get::<Light>() {
                 self.light(light, &pose);
+            }
+            if let Some(effect) = entity.get::<VisualEffect>() {
+                let name = entity
+                    .get::<SceneMetadata>()
+                    .map(|m| m.name.as_str())
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or("effect");
+                self.effects.push(EffectView {
+                    entity: stable_id(address),
+                    label: format!("{name} ({address})"),
+                    effect: effect.effect.clone(),
+                    position: pose.translation.to_array(),
+                });
             }
             if let Some(renderer) = entity.get::<MeshRenderer>() {
                 let name = entity

@@ -1,0 +1,77 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_foxanim1",
+  "records": {
+    "an_fox": {
+      "name": "Fox locomotion",
+      "controller": {
+        "parameters": {
+          "speed": {}
+        },
+        "nodes": {
+          "idle": {
+            "clip": "@anim/fox-survey.animation#ac_foxsurv1"
+          },
+          "move": {
+            "kind": "blend1d",
+            "parameterX": "speed",
+            "samples": [
+              {
+                "node": "walk",
+                "x": 1.4
+              },
+              {
+                "node": "run",
+                "x": 4.5
+              }
+            ]
+          },
+          "run": {
+            "clip": "@anim/fox-run.animation#ac_foxrun01"
+          },
+          "walk": {
+            "clip": "@anim/fox-walk.animation#ac_foxwalk1"
+          }
+        },
+        "states": {
+          "idle": {
+            "node": "idle"
+          },
+          "move": {
+            "node": "move",
+            "duration": 44800
+          }
+        },
+        "transitions": [
+          {
+            "id": "start",
+            "from": "idle",
+            "to": "move",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "greater",
+                "floatValue": 0.15
+              }
+            ]
+          },
+          {
+            "id": "stop",
+            "from": "move",
+            "to": "idle",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "less",
+                "floatValue": 0.075
+              }
+            ]
+          }
+        ],
+        "initial": "idle"
+      }
+    }
+  }
+}

@@ -5,10 +5,14 @@
 //! Cross-platform bit equality still requires testing on the other target machines.
 //! No Rust callbacks, compiler processes, filesystem access or wall clock enter a tick.
 
+#[cfg(feature = "bench")]
+pub mod benchmark;
 mod bodies;
 mod character;
 mod convert;
 mod debug;
+mod events;
+mod jobs;
 mod joints;
 mod query;
 mod shapes;
@@ -57,6 +61,7 @@ pub struct JoltBackend {
     raw_bodies: Vec<sys::AraBodyState>,
     raw_ids: Vec<u32>,
     raw_commands: Vec<sys::AraBodyCommand>,
+    raw_descriptions: Vec<sys::AraBodyDesc>,
     structure: u64,
     fingerprint: u64,
 }
@@ -141,6 +146,7 @@ impl JoltBackend {
 impl PhysicsBackend for JoltBackend {
     type Snapshot = JoltSnapshot;
     fn new(config: &PhysicsConfig) -> Result<Self> {
+        jobs::validate_pool(config)?;
         #[cfg(target_arch = "x86_64")]
         if !std::is_x86_feature_detected!("avx2")
             || !std::is_x86_feature_detected!("bmi1")
@@ -172,6 +178,12 @@ impl PhysicsBackend for JoltBackend {
             event_capacity: config.event_capacity,
             layer_masks: config.layer_masks,
             gravity: convert::v(config.gravity),
+            speculative_contact_distance: config.speculative_contact_distance,
+            time_before_sleep: config.time_before_sleep,
+            sleep_velocity_threshold: config.sleep_velocity_threshold,
+            settings_flags: u32::from(config.deterministic_simulation)
+                | (u32::from(config.large_island_splitter) << 1)
+                | (u32::from(config.shared_job_pool) << 2),
         };
         // SAFETY: d is fully initialized; the shim validates capacity/filter settings.
         let world = NonNull::new(unsafe { sys::ara_world_create(&d) }).ok_or_else(Self::error)?;
@@ -190,6 +202,7 @@ impl PhysicsBackend for JoltBackend {
             raw_bodies: Vec::new(),
             raw_ids: Vec::new(),
             raw_commands: Vec::new(),
+            raw_descriptions: Vec::new(),
             structure: 0,
             fingerprint: 14695981039346656037,
         })
@@ -210,11 +223,17 @@ impl PhysicsBackend for JoltBackend {
     fn destroy_body(&mut self, body: BodyHandle) -> Result<()> {
         self.remove_body(body)
     }
+    fn destroy_bodies(&mut self, bodies: &[BodyHandle]) -> Result<()> {
+        self.remove_bodies(bodies)
+    }
     fn apply(&mut self, commands: &[BodyCommand], dt: f32) -> Result<()> {
         self.apply_bodies(commands, dt)
     }
     fn read_bodies(&mut self, bodies: &[BodyHandle], out: &mut Vec<BodyState>) -> Result<()> {
         self.extract_bodies(bodies, out)
+    }
+    fn read_body_columns(&mut self, bodies: &[BodyHandle], out: &mut BodyColumns) -> Result<()> {
+        self.extract_columns(bodies, out)
     }
     fn body_state(&self, body: BodyHandle) -> Result<BodyState> {
         self.extract_body(body)

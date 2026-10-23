@@ -1,0 +1,21 @@
+graph Rifle {
+  param indoor = 0 range(0, 1) "0 outdoors (long slap-back tail), 1 indoors (short dense tail)";
+  trigger fire "Fired by the weapon on each shot";
+  let crack = sample(@sfx/weapons/rifle_crack.wav, fire);
+  let punch = ad(fire, 0.0005, 0.06);
+  let thump = sine(55);
+  let low = mul(thump, punch.out);
+  let hiss = noise.white(21);
+  let snap_env = ad(fire, 0.0002, 0.02);
+  let snap = mul(hiss, snap_env.out);
+  let body = mix(crack.out, low, snap);
+  let tail_time = map(indoor, 0, 1, 0.32, 0.09);
+  let tail_feedback = map(indoor, 0, 1, 0.45, 0.25);
+  let tail = delay(body, tail_time, tail_feedback, 0.5);
+  let dark_tail = lowpass(tail, 2200, 0.7);
+  let tail_level = map(indoor, 0, 1, 0.5, 0.3);
+  let tail_out = mul(dark_tail, tail_level);
+  let shot = mix(body, tail_out);
+  let level = gain(shot, -10);
+  output out = level;
+}

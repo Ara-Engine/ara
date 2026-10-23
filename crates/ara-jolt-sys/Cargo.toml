@@ -10,6 +10,8 @@ links = "ara_jolt"
 [features]
 default = ["cross-platform-deterministic"]
 cross-platform-deterministic = []
+bench = []
+profile = ["bench"]
 
 [build-dependencies]
 cc = { version = "1.2", features = ["parallel"] }

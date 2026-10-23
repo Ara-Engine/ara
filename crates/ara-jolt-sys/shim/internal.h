@@ -28,6 +28,9 @@
 #include <vector>
 
 using namespace JPH;
+#include "host_jobs.h"
+#include "temp.h"
+#include "character_broadphase.h"
 constexpr uint32_t kInvalid = 0xffffffffu;
 void set_error(const char* message) noexcept;
 inline void require(bool condition, const char* message) { if (!condition) throw std::runtime_error(message); }
@@ -120,11 +123,13 @@ struct AraWorld {
     BroadPhaseLayerInterfaceTable bp_layers{16, 2};
     ObjectLayerPairFilterTable pairs{16};
     std::unique_ptr<ObjectVsBroadPhaseLayerFilterTable> object_bp;
-    std::unique_ptr<TempAllocatorImplWithMallocFallback> temp;
+    std::unique_ptr<MeasuredTemp> temp;
     std::unique_ptr<JobSystem> jobs;
+    HostJobs* host_jobs = nullptr;
+    std::vector<BodyID> body_batch;
     Contacts contacts;
     CharacterListener character_listener;
-    CharacterVsCharacterCollisionSimple character_collision;
+    SpatialCharacters character_collision;
     PhysicsSystem system;
     std::vector<RefConst<Shape>> shapes;
     std::vector<CharacterSlot> characters;

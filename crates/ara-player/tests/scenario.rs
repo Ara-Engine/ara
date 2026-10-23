@@ -5,97 +5,14 @@
 //! light colour → keep changes → the scene document updated. Then determinism
 //! (`test.run` twice in separate processes), Host + 2 launches, replay verification and
 //! crash isolation (panic, access violation, hang → restart). Prints measured numbers.
-use ara_host::{Host, HostConfig, Project};
-use ara_mcp::Adapter;
-use ara_play_host::{PlayConfig, PlayService};
+mod support;
+
 use serde_json::{Value, json};
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     time::{Duration, Instant},
 };
-
-fn copy(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap().flatten() {
-        let name = entry.file_name();
-        if name == ".ara" {
-            continue;
-        }
-        if entry.path().is_dir() {
-            copy(&entry.path(), &to.join(name));
-        } else {
-            std::fs::copy(entry.path(), to.join(name)).unwrap();
-        }
-    }
-}
-
-/// The import worker next to the player binary, built on demand.
-fn import_worker(player: &Path) -> PathBuf {
-    let worker =
-        player.with_file_name(format!("ara-import-worker{}", std::env::consts::EXE_SUFFIX));
-    if !worker.exists() {
-        let status = std::process::Command::new(env!("CARGO"))
-            .args(["build", "-p", "ara-import-worker"])
-            .env("CARGO_BUILD_JOBS", "2")
-            .status()
-            .unwrap();
-        assert!(status.success(), "building ara-import-worker failed");
-    }
-    worker
-}
-
-struct Agent {
-    host: Host,
-    mcp: Adapter,
-    session: String,
-}
-
-impl Agent {
-    fn tool(&mut self, name: &str, args: Value) -> Value {
-        let shown = args.to_string();
-        let t = Instant::now();
-        let result = self.raw(name, args);
-        assert_eq!(
-            result["isError"],
-            json!(false),
-            "{name} {shown} after {:?}: {}",
-            t.elapsed(),
-            result["content"]
-        );
-        result["structuredContent"].clone()
-    }
-    fn raw(&mut self, name: &str, mut args: Value) -> Value {
-        if name != "ara_session" {
-            args["session"] = json!(self.session);
-        }
-        self.mcp
-            .call_tool(&mut self.host, name, args.as_object().cloned().unwrap())
-            .unwrap()
-    }
-    fn play(&mut self, action: &str, args: Value) -> Value {
-        let mut args = args;
-        args["action"] = json!(action);
-        self.tool("ara_play", args)
-    }
-    /// Lets the owner run its tick (pool refill, heartbeats, imports) until `ready`.
-    fn until(&mut self, what: &str, mut ready: impl FnMut(&mut Self) -> bool) {
-        let start = Instant::now();
-        while !ready(self) {
-            assert!(
-                start.elapsed() < Duration::from_secs(120),
-                "timed out waiting for {what}"
-            );
-            self.host.tick();
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-    fn pool_ready(&mut self) {
-        self.until("a warm pool", |a| {
-            let status = a.play("status", json!({}));
-            status["pool"]["headless"].as_u64().unwrap_or(0) >= 2
-        });
-    }
-}
+use support::{Agent, demo_copy};
 
 fn percentile(samples: &mut [f64], p: f64) -> f64 {
     samples.sort_by(f64::total_cmp);
@@ -104,47 +21,30 @@ fn percentile(samples: &mut [f64], p: f64) -> f64 {
 
 #[test]
 fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
-    let player = PathBuf::from(env!("CARGO_BIN_EXE_ara-player"));
-    let worker = import_worker(&player);
-    let dir = std::env::temp_dir().join(format!("ara-scenario-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    copy(
-        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")),
-        &dir,
-    );
+    let dir = demo_copy("scenario");
     let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
-
-    let mut project = Project::open(&dir).unwrap();
-    ara_play_host::register_engine_schemas(&mut project.db);
-    let mut host = Host::open(
-        project,
-        HostConfig {
-            seed: Some(7),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let mut config = PlayConfig::for_project(&dir);
-    config.pool.executable = player;
-    config.import_worker = worker;
-    host.register(Box::new(PlayService::new(&dir, config)))
-        .unwrap();
-    let mut agent = Agent {
-        host,
-        mcp: Adapter::new(),
-        session: String::new(),
-    };
-    let begun = agent.tool(
-        "ara_session",
-        json!({"action": "begin", "client": "scenario", "author": "agent:scenario"}),
-    );
-    agent.session = begun["session"].as_str().unwrap().to_owned();
+    // An importer upgrade must not fail Play: record an older glTF importer version.
+    let sidecar = dir.join("assets/fox/Fox.glb.import.json");
+    let current = std::fs::read_to_string(&sidecar).unwrap();
+    let installed =
+        serde_json::from_str::<Value>(&current).unwrap()["records"]["i_settings"]["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+    std::fs::write(&sidecar, current.replace(&installed, "2-gltf14-legacy")).unwrap();
+    let mut agent = Agent::open(&dir, 7, |_| {});
 
     // Warm the pool; a first Play also cooks the Fox (out of process) into the cache.
     agent.pool_ready();
     let first = Instant::now();
     let warm = agent.play("start", json!({"startPaused": true}));
     let first_play_ms = first.elapsed().as_secs_f64() * 1000.0;
+    assert_eq!(warm["notes"][0]["code"], json!("ARA7306"), "{warm}");
+    assert!(
+        std::fs::read_to_string(&sidecar)
+            .unwrap()
+            .contains(&installed)
+    );
     agent.play("stop", json!({"world": warm["world"]}));
     agent.pool_ready();
 
@@ -346,42 +246,12 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
 #[test]
 #[ignore = "opens a window; run explicitly with --ignored"]
 fn agent_plays_the_demo_in_a_window() {
-    let player = PathBuf::from(env!("CARGO_BIN_EXE_ara-player"));
-    let worker = import_worker(&player);
-    let dir = std::env::temp_dir().join(format!("ara-window-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    copy(
-        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/demo")),
-        &dir,
-    );
+    let dir = demo_copy("window");
     let captures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/scenario");
-    let mut project = Project::open(&dir).unwrap();
-    ara_play_host::register_engine_schemas(&mut project.db);
-    let mut host = Host::open(
-        project,
-        HostConfig {
-            seed: Some(9),
-            ..Default::default()
-        },
-    )
-    .unwrap();
-    let mut config = PlayConfig::for_project(&dir);
-    config.pool.executable = player;
-    config.import_worker = worker;
-    config.pool.windowed = 1;
-    config.pool.headless = 0;
-    host.register(Box::new(PlayService::new(&dir, config)))
-        .unwrap();
-    let mut agent = Agent {
-        host,
-        mcp: Adapter::new(),
-        session: String::new(),
-    };
-    let begun = agent.tool(
-        "ara_session",
-        json!({"action": "begin", "client": "scenario", "author": "agent:scenario"}),
-    );
-    agent.session = begun["session"].as_str().unwrap().to_owned();
+    let mut agent = Agent::open(&dir, 9, |config| {
+        config.pool.windowed = 1;
+        config.pool.headless = 0;
+    });
     agent.until("a warm window", |a| {
         a.play("status", json!({}))["pool"]["windowed"]
             .as_u64()
