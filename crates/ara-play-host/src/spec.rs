@@ -11,17 +11,18 @@ use ara_play::{Compare, method};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-/// One step.
+/// One step; `do` selects the variant (`run` is spelled `step`).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "do", rename_all = "camelCase", deny_unknown_fields)]
-pub enum Step {
+pub enum Action {
     /// Queue injections for the next tick.
     Input {
         /// `{action, value, holdTicks, afterTicks, player}`.
         inputs: Vec<Value>,
     },
     /// Run exact ticks.
-    Step {
+    #[serde(rename = "step")]
+    Run {
         /// Tick count.
         ticks: u32,
         /// Injections relative to the first tick.
@@ -75,7 +76,7 @@ fn one() -> u32 {
 }
 
 /// Parses spec steps with located errors.
-pub fn parse(steps: &[Value]) -> Result<Vec<Step>, String> {
+pub fn parse(steps: &[Value]) -> Result<Vec<Action>, String> {
     steps
         .iter()
         .enumerate()
@@ -86,7 +87,7 @@ pub fn parse(steps: &[Value]) -> Result<Vec<Step>, String> {
 /// Runs the steps through `call(method, params)`; returns the report (pass/fail per
 /// assertion, samples, final hash). Engine errors abort the run.
 pub fn run(
-    steps: &[Step],
+    steps: &[Action],
     mut call: impl FnMut(&str, Value) -> Result<Value, Vec<Diagnostic>>,
 ) -> Result<Value, Vec<Diagnostic>> {
     let mut results = Vec::new();
@@ -94,16 +95,16 @@ pub fn run(
     let mut samples = Vec::new();
     for (index, step) in steps.iter().enumerate() {
         let entry = match step {
-            Step::Input { inputs } => {
+            Action::Input { inputs } => {
                 let r = call(method::INPUT, json!({"inputs": inputs}))?;
                 json!({"step": index, "do": "input", "tick": r["tick"]})
             }
-            Step::Step { ticks, inputs } => {
+            Action::Run { ticks, inputs } => {
                 let r = call(method::STEP, json!({"ticks": ticks, "inputs": inputs}))?;
                 samples.extend(r["samples"].as_array().cloned().unwrap_or_default());
                 json!({"step": index, "do": "step", "tick": r["tick"], "hash": r["hash"]})
             }
-            Step::Until {
+            Action::Until {
                 path,
                 compare,
                 value,
@@ -118,7 +119,7 @@ pub fn run(
                 samples.extend(r["samples"].as_array().cloned().unwrap_or_default());
                 json!({"step": index, "do": "until", "path": path, "ok": ok, "tick": r["tick"], "ticks": r["ticks"]})
             }
-            Step::Expect {
+            Action::Expect {
                 path,
                 compare,
                 value,
@@ -129,19 +130,19 @@ pub fn run(
                 passed &= ok;
                 json!({"step": index, "do": "expect", "path": path, "compare": compare, "expected": value, "actual": actual, "ok": ok, "tick": r["tick"]})
             }
-            Step::Patch { sets } => {
+            Action::Patch { sets } => {
                 let r = call(method::PATCH, json!({"sets": sets}))?;
                 json!({"step": index, "do": "patch", "appliedAtTick": r["appliedAtTick"], "readBack": r["readBack"]})
             }
-            Step::Watch { paths, every } => {
+            Action::Watch { paths, every } => {
                 call(method::WATCH, json!({"paths": paths, "every": every}))?;
                 json!({"step": index, "do": "watch"})
             }
-            Step::Capture { path } => {
+            Action::Capture { path } => {
                 let r = call(method::CAPTURE, json!({"path": path}))?;
                 json!({"step": index, "do": "capture", "image": r["image"], "marks": r["marks"].as_array().map_or(0, Vec::len)})
             }
-            Step::Hash => {
+            Action::Hash => {
                 let r = call(method::CAPTURE, json!({}))?;
                 json!({"step": index, "do": "hash", "tick": r["tick"], "hash": r["hash"]})
             }

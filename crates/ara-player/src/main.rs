@@ -168,10 +168,10 @@ impl Player {
         self.last_advance = now;
         if let Some(world) = &mut self.world {
             let running = world.runtime.running();
-            if let Some(window) = &mut self.window {
-                if window.events(&mut world.runtime)? {
-                    self.stop = true;
-                }
+            if let Some(window) = &mut self.window
+                && window.events(&mut world.runtime)?
+            {
+                self.stop = true;
             }
             if running {
                 let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));

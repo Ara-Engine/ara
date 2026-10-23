@@ -6,12 +6,13 @@
 #![warn(missing_docs)]
 
 pub mod assets;
+mod keep;
 pub mod params;
 pub mod pool;
 mod spec;
 
 use ara_diag::{Code, Diagnostic, FixAction};
-use ara_host::{Cx, Method, Service, params::ApplyParams, params::CallSpec, parse};
+use ara_host::{Cx, Method, Service, parse};
 use ara_play::{PlayScene, Role, SnapshotRef, Start, method, shm::Section};
 use ara_proto::Scope;
 use ara_schema::SchemaDb;
@@ -87,6 +88,9 @@ impl PlayConfig {
         }
     }
 }
+
+/// Players taken and started for a world, with their `play.start` results.
+type Launched = (Vec<(Role, Player)>, Vec<Value>);
 
 /// A running world: its players (authority first), snapshot section and fault.
 struct World {
@@ -322,7 +326,7 @@ impl PlayService {
         window: bool,
         snapshot: &SnapshotRef,
         start_paused: bool,
-    ) -> Result<(Vec<(Role, Player)>, Vec<Value>), Vec<Diagnostic>> {
+    ) -> Result<Launched, Vec<Diagnostic>> {
         let windowed = roles
             .iter()
             .filter(|r| window && **r != Role::Dedicated)
@@ -533,87 +537,6 @@ impl PlayService {
         Ok(json!({"world": id, "tick": tick}))
     }
 
-    /// "Keep changes": diff → filter → `prev` conflict check → one transaction.
-    fn keep(&mut self, cx: &mut Cx<'_>, p: PlayKeepParams) -> Result<Value, Vec<Diagnostic>> {
-        let diff = self.call(&p.world, method::DIFF, json!({}), false)?;
-        let scene = self.world(&p.world)?.scene.clone();
-        let changes: Vec<ara_runtime::live::Change> =
-            serde_json::from_value(diff["changes"].clone())
-                .map_err(|e| fail(codes::PLAY, e.to_string()))?;
-        let include_driven = p.include_driven.unwrap_or(false);
-        let doc = cx
-            .store()
-            .workspace()
-            .docs()
-            .find(|(_, d)| d.id.as_str() == scene)
-            .map(|(_, d)| d.clone())
-            .ok_or_else(|| {
-                fail(
-                    codes::REQUEST,
-                    format!("scene `{scene}` is no longer loaded"),
-                )
-            })?;
-        let schema = cx.store().schema().clone();
-        let mut calls = Vec::new();
-        let mut kept = Vec::new();
-        let mut conflicts = Vec::new();
-        let mut skipped = Vec::new();
-        for change in changes {
-            let wanted = (include_driven || !change.driven)
-                && p.entities
-                    .as_ref()
-                    .is_none_or(|e| e.contains(&change.entity))
-                && p.paths
-                    .as_ref()
-                    .is_none_or(|paths| paths.iter().any(|q| change.path.starts_with(q.as_str())));
-            if !wanted {
-                continue;
-            }
-            let Some(value) = change.value.clone() else {
-                skipped.push(json!({"entity": change.entity, "path": change.path, "reason": "removed in play"}));
-                continue;
-            };
-            if change.path.is_empty() {
-                skipped.push(json!({"entity": change.entity, "reason": "deleted in play"}));
-                continue;
-            }
-            // The edit world may have changed since Play: `prev` must still hold.
-            let current = current_value(&doc, &schema, &change.entity, &change.path);
-            if !same(&current, &change.prev) {
-                conflicts.push(json!({"entity": change.entity, "path": change.path, "edit": current, "playStart": change.prev, "play": value}));
-                continue;
-            }
-            calls.push(CallSpec {
-                cmd: "property.set".into(),
-                args: Some(json!({"entity": change.entity, "path": change.path, "value": value})),
-                symbol: None,
-            });
-            kept.push(json!({"entity": change.entity, "path": change.path, "value": value}));
-        }
-        if calls.is_empty() {
-            return Ok(
-                json!({"kept": kept, "conflicts": conflicts, "skipped": skipped, "transaction": null}),
-            );
-        }
-        let session = cx
-            .session()
-            .map(|s| s.id.clone())
-            .ok_or_else(|| fail(codes::REQUEST, "keep needs a session"))?;
-        let result = cx.apply(ApplyParams {
-            commands: calls,
-            doc: Some(scene),
-            session,
-            why: Some(
-                p.why
-                    .unwrap_or_else(|| format!("Keep changes from {}", p.world)),
-            ),
-            dry_run: None,
-            base: None,
-            idempotency_key: None,
-        })?;
-        Ok(json!({"kept": kept, "conflicts": conflicts, "skipped": skipped, "transaction": result}))
-    }
-
     fn status(&mut self) -> Value {
         let pool = self.pool.as_ref().map(|p| {
             json!({
@@ -675,44 +598,6 @@ impl PlayService {
                 format!("playtest failed: {}", spec::summary(&result)),
             ))
         }
-    }
-}
-
-/// The stored value at `Component.field…` of `entity` (canonical, defaults omitted).
-fn current_value(
-    doc: &ara_doc::Document,
-    schema: &SchemaDb,
-    entity: &str,
-    path: &str,
-) -> Option<Value> {
-    let record = doc.record(entity)?;
-    let mut parts = path.split('.');
-    let component = parts.next()?;
-    let ty = ara_schema::ValueType::Named(component.into());
-    let mut value = schema.canonical_value(&ty, record.get(component)?);
-    for part in parts {
-        value = value.get(part)?.clone();
-    }
-    Some(value)
-}
-
-/// Equality at f32 precision for numbers (play values are f32 widened to JSON).
-fn same(a: &Option<Value>, b: &Option<Value>) -> bool {
-    fn eq(a: &Value, b: &Value) -> bool {
-        match (a, b) {
-            (Value::Number(x), Value::Number(y)) => {
-                x.as_f64().map(|v| v as f32) == y.as_f64().map(|v| v as f32)
-            }
-            (Value::Array(x), Value::Array(y)) => {
-                x.len() == y.len() && x.iter().zip(y).all(|(a, b)| eq(a, b))
-            }
-            _ => a == b,
-        }
-    }
-    match (a, b) {
-        (Some(a), Some(b)) => eq(a, b),
-        (None, None) => true,
-        _ => false,
     }
 }
 

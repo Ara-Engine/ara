@@ -7,25 +7,25 @@
       "order": "a0",
       "Environment": {
         "sky": [
+          0.1,
           0.16,
-          0.24,
-          0.5,
+          0.4,
           1
         ],
         "horizon": [
-          1.0,
-          0.55,
-          0.32,
+          0.95,
+          0.45,
+          0.22,
           1
         ],
         "ground": [
-          0.12,
-          0.1,
-          0.09,
+          0.06,
+          0.05,
+          0.045,
           1
         ],
-        "intensity": 700,
-        "exposure": 0.0016
+        "intensity": 220,
+        "exposure": 0.0022
       }
     },
     "e_sun": {
@@ -42,11 +42,11 @@
         "kind": "directional",
         "color": [
           1.0,
-          0.62,
-          0.38,
+          0.55,
+          0.3,
           1
         ],
-        "intensity": 2600
+        "intensity": 2400
       }
     },
     "e_ground": {
@@ -66,9 +66,9 @@
           30
         ],
         "color": [
-          0.42,
-          0.4,
-          0.37,
+          0.32,
+          0.3,
+          0.27,
           1
         ],
         "roughness": 0.9
@@ -804,7 +804,7 @@
           0.25,
           1
         ],
-        "intensity": 2500,
+        "intensity": 9000,
         "range": 9
       }
     },
@@ -852,7 +852,7 @@
           0.3,
           1
         ],
-        "intensity": 2500,
+        "intensity": 9000,
         "range": 9
       }
     },
@@ -900,7 +900,7 @@
           1,
           1
         ],
-        "intensity": 1800,
+        "intensity": 7000,
         "range": 9
       }
     },
@@ -954,11 +954,89 @@
           1,
           1
         ],
-        "intensity": 6000,
+        "intensity": 20000,
         "range": 14,
         "innerAngle": 18,
         "outerAngle": 28
       }
+    },
+    "e_bulb1": {
+      "name": "Lamp 1 bulb",
+      "parent": "e_lamp1",
+      "order": "aT",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "color": [
+          1,
+          0.9,
+          0.8,
+          1
+        ],
+        "emissive": [
+          900,
+          480,
+          200
+        ],
+        "roughness": 0.3
+      },
+      "Transform": {}
+    },
+    "e_bulb2": {
+      "name": "Lamp 2 bulb",
+      "parent": "e_lamp2",
+      "order": "aU",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "color": [
+          1,
+          0.9,
+          0.8,
+          1
+        ],
+        "emissive": [
+          900,
+          500,
+          220
+        ],
+        "roughness": 0.3
+      },
+      "Transform": {}
+    },
+    "e_bulb3": {
+      "name": "Lamp 3 bulb",
+      "parent": "e_lamp3",
+      "order": "aV",
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [
+          0.3,
+          0.3,
+          0.3
+        ],
+        "color": [
+          1,
+          0.9,
+          0.8,
+          1
+        ],
+        "emissive": [
+          300,
+          450,
+          900
+        ],
+        "roughness": 0.3
+      },
+      "Transform": {}
     }
   }
 }
