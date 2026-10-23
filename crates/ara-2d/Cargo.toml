@@ -1,0 +1,26 @@
+[package]
+name = "ara-2d"
+description = "Reflected 2D assets, tilemaps and transactional authoring for Ara."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-schema = { path = "../ara-schema" }
+ara-json = { path = "../ara-json" }
+ara-cmd = { path = "../ara-cmd" }
+ara-diag = { path = "../ara-diag" }
+ara-sim = { path = "../ara-sim" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow = "1"
+blake3 = "1.8"
+bevy_ecs = { version = "0.20", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+ara-doc = { path = "../ara-doc" }
+ara-ops = { path = "../ara-ops" }
+
+[lints]
+workspace = true

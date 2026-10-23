@@ -2,6 +2,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Offline/editor ground-truth capture over Ara's shared transport semantics.
 pub mod metrics;
+pub mod robust_scenes;
 pub mod scenes;
 use anyhow::Result;
 use ara_gpu::vulkan::VulkanDevice;
@@ -71,6 +72,10 @@ impl Reference {
     /// Accumulated linear radiance before any post processing.
     pub fn radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {
         self.view.capture_radiance(gpu)
+    }
+    /// Address-independent fingerprint of the shared scene/material/light extraction.
+    pub fn scene_hash(&self) -> &str {
+        self.view.scene_hash()
     }
     /// Release resources before the device owner is dropped.
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {

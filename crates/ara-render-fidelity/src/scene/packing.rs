@@ -44,6 +44,11 @@ pub(super) fn validate(s: &Scene) -> Result<()> {
     }
     for m in &s.materials {
         ensure!(
+            m.base_color[..3].iter().all(|v| (0.0..=1.0).contains(v))
+                && m.emissive_roughness[..3].iter().all(|v| *v >= 0.),
+            "Albedo must conserve energy and emission must be nonnegative"
+        );
+        ensure!(
             m.textures.iter().all(|t| (*t as usize) < s.textures.len())
                 && m.base_color
                     .iter()
@@ -127,6 +132,8 @@ pub(super) fn pack(
             bounds[1] = bounds[1].max(p);
         }
     }
+    let (emitter_offset, emitter_count, emitter_power) =
+        super::emitters::append(s, materials, ids, &mut out);
     out[..32].copy_from_slice(bytemuck::cast_slice(&[
         ids.len() as u32,
         material_offset,
@@ -137,9 +144,9 @@ pub(super) fn pack(
                 .iter()
                 .all(|mesh| materials[mesh.material].flags[0] == 0),
         ),
-        0,
-        0,
-        0,
+        emitter_offset,
+        emitter_count,
+        emitter_power.to_bits(),
     ]));
     out
 }

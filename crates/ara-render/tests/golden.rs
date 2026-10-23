@@ -10,6 +10,44 @@ use ara_render::{
 use glam::Vec3;
 use std::path::Path;
 #[test]
+fn editor_updates_keep_the_device_reuse_descriptors_and_preserve_last_good_geometry() -> Result<()>
+{
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut renderer = Renderer::new(
+        common::scene()?,
+        [320, 180],
+        &[],
+        root.join("../../.sn/test-editor-updates"),
+    )?;
+    let before = renderer.capture(&common::request([320, 180]))?;
+    let image = renderer.output();
+    for _ in 0..24 {
+        renderer.update_geometry(common::scene()?)?;
+    }
+    ensure!(
+        renderer.output() == image,
+        "geometry update replaced the target/device"
+    );
+    let repeat = renderer.capture(&common::request([320, 180]))?;
+    ensure!(
+        repeat.metadata.scene_hash == before.metadata.scene_hash && repeat.image == before.image,
+        "same geometry changed content/provenance"
+    );
+    let mut invalid = common::scene()?;
+    invalid.meshes.clear();
+    ensure!(
+        renderer.update_geometry(invalid).is_err(),
+        "invalid update was accepted"
+    );
+    let retained = renderer.capture(&common::request([320, 180]))?;
+    ensure!(
+        retained.image == before.image,
+        "invalid update discarded the last good scene"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+#[test]
 fn captures_match_goldens_and_reproduce_entity_picking() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let goldens = root.join("tests/goldens");

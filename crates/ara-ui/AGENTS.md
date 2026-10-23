@@ -42,6 +42,8 @@ Widget rules:
 - Runtime visibility remains independent of source styles/theme switching.
 - Utility classes are not compiled; arbitrary classes are semantic stylesheet hooks.
 - Layout supports Flexbox/Grid, min/max sizes, alignment, absolute overlays and translations.
+- `flex-basis` supports dock weights; `white-space:nowrap` prevents short chrome
+  labels wrapping. `InputState::blur` hands text focus back to native viewport input.
 - General browser CSS, selector combinators and arbitrary transforms are diagnosed as unsupported.
 
 Tests: `CARGO_BUILD_JOBS=4 cargo test -p ara-ui`.

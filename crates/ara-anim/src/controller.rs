@@ -225,6 +225,8 @@ impl Animator {
         skeleton: &Skeleton,
         mut emit: impl FnMut(Event<'a>),
     ) -> Result<RootMotion, Error> {
+        #[cfg(feature = "profiling")]
+        let _profile = ara_profile::scope("anim.tick");
         self.check(controller, skeleton)?;
         ensure(
             self.state.tick < u64::MAX

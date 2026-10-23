@@ -39,11 +39,4 @@ Expand-Selected $steam (Join-Path $runtimeRoot 'steam') {
     $name.StartsWith("steamaudio/lib/$Platform/") -or
     $name -in @('steamaudio/THIRDPARTY.md','steamaudio/include/phonon.h','steamaudio/include/phonon_version.h')
 }
-if ($Platform -eq 'windows-x64') {
-    $sdl = Get-PinnedArchive 'sdl.zip' 'https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18-win32-x64.zip' '75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c'
-    Expand-Selected $sdl (Join-Path $runtimeRoot 'sdl') {
-        param($name)
-        $name -in @('SDL3.dll','LICENSE.txt','README.md')
-    }
-}
 Write-Output "Optional runtimes ready: $runtimeRoot ($Platform). No Cargo build uses these files."

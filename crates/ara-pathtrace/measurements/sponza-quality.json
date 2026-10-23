@@ -1,0 +1,35 @@
+{
+  "active_probes": 5837,
+  "error": {
+    "mae": 2.8753296589741715,
+    "relative_rmse": 0.07284851231158324,
+    "rmse": 8.14120607710993
+  },
+  "ev100": 5.5,
+  "probes": 6318,
+  "sampling": "256-phase Halton pixel-area integration; four-phase transport; one-event lobe mixture",
+  "scene_hash": "2b9b176b7d424e3b6c92a79d316ed0e936364eeadf5903e77924a8a0bb6831c0",
+  "settle_frames": 192,
+  "size": [
+    640,
+    360
+  ],
+  "tone_mapper": "PBR Neutral",
+  "volume": {
+    "counts": [
+      27,
+      13,
+      18
+    ],
+    "origin": [
+      -19.953630447387695,
+      -1.9716410636901855,
+      -12.543143272399902
+    ],
+    "spacing": [
+      1.4883416891098022,
+      1.414432406425476,
+      1.4301457405090332
+    ]
+  }
+}

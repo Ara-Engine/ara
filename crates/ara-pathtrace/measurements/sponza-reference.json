@@ -1,0 +1,31 @@
+{
+  "bounces": 12,
+  "camera": {
+    "kind": "look_at",
+    "position": [
+      -11.0,
+      1.7000000476837158,
+      0.0
+    ],
+    "target": [
+      5.0,
+      3.0,
+      0.0
+    ],
+    "vertical_fov": 1.0499999523162842
+  },
+  "convergence": {
+    "mae": 0.4906783743940619,
+    "relative_rmse": 0.010021191728201687,
+    "rmse": 1.1199211131254223
+  },
+  "ev100": 5.5,
+  "precision": "RGBA32F linear accumulation, unfiltered",
+  "reference_samples": 4096,
+  "scene_hash": "2b9b176b7d424e3b6c92a79d316ed0e936364eeadf5903e77924a8a0bb6831c0",
+  "size": [
+    640,
+    360
+  ],
+  "tone_mapper": "PBR Neutral"
+}

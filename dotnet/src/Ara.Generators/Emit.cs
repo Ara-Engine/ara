@@ -203,9 +203,9 @@ public static class Emit
             c.Line("/// <summary>The NativeAOT export the Rust host loads (<c>ara_script_init</c>).</summary>");
             c.Open("internal static unsafe class AraNativeEntry");
             c.Line("[global::System.Runtime.InteropServices.UnmanagedCallersOnly(EntryPoint = \"ara_script_init\")]");
-            var mods = new List<string>();
+            // Referenced modules first (dependency order), then this one: registration sees the types it uses.
+            var mods = linked.Select(l => $"({Lit(l.Name)}, new global::System.Action<global::Ara.Hosting.ModuleBuilder>({l.Entry}.Register))").ToList();
             if (declares) mods.Add($"({cls}.Name, new global::System.Action<global::Ara.Hosting.ModuleBuilder>({cls}.Register))");
-            mods.AddRange(linked.Select(l => $"({Lit(l.Name)}, new global::System.Action<global::Ara.Hosting.ModuleBuilder>({l.Entry}.Register))"));
             c.Line("static int Init(global::Ara.Hosting.HostInit* host, global::Ara.Hosting.ScriptApi* api) =>");
             c.Line("    global::Ara.Hosting.ScriptRuntime.Init(host, api, new global::Ara.Hosting.StaticModuleLoader(" + string.Join(", ", mods) + "));");
             c.Close();

@@ -4,7 +4,6 @@ use crate::graph::{Graph, State};
 use crate::scene::Vertex;
 use ara_gpu::{RootConstants, vulkan::Command};
 use bytemuck::Zeroable;
-use sha2::{Digest, Sha256};
 
 impl Renderer {
     pub(super) fn upload_scene(
@@ -30,7 +29,8 @@ impl Renderer {
                 && scene.sun_lux.is_finite(),
             "Invalid directional light"
         );
-        let mut hash = Sha256::new();
+        let scene_hash = super::hash::scene_hash(&scene);
+        let static_scene_hash = super::hash::static_hash(&scene);
         let mut graphics_inputs = Vec::new();
         let mut texture_indices = Vec::new();
         for texture in &scene.textures {
@@ -38,10 +38,6 @@ impl Renderer {
                 texture.rgba.len() == texture.size[0] as usize * texture.size[1] as usize * 4,
                 "Invalid texture pixels"
             );
-            hash.update(texture.size[0].to_le_bytes());
-            hash.update(texture.size[1].to_le_bytes());
-            hash.update([u8::from(texture.srgb)]);
-            hash.update(&texture.rgba);
             let format = if texture.srgb {
                 vk::Format::R8G8B8A8_SRGB
             } else {
@@ -52,7 +48,6 @@ impl Renderer {
             graphics_inputs.push((Resource::Image(image), Access::ShaderRead));
         }
         let mut materials = scene.materials;
-        hash.update(bytemuck::cast_slice(&materials));
         for material in &mut materials {
             for index in &mut material.textures {
                 *index = *texture_indices
@@ -95,12 +90,6 @@ impl Renderer {
                     ),
                 "Non-finite vertex"
             );
-            hash.update(mesh.entity.to_le_bytes());
-            hash.update((mesh.name.len() as u64).to_le_bytes());
-            hash.update(mesh.name.as_bytes());
-            hash.update(bytemuck::cast_slice(&mesh.vertices));
-            hash.update(bytemuck::cast_slice(&mesh.indices));
-            hash.update((mesh.material as u64).to_le_bytes());
             let centre = mesh
                 .vertices
                 .iter()
@@ -132,9 +121,6 @@ impl Renderer {
             });
         }
         ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
-        hash.update(bytemuck::cast_slice(&scene.lights));
-        hash.update(bytemuck::bytes_of(&scene.sun_direction));
-        hash.update(bytemuck::bytes_of(&scene.sun_lux));
         let lights = if scene.lights.is_empty() {
             vec![crate::scene::Light::zeroed()]
         } else {
@@ -184,9 +170,6 @@ impl Renderer {
                 .all(|x| x.is_finite() && *x >= 0.),
             "HDR radiance must be finite and nonnegative"
         );
-        hash.update(scene.environment_size[0].to_le_bytes());
-        hash.update(scene.environment_size[1].to_le_bytes());
-        hash.update(bytemuck::cast_slice(&scene.environment));
         let environment_image = upload_image(
             &mut gpu,
             scene.environment_size,
@@ -314,6 +297,11 @@ impl Renderer {
             }
         }
         gpu.assert_clean()?;
+        let dynamic = graphics_inputs
+            .iter()
+            .filter_map(|(r, _)| matches!(r, Resource::Buffer(_)).then_some(*r))
+            .chain([Resource::Buffer(compute_lights)])
+            .collect();
         Ok(Self {
             gpu,
             size,
@@ -337,10 +325,13 @@ impl Renderer {
             sun_lux: scene.sun_lux,
             previous_vp: Mat4::IDENTITY,
             frame_number: 0,
-            scene_hash: format!("{:x}", hash.finalize()),
+            scene_hash,
+            static_scene_hash,
             shader_metadata,
             entity_names,
             last_timings: Vec::new(),
+            scene_textures: texture_indices,
+            dynamic,
         })
     }
 }

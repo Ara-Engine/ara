@@ -35,13 +35,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit_consumer"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a45e2bb300bea6d5f33a82c3e051c3ddc6f41c209750f68a0acbe991a284344"
+dependencies = [
+ "accesskit 0.25.1",
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "accesskit_ios"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "750c4e9f6ce888dfe8a10c0f1b5ceb646a7854fd46579d74919219d1bb314083"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
  "objc2 0.5.3",
  "objc2-foundation 0.2.2",
@@ -55,7 +65,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce02dc63b43f0c9296af9ac946312a2dc8814427d7a64d2d600971dac55b6076"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
  "objc2 0.5.3",
  "objc2-app-kit",
@@ -69,8 +79,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106c2b961215864d1c2e703ee63269c25c4e80a577ffb2c1017b9c17dcdf83a1"
 dependencies = [
  "accesskit 0.24.1",
- "accesskit_consumer",
+ "accesskit_consumer 0.38.0",
  "hashbrown 0.16.1",
+ "static_assertions",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
+name = "accesskit_windows"
+version = "0.35.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce63f35d6bdcf59f26b76b3379063f738e6412cef46999cc772d46aa3de35adb"
+dependencies = [
+ "accesskit 0.25.1",
+ "accesskit_consumer 0.39.1",
+ "hashbrown 0.17.1",
  "static_assertions",
  "windows",
  "windows-core",
@@ -85,7 +109,7 @@ dependencies = [
  "accesskit 0.24.1",
  "accesskit_ios",
  "accesskit_macos",
- "accesskit_windows",
+ "accesskit_windows 0.34.0",
  "raw-window-handle",
  "winit",
 ]
@@ -377,11 +401,30 @@ dependencies = [
  "ara-json",
  "ara-mcp",
  "ara-merge",
+ "ara-profile",
  "ara-proto",
  "ara-rpc",
  "ara-schema",
  "clap",
  "insta",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-2d"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "blake3",
+ "serde",
  "serde_json",
 ]
 
@@ -393,6 +436,7 @@ dependencies = [
  "ara-doc",
  "ara-json",
  "ara-ops",
+ "ara-profile",
  "ara-schema",
  "glam 0.34.1",
  "gltf",
@@ -412,6 +456,7 @@ dependencies = [
  "ara-doc",
  "ara-json",
  "ara-ops",
+ "ara-profile",
  "ara-schema",
  "blake3",
  "libc",
@@ -440,7 +485,9 @@ version = "0.0.0"
 dependencies = [
  "ara-json",
  "ara-opus-sys",
+ "ara-profile",
  "ara-schema",
+ "ara-sdl3-src",
  "bevy_ecs",
  "blake3",
  "ebur128",
@@ -449,12 +496,31 @@ dependencies = [
  "ogg",
  "rtrb",
  "rustfft",
- "sdl3-sys",
  "serde",
  "serde_json",
  "symphonia",
  "thiserror 2.0.21",
  "windows",
+]
+
+[[package]]
+name = "ara-bench"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-doc",
+ "ara-host",
+ "ara-input",
+ "ara-json",
+ "ara-profile",
+ "ara-schema",
+ "ara-sim",
+ "divan",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -513,6 +579,53 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ara-editor"
+version = "0.0.0"
+dependencies = [
+ "accesskit 0.25.1",
+ "accesskit_windows 0.35.1",
+ "anyhow",
+ "ara-cmd",
+ "ara-components",
+ "ara-diag",
+ "ara-doc",
+ "ara-editor-gpu",
+ "ara-gpu",
+ "ara-host",
+ "ara-json",
+ "ara-mcp",
+ "ara-ops",
+ "ara-platform",
+ "ara-proto",
+ "ara-render",
+ "ara-rpc",
+ "ara-schema",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-text",
+ "glam 0.30.9",
+ "gltf",
+ "image",
+ "sdl3-sys",
+ "serde",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
+name = "ara-editor-gpu"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-gpu",
+ "ara-ui",
+ "ara-ui-render",
+ "ash 0.38.0+1.4.352",
+ "bytemuck",
+ "image",
 ]
 
 [[package]]
@@ -605,6 +718,7 @@ dependencies = [
  "ara-json",
  "ara-merge",
  "ara-ops",
+ "ara-profile",
  "ara-proto",
  "ara-schema",
  "insta",
@@ -626,6 +740,18 @@ dependencies = [
  "serde_json",
  "tempfile",
  "texture2ddecoder",
+]
+
+[[package]]
+name = "ara-import2d"
+version = "0.0.0"
+dependencies = [
+ "ara-2d",
+ "ara-asset",
+ "ara-schema",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -777,6 +903,7 @@ dependencies = [
  "ara-diag",
  "ara-json",
  "ara-nav-sys",
+ "ara-profile",
  "ara-schema",
  "bevy_ecs",
  "blake3",
@@ -862,8 +989,10 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-gpu",
+ "ara-landscape",
  "ara-render",
  "ara-render-fidelity",
+ "ara-terrain",
  "glam 0.30.9",
  "image",
  "serde",
@@ -875,6 +1004,7 @@ name = "ara-physics"
 version = "0.0.0"
 dependencies = [
  "ara-diag",
+ "ara-profile",
  "ara-schema",
  "bevy_ecs",
  "serde",
@@ -895,13 +1025,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-physics2d"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-2d",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-ops",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "bincode",
+ "rapier2d",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ara-platform"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-audio",
  "ara-gpu",
+ "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
- "sdl3-sys",
+]
+
+[[package]]
+name = "ara-profile"
+version = "0.0.0"
+dependencies = [
+ "ara-gpu",
+ "ara-json",
+ "postcard",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "tracy-client",
 ]
 
 [[package]]
@@ -921,6 +1086,7 @@ dependencies = [
  "ara-gpu",
  "ara-json",
  "ara-platform",
+ "ara-profile",
  "bytemuck",
  "glam 0.30.9",
  "gltf",
@@ -943,6 +1109,32 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "ara-render2d"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-2d",
+ "ara-asset",
+ "ara-cmd",
+ "ara-components",
+ "ara-doc",
+ "ara-gpu",
+ "ara-import2d",
+ "ara-json",
+ "ara-ops",
+ "ara-physics2d",
+ "ara-render",
+ "ara-schema",
+ "ara-sim",
+ "blake3",
+ "bytemuck",
+ "glam 0.30.9",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1001,6 +1193,7 @@ version = "0.0.0"
 dependencies = [
  "ara-components",
  "ara-diag",
+ "ara-profile",
  "ara-schema",
  "bevy_ecs",
  "bevy_tasks",
@@ -1011,7 +1204,16 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "tracing",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ara-sdl3-src"
+version = "0.0.0"
+dependencies = [
+ "cc",
+ "sdl3-sys",
 ]
 
 [[package]]
@@ -1036,6 +1238,7 @@ dependencies = [
  "ara-input",
  "ara-json",
  "ara-ops",
+ "ara-profile",
  "ara-schema",
  "bevy_ecs",
  "bevy_tasks",
@@ -1045,6 +1248,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2791,6 +2995,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3202,6 +3415,7 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+ "terminal_size",
 ]
 
 [[package]]
@@ -3274,6 +3488,12 @@ dependencies = [
  "crossbeam-utils",
  "portable-atomic",
 ]
+
+[[package]]
+name = "condtype"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf0a07a401f374238ab8e2f11a104d2851bf9ce711ec69804834de8af45c7af"
 
 [[package]]
 name = "console"
@@ -3830,6 +4050,31 @@ name = "disqualified"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e90a5dd66beeca277ae954f8055b02a712792b6b6b43f2bc2f92b0b7d8291614"
+
+[[package]]
+name = "divan"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a405457ec78b8fe08b0e32b4a3570ab5dff6dd16eb9e76a5ee0a9d9cbd898933"
+dependencies = [
+ "cfg-if",
+ "clap",
+ "condtype",
+ "divan-macros",
+ "libc",
+ "regex-lite",
+]
+
+[[package]]
+name = "divan-macros"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9556bc800956545d6420a640173e5ba7dfa82f38d3ea5a167eb555bc69ac3323"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "dlib"
@@ -4429,6 +4674,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "generator"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1be81b31c9ce4caf7f3178eeb90662bb1864d3ad363ec6bdada3201adff19c37"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "log",
+ "rustversion",
+ "windows-link",
+ "windows-result",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4497,6 +4757,18 @@ dependencies = [
 
 [[package]]
 name = "glam"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556f6b2ea90b8d15a74e0e7bb41671c9bdf38cd9f78c284d750b9ce58a2b5be7"
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+
+[[package]]
+name = "glam"
 version = "0.33.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
@@ -4539,6 +4811,7 @@ checksum = "28d74079318e3a077bd3d15faa90fde24fa37bb9f157f92f853e6019a15fd413"
 dependencies = [
  "approx",
  "glam 0.33.12",
+ "nalgebra",
  "num-traits",
  "serde",
  "simba",
@@ -6507,6 +6780,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "loom"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
+dependencies = [
+ "cfg-if",
+ "generator",
+ "scoped-tls",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6528,6 +6814,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
+]
+
+[[package]]
+name = "matrixmultiply"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f607c237553f086e7043417a51df26b2eb899d3caff94e6a67592ff992fedc7"
+dependencies = [
+ "autocfg",
+ "rawpointer",
 ]
 
 [[package]]
@@ -6703,6 +6999,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "nalgebra"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adc43a60c217b0c6ff46e47f26911015ad8d2e5a8be1af668c67e370d99a4346"
+dependencies = [
+ "approx",
+ "glam 0.30.9",
+ "glam 0.31.1",
+ "glam 0.32.1",
+ "glam 0.33.12",
+ "matrixmultiply",
+ "nalgebra-macros",
+ "num-complex",
+ "num-rational",
+ "num-traits",
+ "serde",
+ "simba",
+ "typenum",
+]
+
+[[package]]
+name = "nalgebra-macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "973e7178a678cfd059ccec50887658d482ce16b0aa9da3888ddeab5cd5eb4889"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "nanorand"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6838,6 +7166,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6864,6 +7201,7 @@ checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "bytemuck",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -7159,6 +7497,16 @@ dependencies = [
  "block2 0.6.2",
  "libc",
  "objc2 0.6.5",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
  "objc2-core-foundation",
 ]
 
@@ -7521,6 +7869,7 @@ dependencies = [
  "foldhash 0.2.0",
  "glamx",
  "hashbrown 0.17.1",
+ "indexmap",
  "log",
  "num-derive 0.5.1",
  "num-traits",
@@ -7928,6 +8277,19 @@ name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
+dependencies = [
+ "profiling-procmacros",
+]
+
+[[package]]
+name = "profiling-procmacros"
+version = "1.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
+dependencies = [
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "proptest"
@@ -8215,6 +8577,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rapier2d"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b73d84c8e78f4fbd46fb5c800bbdb15cad6ef2bd517de6a4d31fe60edd838f8d"
+dependencies = [
+ "approx",
+ "arrayvec",
+ "bitflags 2.13.2",
+ "glamx",
+ "log",
+ "nalgebra",
+ "num-traits",
+ "parry2d",
+ "profiling",
+ "serde",
+ "simba",
+ "static_assertions",
+ "thiserror 2.0.21",
+ "wide",
+]
+
+[[package]]
 name = "raw-cpuid"
 version = "11.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8240,6 +8624,12 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
 ]
+
+[[package]]
+name = "rawpointer"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
 name = "rayon"
@@ -8361,6 +8751,12 @@ dependencies = [
  "memchr",
  "regex-syntax",
 ]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 
 [[package]]
 name = "regex-syntax"
@@ -8653,6 +9049,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "scoped-tls"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8854,6 +9256,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a7200d82ff1c7b4235efd12f11e2537a402c91cf83a5cb97ce80eef787fde7"
 dependencies = [
  "approx",
+ "libm",
  "num-complex",
  "num-traits",
  "wide",
@@ -9272,6 +9675,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.39.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2071df9448915b71c4fe6d25deaf1c22f12bd234f01540b77312bb8e41361e6"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows",
+]
+
+[[package]]
 name = "taffy"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9309,6 +9726,16 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.3",
  "once_cell",
+ "rustix 1.1.5",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
+dependencies = [
  "rustix 1.1.5",
  "windows-sys 0.61.2",
 ]
@@ -9680,6 +10107,27 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "tracy-client"
+version = "0.18.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6131992ff3e2cb96f407eb4eb005427ba15e2687260d99089b90e60e33169ce0"
+dependencies = [
+ "loom",
+ "once_cell",
+ "tracy-client-sys",
+]
+
+[[package]]
+name = "tracy-client-sys"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab27f167b093214c68413a2e0bcd318f0591af475597405ff68138ba0a433379"
+dependencies = [
+ "cc",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]

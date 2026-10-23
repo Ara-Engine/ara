@@ -6,6 +6,60 @@ use ara_gpu::{
     vulkan::{Command, VulkanDevice},
 };
 impl FidelityView {
+    /// Read histogram exposure diagnostics explicitly; ordinary frames do no readback.
+    pub fn capture_exposure(&self, gpu: &mut VulkanDevice) -> Result<crate::ExposureState> {
+        anyhow::ensure!(self.history, "Render before capture");
+        let b = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        let mut c = gpu.begin(Queue::Graphics);
+        c.barriers([
+            Barrier {
+                resource: Resource::Buffer(self.exposure),
+                before: self.exposure_state.access,
+                after: Access::CopySource,
+                handoff: None,
+            },
+            Barrier {
+                resource: Resource::Buffer(b),
+                before: Access::Undefined,
+                after: Access::CopyDestination,
+                handoff: None,
+            },
+        ]);
+        c.push(Command::CopyBuffer {
+            source: self.exposure,
+            destination: b,
+            size: 16,
+        });
+        c.barriers([
+            Barrier {
+                resource: Resource::Buffer(b),
+                before: Access::CopyDestination,
+                after: Access::HostRead,
+                handoff: None,
+            },
+            Barrier {
+                resource: Resource::Buffer(self.exposure),
+                before: Access::CopySource,
+                after: self.exposure_state.access,
+                handoff: None,
+            },
+        ]);
+        let point = gpu.submit(c.finish(), &[])?;
+        gpu.resolve(point)?;
+        let bytes = gpu.read(b)?;
+        gpu.retire(Resource::Buffer(b))?;
+        gpu.collect()?;
+        let mut values = [0.; 4];
+        for (i, word) in bytes.as_chunks::<4>().0.iter().enumerate() {
+            values[i] = f32::from_le_bytes(*word);
+        }
+        Ok(crate::ExposureState {
+            multiplier: values[0],
+            previous_multiplier: values[1],
+            target_ev100: values[2],
+            metered_luminance: values[3],
+        })
+    }
     /// Read full-precision filtered linear radiance before exposure and display mapping.
     /// Reference mode copies its undenoised accumulation into the same channel.
     pub fn capture_radiance(&self, gpu: &mut VulkanDevice) -> Result<Vec<[f32; 4]>> {

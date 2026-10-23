@@ -14,6 +14,10 @@
     <ProjectReference Include="../Ara.Agent/Ara.Agent.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The agent profile of the shared API allowlist (plain C#, also compiled into Ara.Analyzers). -->
+    <Compile Include="../Ara.Analyzers/ApiProfiles.cs" Link="ApiProfiles.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Ara.RunWorker.Tests" />
   </ItemGroup>
 </Project>

@@ -4,7 +4,7 @@ float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
 [shader("compute")][numthreads(8,8,1)]
 void temporalMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint slot=f.control.x,previous=1-slot;
-    float3 directLight=f.transport.x==0?pixel(f,DIRECT,p).rgb:float3(0);float3 colour=pixel(f,RAW,p).rgb;float count=1;float l=luminance(colour);float2 moments=float2(l,l*l);
+    float directCount=1;float3 directLight=f.transport.x==0?pixel(f,DIRECT,p).rgb:float3(0);float3 colour=pixel(f,RAW,p).rgb;float count=1;float l=luminance(colour);float2 moments=float2(l,l*l);
     float4 world=pixel(f,WORLD+slot,p),normal=pixel(f,NORMAL+slot,p),motion=pixel(f,MOTION,p);
     float2 uv=(float2(p)+0.5)/float2(f.sizes.xy)+motion.xy+(f.jitter.zw-f.jitter.xy)/float2(f.sizes.xy);
     if(f.temporal.x==0 && f.transport.x==1){
@@ -27,13 +27,15 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
                 if(l>ceiling){colour*=ceiling/max(l,1e-6);l=ceiling;moments=float2(l,l*l);}
             }
             // Illumination changes are host-signalled; stochastic highlights are not resets.
-            directLight=lerp((footprint?sampleImage(f,DIRECT_HISTORY+previous,uv):pixel(f,DIRECT_HISTORY+previous,at)).rgb,directLight,max(1/max(count,1),0.05));
+            float4 oldDirect=footprint?sampleImage(f,DIRECT_HISTORY+previous,uv):pixel(f,DIRECT_HISTORY+previous,at);
+            directCount=min(oldDirect.w+1,length(motion.xy*f.sizes.xy)>1?4.:96.);
+            directLight=lerp(oldDirect.rgb,directLight,1/directCount);
             colour=lerp(clipped,colour,weight);moments=lerp((footprint?sampleImage(f,MOMENTS+previous,uv):pixel(f,MOMENTS+previous,at)).xy,moments,weight);
         }
     }
     if(f.transport.x==1){l=luminance(colour);moments=float2(l,l*l);}
     float variance=max(moments.y-moments.x*moments.x,0);
-    store(f,DIRECT_HISTORY+slot,p,float4(directLight,1));
+    store(f,DIRECT_HISTORY+slot,p,float4(directLight,directCount));
     store(f,HISTORY+slot,p,float4(colour,count));store(f,MOMENTS+slot,p,float4(moments,variance,count));
 }
 // Three 3x3 wavelet iterations stage incident radiance and geometric guides.
@@ -60,5 +62,5 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         float weight=(x==0?2:1)*(y==0?2:1);
         weight*=exp(-abs(dot(filterWorld[at].xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(g.xyz,guide.xyz),0),lerp(128.,32.,roughness))*(historyCount<4?1:exp(-abs(luminance(c)-l)/(4*sigma+0.1)))*float(filterWorld[at].w==world.w);
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
-    }store(f,target,p,float4(sum/max(total,1e-6)+(root.pass==2?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));
+    }store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*demodulation(f,p)+pixel(f,DIRECT_HISTORY+slot,p).rgb:sum/max(total,1e-6),1));
 }

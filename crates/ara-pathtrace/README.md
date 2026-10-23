@@ -4,8 +4,8 @@
 probes, denoising, history rejection or upscaling. Every sample is independent;
 GGX/diffuse mixture PDFs and roulette weights preserve transport energy. Point
 and directional visibility uses the same physical units and masked hit semantics
-as hybrid rendering. Emissive surfaces are found through BSDF sampling; explicit
-area-light next-event estimation is not implemented yet.
+as hybrid rendering. Emissive triangles use area/power-weighted next-event estimation, with the same
+alpha-aware visibility and finite-roughness material semantics as the hybrid.
 
 Run from the repository root (all commands scope Cargo to two jobs):
 
@@ -52,8 +52,8 @@ The four-stop light-step test measures the probe field itself over 24 frames,
 against a 48-frame target, and requires 90% response within 12 frames.
 
 `measurements/` contains canonical JSON: per-case reference/convergence errors,
-sequence errors, probe step response, the baked probe field, device/driver identity,
-and pass timing distributions. `gpu-timings-before.json` records the original
+sequence errors, probe step response, device/driver identity,
+and pass timing distributions. Generated probe bakes stay in ignored `.sn/`. `gpu-timings-before.json` records the original
 global-read denoiser; the current pass uses a cooperative shared-memory halo.
 
 `Timings` uses 60 samples after 12 warmup frames at 2560x1440 and 1707x960 ->
@@ -66,7 +66,7 @@ Budget success on this diagnostic scene does not establish complex-content or
 Unreal visual/performance parity. See `../ara-render-fidelity/README.md` for the
 remaining native-refit, vendor SDK and production Raster/editor integration work.
 
-## Quality pass measurements
+## Prior 4a04cc3 quality-pass baseline
 
 All timestamps include API/sync validation on the RTX 4070 SUPER. Diagnostic
 frame budgets are enforced against p95, with no async-overlap claim. Performance
@@ -114,9 +114,8 @@ redistributed in this commit. The benchmark imports OBJ positions/vertex normals
 UVs, diffuse PNG textures and alpha masks, and approximates GGX roughness from
 MTL shininess. It does not import height-bump maps or claim material parity with
 an authored glTF PBR conversion. The large scene is **above both frame budgets**;
-it has not been compared against a 4096-spp ground truth. One coarse automatic
-probe volume also limits shaded-arcade quality. These limits remain visible in
-its capture rather than being hidden by a simple-scene timing claim.
+these are the historical measurements before the Sponza round below. The historical captures used a coarse probe volume and EV100 10; the new round
+retains their data as a baseline, rather than using these numbers as current results.
 
 Captures: `interior-before-quality.png`, `interior-1440p.png`, `interior-960p.png`,
 `thin_wall-hybrid.png`, `glossy_interior-reference.png`, the three `*-sequence.png`
@@ -125,3 +124,110 @@ The wall's diagonal edge is a correct ceiling/sun shadow; see direct-only refere
 and explanation in the fidelity README. Native refit and production Raster/Mobile
 remain blocked by the same backend integration boundaries documented there.
 The editor offscreen target/material ABI and DLSS/Streamline seam are preserved.
+
+## Sponza ground truth and robustness round
+
+Reproduce using `run.ps1 -Mode Sponza-Reference`, then `-Mode Sponza-Quality`,
+`-Mode Content`, `-Mode Robust-Quality` and `-Mode Robust-Timings`.
+The local pinned Sponza asset must be fetched first. `Sponza-Reference` always
+reaccumulates 4096 independent samples at 640x360 / 12 bounces, with a 2048-spp
+convergence check. Its linear HDR cache is ignored; a matching scene fingerprint,
+camera, resolution and sample contract are required before comparison. The
+original baseline is immutable `sponza-baseline.json` (main 55bd504), with the prior
+15.32/7.30 ms timing table retained in `sponza-timings-before-energy.json`.
+
+`Sponza-Quality` integrates 192 jittered hybrid frames, enforces <=10% linear
+relative RMSE, checks its fixed-EV100 5.5/PBR Neutral golden, and writes
+`sponza-reference-side-by-side.png` (hybrid left, undenoised reference right).
+Exposure/bloom/fog never enter the RMSE calculation. The reference comparison is
+640x360; native/upscaled hero captures and GPU budgets are measured separately at
+2560x1440 and 1707x960 ->2560x1440. No 1440p/4096-spp reference is claimed.
+The automatic lattice has 6318 probes at about 1.4-1.5 m spacing, 5837 active after
+settling. Probe rays resolve five scattering events before feeding the previous
+visibility-aware field back into the terminal. No artificial GI gain, sky gain,
+albedo boost or lamp was added to the Sponza rig.
+
+Both the original hybrid and reference were underexposed at EV100 10. Histogram
+metering is near EV100 4 before compensation; auto content captures use -1.5 stops
+compensation. Fixed goldens use EV100 5.5 (Sponza), 12 (daylight), 5 (night), with
+PBR Neutral. ACES-fit remains selectable. Photographic exposure is separate from
+transport: passing global RMSE alone does not prove all shaded regions are correct.
+
+`robust_scenes::outdoor` extracts an actual landscape sample tile, recentered in
+metres, with heightfield vertex normals, a baked original layer-colour texture,
+18 crossed alpha canopies and sky illumination. This is a terrain/visibility
+fixture, not a production forest or realistic authored foliage asset. `night` has
+five 12 cm emissive ceiling panels, zero environment/sun/analytic lights. Both have
+480x270, 4096-spp /12-bounce same-view references and 256 hybrid settle frames.
+Their fixed-exposure goldens are checked in `cargo test`; no historical before
+measurement exists for these new fixtures. Robust timing JSON records per-pass
+p50/p95 after 96 warmup frames. Sponza uses 240 samples after 96 warmup frames.
+`Content` and `Robust-Timings` enforce <=10 /5 ms p95 and retain the measured
+report even on failure. All runs use two Cargo jobs and API/synchronization validation. The shared GPU/CPU
+have approximately ten agents, with no exclusive access or controlled clocks;
+Sponza telemetry records nvidia-smi before/after each run. GPU-work sums are not
+application frame latency, and extensive camera motion/reset frames cost more.
+
+Native BLAS refit remains unavailable in ara-gpu's merged command interface; the
+existing explicit rebuild fallback is retained. Raster/Mobile require matching
+baked probes; a production landscape/foliage fallback still needs the material and
+streaming integration described in the fidelity README. DLSS's SDK seam remains.
+
+## Recorded final results
+
+| Scene | Relative RMSE, before -> after | Native / upscaled p95, ms |
+|---|---:|---:|
+| Sponza | 27.12% -> 7.28% | 15.32 / 7.30 -> 8.99 / 3.93 |
+| outdoor_day (new) | 3.94% | 5.03 / 2.90 |
+| night_interior (new) | 4.91% | 6.81 / 2.86 |
+
+Sponza 2048 ->4096 reference residual: 1.00%; daylight 0.11%; night 1.46%.
+The legacy gates remain: glossy 6.99% ->6.47%, thin wall 9.64% ->9.04%, furnace
+0.65% ->0.62%. The diagnostic frame is 6.44 /2.82 ms p95 (native /upscaled).
+
+| Sponza pass p50, ms | Native before -> after | Upscaled before -> after |
+|---|---:|---:|
+| Bloom.Horizontal | 0.211 -> 0.208 | 0.097 -> 0.096 |
+| Bloom.Vertical | 0.108 -> 0.108 | 0.052 -> 0.051 |
+| DDGI.Trace.Relocate.Classify.Integrate | 0.160 -> 0.141 | 0.157 -> 0.143 |
+| Exposure.EV100.Meter.Adapt | 0.004 -> 0.025 | 0.005 -> 0.026 |
+| Output.SDR | 0.046 -> 0.057 | 0.000 -> 0.000 |
+| Post.Atmosphere.Lens.ToneMap.LUT | 0.301 -> 0.310 | 0.094 -> 0.100 |
+| RT.Disocclusion.Repair | 1.224 -> 0.000 | 0.693 -> 0.000 |
+| RT.Reflections.SoftShadows.DDGI | 6.821 -> 2.733 | 3.100 -> 1.277 |
+| SVGF.Atrous.1 | 0.496 -> 0.481 | 0.223 -> 0.219 |
+| SVGF.Atrous.2 | 0.541 -> 0.546 | 0.258 -> 0.258 |
+| SVGF.Atrous.4 | 0.591 -> 0.668 | 0.263 -> 0.296 |
+| SVGF.Reproject.Reject.Outlier.Moments | 0.891 -> 0.868 | 0.387 -> 0.369 |
+| Upscale.FSR1.EASU | 0.000 -> 0.000 | 0.289 -> 0.178 |
+| Upscale.FSR1.RCAS | 0.000 -> 0.000 | 0.058 -> 0.063 |
+| Upscale.TAAU.Resolve | 1.034 -> 0.580 | 0.000 -> 0.000 |
+| Viewport.Ready | 0.000 -> 0.000 | 0.000 -> 0.000 |
+| Visibility.Motion | 2.224 -> 1.629 | 1.008 -> 0.762 |
+
+Each JSON also includes per-pass p95. Total p95 is measured from frame sums, not
+the sum of individual pass percentiles. Static pixel-area accumulation removes
+the repair pass from steady-view runs; the pan sequence exercises its moving-view
+path, but is not a native-resolution performance gate. The timings do not prove
+worst-case moving-camera/reset budgets.
+
+Verified visually: all hybrid/reference/diff captures, native/upscaled hero views,
+baked fallback, moving-light/time-of-day/disocclusion sheets and Sponza pan sheet.
+**This does not yet pass for an Unreal 5 Lumen screenshot.** Sponza still has no
+authored normal/height maps or full PBR material conversion. At 640x360, the fixed
+corridor crop [170,235]..[430,350] has 27.17% relative RMSE and 17.39% lower mean
+luminance than the reference, despite 7.28% whole-image error. Bright architecture
+dominates the global energy denominator. Lighting-reset sequences show visible
+low-sample mottling, and the daylight alpha canopies are procedural stand-ins.
+These limitations are visible in the committed captures; passing the numerical
+gates is not visual parity.
+
+The landscape fixture adds two existing local path dependencies. Per task file
+ownership, the parent checkpoint supplied the generated Cargo.lock membership
+edges. This follow-up changes no root files. Generated probe bakes are written to
+ignored `.sn/baked-interior.json`; the fixture passes them to the fallback in memory.
+
+The final detached verification run reaccumulated the three 4096-spp references,
+passed strict display goldens, RMSE/temporal/budget gates, both crates' tests,
+clippy with warnings denied, rustfmt checks and all 17 SPIR-V validations.
+No capture PNG changed from checkpoint 1044f81; the result is deterministic.

@@ -1,0 +1,163 @@
+{
+  "device": {
+    "api_version": "1.4.351",
+    "compute_family": 2,
+    "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
+    "descriptor_heap_available": true,
+    "device_id": 10115,
+    "driver_version": 2588114944,
+    "graphics_family": 0,
+    "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "max_image_dimension": 32768,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "pipeline_cache_uuid": [
+      100,
+      75,
+      136,
+      101,
+      121,
+      38,
+      56,
+      71,
+      180,
+      10,
+      171,
+      50,
+      87,
+      147,
+      32,
+      126
+    ],
+    "ray_tracing": true,
+    "timestamp_period_ns": 1.0,
+    "timestamp_valid_bits": [
+      64,
+      64
+    ],
+    "vendor_id": 4318
+  },
+  "entity_map": [
+    [
+      1,
+      612844469367532085,
+      "Coin"
+    ],
+    [
+      2,
+      686829787259933836,
+      "Amber lantern"
+    ],
+    [
+      3,
+      1777936226886777139,
+      "Amber lantern"
+    ],
+    [
+      4,
+      2905273877586534608,
+      "Coin"
+    ],
+    [
+      5,
+      4255820719152952676,
+      "Coin"
+    ],
+    [
+      6,
+      6728846669943550988,
+      "Coin"
+    ],
+    [
+      7,
+      7690608504785830624,
+      "Nine-slice supply crate"
+    ],
+    [
+      8,
+      7731439355775835903,
+      "Scout"
+    ],
+    [
+      9,
+      10324883041208573485,
+      "Coin"
+    ],
+    [
+      10,
+      10558729798364308802,
+      "Parallax mountain"
+    ],
+    [
+      11,
+      13463340161653533772,
+      "Parallax mountain"
+    ],
+    [
+      12,
+      14866164513971931557,
+      "Parallax clouds"
+    ],
+    [
+      13,
+      14927075231606947748,
+      "Parallax clouds"
+    ],
+    [
+      14,
+      16759630289329201659,
+      "Ruins tilemap"
+    ]
+  ],
+  "request": {
+    "camera": {
+      "centre": [
+        0.0,
+        0.5
+      ],
+      "kind": "orthographic",
+      "world_size": [
+        20.0,
+        11.25
+      ]
+    },
+    "deterministic": true,
+    "exposure": 1.0,
+    "marks": 32,
+    "mode": "lit",
+    "seed": 42,
+    "settle_frames": 2,
+    "size": [
+      640,
+      360
+    ],
+    "tick": 120
+  },
+  "scene_hash": "a0919e10264088448a5a3a2693b22a0b601b06f767baa6a4b28af5183ba78d72",
+  "shaders": {
+    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "compiler": "2026.17-25-gc7954ebd1",
+    "content_key": "88f803994a3e723b35c72148d514c026d96cb8e8a0319ab8fd415e44e77c4493"
+  },
+  "timings": [
+    {
+      "milliseconds": 0.026944,
+      "pass": "Sprites.TileChunks.Bindless",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.013312,
+      "pass": "Exposure.ACESFitted.SDR",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.06816,
+      "pass": "CaptureReadback",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.000064,
+      "pass": "HostReadback",
+      "queue": "Graphics"
+    }
+  ]
+}

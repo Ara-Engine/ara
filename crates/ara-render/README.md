@@ -4,8 +4,9 @@
 owns the graph, PBR passes and visual feedback API. `ara-platform` owns SDL3
 window/input and native presentation; `ara-shader-cook` is an offline executable.
 
-From the repository root, run `crates/ara-platform/setup.ps1` once on Windows,
-then `crates/ara-render/run.ps1 -Mode Check`. Use `-Mode Capture` for all debug
+From the repository root on Windows, run `crates/ara-render/run.ps1 -Mode Check`.
+SDL builds statically with `cc`; no setup script or SDL3.dll is required.
+Use `-Mode Capture` for all debug
 PNGs/marks/legends/ID channels and `-Mode Window -Frames 120` for the live demo.
 The Vulkan SDK 1.4.363.0 is needed to recook, not to run cooked shaders:
 `cargo run -p ara-shader-cook -- shaders/pipelines.json crates/ara-render/cooked`.

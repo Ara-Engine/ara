@@ -1,0 +1,20 @@
+{
+  "sprites": {
+    "entries": {
+      "spriteFragment": "fragment",
+      "spriteVertex": "vertex"
+    },
+    "source": "sprites.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  }
+}

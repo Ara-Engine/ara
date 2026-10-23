@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2",
+  "key": "24072a2a3fb9e30bab4beed27977c45d6ef052f3dd73e742f601d916e8589e65",
   "stages": [
     {
-      "dxil": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/atrousMain.dxil",
-      "dxil_hash": "6d0d4a2c06baf513147dd3f3561d049afedbc56a7e441e629d15dc56bceef9a0",
+      "dxil": "24072a2a3fb9e30bab4beed27977c45d6ef052f3dd73e742f601d916e8589e65/atrousMain.dxil",
+      "dxil_hash": "8d66622f8a6148eaa9302f8c2464ab58880af6bf7835438c52972d6b37a64095",
       "source_entry": "atrousMain",
-      "spirv": "198aa4a891084b384c342ec6ac96f055152fca8e4108c5a1fb6e2f9724c753e2/atrousMain.spv",
+      "spirv": "24072a2a3fb9e30bab4beed27977c45d6ef052f3dd73e742f601d916e8589e65/atrousMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "0a9e26f6365c7399f716d5240cf570f63feaa9f2f4eefb5c5c181e221fb824bd",
+      "spirv_hash": "1af56abe97f18a6ee8ddf9ad9dfa7f98b00c0cedca924d85be5067f71f4965f3",
       "stage": "compute"
     }
   ],

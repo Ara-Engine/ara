@@ -8,10 +8,11 @@ enforces wall-clock and memory limits and kills the worker on violation.
   (`#line` maps diagnostics to script lines), compiles against the framework and
   `Ara.Agent` only, checks the `Whitelist`, runs it in a throwaway collectible ALC, and
   serializes the return value.
-- `Whitelist`: a first cut in the shape of s&box `Sandbox.Access`: every referenced type
-  and member must be in the language runtime (primitives, collections, LINQ, text, JSON,
-  tasks) or `Ara.Agent`; no files, network, processes, threads, reflection, interop or
-  dynamic loading. P/Invoke and module refs are refused.
+- `Whitelist`: the `agent` profile of `Ara.Analyzers/ApiProfiles.cs` (linked source, shared with
+  the module analyzers ARA05xx), checked on IL: every referenced type and member must be in
+  the language runtime (primitives, collections, LINQ, text, JSON, tasks) or `Ara.Agent`; no
+  files, network, processes, threads, reflection, interop or dynamic loading. P/Invoke and
+  module refs are refused.
 
 ## Testing
 

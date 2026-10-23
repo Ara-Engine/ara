@@ -1,0 +1,41 @@
+[package]
+name = "ara-editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ara-cmd = { path = "../ara-cmd" }
+ara-components = { path = "../ara-components" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-gpu = { path = "../ara-gpu" }
+ara-editor-gpu = { path = "../ara-editor-gpu" }
+ara-host = { path = "../ara-host" }
+ara-json = { path = "../ara-json" }
+ara-mcp = { path = "../ara-mcp" }
+ara-ops = { path = "../ara-ops" }
+ara-platform = { path = "../ara-platform" }
+ara-proto = { path = "../ara-proto" }
+ara-render = { path = "../ara-render" }
+ara-rpc = { path = "../ara-rpc" }
+ara-schema = { path = "../ara-schema" }
+ara-ui = { path = "../ara-ui" }
+ara-ui-render = { path = "../ara-ui-render" }
+ara-ui-text = { path = "../ara-ui-text" }
+anyhow = "1"
+glam = { version = "0.30", features = ["serde", "bytemuck"] }
+gltf = "1.4"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sdl3-sys = { version = "0.7", default-features = false }
+accesskit = { version = "0.25", features = ["serde"] }
+
+[target.'cfg(windows)'.dependencies]
+accesskit_windows = "0.35"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Threading", "Win32_Security"] }

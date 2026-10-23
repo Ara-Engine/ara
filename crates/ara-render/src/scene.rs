@@ -99,6 +99,13 @@ pub struct Scene {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CameraSpec {
+    /// Axis-aligned orthographic XY view, for 2D and editor projections.
+    Orthographic {
+        /// World-space view centre.
+        centre: glam::Vec2,
+        /// Visible world width and height in metres.
+        world_size: glam::Vec2,
+    },
     /// Perspective camera looking at an arbitrary point.
     LookAt {
         /// Camera position in metres.
@@ -138,7 +145,28 @@ impl CameraSpec {
     pub fn resolve(&self, size: [u32; 2]) -> anyhow::Result<Camera> {
         anyhow::ensure!(!size.contains(&0), "Camera extent must be nonzero");
         let aspect = size[0] as f32 / size[1] as f32;
+        if let Self::Orthographic { centre, world_size } = *self {
+            anyhow::ensure!(
+                centre.is_finite() && world_size.is_finite() && world_size.min_element() > 0.,
+                "Invalid orthographic camera"
+            );
+            let position = centre.extend(1.);
+            return Ok(Camera {
+                position,
+                forward: -Vec3::Z,
+                view: Mat4::look_at_rh(position, centre.extend(0.), Vec3::Y),
+                projection: Mat4::orthographic_rh(
+                    -world_size.x * 0.5,
+                    world_size.x * 0.5,
+                    -world_size.y * 0.5,
+                    world_size.y * 0.5,
+                    100.,
+                    0.1,
+                ),
+            });
+        }
         let (position, target, fov) = match *self {
+            Self::Orthographic { .. } => unreachable!("orthographic request resolved above"),
             Self::LookAt {
                 position,
                 target,

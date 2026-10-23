@@ -90,7 +90,8 @@ public static unsafe class ScriptRuntime
             {
                 SwapUpdate s => ApplySwap(s),
                 DeltaUpdate d => ApplyDelta(d),
-                _ => Finish(u, SlotOf(u.Slot)),
+                ErrorUpdate e => Finish(ref e.Report, e.Slot, SlotOf(e.Slot), 0),
+                _ => 0,
             };
         }
         return flags;
@@ -102,62 +103,88 @@ public static unsafe class ScriptRuntime
         return index < slots.Length ? slots[index] : null;
     }
 
-    static uint Finish(PendingUpdate u, ModuleSlot? slot)
+    static uint Finish(ref ReloadReport report, uint slotIndex, ModuleSlot? slot, ulong applyStart)
     {
-        u.Report.Module = u.Slot;
+        report.Module = slotIndex;
         if (slot is not null)
         {
-            u.Report.Generation = slot.Generation;
-            u.Report.DeltaCount = slot.Deltas;
-            u.Report.Hot = slot.Hot ? 1u : 0u;
+            report.Generation = slot.Generation;
+            report.DeltaCount = slot.Deltas;
+            report.Hot = slot.Hot ? 1u : 0u;
         }
-        u.Report.TApplied = Host.Now();
-        Host.ReportReload(u.Report);
+        report.TApplied = Host.Now();
+        if (applyStart != 0) report.ApplyUs = (uint)Math.Min(uint.MaxValue, (report.TApplied - applyStart) / 1000);
+        Host.ReportReload(report);
         return 0;
     }
 
+    /// <summary>Registers every module of the swap with the host in one call (all or none), then installs their tables.</summary>
     static uint ApplySwap(SwapUpdate u)
     {
-        var slot = SlotOf(u.Slot);
-        var builder = u.Module;
-        var generation = slot is null ? 0u : slot.Generation + 1;
+        var t0 = Host.Now();
+        var mods = u.Modules;
+        var generations = new uint[mods.Count];
         byte[] response;
         try
         {
-            response = Host.RegisterModule(builder.Descriptor(u.Name, u.Slot, generation, u.Hot));
+            using var ms = new MemoryStream();
+            ms.WriteByte((byte)'[');
+            for (int i = 0; i < mods.Count; i++)
+            {
+                var m = mods[i];
+                generations[i] = SlotOf(m.Slot) is { } existing ? existing.Generation + 1 : 0;
+                if (i > 0) ms.WriteByte((byte)',');
+                ms.Write(m.Module.Descriptor(m.Name, m.Slot, generations[i], m.Hot));
+            }
+            ms.WriteByte((byte)']');
+            response = Host.RegisterModules(ms.ToArray());
         }
         catch (Exception e)
         {
-            return Reject(u, slot, $"module `{u.Name}`: registration failed: {e.Message}");
+            return Reject(u, $"registration failed: {e.Message}", t0);
         }
         using var doc = JsonDocument.Parse(response);
         var root = doc.RootElement;
         if (!root.GetProperty("ok").GetBoolean())
-            return Reject(u, slot, null); // the host reported why
-        SetIndexes(root, "components", builder.Components);
-        SetIndexes(root, "resources", builder.Resources);
-        SetIndexes(root, "cues", builder.Cues);
-        slot ??= AddSlot(u.Slot, u.Name);
-        slot.Tables = BuildTables(builder, slot.Tables);
-        slot.Generation = generation;
-        slot.Deltas = 0;
-        slot.Hot = u.Hot;
-        u.Installed?.Invoke();
-        Finish(u, slot);
+            return Reject(u, null, t0); // the host reported why
+        for (int i = 0; i < mods.Count; i++)
+        {
+            var m = mods[i];
+            SetIndexes(root, "components", m.Module.Components);
+            SetIndexes(root, "resources", m.Module.Resources);
+            SetIndexes(root, "cues", m.Module.Cues);
+            var slot = SlotOf(m.Slot) ?? AddSlot(m.Slot, m.Name);
+            slot.Tables = BuildTables(m.Module, slot.Tables);
+            slot.Generation = generations[i];
+            slot.Deltas = 0;
+            slot.Hot = m.Hot;
+        }
+        foreach (var m in mods) m.Installed?.Invoke();
+        foreach (var m in mods)
+        {
+            m.Report.Cascade = (uint)mods.Count;
+            Finish(ref m.Report, m.Slot, SlotOf(m.Slot), t0);
+        }
         return AbiConst.BoundaryReloaded | AbiConst.BoundarySchemaChanged;
     }
 
-    static uint Reject(SwapUpdate u, ModuleSlot? slot, string? why)
+    static uint Reject(SwapUpdate u, string? why, ulong t0)
     {
-        if (why is not null) Diag.Report(AraCodes.LoadFailed, "error", why + " (the last good code keeps running)");
-        u.Report.Kind = AbiConst.ReloadError;
-        u.Rejected?.Invoke(why ?? "registration rejected");
-        Finish(u, slot);
+        var names = string.Join(", ", u.Modules.Select(m => $"`{m.Name}`"));
+        if (why is not null) Diag.Report(AraCodes.LoadFailed, "error", $"module {names}: {why} (the last good code keeps running)");
+        foreach (var m in u.Modules)
+        {
+            m.Report.Kind = AbiConst.ReloadError;
+            m.Report.Cascade = (uint)u.Modules.Count;
+            m.Rejected?.Invoke(why ?? "registration rejected");
+            Finish(ref m.Report, m.Slot, SlotOf(m.Slot), t0);
+        }
         return 0;
     }
 
     static uint ApplyDelta(DeltaUpdate d)
     {
+        var t0 = Host.Now();
         var slot = SlotOf(d.Slot);
         try
         {
@@ -165,17 +192,19 @@ public static unsafe class ScriptRuntime
         }
         catch (Exception e)
         {
-            Diag.Report(AraCodes.LoadFailed, "error", $"EnC delta failed: {e.Message}; recompiling as a full module");
+            Diag.Report(AraCodes.DeltaRejected, "warning", $"the runtime rejected an EnC delta ({e.Message}); rebuilding the module as L3");
             d.Report.Kind = AbiConst.ReloadError;
+            d.Report.Escalation = AbiConst.EscRuntimeRejected;
             d.Failed?.Invoke(e);
-            return Finish(d, slot);
+            return Finish(ref d.Report, d.Slot, slot, t0);
         }
         if (slot is not null)
         {
             slot.Deltas++;
             slot.Tables.ClearFaults();
         }
-        Finish(d, slot);
+        d.Report.Cascade = 1;
+        Finish(ref d.Report, d.Slot, slot, t0);
         return AbiConst.BoundaryReloaded;
     }
 
