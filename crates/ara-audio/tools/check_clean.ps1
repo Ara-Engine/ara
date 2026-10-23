@@ -24,7 +24,7 @@ try {
     Write-Output 'CMake/Python absent from PATH; CARGO_BUILD_JOBS=2'
     cargo check --workspace
     if ($LASTEXITCODE -ne 0) { throw 'Workspace check failed' }
-    cargo test -p ara-audio -p ara-opus-sys
+    cargo test -p ara-audio -p ara-opus-sys -p ara-acoustics -p ara-audio-graph -p ara-audio-mix -p ara-music -p ara-audio-why
     if ($LASTEXITCODE -ne 0) { throw 'Audio tests failed' }
 } finally {
     $env:PATH = $previousPath

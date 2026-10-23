@@ -1,0 +1,180 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -11.887991815374539,
+      "rmsDbfs": -17.648919927149908
+    }
+  ],
+  "channelRms": [0.13108530354489253, 0.13108530354489253],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "graphs": [
+    {
+      "graph": "Engine",
+      "instance": "engine",
+      "nodes": [
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "revs",
+          "op": "smooth",
+          "peak": 5199.0625,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "rate",
+          "op": "div",
+          "peak": 2.5995312,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "idle",
+          "op": "sample",
+          "peak": 0.475,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "firing",
+          "op": "div",
+          "peak": 173.30208,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "pulse",
+          "op": "saw",
+          "peak": 0.9999974,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "half",
+          "op": "mul",
+          "peak": 86.65104,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "sub",
+          "op": "sine",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "harmonics",
+          "op": "mix",
+          "peak": 1.2118953,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "cutoff",
+          "op": "map",
+          "peak": 4560,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "filtered",
+          "op": "lowpass",
+          "peak": 1.4923123,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "grit",
+          "op": "saturate",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "synth_level",
+          "op": "map",
+          "peak": 0.32999998,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "synth",
+          "op": "mul",
+          "peak": 0.32999998,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "layered",
+          "op": "mix",
+          "peak": 0.8046378,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 751,
+          "blocks": 751,
+          "node": "level",
+          "op": "gain",
+          "peak": 0.2544488,
+          "triggers": 0
+        }
+      ]
+    }
+  ],
+  "integratedLufs": -14.280607958362362,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -17.64891991862106,
+  "samplePeak": 0.254448801279068,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0.0005729166666666667,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -24.324282960223684
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -24.15443685665824
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -24.131456752292312
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -22.899785216128965
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -53.01915173474646
+    }
+  ],
+  "truePeak": 0.25517892837524414,
+  "wavBlake3": "b51a7ab8faff36d39580e7fd2e75dd1c6349514ffe301ae8a761c893ed466eec"
+}

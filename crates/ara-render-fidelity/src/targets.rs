@@ -20,12 +20,16 @@ pub(crate) const OUTPUT: usize = 18;
 pub(crate) const DISPLAY_HISTORY0: usize = 19;
 pub(crate) const DIRECT: usize = 21;
 pub(crate) const DIRECT_HISTORY0: usize = 22;
-pub(crate) const COUNT: usize = 24;
+pub(crate) const TRANSMITTANCE: usize = 24;
+pub(crate) const MULTISCATTER: usize = 25;
+pub(crate) const SKYVIEW: usize = 26;
+pub(crate) const FROXELS: usize = 27;
+pub(crate) const COUNT: usize = 28;
 
 pub(crate) struct Targets {
     pub images: Vec<Image>,
-    pub sampled: [u32; 24],
-    pub storage: [u32; 24],
+    pub sampled: [u32; COUNT],
+    pub storage: [u32; COUNT],
     pub states: Vec<State>,
 }
 impl Targets {
@@ -37,12 +41,14 @@ impl Targets {
     ) -> Result<Self> {
         let mut t = Self {
             images: Vec::new(),
-            sampled: [0; 24],
-            storage: [0; 24],
+            sampled: [0; COUNT],
+            storage: [0; COUNT],
             states: Vec::new(),
         };
         for i in 0..COUNT {
-            let size = if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
+            let size = if i >= TRANSMITTANCE {
+                [[256, 64], [32, 32], [192, 108], [4096, 36]][i - TRANSMITTANCE]
+            } else if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
                 display
             } else {
                 render

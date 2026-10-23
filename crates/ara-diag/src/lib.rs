@@ -1,13 +1,26 @@
-//! Structured diagnostics shared by every Ara subsystem.
+//! Structured diagnostics shared by every Ara subsystem, and the bus that carries
+//! them to the project host.
 //!
 //! A [`Diagnostic`] has a stable [`Code`] (`ARA1101`), a severity, a message, a
-//! structured [`Location`] (file, record, field path, ...) and optional
+//! structured [`Location`] (file, record, field path, ...), the [`Subject`]s it is
+//! about (entities, assets, systems, passes, modules) and optional
 //! machine-applicable [`Fix`]es. The CLI prints them as text or JSON; agents read the
-//! JSON and apply fixes directly. All engine codes live in [`codes`], so they stay
-//! unique and documented in one place.
+//! JSON and apply fixes directly.
+//!
+//! - [`bus`]: any thread emits diagnostics (lock-free, sampled); the host drains
+//!   them into a [`store::Store`] it queries, streams and summarizes ([`summary`]).
+//! - [`codes`]: kernel and bus code constants; [`catalog`]: every code's docs
+//!   (title, explanation, causes, fixes), including other crates' codes.
 
+pub mod bus;
+pub mod catalog;
 pub mod codes;
 mod render;
+pub mod store;
+mod subject;
+pub mod summary;
+
+pub use subject::{Subject, SubjectKind};
 
 use std::fmt;
 
@@ -16,14 +29,43 @@ use serde_json::Value;
 
 /// A stable diagnostic code, printed as `ARA` plus four digits (`ARA1101`).
 ///
-/// Codes never change meaning once released. `ARA0001`–`ARA0999` belong to the C#
-/// analyzers; the kernel uses the ranges listed in [`codes`].
+/// Codes never change meaning once released. `ARA0001`–`ARA0999` belong to C#; the
+/// kernel and bus ranges are listed in [`codes`]. *Named* codes (`ARA-EXP-AND-007`,
+/// `ARA_GPU_STALE_HANDLE`) keep the name they were born with: their number is an
+/// internal slot and they print and parse by name ([`catalog::label`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Code(pub u16);
 
+impl Code {
+    /// Parses `ARA1302` (any case) or a named code's name.
+    pub fn parse(text: &str) -> Option<Code> {
+        let t = text.trim();
+        let numeric = t
+            .get(..3)
+            .filter(|p| p.eq_ignore_ascii_case("ara"))
+            .and_then(|_| t.get(3..))
+            .filter(|n| n.len() == 4)
+            .and_then(|n| n.parse().ok());
+        match numeric {
+            Some(n) => Some(Code(n)),
+            None => catalog::lookup(t)
+                .filter(|d| d.label.is_some())
+                .map(|d| d.code),
+        }
+    }
+
+    /// Its documentation, if catalogued.
+    pub fn doc(self) -> Option<&'static catalog::CodeDoc> {
+        catalog::get(self)
+    }
+}
+
 impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ARA{:04}", self.0)
+        match catalog::label(*self) {
+            Some(label) => f.write_str(label),
+            None => write!(f, "ARA{:04}", self.0),
+        }
     }
 }
 
@@ -36,9 +78,7 @@ impl Serialize for Code {
 impl<'de> Deserialize<'de> for Code {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let text = String::deserialize(d)?;
-        text.strip_prefix("ARA")
-            .and_then(|n| n.parse().ok())
-            .map(Code)
+        Code::parse(&text)
             .ok_or_else(|| serde::de::Error::custom(format!("invalid diagnostic code `{text}`")))
     }
 }
@@ -167,6 +207,15 @@ pub struct Diagnostic {
     /// Where it happened. Boxed to keep `Result<_, Diagnostic>` small.
     #[serde(default, skip_serializing_if = "Location::is_empty")]
     pub location: Box<Location>,
+    /// What it is about besides its location: entities, assets, documents, systems,
+    /// render passes, C# modules. The bus is queried by these, and `ara why`
+    /// follows them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subjects: Vec<Subject>,
+    /// Structured facts for tools and explainers (a reload's level and reason, a
+    /// frame's contributors). Not part of the dedup key; keep it small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Box<Value>>,
     /// Suggested fixes, best first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fixes: Vec<Fix>,
@@ -180,6 +229,8 @@ impl Diagnostic {
             severity,
             message: message.into(),
             location: Box::default(),
+            subjects: Vec::new(),
+            data: None,
             fixes: Vec::new(),
         }
     }
@@ -260,6 +311,31 @@ impl Diagnostic {
             action,
         });
         self
+    }
+
+    /// Adds a subject (once).
+    pub fn subject(mut self, subject: Subject) -> Self {
+        if !self.subjects.contains(&subject) {
+            self.subjects.push(subject);
+        }
+        self
+    }
+
+    /// Attaches structured facts (`data`).
+    pub fn data(mut self, data: Value) -> Self {
+        self.data = Some(Box::new(data));
+        self
+    }
+
+    /// Emits the diagnostic onto the [`bus`] (if a consumer is attached and the
+    /// code is not being sampled out). Returns its event ID for causal links.
+    pub fn emit(self) -> Option<bus::EventId> {
+        bus::emit_with(self, bus::Meta::default())
+    }
+
+    /// Emits with metadata: a cause, a dedup key, an origin or a tick.
+    pub fn emit_with(self, meta: bus::Meta) -> Option<bus::EventId> {
+        bus::emit_with(self, meta)
     }
 }
 

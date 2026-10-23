@@ -430,6 +430,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-acoustics"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-json",
+ "ara-physics",
+ "ara-schema",
+ "bevy_ecs",
+ "blake3",
+ "libloading 0.9.0",
+ "rtrb",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-anim"
 version = "0.0.0"
 dependencies = [
@@ -508,6 +525,7 @@ dependencies = [
 name = "ara-audio"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "ara-opus-sys",
  "ara-profile",
@@ -526,6 +544,47 @@ dependencies = [
  "symphonia",
  "thiserror 2.0.21",
  "windows",
+]
+
+[[package]]
+name = "ara-audio-graph"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-ops",
+ "ara-schema",
+ "blake3",
+ "rtrb",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-mix"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-audio-why"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-why",
+ "serde_json",
 ]
 
 [[package]]
@@ -664,6 +723,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ara-bridge",
+ "ara-diag",
  "ara-json",
  "ara-pack",
  "ara-schema",
@@ -709,10 +769,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-geo"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-asset",
+ "ara-json",
+ "ara-schema",
+ "bytemuck",
+ "half",
+ "meshopt",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-gpu"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ara-diag",
  "ara-json",
  "ash 0.38.0+1.4.352",
  "bytemuck",
@@ -751,6 +827,7 @@ dependencies = [
  "ara-profile",
  "ara-proto",
  "ara-schema",
+ "ara-why",
  "insta",
  "serde",
  "serde_json",
@@ -793,6 +870,7 @@ version = "0.0.0"
 dependencies = [
  "ara-asset",
  "ara-asset-format",
+ "ara-geo",
  "ara-json",
  "ara-schema",
  "base64 0.22.1",
@@ -930,6 +1008,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-music"
+version = "0.0.0"
+dependencies = [
+ "ara-audio",
+ "ara-diag",
+ "ara-doc",
+ "ara-json",
+ "ara-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-nav"
 version = "0.0.0"
 dependencies = [
@@ -1004,6 +1095,7 @@ dependencies = [
 name = "ara-pack"
 version = "0.0.0"
 dependencies = [
+ "ara-diag",
  "ara-json",
  "blake3",
  "chacha20poly1305",
@@ -1203,6 +1295,22 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "ara-render-geo"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-geo",
+ "ara-gpu",
+ "ara-render",
+ "ara-vsm",
+ "bytemuck",
+ "glam 0.30.9",
+ "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1552,6 +1660,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-vsm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "glam 0.30.9",
+ "serde",
+]
+
+[[package]]
+name = "ara-why"
+version = "0.0.0"
+dependencies = [
+ "ara-diag",
+ "ara-material",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-world"
 version = "0.0.0"
 dependencies = [
@@ -1582,6 +1710,7 @@ dependencies = [
  "ara-doc",
  "ara-host",
  "ara-json",
+ "ara-material",
  "ara-merge",
  "ara-ops",
  "ara-proto",

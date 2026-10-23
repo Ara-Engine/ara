@@ -1,10 +1,11 @@
-//! Generated docs (R03 §4.9): one markdown page per type, command, method and topic,
-//! built from the Schema DB, the command registry and the method catalog of this
-//! engine version. `ara docs --llms` writes them with `llms.txt` and `llms-full.txt`;
-//! `docs.search` searches the same pages.
+//! Generated docs (R03 §4.9): one markdown page per type, command, method, topic and
+//! diagnostic code, built from the Schema DB, the command registry, the method
+//! catalog and the code catalog (`ara_diag::catalog`) of this engine version.
+//! `ara docs --llms` writes them with `llms.txt` and `llms-full.txt`; `docs.search`
+//! searches the same pages.
 
 use ara_cmd::Registry;
-use ara_diag::codes;
+use ara_diag::catalog;
 use ara_proto::{MethodInfo, PROTOCOL, Scope};
 use ara_schema::{SchemaDb, Shape, StructRole, TypeDesc};
 use serde_json::Value;
@@ -238,14 +239,29 @@ pub fn generate(
             body,
         });
     }
-    let mut errors = String::from("| Code | Name | Meaning |\n|---|---|---|\n");
-    for (code, name, doc) in codes::ALL {
-        errors.push_str(&format!("| `{code}` | `{name}` | {} |\n", cell(doc.trim())));
+    let mut errors = String::from(
+        "Every code has a page (`errors/<code>`): what it means, common causes and fixes. `ara why <code>` adds where it happens now.\n\n| Code | Title | Meaning | Reported by |\n|---|---|---|---|\n",
+    );
+    for doc in catalog::all() {
+        errors.push_str(&format!(
+            "| [`{}`](errors/{}.md) | {} | {} | {} |\n",
+            doc.code,
+            doc.code,
+            cell(doc.title),
+            cell(doc.summary()),
+            cell(doc.owner)
+        ));
+        pages.push(DocPage {
+            id: format!("errors/{}", doc.code),
+            title: format!("{} {}", doc.code, doc.title),
+            summary: doc.summary().to_owned(),
+            body: doc.markdown(),
+        });
     }
     pages.push(DocPage {
         id: "errors".into(),
         title: "Diagnostic codes".into(),
-        summary: "Every stable `ARA####` code and what it means.".into(),
+        summary: "Every stable diagnostic code: title, meaning and who reports it.".into(),
         body: errors,
     });
     pages.push(DocPage {

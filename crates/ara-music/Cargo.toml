@@ -1,0 +1,21 @@
+[package]
+name = "ara-music"
+description = "Interactive music for ara-audio: segments with tempo maps, intensity layers, bar/beat transitions, stingers and horizontal resequencing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-audio = { path = "../ara-audio" }
+ara-diag = { path = "../ara-diag" }
+ara-doc = { path = "../ara-doc" }
+ara-schema = { path = "../ara-schema" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+ara-json = { path = "../ara-json" }
+
+[lints]
+workspace = true

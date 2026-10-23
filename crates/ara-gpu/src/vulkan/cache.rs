@@ -47,6 +47,11 @@ mod tests {
     #[test]
     fn rejects_corrupt_and_foreign_headers() {
         let info = DeviceInfo {
+            mesh_shading: false,
+            mesh_dispatch: [0; 4],
+            task_dispatch: [0; 4],
+            geometry_shader: false,
+            buffer_int64_atomics: false,
             name: String::new(),
             vendor_id: 1,
             device_id: 2,

@@ -9,6 +9,7 @@
 
 mod assembly;
 mod components;
+mod diagnose;
 mod hierarchy;
 mod prefabs;
 mod repair;
@@ -27,11 +28,26 @@ pub const MAIN: &str = "levels/main.scene";
 pub const OUTPOST: &str = "levels/outpost.scene";
 
 /// Suite names, for `--suite`.
-pub const SUITES: &[&str] = &["v0"];
+pub const SUITES: &[&str] = &["v0", "diagnose"];
 
 /// The tasks of suite `name`.
 pub fn suite(name: &str) -> Option<Vec<Task>> {
-    (name == "v0").then(v0)
+    match name {
+        "v0" => Some(v0()),
+        "diagnose" => Some(diagnose()),
+        _ => None,
+    }
+}
+
+/// Suite `diagnose`: four broken scenes described only by their symptom (a bad
+/// material, a mesh lost in a re-export, a culling mask, a NaN from physics).
+pub fn diagnose() -> Vec<Task> {
+    vec![
+        diagnose::BAD_MATERIAL,
+        diagnose::MISSING_MESH,
+        diagnose::CULLING_MASK,
+        diagnose::NAN_BARREL,
+    ]
 }
 
 /// Suite v0: 22 tasks over scene assembly, components, prefabs, hierarchy,

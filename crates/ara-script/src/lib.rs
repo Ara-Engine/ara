@@ -17,6 +17,7 @@ pub mod csgen;
 mod ecs;
 mod host;
 mod module;
+mod reload_diag;
 pub mod run;
 pub mod value;
 

@@ -1,0 +1,211 @@
+{
+  "label": "why-with-r2",
+  "agent": "codex:gpt-6-luna",
+  "suite": "diagnose",
+  "started": "2026-10-23T06:46:08Z",
+  "engine": "baa7b61+dirty",
+  "results": [
+    {
+      "task": "why-bad-material",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_radio1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the radio still draws with its material",
+          "ok": true,
+          "detail": "Some(String(\"@materials/radio.material#gr_radio001\"))"
+        },
+        {
+          "what": "the radio material compiles",
+          "ok": true
+        },
+        {
+          "what": "the radio material keeps its green paint",
+          "ok": true,
+          "detail": "the paint parameter changed"
+        }
+      ],
+      "turns": 11,
+      "toolCalls": {
+        "ara_inspect": 3,
+        "ara_schema": 2,
+        "ara_session": 1,
+        "ara_why": 2,
+        "shell": 3
+      },
+      "wallMs": 33927,
+      "tokens": {
+        "input": 26005,
+        "cacheRead": 494848,
+        "cacheWrite": 0,
+        "output": 1432
+      },
+      "codes": {
+        "ARA1506": 2
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The radio disappeared because its material referenced `pain`, which isn’t a defined value. I changed it to `paint` in [radio.material](C:/Users/snowy/AppData/Local/Temp/arabench/codex-gpt-6-luna-why-bad-material-69064-19e40188-4/proj/materials/radio.material). Ara now reports the material as OK and finds no remaining document or bus issue for the radio’s visibility. The running renderer check is still unknown."
+    },
+    {
+      "task": "why-missing-mesh",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_gen001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the generator draws the re-exported mesh",
+          "ok": true,
+          "detail": "Some(String(\"@meshes/generator_v2.glb#ms_genr0002\"))"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_session": 1,
+        "ara_why": 2
+      },
+      "wallMs": 14887,
+      "tokens": {
+        "input": 18327,
+        "cacheRead": 180096,
+        "cacheWrite": 0,
+        "output": 579
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The generator was invisible because its scene reference still pointed to the old mesh ID, which no longer resolves after the re-export. I updated it to `@meshes/generator_v2.glb#ms_genr0002`.\n\nAra now reports the mesh reference as valid. The renderer pass still needs a running renderer to verify visually. The change is recorded as transaction `tx_4ts7r6ck` for human review."
+    },
+    {
+      "task": "why-culling-mask",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_bench1` still exists",
+          "ok": true
+        },
+        {
+          "what": "the workbench is on a layer the camera draws",
+          "ok": true,
+          "detail": "Some(String(\"default\"))"
+        },
+        {
+          "what": "`e_cam001` still exists",
+          "ok": true
+        },
+        {
+          "what": "the camera is unchanged",
+          "ok": true,
+          "detail": "Some(Array [String(\"default\"), String(\"props\")])"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 2,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_why": 1
+      },
+      "wallMs": 12340,
+      "tokens": {
+        "input": 22376,
+        "cacheRead": 126848,
+        "cacheWrite": 0,
+        "output": 352
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Ara identified the cause: the Workbench was on the `editor` layer, which `MainCamera` doesn’t render. I moved it to the `default` layer, which the camera already renders. The camera is unchanged."
+    },
+    {
+      "task": "why-nan-barrel",
+      "area": "diagnose",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`ara check` passes",
+          "ok": true
+        },
+        {
+          "what": "`e_brl003` still exists",
+          "ok": true
+        },
+        {
+          "what": "Barrel.002 has a mass again",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl001` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl001 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "`e_brl002` still exists",
+          "ok": true
+        },
+        {
+          "what": "e_brl002 keeps its mass",
+          "ok": true,
+          "detail": "Some(30.0)"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": {
+        "shell": 5
+      },
+      "wallMs": 19410,
+      "tokens": {
+        "input": 20162,
+        "cacheRead": 103168,
+        "cacheWrite": 0,
+        "output": 821
+      },
+      "codes": {},
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "`Barrel.002` disappeared because its dynamic rigid body had zero mass. Physics divided by zero on the first step, making its position NaN.\n\nI set its mass to `30 kg`, matching the other barrels, in transaction `tx_q9j2qtc3`. `ara check` reports 0 errors and 0 warnings. The change is applied and awaiting human review."
+    }
+  ]
+}

@@ -46,6 +46,7 @@ fn landscape_and_emissive_only_room_match_fixed_exposure_goldens() -> Result<()>
         s.post.ev100 = Some(if outdoor { 12. } else { 5. });
         s.post.tone_mapper = ara_render_fidelity::ToneMapper::PbrNeutral;
         let mut view = FidelityView::new(&mut gpu, &scene, s, None)?;
+        ara_pathtrace::robust_scenes::configure_view(&mut gpu, &mut view, outdoor)?;
         for tick in 0..256 {
             view.render(
                 &mut gpu,

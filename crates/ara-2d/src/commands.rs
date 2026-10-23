@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 fn invalid(e: impl std::fmt::Display) -> Diagnostic {
-    Diagnostic::error(ara_diag::Code(3601), e.to_string())
+    Diagnostic::error(ara_diag::Code(3620), e.to_string())
 }
 /// Upper bound on cells changed by one stroke, fill or rule pass.
 const MAX_CELLS: usize = 65536;

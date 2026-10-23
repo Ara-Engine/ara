@@ -415,15 +415,28 @@ pub enum SeverityParam {
 pub struct LogsParams {
     /// Session handle from `session.begin`.
     pub session: String,
-    /// Only entries newer than this cursor (`cursor` of a previous call).
+    /// Only entries new or repeated after this cursor (`cursor` of a previous call).
     pub since: Option<u64>,
-    /// Only these codes (`ARA1101`).
+    /// Only these codes (`ARA1302`, `ARA-EXP-AND-007`).
     pub codes: Option<Vec<String>>,
     /// Minimum severity (default `info`).
     pub severity: Option<SeverityParam>,
     /// Only entries about this entity (record ID or address prefix).
     pub entity: Option<String>,
-    /// Maximum entries (default 50).
+    /// Only entries about these subjects (`entity:e_8b21`, `asset:@meshes/crate.glb`,
+    /// `system:physics.step`, `pass:gbuffer`, `module:Gameplay`).
+    pub subjects: Option<Vec<String>>,
+    /// Only entries caused by `engine`, `human`, `agent` or `agent:<name>`.
+    pub origin: Option<String>,
+    /// Only entries whose message contains this text.
+    pub text: Option<String>,
+    /// Group entries by code with counts, subjects and the best fix (default true);
+    /// `false` lists them one by one.
+    pub group: Option<bool>,
+    /// Approximate size of the text answer in characters (default 2000).
+    pub budget: Option<u32>,
+    /// Also return up to this many entries (newest kept) as JSON `entries`, with the
+    /// grouped `summary`. Without it the answer is the text: what agents need.
     pub limit: Option<u32>,
 }
 

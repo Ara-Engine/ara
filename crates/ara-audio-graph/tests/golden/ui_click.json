@@ -1,0 +1,140 @@
+{
+  "buses": [
+    {
+      "kind": "bus",
+      "name": "master",
+      "overloads": 0,
+      "peakDbfs": -2.402957603152961,
+      "rmsDbfs": -32.1602537754666
+    }
+  ],
+  "channelRms": [0.024659672863042027, 0.024659672863042027],
+  "clippedSamples": 0,
+  "clipping": false,
+  "frames": 96000,
+  "graphs": [
+    {
+      "graph": "UiClick",
+      "instance": "ui_click",
+      "nodes": [
+        {
+          "activeBlocks": 1,
+          "blocks": 14,
+          "node": "go",
+          "op": "start",
+          "peak": 0,
+          "triggers": 1
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "envelope",
+          "op": "ad",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "freq",
+          "op": "mul",
+          "peak": 2400,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "tone",
+          "op": "sine",
+          "peak": 1,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "tick",
+          "op": "noise.white",
+          "peak": 0.9992237,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "bright",
+          "op": "highpass",
+          "peak": 1.4673158,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "body",
+          "op": "mix",
+          "peak": 2.4673157,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "shaped",
+          "op": "mul",
+          "peak": 2.1397703,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "level",
+          "op": "gain",
+          "peak": 1.0724255,
+          "triggers": 0
+        },
+        {
+          "activeBlocks": 14,
+          "blocks": 14,
+          "node": "stereo",
+          "op": "pan",
+          "peak": 0.7583193,
+          "triggers": 0
+        }
+      ]
+    }
+  ],
+  "integratedLufs": -19.148985407510292,
+  "preLimiterOverloads": 0,
+  "rmsDbfs": -32.160253781665475,
+  "samplePeak": 0.7583193182945251,
+  "sampleRate": 48000,
+  "seconds": 2,
+  "silenceFraction": 0.98203125,
+  "silent": false,
+  "spectrum": [
+    {
+      "highHz": 125,
+      "lowHz": 0,
+      "rmsDbfs": -118.56995939221832
+    },
+    {
+      "highHz": 500,
+      "lowHz": 125,
+      "rmsDbfs": -84.08359302820506
+    },
+    {
+      "highHz": 2000,
+      "lowHz": 500,
+      "rmsDbfs": -57.34755494954121
+    },
+    {
+      "highHz": 8000,
+      "lowHz": 2000,
+      "rmsDbfs": -28.978491853391542
+    },
+    {
+      "highHz": 24000,
+      "lowHz": 8000,
+      "rmsDbfs": -32.869741647248546
+    }
+  ],
+  "truePeak": 0.7696077227592468,
+  "wavBlake3": "8d141eb33141921938cdfb065bda7a9f77045c5bf1ea57aca727f40a4af03b6b"
+}

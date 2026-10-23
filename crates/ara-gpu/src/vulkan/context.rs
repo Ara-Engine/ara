@@ -55,6 +55,21 @@ unsafe extern "system" fn debug_callback(
         }
         let label = if counted { "VALIDATION" } else { "ENVIRONMENT" };
         eprintln!("{label} {severity:?}: {message}");
+        // Validation can fire every frame: admission samples it before anything is built.
+        let code = if counted {
+            ara_diag::codes::GPU_VALIDATION
+        } else {
+            ara_diag::codes::GPU_ENVIRONMENT
+        };
+        if ara_diag::bus::admit(code) {
+            let error = severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR);
+            let d = if error {
+                ara_diag::Diagnostic::error(code, message.clone())
+            } else {
+                ara_diag::Diagnostic::warning(code, message.clone())
+            };
+            ara_diag::bus::push(d, ara_diag::bus::Meta::default());
+        }
         if let Ok(mut messages) = state.messages.lock() {
             messages.push(Diagnostic {
                 code: if counted {
@@ -103,6 +118,16 @@ pub struct DeviceInfo {
     pub device_id: u32,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
+    /// Enabled optional VK_EXT_mesh_shader mesh/task stages.
+    pub mesh_shading: bool,
+    /// Mesh indirect group limits: x, y, z, and the total group count.
+    pub mesh_dispatch: [u32; 4],
+    /// Task indirect group limits: x, y, z, and the total group count.
+    pub task_dispatch: [u32; 4],
+    /// Enabled core geometry capability (also used by Slang PrimitiveId inputs).
+    pub geometry_shader: bool,
+    /// Enabled 64-bit shader integer operations and buffer atomics.
+    pub buffer_int64_atomics: bool,
     /// Maximum supported 2D extent.
     pub max_image_dimension: u32,
     /// Supported Vulkan version.
@@ -147,6 +172,8 @@ pub struct Gpu {
     pub compute_pool: vk::CommandPool,
     /// Optional RT extension dispatch table; inspect info.ray_tracing before use.
     pub acceleration: ash::khr::acceleration_structure::Device,
+    /// Optional mesh-shader dispatch table; gated by info.mesh_shading.
+    pub mesh: ash::ext::mesh_shader::Device,
     /// Immutable device, driver and capability provenance.
     pub info: DeviceInfo,
     /// Stable callback state, retained through instance teardown.

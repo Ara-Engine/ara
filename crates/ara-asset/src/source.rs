@@ -268,10 +268,13 @@ impl AssetPipeline {
             self.snapshots.remove(&completed.asset);
             match completed.result {
                 Ok(input) => self.reload.request(completed.asset, input),
-                Err(error) => events.push(ReloadEvent::Failed {
-                    asset: completed.asset,
-                    error,
-                }),
+                Err(error) => {
+                    error.diagnostic(&completed.asset).emit();
+                    events.push(ReloadEvent::Failed {
+                        asset: completed.asset,
+                        error,
+                    })
+                }
             }
         }
         self.snapshot_changes.extend(self.watcher.changed()?);

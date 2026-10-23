@@ -222,3 +222,32 @@ remain Cargo dependencies except the explicitly vendored BSD libopus sources in
 stereo sawtooths (no external recording), encoded with ffmpeg FLAC/libvorbis and
 metadata removed. They verify real incremental FLAC/Vorbis decoding. Goldens
 use a fixed integer LCG, fixed scheduling and reviewed WAV BLAKE3 constants.
+
+## Audio v2 (acoustics, graphs, mixing, music)
+
+The v2 crates build on this runtime without changing its seams:
+
+| Crate | Role |
+|---|---|
+| `ara-acoustics` | occlusion/transmission over a `RayScene` (physics adapter), zones and portals, distance curves, air absorption, Doppler, the listener room reverb (18 early taps + 8-line FDN) as an aux effect, Steam Audio or geometric per-cell baking |
+| `ara-audio-graph` | `.audiograph` DSL ⇄ `ara-graph` projection, typed commands, compiled allocation-free DSP voices |
+| `ara-audio-mix` | mixer documents: bus tree, ducking, category voice limits, -16 LUFS targets, mix states |
+| `ara-music` | segments, intensity layers, bar/beat transitions, stingers, resequencing |
+| `ara-audio-why` | `ara why` explainer for inaudible sources |
+
+Engine additions here are additive: aux sends (`add_aux`, `route_aux`), procedural voices
+(`SignalSource`), bus voice limits with `VoiceStatus`, loudness trims, `AcousticPath::air`,
+bus/aux capture meters and `diagnose` (ARA3400–3410).
+
+Measured on the shared Windows dev box (release, one core, 128-frame quanta,
+`evidence/` in each crate):
+
+- 1,000 real voices, each on the occluded three-band path with air absorption and a
+  per-voice reverb send into the FDN room reverb: **p50 0.46 ms, p95 0.66 ms** per block;
+  with all 1,000 voices retargeted every 8 blocks (256-frame ramps): p50 0.48 ms, p95 0.76 ms.
+  Zero allocations. (`cargo run -p ara-acoustics --release --example acoustics_bench`)
+- Graph voices: 3.3–6.2 µs per voice per block for the five example graphs
+  (`cargo run -p ara-audio-graph --release --example graph_cost`).
+- Device latency path unchanged: WASAPI RAW 480-frame period, 20 ms queue estimate,
+  3.0–4.6 ms command to first submit (`evidence/latency-v2.json`); the earlier loopback
+  measurement (p50 25.3 ms) therefore still applies.

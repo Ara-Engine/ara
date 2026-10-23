@@ -3,6 +3,7 @@
 //! ```text
 //! error[ARA1101]: unknown field `positon` on `Transform`
 //!   --> levels/arena.scene · e_8b21 · Transform.positon
+//!   = about: asset:@meshes/crate.glb
 //!   = fix: Rename `positon` to `position`
 //! ```
 
@@ -50,6 +51,10 @@ impl fmt::Display for Diagnostic {
         write!(f, "{}[{}]: {}", self.severity, self.code, self.message)?;
         if !self.location.is_empty() {
             write!(f, "\n  --> {}", self.location)?;
+        }
+        if !self.subjects.is_empty() {
+            let about: Vec<String> = self.subjects.iter().map(ToString::to_string).collect();
+            write!(f, "\n  = about: {}", about.join(", "))?;
         }
         for fix in &self.fixes {
             write!(f, "\n  = fix: {}", fix.title)?;
