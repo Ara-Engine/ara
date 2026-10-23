@@ -1,5 +1,13 @@
-use anyhow::{Result, ensure};
-use sdl3_sys::{error::SDL_GetError, events::*, init::*, video::*, vulkan::*};
+use anyhow::{Context, Result, ensure};
+use sdl3_sys::{
+    error::SDL_GetError,
+    events::*,
+    init::*,
+    pixels::SDL_PIXELFORMAT_RGBA32,
+    surface::{SDL_CreateSurfaceFrom, SDL_DestroySurface},
+    video::*,
+    vulkan::*,
+};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -38,6 +46,9 @@ pub enum Event {
     /// Mouse wheel motion.
     Wheel([f32; 2]),
 }
+/// The Ara app icon (64 px PNG exported by `ara-brand` from `assets/brand/ara-icon.svg`).
+const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-64.png");
+
 /// Main-thread-owned resizable SDL3 Vulkan window and video subsystem reference.
 pub struct Window {
     pub(crate) handle: *mut SDL_Window,
@@ -45,6 +56,7 @@ pub struct Window {
 }
 impl Window {
     /// Open a native resizable Vulkan window; creation is confined to the SDL main thread.
+    /// The window starts with the Ara app icon; games replace it with [`Window::set_icon`].
     pub fn new(title: &str, size: [u32; 2]) -> Result<Self> {
         let title = CString::new(title)?;
         ensure!(
@@ -64,11 +76,42 @@ impl Window {
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
                 anyhow::bail!("SDL window: {}", error());
             }
-            Ok(Self {
+            let window = Self {
                 handle,
                 _main_thread: PhantomData,
-            })
+            };
+            // The icon is cosmetic: drivers without window icons (Wayland) still get a window.
+            let _ = decode_icon(ARA_ICON_PNG).and_then(|(rgba, size)| window.set_icon(&rgba, size));
+            Ok(window)
         }
+    }
+    /// Set the title-bar and taskbar icon from straight-alpha RGBA8 pixels (`size` = width, height).
+    pub fn set_icon(&self, rgba: &[u8], size: [u32; 2]) -> Result<()> {
+        ensure!(
+            !size.contains(&0)
+                && size.iter().all(|n| *n <= 4096)
+                && rgba.len() == size[0] as usize * size[1] as usize * 4,
+            "Invalid icon: {}x{} with {} bytes",
+            size[0],
+            size[1],
+            rgba.len()
+        );
+        // SAFETY: The surface borrows `rgba` read-only for this call only; SDL_SetWindowIcon
+        // copies it into its own ARGB8888 surface before we destroy ours.
+        unsafe {
+            let surface = SDL_CreateSurfaceFrom(
+                size[0] as i32,
+                size[1] as i32,
+                SDL_PIXELFORMAT_RGBA32,
+                rgba.as_ptr().cast_mut().cast(),
+                size[0] as i32 * 4,
+            );
+            ensure!(!surface.is_null(), "SDL icon surface: {}", error());
+            let set = SDL_SetWindowIcon(self.handle, surface);
+            SDL_DestroySurface(surface);
+            ensure!(set, "SDL icon: {}", error());
+        }
+        Ok(())
     }
     /// Instance extensions required by the active SDL Vulkan driver.
     pub fn extensions(&self) -> Result<Vec<CString>> {
@@ -296,6 +339,18 @@ impl Window {
         Ok(events)
     }
 }
+/// Decode an 8-bit RGBA PNG into pixels and its size.
+fn decode_icon(png_bytes: &[u8]) -> Result<(Vec<u8>, [u32; 2])> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(png_bytes)).read_info()?;
+    let mut rgba = vec![0; reader.output_buffer_size().context("icon too large")?];
+    let info = reader.next_frame(&mut rgba)?;
+    ensure!(
+        info.color_type == png::ColorType::Rgba && info.bit_depth == png::BitDepth::Eight,
+        "icon must be 8-bit RGBA"
+    );
+    rgba.truncate(info.buffer_size());
+    Ok((rgba, [info.width, info.height]))
+}
 pub(crate) fn error() -> String {
     // SAFETY: SDL_GetError returns a valid thread-local nul-terminated string.
     unsafe {
@@ -311,5 +366,14 @@ impl Drop for Window {
             SDL_DestroyWindow(self.handle);
             SDL_QuitSubSystem(SDL_INIT_VIDEO);
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ara_icon_decodes_to_64px_rgba() {
+        let (rgba, size) = super::decode_icon(super::ARA_ICON_PNG).expect("embedded icon decodes");
+        assert_eq!(size, [64, 64]);
+        assert_eq!(rgba.len(), 64 * 64 * 4);
     }
 }

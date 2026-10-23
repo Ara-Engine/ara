@@ -9,7 +9,8 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 ## Command line
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]`.
-Never run by hand: it needs an owner and the token.
+Never run by hand: it needs an owner and the token. `build.rs` embeds the Ara
+exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
 ## Modules
 

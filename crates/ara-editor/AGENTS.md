@@ -12,6 +12,8 @@ Public boundaries:
 - `shell`: retained panel tree and semantic interaction helpers.
 - `gpu`: 64-byte instance ABI, raster/MSDF atlases, ordered draws and clip masks.
 - `transport`: authenticated localhost EP and MCP; no project state on IO threads.
+- `build.rs`: embeds `assets/brand/ara.ico` as the Windows exe icon (embed-resource;
+  `rc.exe` ships with the Windows SDK MSVC already needs). The window icon comes from ara-platform.
 
 Every content change uses cmd.apply, including gizmo commits and diagnostic fixes.
 Gizmo preview is transient extraction data, never a side-channel document write.

@@ -1,0 +1,2 @@
+// Windows executable icon for Ara binaries (embedded by build.rs via embed-resource).
+1 ICON "ara.ico"

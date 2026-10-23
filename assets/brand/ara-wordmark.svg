@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 136 64">
+  <title>Ara</title>
+  <g fill="#346bf1">
+    <path d="M32 4 L60 60 H44 L28 28 L12 60 H4 Z"/>
+    <path d="M28 44 L34 50 L28 56 L22 50 Z"/>
+  </g>
+  <g fill="#f5f5f5">
+    <path d="M66 60 V42 A18 18 0 0 1 90.74 25.31 L87.37 33.66 A9 9 0 0 0 75 42 V60 Z"/>
+    <path d="M96 42 A18 18 0 0 1 132 42 A18 18 0 0 1 96 42 Z M105 42 A9 9 0 0 0 123 42 A9 9 0 0 0 105 42 Z M123 24 H132 V60 H123 Z"/>
+  </g>
+</svg>
