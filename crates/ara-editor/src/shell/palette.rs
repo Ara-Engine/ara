@@ -110,24 +110,25 @@ impl Shell {
                 .map(|m| m.params.clone())
                 .or_else(|| editor.command_schemas.get(&name).cloned());
             if let Some(schema) = schema
-                && let Some(properties) = schema["properties"].as_object() {
-                    for (key, prop) in properties {
-                        if key == "session" {
-                            continue;
-                        }
-                        let id = format!("param-{key}");
-                        self.bindings.insert(
-                            ara_ui::source::stable_id(&id),
-                            Binding::PaletteParam(key.clone()),
-                        );
-                        let value = self
-                            .palette_params
-                            .get(key)
-                            .map(display)
-                            .unwrap_or_default();
-                        out.push_str(&format!("<text id='param-label-{key}' class='muted' text='{}' /><field id='{id}' text='{}' action='Dispatch' description='{}' />",escape(key),escape(&value),escape(prop["description"].as_str().unwrap_or(""))));
+                && let Some(properties) = schema["properties"].as_object()
+            {
+                for (key, prop) in properties {
+                    if key == "session" {
+                        continue;
                     }
+                    let id = format!("param-{key}");
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&id),
+                        Binding::PaletteParam(key.clone()),
+                    );
+                    let value = self
+                        .palette_params
+                        .get(key)
+                        .map(display)
+                        .unwrap_or_default();
+                    out.push_str(&format!("<text id='param-label-{key}' class='muted' text='{}' /><field id='{id}' text='{}' action='Dispatch' description='{}' />",escape(key),escape(&value),escape(prop["description"].as_str().unwrap_or(""))));
                 }
+            }
             out.push_str(&self.bind_button(
                 "palette-run",
                 "Run command",

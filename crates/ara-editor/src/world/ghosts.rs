@@ -1,6 +1,12 @@
 use super::*;
 impl DocumentView {
-    pub(super) fn append_ghosts(&self, root: &Path, state: &EditorState, transforms: &BTreeMap<String, Mat4>, scene: &mut Scene) -> anyhow::Result<()> {
+    pub(super) fn append_ghosts(
+        &self,
+        root: &Path,
+        state: &EditorState,
+        transforms: &BTreeMap<String, Mat4>,
+        scene: &mut Scene,
+    ) -> anyhow::Result<()> {
         let tokens = if state.light {
             ara_ui::theme::EditorTheme::Light
         } else {

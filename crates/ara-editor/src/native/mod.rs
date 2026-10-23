@@ -83,9 +83,9 @@ impl Native {
         };
         let (send, edits) = mpsc::channel();
         // SAFETY: Window is owned by ara-platform on this thread and remains live through Native teardown.
-        let window_id=unsafe{SDL_GetWindowID(window)};
+        let window_id = unsafe { SDL_GetWindowID(window) };
         let mut watch = Box::new(Watch {
-            window:window_id,
+            window: window_id,
             send,
         });
         // SAFETY: Box keeps userdata stable; callback is removed before userdata is freed.

@@ -2,11 +2,32 @@ use super::*;
 use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
 impl Shell {
-    pub(crate) fn hover_tooltip(&mut self)->ara_ui::Result<()>{
-        let description=self.ui.paint_order.iter().rev().find_map(|i|{let node=&self.ui.nodes[*i];(node.rect.contains(self.pointer[0],self.pointer[1])&&node.clip.contains(self.pointer[0],self.pointer[1])).then(||node.element.attrs.get("description").map(String::as_str)).flatten()});
-        if description==self.tooltip_text.as_deref(){return Ok(());}let description=description.map(str::to_owned);
-        if let Some(i)=self.ui.find("tooltip"){self.ui.set_visible(i,description.is_some())?;self.ui.nodes[i].paint_offset=[self.pointer[0].clamp(0.,(self.ui.size[0]-325.).max(0.)),(self.pointer[1]+18.).clamp(0.,(self.ui.size[1]-100.).max(0.))];}
-        if let Some(text)=&description{if let Some(i)=self.ui.find("tooltip-text"){self.ui.set_text(i,text)?;}}self.tooltip_text=description;Ok(())
+    pub(crate) fn hover_tooltip(&mut self) -> ara_ui::Result<()> {
+        let description = self.ui.paint_order.iter().rev().find_map(|i| {
+            let node = &self.ui.nodes[*i];
+            (node.rect.contains(self.pointer[0], self.pointer[1])
+                && node.clip.contains(self.pointer[0], self.pointer[1]))
+            .then(|| node.element.attrs.get("description").map(String::as_str))
+            .flatten()
+        });
+        if description == self.tooltip_text.as_deref() {
+            return Ok(());
+        }
+        let description = description.map(str::to_owned);
+        if let Some(i) = self.ui.find("tooltip") {
+            self.ui.set_visible(i, description.is_some())?;
+            self.ui.nodes[i].paint_offset = [
+                self.pointer[0].clamp(0., (self.ui.size[0] - 325.).max(0.)),
+                (self.pointer[1] + 18.).clamp(0., (self.ui.size[1] - 100.).max(0.)),
+            ];
+        }
+        if let Some(text) = &description {
+            if let Some(i) = self.ui.find("tooltip-text") {
+                self.ui.set_text(i, text)?;
+            }
+        }
+        self.tooltip_text = description;
+        Ok(())
     }
     /// Route input through retained hit testing, focus and native widgets.
     pub fn event(
@@ -162,18 +183,19 @@ impl Shell {
                     }
                     Binding::Asset(asset) => {
                         if let Some(path) = self.pick_field.take()
-                            && let Some(reference) = &asset.reference {
-                                editor.apply(
-                                    crate::inspector::edit_commands(
-                                        &editor.state.selection,
-                                        &path,
-                                        &json!(reference),
-                                    ),
-                                    "Pick asset reference",
-                                    None,
-                                )?;
-                                rebuild = true;
-                            }
+                            && let Some(reference) = &asset.reference
+                        {
+                            editor.apply(
+                                crate::inspector::edit_commands(
+                                    &editor.state.selection,
+                                    &path,
+                                    &json!(reference),
+                                ),
+                                "Pick asset reference",
+                                None,
+                            )?;
+                            rebuild = true;
+                        }
                     }
                     Binding::Fix(diagnostic, index) => {
                         apply_fix(editor, diagnostic, *index)?;
@@ -303,14 +325,26 @@ fn apply_fix(
         .as_deref()
         .or_else(|| editor.state.selection.first().map(String::as_str));
     let workspace = editor.host.store().workspace();
-    let doc = diagnostic.location.doc.clone().or_else(|| diagnostic.location.file.as_deref().and_then(|file| workspace.find(file).map(ToString::to_string))).unwrap_or_else(|| editor.state.doc.clone());
+    let doc = diagnostic
+        .location
+        .doc
+        .clone()
+        .or_else(|| {
+            diagnostic
+                .location
+                .file
+                .as_deref()
+                .and_then(|file| workspace.find(file).map(ToString::to_string))
+        })
+        .unwrap_or_else(|| editor.state.doc.clone());
     match &fix.action {
         FixAction::Remove { record, path } => {
             let entity = record
                 .as_deref()
                 .or(entity)
                 .ok_or("fix needs a target entity")?;
-            editor.apply_to(&doc, 
+            editor.apply_to(
+                &doc,
                 vec![json!({"cmd":"editor.property.reset","args":{"entity":entity,"path":path}})],
                 &fix.title,
             )?;

@@ -268,17 +268,131 @@ fn layout_persistence_units_and_multi_edit_are_validated() {
 }
 
 #[test]
-fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_reviewable(){
-    let project=Project::new();let mut editor=project.open();editor.action("editor.select",json!({"entities":["e_child001"]})).unwrap();let human=editor.state.camera;
-    let agent=Endpoint::call(&mut editor,"session.begin",json!({"client":"presence","author":"agent:presence"})).unwrap()["session"].as_str().unwrap().to_owned();
-    Endpoint::call(&mut editor,"editor.select",json!({"session":agent,"entities":["e_crate001"]})).unwrap();Endpoint::call(&mut editor,"editor.camera",json!({"session":agent,"target":[3,2,1],"yaw":1.,"pitch":0.2,"distance":6.})).unwrap();assert_eq!(editor.state.camera,human);assert_eq!(editor.state.selection,["e_child001"]);assert_eq!(editor.state.presence[&agent].selection,["e_crate001"]);
-    editor.action("editor.follow",json!({"agent":agent})).unwrap();assert_eq!(editor.state.camera.distance,6.);editor.action("editor.follow",json!({})).unwrap();
-    let result=Endpoint::call(&mut editor,"cmd.apply",json!({"session":agent,"doc":"sc_test0001","why":"Remove obsolete crate","commands":[{"cmd":"entity.delete","args":{"entities":["e_crate001"]}}]})).unwrap();let view=editor.view().unwrap();assert!(view.entities().is_empty());let scene=view.scene(&project.0,&editor.state,None).unwrap();assert_eq!(scene.meshes.len(),1);assert!(scene.meshes[0].name.contains("deleted"));assert_eq!(scene.materials[scene.meshes[0].material].flags[0],2);
-    editor.action("review.revert",json!({"txn":result["txn"]})).unwrap();assert_eq!(editor.view().unwrap().entities().len(),2);
+fn agent_presence_does_not_take_the_human_camera_and_deleted_records_remain_reviewable() {
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action("editor.select", json!({"entities":["e_child001"]}))
+        .unwrap();
+    let human = editor.state.camera;
+    let agent = Endpoint::call(
+        &mut editor,
+        "session.begin",
+        json!({"client":"presence","author":"agent:presence"}),
+    )
+    .unwrap()["session"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    Endpoint::call(
+        &mut editor,
+        "editor.select",
+        json!({"session":agent,"entities":["e_crate001"]}),
+    )
+    .unwrap();
+    Endpoint::call(
+        &mut editor,
+        "editor.camera",
+        json!({"session":agent,"target":[3,2,1],"yaw":1.,"pitch":0.2,"distance":6.}),
+    )
+    .unwrap();
+    assert_eq!(editor.state.camera, human);
+    assert_eq!(editor.state.selection, ["e_child001"]);
+    assert_eq!(editor.state.presence[&agent].selection, ["e_crate001"]);
+    editor
+        .action("editor.follow", json!({"agent":agent}))
+        .unwrap();
+    assert_eq!(editor.state.camera.distance, 6.);
+    editor.action("editor.follow", json!({})).unwrap();
+    let result=Endpoint::call(&mut editor,"cmd.apply",json!({"session":agent,"doc":"sc_test0001","why":"Remove obsolete crate","commands":[{"cmd":"entity.delete","args":{"entities":["e_crate001"]}}]})).unwrap();
+    let view = editor.view().unwrap();
+    assert!(view.entities().is_empty());
+    let scene = view.scene(&project.0, &editor.state, None).unwrap();
+    assert_eq!(scene.meshes.len(), 1);
+    assert!(scene.meshes[0].name.contains("deleted"));
+    assert_eq!(scene.materials[scene.meshes[0].material].flags[0], 2);
+    editor
+        .action("review.revert", json!({"txn":result["txn"]}))
+        .unwrap();
+    assert_eq!(editor.view().unwrap().entities().len(), 2);
 }
 
 #[test]
-fn duplicate_reparent_and_reset_are_one_command_each_with_undo(){
-    let project=Project::new();let mut editor=project.open();let result=editor.apply(vec![json!({"cmd":"editor.entity.duplicate","args":{"entity":"e_crate001"}})],"Duplicate crate",None).unwrap();assert_eq!(editor.view().unwrap().entities().len(),4);let id=result["outputs"][0]["id"].as_str().unwrap();assert_eq!(editor.view().unwrap().entities()[id].record["name"],"Salvage crate copy");editor.action("history.undo",json!({})).unwrap();assert_eq!(editor.view().unwrap().entities().len(),2);
-    editor.apply(vec![json!({"cmd":"entity.reparent","args":{"entity":"e_child001"}}),json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"Transform.position.x","value":3}})],"Reparent and position",None).unwrap();editor.apply(vec![json!({"cmd":"editor.property.reset","args":{"entity":"e_crate001","path":"Transform.position"}})],"Reset",None).unwrap();assert_eq!(x(&editor),0.);editor.action("history.undo",json!({})).unwrap();assert_eq!(x(&editor),3.);
+fn duplicate_reparent_and_reset_are_one_command_each_with_undo() {
+    let project = Project::new();
+    let mut editor = project.open();
+    let result = editor
+        .apply(
+            vec![json!({"cmd":"editor.entity.duplicate","args":{"entity":"e_crate001"}})],
+            "Duplicate crate",
+            None,
+        )
+        .unwrap();
+    assert_eq!(editor.view().unwrap().entities().len(), 4);
+    let id = result["outputs"][0]["id"].as_str().unwrap();
+    assert_eq!(
+        editor.view().unwrap().entities()[id].record["name"],
+        "Salvage crate copy"
+    );
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(editor.view().unwrap().entities().len(), 2);
+    editor.apply(vec![json!({"cmd":"entity.reparent","args":{"entity":"e_child001"}}),json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"Transform.position.x","value":3}})],"Reparent and position",None).unwrap();
+    editor.apply(vec![json!({"cmd":"editor.property.reset","args":{"entity":"e_crate001","path":"Transform.position"}})],"Reset",None).unwrap();
+    assert_eq!(x(&editor), 0.);
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(x(&editor), 3.);
+}
+
+#[test]
+#[ignore = "100k hierarchy scale measurement; run explicitly on the workstation"]
+fn hierarchy_100k_keeps_a_bounded_row_pool_and_reaches_the_last_entity() {
+    let project = Project::new();
+    let records: serde_json::Map<String, Value> = (0..100_000)
+        .map(|i| {
+            (
+                format!("e_{i:08}"),
+                json!({"name":format!("Entity {i:08}"),"Transform":{}}),
+            )
+        })
+        .collect();
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":records}),
+    );
+    let mut editor = project.open();
+    let start = std::time::Instant::now();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let build_ms = start.elapsed().as_secs_f64() * 1000.;
+    let node_count = shell.ui.nodes.len();
+    assert!(
+        node_count < 1_000,
+        "hierarchy allocated {node_count} retained nodes"
+    );
+    let i = shell.ui.find("hierarchy-rows").unwrap();
+    let rect = shell.ui.nodes[i].rect;
+    shell.pointer = [rect.x + 20., rect.y + 20.];
+    let start = std::time::Instant::now();
+    assert!(shell.scroll_hierarchy(2_600_000.).unwrap());
+    shell.frame().unwrap();
+    let scroll_ms = start.elapsed().as_secs_f64() * 1000.;
+    assert_eq!(shell.ui.nodes.len(), node_count);
+    let work = shell.frame().unwrap();
+    assert_eq!(
+        work.paint_nodes, 0,
+        "idle hierarchy must retain its display list"
+    );
+    shell
+        .click_entity("e_00099999", &mut MemoryClipboard::default())
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert_eq!(editor.state.selection, ["e_00099999"]);
+    eprintln!(
+        "100k hierarchy: build {build_ms:.3} ms; scroll {scroll_ms:.3} ms; {node_count} retained nodes"
+    );
+    let output = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("evidence/hierarchy-100k.json");
+    std::fs::create_dir_all(output.parent().unwrap()).unwrap();
+    write(
+        &output,
+        json!({"entities":100000,"retainedNodes":node_count,"buildMs":build_ms,"scrollMs":scroll_ms,"idlePaintNodes":work.paint_nodes,"lastEntitySelected":true}),
+    );
 }

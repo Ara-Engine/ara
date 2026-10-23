@@ -60,7 +60,7 @@ pub struct Shell {
     color_picker: Option<String>,
     modal_open: bool,
     pub(crate) version: u64,
-    tooltip_text:Option<String>,
+    tooltip_text: Option<String>,
 }
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
@@ -117,7 +117,7 @@ impl Shell {
             color_picker: None,
             modal_open: false,
             version: 0,
-            tooltip_text:None,
+            tooltip_text: None,
         };
         shell.rebuild(editor)?;
         Ok(shell)
@@ -178,8 +178,10 @@ impl Shell {
         markup.push_str("<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip>");
         markup.push_str("</ui>");
         let mut ui = Ui::editor(&markup, include_str!("editor.css"), self.ui.size)?;
-        if let Some(i)=ui.find("tooltip"){ui.set_visible(i,false)?;}
-        self.tooltip_text=None;
+        if let Some(i) = ui.find("tooltip") {
+            ui.set_visible(i, false)?;
+        }
+        self.tooltip_text = None;
         if editor.state.light {
             ui.switch_theme(ara_ui::theme::EditorTheme::Light)?;
         }
@@ -242,13 +244,19 @@ impl Shell {
     }
     fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
         let id = path.replace('.', "-");
-        let Some(row) = self.ui.find(&format!("field-{id}")) else { return Ok(()); };
+        let Some(row) = self.ui.find(&format!("field-{id}")) else {
+            return Ok(());
+        };
         if let Some(scroll) = self.ui.find("inspector-scroll") {
             let delta = self.ui.nodes[row].rect.y - self.ui.nodes[scroll].rect.y;
             self.ui.scroll_to(scroll, [0., delta])?;
             self.ui.frame(&mut self.text)?;
         }
-        if let Some(field) = self.ui.find(&format!("edit-{id}")).or_else(|| self.ui.find(&format!("edit-{id}-0"))) {
+        if let Some(field) = self
+            .ui
+            .find(&format!("edit-{id}"))
+            .or_else(|| self.ui.find(&format!("edit-{id}-0")))
+        {
             let key = ara_ui::source::stable_id(&self.ui.nodes[field].element.id);
             self.input.focus(&mut self.ui, key)?;
         }

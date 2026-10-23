@@ -44,16 +44,17 @@ unsafe extern "system" fn subclass(
     unsafe {
         let state = &mut *(data as *mut State);
         if message == WM_GETOBJECT
-            && let Some(result) = state.adapter.handle_wm_getobject(w, l, &mut state.initial) {
-                return result.into();
-            }
+            && let Some(result) = state.adapter.handle_wm_getobject(w, l, &mut state.initial)
+        {
+            return result.into();
+        }
         if (message == WM_SETFOCUS || message == WM_KILLFOCUS)
             && let Some(events) = state
                 .adapter
                 .update_window_focus_state(message == WM_SETFOCUS)
-            {
-                events.raise();
-            }
+        {
+            events.raise();
+        }
         DefSubclassProc(hwnd, message, w, l)
     }
 }

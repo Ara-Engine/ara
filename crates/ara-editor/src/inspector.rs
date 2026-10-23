@@ -184,19 +184,21 @@ pub fn fields(
                                 .unwrap_or_else(|| db.field_default(desc)),
                         );
                     } else if let Some(axis) = changed.strip_prefix(&format!("{path}."))
-                        && let Some(index) = desc.ty.component_index(axis) {
-                            let mut original = value.clone();
-                            if let Some(values) = original.as_array_mut()
-                                && index < values.len() {
-                                    values[index] = if previous.is_null() {
-                                        db.field_default(desc)[index].clone()
-                                    } else {
-                                        previous.clone()
-                                    };
-                                    was = Some(original);
-                                    provenance = Provenance::AgentChanged;
-                                }
+                        && let Some(index) = desc.ty.component_index(axis)
+                    {
+                        let mut original = value.clone();
+                        if let Some(values) = original.as_array_mut()
+                            && index < values.len()
+                        {
+                            values[index] = if previous.is_null() {
+                                db.field_default(desc)[index].clone()
+                            } else {
+                                previous.clone()
+                            };
+                            was = Some(original);
+                            provenance = Provenance::AgentChanged;
                         }
+                    }
                 }
             }
             result.push(Field {

@@ -19,15 +19,16 @@ impl Shell {
     /// Scroll a finite row pool over the full hierarchy model.
     pub fn scroll_hierarchy(&mut self, delta: f32) -> ara_ui::Result<bool> {
         if let Some(view) = &mut self.asset_view
-            && let Some(index) = self.ui.find("asset-rows") {
-                let r = self.ui.nodes[index].rect;
-                if r.contains(self.pointer[0], self.pointer[1]) {
-                    self.asset_offset = (self.asset_offset + delta)
-                        .clamp(0., (self.asset_rows.items.len() as f32 * 26. - r.h).max(0.));
-                    view.scroll(&mut self.ui, &self.asset_rows, self.asset_offset, r.h)?;
-                    return Ok(true);
-                }
+            && let Some(index) = self.ui.find("asset-rows")
+        {
+            let r = self.ui.nodes[index].rect;
+            if r.contains(self.pointer[0], self.pointer[1]) {
+                self.asset_offset = (self.asset_offset + delta)
+                    .clamp(0., (self.asset_rows.items.len() as f32 * 26. - r.h).max(0.));
+                view.scroll(&mut self.ui, &self.asset_rows, self.asset_offset, r.h)?;
+                return Ok(true);
             }
+        }
         let Some(view) = &mut self.hierarchy_view else {
             return Ok(false);
         };

@@ -178,11 +178,12 @@ impl Service for EditorService {
         let human = separate.then(|| (state.doc.clone(), state.selection.clone(), state.camera));
         if separate
             && let Some((id, _)) = &agent
-                && let Some(presence) = state.presence.get(id) {
-                    state.doc = presence.doc.clone();
-                    state.selection = presence.selection.clone();
-                    state.camera = presence.camera;
-                }
+            && let Some(presence) = state.presence.get(id)
+        {
+            state.doc = presence.doc.clone();
+            state.selection = presence.selection.clone();
+            state.camera = presence.camera;
+        }
         match method {
             "editor.follow" => {
                 let p: EditorFollow = parse(params)?;
@@ -263,9 +264,15 @@ impl Service for EditorService {
                 let mut max = Vec3::splat(f32::NEG_INFINITY);
                 for (id, matrix) in transforms {
                     if state.selection.is_empty() || state.selection.contains(&id) {
-                        let p = matrix.transform_point3(Vec3::ZERO);
-                        min = min.min(p - Vec3::ONE * 0.5);
-                        max = max.max(p + Vec3::ONE * 0.5);
+                        for x in [-0.5, 0.5] {
+                            for y in [-0.5, 0.5] {
+                                for z in [-0.5, 0.5] {
+                                    let p = matrix.transform_point3(Vec3::new(x, y, z));
+                                    min = min.min(p);
+                                    max = max.max(p);
+                                }
+                            }
+                        }
                     }
                 }
                 if min.is_finite() {
@@ -373,22 +380,23 @@ impl Service for EditorService {
             _ => return Err(vec![crate::invalid("unknown editor action")]),
         }
         if let Some((doc, selection, camera)) = human
-            && let Some((id, author)) = agent {
-                state.presence.insert(
-                    id.clone(),
-                    crate::state::AgentPresence {
-                        author,
-                        doc: state.doc.clone(),
-                        selection: state.selection.clone(),
-                        camera: state.camera,
-                    },
-                );
-                if state.follow.as_ref() != Some(&id) {
-                    state.doc = doc;
-                    state.selection = selection;
-                    state.camera = camera;
-                }
+            && let Some((id, author)) = agent
+        {
+            state.presence.insert(
+                id.clone(),
+                crate::state::AgentPresence {
+                    author,
+                    doc: state.doc.clone(),
+                    selection: state.selection.clone(),
+                    camera: state.camera,
+                },
+            );
+            if state.follow.as_ref() != Some(&id) {
+                state.doc = doc;
+                state.selection = selection;
+                state.camera = camera;
             }
+        }
         let author = cx
             .session()
             .map(|s| s.author.clone())

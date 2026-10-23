@@ -168,7 +168,12 @@ impl Editor {
         commands: Vec<Value>,
         why: &str,
     ) -> Result<Value, EditorError> {
-        self.call_for(ConnId::LOCAL,"cmd.apply",json!({"session":self.session,"doc":doc,"commands":commands,"why":why})).map_err(Into::into)
+        self.call_for(
+            ConnId::LOCAL,
+            "cmd.apply",
+            json!({"session":self.session,"doc":doc,"commands":commands,"why":why}),
+        )
+        .map_err(Into::into)
     }
     /// Refresh navigation snapshots without cloning unchanged frame state.
     pub fn sync(&mut self) -> bool {
@@ -243,9 +248,10 @@ impl Editor {
         let mut deleted = ara_doc::Document::new("scene", document.id.clone());
         for op in self.unreviewed_ops() {
             if let ara_doc::Op::Delete { doc, id, snapshot } = op
-                && doc.as_str() == self.state.doc {
-                    deleted.insert_unchecked(id.clone(), snapshot.clone());
-                }
+                && doc.as_str() == self.state.doc
+            {
+                deleted.insert_unchecked(id.clone(), snapshot.clone());
+            }
         }
         if !deleted.records().is_empty() {
             let mut diagnostics = Vec::new();
@@ -335,9 +341,9 @@ impl Editor {
                         .pending
                         .iter()
                         .find(|p| p.params["idempotencyKey"].as_str() == Some(key))
-                    {
-                        return Ok(json!({"queued":true,"ticket":p.id}));
-                    }
+                {
+                    return Ok(json!({"queued":true,"ticket":p.id}));
+                }
                 self.pending_sequence += 1;
                 let id = format!("pending-{}", self.pending_sequence);
                 self.pending.push_back(Pending {

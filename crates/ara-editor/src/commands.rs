@@ -115,16 +115,18 @@ impl Command for Duplicate {
     }
 }
 fn descendants(resolved: &ara_doc::prefab::Resolved, root: &str) -> Vec<String> {
+    let mut children: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for (id, entity) in resolved {
+        if let Some(parent) = entity.parent.as_deref() {
+            children.entry(parent).or_default().push(id);
+        }
+    }
     let mut out = vec![root.to_owned()];
     let mut i = 0;
     while i < out.len() {
-        let id = out[i].as_str();
-        let children: Vec<_> = resolved
-            .iter()
-            .filter(|(_, e)| e.parent.as_deref() == Some(id))
-            .map(|(id, _)| id.clone())
-            .collect();
-        out.extend(children);
+        if let Some(kids) = children.get(out[i].as_str()) {
+            out.extend(kids.iter().map(|id| (*id).to_owned()));
+        }
         i += 1;
     }
     out

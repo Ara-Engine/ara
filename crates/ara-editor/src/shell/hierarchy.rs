@@ -126,9 +126,10 @@ impl Shell {
                 self.hierarchy_entities.insert(key, id.clone());
             }
             if (!editor.state.collapsed.contains(id) || !query.is_empty())
-                && let Some(kids) = children.get(&Some(id.as_str())) {
-                    stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
-                }
+                && let Some(kids) = children.get(&Some(id.as_str()))
+            {
+                stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
+            }
         }
         for (id, record) in editor.view()?.ghosts() {
             let key = crate::world::render_id(id);
