@@ -283,7 +283,7 @@ impl Streaming {
             }
             let candidate = self
                 .cells
-                .iter()
+                .iter_mut()
                 .filter(|(_, s)| {
                     s.wanted
                         && s.loaded.is_none()
@@ -292,16 +292,12 @@ impl Streaming {
                         && s.failure.is_none()
                 })
                 .min_by(|(a, sa), (b, sb)| sa.priority.total_cmp(&sb.priority).then(a.cmp(b)));
-            let Some((id, _)) = candidate else {
+            let Some((id, state)) = candidate else {
                 break;
             };
             if !self.workers.request(id) {
                 break;
             }
-            let state = self
-                .cells
-                .get_mut(id.to_owned().as_str())
-                .expect("selected cell exists");
             state.in_flight = true;
             state.unload = false;
             self.reserved += self.config.cell_reservation;
@@ -324,7 +320,7 @@ impl Streaming {
         {
             let candidate = self
                 .cells
-                .iter()
+                .iter_mut()
                 .filter(|(_, s)| s.loaded.is_some() && (s.unload || !s.notified))
                 .min_by(|(a, sa), (b, sb)| {
                     sb.unload
@@ -332,11 +328,9 @@ impl Streaming {
                         .then(sa.priority.total_cmp(&sb.priority))
                         .then(a.cmp(b))
                 });
-            let Some((id, _)) = candidate else {
+            let Some((id, state)) = candidate else {
                 break;
             };
-            let id = id.to_owned();
-            let state = self.cells.get_mut(&id).expect("selected cell exists");
             let cell = state.loaded.as_mut().expect("selected cell is loaded");
             if state.unload {
                 if state.count > 0 {
@@ -347,7 +341,7 @@ impl Streaming {
                 }
                 if state.count == 0 {
                     if state.notified {
-                        interest.removed(&id, state.key);
+                        interest.removed(id, state.key);
                         state.notified = false;
                     }
                     let cell = state.loaded.take().expect("cell was just selected");
@@ -363,7 +357,7 @@ impl Streaming {
                     stats.spawned += 1;
                 }
                 if cell.prepared.is_empty() {
-                    interest.ready(&id, state.key, state.visible, &cell.blob.proxies);
+                    interest.ready(id, state.key, state.visible, &cell.blob.proxies);
                     state.notified = true;
                 }
             }
