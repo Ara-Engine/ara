@@ -22,12 +22,12 @@
         {
           "pass": "Vfx.Acquire",
           "queue": "Graphics",
-          "milliseconds": 0.000064
+          "milliseconds": 0.000032
         },
         {
           "pass": "Vfx.Backdrop",
           "queue": "Graphics",
-          "milliseconds": 0.122624
+          "milliseconds": 0.126816
         },
         {
           "pass": "Vfx.Prepare",
@@ -37,27 +37,27 @@
         {
           "pass": "Vfx.Spawn",
           "queue": "Graphics",
-          "milliseconds": 0
+          "milliseconds": 0.000128
         },
         {
           "pass": "Vfx.Update",
           "queue": "Graphics",
-          "milliseconds": 0.272352
+          "milliseconds": 0.270336
         },
         {
           "pass": "Vfx.Compact.Scan",
           "queue": "Graphics",
-          "milliseconds": 0.077824
+          "milliseconds": 0.084992
         },
         {
           "pass": "Vfx.Compact.Prefix",
           "queue": "Graphics",
-          "milliseconds": 0.265216
+          "milliseconds": 0.422912
         },
         {
           "pass": "Vfx.Compact.Scatter",
           "queue": "Graphics",
-          "milliseconds": 0.018432
+          "milliseconds": 0.057344
         },
         {
           "pass": "Vfx.Events",
@@ -77,17 +77,17 @@
         {
           "pass": "Vfx.Draw",
           "queue": "Graphics",
-          "milliseconds": 0.558656
+          "milliseconds": 0.558624
         },
         {
           "pass": "Vfx.Tonemap",
           "queue": "Graphics",
-          "milliseconds": 0.100352
+          "milliseconds": 0.101376
         },
         {
           "pass": "Vfx.Readback",
           "queue": "Graphics",
-          "milliseconds": 0.002336
+          "milliseconds": 0.001536
         },
         {
           "pass": "Vfx.Host",
@@ -123,47 +123,47 @@
       {
         "pass": "Vfx.Acquire",
         "p50_ms": 0.000064,
-        "p95_ms": 0.000192
+        "p95_ms": 0.000128
       },
       {
         "pass": "Vfx.Backdrop",
-        "p50_ms": 0.128896,
-        "p95_ms": 0.159328
+        "p50_ms": 0.128128,
+        "p95_ms": 0.160608
       },
       {
         "pass": "Vfx.Compact.Prefix",
-        "p50_ms": 0.26624,
-        "p95_ms": 0.29696
+        "p50_ms": 0.422912,
+        "p95_ms": 0.470016
       },
       {
         "pass": "Vfx.Compact.Scan",
-        "p50_ms": 0.079872,
-        "p95_ms": 0.083968
+        "p50_ms": 0.08704,
+        "p95_ms": 0.094208
       },
       {
         "pass": "Vfx.Compact.Scatter",
-        "p50_ms": 0.017408,
-        "p95_ms": 0.019456
+        "p50_ms": 0.057344,
+        "p95_ms": 0.064512
       },
       {
         "pass": "Vfx.Draw",
-        "p50_ms": 0.55952,
-        "p95_ms": 0.616544
+        "p50_ms": 0.559424,
+        "p95_ms": 0.617248
       },
       {
         "pass": "Vfx.Events",
         "p50_ms": 0.001024,
-        "p95_ms": 0.001024
+        "p95_ms": 0.002048
       },
       {
         "pass": "Vfx.Host",
         "p50_ms": 0.000064,
-        "p95_ms": 0.00016
+        "p95_ms": 0.000064
       },
       {
         "pass": "Vfx.IndirectArgs",
         "p50_ms": 0.002048,
-        "p95_ms": 0.002048
+        "p95_ms": 0.003072
       },
       {
         "pass": "Vfx.Prepare",
@@ -173,7 +173,7 @@
       {
         "pass": "Vfx.Readback",
         "p50_ms": 0.00192,
-        "p95_ms": 0.0024
+        "p95_ms": 0.002976
       },
       {
         "pass": "Vfx.Sort",
@@ -188,12 +188,12 @@
       {
         "pass": "Vfx.Tonemap",
         "p50_ms": 0.100352,
-        "p95_ms": 0.11264
+        "p95_ms": 0.111616
       },
       {
         "pass": "Vfx.Update",
-        "p50_ms": 0.275392,
-        "p95_ms": 0.307072
+        "p50_ms": 0.276,
+        "p95_ms": 0.299808
       }
     ],
     "niagara_baseline": null,
@@ -227,12 +227,12 @@
         {
           "pass": "Vfx.Backdrop",
           "queue": "Graphics",
-          "milliseconds": 0.122976
+          "milliseconds": 0.123904
         },
         {
           "pass": "Vfx.Prepare",
           "queue": "Compute",
-          "milliseconds": 0.002816
+          "milliseconds": 0.001888
         },
         {
           "pass": "Vfx.Spawn",
@@ -242,27 +242,27 @@
         {
           "pass": "Vfx.Update",
           "queue": "Compute",
-          "milliseconds": 0.274336
+          "milliseconds": 0.304768
         },
         {
           "pass": "Vfx.Compact.Scan",
           "queue": "Compute",
-          "milliseconds": 0.0768
+          "milliseconds": 0.086016
         },
         {
           "pass": "Vfx.Compact.Prefix",
           "queue": "Compute",
-          "milliseconds": 0.26624
+          "milliseconds": 0.421888
         },
         {
           "pass": "Vfx.Compact.Scatter",
           "queue": "Compute",
-          "milliseconds": 0.017408
+          "milliseconds": 0.05632
         },
         {
           "pass": "Vfx.Events",
           "queue": "Compute",
-          "milliseconds": 0.001024
+          "milliseconds": 0.002048
         },
         {
           "pass": "Vfx.Sort",
@@ -277,17 +277,17 @@
         {
           "pass": "Vfx.Draw",
           "queue": "Graphics",
-          "milliseconds": 0.559008
+          "milliseconds": 0.559776
         },
         {
           "pass": "Vfx.Tonemap",
           "queue": "Graphics",
-          "milliseconds": 0.100352
+          "milliseconds": 0.099328
         },
         {
           "pass": "Vfx.Readback",
           "queue": "Graphics",
-          "milliseconds": 0.001696
+          "milliseconds": 0.001472
         },
         {
           "pass": "Vfx.Host",
@@ -327,53 +327,53 @@
       },
       {
         "pass": "Vfx.Backdrop",
-        "p50_ms": 0.122752,
-        "p95_ms": 0.155552
+        "p50_ms": 0.122432,
+        "p95_ms": 0.15568
       },
       {
         "pass": "Vfx.Compact.Prefix",
-        "p50_ms": 0.26624,
-        "p95_ms": 0.26624
+        "p50_ms": 0.422912,
+        "p95_ms": 0.422912
       },
       {
         "pass": "Vfx.Compact.Scan",
-        "p50_ms": 0.077824,
-        "p95_ms": 0.083968
+        "p50_ms": 0.086016,
+        "p95_ms": 0.096256
       },
       {
         "pass": "Vfx.Compact.Scatter",
-        "p50_ms": 0.017408,
-        "p95_ms": 0.018432
+        "p50_ms": 0.057344,
+        "p95_ms": 0.06656
       },
       {
         "pass": "Vfx.Draw",
-        "p50_ms": 0.559264,
-        "p95_ms": 0.560032
+        "p50_ms": 0.560384,
+        "p95_ms": 0.561056
       },
       {
         "pass": "Vfx.Events",
         "p50_ms": 0.001024,
-        "p95_ms": 0.001024
+        "p95_ms": 0.002048
       },
       {
         "pass": "Vfx.Host",
         "p50_ms": 0.000064,
-        "p95_ms": 0.000096
+        "p95_ms": 0.000128
       },
       {
         "pass": "Vfx.IndirectArgs",
         "p50_ms": 0.002048,
-        "p95_ms": 0.002048
+        "p95_ms": 0.003072
       },
       {
         "pass": "Vfx.Prepare",
-        "p50_ms": 0.002368,
-        "p95_ms": 0.00288
+        "p50_ms": 0.00224,
+        "p95_ms": 0.002656
       },
       {
         "pass": "Vfx.Readback",
-        "p50_ms": 0.001952,
-        "p95_ms": 0.002336
+        "p50_ms": 0.00192,
+        "p95_ms": 0.002304
       },
       {
         "pass": "Vfx.Sort",
@@ -388,12 +388,12 @@
       {
         "pass": "Vfx.Tonemap",
         "p50_ms": 0.099328,
-        "p95_ms": 0.109568
+        "p95_ms": 0.108544
       },
       {
         "pass": "Vfx.Update",
-        "p50_ms": 0.27408,
-        "p95_ms": 0.305056
+        "p50_ms": 0.274176,
+        "p95_ms": 0.300032
       }
     ],
     "niagara_baseline": null,

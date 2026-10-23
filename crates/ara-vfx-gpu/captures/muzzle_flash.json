@@ -74,7 +74,7 @@
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "bec90fd51209d741a406b83bfea7a9011dcd0d31e53134f8b1935bcdbddaef75"
+    "content_key": "711d91c327dfe3eb3a532a33342014000dbf146c1c8e384c0a5024fe065df5f0"
   },
   "timings": [
     {
@@ -83,42 +83,42 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.02112,
+      "milliseconds": 0.021248,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Prepare",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.00128,
+      "milliseconds": 0.001888,
       "pass": "Vfx.Spawn",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.00512,
       "pass": "Vfx.Update",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.006144,
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.00512,
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.003072,
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001024,
+      "milliseconds": 0.003072,
       "pass": "Vfx.Events",
       "queue": "Graphics"
     },
@@ -128,12 +128,12 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001024,
+      "milliseconds": 0.003072,
       "pass": "Vfx.IndirectArgs",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.01072,
+      "milliseconds": 0.0104,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
@@ -143,7 +143,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.159488,
+      "milliseconds": 0.159616,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

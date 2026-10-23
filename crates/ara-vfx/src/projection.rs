@@ -175,7 +175,13 @@ impl DomainAdapter for VfxAdapter {
 pub fn registry() -> Result<ara_graph::NodeRegistry, Diagnostic> {
     let mut registry = ara_graph::NodeRegistry::default();
     for module in crate::library::MODULES {
-        registry.add(ara_graph::NodeKind {name:format!("vfx.{}",module.name),version:1,doc:module.doc.into(),ports:ports(),dynamic_ports:false})?;
+        registry.add(ara_graph::NodeKind {
+            name: format!("vfx.{}", module.name),
+            version: 1,
+            doc: module.doc.into(),
+            ports: ports(),
+            dynamic_ports: false,
+        })?;
     }
     Ok(registry)
 }

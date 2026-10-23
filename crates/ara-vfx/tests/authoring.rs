@@ -22,11 +22,7 @@ fn samples_roundtrip_text_graph_and_compiled_modules() {
         let text = graph.write(&db).unwrap();
         let read = Graph::read(&text, &db).unwrap();
         assert_eq!(Effect::from_graph(&read).unwrap(), effect);
-        assert!(
-            graph
-                .validate(&registry().unwrap(), &VfxAdapter)
-                .is_empty()
-        );
+        assert!(graph.validate(&registry().unwrap(), &VfxAdapter).is_empty());
         assert!(generate(&effect).unwrap().contains("updateParticle"));
     }
 }
@@ -112,6 +108,10 @@ fn typed_bindings_and_quality_diagnostics() {
         effect
             .resolve(&BTreeMap::from([("user.rate".into(), Value::Bool(true))]))
             .is_err()
+    );
+    assert!(!Module::Rate { per_second: 1. }.accepts_binding("per_second", &Value::Uint(1)));
+    assert!(
+        !Module::Point { position: [0.; 3] }.accepts_binding("position", &Value::Color([1.; 4]))
     );
     effect.quality.particles = 10;
     assert!(!effect.diagnostics().is_empty());

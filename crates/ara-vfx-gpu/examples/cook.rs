@@ -22,22 +22,7 @@ fn main() -> Result<()> {
         .map(|(e, _)| e)
         .collect::<Vec<_>>();
     effects.push(ara_vfx::samples::million());
-    // Exercise the two additional geometry paths with real offline cooks too.
-    let mut ribbon = ara_vfx::samples::magic_swirl();
-    ribbon.name = "ribbon".into();
-    ribbon.emitters[0].stacks.render[0].module = ara_vfx::Module::Ribbon {
-        width: 0.025,
-        domain: ara_material::Domain::Unlit,
-    };
-    effects.push(ribbon);
-    let mut mesh = ara_vfx::samples::sparks();
-    mesh.name = "mesh".into();
-    mesh.emitters[0].stacks.render[0].module = ara_vfx::Module::Mesh {
-        triangles: vec![[[-0.5, 0., 0.], [0.5, 0., 0.], [0., 1., 0.]]],
-        domain: ara_material::Domain::Surface,
-        sorting: ara_vfx::Sorting::Age,
-    };
-    effects.push(mesh);
+    effects.extend(ara_vfx::samples::additional().into_iter().map(|(e, _)| e));
     let selected = std::env::args().nth(1);
     for effect in effects {
         if selected.as_ref().is_some_and(|name| name != &effect.name) {

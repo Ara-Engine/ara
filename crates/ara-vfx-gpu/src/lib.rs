@@ -4,12 +4,12 @@
 mod cook;
 mod layout;
 mod passes;
-mod runtime;
 mod readback;
+mod runtime;
 mod stats;
 
 pub use cook::cook_source;
-pub use runtime::{GpuSystem, SceneDepth, View};
+pub use runtime::{GpuSystem, SceneColor, SceneDepth, View};
 pub use stats::{EmitterStats, Stats};
 
 /// All runtime shader entries, cooked together under one immutable content key.

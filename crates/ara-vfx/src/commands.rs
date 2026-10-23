@@ -66,6 +66,9 @@ impl Command for ApplyText {
     }
     fn run(ctx: &mut EditCtx<'_, '_>, p: TextParams) -> Result<Value, Diagnostic> {
         let graph = Graph::from_document(ctx.read().doc())?;
+        if graph.header.domain != "vfx" {
+            return Err(error("vfx.text.apply requires a VFX graph"));
+        }
         apply(ctx, graph, Effect::parse(&p.source)?)
     }
 }

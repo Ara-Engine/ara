@@ -161,14 +161,15 @@ float3 ara_engine_light(AraSurface s, AraMaterialInput input, float3 lightDirect
     return ((diffuse + specular) * (1.0 - coat * 0.04) + clearCoat) * radiance * nl
          + transmitted * radiance + s.baseColor * indirect * (1.0 - metallic) + s.emissive;
 }
-// VFX content 93189a1b19d1262a074893ac5d65f35ddcaaf0ad21a92884a8067ebae6c2e49c
+// VFX content 76997778d68c574be52d82b83a1d3946f4538174206b4f4ff03a2a3b65e85c42
 void initializeParticle(uint emitter, inout Particle p) { uint rng=p.seed; switch(emitter) {
 case 0u: {
 {
-p.life=2.0; p.size=0.03500000014901161; p.color=float4(8.0,2.799999952316284,0.25,0.8999999761581421);
+p.life=2.0; p.size=0.10000000149011612; p.color=float4(3.0,1.0,0.20000000298023224,1.0);
 }
 {
-p.position=float3(0.0,0.699999988079071,0.0);
+float pick=random(rng)*0.36000001430511475;float u=sqrt(random(rng));float b=random(rng);
+if (pick<=0.36000001430511475) {p.position=(1-u)*float3(-0.30000001192092896,0.699999988079071,-0.30000001192092896)+u*(1-b)*float3(0.30000001192092896,0.699999988079071,-0.30000001192092896)+u*b*float3(0.0,0.699999988079071,0.30000001192092896);}
 }
 {
 p.velocity=float3(0.0,3.0,0.0)+(2*random3(rng)-1)*float3(2.5999999046325684,2.0,2.5999999046325684);
@@ -198,7 +199,7 @@ case 2u:return float3(0.0,1.0,0.0);
 }return float3(0);}
 // sparks / Spawn / rate: rate
 // sparks / Initialize / lifetime: lifetime
-// sparks / Initialize / source: point
+// sparks / Initialize / source: mesh_surface
 // sparks / Initialize / spray: velocity
 // sparks / Update / gravity: gravity
 // sparks / Update / floor: plane_collision
@@ -262,17 +263,30 @@ void scanMain(uint3 id:SV_DispatchThreadID,uint3 local:SV_GroupThreadID,uint3 gr
     buffers[NonUniformResourceIndex(root.lists)].Store<uint4>(c.lists.z+i*16,uint4(aliveScan[l],eventScan[l],asuint(areaScan[l]),0));
     if(l==255)buffers[NonUniformResourceIndex(root.lists)].Store<uint4>(c.lists.w+group.x*16,uint4(aliveScan[l],eventScan[l],asuint(areaScan[l]),0));
 }
-[shader("compute")][numthreads(1,1,1)]
-void prefixMain(){
-    uint e=root.emitter;Config c=config(e);uint2 prefix=0;float area=0;uint selected=0;bool limited=false;
-    for(uint g=0;g<c.partition.w;g++){uint4 count=buffers[NonUniformResourceIndex(root.lists)].Load<uint4>(c.lists.w+g*16);buffers[NonUniformResourceIndex(root.lists)].Store<uint2>(c.scratch.x+g*16,prefix);
+[shader("compute")][numthreads(256,1,1)]
+void prefixMain(uint3 local:SV_GroupThreadID){
+    uint e=root.emitter;Config c=config(e);uint lane=local.x;
+    // Contiguous chunks preserve slot order. At 1M particles each lane scans 16 groups.
+    uint span=(c.partition.w+255)/256;uint start=lane*span;uint end=min(start+span,c.partition.w);
+    uint2 sum=0;float area=0;
+    for(uint g=start;g<end;g++){uint4 count=buffers[NonUniformResourceIndex(root.lists)].Load<uint4>(c.lists.w+g*16);sum+=count.xy;area+=asfloat(count.z);}
+    aliveScan[lane]=sum.x;eventScan[lane]=sum.y;areaScan[lane]=area;GroupMemoryBarrierWithGroupSync();
+    for(uint stride=1;stride<256;stride*=2){uint pa=lane>=stride?aliveScan[lane-stride]:0;uint pe=lane>=stride?eventScan[lane-stride]:0;float ps=lane>=stride?areaScan[lane-stride]:0;GroupMemoryBarrierWithGroupSync();aliveScan[lane]+=pa;eventScan[lane]+=pe;areaScan[lane]+=ps;GroupMemoryBarrierWithGroupSync();}
+    uint2 total=uint2(aliveScan[255],eventScan[255]);float totalArea=areaScan[255];
+    uint2 prefix=lane>0?uint2(aliveScan[lane-1],eventScan[lane-1]):uint2(0);
+    area=lane>0?areaScan[lane-1]:0;uint selected=0;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint g=start;g<end;g++){
+        uint4 count=buffers[NonUniformResourceIndex(root.lists)].Load<uint4>(c.lists.w+g*16);
+        buffers[NonUniformResourceIndex(root.lists)].Store<uint2>(c.scratch.x+g*16,prefix);
         float groupArea=asfloat(count.z);
-        if(!limited){if(area+groupArea<=c.surface.w)selected=prefix.x+count.x;
-            else{limited=true;for(uint lane=0;lane<256;lane++){uint4 local=buffers[NonUniformResourceIndex(root.lists)].Load<uint4>(c.lists.z+(g*256+lane)*16);if(area+asfloat(local.z)>c.surface.w)break;selected=prefix.x+local.x;}}}
-        prefix+=count.xy;area+=groupArea;}
-    storeState(e,0,prefix.x);storeState(e,4,c.partition.y-prefix.x);storeState(e,8,min(prefix.y,c.atlas.z));
-    storeState(e,52,state(e,52)+(prefix.y>c.atlas.z?prefix.y-c.atlas.z:0));
-    storeState(e,56,selected);storeState(e,60,asuint(area));
+        if(area+groupArea<=c.surface.w)selected=prefix.x+count.x;
+        else if(area<c.surface.w){for(uint slot=0;slot<256;slot++){uint4 value=buffers[NonUniformResourceIndex(root.lists)].Load<uint4>(c.lists.z+(g*256+slot)*16);if(area+asfloat(value.z)>c.surface.w)break;selected=prefix.x+value.x;}}
+        prefix+=count.xy;area+=groupArea;
+    }
+    aliveScan[lane]=selected;GroupMemoryBarrierWithGroupSync();
+    for(uint stride=128;stride>0;stride/=2){if(lane<stride)aliveScan[lane]=max(aliveScan[lane],aliveScan[lane+stride]);GroupMemoryBarrierWithGroupSync();}
+    if(lane==0){storeState(e,0,total.x);storeState(e,4,c.partition.y-total.x);storeState(e,8,min(total.y,c.atlas.z));storeState(e,52,state(e,52)+(total.y>c.atlas.z?total.y-c.atlas.z:0));storeState(e,56,aliveScan[0]);storeState(e,60,asuint(totalArea));}
 }
 [shader("compute")][numthreads(256,1,1)]
 void scatterMain(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID){

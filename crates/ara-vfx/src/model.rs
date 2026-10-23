@@ -234,10 +234,15 @@ impl Effect {
                 for item in emitter.stacks.get_mut(stage) {
                     let mut module = encode(&item.module)?;
                     for (field, key) in &item.bindings {
-                        let literal = values
+                        let parameter = values
                             .get(key)
-                            .ok_or_else(|| error(format!("unknown binding {key}")))?
-                            .literal();
+                            .ok_or_else(|| error(format!("unknown binding {key}")))?;
+                        if !item.module.accepts_binding(field, parameter) {
+                            return Err(error(format!(
+                                "binding type mismatch: {field} from {key}"
+                            )));
+                        }
+                        let literal = parameter.literal();
                         let object = module
                             .as_object_mut()
                             .ok_or_else(|| error("module must be object"))?;

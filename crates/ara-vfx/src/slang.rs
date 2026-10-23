@@ -11,16 +11,6 @@ fn f(x: f32) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn scalar_literals_preserve_integer_magnitude_and_sign() {
-        for value in [0.,1.,-1.,2.,10.,100.,0.01,-9.81] {
-            let literal=super::f(value);
-            assert_eq!(literal.parse::<f32>().unwrap(),value);
-        }
-    }
-}
 fn v(xs: &[f32]) -> String {
     format!(
         "float{}({})",
@@ -286,4 +276,15 @@ pub fn generate(effect: &Effect) -> Result<String, Diagnostic> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn scalar_literals_preserve_integer_magnitude_and_sign() {
+        for value in [0., 1., -1., 2., 10., 100., 0.01, -9.81] {
+            let literal = super::f(value);
+            assert_eq!(literal.parse::<f32>().unwrap(), value);
+        }
+    }
 }

@@ -37,17 +37,28 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
         assert_eq!(a.image.as_raw(), b.image.as_raw(), "{} replay", effect.name);
         assert_eq!(a.legend.len(), 1, "{} has visible particles", effect.name);
         let cpu = CpuSystem::at_tick(&effect, tick, None).unwrap();
-        let gpu_particles=system.read_particles(&mut gpu).unwrap();
-        for (gpu,cpu) in gpu_particles.iter().zip(cpu.emitters()) {
+        let gpu_particles = system.read_particles(&mut gpu).unwrap();
+        for (gpu, cpu) in gpu_particles.iter().zip(cpu.emitters()) {
             for &slot in cpu.alive.iter().take(64) {
-                let a=&gpu[slot as usize];let b=cpu.particle(slot).unwrap();
-                assert_eq!(a.seed,b.seed,"{} seed",effect.name);
-                assert_eq!(a.birth,b.birth,"{} birth",effect.name);
-                assert_eq!(a.life,b.life,"{} lifetime",effect.name);
-                assert!(a.position.abs_diff_eq(b.position,0.005),"{} position: {:?} vs {:?}",effect.name,a.position,b.position);
-                assert!(a.velocity.abs_diff_eq(b.velocity,0.005),"{} velocity",effect.name);
-                assert!((a.size-b.size).abs()<0.0001,"{} size",effect.name);
-                assert!(a.color.abs_diff_eq(b.color,0.001),"{} color",effect.name);
+                let a = &gpu[slot as usize];
+                let b = cpu.particle(slot).unwrap();
+                assert_eq!(a.seed, b.seed, "{} seed", effect.name);
+                assert_eq!(a.birth, b.birth, "{} birth", effect.name);
+                assert_eq!(a.life, b.life, "{} lifetime", effect.name);
+                assert!(
+                    a.position.abs_diff_eq(b.position, 0.005),
+                    "{} position: {:?} vs {:?}",
+                    effect.name,
+                    a.position,
+                    b.position
+                );
+                assert!(
+                    a.velocity.abs_diff_eq(b.velocity, 0.005),
+                    "{} velocity",
+                    effect.name
+                );
+                assert!((a.size - b.size).abs() < 0.0001, "{} size", effect.name);
+                assert!(a.color.abs_diff_eq(b.color, 0.001), "{} color", effect.name);
             }
         }
         assert_eq!(

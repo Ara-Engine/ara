@@ -74,16 +74,16 @@
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "93e1b979d9b0ca3a3d6cf6c3608942bb88ce53756a6c6d09950c1417c8e8f95c"
+    "content_key": "3f79f4d1ac5748f85fb88fab25861bf28c181a41c537dffef00fe3774566f447"
   },
   "timings": [
     {
-      "milliseconds": 0.000192,
+      "milliseconds": 0.000064,
       "pass": "Vfx.Acquire",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.020704,
+      "milliseconds": 0.020576,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -118,7 +118,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001024,
+      "milliseconds": 0.002048,
       "pass": "Vfx.Events",
       "queue": "Graphics"
     },
@@ -133,7 +133,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.0056,
+      "milliseconds": 0.00544,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
@@ -143,7 +143,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.157056,
+      "milliseconds": 0.156224,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

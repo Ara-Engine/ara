@@ -1,4 +1,4 @@
-use anyhow::{Result,ensure};
+use anyhow::{Result, ensure};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_vfx_gpu::{GpuSystem, View};
 use std::{collections::BTreeMap, path::Path};
@@ -34,7 +34,10 @@ fn main() -> Result<()> {
             }
         }
         let stats = system.stats(&gpu)?;
-        ensure!(stats.particles_alive==1_000_000&&stats.emitters[0].rendered==1_000_000,"million-particle benchmark must update and draw every particle");
+        ensure!(
+            stats.particles_alive == 1_000_000 && stats.emitters[0].rendered == 1_000_000,
+            "million-particle benchmark must update and draw every particle"
+        );
         let stages=samples.into_iter().map(|(pass,mut ms)|{ms.sort_by(f64::total_cmp);serde_json::json!({"pass":pass,"p50_ms":ms[ms.len()/2],"p95_ms":ms[ms.len()*95/100]})}).collect::<Vec<_>>();
         results.push(serde_json::json!({"async_compute":async_compute,"resolution":[2560,1440],"warmup":30,"samples":120,"stats":stats,"stages":stages,"niagara_baseline":null,"comparison":"Niagara equivalent has not been measured on this machine."}));
         println!("async={async_compute}: {} alive", stats.particles_alive);

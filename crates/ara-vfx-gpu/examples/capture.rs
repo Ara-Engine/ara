@@ -10,7 +10,10 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&output)?;
     let mut gpu = VulkanDevice::new(&[], root.join(".cache"))?;
     let selected = std::env::args().nth(1);
-    for (effect, tick) in ara_vfx::samples::all() {
+    for (effect, tick) in ara_vfx::samples::all()
+        .into_iter()
+        .chain(ara_vfx::samples::additional())
+    {
         if selected.as_ref().is_some_and(|name| name != &effect.name) {
             continue;
         }

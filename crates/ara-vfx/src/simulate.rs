@@ -511,7 +511,7 @@ pub fn sorting(emitter: &Emitter) -> Sorting {
         .iter()
         .find_map(|m| match m.module {
             Module::Sprite { sorting, .. } | Module::Mesh { sorting, .. } => Some(sorting),
-            Module::Ribbon {..}=>Some(Sorting::Age),
+            Module::Ribbon { .. } => Some(Sorting::Age),
             _ => None,
         })
         .unwrap_or(Sorting::None)

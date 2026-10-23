@@ -21,17 +21,17 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.021088
+      "milliseconds": 0.02032
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.002048
+      "milliseconds": 0.003072
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.001664
+      "milliseconds": 0.001888
     },
     {
       "pass": "Vfx.Update",
@@ -46,7 +46,7 @@
     {
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics",
-      "milliseconds": 0.00512
+      "milliseconds": 0.003072
     },
     {
       "pass": "Vfx.Compact.Scatter",
@@ -61,7 +61,7 @@
     {
       "pass": "Vfx.Sort",
       "queue": "Graphics",
-      "milliseconds": 0.001024
+      "milliseconds": 0
     },
     {
       "pass": "Vfx.IndirectArgs",
@@ -71,7 +71,7 @@
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.015104
+      "milliseconds": 0.01504
     },
     {
       "pass": "Vfx.Tonemap",
@@ -81,7 +81,7 @@
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.156096
+      "milliseconds": 0.156576
     },
     {
       "pass": "Vfx.Host",
@@ -89,7 +89,7 @@
       "milliseconds": 0.000064
     }
   ],
-  "overdraw_estimate": 0.1071203425526619,
+  "overdraw_estimate": 0.10712035000324249,
   "batches": 1,
   "lights": 0,
   "device": {

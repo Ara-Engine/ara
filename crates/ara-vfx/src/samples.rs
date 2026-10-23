@@ -197,7 +197,7 @@ pub fn magic_swirl() -> Effect {
                 softening: 0.2,
             },
         ),
-        item("damping",Module::Drag {coefficient:1.5}),
+        item("damping", Module::Drag { coefficient: 1.5 }),
         item(
             "fade",
             Module::ColorOverLife {
@@ -393,6 +393,37 @@ pub fn all() -> Vec<(Effect, u32)> {
         (muzzle_flash(), 3),
         (rain(), 100),
     ]
+}
+/// Focused geometry and depth fixtures beyond the six visual baselines.
+pub fn additional() -> Vec<(Effect, u32)> {
+    let mut ribbon = magic_swirl();
+    ribbon.name = "ribbon".into();
+    ribbon.emitters[0].stacks.render[0].module = Module::Ribbon {
+        width: 0.025,
+        domain: Domain::Unlit,
+    };
+    let mut mesh = sparks();
+    mesh.name = "mesh".into();
+    mesh.emitters[0].stacks.render[0].module = Module::Mesh {
+        triangles: vec![[[-0.5, 0., 0.], [0.5, 0., 0.], [0., 1., 0.]]],
+        domain: Domain::Surface,
+        sorting: Sorting::Age,
+    };
+    mesh.emitters[0].stacks.initialize[0].module = Module::Lifetime {
+        seconds: 2.,
+        size: 0.1,
+        color: [3., 1., 0.2, 1.],
+    };
+    mesh.emitters[0].stacks.initialize[1].module = Module::MeshSurface {
+        triangles: vec![[[-0.3, 0.7, -0.3], [0.3, 0.7, -0.3], [0., 0.7, 0.3]]],
+    };
+    let mut depth = sparks();
+    depth.name = "depth_sparks".into();
+    depth.emitters[0].stacks.update[1].module = Module::DepthCollision {
+        restitution: 0.6,
+        thickness: 0.5,
+    };
+    vec![(ribbon, 100), (mesh, 100), (depth, 100)]
 }
 /// Million-sprite throughput workload with bounded 1440p coverage.
 pub fn million() -> Effect {

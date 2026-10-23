@@ -218,6 +218,57 @@ pub enum Module {
     },
 }
 impl Module {
+    /// Whether a namespaced parameter has the exact type of a bindable setting.
+    /// Geometry, curves, domains and event destinations remain authored structure.
+    pub fn accepts_binding(&self, field: &str, value: &crate::Value) -> bool {
+        use crate::Value;
+        matches!(
+            (self, field, value),
+            (Self::Rate { .. }, "per_second", Value::Float(_))
+                | (Self::Burst { .. }, "tick" | "count", Value::Uint(_))
+                | (Self::Lifetime { .. }, "seconds" | "size", Value::Float(_))
+                | (Self::Lifetime { .. }, "color", Value::Color(_))
+                | (Self::Point { .. }, "position", Value::Vec3(_))
+                | (Self::Sphere { .. }, "center", Value::Vec3(_))
+                | (Self::Sphere { .. }, "radius", Value::Float(_))
+                | (Self::Box { .. }, "center" | "extent", Value::Vec3(_))
+                | (Self::Cone { .. }, "origin", Value::Vec3(_))
+                | (Self::Cone { .. }, "height" | "radius", Value::Float(_))
+                | (Self::Velocity { .. }, "value" | "spread", Value::Vec3(_))
+                | (Self::Gravity { .. }, "acceleration", Value::Vec3(_))
+                | (Self::Drag { .. }, "coefficient", Value::Float(_))
+                | (
+                    Self::CurlNoise { .. },
+                    "frequency" | "strength",
+                    Value::Float(_)
+                )
+                | (Self::Vortex { .. }, "center" | "axis", Value::Vec3(_))
+                | (Self::Vortex { .. }, "strength", Value::Float(_))
+                | (Self::Attractor { .. }, "position", Value::Vec3(_))
+                | (
+                    Self::Attractor { .. },
+                    "strength" | "softening",
+                    Value::Float(_)
+                )
+                | (Self::PlaneCollision { .. }, "normal", Value::Vec3(_))
+                | (
+                    Self::PlaneCollision { .. },
+                    "offset" | "restitution",
+                    Value::Float(_)
+                )
+                | (
+                    Self::DepthCollision { .. },
+                    "restitution" | "thickness",
+                    Value::Float(_)
+                )
+                | (Self::Sprite { .. }, "soft_distance", Value::Float(_))
+                | (Self::Flipbook { .. }, "fps", Value::Float(_))
+                | (Self::Ribbon { .. }, "width", Value::Float(_))
+                | (Self::Light { .. }, "color", Value::Vec3(_))
+                | (Self::Light { .. }, "lumens" | "radius", Value::Float(_))
+                | (Self::EventSpawn { .. }, "count", Value::Uint(_))
+        )
+    }
     /// Required stack for this module, exposed to stack inspectors and agents.
     pub fn stage(&self) -> Stage {
         match self {

@@ -21,6 +21,17 @@ impl GpuSystem {
             "exposure must be finite and positive"
         );
         let camera = view.camera.resolve(self.size)?;
+        self.color_target = self.hdr;
+        self.color_index = self.hdr_index;
+        self.preview_background = view.scene_color.is_none();
+        if let Some(color) = view.scene_color {
+            ensure!(
+                color.state.queue == Queue::Graphics && view.scene_depth.is_some(),
+                "scene HDR requires Graphics ownership and matching depth"
+            );
+            self.color_target = color.image;
+            self.color_index = color.sampled_index;
+        }
         let vp = camera.projection * camera.view;
         let inverse_view = camera.view.inverse();
         let mut frame = self.last_frame;
@@ -81,6 +92,11 @@ impl GpuSystem {
         } else {
             ids[8]
         };
+        let scene_color = if let Some(color) = view.scene_color {
+            graph.import(ara_gpu::Resource::Image(color.image), color.state)
+        } else {
+            ids[7]
+        };
         let core = |storage| {
             vec![
                 (
@@ -123,7 +139,7 @@ impl GpuSystem {
                 (ids[2], Access::ShaderRead),
                 (ids[3], Access::ShaderRead),
                 (ids[4], Access::ShaderRead),
-                (ids[7], Access::Color),
+                (scene_color, Access::Color),
                 (ids[8], Access::Color),
             ],
         );
@@ -156,14 +172,17 @@ impl GpuSystem {
                 Access::ShaderRead,
             ));
         }
-        draw.extend([(ids[7], Access::Color), (scene_depth, Access::ShaderRead)]);
+        draw.extend([
+            (scene_color, Access::Color),
+            (scene_depth, Access::ShaderRead),
+        ]);
         graph.pass("Vfx.Draw", Queue::Graphics, draw);
         graph.pass(
             "Vfx.Tonemap",
             Queue::Graphics,
             [
                 (ids[4], Access::ShaderRead),
-                (ids[7], Access::ShaderRead),
+                (scene_color, Access::ShaderRead),
                 (ids[9], Access::Color),
                 (ids[10], Access::Color),
             ],
@@ -345,6 +364,9 @@ impl GpuSystem {
         }
     }
     fn backdrop(&self, r: &mut Recorder) {
+        if !self.preview_background {
+            return;
+        }
         r.push(Command::Pipeline(self.pipelines.backdrop));
         r.push(self.constants(0, 0, 0));
         r.push(Command::BeginRendering {
@@ -368,7 +390,7 @@ impl GpuSystem {
         r.push(Command::Pipeline(self.pipelines.particles));
         r.push(Command::BeginRendering {
             colors: vec![Attachment {
-                image: self.hdr,
+                image: self.color_target,
                 clear: None,
             }],
             depth: None,
@@ -387,7 +409,7 @@ impl GpuSystem {
     }
     fn tonemap(&self, r: &mut Recorder) {
         r.push(Command::Pipeline(self.pipelines.tonemap));
-        r.push(self.constants(0, self.hdr_index, 0));
+        r.push(self.constants(0, self.color_index, 0));
         r.push(Command::BeginRendering {
             colors: vec![
                 Attachment {

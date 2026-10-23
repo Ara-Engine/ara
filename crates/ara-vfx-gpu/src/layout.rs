@@ -72,7 +72,7 @@ impl Layout {
                         c.render[0] = 1;
                         c.render[1] = 6;
                         c.surface[2] = *width;
-                        c.render[3]=2;
+                        c.render[3] = 2;
                         Some(*domain)
                     }
                     Module::Mesh {

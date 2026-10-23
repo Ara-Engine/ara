@@ -21,6 +21,18 @@ pub struct View {
     pub async_compute: bool,
     /// Optional same-sized scene depth. Graphics ownership is returned as ShaderRead.
     pub scene_depth: Option<SceneDepth>,
+    /// Optional HDR scene color to composite into; requires scene_depth.
+    pub scene_color: Option<SceneColor>,
+}
+/// Imported linear HDR scene color, preserved beneath the VFX draw.
+#[derive(Clone, Copy)]
+pub struct SceneColor {
+    /// Same-device RGBA32-float attachment matching the feature's size.
+    pub image: Image,
+    /// Published sampled-image index for tone mapping the composited result.
+    pub sampled_index: u32,
+    /// Actual prior access, owned by Graphics. Returns in Graphics/ShaderRead.
+    pub state: State,
 }
 /// Imported opaque scene depth, shared by soft particles and GPU collisions.
 #[derive(Clone, Copy)]
@@ -43,6 +55,7 @@ impl Default for View {
             exposure: 1.,
             async_compute: false,
             scene_depth: None,
+            scene_color: None,
         }
     }
 }
@@ -80,6 +93,9 @@ pub struct GpuSystem {
     pub(crate) config_index: u32,
     pub(crate) depth_index: u32,
     pub(crate) hdr_index: u32,
+    pub(crate) color_target: Image,
+    pub(crate) color_index: u32,
+    pub(crate) preview_background: bool,
     pub(crate) pipelines: Pipelines,
     pub(crate) size: [u32; 2],
     pub(crate) tick: u32,
@@ -265,6 +281,9 @@ impl GpuSystem {
             config_index,
             depth_index,
             hdr_index,
+            color_target: hdr,
+            color_index: hdr_index,
+            preview_background: true,
             pipelines,
             size,
             tick: 0,
@@ -369,6 +388,7 @@ impl GpuSystem {
             exposure: request.exposure,
             async_compute: false,
             scene_depth: None,
+            scene_color: None,
         };
         for _ in 1..request.tick {
             self.run_frame(gpu, &view, false, true)?;
