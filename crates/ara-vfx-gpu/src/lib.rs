@@ -5,6 +5,7 @@ mod cook;
 mod layout;
 mod passes;
 mod readback;
+mod resources;
 mod runtime;
 mod stats;
 

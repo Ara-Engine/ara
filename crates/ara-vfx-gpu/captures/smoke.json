@@ -83,37 +83,37 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.021248,
+      "milliseconds": 0.05456,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Prepare",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.00144,
+      "milliseconds": 0.004448,
       "pass": "Vfx.Spawn",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Update",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.007168,
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.007168,
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002048,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics"
     },
@@ -123,7 +123,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.116736,
+      "milliseconds": 0.262144,
       "pass": "Vfx.Sort",
       "queue": "Graphics"
     },
@@ -133,17 +133,17 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.201728,
+      "milliseconds": 0.60224,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.008192,
+      "milliseconds": 0.023552,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.156448,
+      "milliseconds": 0.162912,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

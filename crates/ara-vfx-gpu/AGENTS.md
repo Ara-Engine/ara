@@ -8,17 +8,18 @@ events. Shader compilers are never runtime dependencies.
 
 - `GpuSystem`: allocate from a matching cooked effect, step fixed ticks, render,
   capture through ara-render's channel/provenance API, return agent stats.
-- `View`: resolved camera/frame inputs; optional imported scene depth.
+- `View`: camera/frame inputs; optional scene HDR and depth for world composition.
 - `cook_source`: offline specialized module source plus material-system shaders.
-- `examples/cook`: external Slang/SPIR-V/DXIL cooker for the sample cohort.
-- `examples/capture`: six deterministic previews and reproducible channel hashes.
-- `examples/timings`: warmed million-sprite GPU timings at 2560x1440.
+- `examples/vfx_cook`: external Slang/SPIR-V/DXIL cooker for the sample cohort.
+- `examples/vfx_capture`: deterministic previews and reproducible channel hashes.
+- `examples/vfx_timings`: warmed million-sprite GPU timings at 2560x1440.
 
 ## Layout and synchronization
 
 Particles are four SoA float4/u32x4 channels. Each emitter has a padded power-of-two
 partition; the requested capacity and effect quality cap bound active slots.
 Alive/dead compaction uses group scans and deterministic group-prefix sums.
+Projected-coverage prefixes bound the selected draw list before depth/age sorting.
 Events copy positions before slot reuse, route on GPU, spawn on the next tick.
 Draw/dispatch arguments are GPU-generated; GPU events are cosmetic only.
 Depth/age sorts use deterministic bitonic passes with slot-ID ties.

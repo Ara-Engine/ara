@@ -11,16 +11,16 @@ try {
     New-Item -ItemType Directory -Force $empty | Out-Null
     $env:VK_IMPLICIT_LAYER_PATH=$empty
     $env:VK_LAYER_PATH='C:/VulkanSDK/1.4.363.0/Bin'
-    if ($Mode -eq 'Cook') {cargo run -p ara-vfx-gpu --example cook}
-    elseif ($Mode -eq 'Capture') {cargo run -p ara-vfx-gpu --example capture}
-    elseif ($Mode -eq 'Timings') {cargo run -p ara-vfx-gpu --example timings}
+    if ($Mode -eq 'Cook') {cargo run -p ara-vfx-gpu --example vfx_cook}
+    elseif ($Mode -eq 'Capture') {cargo run -p ara-vfx-gpu --example vfx_capture}
+    elseif ($Mode -eq 'Timings') {cargo run -p ara-vfx-gpu --example vfx_timings}
     else {
-        cargo check -p ara-vfx -p ara-vfx-gpu
+        cargo check -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render
         if ($LASTEXITCODE -ne 0) {throw 'check failed'}
         $env:ARA_VFX_GPU_TESTS='1'
-        cargo test -p ara-vfx -p ara-vfx-gpu -p ara-gpu
+        cargo test -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render
         if ($LASTEXITCODE -ne 0) {throw 'tests failed'}
-        cargo clippy -p ara-vfx -p ara-vfx-gpu -p ara-gpu --all-targets -- -D warnings
+        cargo clippy -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render --all-targets -- -D warnings
         if ($LASTEXITCODE -ne 0) {throw 'clippy failed'}
         cargo fmt -p ara-vfx -p ara-vfx-gpu -p ara-gpu -p ara-render -- --check
     }

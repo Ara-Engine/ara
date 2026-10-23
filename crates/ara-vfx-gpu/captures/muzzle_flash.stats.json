@@ -21,42 +21,42 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.021248
+      "milliseconds": 0.06464
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.004096
+      "milliseconds": 0.006144
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.001888
+      "milliseconds": 0.004544
     },
     {
       "pass": "Vfx.Update",
       "queue": "Graphics",
-      "milliseconds": 0.00512
+      "milliseconds": 0.009216
     },
     {
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics",
-      "milliseconds": 0.006144
+      "milliseconds": 0.012288
     },
     {
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics",
-      "milliseconds": 0.00512
+      "milliseconds": 0.012288
     },
     {
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.008192
     },
     {
       "pass": "Vfx.Events",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.004096
     },
     {
       "pass": "Vfx.Sort",
@@ -66,22 +66,22 @@
     {
       "pass": "Vfx.IndirectArgs",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.007168
     },
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.0104
+      "milliseconds": 0.03184
     },
     {
       "pass": "Vfx.Tonemap",
       "queue": "Graphics",
-      "milliseconds": 0.008192
+      "milliseconds": 0.026624
     },
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.159616
+      "milliseconds": 0.6112
     },
     {
       "pass": "Vfx.Host",
@@ -110,6 +110,7 @@
     "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
   },
   "effect_hash": "978ac5560f12a1db35846d927449f0805a0abb91b24dd5595d97865c80874c2c",
+  "shader_key": "711d91c327dfe3eb3a532a33342014000dbf146c1c8e384c0a5024fe065df5f0",
   "async_compute": false,
   "diagnostics": []
 }

@@ -122,3 +122,11 @@ timestamps exclude intervening barriers/submission overhead; they are not a
 whole-frame wall-time claim. No Niagara-equivalent baseline has been measured.
 Same-device GPU replay is exact; cross-vendor floating-point identity is not
 promised. Async compute stays opt-in because this workload offers little overlap.
+
+Measured on the RTX 4070 SUPER with Vulkan SDK 1.4.363.0, the parallel group-prefix
+pass reduced its 1M-particle median from 0.423 ms to about 0.018 ms. Update is
+about 0.28 ms and the 6M-vertex instanced sprite draw about 0.56–0.62 ms. Summed
+stage medians, including the 1440p background and tone mapper, are about
+1.2–1.3 ms. The workload uses 0.003 m sprites distributed across an 8×5×2 m box;
+this measures simulation and geometry throughput with low fill cost. Raw reports
+retain the quality-cap and prefix-scan measurements before and after the change.

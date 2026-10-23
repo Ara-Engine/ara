@@ -21,37 +21,37 @@
     {
       "pass": "Vfx.Backdrop",
       "queue": "Graphics",
-      "milliseconds": 0.021248
+      "milliseconds": 0.05456
     },
     {
       "pass": "Vfx.Prepare",
       "queue": "Graphics",
-      "milliseconds": 0.002048
+      "milliseconds": 0.004096
     },
     {
       "pass": "Vfx.Spawn",
       "queue": "Graphics",
-      "milliseconds": 0.00144
+      "milliseconds": 0.004448
     },
     {
       "pass": "Vfx.Update",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.004096
     },
     {
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.007168
     },
     {
       "pass": "Vfx.Compact.Prefix",
       "queue": "Graphics",
-      "milliseconds": 0.003072
+      "milliseconds": 0.007168
     },
     {
       "pass": "Vfx.Compact.Scatter",
       "queue": "Graphics",
-      "milliseconds": 0.002048
+      "milliseconds": 0.004096
     },
     {
       "pass": "Vfx.Events",
@@ -61,7 +61,7 @@
     {
       "pass": "Vfx.Sort",
       "queue": "Graphics",
-      "milliseconds": 0.116736
+      "milliseconds": 0.262144
     },
     {
       "pass": "Vfx.IndirectArgs",
@@ -71,17 +71,17 @@
     {
       "pass": "Vfx.Draw",
       "queue": "Graphics",
-      "milliseconds": 0.201728
+      "milliseconds": 0.60224
     },
     {
       "pass": "Vfx.Tonemap",
       "queue": "Graphics",
-      "milliseconds": 0.008192
+      "milliseconds": 0.023552
     },
     {
       "pass": "Vfx.Readback",
       "queue": "Graphics",
-      "milliseconds": 0.156448
+      "milliseconds": 0.162912
     },
     {
       "pass": "Vfx.Host",
@@ -110,6 +110,7 @@
     "pipeline_cache_uuid": [100, 75, 136, 101, 121, 38, 56, 71, 180, 10, 171, 50, 87, 147, 32, 126]
   },
   "effect_hash": "0c38f3d5d451a4ad8c94f155bb2bfa25f521c8f82a0d6f090033c8ab67bb1f74",
+  "shader_key": "e5909491b6f39fadfcacddf7f757cab8b7bbcbbcb728f6f5b9d52313ec81879b",
   "async_compute": false,
   "diagnostics": []
 }

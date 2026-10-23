@@ -105,7 +105,7 @@ pub enum Module {
         /// Symmetric per-axis half range.
         spread: [f32; 3],
     },
-    /// Constant acceleration applied before integration.
+    /// Constant acceleration for the next tick's displacement.
     Gravity {
         /// Metres per second squared.
         acceleration: [f32; 3],

@@ -83,7 +83,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.02032,
+      "milliseconds": 0.021088,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -93,7 +93,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001888,
+      "milliseconds": 0.002016,
       "pass": "Vfx.Spawn",
       "queue": "Graphics"
     },
@@ -103,7 +103,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.003072,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Compact.Scan",
       "queue": "Graphics"
     },
@@ -128,12 +128,12 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.001024,
+      "milliseconds": 0.002048,
       "pass": "Vfx.IndirectArgs",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.01504,
+      "milliseconds": 0.015424,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
@@ -143,7 +143,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.156576,
+      "milliseconds": 0.167296,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

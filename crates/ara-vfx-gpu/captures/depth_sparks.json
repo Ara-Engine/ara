@@ -83,7 +83,7 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.020864,
+      "milliseconds": 0.020416,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -133,17 +133,17 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.00512,
+      "milliseconds": 0.005856,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.009216,
+      "milliseconds": 0.008192,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.156256,
+      "milliseconds": 0.155648,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

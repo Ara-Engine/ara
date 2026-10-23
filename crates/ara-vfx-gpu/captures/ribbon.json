@@ -78,12 +78,12 @@
   },
   "timings": [
     {
-      "milliseconds": 0.000064,
+      "milliseconds": 0.000096,
       "pass": "Vfx.Acquire",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.028064,
+      "milliseconds": 0.02192,
       "pass": "Vfx.Backdrop",
       "queue": "Graphics"
     },
@@ -133,17 +133,17 @@
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.004896,
+      "milliseconds": 0.004096,
       "pass": "Vfx.Draw",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.008192,
+      "milliseconds": 0.009216,
       "pass": "Vfx.Tonemap",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.155584,
+      "milliseconds": 0.155936,
       "pass": "Vfx.Readback",
       "queue": "Graphics"
     },

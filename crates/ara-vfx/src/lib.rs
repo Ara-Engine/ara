@@ -2,6 +2,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Ordered, typed VFX authoring and deterministic CPU simulation.
 pub mod commands;
+mod cpu_modules;
 pub mod library;
 mod model;
 mod modules;
