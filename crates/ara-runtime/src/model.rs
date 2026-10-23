@@ -32,10 +32,22 @@ pub struct Primitive {
     pub vertices: Vec<ModelVertex>,
     /// Finest-LOD triangle indices.
     pub indices: Vec<u32>,
+    /// Coarser cooked LODs, finest first, sharing `vertices` (empty when the cook
+    /// produced none).
+    pub lods: Vec<ModelLod>,
     /// Index into [`Model::materials`].
     pub material: Option<usize>,
     /// Index into [`Model::skins`] for skinned primitives.
     pub skin: Option<usize>,
+}
+
+/// A simplified level of detail of a primitive.
+#[derive(Debug, Clone)]
+pub struct ModelLod {
+    /// Triangle indices into the primitive's vertices.
+    pub indices: Vec<u32>,
+    /// meshoptimizer's relative simplification error (fraction of the mesh extent).
+    pub error: f32,
 }
 
 /// Metallic-roughness material factors and texture slots.
@@ -51,10 +63,29 @@ pub struct ModelMaterial {
     pub emissive: [f32; 3],
     /// Base color texture, an index into [`Model::textures`].
     pub base_color_texture: Option<usize>,
+    /// Tangent-space normal map (BC5 XY), an index into [`Model::textures`].
+    pub normal_texture: Option<usize>,
+    /// Normal map strength (`normalTexture.scale`).
+    pub normal_scale: f32,
+    /// Metallic (B) / roughness (G) texture, an index into [`Model::textures`].
+    pub metallic_roughness_texture: Option<usize>,
+    /// Emissive color texture, an index into [`Model::textures`].
+    pub emissive_texture: Option<usize>,
     /// Alpha mode: 0 opaque, 1 mask, 2 blend.
     pub alpha_mode: u32,
     /// Mask cutoff.
     pub alpha_cutoff: f32,
+}
+
+/// How a cooked texture's texels are interpreted (the importer's cook usage).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TextureUsage {
+    /// sRGB color (base color, emissive), BC7 sRGB.
+    Color,
+    /// Linear data (metallic/roughness), BC7 UNORM.
+    Linear,
+    /// Tangent-space normal XY, BC5.
+    Normal,
 }
 
 /// A cooked KTX2 texture, decoded by the presentation layer.
@@ -62,6 +93,8 @@ pub struct ModelMaterial {
 pub struct ModelTexture {
     /// Artifact name, stable within the generation.
     pub name: String,
+    /// Cook usage, which decides the encoding and color space.
+    pub usage: TextureUsage,
     /// Complete KTX2 bytes.
     pub ktx2: Arc<[u8]>,
 }
@@ -121,14 +154,19 @@ impl Model {
         let mut textures = Vec::new();
         let mut texture_by_image = BTreeMap::new();
         for entry in manifest["textures"].as_array().into_iter().flatten() {
-            if entry["usage"] == "color" {
-                let name = string(&entry["artifact"])?;
-                texture_by_image.insert(index(&entry["image"])?, textures.len());
-                textures.push(ModelTexture {
-                    name: name.to_owned(),
-                    ktx2: Arc::from(artifact(name)?),
-                });
-            }
+            let usage = match entry["usage"].as_str() {
+                Some("color") => TextureUsage::Color,
+                Some("linear") => TextureUsage::Linear,
+                Some("normal") => TextureUsage::Normal,
+                _ => continue,
+            };
+            let name = string(&entry["artifact"])?;
+            texture_by_image.insert((index(&entry["image"])?, usage), textures.len());
+            textures.push(ModelTexture {
+                name: name.to_owned(),
+                usage,
+                ktx2: Arc::from(artifact(name)?),
+            });
         }
         let gltf_textures = document["textures"].as_array().cloned().unwrap_or_default();
         let materials = document["materials"]
@@ -242,19 +280,32 @@ fn floats<const N: usize>(value: &Value, default: [f32; N]) -> [f32; N] {
     out
 }
 
-fn material(m: &Value, textures: &[Value], by_image: &BTreeMap<usize, usize>) -> ModelMaterial {
+fn material(
+    m: &Value,
+    textures: &[Value],
+    by_image: &BTreeMap<(usize, TextureUsage), usize>,
+) -> ModelMaterial {
     let pbr = &m["pbrMetallicRoughness"];
-    let base_color_texture = pbr["baseColorTexture"]["index"]
-        .as_u64()
-        .and_then(|t| textures.get(t as usize))
-        .and_then(|t| t["source"].as_u64())
-        .and_then(|image| by_image.get(&(image as usize)).copied());
+    // A glTF texture slot → the cooked texture of its image with the slot's usage.
+    let slot = |info: &Value, usage: TextureUsage| {
+        info["index"]
+            .as_u64()
+            .and_then(|t| textures.get(t as usize))
+            .and_then(|t| t["source"].as_u64())
+            .and_then(|image| by_image.get(&(image as usize, usage)).copied())
+    };
     ModelMaterial {
         base_color: floats(&pbr["baseColorFactor"], [1.0; 4]),
         metallic: pbr["metallicFactor"].as_f64().map_or(1.0, |v| v as f32),
         roughness: pbr["roughnessFactor"].as_f64().map_or(1.0, |v| v as f32),
         emissive: floats(&m["emissiveFactor"], [0.0; 3]),
-        base_color_texture,
+        base_color_texture: slot(&pbr["baseColorTexture"], TextureUsage::Color),
+        normal_texture: slot(&m["normalTexture"], TextureUsage::Normal),
+        normal_scale: m["normalTexture"]["scale"]
+            .as_f64()
+            .map_or(1.0, |v| v as f32),
+        metallic_roughness_texture: slot(&pbr["metallicRoughnessTexture"], TextureUsage::Linear),
+        emissive_texture: slot(&m["emissiveTexture"], TextureUsage::Color),
         alpha_mode: match m["alphaMode"].as_str() {
             Some("MASK") => 1,
             Some("BLEND") => 2,
@@ -390,21 +441,40 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
             }
         })
         .collect();
-    let lod: Lod = bytemuck::pod_read_unaligned(
-        mesh.lods
-            .get(..16)
-            .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?,
-    );
-    let first = lod.first_index as usize * 4;
-    let indices = mesh.indices[first..first + lod.index_count as usize * 4]
-        .as_chunks::<4>()
+    let read = |lod: &Lod| -> Result<Vec<u32>> {
+        let first = lod.first_index as usize * 4;
+        Ok(mesh
+            .indices
+            .get(first..first + lod.index_count as usize * 4)
+            .ok_or_else(|| RuntimeError("LOD outside the index stream".into()))?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
+            .collect())
+    };
+    let mut lods = mesh
+        .lods
+        .as_chunks::<16>()
         .0
         .iter()
-        .map(|b| u32::from_le_bytes(*b))
-        .collect();
+        .map(|raw| bytemuck::pod_read_unaligned::<Lod>(raw));
+    let finest = lods
+        .next()
+        .ok_or_else(|| RuntimeError("mesh has no LOD".into()))?;
+    let indices = read(&finest)?;
+    let lods = lods
+        .map(|lod| {
+            Ok(ModelLod {
+                indices: read(&lod)?,
+                error: lod.error,
+            })
+        })
+        .collect::<Result<_>>()?;
     Ok(Primitive {
         vertices,
         indices,
+        lods,
         material: None,
         skin: None,
     })

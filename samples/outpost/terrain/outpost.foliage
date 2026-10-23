@@ -1,0 +1,149 @@
+{
+  "$schema": "ara://schema/foliage/1",
+  "id": "fo_outpost1",
+  "records": {
+    "f_source": {
+      "terrain": "@terrain/outpost.terrain#tr_outpost1"
+    },
+    "r_branch": {
+      "name": "Dead branches",
+      "species": "rock",
+      "asset": "@assets/kit/branches.gltf#as_kitbranches",
+      "seed": 24,
+      "cellSize": 8,
+      "density": 0.008,
+      "height": [-5, 14],
+      "slope": [0, 25],
+      "channel": 2,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [0.8, 1.3],
+      "enabled": true
+    },
+    "r_iceplant": {
+      "name": "Ice plant",
+      "asset": "@assets/kit/iceplant.gltf#as_kiticeplant",
+      "seed": 27,
+      "cellSize": 2,
+      "density": 0.08,
+      "height": [-5, 14],
+      "slope": [0, 25],
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [0.8, 1.6],
+      "enabled": true
+    },
+    "r_rocks": {
+      "name": "Scree",
+      "species": "rock",
+      "asset": "@assets/kit/rock_a.gltf#as_kitrocka",
+      "seed": 25,
+      "cellSize": 4,
+      "density": 0.025,
+      "height": [-5, 14],
+      "slope": [6, 60],
+      "channel": 1,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [1.5, 4],
+      "enabled": true
+    },
+    "r_rooibos": {
+      "name": "Rooibos bush",
+      "asset": "@assets/kit/rooibos_c.gltf#as_kitrooibosc",
+      "seed": 23,
+      "cellSize": 5,
+      "density": 0.02,
+      "height": [-5, 14],
+      "slope": [0, 30],
+      "channel": 2,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [1.2, 2.2],
+      "enabled": true
+    },
+    "r_shrub": {
+      "name": "Dry shrub",
+      "asset": "@assets/kit/shrub_a.gltf#as_kitshruba",
+      "seed": 21,
+      "cellSize": 2,
+      "density": 0.05,
+      "height": [-5, 14],
+      "slope": [0, 35],
+      "channel": 2,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [1.4, 2.6],
+      "enabled": true
+    },
+    "r_shrubb": {
+      "name": "Dry shrub (sparse)",
+      "asset": "@assets/kit/shrub_b.gltf#as_kitshrubb",
+      "seed": 22,
+      "cellSize": 3,
+      "density": 0.03,
+      "height": [-5, 14],
+      "slope": [0, 35],
+      "channel": 2,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [1.6, 2.8],
+      "enabled": true
+    },
+    "r_stones": {
+      "name": "Stones",
+      "species": "rock",
+      "asset": "@assets/kit/rock_d.gltf#as_kitrockd",
+      "seed": 26,
+      "cellSize": 4,
+      "density": 0.02,
+      "height": [-5, 14],
+      "slope": [0, 60],
+      "channel": 2,
+      "minWeight": 0.3,
+      "noise": 0.6,
+      "scale": [1, 2.5],
+      "enabled": true
+    },
+    "x_3vn1": {
+      "center": [193, 56],
+      "radius": 5
+    },
+    "x_bwr8": {
+      "center": [202, 106],
+      "radius": 5
+    },
+    "x_dqv0": {
+      "center": [197, 82],
+      "radius": 5
+    },
+    "x_g8pc": {
+      "center": [203, 120],
+      "radius": 5
+    },
+    "x_n5vh": {
+      "center": [192, 175],
+      "radius": 5
+    },
+    "x_qhcc": {
+      "center": [195, 148],
+      "radius": 5
+    },
+    "x_rft4": {
+      "center": [192, 24],
+      "radius": 5
+    },
+    "x_skt1": {
+      "center": [200, 134],
+      "radius": 5
+    },
+    "x_we4y": {
+      "center": [192.5, 162],
+      "radius": 5
+    },
+    "x_zth5": {
+      "center": [192, 196],
+      "radius": 37
+    }
+  }
+}

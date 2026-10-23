@@ -1,0 +1,26 @@
+{
+  "$schema": "ara://schema/music/1",
+  "id": "mu_outpost1",
+  "records": {
+    "ms_outpost": {
+      "initial": "dusk",
+      "seed": 7
+    },
+    "sg_dusk": {
+      "name": "dusk",
+      "bars": 64,
+      "tempo": [
+        {
+          "bpm": 60
+        }
+      ],
+      "stems": [
+        {
+          "name": "lonelyhood",
+          "clip": "@assets/third_party/oga_lonelyhood/Lonelyhood.ogg#as_lonelyhood",
+          "gainDb": -10
+        }
+      ]
+    }
+  }
+}

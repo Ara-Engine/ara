@@ -1,0 +1,332 @@
+//! `ara-samples`: the real-art sample projects under `samples/`.
+//!
+//! - `add-polyhaven` / `add-urls` pin a third-party asset in `samples/assets.lock.json`;
+//! - `fetch` downloads (resumable, BLAKE3-verified) into each project's ignored
+//!   `assets/third_party/`; `verify` checks without downloading;
+//! - `credits` regenerates `samples/THIRD_PARTY_ASSETS.md` from the lock;
+//! - `build` authors a project's levels through the `ara` CLI (see `build`).
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+mod build;
+mod capture;
+mod credits;
+mod editor;
+mod fetch;
+mod kit;
+mod lock;
+mod play;
+mod sources;
+
+#[derive(Parser)]
+#[command(about = "Ara sample projects with real CC0 art")]
+struct Cli {
+    /// The samples directory (default: `samples/` of this checkout).
+    #[arg(long, global = true)]
+    samples: Option<PathBuf>,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Pin a Poly Haven model, texture set or HDRI.
+    AddPolyhaven {
+        /// Poly Haven ID (`Barrel_01`).
+        polyhaven: String,
+        /// Folder ID in the lock (default: the Poly Haven ID, lowercased).
+        #[arg(long)]
+        id: Option<String>,
+        /// `model`, `texture`, `hdri` or `character`.
+        #[arg(long, default_value = "model")]
+        kind: String,
+        /// Resolution (`1k`, `2k`, `4k`).
+        #[arg(long, default_value = "1k")]
+        resolution: String,
+        /// Projects that use it (comma-separated).
+        #[arg(long, value_delimiter = ',', required = true)]
+        projects: Vec<String>,
+    },
+    /// Pin files from explicit URLs, with explicit attribution.
+    AddUrls {
+        /// Folder ID in the lock.
+        id: String,
+        /// `model`, `texture`, `hdri` or `character`.
+        #[arg(long, default_value = "model")]
+        kind: String,
+        #[arg(long)]
+        title: String,
+        /// Source page.
+        #[arg(long)]
+        source: String,
+        /// SPDX license (`CC0-1.0`, `CC-BY-4.0`).
+        #[arg(long)]
+        license: String,
+        /// Credited authors (comma-separated).
+        #[arg(long, value_delimiter = ',')]
+        authors: Vec<String>,
+        /// Projects that use it (comma-separated).
+        #[arg(long, value_delimiter = ',', required = true)]
+        projects: Vec<String>,
+        /// `path=url` pairs.
+        #[arg(required = true)]
+        files: Vec<String>,
+    },
+    /// Download and verify the assets of some projects (all by default).
+    Fetch {
+        /// Project folder names.
+        projects: Vec<String>,
+        /// Concurrent downloads.
+        #[arg(long, default_value_t = 4)]
+        jobs: usize,
+    },
+    /// Check that every pinned file is present and verified; never downloads.
+    Verify {
+        /// Project folder names.
+        projects: Vec<String>,
+    },
+    /// Regenerate `THIRD_PARTY_ASSETS.md` from the lock.
+    Credits,
+    /// Author a project's levels through the `ara` CLI (`outpost` or `showcase`).
+    /// Needs fetched assets and release builds of `ara` and `ara-import-worker`.
+    Build {
+        /// Project folder name.
+        project: String,
+    },
+    /// Fidelity captures and GPU timings of one look (`<project>/look/<look>.look.json`).
+    Capture {
+        /// Project folder name.
+        project: String,
+        /// Look name.
+        look: String,
+        /// First shot only, native only (look iteration).
+        #[arg(long)]
+        quick: bool,
+        /// Frames per timing window.
+        #[arg(long, default_value_t = 240)]
+        timing_frames: u32,
+    },
+    /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
+    Play {
+        /// Project folder name.
+        project: String,
+        /// Scene path (`levels/outpost.scene`).
+        scene: String,
+        /// Capture file stem.
+        name: String,
+        /// Ticks to walk forward before capturing.
+        #[arg(long, default_value_t = 90)]
+        walk: u32,
+        /// A headless player instead of a window.
+        #[arg(long)]
+        headless: bool,
+    },
+    /// Open a scene in `ara-editor`, frame it over the Engine Protocol and capture.
+    Editor {
+        /// Project folder name.
+        project: String,
+        /// Scene path.
+        scene: String,
+        /// Capture file stem.
+        name: String,
+        /// Orbit target, yaw (rad), pitch (rad), distance: `x,y,z,yaw,pitch,distance`.
+        #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
+        camera: Vec<f32>,
+    },
+}
+
+fn kind(name: &str) -> Result<lock::Kind> {
+    serde_json::from_value(serde_json::Value::String(name.to_owned()))
+        .with_context(|| format!("unknown kind {name}"))
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let samples = cli
+        .samples
+        .unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../samples")));
+    let lock_path = samples.join("assets.lock.json");
+    let read_lock = || -> Result<lock::Lock> {
+        if lock_path.exists() {
+            lock::Lock::read(&lock_path)
+        } else {
+            Ok(lock::Lock {
+                version: 1,
+                assets: Vec::new(),
+            })
+        }
+    };
+    match cli.command {
+        Command::AddPolyhaven {
+            polyhaven,
+            id,
+            kind: k,
+            resolution,
+            projects,
+        } => {
+            let mut lock = read_lock()?;
+            let id = id.unwrap_or_else(|| polyhaven.to_ascii_lowercase());
+            sources::add(
+                &mut lock,
+                &fetch::Cache::new(&samples),
+                &id,
+                kind(&k)?,
+                projects,
+                sources::Source::PolyHaven {
+                    id: polyhaven,
+                    resolution,
+                },
+            )?;
+            lock.write(&lock_path)?;
+        }
+        Command::AddUrls {
+            id,
+            kind: k,
+            title,
+            source,
+            license,
+            authors,
+            projects,
+            files,
+        } => {
+            let mut lock = read_lock()?;
+            let files = files
+                .iter()
+                .map(|pair| {
+                    pair.split_once('=')
+                        .map(|(p, u)| (p.to_owned(), u.to_owned()))
+                        .with_context(|| format!("expected path=url, got {pair}"))
+                })
+                .collect::<Result<_>>()?;
+            sources::add(
+                &mut lock,
+                &fetch::Cache::new(&samples),
+                &id,
+                kind(&k)?,
+                projects,
+                sources::Source::Urls {
+                    title,
+                    source,
+                    license,
+                    authors,
+                    files,
+                },
+            )?;
+            lock.write(&lock_path)?;
+        }
+        Command::Fetch { projects, jobs } => {
+            fetch::fetch(&samples, &read_lock()?, &projects, jobs)?;
+            println!("fetched and verified");
+        }
+        Command::Verify { projects } => {
+            let missing = fetch::verify(&samples, &read_lock()?, &projects)?;
+            if !missing.is_empty() {
+                anyhow::bail!(
+                    "{} file(s) missing or modified; run `ara-samples fetch`:\n{}",
+                    missing.len(),
+                    missing.join("\n")
+                );
+            }
+            println!("all pinned files present and verified");
+        }
+        Command::Credits => {
+            let text = credits::markdown(&read_lock()?);
+            std::fs::write(samples.join("THIRD_PARTY_ASSETS.md"), text)?;
+        }
+        Command::Build { project } => {
+            let lock = read_lock()?;
+            match project.as_str() {
+                "outpost" => {
+                    build::outpost::build(&build::Ctx::open(&samples, "outpost", "Outpost", lock)?)?
+                }
+                "showcase" => build::showcase::build(&build::Ctx::open(
+                    &samples,
+                    "showcase",
+                    "Material and character showcase",
+                    lock,
+                )?)?,
+                other => anyhow::bail!("unknown project {other} (outpost, showcase)"),
+            }
+            println!("built {project}");
+        }
+        Command::Capture {
+            project,
+            look,
+            quick,
+            timing_frames,
+        } => capture::run(
+            &samples,
+            &read_lock()?,
+            &capture::Request {
+                project: &project,
+                look: &look,
+                quick,
+                timing_frames,
+            },
+        )?,
+        Command::Play {
+            project,
+            scene,
+            name,
+            walk,
+            headless,
+        } => {
+            let report = play::run(
+                &samples,
+                &play::Request {
+                    project: &project,
+                    scene: &scene,
+                    name: &name,
+                    walk,
+                    window: !headless,
+                },
+            )?;
+            let path = samples
+                .join(&project)
+                .join("evidence")
+                .join(format!("{name}-player.json"));
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(&report)?
+                    + "
+",
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report["status"])?);
+        }
+        Command::Editor {
+            project,
+            scene,
+            name,
+            camera,
+        } => {
+            anyhow::ensure!(camera.len() == 6, "--camera takes x,y,z,yaw,pitch,distance");
+            let report = editor::run(
+                &samples,
+                &editor::Request {
+                    project: &project,
+                    scene: &scene,
+                    name: &name,
+                    camera: (
+                        [camera[0], camera[1], camera[2]],
+                        camera[3],
+                        camera[4],
+                        camera[5],
+                    ),
+                },
+            )?;
+            let path = samples
+                .join(&project)
+                .join("evidence")
+                .join(format!("{name}-editor.json"));
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(&report)?
+                    + "
+",
+            )?;
+            println!("{}", report["logs"]["text"].as_str().unwrap_or_default());
+        }
+    }
+    Ok(())
+}

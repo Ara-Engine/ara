@@ -1,0 +1,97 @@
+{
+  "$schema": "ara://schema/animation/1",
+  "id": "ac_human1",
+  "records": {
+    "an_idlea": {
+      "name": "Idle_A"
+    },
+    "an_jog": {
+      "name": "Jog"
+    },
+    "an_locomotion": {
+      "name": "Locomotion",
+      "controller": {
+        "parameters": {
+          "speed": {}
+        },
+        "nodes": {
+          "idle": {
+            "clip": "@anim/human.animation#an_idlea"
+          },
+          "jog": {
+            "clip": "@anim/human.animation#an_jog"
+          },
+          "move": {
+            "kind": "blend1d",
+            "parameterX": "speed",
+            "samples": [
+              {
+                "node": "walk",
+                "x": 1.5
+              },
+              {
+                "node": "jog",
+                "x": 3.2
+              },
+              {
+                "node": "sprint",
+                "x": 5.5
+              }
+            ]
+          },
+          "sprint": {
+            "clip": "@anim/human.animation#an_sprint"
+          },
+          "walk": {
+            "clip": "@anim/human.animation#an_walk"
+          }
+        },
+        "states": {
+          "idle": {
+            "node": "idle"
+          },
+          "move": {
+            "node": "move",
+            "duration": 58667
+          }
+        },
+        "transitions": [
+          {
+            "id": "start",
+            "from": "idle",
+            "to": "move",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "greater",
+                "floatValue": 0.15
+              }
+            ]
+          },
+          {
+            "id": "stop",
+            "from": "move",
+            "to": "idle",
+            "duration": 9600,
+            "conditions": [
+              {
+                "parameter": "speed",
+                "comparison": "less",
+                "floatValue": 0.075
+              }
+            ]
+          }
+        ],
+        "initial": "idle",
+        "extractRootMotion": false
+      }
+    },
+    "an_sprint": {
+      "name": "Sprint"
+    },
+    "an_walk": {
+      "name": "Walk"
+    }
+  }
+}

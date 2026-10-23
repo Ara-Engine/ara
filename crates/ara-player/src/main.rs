@@ -118,6 +118,8 @@ struct Player {
     last_status: Instant,
     last_advance: Instant,
     max_late: Duration,
+    /// Whether the world's first windowed frame (the full scene upload) was presented.
+    uploaded: bool,
     stop: bool,
     /// Scene-dependent landscape/VFX pipelines warm on the first window frame.
     window_ready: bool,
@@ -178,6 +180,7 @@ fn run(args: Args) -> Result<()> {
         last_status: Instant::now(),
         last_advance: Instant::now(),
         max_late: Duration::ZERO,
+        uploaded: false,
         stop: false,
         window_ready: false,
         prewarmed,
@@ -279,6 +282,12 @@ impl Player {
                 Some(_) => Some(world.audio_inputs()?),
                 None => None,
             };
+            // The first presented frame uploads the whole scene (texture decodes, mesh
+            // buffers): seconds with real content, so the owner's watchdog is told.
+            if self.window.is_some() && !self.uploaded {
+                busy(&mut self.link, "upload")?;
+                self.uploaded = true;
+            }
             // Acoustics and voice updates read the simulation only (physics is not
             // stepping between ticks): a worker runs them while the GPU frame presents.
             let listener = world::listener(&self.frame);

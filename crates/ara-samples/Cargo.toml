@@ -1,0 +1,39 @@
+[package]
+name = "ara-samples"
+description = "Sample projects with real CC0 art: pinned asset fetch, scene authoring through the ara CLI, fidelity captures and timings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+ara-anim = { path = "../ara-anim" }
+ara-asset = { path = "../ara-asset" }
+ara-diag.workspace = true
+ara-doc.workspace = true
+ara-foliage = { path = "../ara-foliage" }
+ara-gpu = { path = "../ara-gpu" }
+ara-ops.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
+ara-play = { path = "../ara-play" }
+ara-play-host = { path = "../ara-play-host" }
+ara-render = { path = "../ara-render" }
+ara-render-fidelity = { path = "../ara-render-fidelity" }
+ara-runtime = { path = "../ara-runtime" }
+ara-runtime-render = { path = "../ara-runtime-render" }
+ara-schema.workspace = true
+ara-terrain = { path = "../ara-terrain" }
+ara-vfx = { path = "../ara-vfx" }
+ara-vfx-gpu = { path = "../ara-vfx-gpu" }
+blake3 = "1.8"
+clap.workspace = true
+glam = "0.30"
+glam34 = { package = "glam", version = "0.34" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

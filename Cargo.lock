@@ -1697,6 +1697,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-samples"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "ara-anim",
+ "ara-asset",
+ "ara-diag",
+ "ara-doc",
+ "ara-foliage",
+ "ara-gpu",
+ "ara-ops",
+ "ara-play",
+ "ara-play-host",
+ "ara-proto",
+ "ara-render",
+ "ara-render-fidelity",
+ "ara-rpc",
+ "ara-runtime",
+ "ara-runtime-render",
+ "ara-schema",
+ "ara-terrain",
+ "ara-vfx",
+ "ara-vfx-gpu",
+ "blake3",
+ "clap",
+ "glam 0.30.9",
+ "glam 0.34.1",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-save"
 version = "0.0.1-alpha"
 dependencies = [

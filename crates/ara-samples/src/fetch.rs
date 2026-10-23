@@ -1,0 +1,208 @@
+//! On-demand downloads: a content-addressed blob cache (`samples/.cache/blobs/<blake3>`),
+//! resumable transfers (`curl -C -` into `.part` files) and hash verification before a
+//! blob is published. Project files are hard links (or copies) of verified blobs.
+use crate::lock::{Asset, Lock};
+use anyhow::{Context, Result, bail, ensure};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Mutex,
+};
+
+/// The shared download cache under `samples/`.
+pub struct Cache {
+    root: PathBuf,
+}
+
+impl Cache {
+    /// The cache of the samples directory (`<samples>/.cache`).
+    pub fn new(samples: &Path) -> Self {
+        Self {
+            root: samples.join(".cache"),
+        }
+    }
+
+    /// Where a verified blob lives.
+    pub fn blob(&self, hash: &str) -> PathBuf {
+        self.root.join("blobs").join(hash)
+    }
+
+    /// Downloads `url` into the blob cache (resuming a partial transfer) and returns
+    /// its hash. With `expected`, a mismatch deletes the partial file and fails.
+    pub fn download(&self, url: &str, expected: Option<&str>) -> Result<(String, u64)> {
+        if let Some(hash) = expected {
+            let blob = self.blob(hash);
+            if blob.is_file() && hash_file(&blob)? == hash {
+                return Ok((hash.to_owned(), std::fs::metadata(&blob)?.len()));
+            }
+        }
+        let partial = self.root.join("partial");
+        std::fs::create_dir_all(&partial)?;
+        std::fs::create_dir_all(self.root.join("blobs"))?;
+        let key = blake3::hash(url.as_bytes()).to_hex();
+        let part = partial.join(format!("{}.part", &key[..32]));
+        curl(url, &part)?;
+        let hash = hash_file(&part)?;
+        if let Some(expected) = expected
+            && hash != expected
+        {
+            std::fs::remove_file(&part)?;
+            bail!("hash mismatch for {url}: expected {expected}, got {hash}");
+        }
+        let size = std::fs::metadata(&part)?.len();
+        let blob = self.blob(&hash);
+        if blob.exists() {
+            std::fs::remove_file(&part)?;
+        } else {
+            std::fs::rename(&part, &blob)?;
+        }
+        Ok((hash, size))
+    }
+
+    /// Reads a small document (API JSON) without caching it.
+    pub fn get_text(url: &str) -> Result<String> {
+        let output = Command::new("curl")
+            .args(["-fsSL", "--retry", "3", url])
+            .output()
+            .context("running curl (install it or put it on PATH)")?;
+        ensure!(
+            output.status.success(),
+            "GET {url} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(String::from_utf8(output.stdout)?)
+    }
+}
+
+/// `curl` with retries and resume; the binary ships with Windows 10+, macOS and Linux.
+fn curl(url: &str, out: &Path) -> Result<()> {
+    let status = Command::new("curl")
+        .args([
+            "-fsSL",
+            "--retry",
+            "5",
+            "--retry-delay",
+            "2",
+            "-C",
+            "-",
+            "-o",
+        ])
+        .arg(out)
+        .arg(url)
+        .status()
+        .context("running curl (install it or put it on PATH)")?;
+    // 33: the server refused the range because the partial file is already complete.
+    ensure!(
+        status.success() || status.code() == Some(33),
+        "download failed ({status}): {url}"
+    );
+    Ok(())
+}
+
+/// BLAKE3 of a file, lowercase hex.
+pub fn hash_file(path: &Path) -> Result<String> {
+    let mut hasher = blake3::Hasher::new();
+    let mut file =
+        std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut buffer = vec![0; 1 << 20];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+/// Fetches every asset of `projects` (all when empty) and materializes it into each
+/// project that uses it. Already-present files are re-hashed, never re-downloaded.
+pub fn fetch(samples: &Path, lock: &Lock, projects: &[String], jobs: usize) -> Result<()> {
+    let cache = Cache::new(samples);
+    let wanted: Vec<(&Asset, &str)> = lock
+        .assets
+        .iter()
+        .flat_map(|a| a.projects.iter().map(move |p| (a, p.as_str())))
+        .filter(|(_, p)| projects.is_empty() || projects.iter().any(|w| w == p))
+        .collect();
+    let queue = Mutex::new(wanted.iter());
+    let errors = Mutex::new(Vec::new());
+    let done = Mutex::new(0usize);
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.max(1) {
+            scope.spawn(|| {
+                while let Some(&(asset, project)) = queue.lock().ok().and_then(|mut q| q.next()) {
+                    if let Err(e) = materialize(&cache, &samples.join(project), asset)
+                        && let Ok(mut errors) = errors.lock()
+                    {
+                        errors.push(format!("{project}/{}: {e:#}", asset.id));
+                    }
+                    if let Ok(mut done) = done.lock() {
+                        *done += 1;
+                        eprintln!("[{}/{}] {project}: {}", *done, wanted.len(), asset.id);
+                    }
+                }
+            });
+        }
+    });
+    let errors = errors.into_inner().unwrap_or_default();
+    if !errors.is_empty() {
+        bail!("{} asset(s) failed:\n{}", errors.len(), errors.join("\n"));
+    }
+    Ok(())
+}
+
+/// Places every file of `asset` in `project`, downloading missing blobs.
+fn materialize(cache: &Cache, project: &Path, asset: &Asset) -> Result<()> {
+    ensure!(
+        project.join("ara.project.json").is_file(),
+        "{} is not an Ara project",
+        project.display()
+    );
+    let dir = asset.dir(project);
+    for file in &asset.files {
+        let target = dir.join(&file.path);
+        if target.is_file() && hash_file(&target)? == file.blake3 {
+            continue;
+        }
+        let (hash, size) = cache.download(&file.url, Some(&file.blake3))?;
+        ensure!(
+            size == file.size,
+            "{}: size {size}, lock says {}",
+            file.path,
+            file.size
+        );
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        if target.exists() {
+            std::fs::remove_file(&target)?;
+        }
+        let blob = cache.blob(&hash);
+        if std::fs::hard_link(&blob, &target).is_err() {
+            std::fs::copy(&blob, &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Checks that every file of `projects` is present and verified, without downloading.
+pub fn verify(samples: &Path, lock: &Lock, projects: &[String]) -> Result<Vec<String>> {
+    let mut missing = Vec::new();
+    for asset in &lock.assets {
+        for project in asset
+            .projects
+            .iter()
+            .filter(|p| projects.is_empty() || projects.contains(p))
+        {
+            for file in &asset.files {
+                let path = asset.dir(&samples.join(project)).join(&file.path);
+                if !path.is_file() || hash_file(&path)? != file.blake3 {
+                    missing.push(format!("{project}/{}", asset.relative(&file.path)));
+                }
+            }
+        }
+    }
+    Ok(missing)
+}

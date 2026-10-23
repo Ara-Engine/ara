@@ -1,0 +1,50 @@
+{
+  "scene": "levels/outpost.scene",
+  "start": {
+    "world": "play:1",
+    "scene": "sc_outpost1",
+    "snapshotBytes": 144006,
+    "transport": "shm",
+    "prepareMs": 2890.892,
+    "bootMs": 1470.5555000000002,
+    "players": [
+      {
+        "role": "local",
+        "pid": 25516,
+        "started": {
+          "tick": 1,
+          "entities": 317,
+          "buildMs": 857.7724,
+          "firstTickMs": 1.4892,
+          "netHandshakeMs": null
+        }
+      }
+    ]
+  },
+  "presentedCapture": {
+    "tick": 73,
+    "hash": "c5105885dd83b75f2e53307f239d0e20336ec6bbfb347271234e5c65d96ef138",
+    "entities": 317,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\outpost\\evidence\\outpost-player-window.png",
+    "marks": []
+  },
+  "fullCapture": {
+    "tick": 81,
+    "hash": "1f565b7b2a0205c3af7afc45e30003f1b2c09d46464b5f49467b340bf80ec6bd",
+    "entities": 317,
+    "image": "C:\\Users\\snowy\\.t3\\worktrees\\snengine\\t3-3fa0010b\\crates\\ara-samples/../../samples\\outpost\\evidence\\outpost-player.png",
+    "marks": []
+  },
+  "status": {
+    "tick": 261,
+    "paused": false,
+    "maxLateUs": 16244,
+    "fps": 15.014778295537385,
+    "frameMsP95": 72.31859588623047,
+    "fault": null,
+    "audio": true,
+    "net": null,
+    "cells": []
+  },
+  "wallSeconds": 13.8707001
+}
