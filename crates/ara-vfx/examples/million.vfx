@@ -4,7 +4,7 @@
   "hz": 60,
   "quality": {
     "particles": 1000000,
-    "overdraw": 16,
+    "overdraw": 64,
     "lights": 8,
     "events": 4096
   },
@@ -41,8 +41,8 @@
             "name": "box",
             "module": {
               "op": "box",
-              "center": [0, 1, 0],
-              "extent": [4, 2.5, 1]
+              "center": [0, 2.5, 0],
+              "extent": [3, 1.8, 0.8]
             }
           },
           {

@@ -1,8 +1,8 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Ordered, typed VFX authoring and deterministic CPU simulation.
-pub mod commands;
 mod appearance;
+pub mod commands;
 mod cpu_modules;
 pub mod library;
 mod model;
@@ -11,10 +11,11 @@ mod projection;
 pub mod samples;
 mod simulate;
 mod slang;
+mod starter;
 mod validate;
 
-pub use model::*;
 pub use appearance::*;
+pub use model::*;
 pub use modules::*;
 pub use projection::{VfxAdapter, registry};
 pub use simulate::*;

@@ -18,8 +18,8 @@ pub(crate) struct Config {
     pub bounds_max: [f32; 4],
     pub light_color: [f32; 4],    // rgb, lumens
     pub light_position: [f32; 4], // xyz,radius
-    pub appearance: [u32; 4], // sheet, blend, alignment, reserved
-    pub motion: [f32; 4], // stretch, shutter, reserved
+    pub appearance: [u32; 4],     // sheet, blend, alignment, reserved
+    pub motion: [f32; 4],         // stretch, shutter, reserved
 }
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -67,9 +67,15 @@ impl Layout {
             c.bounds_max = [e.bounds.max[0], e.bounds.max[1], e.bounds.max[2], 0.];
             for m in &e.stacks.render {
                 let domain = match &m.module {
-                    Module::Appearance { texture, blend, alignment, stretch, shutter } => {
-                        c.appearance=[*texture as u32,*blend as u32,*alignment as u32,0];
-                        c.motion=[*stretch,*shutter,0.,0.];
+                    Module::Appearance {
+                        texture,
+                        blend,
+                        alignment,
+                        stretch,
+                        shutter,
+                    } => {
+                        c.appearance = [*texture as u32, *blend as u32, *alignment as u32, 0];
+                        c.motion = [*stretch, *shutter, 0., 0.];
                         None
                     }
                     Module::Sprite {

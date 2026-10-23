@@ -161,10 +161,16 @@ impl GpuSystem {
         let config_index = gpu.storage_buffer(config)?.index;
         let depth_index = gpu.sampled_image(depth, false)?.index;
         let hdr_index = gpu.sampled_image(hdr, false)?.index;
-        let atlas_bytes=std::fs::read(cooked.join("../atlas.rgba"))?;
-        let atlas=crate::atlas::upload(gpu,&atlas_bytes)?;
-        let atlas_index=gpu.sampled_image(atlas,false)?.index;
-        resources.push(Tracked {resource:Resource::Image(atlas),state:State {access:Access::ShaderRead,queue:Queue::Graphics}});
+        let atlas_bytes = std::fs::read(cooked.join("../atlas.rgba"))?;
+        let atlas = crate::atlas::upload(gpu, &atlas_bytes)?;
+        let atlas_index = gpu.sampled_image(atlas, false)?.index;
+        resources.push(Tracked {
+            resource: Resource::Image(atlas),
+            state: State {
+                access: Access::ShaderRead,
+                queue: Queue::Graphics,
+            },
+        });
         gpu.upload(config, bytemuck::cast_slice(&layout.configs))?;
         resources[3].state.access = Access::HostWrite;
         let mut result = Self {

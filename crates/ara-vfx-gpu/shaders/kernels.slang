@@ -25,7 +25,7 @@ groupshared float areaScan[256];
 void scanMain(uint3 id:SV_DispatchThreadID,uint3 local:SV_GroupThreadID,uint3 group:SV_GroupID){
     Config c=config(root.emitter);uint l=local.x;uint i=id.x;uint a=0;uint events=0;float area=0;
     if(i<c.partition.y){Particle p=loadParticle(c.partition.x+i);a=p.age>=0?1:0;uint flags=buffers[NonUniformResourceIndex(root.particles)].Load((c.partition.x+i+3*frame().extent.z)*16+12);events=countbits(flags&3u);
-        if(a!=0){Frame f=frame();float diameter=p.size;if(c.render.x==1)diameter=max(c.surface.z,length(c.boundsMax.xyz-c.boundsMin.xyz));if(c.render.x==2)diameter*=asfloat(f.demands[root.emitter].z);
+        if(a!=0){Frame f=frame();float diameter=p.size;if(c.render.x==0){if(c.appearance.x==1)diameter*=2.;if(c.appearance.z==1)diameter=max(diameter,max(p.size*c.motion.x,p.size+length(p.velocity)*f.clock.x*c.motion.y));}if(c.render.x==1)diameter=max(c.surface.z,length(c.boundsMax.xyz-c.boundsMin.xyz));if(c.render.x==2)diameter*=asfloat(f.demands[root.emitter].z);
             float distance=max(f.clock.z,dot(p.position-f.camera.xyz,f.forward.xyz)-diameter*.5);float projected=diameter*f.clock.w/(2*distance);area=max(1./float(f.extent.x*f.extent.y),min(1.,projected*projected*float(f.extent.y)/f.extent.x));}}
     aliveScan[l]=a;eventScan[l]=events;areaScan[l]=area;GroupMemoryBarrierWithGroupSync();
     for(uint stride=1;stride<256;stride*=2){uint pa=l>=stride?aliveScan[l-stride]:0;uint pe=l>=stride?eventScan[l-stride]:0;float ps=l>=stride?areaScan[l-stride]:0;GroupMemoryBarrierWithGroupSync();aliveScan[l]+=pa;eventScan[l]+=pe;areaScan[l]+=ps;GroupMemoryBarrierWithGroupSync();}

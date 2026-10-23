@@ -54,14 +54,31 @@ impl GpuSystem {
             camera.projection.y_axis.y,
         ];
         frame.inputs = [self.config_index, self.depth_index, 1, self.material_index];
-        frame.visuals=[self.atlas_index,view.scene_background.map_or(0,|c|c.sampled_index),u32::from(view.linear_depth)|if view.scene_background.is_some(){2}else{0},0];
-        frame.ambient=view.lighting.ambient.extend(0.).to_array();
-        frame.sun_direction=view.lighting.sun_direction.extend(0.).to_array();
-        frame.sun_color=view.lighting.sun_color.extend(0.).to_array();
-        frame.probe_counts=[0;4];
-        if let Some(p)=&view.lighting.probes {
-            ensure!(p.state.queue==Queue::Graphics && p.counts.iter().all(|c|*c>=2) && p.spacing.cmpgt(glam::Vec3::ZERO).all(),"invalid borrowed probe field");
-            frame.probe_origin=p.origin.extend(0.).to_array();frame.probe_spacing=p.spacing.extend(0.).to_array();frame.probe_counts=[p.counts[0],p.counts[1],p.counts[2],p.index+1];
+        frame.visuals = [
+            self.atlas_index,
+            view.scene_background.map_or(0, |c| c.sampled_index),
+            u32::from(view.linear_depth)
+                | if view.scene_background.is_some() {
+                    2
+                } else {
+                    0
+                },
+            0,
+        ];
+        frame.ambient = view.lighting.ambient.extend(0.).to_array();
+        frame.sun_direction = view.lighting.sun_direction.extend(0.).to_array();
+        frame.sun_color = view.lighting.sun_color.extend(0.).to_array();
+        frame.probe_counts = [0; 4];
+        if let Some(p) = &view.lighting.probes {
+            ensure!(
+                p.state.queue == Queue::Graphics
+                    && p.counts.iter().all(|c| *c >= 2)
+                    && p.spacing.cmpgt(glam::Vec3::ZERO).all(),
+                "invalid borrowed probe field"
+            );
+            frame.probe_origin = p.origin.extend(0.).to_array();
+            frame.probe_spacing = p.spacing.extend(0.).to_array();
+            frame.probe_counts = [p.counts[0], p.counts[1], p.counts[2], p.index + 1];
         }
         if let Some(depth) = view.scene_depth {
             ensure!(
@@ -141,15 +158,20 @@ impl GpuSystem {
             acquire.push((scene_depth, Access::ShaderRead));
         }
         graph.pass("Vfx.Acquire", Queue::Graphics, acquire);
-        let mut backdrop=vec![
-                (ids[2], Access::ShaderRead),
-                (ids[3], Access::ShaderRead),
-                (ids[4], Access::ShaderRead),
-                (scene_color, Access::Color),
-                (ids[8], Access::Color),
-            ];
-        if let Some(background)=view.scene_background {backdrop.push((graph.import(ara_gpu::Resource::Image(background.image),background.state),Access::ShaderRead));}
-        graph.pass("Vfx.Backdrop",Queue::Graphics,backdrop);
+        let mut backdrop = vec![
+            (ids[2], Access::ShaderRead),
+            (ids[3], Access::ShaderRead),
+            (ids[4], Access::ShaderRead),
+            (scene_color, Access::Color),
+            (ids[8], Access::Color),
+        ];
+        if let Some(background) = view.scene_background {
+            backdrop.push((
+                graph.import(ara_gpu::Resource::Image(background.image), background.state),
+                Access::ShaderRead,
+            ));
+        }
+        graph.pass("Vfx.Backdrop", Queue::Graphics, backdrop);
         for name in [
             "Vfx.Prepare",
             "Vfx.Spawn",
@@ -172,9 +194,14 @@ impl GpuSystem {
             graph.pass(name, compute, accesses);
         }
         let mut draw = core(false);
-        draw.push((ids[13],Access::ShaderRead));
-        draw.push((ids[10],Access::Color));
-        if let Some(p)=&view.lighting.probes {draw.push((graph.import(ara_gpu::Resource::Buffer(p.buffer),p.state),Access::ShaderRead));}
+        draw.push((ids[13], Access::ShaderRead));
+        draw.push((ids[10], Access::Color));
+        if let Some(p) = &view.lighting.probes {
+            draw.push((
+                graph.import(ara_gpu::Resource::Buffer(p.buffer), p.state),
+                Access::ShaderRead,
+            ));
+        }
         draw.push((ids[12], Access::ShaderRead));
         for &(image, state) in &self.material_textures {
             draw.push((
@@ -398,10 +425,16 @@ impl GpuSystem {
     fn draw(&self, r: &mut Recorder) {
         r.push(Command::Pipeline(self.pipelines.particles));
         r.push(Command::BeginRendering {
-            colors: vec![Attachment {
-                image: self.color_target,
-                clear: None,
-            },Attachment {image:self.feature_ids,clear:Some([0.;4])}],
+            colors: vec![
+                Attachment {
+                    image: self.color_target,
+                    clear: None,
+                },
+                Attachment {
+                    image: self.feature_ids,
+                    clear: Some([0.; 4]),
+                },
+            ],
             depth: None,
             size: self.size,
         });
@@ -420,12 +453,10 @@ impl GpuSystem {
         r.push(Command::Pipeline(self.pipelines.tonemap));
         r.push(self.constants(0, self.color_index, 0));
         r.push(Command::BeginRendering {
-            colors: vec![
-                Attachment {
-                    image: self.output,
-                    clear: Some([0.; 4]),
-                },
-            ],
+            colors: vec![Attachment {
+                image: self.output,
+                clear: Some([0.; 4]),
+            }],
             depth: None,
             size: self.size,
         });

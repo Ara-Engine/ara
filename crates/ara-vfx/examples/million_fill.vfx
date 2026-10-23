@@ -1,0 +1,80 @@
+{
+  "name": "million_fill",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 64,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "million",
+      "capacity": 1000000,
+      "bounds": {
+        "min": [-6, -4, -3],
+        "max": [6, 7, 3]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "burst",
+            "module": {
+              "op": "burst",
+              "tick": 0,
+              "count": 1000000
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 60,
+              "size": 0.05,
+              "color": [0.15, 0.4, 1, 0.2]
+            }
+          },
+          {
+            "name": "box",
+            "module": {
+              "op": "box",
+              "center": [0, 2.5, 0],
+              "extent": [3, 1.8, 0.8]
+            }
+          },
+          {
+            "name": "drift",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.01, 0],
+              "spread": [0.01, 0.01, 0.01]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "gravity",
+            "module": {
+              "op": "gravity",
+              "acceleration": [0, -0.001, 0]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

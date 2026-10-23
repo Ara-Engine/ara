@@ -11,7 +11,7 @@
   "emitters": [
     {
       "name": "flame",
-      "capacity": 4096,
+      "capacity": 512,
       "bounds": {
         "min": [-8, -2, -8],
         "max": [8, 12, 8]
@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 1000
+              "per_second": 65
             }
           }
         ],
@@ -31,8 +31,8 @@
             "name": "lifetime",
             "module": {
               "op": "lifetime",
-              "seconds": 1.4,
-              "size": 0.2,
+              "seconds": 1.25,
+              "size": 0.42,
               "color": [5, 0.6, 0.03, 0.5]
             }
           },
@@ -41,15 +41,15 @@
             "module": {
               "op": "sphere",
               "center": [0, 0.2, 0],
-              "radius": 0.28
+              "radius": 0.22
             }
           },
           {
             "name": "rise",
             "module": {
               "op": "velocity",
-              "value": [0, 1.8, 0],
-              "spread": [0.3, 0.5, 0.3]
+              "value": [0, 1.15, 0],
+              "spread": [0.15, 0.2, 0.15]
             }
           }
         ],
@@ -59,7 +59,7 @@
             "module": {
               "op": "curl_noise",
               "frequency": 3,
-              "strength": 1.5
+              "strength": 0.65
             }
           },
           {
@@ -76,15 +76,19 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": [4, 0.3, 0.01, 0.25]
+                  "value": [5, 2, 0.4, 0]
                 },
                 {
-                  "t": 0.3,
-                  "value": [6, 1.4, 0.1, 0.6]
+                  "t": 0.15,
+                  "value": [6, 2.3, 0.4, 0.8]
+                },
+                {
+                  "t": 0.65,
+                  "value": [3, 0.6, 0.04, 0.5]
                 },
                 {
                   "t": 1,
-                  "value": [0.3, 0.02, 0, 0]
+                  "value": [0.5, 0.03, 0, 0]
                 }
               ]
             }
@@ -96,15 +100,15 @@
               "keys": [
                 {
                   "t": 0,
-                  "value": 0.18
+                  "value": 0.36
                 },
                 {
                   "t": 0.4,
-                  "value": 0.3
+                  "value": 0.48
                 },
                 {
                   "t": 1,
-                  "value": 0.02
+                  "value": 0.12
                 }
               ]
             }
@@ -118,6 +122,274 @@
               "domain": "unlit",
               "soft_distance": 0.15,
               "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "fire",
+              "blend": "additive",
+              "alignment": "camera",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          },
+          {
+            "name": "hearth_light",
+            "module": {
+              "op": "light",
+              "color": [1, 0.32, 0.055],
+              "lumens": 650,
+              "radius": 4
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "smoke",
+      "capacity": 2048,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 16
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 4,
+              "size": 0.45,
+              "color": [0.2, 0.23, 0.28, 0.14]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "cone",
+              "origin": [0, 0.1, 0],
+              "height": 0.4,
+              "radius": 0.3
+            }
+          },
+          {
+            "name": "rise",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.8, 0],
+              "spread": [0.15, 0.2, 0.15]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "curl",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 1.5,
+              "strength": 0.45
+            }
+          },
+          {
+            "name": "grow",
+            "module": {
+              "op": "size_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 0.45
+                },
+                {
+                  "t": 1,
+                  "value": 1.5
+                }
+              ]
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.35, 0.39, 0.44, 0]
+                },
+                {
+                  "t": 0.15,
+                  "value": [0.55, 0.58, 0.63, 0.55]
+                },
+                {
+                  "t": 0.75,
+                  "value": [0.55, 0.58, 0.63, 0.2]
+                },
+                {
+                  "t": 1,
+                  "value": [0.55, 0.58, 0.63, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "surface",
+              "soft_distance": 0.3,
+              "sorting": "depth"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "smoke",
+              "blend": "alpha",
+              "alignment": "camera",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "embers",
+      "capacity": 4096,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 18
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 2,
+              "size": 0.012,
+              "color": [14, 4.5, 0.7, 0.85]
+            }
+          },
+          {
+            "name": "source",
+            "module": {
+              "op": "point",
+              "position": [0, 0.7, 0]
+            }
+          },
+          {
+            "name": "spray",
+            "module": {
+              "op": "velocity",
+              "value": [0, 2, 0],
+              "spread": [0.4, 0.7, 0.4]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "gravity",
+            "module": {
+              "op": "gravity",
+              "acceleration": [0, -9.81, 0]
+            }
+          },
+          {
+            "name": "floor",
+            "module": {
+              "op": "plane_collision",
+              "normal": [0, 1, 0],
+              "offset": 0,
+              "restitution": 0.6
+            }
+          },
+          {
+            "name": "cool",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [18, 8, 2, 1]
+                },
+                {
+                  "t": 0.5,
+                  "value": [9, 1.8, 0.1, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [1, 0.05, 0, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.15,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3,
+              "shutter": 0.85
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]

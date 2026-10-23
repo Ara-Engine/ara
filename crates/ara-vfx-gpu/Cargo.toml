@@ -22,5 +22,6 @@ serde_json.workspace = true
 blake3 = "1"
 
 [dev-dependencies]
+ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-shader-cook = { path = "../ara-shader-cook" }
 image = { version = "0.25", default-features = false, features = ["png"] }

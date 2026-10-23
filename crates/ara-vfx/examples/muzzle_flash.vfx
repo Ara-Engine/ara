@@ -23,7 +23,7 @@
             "module": {
               "op": "burst",
               "tick": 0,
-              "count": 96
+              "count": 9
             }
           }
         ],
@@ -33,8 +33,8 @@
             "module": {
               "op": "lifetime",
               "seconds": 0.12,
-              "size": 0.3,
-              "color": [15, 5, 0.5, 0.7]
+              "size": 0.25,
+              "color": [12, 5, 0.6, 0.8]
             }
           },
           {
@@ -42,16 +42,16 @@
             "module": {
               "op": "cone",
               "origin": [0, 0.5, 0],
-              "height": 0.8,
-              "radius": 0.3
+              "height": 0.15,
+              "radius": 0.05
             }
           },
           {
             "name": "speed",
             "module": {
               "op": "velocity",
-              "value": [0, 1, 0],
-              "spread": [0.6, 1, 0.6]
+              "value": [5, 0.25, 0],
+              "spread": [1.5, 0.5, 0.5]
             }
           }
         ],
@@ -81,6 +81,17 @@
               "color": [1, 0.45, 0.08],
               "lumens": 900,
               "radius": 3
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "fire",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3,
+              "shutter": 0.75
             }
           }
         ]

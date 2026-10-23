@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 650
+              "per_second": 220
             }
           }
         ],
@@ -74,6 +74,26 @@
               "offset": 0,
               "restitution": 0.6
             }
+          },
+          {
+            "name": "cool",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [18, 8, 2, 1]
+                },
+                {
+                  "t": 0.5,
+                  "value": [9, 1.8, 0.1, 0.8]
+                },
+                {
+                  "t": 1,
+                  "value": [1, 0.05, 0, 0]
+                }
+              ]
+            }
           }
         ],
         "render": [
@@ -90,6 +110,25 @@
               ],
               "domain": "surface",
               "sorting": "age"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "spark",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 3,
+              "shutter": 0.85
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]

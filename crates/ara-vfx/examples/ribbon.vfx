@@ -11,7 +11,7 @@
   "emitters": [
     {
       "name": "swirl",
-      "capacity": 8192,
+      "capacity": 512,
       "bounds": {
         "min": [-8, -2, -8],
         "max": [8, 12, 8]
@@ -22,7 +22,7 @@
             "name": "rate",
             "module": {
               "op": "rate",
-              "per_second": 1600
+              "per_second": 95
             }
           }
         ],
@@ -32,7 +32,7 @@
             "module": {
               "op": "lifetime",
               "seconds": 3,
-              "size": 0.045,
+              "size": 0.42,
               "color": [0.3, 1.5, 5, 0.7]
             }
           },
@@ -41,7 +41,7 @@
             "module": {
               "op": "sphere",
               "center": [0, 1.4, 0],
-              "radius": 0.85
+              "radius": 1.05
             }
           },
           {
@@ -60,7 +60,7 @@
               "op": "vortex",
               "center": [0, 1.4, 0],
               "axis": [0, 1, 0],
-              "strength": 2.2
+              "strength": 1.8
             }
           },
           {
@@ -68,7 +68,7 @@
             "module": {
               "op": "curl_noise",
               "frequency": 2.4,
-              "strength": 0.9
+              "strength": 0.3
             }
           },
           {
@@ -76,7 +76,7 @@
             "module": {
               "op": "attractor",
               "position": [0, 1.4, 0],
-              "strength": 3,
+              "strength": 0.8,
               "softening": 0.2
             }
           },
@@ -84,7 +84,7 @@
             "name": "damping",
             "module": {
               "op": "drag",
-              "coefficient": 1.5
+              "coefficient": 0.4
             }
           },
           {
@@ -115,6 +115,94 @@
               "op": "ribbon",
               "width": 0.025,
               "domain": "unlit"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "wisp",
+              "blend": "additive",
+              "alignment": "velocity",
+              "stretch": 2.5,
+              "shutter": 0.5
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sigil",
+      "capacity": 64,
+      "bounds": {
+        "min": [-8, -2, -8],
+        "max": [8, 12, 8]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "burst",
+            "module": {
+              "op": "burst",
+              "tick": 0,
+              "count": 1
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "life",
+            "module": {
+              "op": "lifetime",
+              "seconds": 10,
+              "size": 3.1,
+              "color": [0.08, 0.7, 3, 0.5]
+            }
+          },
+          {
+            "name": "ground",
+            "module": {
+              "op": "point",
+              "position": [0, 0.02, 0]
+            }
+          }
+        ],
+        "update": [],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "unlit",
+              "soft_distance": 0.004,
+              "sorting": "none"
+            }
+          },
+          {
+            "name": "appearance",
+            "module": {
+              "op": "appearance",
+              "texture": "ring",
+              "blend": "additive",
+              "alignment": "ground",
+              "stretch": 1,
+              "shutter": 0
+            }
+          },
+          {
+            "name": "flipbook",
+            "module": {
+              "op": "flipbook",
+              "grid": [4, 4],
+              "fps": 16
             }
           }
         ]

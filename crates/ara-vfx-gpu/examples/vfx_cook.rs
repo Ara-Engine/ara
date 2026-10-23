@@ -22,14 +22,21 @@ fn main() -> Result<()> {
         .map(|(e, _)| e)
         .collect::<Vec<_>>();
     effects.push(ara_vfx::samples::million());
+    effects.push(ara_vfx::samples::million_fill());
     effects.extend(ara_vfx::samples::additional().into_iter().map(|(e, _)| e));
     let selected = std::env::args().nth(1);
     let text_only = selected.as_deref() == Some("--text-only");
     if !text_only {
-        let bytes=ara_vfx_gpu::cook_atlas();
+        let bytes = ara_vfx_gpu::cook_atlas();
         std::fs::create_dir_all(root.join("cooked"))?;
-        std::fs::write(root.join("cooked/atlas.rgba"),&bytes)?;
-        image::save_buffer(root.join("cooked/atlas.png"),&bytes,ara_vfx_gpu::ATLAS_SIZE[0],ara_vfx_gpu::ATLAS_SIZE[1],image::ColorType::Rgba8)?;
+        std::fs::write(root.join("cooked/atlas.rgba"), &bytes)?;
+        image::save_buffer(
+            root.join("cooked/atlas.png"),
+            &bytes,
+            ara_vfx_gpu::ATLAS_SIZE[0],
+            ara_vfx_gpu::ATLAS_SIZE[1],
+            image::ColorType::Rgba8,
+        )?;
     }
     for effect in effects {
         if !text_only && selected.as_ref().is_some_and(|name| name != &effect.name) {
@@ -41,7 +48,9 @@ fn main() -> Result<()> {
             samples.join(format!("{}.vfx", effect.name)),
             effect.text().map_err(|d| anyhow::anyhow!("{d:?}"))?,
         )?;
-        if text_only { continue; }
+        if text_only {
+            continue;
+        }
         let source = root.join("generated").join(&effect.name);
         std::fs::create_dir_all(&source)?;
         std::fs::write(
@@ -86,8 +95,8 @@ fn main() -> Result<()> {
             );
         }
         // The canonical writer owns text ordering for this derived manifest.
-        let value = ara_json::to_value(&
-            manifest
+        let value = ara_json::to_value(
+            &manifest
                 .iter()
                 .map(|(name, p)| {
                     (

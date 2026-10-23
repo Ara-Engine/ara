@@ -275,6 +275,11 @@ impl Module {
                     Value::Float(_)
                 )
                 | (Self::Sprite { .. }, "soft_distance", Value::Float(_))
+                | (
+                    Self::Appearance { .. },
+                    "stretch" | "shutter",
+                    Value::Float(_)
+                )
                 | (Self::Flipbook { .. }, "fps", Value::Float(_))
                 | (Self::Ribbon { .. }, "width", Value::Float(_))
                 | (Self::Light { .. }, "color", Value::Vec3(_))

@@ -40,7 +40,14 @@ pub struct Lighting {
     pub probes: Option<ProbeLighting>,
 }
 impl Default for Lighting {
-    fn default() -> Self {Self {ambient:Vec3::new(0.12,0.17,0.24),sun_direction:Vec3::new(0.4,1.,0.3).normalize(),sun_color:Vec3::new(1.5,1.3,1.1),probes:None}}
+    fn default() -> Self {
+        Self {
+            ambient: Vec3::new(0.12, 0.17, 0.24),
+            sun_direction: Vec3::new(0.4, 1., 0.3).normalize(),
+            sun_color: Vec3::new(1.5, 1.3, 1.1),
+            probes: None,
+        }
+    }
 }
 /// Read-only fidelity DDGI field, borrowed until the next fidelity render.
 pub struct ProbeLighting {
@@ -53,7 +60,7 @@ pub struct ProbeLighting {
     /// Probe separation in metres.
     pub spacing: Vec3,
     /// XYZ lattice dimensions.
-    pub counts: [u32;3],
+    pub counts: [u32; 3],
     /// Actual previous access; ownership must be Graphics.
     pub state: State,
 }
@@ -80,9 +87,9 @@ pub struct SceneDepth {
 impl Default for View {
     fn default() -> Self {
         Self {
-            scene_background:None,
-            linear_depth:false,
-            lighting:Lighting::default(),
+            scene_background: None,
+            linear_depth: false,
+            lighting: Lighting::default(),
             camera: CameraSpec::LookAt {
                 position: Vec3::new(5., 3.4, 6.),
                 target: Vec3::new(0., 1.4, 0.),
@@ -224,12 +231,19 @@ impl GpuSystem {
     }
     /// Completed composited HDR image, ready for the fidelity post stack.
     pub fn hdr_output(&self) -> SceneColor {
-        SceneColor {image:self.color_target,sampled_index:self.color_index,state:self.resources[7].state}
+        SceneColor {
+            image: self.color_target,
+            sampled_index: self.color_index,
+            state: State {
+                access: Access::ShaderRead,
+                queue: Queue::Graphics,
+            },
+        }
     }
     /// Redraw a completed tick with new view inputs, without advancing simulation.
-    pub fn render(&mut self, gpu:&mut VulkanDevice, view:&View) -> Result<()> {
-        ensure!(self.tick>0,"step before rendering a completed tick");
-        self.run_frame(gpu,view,false,false)
+    pub fn render(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
+        ensure!(self.tick > 0, "step before rendering a completed tick");
+        self.run_frame(gpu, view, false, false)
     }
     /// Bind material-system instance rows and all texture images reachable by them.
     /// Call at a completed frame boundary; textures return in Graphics/ShaderRead.

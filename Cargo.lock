@@ -1164,6 +1164,7 @@ dependencies = [
  "ara-json",
  "ara-material",
  "ara-render",
+ "ara-render-fidelity",
  "ara-shader-cook",
  "ara-vfx",
  "blake3",

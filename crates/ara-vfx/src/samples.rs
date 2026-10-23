@@ -40,14 +40,14 @@ fn emitter(name: &str, capacity: u32, color: [f32; 4], life: f32, size: f32) -> 
     }
 }
 fn system(name: &str, emitters: Vec<Emitter>) -> Effect {
-    Effect {
+    crate::starter::finish(Effect {
         name: name.into(),
         seed: 17,
         hz: 60,
         quality: Quality::default(),
         parameters: vec![],
         emitters,
-    }
+    })
 }
 /// Warm flame with rising turbulent particles and an emissive color gradient.
 pub fn campfire() -> Effect {
@@ -443,8 +443,8 @@ pub fn million() -> Effect {
         item(
             "box",
             Module::Box {
-                center: [0., 1., 0.],
-                extent: [4., 2.5, 1.],
+                center: [0., 2.5, 0.],
+                extent: [3., 1.8, 0.8],
             },
         ),
         item(
@@ -461,5 +461,21 @@ pub fn million() -> Effect {
             acceleration: [0., -0.001, 0.],
         },
     ));
-    system("million", vec![e])
+    let mut effect = system("million", vec![e]);
+    effect.quality.overdraw = 64.;
+    effect
+}
+
+/// One million 0.05 m sprites, with an explicit 64-layer coverage ceiling.
+/// Uses the same motion and distribution as the 0.003 m throughput workload.
+pub fn million_fill() -> Effect {
+    let mut effect = million();
+    effect.name = "million_fill".into();
+    effect.quality.overdraw = 64.;
+    for m in &mut effect.emitters[0].stacks.initialize {
+        if let Module::Lifetime { size, .. } = &mut m.module {
+            *size = 0.05;
+        }
+    }
+    effect
 }

@@ -35,7 +35,7 @@
       "particleVertex": "vertex"
     },
     "state": {
-      "color_formats": [109],
+      "color_formats": [109, 100],
       "depth_format": null,
       "vertex_stride": 0,
       "depth_test": false,
@@ -162,7 +162,7 @@
       "tonemapFragment": "fragment"
     },
     "state": {
-      "color_formats": [37, 100],
+      "color_formats": [37],
       "depth_format": null,
       "vertex_stride": 0,
       "depth_test": false,
