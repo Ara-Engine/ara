@@ -167,7 +167,7 @@ impl Shell {
         let mut markup = String::from("<ui id='editor'>");
         markup.push_str("<panel id='topbar' class='topbar'>");
         markup.push_str(&format!("<text id='brand' class='brand' text='ara' /><text id='project-name' text='{}' /><text id='project-divider' class='muted' text='/' /><text id='scene-name' class='muted' text='{}' /><panel id='top-spacer' style='flex-grow:1' />",escape(&project_name(editor)),escape(editor.host.store().workspace().path_of(&editor.state.doc).unwrap_or("Scene"))));
-        markup.push_str("<panel id='play-controls' class='play-pill'>");
+        markup.push_str(&format!("<panel id='play-controls' class='play-pill' style='position:absolute;left:{}px;top:8px;width:100px'>",(self.ui.size[0]-100.)*0.5));
         for (id, name) in [
             ("play", "play"),
             ("pause", "pause"),
@@ -443,6 +443,14 @@ impl Shell {
                 .find(&format!("swatch-{}", field.path.replace('.', "-")))
             {
                 let r = self.ui.nodes[i].rect;
+                let clip = self.ui.nodes[i].clip.intersection(r);
+                if !r.intersects(clip) || clip.w <= 0. || clip.h <= 0. {
+                    continue;
+                }
+                self.ui
+                    .display
+                    .commands
+                    .push(ara_ui::paint::Draw::PushClip { rect: clip });
                 let channel = |n: usize| field.value[n].as_f64().unwrap_or(1.).clamp(0., 1.);
                 self.ui
                     .display
@@ -463,6 +471,7 @@ impl Shell {
                             (channel(3) * 255.) as u8,
                         ),
                     });
+                self.ui.display.commands.push(ara_ui::paint::Draw::PopClip);
             }
         }
     }

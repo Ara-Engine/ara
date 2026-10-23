@@ -207,10 +207,10 @@ impl Shell {
         ] {
             self.bindings.insert(ara_ui::source::stable_id(id),Binding::Protocol("editor.camera",json!({"target":editor.state.camera.target.to_array(),"yaw":yaw,"pitch":pitch,"distance":editor.state.camera.distance})));
             if id == "view-iso" {
-                out.push_str(&format!("<button id='{id}' class='small quiet' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' label='Perspective view' description='Return to isometric perspective' action='Dispatch'>{}</button>",icons::icon(id,"box")));
+                out.push_str(&format!("<button id='{id}' class='small quiet view-axis' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' label='Perspective view' description='Return to isometric perspective' action='Dispatch'>{}</button>",icons::icon(id,"box")));
                 continue;
             }
-            out.push_str(&format!("<button id='{id}' class='small quiet' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' text='{label}' description='Snap Scene camera to {label} view' action='Dispatch' />"));
+            out.push_str(&format!("<button id='{id}' class='small quiet view-axis' style='position:absolute;left:{left}px;top:{top}px;width:28px;height:24px' text='{label}' description='Snap Scene camera to {label} view' action='Dispatch' />"));
         }
         out.push_str("</panel></panel>");
     }

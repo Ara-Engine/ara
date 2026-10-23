@@ -251,13 +251,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
             }
             if let Some(verification) = &mut verification {
-                dirty |= verification.step(
+                let changed = verification.step(
                     &mut editor,
                     &mut shell,
                     &mut gpu,
                     &mut ui_renderer,
                     &mut renderer,
                 )?;
+                if changed {
+                    icon_state = (!editor.state.light, last_dpi);
+                }
+                dirty |= changed;
                 scene_dirty |= dirty;
             }
             let physical = window.size()?;

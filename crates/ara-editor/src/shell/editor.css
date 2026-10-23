@@ -80,3 +80,8 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .agent-card { padding:8px; gap:4px; }
 
 .asset-list { padding:8px; gap:0px; }
+
+.view-axis { padding:2px; background:var(--card); border-color:var(--input); }
+#view-x { color:var(--destructive-foreground); }
+#view-y { color:var(--success-foreground); }
+#view-z { color:var(--info-foreground); }

@@ -38,7 +38,7 @@ float4 fragmentMain(Varying input):SV_Target {
         float sy=sin(i.uv.w),cy=cos(i.uv.w),sp=sin(i.parameters.x),cp=cos(i.parameters.x);
         float3 forward=float3(-sy*cp,-sp,-cy*cp),right=float3(cy,0,-sy),up=float3(-sy*sp,cp,-cy*sp);
         float3 ray=normalize(forward+right*(ndc.x*i.parameters.y*i.rect.z/i.rect.w)+up*(ndc.y*i.parameters.y));
-        float distance=-i.uv.y/ray.y;
+        float distance=-i.uv.y/(abs(ray.y)<0.00001?-0.00001:ray.y);
         float2 ground=(i.uv.xyz+ray*distance).xz;
         float2 cell=ground/i.parameters.z;
         float2 derivative=max(fwidth(cell),0.00001);

@@ -53,6 +53,7 @@ impl Shell {
         out.push_str("</scroll>");
     }
     pub(super) fn agents_panel(&mut self, editor: &mut Editor, out: &mut String) {
+        let compact = self.ui.size[1] < 800.;
         out.push_str("<panel id='agents-toolbar' class='toolbar'><text id='policy-label' class='muted' text='Apply agent changes' />");
         for (policy, label) in [
             (crate::state::ApplyPolicy::Immediately, "Immediately"),
@@ -70,7 +71,11 @@ impl Shell {
                 },
             ));
         }
-        out.push_str("</panel><scroll id='agents-scroll' class='body'>");
+        out.push_str(if compact {
+            "</panel><scroll id='agents-scroll' class='body' style='padding:4px;gap:8px'>"
+        } else {
+            "</panel><scroll id='agents-scroll' class='body'>"
+        });
         for (id, presence) in &editor.state.presence {
             out.push_str(&format!("<panel id='presence-{id}' class='row'><text id='presence-label-{id}' class='accent' text='{} / {} selected' />",escape(&presence.author),presence.selection.len()));
             out.push_str(&self.bind_button(
@@ -117,7 +122,7 @@ impl Shell {
                 let Some(id) = item["txn"].as_str() else {
                     continue;
                 };
-                out.push_str(&format!("<panel id='turn-{id}' class='section agent-card'><panel id='turn-header-{id}' class='row'><panel id='avatar-{id}' class='avatar'>{}</panel><text id='turn-title-{id}' text='{}' /><text id='turn-meta-{id}' class='badge' text='Turn {}' /><panel id='turn-fill-{id}' style='flex-grow:1' />",icons::icon(&format!("avatar-{id}"),"bot"),escape(item["author"].as_str().unwrap_or("Agent")),escape(&id.chars().take(8).collect::<String>())));
+                out.push_str(&format!("<panel id='turn-{id}' class='section agent-card'><panel id='turn-header-{id}' class='row'><panel id='avatar-{id}' class='avatar'>{}</panel><text id='turn-title-{id}' text='{}' /><text id='turn-meta-{id}' class='badge' text='Turn {}' />{}<panel id='turn-fill-{id}' style='flex-grow:1' />",icons::icon(&format!("avatar-{id}"),"bot"),escape(item["author"].as_str().unwrap_or("Agent")),escape(&id.chars().take(8).collect::<String>()),if compact{format!("<text id='turn-why-{id}' class='muted' text='{}' />",escape(item["why"].as_str().unwrap_or("Agent changes")))}else{String::new()}));
                 out.push_str(&self.bind_button(
                     &format!("accept-{id}"),
                     "Accept",
@@ -131,7 +136,9 @@ impl Shell {
                     "small quiet",
                 ));
                 out.push_str("</panel>");
-                out.push_str(&format!("<panel id='turn-summary-{id}' class='row'><text id='turn-why-{id}' text='{}' /><text id='turn-commands-{id}' class='badge' text='{}' /></panel>",escape(item["why"].as_str().unwrap_or("No reason supplied")),escape(item["label"].as_str().unwrap_or("Commands"))));
+                if !compact {
+                    out.push_str(&format!("<panel id='turn-summary-{id}' class='row'><text id='turn-why-{id}' text='{}' /><text id='turn-commands-{id}' class='badge' text='{}' /></panel>",escape(item["why"].as_str().unwrap_or("No reason supplied")),escape(item["label"].as_str().unwrap_or("Commands"))));
+                }
 
                 if let Some(tx) = editor.host.store().txn(&ara_ops::TxnId(id.into())) {
                     for (index, op) in tx.ops.iter().enumerate() {

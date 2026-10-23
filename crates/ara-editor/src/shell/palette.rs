@@ -255,6 +255,9 @@ mod tests {
         assert!(super::fuzzy("transform.set", "trset").is_some());
         assert!(super::fuzzy("frame", "fm").is_some());
         assert!(super::fuzzy("frame", "mf").is_none());
-        assert_eq!(super::fuzzy("?cho", "?o").map(|(_, p)| p), Some(vec![0, 3]));
+        assert_eq!(
+            super::fuzzy("\u{e9}cho", "\u{e9}o").map(|(_, p)| p),
+            Some(vec![0, 3])
+        );
     }
 }
