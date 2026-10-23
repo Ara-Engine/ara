@@ -22,7 +22,7 @@ fn set(
         return Ok(());
     }
     let value = value
-        .map(serde_json::to_value)
+        .map(|v| ara_2d::to_value(&v))
         .transpose()
         .map_err(invalid)?;
     ctx.set_entity(target, &FieldPath::field(component), value)
@@ -177,9 +177,9 @@ impl Command for GenerateTileColliders {
             let value = json!({
                 "parent": p.entity.0,
                 "name": format!("{} collision", hull.layer),
-                "PhysicsPose2d": PhysicsPose2d { position: p.origin, rotation: 0. },
-                "RigidBody2d": body,
-                "Collider2d": collider,
+                "PhysicsPose2d": ara_2d::to_value(&PhysicsPose2d { position: p.origin, rotation: 0. }).map_err(invalid)?,
+                "RigidBody2d": ara_2d::to_value(&body).map_err(invalid)?,
+                "Collider2d": ara_2d::to_value(&collider).map_err(invalid)?,
                 "TileColliderSource2d": {"owner": p.entity.0},
             });
             ctx.create(id, value.as_object().expect("object literal").to_owned())?;
@@ -190,7 +190,6 @@ impl Command for GenerateTileColliders {
 /// Installs the physics authoring API in Engine Protocol/MCP reflection.
 pub fn register(registry: &mut Registry, db: &mut SchemaDb) {
     crate::register(db);
-    db.register::<TileColliderSource2d>();
     registry.command::<SetPhysics>(db);
     registry.command::<GenerateTileColliders>(db);
 }

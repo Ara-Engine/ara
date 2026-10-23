@@ -28,6 +28,8 @@ ara-asset = { path = "../ara-asset" }
 
 [dev-dependencies]
 ara-doc = { path = "../ara-doc" }
+ara-cmd = { path = "../ara-cmd" }
+ara-ops = { path = "../ara-ops" }
 
 [lints]
 workspace = true

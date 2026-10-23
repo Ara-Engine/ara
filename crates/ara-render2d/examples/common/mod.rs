@@ -1,24 +1,18 @@
+//! Shared sample harness for the platformer example, goldens and benchmark.
 #![allow(dead_code)]
-mod fixtures;
+pub mod fixtures;
 use anyhow::{Result, ensure};
-use ara_2d::{Camera2d, Light2d, Sprite, SpriteRegion, Tile, TileDefinition, TileLayer, Tilemap};
+use ara_2d::{Camera2d, Sprite, SpriteRegion};
 use ara_render::capture::{CaptureRequest, ViewMode};
 use ara_render2d::{AtlasImage, Scene2d, SpriteDraw};
 use ara_schema::{AssetRef, SchemaDb};
-pub fn prepare(root: &Path) -> Result<()> {
-    fixtures::prepare(root)
-}
 use std::{collections::BTreeMap, path::Path};
+
 pub const ATLAS: &str = "@art/platformer.png#at_platform1";
 pub const NORMAL: &str = "@art/platformer-normal.png#at_normal01";
-pub fn camera() -> Camera2d {
-    Camera2d {
-        centre: [0., 0.5],
-        zoom: 2.,
-        ambient: [0.32, 0.39, 0.52],
-        ..Default::default()
-    }
-}
+/// Fixed ticks simulated before capture: the crate lands and the scout settles.
+pub const TICKS: u32 = 120;
+
 pub fn request(size: [u32; 2]) -> CaptureRequest {
     CaptureRequest {
         camera: ara_render::scene::CameraSpec::Orthographic {
@@ -30,7 +24,7 @@ pub fn request(size: [u32; 2]) -> CaptureRequest {
         deterministic: true,
         exposure: 1.,
         settle_frames: 2,
-        tick: 120,
+        tick: u64::from(TICKS),
         seed: 42,
         marks: Some(32),
     }
@@ -43,7 +37,9 @@ pub fn schema() -> SchemaDb {
     ara_physics2d::register(&mut db);
     db
 }
-pub fn scene(root: &Path, worker: Option<&Path>) -> Result<Scene2d> {
+/// Projects the canonical scene, runs `TICKS` fixed ticks of 2D physics, and extracts the
+/// result with boundary-published atlases. Returns the scene's own camera.
+pub fn scene(root: &Path, worker: Option<&Path>) -> Result<(Scene2d, Camera2d)> {
     let db = schema();
     let read = ara_doc::read(
         &std::fs::read_to_string(root.join("sample/platformer.scene"))?,
@@ -64,21 +60,41 @@ pub fn scene(root: &Path, worker: Option<&Path>) -> Result<Scene2d> {
         read.doc.ok_or_else(|| anyhow::anyhow!("invalid sample"))?,
     )?;
     let mut session = ara_sim::Session::local(edit, Default::default(), 42, Default::default())?;
+    ara_physics2d::install(&mut session, Default::default())?;
+    for _ in 0..TICKS {
+        session.step()?;
+    }
+    let world = session.world_mut();
+    ensure!(
+        world
+            .resource::<ara_physics2d::Physics2dStatus>()
+            .error
+            .is_none(),
+        "sample physics faulted"
+    );
+    let camera = world
+        .query::<&Camera2d>()
+        .iter(world)
+        .next()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("sample has no Camera2d"))?;
     let color = cook_atlas(root, "platformer.png", false, worker)?;
     let normal = cook_atlas(root, "platformer-normal.png", true, worker)?;
-    Scene2d::extract(
-        session.world_mut(),
+    let scene = Scene2d::extract(
+        world,
         BTreeMap::from([(ATLAS.into(), color), (NORMAL.into(), normal)]),
-        120,
-    )
+        u64::from(TICKS),
+    )?;
+    Ok((scene, camera))
 }
-pub fn benchmark(root: &Path) -> Result<Scene2d> {
-    let mut scene = scene(root, None)?;
+/// Replaces the sample's content with `count` unlit sprites of `size` metres on a grid.
+pub fn benchmark(root: &Path, count: u64, size: f32) -> Result<Scene2d> {
+    let (mut scene, _) = scene(root, None)?;
     scene.tilemaps.clear();
     scene.lights.clear();
     scene.occluders.clear();
     scene.sprites.clear();
-    for i in 0..100_000u64 {
+    for i in 0..count {
         scene.sprites.push(SpriteDraw {
             entity: i + 1,
             name: format!("Sprite {i}"),
@@ -86,14 +102,15 @@ pub fn benchmark(root: &Path) -> Result<Scene2d> {
             basis: [1., 0., 0., 1.],
             sprite: Sprite {
                 atlas: Some(AssetRef(ATLAS.into())),
-                region: "lantern".into(),
-                size: [0.09, 0.09],
+                region: "coin".into(),
+                size: [size; 2],
                 ..Default::default()
             },
         });
     }
     Ok(scene)
 }
+/// Imports a sample PNG through the out-of-process atlas worker, memoized in a local cache.
 fn cook_atlas(
     root: &Path,
     source: &str,
@@ -133,17 +150,17 @@ fn cook_atlas(
         cache.store(key, &output)?;
         output
     };
-    let metadata = &output
-        .artifacts
-        .iter()
-        .find(|a| a.name == "atlas.json")
-        .ok_or_else(|| anyhow::anyhow!("missing atlas metadata"))?
-        .bytes;
-    let pixels = &output
-        .artifacts
-        .iter()
-        .find(|a| a.name == "atlas.rgba")
-        .ok_or_else(|| anyhow::anyhow!("missing atlas pixels"))?
-        .bytes;
-    AtlasImage::from_cooked(serde_json::from_slice(metadata)?, pixels, linear)
+    let artifact = |name: &str| {
+        output
+            .artifacts
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| a.bytes.as_slice())
+            .ok_or_else(|| anyhow::anyhow!("missing atlas artifact {name}"))
+    };
+    AtlasImage::from_cooked(
+        serde_json::from_slice(artifact("atlas.json")?)?,
+        artifact("atlas.rgba")?,
+        linear,
+    )
 }

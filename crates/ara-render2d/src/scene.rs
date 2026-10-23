@@ -82,7 +82,8 @@ pub struct Scene2d {
     pub tilemaps: Vec<TilemapDraw>,
     /// Opt-in local lights in stable identity order.
     pub lights: Vec<Light2d>,
-    /// World-space shadow segments, including derived tile silhouettes.
+    /// World-space shadow segments `[ax, ay, bx, by]` from solid tile silhouettes, wound
+    /// counter-clockwise; only edges facing a fragment shadow it.
     pub occluders: Vec<[f32; 4]>,
 }
 impl Scene2d {
@@ -149,14 +150,16 @@ impl Scene2d {
                 });
             }
             if let Some(map) = map {
-                for hull in ara_2d::tilemap::colliders(map)? {
-                    for i in 0..hull.vertices.len() {
-                        let a = hull.vertices[i];
-                        let b = hull.vertices[(i + 1) % hull.vertices.len()];
-                        let a = matrix.transform_point3(glam::Vec3::new(a[0], a[1], 0.));
-                        let b = matrix.transform_point3(glam::Vec3::new(b[0], b[1], 0.));
-                        scene.occluders.push([a.x, a.y, b.x, b.y]);
-                    }
+                // Shadow edges stay counter-clockwise in world space, even when mirrored.
+                let mirrored = basis[0] * basis[3] - basis[1] * basis[2] < 0.;
+                for [ax, ay, bx, by] in ara_2d::tilemap::outline(map)? {
+                    let a = matrix.transform_point3(glam::Vec3::new(ax, ay, 0.));
+                    let b = matrix.transform_point3(glam::Vec3::new(bx, by, 0.));
+                    scene.occluders.push(if mirrored {
+                        [b.x, b.y, a.x, a.y]
+                    } else {
+                        [a.x, a.y, b.x, b.y]
+                    });
                 }
                 scene.tilemaps.push(TilemapDraw {
                     entity,

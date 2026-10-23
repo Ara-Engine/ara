@@ -112,7 +112,12 @@ impl Renderer2d {
                         colors: vec![
                             Attachment {
                                 image: self.targets[0],
-                                clear: Some([0.012, 0.018, 0.032, 1.]),
+                                clear: Some([
+                                    camera.background[0],
+                                    camera.background[1],
+                                    camera.background[2],
+                                    1.,
+                                ]),
                             },
                             Attachment {
                                 image: self.targets[1],

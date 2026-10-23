@@ -41,11 +41,14 @@ float4 sampleAtlas(uint index,float2 uv,bool nearest) {
     return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);
 }
 float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+// Occluders are solid-region outlines wound counter-clockwise (solid on the left). Only
+// edges facing the fragment cast shadows: solid tiles are lit through their own surface
+// but shadowed by other solids between them and the light.
 bool blocked(Frame f,float2 point,float2 light) {
     float2 ray=light-point;
     for(uint i=0;i<f.counts.y;i++) {
         float4 edge=buffers[NonUniformResourceIndex(root.frame)].Load<float4>(f.offsets.y+i*16);
-        float2 segment=edge.zw-edge.xy;float den=cross2(ray,segment);if(abs(den)<0.000001)continue;
+        float2 segment=edge.zw-edge.xy;if(dot(float2(segment.y,-segment.x),ray)>=0)continue;float den=cross2(ray,segment);if(abs(den)<0.000001)continue;
         float2 offset=edge.xy-point;float t=cross2(offset,segment)/den;float u=cross2(offset,ray)/den;
         if(t>0.002&&t<0.998&&u>=0&&u<=1)return true;
     }

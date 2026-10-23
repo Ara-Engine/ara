@@ -222,7 +222,7 @@ impl Importer for TilemapImporter {
         "ara.tilemap2d"
     }
     fn version(&self) -> &str {
-        "1"
+        "2"
     }
     fn import(&self, input: &ImportInput, ctx: &mut ImportContext<'_>) -> Result<ImportOutput> {
         let map: Tilemap = serde_json::from_slice(&input.source)?;

@@ -98,3 +98,44 @@ fn real_worker_matches_pure_output_and_cache_action_identity() {
     ara_import2d::registry().unwrap().register_schemas(&mut db);
     assert!(db.verify().is_empty(), "{:?}", db.verify());
 }
+#[test]
+fn tilemap_cook_emits_canonical_manifest_and_content_addressed_chunks() {
+    let map = serde_json::json!({
+        "definitions": {"1": {"region": "grass", "solid": true}},
+        "layers": [{"id": "l_ground", "cells": {"-1,0": 1, "40,3": 1}}]
+    });
+    let mut tilemap = input();
+    tilemap.importer = "ara.tilemap2d".into();
+    tilemap.version = "2".into();
+    tilemap.source = serde_json::to_vec(&map).unwrap();
+    tilemap.source_path = "level.tilemap".into();
+    let token = Cancellation::default();
+    let mut progress = |_| {};
+    let out = ara_import2d::registry()
+        .unwrap()
+        .import(
+            &tilemap,
+            &mut ImportContext {
+                metrics: None,
+                cancellation: &token,
+                progress: &mut progress,
+            },
+        )
+        .unwrap();
+    let names: Vec<_> = out.artifacts.iter().map(|a| a.name.as_str()).collect();
+    assert!(names.contains(&"tilemap.json"), "{names:?}");
+    // One chunk per occupied 32x32 block: (-1,0) lands in chunk -1,0 and (40,3) in 1,0.
+    let chunks: Vec<_> = out
+        .artifacts
+        .iter()
+        .filter(|a| a.name.starts_with("chunks/l_ground/"))
+        .collect();
+    assert_eq!(chunks.len(), 2, "{names:?}");
+    assert!(names.iter().any(|n| n.starts_with("chunks/l_ground/-1,0.")));
+    assert!(names.iter().any(|n| n.starts_with("chunks/l_ground/1,0.")));
+    assert!(
+        chunks
+            .iter()
+            .all(|a| a.bytes.starts_with(b"AR2C\x02") && a.bytes.len() == 16 + 4096)
+    );
+}

@@ -39,41 +39,71 @@
   "entity_map": [
     [
       1,
+      612844469367532085,
+      "Coin"
+    ],
+    [
+      2,
       686829787259933836,
       "Amber lantern"
     ],
     [
-      2,
+      3,
       1777936226886777139,
       "Amber lantern"
     ],
     [
-      3,
+      4,
+      2905273877586534608,
+      "Coin"
+    ],
+    [
+      5,
+      4255820719152952676,
+      "Coin"
+    ],
+    [
+      6,
+      6728846669943550988,
+      "Coin"
+    ],
+    [
+      7,
       7690608504785830624,
       "Nine-slice supply crate"
     ],
     [
-      4,
+      8,
       7731439355775835903,
       "Scout"
     ],
     [
-      5,
+      9,
+      10324883041208573485,
+      "Coin"
+    ],
+    [
+      10,
       10558729798364308802,
       "Parallax mountain"
     ],
     [
-      6,
+      11,
       13463340161653533772,
       "Parallax mountain"
     ],
     [
-      7,
+      12,
       14866164513971931557,
       "Parallax clouds"
     ],
     [
-      8,
+      13,
+      14927075231606947748,
+      "Parallax clouds"
+    ],
+    [
+      14,
       16759630289329201659,
       "Ruins tilemap"
     ]
@@ -102,25 +132,25 @@
     ],
     "tick": 120
   },
-  "scene_hash": "fb47ab20281fe6618c50aa49a7cc8240f64869d28ddc28a3afd5f8728d3688e3",
+  "scene_hash": "a0919e10264088448a5a3a2693b22a0b601b06f767baa6a4b28af5183ba78d72",
   "shaders": {
     "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "7b08d12e01ba479bd469d738936d5b81ca7aae38d21b51ea561803ec29010549"
+    "content_key": "88f803994a3e723b35c72148d514c026d96cb8e8a0319ab8fd415e44e77c4493"
   },
   "timings": [
     {
-      "milliseconds": 0.022528,
+      "milliseconds": 0.026944,
       "pass": "Sprites.TileChunks.Bindless",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.012288,
+      "milliseconds": 0.013312,
       "pass": "Exposure.ACESFitted.SDR",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.068064,
+      "milliseconds": 0.06816,
       "pass": "CaptureReadback",
       "queue": "Graphics"
     },

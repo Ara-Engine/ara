@@ -84,7 +84,10 @@ pub(crate) fn prepare(scene: &Scene2d, indices: &BTreeMap<String, u32>) -> Resul
             for (key, tile) in &layer.cells {
                 let (x, y) = tilemap::coordinate(key)?;
                 let chunk = [x.div_euclid(32), y.div_euclid(32)];
-                let definition = &map.map.definitions[&tile.tile.to_string()];
+                let definition = map
+                    .map
+                    .definition(*tile)
+                    .ok_or_else(|| anyhow::anyhow!("unknown tile {tile}"))?;
                 let centre = map.map.layout.centre(x, y, map.map.cell_size);
                 let draw = SpriteDraw {
                     entity: map.entity,
@@ -101,6 +104,7 @@ pub(crate) fn prepare(scene: &Scene2d, indices: &BTreeMap<String, u32>) -> Resul
                         size: map.map.cell_size,
                         lit: definition.lit,
                         parallax: layer.parallax,
+                        tint: layer.tint,
                         ..Default::default()
                     },
                 };

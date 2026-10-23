@@ -1,10 +1,53 @@
+//! Regenerates the sample's committed sources: pixel art, atlas settings and the scene,
+//! which is authored only through the typed command script `platformer.commands.json`.
 use super::*;
+
+/// Writes the source PNGs and atlas settings, then replays the command script.
 pub fn prepare(root: &Path) -> Result<()> {
     let dir = root.join("sample");
     std::fs::create_dir_all(&dir)?;
+    paint(&dir)?;
+    std::fs::write(
+        dir.join("platformer.scene"),
+        author(&dir.join("platformer.commands.json"))?,
+    )?;
+    Ok(())
+}
+
+/// Applies the command script through the shared registry, exactly as an agent would over
+/// the Engine Protocol (one batch = one undo item), and returns the canonical scene text.
+/// IDs minted by commands come from a seeded generator, so the output is reproducible.
+pub fn author(script: &Path) -> Result<String> {
+    let mut db = schema();
+    let mut registry = ara_cmd::Registry::builtin(&mut db);
+    ara_2d::commands::register(&mut registry, &mut db);
+    ara_physics2d::commands::register(&mut registry, &mut db);
+    let mut workspace = ara_doc::Workspace::default();
+    workspace.insert(
+        "platformer.scene",
+        ara_doc::Document::new(
+            "scene",
+            ara_doc::AssetId::parse("sc_platform1").map_err(anyhow::Error::msg)?,
+        ),
+    );
+    let mut store = ara_ops::Store::with_ids(db, workspace, ara_doc::IdGen::seeded(2));
+    let batches: Vec<ara_cmd::Batch> = serde_json::from_slice(&std::fs::read(script)?)?;
+    for batch in &batches {
+        registry
+            .apply(&mut store, batch, &ara_cmd::Session::human())
+            .map_err(|e| anyhow::anyhow!("{:?}: {e:?}", batch.why))?;
+    }
+    let doc = store
+        .workspace()
+        .doc("sc_platform1")
+        .ok_or_else(|| anyhow::anyhow!("sample document absent"))?;
+    Ok(ara_doc::write(doc, store.schema()))
+}
+
+/// Authored pixel fixtures: grass, masonry, soil, crate, hero, lantern, coins, parallax.
+fn paint(dir: &Path) -> Result<()> {
     let mut color = image::RgbaImage::new(128, 96);
     let mut normal = image::RgbaImage::from_pixel(128, 96, image::Rgba([128, 128, 255, 255]));
-    // Authored pixel fixtures: grass, masonry, soil, crate, hero, lantern and parallax.
     for y in 0..16 {
         for x in 0..16 {
             let shade = ((x * 13 + y * 7) % 5) as u8;
@@ -44,6 +87,7 @@ pub fn prepare(root: &Path) -> Result<()> {
                     [110 + shade * 4, 75 + shade * 3, 61, 255]
                 }),
             );
+            // Bevelled masonry normals; everything else stays flat.
             let nx = (x as f32 / 15. - 0.5) * 0.8;
             let ny = (0.5 - y as f32 / 15.) * 0.8;
             let nz = (1. - nx * nx - ny * ny).sqrt();
@@ -62,6 +106,14 @@ pub fn prepare(root: &Path) -> Result<()> {
     for frame in 0..2 {
         for y in 0..24 {
             for x in 0..16 {
+                // The step frame shifts the legs apart by one pixel.
+                let leg = |x: u32| {
+                    if frame == 0 {
+                        (3..7).contains(&x) || (9..13).contains(&x)
+                    } else {
+                        (2..6).contains(&x) || (10..14).contains(&x)
+                    }
+                };
                 let pixel = if y < 7 && (3..13).contains(&x) {
                     Some(if y < 2 {
                         [43, 54, 75, 255]
@@ -76,7 +128,7 @@ pub fn prepare(root: &Path) -> Result<()> {
                     } else {
                         [67, 158, 181, 255]
                     })
-                } else if y >= 17 && ((3..7).contains(&x) || (9..13).contains(&x)) {
+                } else if y >= 17 && leg(x) {
                     Some(if y > 21 {
                         [38, 45, 62, 255]
                     } else {
@@ -103,6 +155,31 @@ pub fn prepare(root: &Path) -> Result<()> {
                         [60, 67, 80, 255]
                     }),
                 );
+            }
+        }
+    }
+    // Coin and its spin frame: a gold disc, then a narrow ellipse.
+    for (frame, half_width) in [(0u32, 3.5f32), (1, 1.5)] {
+        for y in 0..8 {
+            for x in 0..8 {
+                let dx = (x as f32 - 3.5) / half_width;
+                let dy = (y as f32 - 3.5) / 3.5;
+                let d = dx * dx + dy * dy;
+                if d <= 1. {
+                    let rim = d > 0.55;
+                    let shine = x as f32 - 3.5 < -0.5 * half_width && y < 4;
+                    color.put_pixel(
+                        72 + frame * 8 + x,
+                        y,
+                        image::Rgba(if shine {
+                            [255, 246, 196, 255]
+                        } else if rim {
+                            [214, 150, 38, 255]
+                        } else {
+                            [255, 205, 64, 255]
+                        }),
+                    );
+                }
             }
         }
     }
@@ -138,6 +215,8 @@ pub fn prepare(root: &Path) -> Result<()> {
         ("heroIdle", 0, 16, 16, 24),
         ("heroStep", 16, 16, 16, 24),
         ("lantern", 64, 0, 8, 16),
+        ("coin", 72, 0, 8, 8),
+        ("coinSpin", 80, 0, 8, 8),
         ("mountain", 0, 64, 64, 32),
         ("cloud", 64, 64, 64, 32),
     ];
@@ -164,132 +243,5 @@ pub fn prepare(root: &Path) -> Result<()> {
         dir.join("atlas.settings.json"),
         ara_2d::canonical(&settings)?,
     )?;
-    let mut map = Tilemap {
-        atlas: Some(AssetRef(ATLAS.into())),
-        normal_atlas: Some(AssetRef(NORMAL.into())),
-        definitions: [
-            (
-                "1".into(),
-                TileDefinition {
-                    region: "grass".into(),
-                    solid: true,
-                    lit: true,
-                },
-            ),
-            (
-                "2".into(),
-                TileDefinition {
-                    region: "stone".into(),
-                    solid: true,
-                    lit: true,
-                },
-            ),
-            (
-                "3".into(),
-                TileDefinition {
-                    region: "dirt".into(),
-                    solid: true,
-                    lit: true,
-                },
-            ),
-        ]
-        .into(),
-        layers: vec![
-            TileLayer {
-                id: "l_ground".into(),
-                sorting_layer: 0,
-                ..Default::default()
-            },
-            TileLayer {
-                id: "l_ruins".into(),
-                sorting_layer: 1,
-                ..Default::default()
-            },
-        ],
-        ..Default::default()
-    };
-    for x in -24..24 {
-        for y in -6..=-3 {
-            map.layers[0].cells.insert(
-                ara_2d::tilemap::key(x, y),
-                Tile {
-                    tile: if y == -3 { 1 } else { 3 },
-                    terrain: 1,
-                },
-            );
-        }
-    }
-    for (left, right, y) in [(-7, -3, 0), (2, 6, -1)] {
-        for x in left..=right {
-            map.layers[1].cells.insert(
-                ara_2d::tilemap::key(x, y),
-                Tile {
-                    tile: 2,
-                    terrain: 2,
-                },
-            );
-        }
-    }
-    for y in -2..3 {
-        map.layers[1].cells.insert(
-            ara_2d::tilemap::key(7, y),
-            Tile {
-                tile: 2,
-                terrain: 2,
-            },
-        );
-    }
-    let sprite = |region: &str, size: [f32; 2], layer: i32, lit: bool, parallax: [f32; 2]| Sprite {
-        atlas: Some(AssetRef(ATLAS.into())),
-        normal_atlas: Some(AssetRef(NORMAL.into())),
-        region: region.into(),
-        size,
-        sorting_layer: layer,
-        lit,
-        parallax,
-        ..Default::default()
-    };
-    let mut records = serde_json::Map::new();
-    records.insert(
-        "e_map1".into(),
-        serde_json::json!({"name":"Ruins tilemap","Tilemap":map}),
-    );
-    records.insert("e_hero1".into(),serde_json::json!({"name":"Scout","Transform":{"position":[-1.5,-1.75,0]},"Sprite":sprite("heroIdle",[1.,1.5],3,true,[1.;2]),"PhysicsPose2d":{"position":[-1.5,-1.75]},"CharacterController2d":{"height":1.5},"Flipbook":{"frames":[{"region":"heroIdle","ticks":8},{"region":"heroStep","ticks":8}],"looping":true}}));
-    records.insert("e_crate1".into(),serde_json::json!({"name":"Nine-slice supply crate","Transform":{"position":[1.,-1.75,0]},"Sprite":Sprite {nine_slice:true,..sprite("crate",[1.75,1.5],2,true,[1.;2])}}));
-    for (id, x, y) in [("e_lamp1", -4., 1.), ("e_lamp2", 5., 0.)] {
-        records.insert(id.into(),serde_json::json!({"name":"Amber lantern","Transform":{"position":[x,y,0]},"Sprite":sprite("lantern",[0.5,1.],4,false,[1.;2])}));
-    }
-    records.insert("e_light1".into(),serde_json::json!({"name":"Lantern light","Light2d":Light2d {position:[-3.8,1.2,1.8],color:[3.4,2.1,0.9],radius:8.,shadows:true}}));
-    records.insert("e_light2".into(),serde_json::json!({"name":"Blue rim light","Light2d":Light2d {position:[6.,2.4,1.5],color:[0.5,1.3,2.8],radius:6.,shadows:true}}));
-    for (id, x) in [("e_peak1", -7.), ("e_peak2", 7.)] {
-        records.insert(id.into(),serde_json::json!({"name":"Parallax mountain","Transform":{"position":[x,-0.25,0]},"Sprite":sprite("mountain",[16.,8.],-10,false,[0.3,0.3])}));
-    }
-    records.insert("e_cloud1".into(),serde_json::json!({"name":"Parallax clouds","Transform":{"position":[-2.,3.,0]},"Sprite":sprite("cloud",[10.,5.],-9,false,[0.15,0.15])}));
-    records.insert(
-        "e_camera1".into(),
-        serde_json::json!({"name":"Pixel camera","Camera2d":camera()}),
-    );
-    let value =
-        serde_json::json!({"$schema":"ara://schema/scene/1","id":"sc_platform1","records":records});
-    let db = schema();
-    let read = ara_doc::read(
-        &serde_json::to_string(&value)?,
-        "platformer.scene",
-        &db,
-        None,
-    );
-    ensure!(!read.diags.iter().any(|d| d.is_error()), "{:?}", read.diags);
-    std::fs::write(
-        dir.join("platformer.scene"),
-        ara_doc::write(
-            &read
-                .doc
-                .ok_or_else(|| anyhow::anyhow!("sample document absent"))?,
-            &db,
-        ),
-    )?;
-    let manifest = root.join("shaders/pipelines.json");
-    let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest)?)?;
-    ara_gpu::cooked::write_json(&manifest, &value)?;
     Ok(())
 }

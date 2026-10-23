@@ -4,10 +4,23 @@ use anyhow::{Result, ensure};
 use ara_render::capture::{ViewMode, compare};
 use ara_render2d::Renderer2d;
 use std::path::Path;
+
+#[test]
+fn sample_scene_is_exactly_its_command_script() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let authored = common::fixtures::author(&root.join("sample/platformer.commands.json"))?;
+    let committed = std::fs::read_to_string(root.join("sample/platformer.scene"))?;
+    ensure!(
+        authored == committed,
+        "platformer.scene drifted from platformer.commands.json; run `platformer prepare`"
+    );
+    Ok(())
+}
+
 #[test]
 fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let scene = common::scene(
+    let (scene, camera) = common::scene(
         root,
         Some(Path::new(env!("CARGO_BIN_EXE_ara-2d-import-worker"))),
     )?;
@@ -24,7 +37,7 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
     ] {
         let mut request = common::request([640, 360]);
         request.mode = mode;
-        let capture = renderer.capture(&common::camera(), request)?;
+        let capture = renderer.capture(&camera, request)?;
         let path = dir.join(format!("{}.png", mode.name()));
         if update {
             std::fs::create_dir_all(&dir)?;
@@ -45,7 +58,7 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
             mode.name(),
             comparison.score
         );
-        ensure!(capture.legend.len() >= 7, "missing visible scene entities");
+        ensure!(capture.legend.len() >= 12, "missing visible scene entities");
         for item in &capture.legend {
             let [x, y, w, h] = item.bbox;
             ensure!(
@@ -61,19 +74,15 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
     ensure!(
         Some(
             renderer
-                .capture(&common::camera(), common::request([640, 360]))?
+                .capture(&camera, common::request([640, 360]))?
                 .image
         ) == lit,
         "capture depends on history"
     );
-    let mut camera = common::camera();
-    camera.centre[0] += 1.;
+    let mut moved = camera.clone();
+    moved.centre[0] += 1.;
     ensure!(
-        Some(
-            renderer
-                .capture(&camera, common::request([640, 360]))?
-                .image
-        ) != lit,
+        Some(renderer.capture(&moved, common::request([640, 360]))?.image) != lit,
         "camera/parallax did not move"
     );
     renderer.gpu().assert_clean()?;
@@ -82,10 +91,7 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
     no_lights.lights.clear();
     let mut dark = Renderer2d::new(&no_lights, [640, 360], root.join("../../.sn/test2d-dark"))?;
     ensure!(
-        Some(
-            dark.capture(&common::camera(), common::request([640, 360]))?
-                .image
-        ) != lit,
+        Some(dark.capture(&camera, common::request([640, 360]))?.image) != lit,
         "local lights made no visible contribution"
     );
     drop(dark);
@@ -98,16 +104,12 @@ fn platformer_capture_goldens_picking_parallax_and_lighting() -> Result<()> {
         }
     }
     let mut a = Renderer2d::new(&unlit, [640, 360], root.join("../../.sn/test2d-unlit"))?;
-    let independent = a
-        .capture(&common::camera(), common::request([640, 360]))?
-        .image;
+    let independent = a.capture(&camera, common::request([640, 360]))?.image;
     drop(a);
     unlit.lights.clear();
     let mut b = Renderer2d::new(&unlit, [640, 360], root.join("../../.sn/test2d-unlit"))?;
     ensure!(
-        independent
-            == b.capture(&common::camera(), common::request([640, 360]))?
-                .image,
+        independent == b.capture(&camera, common::request([640, 360]))?.image,
         "unlit sprites paid for/depended on opt-in lights"
     );
     Ok(())

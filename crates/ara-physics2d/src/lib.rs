@@ -18,7 +18,8 @@ pub fn register(db: &mut ara_schema::SchemaDb) {
         .register::<Collider2d>()
         .register::<CharacterController2d>()
         .register::<CharacterInput2d>()
-        .register::<CharacterMotion2d>();
+        .register::<CharacterMotion2d>()
+        .register::<commands::TileColliderSource2d>();
 }
 /// Registers component codecs and the complete rollback-safe solver resource.
 pub fn register_sim(registry: &mut ara_sim::SimRegistry) -> Result<(), ara_sim::SimError> {

@@ -59,6 +59,22 @@
       }
     },
     {
+      "name": "coin",
+      "region": {
+        "x": 72,
+        "width": 8,
+        "height": 8
+      }
+    },
+    {
+      "name": "coinSpin",
+      "region": {
+        "x": 80,
+        "width": 8,
+        "height": 8
+      }
+    },
+    {
       "name": "mountain",
       "region": {
         "y": 64,

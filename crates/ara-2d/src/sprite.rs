@@ -116,6 +116,9 @@ pub struct Camera2d {
     /// Linear scene ambient illumination.
     #[ara(default = [0.2, 0.2, 0.25])]
     pub ambient: [f32; 3],
+    /// Linear clear color behind every layer.
+    #[ara(default = [0.012, 0.018, 0.032])]
+    pub background: [f32; 3],
 }
 impl Default for Camera2d {
     fn default() -> Self {
@@ -125,6 +128,7 @@ impl Default for Camera2d {
             zoom: 2.,
             pixel_perfect: true,
             ambient: [0.2, 0.2, 0.25],
+            background: [0.012, 0.018, 0.032],
         }
     }
 }
@@ -135,6 +139,7 @@ impl Camera2d {
             self.centre
                 .iter()
                 .chain(self.ambient.iter())
+                .chain(self.background.iter())
                 .all(|v| v.is_finite())
                 && self.pixels_per_metre.is_finite()
                 && self.pixels_per_metre > 0.

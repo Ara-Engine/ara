@@ -31,7 +31,7 @@ fn generated_tile_hulls_are_owned_replaceable_and_undoable() -> Result<()> {
             ("entity.create", json!({"id":"e_map1"})),
             (
                 "tilemap.set",
-                json!({"entity":"e_map1","value":{"definitions":{"1":{"solid":true}},"layers":[{"id":"l_ground","cells":{"0,0":{"tile":1},"1,0":{"tile":1}}}]}}),
+                json!({"entity":"e_map1","value":{"definitions":{"1":{"solid":true}},"layers":[{"id":"l_ground","cells":{"0,0":1,"1,0":1}}]}}),
             ),
         ],
     );
