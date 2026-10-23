@@ -81,6 +81,19 @@ internal static class EditClassifier
         return (Escalation.None, edits);
     }
 
+    /// <summary>
+    /// True if any doc comment changed. Doc comments are trivia (invisible to
+    /// <see cref="Classify"/>) but the generator turns them into schema docs, so such an
+    /// edit must regenerate (L3).
+    /// </summary>
+    internal static bool DocsChanged(IReadOnlyList<FileChange> changes) =>
+        changes.Any(c => c.Old is null || c.New is null || Docs(c.Old) != Docs(c.New));
+
+    static string Docs(SyntaxTree tree) =>
+        string.Concat(tree.GetRoot().DescendantTrivia(descendIntoTrivia: false)
+            .Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+            .Select(t => t.ToString()));
+
     /// <summary>Maps body edits to Roslyn semantic edits (Update of the old and new method symbols).</summary>
     internal static List<SemanticEdit> ToSemanticEdits(List<BodyEdit> edits, Compilation oldComp, Compilation newComp)
     {

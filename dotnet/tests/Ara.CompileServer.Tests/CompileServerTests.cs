@@ -145,8 +145,15 @@ public sealed class SessionTests : IDisposable
         Edit(s, "c.Value += ;", "c.Value += 5;");
         Assert.Equal(MessageKind.Delta, sink.Next().Kind);
 
-        // A generated-code change (a new component field) takes L3.
+        // A new component field is structural: L3.
         Edit(s, "public int Value; }", "public int Value; /// <summary>More.</summary>\n public int More; }");
+        (kind, r) = sink.Next();
+        Assert.Equal(MessageKind.Image, kind);
+        r.U32(); r.U32(); r.Bool(); r.U32();
+        Assert.Equal((uint)Escalation.Structural, r.U32());
+
+        // A doc-comment edit changes the generated schema docs, so it takes L3 too.
+        Edit(s, "/// <summary>Ticks.</summary>", "/// <summary>Ticks seen.</summary>");
         (kind, r) = sink.Next();
         Assert.Equal(MessageKind.Image, kind);
         r.U32(); r.U32(); r.Bool(); r.U32();

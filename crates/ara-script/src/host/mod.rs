@@ -263,11 +263,14 @@ impl ScriptHost {
 
     /// Rebuilds the system schedule and behaviour plans after the registry changed.
     fn rebuild(&mut self, world: &mut World) {
+        if self.registry.catalog_dirty {
+            self.registry.catalog_dirty = false;
+            world.insert_resource(self.registry.catalog());
+        }
         if !self.registry.dirty {
             return;
         }
         self.registry.dirty = false;
-        world.insert_resource(self.registry.catalog());
         let reg = &self.registry;
         let mut systems: Vec<_> = reg.modules.values().flat_map(|m| m.systems.iter()).collect();
         systems.sort_by(|a, b| (a.order, &a.name, a.id).cmp(&(b.order, &b.name, b.id)));

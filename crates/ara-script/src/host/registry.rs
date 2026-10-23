@@ -88,6 +88,8 @@ pub(crate) struct CommandDecl {
 /// One module's current generation.
 #[derive(Debug, Clone)]
 pub(crate) struct ModuleRecord {
+    /// The descriptor without its generation: equal shapes need no re-registration.
+    pub shape: Value,
     pub name: String,
     pub generation: u32,
     pub hot: bool,
@@ -97,6 +99,20 @@ pub(crate) struct ModuleRecord {
     pub commands: Vec<CommandDecl>,
 }
 
+impl ModuleRecord {
+    /// True if both generations schedule the same systems and behaviours with the same access.
+    fn same_shape(&self, other: &ModuleRecord) -> bool {
+        let systems = |m: &ModuleRecord| -> Vec<_> {
+            m.systems
+                .iter()
+                .map(|s| (s.id, s.name.clone(), s.order, s.columns.clone(), s.resources.clone(), s.with.clone(), s.without.clone()))
+                .collect()
+        };
+        let behaviours = |m: &ModuleRecord| -> Vec<_> { m.behaviours.iter().map(|b| (b.id, b.data)).collect() };
+        systems(self) == systems(other) && behaviours(self) == behaviours(other)
+    }
+}
+
 /// Everything registered by the engine and the C# modules.
 pub(crate) struct Registry {
     pub schema: SchemaDb,
@@ -104,8 +120,10 @@ pub(crate) struct Registry {
     pub resources: Vec<ScriptData>,
     pub cues: Vec<ScriptData>,
     pub modules: BTreeMap<u32, ModuleRecord>,
-    /// Systems, behaviours or commands changed since the schedule was built.
+    /// Systems, behaviours or the components they use changed since the schedule was built.
     pub dirty: bool,
+    /// Components were added or moved to new ids since the world's catalog was written.
+    pub catalog_dirty: bool,
 }
 
 #[derive(Deserialize)]
@@ -237,6 +255,7 @@ impl Registry {
             cues: Vec::new(),
             modules: BTreeMap::new(),
             dirty: true,
+            catalog_dirty: true,
         }
     }
 
@@ -259,6 +278,18 @@ impl Registry {
     /// Registers one module generation. On error nothing changes and the old
     /// generation keeps running.
     pub fn register_module(&mut self, world: &mut World, json: &[u8]) -> Result<Value, Vec<Diagnostic>> {
+        let mut shape: Value = serde_json::from_slice(json)
+            .map_err(|e| vec![error(codes::BAD_DESCRIPTOR, format!("module descriptor: {e}"))])?;
+        let generation = shape.as_object_mut().and_then(|o| o.remove("generation"));
+        let slot = shape["slot"].as_u64().and_then(|s| u32::try_from(s).ok()).unwrap_or(u32::MAX);
+        // Fast path: an L3 that changed only code declares exactly what the running generation did.
+        if let Some(prev) = self.modules.get_mut(&slot)
+            && prev.shape == shape
+        {
+            prev.generation = generation.and_then(|g| g.as_u64()).and_then(|g| u32::try_from(g).ok()).unwrap_or(prev.generation);
+            prev.hot = shape["hot"].as_bool().unwrap_or(prev.hot);
+            return Ok(self.response());
+        }
         let d: Descriptor = serde_json::from_slice(json)
             .map_err(|e| vec![error(codes::BAD_DESCRIPTOR, format!("module descriptor: {e}"))])?;
         let owner = Owner::Module(d.slot);
@@ -379,6 +410,7 @@ impl Registry {
         }
 
         // 4. Apply: components (reuse, migrate or add), resources, cues.
+        let mut ids_changed = false;
         for (name, layout) in comps {
             match self.component(&name) {
                 Some(i) if self.components[i as usize].layout == layout => {}
@@ -387,10 +419,12 @@ impl Registry {
                     let old = self.components[i as usize].clone();
                     migrate(world, &schema, &old, id, &layout);
                     self.components[i as usize] = ScriptComponent { name, id, layout, owner };
+                    ids_changed = true;
                 }
                 None => {
                     let id = register_bevy_component(world, &name, &layout).map_err(|e| vec![e])?;
                     self.components.push(ScriptComponent { name, id, layout, owner });
+                    self.catalog_dirty = true;
                 }
             }
         }
@@ -409,6 +443,7 @@ impl Registry {
                 None => value::default_bytes(&schema, &layout),
             };
             insert_resource_bytes(world, id, &bytes);
+            ids_changed = true;
             let rec = ScriptData { name, id: Some(id), layout, owner };
             match existing {
                 Some(i) => self.resources[i as usize] = rec,
@@ -426,6 +461,7 @@ impl Registry {
         let resolve = |n: &str| self.component(n).unwrap_or(u32::MAX);
         let id = |i: usize| (d.slot << 16) | u32::try_from(i).unwrap_or(0xFFFF);
         let record = ModuleRecord {
+            shape,
             name: d.module.clone(),
             generation: d.generation,
             hot: d.hot,
@@ -470,19 +506,26 @@ impl Registry {
                 })
                 .collect(),
         };
+        // An L3 that only changed code keeps the schedule: systems are ids into the C# table.
+        let same = self.modules.get(&d.slot).is_some_and(|prev| prev.same_shape(&record));
+        self.dirty |= ids_changed || !same;
+        self.catalog_dirty |= ids_changed;
         self.modules.insert(d.slot, record);
         self.schema = schema;
-        self.dirty = true;
+        Ok(self.response())
+    }
 
+    /// The registration response: every script index by name.
+    fn response(&self) -> Value {
         let index = |items: Vec<(String, usize)>| -> Value {
             Value::Object(items.into_iter().map(|(n, i)| (n, json!(i))).collect::<Map<_, _>>())
         };
-        Ok(json!({
+        json!({
             "ok": true,
             "components": index(self.components.iter().enumerate().map(|(i, c)| (c.name.clone(), i)).collect()),
             "resources": index(self.resources.iter().enumerate().map(|(i, c)| (c.name.clone(), i)).collect()),
             "cues": index(self.cues.iter().enumerate().map(|(i, c)| (c.name.clone(), i)).collect()),
-        }))
+        })
     }
 }
 

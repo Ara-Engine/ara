@@ -119,15 +119,7 @@ public static unsafe class ScriptRuntime
     static uint ApplySwap(SwapUpdate u)
     {
         var slot = SlotOf(u.Slot);
-        var builder = new ModuleBuilder();
-        try
-        {
-            u.Register(builder);
-        }
-        catch (Exception e)
-        {
-            return Reject(u, slot, $"module `{u.Name}`: Register threw {e.GetType().Name}: {e.Message}");
-        }
+        var builder = u.Module;
         var generation = slot is null ? 0u : slot.Generation + 1;
         byte[] response;
         try

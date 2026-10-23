@@ -129,19 +129,24 @@ public sealed class DevModuleLoader : IModuleLoader
         Action<ModuleBuilder> register;
         try
         {
+            var t0 = Host.Now();
             var asm = pdb.Length > 0 ? alc.LoadFromStream(new MemoryStream(pe), new MemoryStream(pdb)) : alc.LoadFromStream(new MemoryStream(pe));
+            var t1 = Host.Now();
             var attr = asm.GetCustomAttribute<AraModuleAttribute>()
                 ?? throw new InvalidOperationException("the assembly has no [AraModule]; is Ara.Generators referenced?");
             register = attr.Entry.GetMethod("Register", [typeof(ModuleBuilder)])?.CreateDelegate<Action<ModuleBuilder>>()
                 ?? throw new InvalidOperationException($"{attr.Entry} has no Register(ModuleBuilder)");
+            var builder = new ModuleBuilder();
+            register(builder);
             Prepare(asm);
             report.TStaged = Host.Now();
+            Host.Log(0, $"module `{m.Name}` generation {generation} staged: load {(t1 - t0) / 1e6:F1} ms, register + pre-JIT {(report.TStaged - t1) / 1e6:F1} ms ({pe.Length / 1024} KB PE)");
             report.Bytes = (ulong)(pe.Length + pdb.Length);
             ScriptRuntime.Enqueue(new SwapUpdate
             {
                 Slot = m.Slot,
                 Name = m.Name,
-                Register = register,
+                Module = builder,
                 Hot = hot,
                 Report = report,
                 Installed = () =>

@@ -13,7 +13,7 @@ public abstract class PendingUpdate
 }
 
 /// <summary>
-/// L3 (or the initial load): a new generation's registration. The runtime registers it
+/// L3 (or the initial load): a new generation's declarations. The runtime registers them
 /// with the host, builds new tables and installs them, then calls
 /// <see cref="Installed"/>; on failure the old generation keeps running and
 /// <see cref="Rejected"/> is called.
@@ -22,8 +22,11 @@ public sealed class SwapUpdate : PendingUpdate
 {
     /// <summary>Module name (<c>ara.module.toml</c>).</summary>
     public required string Name { get; init; }
-    /// <summary>The generated <c>Register</c> method of the new generation.</summary>
-    public required Action<ModuleBuilder> Register { get; init; }
+    /// <summary>
+    /// The new generation's declarations: loaders run its generated <c>Register</c> while
+    /// staging, so the first call into new code (and its JIT) never lands on the tick thread.
+    /// </summary>
+    public required ModuleBuilder Module { get; init; }
     /// <summary>True if compiled as Debug IL with EnC enabled.</summary>
     public required bool Hot { get; init; }
     /// <summary>Called on the tick thread once the new tables are live (unload the old generation here).</summary>
@@ -81,7 +84,16 @@ public sealed class StaticModuleLoader(params (string Name, Action<ModuleBuilder
     public int Load(string configJson)
     {
         for (int i = 0; i < modules.Length; i++)
-            ScriptRuntime.Enqueue(new SwapUpdate { Slot = (uint)i, Name = modules[i].Name, Register = modules[i].Register, Hot = false });
+        {
+            var builder = new ModuleBuilder();
+            try { modules[i].Register(builder); }
+            catch (Exception e)
+            {
+                Diag.Report(AraCodes.LoadFailed, "error", $"module `{modules[i].Name}`: Register threw {e.GetType().Name}: {e.Message}");
+                return 1;
+            }
+            ScriptRuntime.Enqueue(new SwapUpdate { Slot = (uint)i, Name = modules[i].Name, Module = builder, Hot = false });
+        }
         return 0;
     }
 

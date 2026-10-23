@@ -107,12 +107,12 @@ internal sealed class ModuleSession : IDisposable
         if (hot == _hot) return;
         _hot = hot;
         _user = _user.WithOptions(ModuleCompiler.Options(hot));
-        BuildFull(AbiConst.ReloadL3, Escalation.Requested, Stopwatch.GetTimestamp());
+        BuildFull(AbiConst.ReloadL3, Escalation.Requested, Stopwatch.GetTimestamp(), analyze: []);
     });
 
     /// <summary>Sends a full image of the applied state (the host could not apply a delta).</summary>
     internal void Rebuild(uint escalation) =>
-        _work.Add(() => BuildFull(AbiConst.ReloadL3, (Escalation)escalation, Stopwatch.GetTimestamp()));
+        _work.Add(() => BuildFull(AbiConst.ReloadL3, (Escalation)escalation, Stopwatch.GetTimestamp(), analyze: []));
 
     /// <summary>Queues a change set as if the watcher had reported it (tests, tools).</summary>
     internal void Change(IEnumerable<string> paths)
@@ -202,23 +202,52 @@ internal sealed class ModuleSession : IDisposable
         return list;
     }
 
-    /// <summary>Emits the applied state (plus any pending heat) as a full image and sends it.</summary>
-    bool BuildFull(uint kind, Escalation escalation, long t0)
+    /// <summary>Per-phase timings of one reload, logged at info level.</summary>
+    sealed class Phases(string what)
+    {
+        long _t = Stopwatch.GetTimestamp();
+        readonly List<string> _parts = [];
+
+        public void Mark(string phase)
+        {
+            var now = Stopwatch.GetTimestamp();
+            _parts.Add($"{phase} {Stopwatch.GetElapsedTime(_t, now).TotalMilliseconds:F1}");
+            _t = now;
+        }
+
+        public override string ToString() => $"{what}: {string.Join(", ", _parts)} ms";
+    }
+
+    /// <summary>
+    /// Emits the applied state (plus any pending heat) as a full image and sends it.
+    /// <paramref name="analyze"/> are the trees to run the analyzers on (null: all);
+    /// <paramref name="generated"/> reuses a generator run for the same compilation.
+    /// </summary>
+    bool BuildFull(uint kind, Escalation escalation, long t0, IReadOnlyCollection<SyntaxTree>? analyze = null,
+        (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, string> Generated)? generated = null,
+        Phases? phases = null)
     {
         CompileState(true);
-        var (final, genDiags, generated) = Generate(_user);
+        phases ??= new Phases($"module `{_name}` full build");
+        var (final, genDiags, gen) = generated ?? Generate(_user);
+        phases.Mark("generate");
         var (image, errors) = genDiags.Any(d => d.Severity == DiagnosticSeverity.Error) ? (null, []) : ModuleCompiler.Emit(final);
-        var problems = Problems(final, genDiags, errors, [.. _trees.Values]);
+        phases.Mark("emit");
+        var problems = Problems(final, genDiags, errors, analyze ?? [.. _trees.Values]);
+        phases.Mark("analyze");
         SendDiagnostics(problems, t0);
         if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return false;
         _final = final;
-        _generated = generated;
+        _generated = gen;
         _baseline = _hot ? ModuleCompiler.Baseline(final, image) : null;
+        phases.Mark("baseline");
         if (kind != AbiConst.ReloadInitial) _generation++;
         CheckSize();
         _out.Send(MessageKind.Image, new Protocol.Writer()
             .U32(_slot).U32(_generation).Bool(_hot).U32(kind).U32((uint)escalation).U64(Micros(t0))
             .Bytes(image.Pe).Bytes(image.Pdb).ToArray());
+        phases.Mark($"send ({(image.Pe.Length + image.Pdb.Length) / 1024} KB)");
+        Log(0, phases.ToString());
         return true;
     }
 
@@ -305,6 +334,7 @@ internal sealed class ModuleSession : IDisposable
     /// <summary>Classifies and compiles one change set: an L1 delta, an L3 image, or diagnostics.</summary>
     internal void OnChange(IEnumerable<string> paths, long tEvent)
     {
+        var phases = new Phases($"module `{_name}` edit");
         foreach (var p in paths)
         {
             if (!p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || IsIgnored(p)) continue;
@@ -328,6 +358,7 @@ internal sealed class ModuleSession : IDisposable
         }
         if (changes.Count == 0) return;
         CompileState(true);
+        phases.Mark("read+parse");
         var next = _user;
         foreach (var c in changes)
         {
@@ -341,30 +372,31 @@ internal sealed class ModuleSession : IDisposable
         }
         var changedTrees = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
 
+        // Body-only edits cannot change the generator's output (it reads declarations,
+        // attributes and doc comments only), so L1 skips the generator and keeps the
+        // generated trees: the edited user trees are swapped into the last final compilation.
         var escalation = !_enc || !_hot ? Escalation.Cold : Escalation.None;
-        var (final, genDiags, generated) = Generate(next);
-        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error))
-        {
-            SendDiagnostics(Problems(final, genDiags, [], changedTrees), tEvent);
-            return;
-        }
-        if (escalation == Escalation.None && !SameGenerated(generated)) escalation = Escalation.Generated;
         List<BodyEdit> bodyEdits = [];
         if (escalation == Escalation.None) (escalation, bodyEdits) = EditClassifier.Classify(changes);
-        if (escalation == Escalation.None && bodyEdits.Count == 0)
-        {
-            Adopt(next, final, generated, nextTrees, nextTexts); // trivia-only change
-            return;
-        }
-
+        if (escalation == Escalation.None && EditClassifier.DocsChanged(changes)) escalation = Escalation.Generated;
+        phases.Mark("classify");
         if (escalation == Escalation.None)
         {
+            var final = _final;
+            foreach (var c in changes) final = final.ReplaceSyntaxTree(c.Old!, c.New!);
+            if (bodyEdits.Count == 0)
+            {
+                Adopt(next, final, _generated, nextTrees, nextTexts); // trivia-only change
+                return;
+            }
             var edits = EditClassifier.ToSemanticEdits(bodyEdits, _final, final);
             ModuleDelta? delta = null;
             ImmutableArray<Diagnostic> errors = [];
             try { (delta, errors) = ModuleCompiler.EmitDelta(final, _baseline!, edits); }
             catch (Exception e) { Log(1, $"EmitDifference threw, taking L3: {e.Message}"); }
+            phases.Mark("emit delta");
             var problems = Problems(final, [], errors, changedTrees);
+            phases.Mark("analyze");
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error))
             {
                 SendDiagnostics(problems, tEvent);
@@ -373,25 +405,38 @@ internal sealed class ModuleSession : IDisposable
             if (delta is not null)
             {
                 SendDiagnostics(problems, tEvent);
-                Adopt(next, final, generated, nextTrees, nextTexts);
+                Adopt(next, final, _generated, nextTrees, nextTexts);
                 _baseline = delta.Next;
                 _out.Send(MessageKind.Delta, new Protocol.Writer()
                     .U32(_slot).U32(_generation).U32((uint)edits.Count).U64(Micros(tEvent))
                     .Bytes(delta.Metadata).Bytes(delta.Il).Bytes(delta.Pdb).ToArray());
+                phases.Mark("send");
+                Log(0, "L1 " + phases);
                 return;
             }
             escalation = Escalation.EmitFailed;
         }
 
-        // L3. A cold module's first edit makes it hot (when the host has EnC).
+        // L3: run the generator over the new user compilation.
+        var (genFinal, genDiags, generated) = Generate(next);
+        phases.Mark("generate");
+        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error))
+        {
+            SendDiagnostics(Problems(genFinal, genDiags, [], changedTrees), tEvent);
+            return;
+        }
+
+        // A cold module's first edit makes it hot (when the host has EnC).
         var previous = (_user, _trees, _texts, _hot);
+        var reuse = ((Compilation, ImmutableArray<Diagnostic>, ImmutableDictionary<string, string>)?)(genFinal, genDiags, generated);
         if (escalation == Escalation.Cold && _enc && !_hot)
         {
             _hot = true;
             next = next.WithOptions(ModuleCompiler.Options(true));
+            reuse = null; // new options: run the generator for the Debug-IL compilation
         }
         (_user, _trees, _texts) = (next, nextTrees, nextTexts);
-        if (!BuildFull(AbiConst.ReloadL3, escalation, tEvent))
+        if (!BuildFull(AbiConst.ReloadL3, escalation, tEvent, changedTrees, reuse, phases))
             (_user, _trees, _texts, _hot) = previous; // the errors were sent; the last good state stays applied
     }
 
