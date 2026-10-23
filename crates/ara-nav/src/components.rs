@@ -272,6 +272,9 @@ pub struct NavAgentState {
     /// Long route across clusters when the goal is outside the resident mesh.
     #[serde(default)]
     pub route: Option<crate::Route>,
+    /// Runtime speed cap below `NavAgent::max_speed` (AI gaits: walk, run).
+    #[serde(default)]
+    pub speed_limit: Option<f32>,
 }
 impl NavAgentState {
     /// Creates idle deterministic state with a stable simulation ID.
@@ -293,7 +296,14 @@ impl NavAgentState {
             avoid_link: None,
             issue: None,
             route: None,
+            speed_limit: None,
         }
+    }
+    /// Effective maximum speed: the authored speed capped by `speed_limit`.
+    pub fn max_speed(&self, agent: &NavAgent) -> f32 {
+        self.speed_limit
+            .filter(|l| l.is_finite() && *l >= 0.0)
+            .map_or(agent.max_speed, |l| l.min(agent.max_speed))
     }
     /// Sets a new goal, clearing the corridor so the next tick plans afresh.
     pub fn set_target(&mut self, target: Option<[f32; 3]>) {

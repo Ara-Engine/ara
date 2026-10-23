@@ -170,7 +170,7 @@ fn run(world: &mut World, nav: &mut NavWorld, query: &mut AgentQuery) {
                     preferred: if inert { [0.0; 3] } else { state.desired },
                     radius: agent.radius.clamp(0.001, 10.0),
                     height: agent.height.max(0.01),
-                    max_speed: if inert { 0.0 } else { agent.max_speed },
+                    max_speed: if inert { 0.0 } else { state.max_speed(agent) },
                     max_acceleration: agent.acceleration.max(0.0),
                     layers: if inert { 0 } else { 1 },
                     walls: wall_index.map_or(ara_crowd::NO_WALLS, |i| i as u16),

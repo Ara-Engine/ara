@@ -430,6 +430,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-ai"
+version = "0.0.0"
+dependencies = [
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-graph",
+ "ara-json",
+ "ara-nav",
+ "ara-ops",
+ "ara-perception",
+ "ara-schema",
+ "ara-sim",
+ "ara-why",
+ "bevy_ecs",
+ "blake3",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ara-anim"
 version = "0.0.0"
 dependencies = [

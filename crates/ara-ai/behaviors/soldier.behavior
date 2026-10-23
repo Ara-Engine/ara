@@ -1,0 +1,40 @@
+# Cover fight: engage while healthy, find hidden cover when hurt, recover, re-engage.
+behavior Soldier {
+  var health: float = 100;
+  var target: entity;
+  var cover: vec3;
+
+  query CoverSpot {
+    generate cover(self, 16);
+    filter navigable(item);
+    filter distance(item, lastSeen(target)) > 6;
+    filter not visible(lastSeen(target), item);
+    score inverse(distance(item, self), 16) weight 2;
+    score remap(distance(item, lastSeen(target)), 6, 20);
+  }
+
+  state Fight select utility every 0.5 {
+    enter set target = nearest("player");
+    state Engage {
+      score remap(health, 30, 70);
+      do face(lastSeen(target));
+      do act("fire", target, every: 0.5);
+    }
+    state TakeCover {
+      score inverse(health, 60);
+      state FindCover {
+        do find(CoverSpot, into: cover);
+        on done -> GoToCover;
+        on failed -> Hold;
+      }
+      state GoToCover {
+        do moveTo(cover, speed: 4, tolerance: 0.6);
+        on done -> Hold;
+        on failed -> FindCover;
+      }
+      state Hold {
+        do face(lastSeen(target));
+      }
+    }
+  }
+}

@@ -107,6 +107,7 @@ pub(crate) fn steer(
     gates: &LinkGates,
     cfg: Follow,
 ) -> [f32; 3] {
+    let max_speed = state.max_speed(agent);
     let Some(target) = state.target else {
         if state.issue != Some(NavIssue::StartOffMesh) {
             state.status = NavStatus::Idle;
@@ -137,7 +138,7 @@ pub(crate) fn steer(
     let reach = agent
         .stopping_distance
         .max(agent.radius)
-        .max(agent.max_speed * cfg.dt * 1.5);
+        .max(max_speed * cfg.dt * 1.5);
     let Some(path) = state.path.as_ref() else {
         return [0.0; 3];
     };
@@ -153,7 +154,7 @@ pub(crate) fn steer(
             previous,
             corners[corner].position,
             corners[corner + 1].position,
-            agent.max_speed * cfg.dt,
+            max_speed * cfg.dt,
         ) {
             break;
         }
@@ -195,7 +196,7 @@ pub(crate) fn steer(
                 link.map(|(l, _)| l),
                 current.position,
                 end,
-                agent.max_speed,
+                max_speed,
                 cfg.dt,
             ),
             link: id,
@@ -235,7 +236,7 @@ pub(crate) fn steer(
     if length <= 1e-4 {
         return [0.0; 3];
     }
-    let mut speed = agent.max_speed;
+    let mut speed = max_speed;
     if terminal && leg.is_none() {
         // Slow down within two radii of the goal, never overshooting in one tick.
         let remaining = horizontal(position, target);
@@ -249,7 +250,7 @@ pub(crate) fn steer(
     ];
     // Stall: wanting to move for a while without moving.
     let moving = (state.velocity[0].powi(2) + state.velocity[2].powi(2)).sqrt();
-    if speed > 0.2 * agent.max_speed && moving < 0.1 * agent.max_speed {
+    if speed > 0.2 * max_speed && moving < 0.1 * max_speed {
         state.stalled += 1;
         if state.stalled > cfg.stall_ticks {
             state.stalled = 0;

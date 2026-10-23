@@ -168,3 +168,73 @@ pub(crate) fn crossing(p: V2, q: V2, a: V2, b: V2) -> Option<f32> {
     let u = crate::orca::det(a - p, r) / denominator;
     ((0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)).then_some(t)
 }
+
+impl Walls {
+    /// Fraction along `a`-`b` of the first wall the segment crosses (XZ), only
+    /// counting walls whose height is within `vertical` metres of the segment
+    /// there. Walks the hashed cells along the segment; allocation-free.
+    pub fn first_hit(&self, a: [f32; 3], b: [f32; 3], vertical: f32) -> Option<f32> {
+        let (p, q) = (V2::new(a[0], a[2]), V2::new(b[0], b[2]));
+        let length = (q - p).len_sq().sqrt();
+        let steps = ((length / (self.cell * 0.5)).ceil() as usize).clamp(1, 1 << 16);
+        let mut best: Option<f32> = None;
+        let mut last = (i32::MIN, i32::MIN);
+        for k in 0..=steps {
+            let t = k as f32 / steps as f32;
+            let at = p + (q - p).scale(t);
+            let here = cell_of(self.inv, at.x, at.z);
+            if here == last {
+                continue;
+            }
+            last = here;
+            for dz in -1..=1 {
+                for dx in -1..=1 {
+                    let bucket = hash(here.0.wrapping_add(dx), here.1.wrapping_add(dz)) & self.mask;
+                    for &index in &self.entries
+                        [self.starts[bucket] as usize..self.starts[bucket + 1] as usize]
+                    {
+                        let s = &self.segments[index as usize];
+                        if let Some(t) = crossing(p, q, s.a, s.b) {
+                            let y = a[1] + (b[1] - a[1]) * t;
+                            if y >= s.y_min - vertical && y <= s.y_max + vertical {
+                                best = Some(best.map_or(t, |b: f32| b.min(t)));
+                            }
+                        }
+                    }
+                }
+            }
+            if best.is_some_and(|b| b <= t) {
+                break; // Nothing later on the segment can be nearer.
+            }
+        }
+        best
+    }
+
+    /// Walls with any point within `radius` of `center` (XZ), deduplicated and in
+    /// index order, appended to `out` as world-space segments.
+    pub fn within(&self, center: [f32; 3], radius: f32, out: &mut Vec<Wall>) {
+        let c = V2::new(center[0], center[2]);
+        let (x0, z0) = cell_of(self.inv, c.x - radius, c.z - radius);
+        let (x1, z1) = cell_of(self.inv, c.x + radius, c.z + radius);
+        let mut found: Vec<u32> = Vec::new();
+        for z in z0..=z1 {
+            for x in x0..=x1 {
+                let bucket = hash(x, z) & self.mask;
+                found.extend_from_slice(
+                    &self.entries[self.starts[bucket] as usize..self.starts[bucket + 1] as usize],
+                );
+            }
+        }
+        found.sort_unstable();
+        found.dedup();
+        for index in found {
+            let s = &self.segments[index as usize];
+            if (closest(s.a, s.b, c) - c).len_sq() <= radius * radius {
+                out.push(Wall {
+                    a: [s.a.x, s.y_min, s.a.z],
+                    b: [s.b.x, s.y_max, s.b.z],
+                });
+            }
+        }
+    }
+}

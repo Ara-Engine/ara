@@ -1,0 +1,33 @@
+# Patrol -> investigate noise -> chase -> lose -> return.
+behavior Guard {
+  var route: points;
+  var target: entity;
+  var noise: vec3;
+
+  state Alert select first every 0.25 {
+    state Chase when sees(nearest("player")) {
+      enter set target = nearest("player"), clear noise;
+      do moveTo(lastSeen(target), speed: 3, tolerance: 1.5);
+      do face(lastSeen(target));
+    }
+    state Search when known(target) and lost(target) < 5 {
+      do moveTo(lastSeen(target), speed: 2.5, tolerance: 1);
+    }
+    state Investigate when heard() or isSet(noise) {
+      enter set noise = noise();
+      state GoTo {
+        do moveTo(noise, speed: 2, tolerance: 1.5);
+        on done -> LookAround;
+        on failed -> LookAround;
+      }
+      state LookAround {
+        exit clear noise;
+        do wait(2);
+        on done -> Patrol;
+      }
+    }
+    state Patrol {
+      do patrol(route, speed: 1.5);
+    }
+  }
+}
