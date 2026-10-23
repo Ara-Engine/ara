@@ -720,6 +720,7 @@ dependencies = [
  "ara-profile",
  "ara-proto",
  "ara-schema",
+ "ara-why",
  "insta",
  "serde",
  "serde_json",

@@ -13,7 +13,7 @@ use std::fmt::Write;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::bus::{Event, EventId, Fnv, Lost, Meta, Origin};
 use crate::{Code, Diagnostic, Severity, Subject, codes};
@@ -43,7 +43,7 @@ impl Default for Retention {
 }
 
 /// One de-duplicated diagnostic in the store.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Record {
     /// Sequence number of the latest occurrence; pass it as `since` to read newer ones.
@@ -53,12 +53,12 @@ pub struct Record {
     /// Occurrences, including sampled ones.
     pub count: u32,
     /// Occurrences only counted, because sampling held them back.
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub sampled: u32,
     /// Event ID of the latest occurrence; other diagnostics name it as their `cause`.
     pub id: EventId,
     /// The event that caused the latest occurrence.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cause: Option<EventId>,
     /// Who caused the latest occurrence.
     pub origin: Origin,
@@ -67,7 +67,7 @@ pub struct Record {
     /// Unix time of the first occurrence, in milliseconds.
     pub first_at: u64,
     /// Simulation tick of the latest occurrence.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tick: Option<u64>,
     /// The diagnostic.
     pub diagnostic: Diagnostic,
@@ -210,6 +210,8 @@ pub struct Store {
     id_order: VecDeque<EventId>,
     next: u64,
     next_local: u32,
+    /// Event IDs handed to restored records.
+    restored: u64,
     retention: Retention,
     epoch: Instant,
     epoch_ms: u64,
@@ -219,6 +221,22 @@ impl Default for Store {
     fn default() -> Self {
         Store::new(Retention::default())
     }
+}
+
+/// The event-ID range of restored records (live IDs never set the top bit).
+const RESTORED: u64 = 1 << 63;
+
+/// A record with its dedup key, as persisted (`Store::save` / `Store::restore`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Saved {
+    /// The dedup key.
+    pub key: u64,
+    /// The dedup key of the record that caused it (event IDs do not outlive their
+    /// process; keys do).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cause_key: Option<u64>,
+    /// The record.
+    pub record: Record,
 }
 
 /// The store's maps are keyed by hashes and sequence numbers; FNV is plenty.
@@ -259,6 +277,7 @@ impl Store {
             id_order: VecDeque::new(),
             next: 0,
             next_local: 0,
+            restored: 0,
             retention,
             epoch: Instant::now(),
             epoch_ms,
@@ -378,11 +397,15 @@ impl Store {
                 key,
             },
         };
-        let severity = record.diagnostic.severity;
-        self.by_key.insert(key, seq);
         self.remember(e.id, key);
-        let band = &mut self.by_severity[rank(severity) as usize];
-        band.insert(seq);
+        self.place(record)
+    }
+
+    /// Indexes a record under its (new) sequence number and applies retention.
+    fn place(&mut self, record: Record) -> u64 {
+        let (seq, key, severity) = (record.seq, record.key, record.diagnostic.severity);
+        self.by_key.insert(key, seq);
+        self.by_severity[rank(severity) as usize].insert(seq);
         let cap = self.cap(severity);
         while self.by_severity[rank(severity) as usize].len() > cap {
             let Some(old) = self.by_severity[rank(severity) as usize].pop_first() else {
@@ -406,6 +429,59 @@ impl Store {
                 self.ids.remove(&old);
             }
         }
+    }
+
+    /// A record with its dedup key, for persisting it.
+    pub fn save(&self, seq: u64) -> Option<Saved> {
+        let record = self.records.get(&seq)?;
+        Some(Saved {
+            key: record.key,
+            cause_key: record.cause.and_then(|c| self.ids.get(&c).copied()),
+            record: record.clone(),
+        })
+    }
+
+    /// Restores saved records (oldest first; a later one with the same key replaces
+    /// an earlier one) under new sequence numbers. Their event IDs move to a range
+    /// live events never use, keeping causal links between restored records, so a
+    /// new process's events cannot be mistaken for them.
+    pub fn restore(&mut self, saved: Vec<Saved>) -> usize {
+        let mut latest: Vec<Saved> = Vec::new();
+        let mut at: HashMap<u64, usize, Hash> = HashMap::default();
+        for s in saved {
+            match at.get(&s.key) {
+                Some(i) => latest[*i] = s,
+                None => {
+                    at.insert(s.key, latest.len());
+                    latest.push(s);
+                }
+            }
+        }
+        let mut renamed: HashMap<u64, EventId, Hash> = HashMap::default();
+        for s in &latest {
+            self.restored += 1;
+            renamed.insert(s.key, EventId(RESTORED | self.restored));
+        }
+        let n = latest.len();
+        for Saved {
+            key,
+            cause_key,
+            mut record,
+        } in latest
+        {
+            if let Some(old) = self.by_key.get(&key).and_then(|s| self.records.remove(s)) {
+                self.by_severity[rank(old.diagnostic.severity) as usize].remove(&old.seq);
+            }
+            self.next += 1;
+            record.seq = self.next;
+            record.first = record.seq;
+            record.key = key;
+            record.id = renamed.get(&key).copied().unwrap_or(EventId(RESTORED));
+            record.cause = cause_key.and_then(|k| renamed.get(&k).copied());
+            self.remember(record.id, key);
+            self.place(record);
+        }
+        n
     }
 
     /// Drops records last seen longer ago than `Retention::max_age`.
@@ -597,6 +673,32 @@ mod tests {
         assert_eq!((spam[0].count, spam[0].sampled), (41, 40));
         let dropped = s.query(&Filter { codes: vec![codes::DIAG_DROPPED], ..Filter::default() });
         assert!(dropped[0].diagnostic.message.starts_with("3 diagnostics"));
+    }
+
+    #[test]
+    fn saved_records_restore_with_their_causes_and_new_ids() {
+        let mut a = Store::default();
+        let parent = a.push(Diagnostic::error(codes::IO, "disk full"), Meta::default()).id;
+        let child = a
+            .push(warn("flush failed"), Meta::caused_by(Some(parent)))
+            .seq;
+        a.push(Diagnostic::error(codes::IO, "disk full"), Meta::default());
+        let saved: Vec<Saved> = (1..=a.cursor()).filter_map(|s| a.save(s)).collect();
+        let text = serde_json::to_string(&saved).expect("serialize");
+        let back: Vec<Saved> = serde_json::from_str(&text).expect("deserialize");
+
+        let mut b = Store::default();
+        assert_eq!(b.restore(back), 2, "one record per key; the last line wins");
+        let records = b.query(&Filter::default());
+        let disk = records.iter().find(|r| r.diagnostic.code == codes::IO).expect("disk");
+        assert_eq!(disk.count, 2);
+        assert!(disk.id.0 & RESTORED != 0);
+        let flush = records.iter().find(|r| r.diagnostic.code != codes::IO).expect("flush");
+        assert_eq!(b.causes(flush)[0].seq, disk.seq, "causal links survive");
+        // A new process's events reuse low IDs; they never alias restored ones.
+        let fresh = b.push(Diagnostic::info(codes::REF_FILLED, "new"), Meta::default()).id;
+        assert!(b.by_id(fresh).is_some_and(|r| r.diagnostic.message == "new"));
+        let _ = (child, a);
     }
 
     #[test]

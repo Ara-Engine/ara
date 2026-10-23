@@ -11,10 +11,14 @@
 //! - `diag.report`: other processes (players, import workers) push diagnostics into
 //!   this host's bus.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use ara_diag::bus::{Meta, Origin};
-use ara_diag::store::{Filter, OriginFilter, Record};
+use ara_diag::store::{Filter, OriginFilter, Record, Saved, Store as DiagStore};
 use ara_diag::summary::summarize;
 use ara_diag::{Code, Diagnostic, Severity, Subject, catalog, codes, did_you_mean};
 use ara_proto::{ConnId, Scope};
@@ -309,6 +313,7 @@ fn report(st: &mut State, origin: Origin, p: DiagReportParams) -> R {
     for d in &skipped {
         recorded.push(st.diag.push(d.clone(), Meta::default()).seq);
     }
+    st.keep(&recorded);
     st.published(&recorded);
     Ok(json!({
         "recorded": recorded.len() - skipped.len(),
@@ -372,6 +377,9 @@ impl Service for DiagService {
                 let p: DiagClearParams = parse(params)?;
                 let f = filter(p.codes, p.severity, p.subjects, p.origin)?;
                 let removed = st.diag.clear(&f);
+                if removed > 0 && let Err(e) = st.diag_file.rewrite(&st.diag) {
+                    st.log(Diagnostic::warning(codes::IO, format!("cannot rewrite `.ara/diagnostics.jsonl`: {e}")));
+                }
                 Ok(json!({ "removed": removed, "cursor": st.diag.cursor() }))
             }
             "diag.report" => report(st, origin, parse(params)?),
@@ -380,5 +388,95 @@ impl Service for DiagService {
                 format!("diag does not handle `{other}`"),
             )]),
         }
+    }
+}
+
+/// The engine's runtime diagnostics, kept in `.ara/diagnostics.jsonl` so `ara why`
+/// still sees what a play process or an import worker reported after the host
+/// restarts. Call errors belong to their session and are not kept. Lines are
+/// appended as records change; the newest line per record wins, and the file is
+/// rewritten once it holds four times more lines than records.
+pub(crate) struct Persist {
+    path: PathBuf,
+    dirty: BTreeSet<u64>,
+    lines: usize,
+    last: Instant,
+}
+
+/// How often changed records are appended.
+const PERSIST_EVERY: Duration = Duration::from_millis(500);
+
+impl Persist {
+    /// Loads `.ara/diagnostics.jsonl` into `store`; returns the file and how many
+    /// lines could not be read.
+    pub(crate) fn open(state_dir: &Path, store: &mut DiagStore) -> (Persist, usize) {
+        let path = state_dir.join("diagnostics.jsonl");
+        let text = fs::read_to_string(&path).unwrap_or_default();
+        let mut saved = Vec::new();
+        let mut bad = 0;
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            match serde_json::from_str::<Saved>(line) {
+                Ok(s) => saved.push(s),
+                Err(_) => bad += 1,
+            }
+        }
+        let lines = saved.len();
+        store.restore(saved);
+        let persist = Persist {
+            path,
+            dirty: BTreeSet::new(),
+            lines,
+            last: Instant::now(),
+        };
+        (persist, bad)
+    }
+
+    /// Marks a record as changed if it is the engine's.
+    pub(crate) fn mark(&mut self, record: &Record) {
+        if record.origin == Origin::Engine {
+            self.dirty.insert(record.seq);
+        }
+    }
+
+    /// Appends changed records (at most every `PERSIST_EVERY` unless `now`), and
+    /// compacts the file when it has grown.
+    pub(crate) fn flush(&mut self, store: &DiagStore, now: bool) -> std::io::Result<()> {
+        if self.dirty.is_empty() || (!now && self.last.elapsed() < PERSIST_EVERY) {
+            return Ok(());
+        }
+        self.last = Instant::now();
+        let seqs = std::mem::take(&mut self.dirty);
+        if self.lines + seqs.len() > 4 * store.len() + 256 {
+            return self.rewrite(store);
+        }
+        let mut text = String::new();
+        for seq in seqs {
+            if let Some(saved) = store.save(seq) {
+                text.push_str(&serde_json::to_string(&saved).unwrap_or_default());
+                text.push('\n');
+                self.lines += 1;
+            }
+        }
+        let mut file = fs::OpenOptions::new().create(true).append(true).open(&self.path)?;
+        file.write_all(text.as_bytes())
+    }
+
+    /// Writes the engine's current records only (after a clear, or to compact).
+    pub(crate) fn rewrite(&mut self, store: &DiagStore) -> std::io::Result<()> {
+        self.dirty.clear();
+        let mut text = String::new();
+        self.lines = 0;
+        for r in store.query(&Filter::default()) {
+            if r.origin == Origin::Engine
+                && let Some(saved) = store.save(r.seq)
+            {
+                text.push_str(&serde_json::to_string(&saved).unwrap_or_default());
+                text.push('\n');
+                self.lines += 1;
+            }
+        }
+        let tmp = self.path.with_extension("jsonl.tmp");
+        fs::write(&tmp, text)?;
+        fs::rename(&tmp, &self.path)
     }
 }

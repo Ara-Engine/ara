@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ara_diag::{Diagnostic, Subject, codes};
+use ara_diag::bus::Meta;
+use ara_diag::{Code, Diagnostic, Subject, codes};
 use ara_host::{Host, HostConfig, Project};
 use ara_proto::ConnId;
 use serde_json::{Value, json};
@@ -188,4 +189,83 @@ fn other_processes_report_and_records_can_be_cleared() {
     assert_eq!(cleared["removed"], 1);
     let left = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA3304"] }));
     assert_eq!(left["total"], 0);
+}
+
+#[test]
+fn why_explains_through_the_protocol_and_its_fixes_run() {
+    let _g = serial();
+    let mut h = open("why");
+    let s = begin(&mut h, "agent:codex");
+    call(
+        &mut h,
+        ConnId::LOCAL,
+        "cmd.apply",
+        json!({ "session": s, "why": "Fade the lid out", "commands": [
+            { "cmd": "property.set", "args": { "entity": "e_stk2/e_c001/e_lid1", "path": "MeshRenderer.tint", "value": [0.2, 0.9, 0.2, 0] } },
+        ]}),
+    );
+    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }));
+    assert_eq!(r["explainer"], "visibility");
+    assert_eq!(r["causes"][0]["code"], "ARA3307", "{}", r["text"]);
+    assert_eq!(r["causes"][0]["likelihood"], "high");
+    let text = r["text"].as_str().expect("text");
+    assert!(text.contains("`MeshRenderer.tint` has alpha 0"), "{text}");
+
+    // The fix is a command: run it as is, and the cause is gone.
+    let fix = &r["causes"][0]["fixes"][0];
+    assert_eq!(fix["action"], "command");
+    call(
+        &mut h,
+        ConnId::LOCAL,
+        "cmd.apply",
+        json!({ "session": s, "why": "Make the lid visible again", "commands": [{ "cmd": fix["command"], "args": fix["params"] }] }),
+    );
+    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_stk2/e_c001/e_lid1 not visible" }));
+    assert!(
+        r["causes"].as_array().is_some_and(|c| c.iter().all(|c| c["likelihood"] != "high")),
+        "{}",
+        r["text"]
+    );
+
+    let list = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "list": true }));
+    assert!(list["text"].as_str().is_some_and(|t| t.contains("visibility") && t.contains("reload")));
+    let none = h
+        .call(ConnId::LOCAL, "why", json!({ "session": s, "question": "why is name:Nothing not visible" }))
+        .expect_err("unknown entity");
+    assert_eq!(none.diagnostics()[0].code, codes::RECORD_NOT_FOUND);
+}
+
+#[test]
+fn engine_diagnostics_survive_a_restart_with_their_causes() {
+    let _g = serial();
+    let mut h = open("persist");
+    let s = begin(&mut h, "human");
+    std::thread::spawn(|| {
+        let parent = Diagnostic::error(Code(7001), "rigid body `Lamp` has zero mass")
+            .subject(Subject::entity("e_lmp1"))
+            .emit();
+        Diagnostic::error(codes::RENDER_NON_FINITE_TRANSFORM, "`Lamp` has a NaN position")
+            .subject(Subject::entity("e_lmp1"))
+            .emit_with(Meta::caused_by(parent));
+    })
+    .join()
+    .expect("worker");
+    let _ = h.call(ConnId::LOCAL, "inspect", json!({ "session": s, "entities": ["e_typo"] }));
+    h.tick();
+    let root = h.root().to_path_buf();
+    drop(h);
+
+    let config = HostConfig {
+        seed: Some(8),
+        ..HostConfig::default()
+    };
+    let mut h = Host::open(Project::open(&root).expect("project"), config).expect("reopen");
+    let s = begin(&mut h, "human");
+    let nan = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA3304"], "group": false }));
+    assert_eq!(nan["total"], 1, "the engine's report survived");
+    let typo = call(&mut h, ConnId::LOCAL, "logs", json!({ "session": s, "codes": ["ARA1204"] }));
+    assert_eq!(typo["total"], 0, "call errors are not kept");
+    let r = call(&mut h, ConnId::LOCAL, "why", json!({ "session": s, "question": "why is e_lmp1 not visible" }));
+    let text = r["text"].as_str().expect("text");
+    assert!(text.contains("caused by: error ARA7001 rigid body `Lamp` has zero mass"), "{text}");
 }

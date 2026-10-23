@@ -92,6 +92,10 @@ pub(crate) struct State {
     pub(crate) bus: bus::Consumer,
     /// Live `diag.subscribe` streams.
     pub(crate) diag_subs: crate::diag::Subscriptions,
+    /// The `ara why` explainers.
+    pub(crate) why: ara_why::Why,
+    /// The engine's runtime diagnostics on disk (`.ara/diagnostics.jsonl`).
+    pub(crate) diag_file: crate::diag::Persist,
     pub(crate) jobs: Jobs,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -161,6 +165,17 @@ impl Host {
         } = project;
         let consumer = bus::attach();
         let mut diag = DiagStore::new(config.diagnostics);
+        let (diag_file, unreadable) = crate::diag::Persist::open(&state_dir, &mut diag);
+        if unreadable > 0 {
+            diag.push(
+                Diagnostic::warning(
+                    codes::DIAG_INVALID_REPORT,
+                    format!("{unreadable} lines of `.ara/diagnostics.jsonl` could not be read and were skipped"),
+                )
+                .file(".ara/diagnostics.jsonl"),
+                Meta::default(),
+            );
+        }
         for d in diags.into_iter().chain(per_file.into_values().flatten()) {
             diag.push(d, Meta::default());
         }
@@ -211,6 +226,8 @@ impl Host {
             diag,
             bus: consumer,
             diag_subs: BTreeMap::new(),
+            why: ara_why::Why::builtin(),
+            diag_file,
             jobs: Jobs::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -238,6 +255,7 @@ impl Host {
         host.register(Box::new(crate::core::Core))?;
         host.register(Box::new(crate::profile::ProfileService))?;
         host.register(Box::new(crate::diag::DiagService))?;
+        host.register(Box::new(crate::why::WhyService))?;
         Ok(host)
     }
 
@@ -285,6 +303,12 @@ impl Host {
             self.routes.insert(m.name.clone(), (index, m));
         }
         Ok(())
+    }
+
+    /// The `ara why` explainer registry: subsystems register their explainers and
+    /// add collectors to the built-in ones here.
+    pub fn why(&mut self) -> &mut ara_why::Why {
+        &mut self.st.why
     }
 
     /// Replaces the connection-approval hook (the editor asks the human).
@@ -395,6 +419,7 @@ impl Host {
         let profiling = self.st.profiler.is_recording() && self.st.profiler.begin_frame().is_ok();
         let span = profiling.then(|| ara_profile::scope("host.tick"));
         self.st.pump_bus();
+        self.st.persist_diag(false);
         self.st.watch();
         self.st.drain();
         self.st.flush(false);
@@ -427,6 +452,8 @@ impl Host {
     pub fn flush(&mut self) {
         self.st.drain();
         self.st.flush(true);
+        self.st.pump_bus();
+        self.st.persist_diag(true);
     }
 
     /// Forgets a closed connection's subscriptions.
@@ -544,6 +571,14 @@ impl State {
         self.published(&[seq]);
     }
 
+    /// Appends changed engine diagnostics to `.ara/diagnostics.jsonl`.
+    pub(crate) fn persist_diag(&mut self, now: bool) {
+        if let Err(e) = self.diag_file.flush(&self.diag, now) {
+            let d = Diagnostic::warning(codes::IO, format!("cannot write `.ara/diagnostics.jsonl`: {e}"));
+            self.diag.push(d, Meta::default());
+        }
+    }
+
     /// Moves everything other threads emitted onto the bus into the store.
     pub(crate) fn pump_bus(&mut self) {
         let mut events = Vec::new();
@@ -551,7 +586,18 @@ impl State {
         let mut touched = self.diag.ingest(events);
         touched.extend(self.diag.absorb(&lost));
         self.diag.expire();
+        self.keep(&touched);
         self.published(&touched);
+    }
+
+    /// Marks records the engine reported (bus events, `diag.report`) for
+    /// `.ara/diagnostics.jsonl`.
+    pub(crate) fn keep(&mut self, seqs: &[u64]) {
+        for seq in seqs {
+            if let Some(r) = self.diag.get(*seq) {
+                self.diag_file.mark(r);
+            }
+        }
     }
 
     /// Notifies `diagnostics` topic subscribers and matching `diag.subscribe`

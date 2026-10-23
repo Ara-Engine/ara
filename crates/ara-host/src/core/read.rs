@@ -374,7 +374,8 @@ pub(super) fn query(st: &mut State, p: QueryParams) -> R {
 
 /// The address an `inspect` entity names: an address, or a name selector (`name:Crate`,
 /// also a bare name) matching exactly one entity.
-fn inspect_target(tree: &Tree, key: &str) -> Result<String, Diagnostic> {
+/// The address `key` (an address, ID or name selector) names in `tree`.
+pub(crate) fn inspect_target(tree: &Tree, key: &str) -> Result<String, Diagnostic> {
     if tree.get(key).is_some() {
         return Ok(key.to_owned());
     }

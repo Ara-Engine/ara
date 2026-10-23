@@ -28,6 +28,7 @@ mod service;
 pub mod session;
 pub mod text;
 pub mod tree;
+pub mod why;
 
 pub use host::{Host, HostConfig, RESERVED};
 pub use project::Project;
