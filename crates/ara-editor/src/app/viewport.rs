@@ -10,6 +10,12 @@ pub(super) struct SceneView {
     camera: Option<crate::state::Camera>,
 }
 impl SceneView {
+    pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
+        self.fidelity
+            .as_ref()
+            .map(|view| view.timings())
+            .unwrap_or(&[])
+    }
     pub fn render(
         &mut self,
         renderer: &mut Renderer,

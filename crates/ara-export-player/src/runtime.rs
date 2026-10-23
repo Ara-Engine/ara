@@ -47,6 +47,8 @@ impl ScriptLane {
 
 /// Everything the platform entry decides before calling [`run`].
 pub struct RunConfig {
+    /// Explicit child-process fault probe, run only after the managed image has loaded.
+    pub crash_probe: Option<crate::shipping::CrashProbe>,
     /// Optional content decryption key supplied by the runtime host, never stored in the pack.
     pub pack_key: Option<ara_pack::EncryptionKey>,
     /// Script binding lane.
@@ -66,6 +68,8 @@ pub struct RunConfig {
 /// What a run measured and proved; printed as one `ARA_RESULT {json}` line.
 #[derive(Serialize)]
 pub struct RunReport {
+    /// This fixture validates shipping and the S7 ABI, not authored demo gameplay.
+    pub template_contract: &'static str,
     /// `os-arch` of the running binary.
     pub platform: String,
     /// `nativeaot` or `r2r-coreclr`.
@@ -193,38 +197,78 @@ pub fn run(cfg: &RunConfig, pack_bytes: &[u8], t0: Instant) -> Result<RunReport,
     let pack = Pack::open(pack_bytes).map_err(|e| e.to_string())?;
     let pack_open = t0.elapsed();
 
-    let scene_bytes = pack
-        .read(
-            "scene/main.scene.json",
-            16 * 1024 * 1024,
-            cfg.pack_key.as_ref(),
+    let (scene, texture) = if pack.manifest().entries.contains_key("ara.project.json") {
+        // The real demo is packed verbatim. Validate every file and its main
+        // scene; the existing S7 workload remains the conformance simulation.
+        pack.validate_all(cfg.pack_key.as_ref())
+            .map_err(|e| e.to_string())?;
+        let project: serde_json::Value = serde_json::from_slice(
+            &pack
+                .read("ara.project.json", 1024 * 1024, cfg.pack_key.as_ref())
+                .map_err(|e| e.to_string())?,
         )
         .map_err(|e| e.to_string())?;
-    let scene: Scene = serde_json::from_slice(&scene_bytes).map_err(|e| format!("scene: {e}"))?;
-    if scene.format != "ara.scene/0" {
-        return Err(format!("unknown scene format {}", scene.format));
-    }
+        let main = project
+            .get("main")
+            .and_then(|v| v.as_str())
+            .ok_or("project main scene is missing")?;
+        let bytes = pack
+            .read(main, 16 * 1024 * 1024, cfg.pack_key.as_ref())
+            .map_err(|e| e.to_string())?;
+        let document: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        if document.get("$schema").and_then(|v| v.as_str()) != Some("ara://schema/scene/1")
+            || !document.get("records").is_some_and(|v| v.is_object())
+        {
+            return Err("invalid packed demo scene".into());
+        }
+        let scene: Scene = serde_json::from_slice(include_bytes!(
+            "../../ara-export/fixtures/sample/content/scene/main.scene.json"
+        ))
+        .map_err(|e| e.to_string())?;
+        (
+            scene,
+            format!(
+                "validated {} packed demo files; main {main}; conformance simulation only",
+                pack.manifest().entries.len()
+            ),
+        )
+    } else {
+        let scene_bytes = pack
+            .read(
+                "scene/main.scene.json",
+                16 * 1024 * 1024,
+                cfg.pack_key.as_ref(),
+            )
+            .map_err(|e| e.to_string())?;
+        let scene: Scene =
+            serde_json::from_slice(&scene_bytes).map_err(|e| format!("scene: {e}"))?;
+        if scene.format != "ara.scene/0" {
+            return Err(format!("unknown scene format {}", scene.format));
+        }
+        let albedo = scene
+            .entities
+            .values()
+            .find_map(|e| e.material.as_ref())
+            .ok_or("scene has no Material")?;
+        let tex_path = albedo
+            .albedo
+            .strip_prefix('@')
+            .ok_or("references must be @path")?;
+        let tex_bytes = pack
+            .read(tex_path, 16 * 1024 * 1024, cfg.pack_key.as_ref())
+            .map_err(|e| e.to_string())?;
+        let texture = format!(
+            "fixture-media blake3:{}",
+            &blake3::hash(&tex_bytes).to_hex()[..16]
+        );
+        (scene, texture)
+    };
     let spawner = scene
         .entities
         .values()
         .find_map(|e| e.spawner)
-        .ok_or("scene has no Spawner")?;
-    let albedo = scene
-        .entities
-        .values()
-        .find_map(|e| e.material.as_ref())
-        .ok_or("scene has no Material")?;
-    let tex_path = albedo
-        .albedo
-        .strip_prefix('@')
-        .ok_or("references must be @path")?;
-    let tex_bytes = pack
-        .read(tex_path, 16 * 1024 * 1024, cfg.pack_key.as_ref())
-        .map_err(|e| e.to_string())?;
-    let texture = format!(
-        "fixture-media blake3:{}",
-        &blake3::hash(&tex_bytes).to_hex()[..16]
-    );
+        .ok_or("scene has no conformance Spawner")?;
     let content = t0.elapsed();
 
     if spawner.count == 0
@@ -242,6 +286,11 @@ pub fn run(cfg: &RunConfig, pack_bytes: &[u8], t0: Instant) -> Result<RunReport,
     let spawn = t0.elapsed();
 
     let (script, load) = Script::load(&cfg.lane)?;
+    match cfg.crash_probe {
+        Some(crate::shipping::CrashProbe::Native) => ara_crash::native_crash_probe(),
+        Some(crate::shipping::CrashProbe::Panic) => panic!("Ara exported player crash probe"),
+        Some(crate::shipping::CrashProbe::Managed) | None => {}
+    }
     let first_call = t0.elapsed();
     let spawn_to_first = cfg
         .spawn_unix_ns
@@ -347,6 +396,7 @@ pub fn run(cfg: &RunConfig, pack_bytes: &[u8], t0: Instant) -> Result<RunReport,
         .len();
     let cs_min = cs_times.iter().copied().fold(f64::MAX, f64::min);
     Ok(RunReport {
+        template_contract: "ara.player.conformance/1",
         platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
         lane: cfg.lane.name(),
         pack_id: pack.id().map_err(|e| e.to_string())?,

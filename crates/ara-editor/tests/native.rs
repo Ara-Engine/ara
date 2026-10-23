@@ -55,14 +55,15 @@ fn native_interaction_route_matches_reviewed_dark_and_light_goldens() {
             .unwrap();
     assert_eq!(evidence["verified"], true);
     for theme in ["ara-dark", "ara-light", "palette-dark", "palette-light"] {
-        let golden = image::open(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/goldens/{theme}.png")),
-        )
-        .unwrap()
-        .into_rgba8();
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/goldens/{theme}.png"));
         let actual = image::open(output.join(format!("{theme}.png")))
             .unwrap()
             .into_rgba8();
+        if std::env::var_os("ARA_EDITOR_UPDATE_GOLDENS").is_some_and(|v| v == "1") {
+            actual.save(&path).unwrap();
+        }
+        let golden = image::open(path).unwrap().into_rgba8();
         let comparison = ara_render::capture::compare(&golden, &actual, 0.005).unwrap();
         eprintln!("{theme}: 1-SSIM={}", comparison.score);
         if !comparison.passed {

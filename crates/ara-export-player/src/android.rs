@@ -118,6 +118,7 @@ fn run_activity(activity: *mut ANativeActivity, t0: Instant) -> Result<(), Strin
         ),
     );
     let cfg = RunConfig {
+        crash_probe: None,
         pack_key: std::env::var("ARA_PACK_KEY")
             .ok()
             .map(|s| ara_pack::EncryptionKey::from_hex(&s).map_err(|e| e.to_string()))

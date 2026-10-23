@@ -15,6 +15,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 ara-components.workspace = true
+ara-ops.workspace = true
 insta.workspace = true
 
 [lints]

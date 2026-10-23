@@ -158,6 +158,19 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
             .commands
             .iter()
             .map(|draw| match draw {
+                Draw::Line {
+                    node,
+                    from,
+                    to,
+                    width,
+                    color,
+                } => Draw::Line {
+                    node: *node,
+                    from: from.map(|v| v * scale),
+                    to: to.map(|v| v * scale),
+                    width: width * scale,
+                    color: *color,
+                },
                 Draw::Rect { node, rect, color } => Draw::Rect {
                     node: *node,
                     rect: scaled(*rect, scale),
@@ -200,6 +213,21 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
                     glyphs,
                     color,
                 } => Draw::GlyphRun {
+                    node: *node,
+                    font: *font,
+                    size: size * scale,
+                    origin: [origin[0] * scale, origin[1] * scale],
+                    glyphs: glyphs.clone(),
+                    color: *color,
+                },
+                Draw::ScalableGlyphRun {
+                    node,
+                    font,
+                    size,
+                    origin,
+                    glyphs,
+                    color,
+                } => Draw::ScalableGlyphRun {
                     node: *node,
                     font: *font,
                     size: size * scale,

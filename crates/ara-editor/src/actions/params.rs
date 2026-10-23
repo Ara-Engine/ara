@@ -1,4 +1,61 @@
 use super::*;
+/// Freeze a complete profiler capture for inspection and comparison.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorProfileFreeze {
+    /// Calling editor or agent session.
+    #[expect(dead_code, reason = "Host validates sessions")]
+    pub session: String,
+    /// Store as the comparison baseline instead of the current capture.
+    pub baseline: Option<bool>,
+}
+/// Shared node-canvas navigation. Content edits use graph/material commands.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorCanvas {
+    /// Calling editor or agent session.
+    #[expect(dead_code, reason = "Host validates sessions")]
+    pub session: String,
+    /// Logical canvas pan.
+    pub pan: Option<[f32; 2]>,
+    /// Zoom between 0.2 and 2.5.
+    pub zoom: Option<f32>,
+    /// Selected stable graph nodes.
+    pub selection: Option<Vec<String>>,
+    /// Open the search-to-add palette.
+    pub add: Option<bool>,
+}
+/// Asset-browser and authoring-panel navigation, independent of scene selection.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorWorkspace {
+    /// Calling editor or agent session.
+    #[expect(dead_code, reason = "Host validates sessions")]
+    pub session: String,
+    /// Source media to inspect; an empty string clears the selection.
+    pub asset: Option<String>,
+    /// Folder to browse.
+    pub folder: Option<String>,
+    /// Thumbnail grid or compact list.
+    pub grid: Option<bool>,
+    /// Resource graph or controller to open.
+    pub resource: Option<String>,
+    /// Module or controller-state address to inspect.
+    pub item: Option<String>,
+    /// Frame identity in the profiler timeline.
+    pub frame: Option<u64>,
+    /// Show the two-capture comparison.
+    pub compare: Option<bool>,
+    /// Show animation pose nodes and blend-space samples.
+    pub blends: Option<bool>,
+    /// Run the live VFX preview.
+    pub playing: Option<bool>,
+    /// Show a plane instead of a sphere in the material preview.
+    pub plane: Option<bool>,
+}
 /// Follow an agent's separate selection/camera without letting it interrupt the human by default.
 #[derive(Schema, Deserialize)]
 #[ara(params)]

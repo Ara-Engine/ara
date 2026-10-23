@@ -1,4 +1,4 @@
-//! Every verifier (suites v0 and diagnose) rejects its untouched fixture and
+//! Every verifier (suites v0, diagnose and collab) rejects its untouched fixture and
 //! accepts its reference solution (the same check as `arabench selftest`, without
 //! agents).
 
@@ -11,6 +11,7 @@ fn every_verifier_rejects_the_fixture_and_accepts_the_reference_solution() {
     let tasks = suite::v0()
         .into_iter()
         .chain(suite::diagnose())
+        .chain(suite::collab())
         .collect::<Vec<_>>();
     assert!(
         tasks.len() >= 24,
@@ -31,6 +32,7 @@ fn task_ids_are_unique() {
     let tasks = suite::v0()
         .into_iter()
         .chain(suite::diagnose())
+        .chain(suite::collab())
         .collect::<Vec<_>>();
     let mut ids: Vec<&str> = tasks.iter().map(|t| t.id).collect();
     ids.sort_unstable();

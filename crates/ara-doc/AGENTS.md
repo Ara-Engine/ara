@@ -46,6 +46,9 @@ vocabulary. Depends on ara-schema, ara-json, ara-diag. No ECS, no IO.
   record_type}` (dangling `entity` fields are warnings, `ARA1212`).
 - `Workspace`: loaded documents + index; `find(id|path|@ref)`, `resolve`, `check`,
   `remove` (a deleted file). `AssetIndex::remove`.
+- `Workspace::insert_with_asset_path(save_path, doc, source_path)`: load a sidecar
+  whose asset references name source media; `path_of` remains the save path.
+  Existing `insert(path, doc)` uses `path` for both purposes.
 - `IdGen` (seedable SplitMix64): `record_id`, `asset_id`, `token`.
 - `OrderKey`, `key_between(a, b)`.
 - `register(&mut SchemaDb)`: the `Entity` record type and `scene`/`prefab` kinds.

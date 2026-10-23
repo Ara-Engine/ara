@@ -514,3 +514,342 @@ fn numeric_scrubbing_is_one_undoable_batch_and_escape_is_nonmutating() {
     assert!(editor.state.reduce_motion);
     assert!(!editor.state.quality);
 }
+
+#[test]
+fn import_settings_are_typed_attributed_and_undoable() {
+    let project = Project::new();
+    std::fs::write(
+        project.0.join("paint.png"),
+        b"invalid source; settings test does not run an importer",
+    )
+    .unwrap();
+    let mut editor = project.open();
+    let result = editor
+        .action("editor.asset.import", json!({"path":"paint.png"}))
+        .unwrap();
+    editor
+        .action("jobs.cancel", json!({"job":result["job"]}))
+        .unwrap();
+    let doc = editor
+        .host
+        .store()
+        .workspace()
+        .docs()
+        .find_map(|(path, doc)| (path == "paint.png.import.json").then(|| doc.id.to_string()))
+        .unwrap();
+    assert_eq!(
+        editor.host.store().workspace().index().path_of(&doc),
+        Some("paint.png")
+    );
+    assert_eq!(
+        editor.host.store().workspace().path_of(&doc),
+        Some("paint.png.import.json")
+    );
+    editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .unwrap()
+            .record("i_settings")
+            .unwrap()["settings"]["usage"],
+        "normal"
+    );
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .unwrap()
+            .record("i_settings")
+            .unwrap()["settings"],
+        json!({})
+    );
+    assert!(editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
+    assert!(
+        editor
+            .action("editor.asset.import", json!({"path":"../escape.png"}))
+            .is_err()
+    );
+}
+
+#[test]
+fn material_canvas_create_connect_and_keyboard_undo() {
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action("editor.focus", json!({"panel":"material"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    shell
+        .click("resource-create-material", &mut clipboard)
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let doc = editor.state.resource.clone().unwrap();
+    let before =
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&doc).unwrap())
+            .unwrap();
+    shell.click("graph-add", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert_eq!(
+        shell.input.focused(),
+        Some(ara_ui::source::stable_id("search-nodes"))
+    );
+    let rect = shell.ui.nodes[shell.ui.find("node-palette").unwrap()].rect;
+    assert!((rect.x + rect.w * 0.5 - 720.).abs() < 0.5);
+    shell.key(&mut editor, 41, true, &mut clipboard).unwrap();
+    assert!(!editor.state.canvas_add);
+    shell.click("graph-add", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    editor
+        .action(
+            "editor.search",
+            json!({"panel":"nodes","query":"material.add"}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.click("node-add-0", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let added = ara_graph::Graph::from_document(editor.host.store().workspace().doc(&doc).unwrap())
+        .unwrap();
+    assert_eq!(added.nodes.len(), before.nodes.len() + 3);
+    let node = added
+        .nodes
+        .iter()
+        .find(|(_, n)| n.kind == "material.add")
+        .unwrap()
+        .0
+        .clone();
+    let source = added
+        .nodes
+        .iter()
+        .find(|(_, n)| n.payload["name"] == "roughness")
+        .unwrap()
+        .0
+        .clone();
+    let to = ara_graph::Endpoint {
+        node: node.clone(),
+        port: "in0".into(),
+    };
+    let from = ara_graph::Endpoint {
+        node: source.clone(),
+        port: "out".into(),
+    };
+    editor
+        .action("editor.canvas", json!({"zoom":0.45,"pan":[20,20]}))
+        .unwrap();
+    shell.sync_canvas(&editor);
+    shell.frame().unwrap();
+    let a = shell.graph_port(&from).unwrap();
+    let b = shell.graph_port(&to).unwrap();
+    shell.pointer = a;
+    shell
+        .graph_event(
+            &mut editor,
+            &ara_platform::Event::MouseButton {
+                button: 1,
+                pressed: true,
+            },
+        )
+        .unwrap();
+    shell
+        .graph_event(
+            &mut editor,
+            &ara_platform::Event::MouseMotion {
+                position: b,
+                delta: [b[0] - a[0], b[1] - a[1]],
+            },
+        )
+        .unwrap();
+    shell
+        .graph_event(
+            &mut editor,
+            &ara_platform::Event::MouseButton {
+                button: 1,
+                pressed: false,
+            },
+        )
+        .unwrap();
+    let connected =
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&doc).unwrap())
+            .unwrap();
+    assert_eq!(
+        connected
+            .edges
+            .values()
+            .find(|e| e.to == to)
+            .unwrap()
+            .from
+            .node,
+        source
+    );
+    shell.key(&mut editor, 224, true, &mut clipboard).unwrap();
+    shell.key(&mut editor, 29, true, &mut clipboard).unwrap();
+    shell.key(&mut editor, 224, false, &mut clipboard).unwrap();
+    let undone =
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&doc).unwrap())
+            .unwrap();
+    assert_eq!(undone.edges, added.edges);
+    let material = ara_material::Material::from_graph(&undone).unwrap();
+    let source = ara_material::dsl::print(&material).unwrap();
+    assert!(source.contains("add("));
+}
+
+#[test]
+fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
+    let project = Project::new();
+    let mut editor = project.open();
+    let material = editor
+        .action(
+            "editor.resource.create",
+            json!({"domain":"material","path":"paint.graph"}),
+        )
+        .unwrap()["doc"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let graph =
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&material).unwrap())
+            .unwrap();
+    let node = graph
+        .nodes
+        .iter()
+        .find(|(_, n)| n.payload["name"] == "roughness")
+        .unwrap()
+        .0
+        .clone();
+    editor
+        .apply_to(
+            &material,
+            vec![json!({"cmd":"editor.material.value.set","args":{"node":node,"value":[0.82]}})],
+            "Set roughness",
+        )
+        .unwrap();
+    let changed =
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&material).unwrap())
+            .unwrap();
+    let ast = ara_material::Material::from_graph(&changed).unwrap();
+    assert_eq!(
+        ast.parameters[&node].default,
+        ara_material::ParameterValue::Numeric(vec![0.82])
+    );
+    assert!(ara_material::dsl::print(&ast).unwrap().contains("0.82"));
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(
+        ara_graph::Graph::from_document(editor.host.store().workspace().doc(&material).unwrap())
+            .unwrap(),
+        graph
+    );
+    editor
+        .action("editor.workspace", json!({"resource":material}))
+        .unwrap();
+    editor
+        .action("editor.canvas", json!({"selection":[node]}))
+        .unwrap();
+    let mut invalid_shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    editor.apply_to(&material,vec![json!({"cmd":"graph.param.set","args":{"node":node,"name":"value","value":"invalid numeric default"}})],"Verify node diagnostics").unwrap();
+    invalid_shell.rebuild(&mut editor).unwrap();
+    assert!(invalid_shell.ui.find("material-error-0").is_some());
+    assert!(
+        invalid_shell.layout_report()["graph"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["id"] == node && n["error"].is_string())
+    );
+    editor.action("history.undo", json!({})).unwrap();
+    invalid_shell.rebuild(&mut editor).unwrap();
+    assert!(invalid_shell.ui.find("material-error-0").is_none());
+    drop(invalid_shell);
+
+    let animation = editor
+        .action(
+            "editor.resource.create",
+            json!({"domain":"animation","path":"motion.animation"}),
+        )
+        .unwrap()["doc"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    editor
+        .action("editor.workspace", json!({"resource":animation}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    for control in [
+        "animation-add-state",
+        "animation-add-state",
+        "animation-add-blend",
+        "animation-add-transition",
+    ] {
+        shell.click(control, &mut clipboard).unwrap();
+        shell.dispatch(&mut editor).unwrap();
+    }
+    let controller = editor
+        .host
+        .store()
+        .workspace()
+        .doc(&animation)
+        .unwrap()
+        .record("an_controller")
+        .unwrap()["controller"]
+        .clone();
+    assert_eq!(controller["states"].as_object().unwrap().len(), 3);
+    assert_eq!(controller["transitions"].as_array().unwrap().len(), 1);
+    let mut invalid = controller.clone();
+    let blend = invalid["nodes"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .find(|key| key.starts_with("Locomotion"))
+        .unwrap()
+        .clone();
+    invalid["nodes"][&blend]["samples"][0]["node"] = json!(blend);
+    let before = editor.host.store().revision();
+    assert!(editor.apply_to(&animation,vec![json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":invalid}})],"Invalid cycle").is_err());
+    assert_eq!(editor.host.store().revision(), before);
+    editor.action("editor.animation.layout",json!({"doc":animation,"editor":{"comments":{"note":{"text":"Locomotion","position":[20,30]}}}})).unwrap();
+    let layout_path = format!(".ara/editor/animation-{animation}.graph");
+    assert!(editor.host.store().workspace().find(&layout_path).is_some());
+    editor.host.flush();
+    drop(shell);
+    drop(editor);
+    let reopened = project.open();
+    let restored: ara_anim::graph::ControllerData = serde_json::from_value(
+        reopened
+            .host
+            .store()
+            .workspace()
+            .doc(&animation)
+            .unwrap()
+            .record("an_controller")
+            .unwrap()["controller"]
+            .clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        restored,
+        serde_json::from_value::<ara_anim::graph::ControllerData>(controller).unwrap()
+    );
+    let layout = reopened
+        .host
+        .store()
+        .workspace()
+        .find(&layout_path)
+        .unwrap();
+    let graph = ara_graph::Graph::from_document(
+        reopened
+            .host
+            .store()
+            .workspace()
+            .doc(layout.as_str())
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(graph.editor.comments["note"].text, "Locomotion");
+}

@@ -8,6 +8,7 @@
 //! documents, history and calls, never the agent's prose.
 
 mod assembly;
+mod collab;
 mod components;
 mod diagnose;
 mod hierarchy;
@@ -28,13 +29,14 @@ pub const MAIN: &str = "levels/main.scene";
 pub const OUTPOST: &str = "levels/outpost.scene";
 
 /// Suite names, for `--suite`.
-pub const SUITES: &[&str] = &["v0", "diagnose"];
+pub const SUITES: &[&str] = &["v0", "diagnose", "collab"];
 
 /// The tasks of suite `name`.
 pub fn suite(name: &str) -> Option<Vec<Task>> {
     match name {
         "v0" => Some(v0()),
         "diagnose" => Some(diagnose()),
+        "collab" => Some(collab()),
         _ => None,
     }
 }
@@ -48,6 +50,12 @@ pub fn diagnose() -> Vec<Task> {
         diagnose::CULLING_MASK,
         diagnose::NAN_BARREL,
     ]
+}
+
+/// Suite `collab`: a teammate holds claims in the outpost level; the agent works
+/// around them (does the rest, or queues the claimed part in a branch session).
+pub fn collab() -> Vec<Task> {
+    vec![collab::CLAIMED_LIGHTS, collab::BRANCH_FOR_CLAIMED]
 }
 
 /// Suite v0: 22 tasks over scene assembly, components, prefabs, hierarchy,

@@ -71,9 +71,20 @@ impl GlyphAtlas {
         if !size.is_finite() || size <= 0.0 || size > 1024.0 || id > u16::MAX as u32 {
             return Err("ARA7050: invalid glyph request".into());
         }
-        let key = (font.source_id, font.index, id, size.to_bits(), mode);
+        let ratio = if mode == TextMode::Msdf {
+            size / 48.
+        } else {
+            1.
+        };
+        let scale_entry = |entry: Entry| Entry {
+            offset: entry.offset.map(|v| v * ratio),
+            size: entry.size.map(|v| v * ratio),
+            ..entry
+        };
+        let cache_size = if mode == TextMode::Msdf { 48f32 } else { size };
+        let key = (font.source_id, font.index, id, cache_size.to_bits(), mode);
         if let Some(entry) = self.cache.get(&key) {
-            return Ok(*entry);
+            return Ok(entry.map(scale_entry));
         }
         let font = swash::FontRef::from_index(&font.bytes, font.index as usize)
             .ok_or("ARA7050: invalid font")?;
@@ -109,7 +120,7 @@ impl GlyphAtlas {
                     image.top,
                     Pipeline::Msdf,
                     4.0,
-                    size / 48.0,
+                    1.0,
                 )
             } else {
                 let p = image.placement;
@@ -133,11 +144,7 @@ impl GlyphAtlas {
                         Pipeline::Mask
                     },
                     0.0,
-                    if mode == TextMode::Msdf {
-                        size / 48.0
-                    } else {
-                        1.0
-                    },
+                    1.0,
                 )
             };
         if width == 0 || height == 0 {
@@ -159,7 +166,7 @@ impl GlyphAtlas {
             range,
         };
         self.cache.insert(key, Some(entry));
-        Ok(Some(entry))
+        Ok(Some(scale_entry(entry)))
     }
     fn insert(&mut self, w: u32, h: u32, pixels: &[u8]) -> Result<(usize, u32, u32)> {
         if w + 2 > self.size || h + 2 > self.size {

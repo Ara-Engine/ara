@@ -5,7 +5,7 @@ method registry (`Service`) and the core methods, review state, checkpoints, the
 journal, always-saved persistence and external-edit reconciliation. The daemon
 (`ara serve`) serves it; the offline CLI and tests call it in-process.
 Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag,
-ara-why, ara-profile.
+ara-why, ara-profile, ara-collab.
 
 ## Public API
 
@@ -66,6 +66,19 @@ ara-why, ara-profile.
   `docs.search` answers a code
   query with its `errors/<code>` page.
 
+## Collaboration (`collab/`, D21)
+
+- `collab.join/leave/presence/who/claim/release/heartbeat/claims/submit/sync/
+  undo/redo/conflicts/policy`, `branch.open/list/status/submit/merge/discard`
+  over an `ara_collab::Hub` in `State`. MCP: `ara_session` `who`, `claim`,
+  `release`, `branch`, `submit`. Any collab call joins the session; `collab.join`
+  also routes `collab.*` notifications to the connection.
+- `dispatch` sets the store origin to the calling session (claims bind per
+  session); `drain` ends with `collab_after` (publish `collab.op`, leave ended
+  sessions, route events, persist `.ara/claims.json` and `.ara/branches/*.json`).
+  `closed(conn)` disconnects its participants (claims stay until they expire).
+- `cmd.apply {branch}` runs in the caller's branch session (no checkpoint, not live).
+
 ## Core methods (`core/`)
 
 `rpc.discover`; `session.begin/status/diff/checkpoint/rollback/end`;
@@ -117,7 +130,6 @@ service registers them.
   diverged (no flushes) until `doc.sync {keep: memory|disk}` or a clean edit.
 
 ## Gotchas
-
 - Host IDs (sessions, checkpoints, jobs) and the store's IDs come from
   `HostConfig::seed`; reopening with the same seed in tests re-mints the same IDs.
 - `*.types.json` changes are only reported (ARA1912); restart to load them.
@@ -125,12 +137,14 @@ service registers them.
 - Sessions survive restarts (journaled); subscriptions don't.
 
 ## Testing
-
 `cargo test -p ara-host`. Unit tests: query parsing (bare words), logs, journal
-compaction, review roll-up. `tests/host.rs` (fixture project copied to a temp dir): JSON-RPC
+compaction, review roll-up. `tests/host.rs` (fixture copied to a temp dir): JSON-RPC
 round trips, scopes, dry run = apply, symbols, review per entity, rollback, crash
-replay, external edits/conflicts, service registration, subscriptions with a
-registry job's progress, document inference + apply text, required agent
-`why`. Snapshots: scene-to-text. `tests/diag.rs` (serialized: the bus is global):
-grouped logs and attribution, subscriptions with other threads' emits, report and
-clear, `why` over the protocol with its fix applied, persistence across a restart.
+replay, external edits/conflicts, service registration, subscriptions with a job's
+progress, document inference + apply text, required agent `why`. `tests/collab.rs`:
+claims vs agents, `who`, branches, restart, submits, per-participant undo.
+Snapshots: scene-to-text. `tests/diag.rs` (serialized: the bus is global): grouped
+logs and attribution, subscriptions with other threads' emits, report and clear,
+`why` over the protocol with its fix applied, persistence across a restart.
+`Cx::create_document` makes an empty canonical document for typed create actions;
+fill it with `Cx::apply` (normal attribution/review/undo).

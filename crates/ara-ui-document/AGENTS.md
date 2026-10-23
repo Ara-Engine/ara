@@ -28,3 +28,6 @@ Rules:
 Tests: `CARGO_BUILD_JOBS=4 cargo test -p ara-ui-document`.
 Also run targeted Clippy with `--all-targets -- -D warnings` and rustfmt check.
 Tests cover CRLF, Unicode, quote styles, comments, structural edits, inverses and stale conflicts.
+
+CSS per-edge padding accepts padding-top/right/bottom/left; the runtime applies
+these after shorthand padding, matching native inspector gutters.

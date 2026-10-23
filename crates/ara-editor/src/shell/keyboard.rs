@@ -27,6 +27,9 @@ impl Shell {
             .and_then(|id| self.ui.by_id(id))
             .is_some_and(|i| matches!(self.ui.nodes[i].element.tag.as_str(), "field" | "input"));
         if ctrl && (scancode == 14 || (shift && scancode == 19)) {
+            if editor.state.canvas_add {
+                editor.action("editor.canvas", json!({"add":false}))?;
+            }
             self.palette_command = None;
             editor.action("editor.palette", json!({"open":!editor.state.palette}))?;
             self.rebuild(editor)?;
@@ -39,11 +42,26 @@ impl Shell {
             self.pick_field = None;
             self.drafts.clear();
             self.rename = false;
+            if editor.state.canvas_add {
+                editor.action("editor.canvas", json!({"add":false}))?;
+            }
             if editor.state.palette {
                 editor.action("editor.palette", json!({"open":false}))?;
             }
             self.event(InputEvent::Cancel, clipboard)?;
             self.rebuild(editor)?;
+            return Ok(true);
+        }
+        if scancode == 40
+            && self.input.focused() == Some(ara_ui::source::stable_id("material-source"))
+        {
+            if ctrl {
+                self.dispatch(editor)?;
+                self.apply_resource_text(editor)?;
+                self.rebuild(editor)?;
+            } else {
+                self.event(InputEvent::Edit(EditEvent::Insert("\n".into())), clipboard)?;
+            }
             return Ok(true);
         }
         if scancode == 40 {
@@ -80,6 +98,10 @@ impl Shell {
                 )?;
                 self.rebuild(editor)?;
             }
+            return Ok(true);
+        }
+        if !field && scancode == 9 && self.ui.find("graph-canvas").is_some() {
+            self.edit_graph_layout(editor, "frame")?;
             return Ok(true);
         }
         if field {

@@ -45,6 +45,8 @@ pub enum Area {
     MultiStep,
     /// Finding out why something is broken with the tools, then fixing it.
     Diagnose,
+    /// Working next to other people: claims and branch sessions.
+    Collab,
 }
 
 /// The project a task starts from.

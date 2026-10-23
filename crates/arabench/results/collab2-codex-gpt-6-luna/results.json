@@ -1,0 +1,136 @@
+{
+  "label": "collab2",
+  "agent": "codex:gpt-6-luna",
+  "suite": "collab",
+  "started": "2026-10-23T10:47:07Z",
+  "engine": "73903ab",
+  "results": [
+    {
+      "task": "collab-avoid-claimed",
+      "area": "collab",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_wlight1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_wlight1` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_flood1` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "`e_ylamp1/e_bulb01` doubled",
+          "ok": true
+        },
+        {
+          "what": "`e_dlamp1/e_bulb01` still exists",
+          "ok": true
+        },
+        {
+          "what": "Mia's claimed DoorLamp is untouched",
+          "ok": true
+        },
+        {
+          "what": "no agent changed the DoorLamp while it was claimed",
+          "ok": true
+        },
+        {
+          "what": "no hand edits of the scene file",
+          "ok": true,
+          "detail": "0 external edits"
+        },
+        {
+          "what": "changed through commands with a `why`",
+          "ok": true
+        }
+      ],
+      "turns": 13,
+      "toolCalls": {
+        "ara_apply": 2,
+        "ara_inspect": 3,
+        "ara_query": 1,
+        "ara_schema": 1,
+        "ara_session": 6
+      },
+      "wallMs": 33019,
+      "tokens": {
+        "input": 50522,
+        "cacheRead": 341504,
+        "cacheWrite": 0,
+        "output": 1670
+      },
+      "codes": {
+        "ARA1101": 2
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "The WorkLight is now 2400 (was 1200), and the YardLamp is 1600 (was 800). The Floodlight is still 0; doubling zero leaves it unchanged.\n\nMia’s claim covers the DoorLamp. I staged its bulb change from 800 to 1600 on branch `br_b3j43013`; it will take effect after her claim ends and the branch is submitted."
+    },
+    {
+      "task": "collab-branch-claimed",
+      "area": "collab",
+      "pass": true,
+      "checks": [
+        {
+          "what": "`e_door01` still exists",
+          "ok": true
+        },
+        {
+          "what": "the live door is untouched while Mia works",
+          "ok": true
+        },
+        {
+          "what": "no agent changed the GateDoor while it was claimed",
+          "ok": true
+        },
+        {
+          "what": "no hand edits of the scene file",
+          "ok": true,
+          "detail": "0 external edits"
+        },
+        {
+          "what": "a submitted branch session holds the change",
+          "ok": true
+        },
+        {
+          "what": "the queued change doubles the door speed",
+          "ok": true
+        }
+      ],
+      "turns": 8,
+      "toolCalls": {
+        "ara_apply": 1,
+        "ara_inspect": 1,
+        "ara_session": 5,
+        "shell": 1
+      },
+      "wallMs": 26539,
+      "tokens": {
+        "input": 25814,
+        "cacheRead": 318208,
+        "cacheWrite": 0,
+        "output": 1157
+      },
+      "codes": {
+        "ARA1101": 1
+      },
+      "rawEdits": [],
+      "externalEdits": 0,
+      "dryRuns": 0,
+      "finalMessage": "Queued the gate door speed change in branch `br_ny0288g4`. Its speed will change from **1.2 to 2.4** once Mia releases her claim on `GateDoor`; the branch will merge automatically then."
+    }
+  ]
+}

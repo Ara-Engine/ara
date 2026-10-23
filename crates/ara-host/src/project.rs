@@ -232,7 +232,8 @@ impl Project {
                 Ok(text) => {
                     let result = read(&text, &rel, &self.db, Some(&self.index));
                     if let Some(doc) = result.doc {
-                        ws.insert(rel.clone(), doc);
+                        let source = asset_path(&rel, &doc.kind);
+                        ws.insert_with_asset_path(rel.clone(), doc, source);
                     }
                     diags.insert(rel, result.diags);
                 }
@@ -245,6 +246,15 @@ impl Project {
             }
         }
         (ws, diags)
+    }
+}
+
+/// Reference target for a document; import sidecars describe their source media.
+pub(crate) fn asset_path<'a>(path: &'a str, kind: &str) -> &'a str {
+    if kind == "import" {
+        path.strip_suffix(SIDECAR_SUFFIX).unwrap_or(path)
+    } else {
+        path
     }
 }
 

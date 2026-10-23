@@ -325,6 +325,10 @@ pub struct ApplyParams {
     pub base: Option<u64>,
     /// Retrying with the same key returns the first result instead of applying twice.
     pub idempotency_key: Option<String>,
+    /// Branch session (`br_…` from `branch.open`) to apply in instead of the live
+    /// documents: nobody sees it until `branch.submit` merges it. Claims do not
+    /// block edits inside your own branch.
+    pub branch: Option<String>,
 }
 
 /// Params of `history.list`.

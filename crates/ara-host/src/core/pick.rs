@@ -32,7 +32,7 @@ pub(crate) fn find_doc(st: &State, key: &str) -> Result<AssetId, Vec<Diagnostic>
             let p = path.to_lowercase();
             let file = p.rsplit('/').next().unwrap_or(&p);
             let no_ext = p.rsplit_once('.').map_or(p.as_str(), |(a, _)| a);
-            key_l == no_ext || key_l == file || key_l == stem(&p)
+            key_l == p || key_l == no_ext || key_l == file || key_l == stem(&p)
         })
         .map(|(_, d)| &d.id)
         .collect();

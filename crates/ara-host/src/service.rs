@@ -185,6 +185,80 @@ impl Cx<'_> {
         &self.st.root
     }
 
+    /// Establish an empty document identity for a subsystem's create command.
+    /// Semantic records must subsequently be added through `apply`, so initialization
+    /// participates in attribution, review and undo like every later edit.
+    pub fn create_document(&mut self, path: &str, kind: &str) -> Result<String, Diagnostic> {
+        use std::path::Component;
+        let relative = Path::new(path);
+        if path.contains(':')
+            || path.contains('\\')
+            || relative.is_absolute()
+            || relative
+                .components()
+                .any(|part| !matches!(part, Component::Normal(_)))
+        {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "document path must stay inside the project",
+            ));
+        }
+        let prefix = self
+            .st
+            .store
+            .schema()
+            .kinds()
+            .find(|k| k.name == kind)
+            .map(|k| k.id_prefix.clone())
+            .ok_or_else(|| Diagnostic::error(codes::INVALID_PARAMS, "unknown document kind"))?;
+        let target = self.st.root.join(relative);
+        if target.exists() || self.st.store.workspace().find(path).is_some() {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "document already exists",
+            ));
+        }
+        let parent = target
+            .parent()
+            .ok_or_else(|| Diagnostic::error(codes::INVALID_PARAMS, "document has no parent"))?;
+        let ancestor = parent.ancestors().find(|p| p.exists()).ok_or_else(|| {
+            Diagnostic::error(codes::INVALID_PARAMS, "document has no existing ancestor")
+        })?;
+        let ancestor = ancestor
+            .canonicalize()
+            .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        if !ancestor.starts_with(&self.st.root) {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "document parent escapes the project",
+            ));
+        }
+        std::fs::create_dir_all(parent).map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        let resolved = parent
+            .canonicalize()
+            .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        if !resolved.starts_with(&self.st.root) {
+            return Err(Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "document parent escapes the project",
+            ));
+        }
+        let id = self.st.store.ids().asset_id(&prefix);
+        let doc = ara_doc::Document::new(kind, id);
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        file.write_all(ara_doc::write(&doc, self.st.store.schema()).as_bytes())
+            .map_err(|e| Diagnostic::error(codes::IO, e.to_string()))?;
+        let id = doc.id.to_string();
+        let source = crate::project::asset_path(path, &doc.kind);
+        self.st.store.load_doc_with_asset_path(path, doc, source);
+        Ok(id)
+    }
+
     /// Runs a batch of commands for the calling session, exactly like `cmd.apply`
     /// (one transaction, review state, a turn checkpoint for agents).
     pub fn apply(&mut self, params: ApplyParams) -> Result<Value, Vec<Diagnostic>> {

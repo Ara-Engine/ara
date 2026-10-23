@@ -163,6 +163,32 @@ pub struct EditorState {
     pub presence: BTreeMap<String, AgentPresence>,
     /// Session whose view the human explicitly chose to follow.
     pub follow: Option<String>,
+    /// Selected source media path; separate from entity selection.
+    pub asset_path: Option<String>,
+    /// Folder shown by the asset browser, relative to the project root.
+    pub asset_folder: String,
+    /// Show thumbnail cards instead of compact asset rows.
+    pub asset_grid: bool,
+    /// Active material, effect or animation document identity.
+    pub resource: Option<String>,
+    /// Pan/zoom for the shared authoring canvas.
+    pub canvas: crate::graph::Camera,
+    /// Stable selected graph nodes, independent of scene selection.
+    pub canvas_selection: BTreeSet<String>,
+    /// Search-to-add palette visibility.
+    pub canvas_add: bool,
+    /// Selected module or controller state in the active authoring resource.
+    pub resource_item: Option<String>,
+    /// Frame selected in the profiler's frozen or live timeline.
+    pub profiler_frame: Option<u64>,
+    /// Show capture deltas instead of a single-frame detail.
+    pub profiler_compare: bool,
+    /// Show the animation pose/blend-space graph instead of the state machine.
+    pub animation_blends: bool,
+    /// Run fixed ticks in the live effect preview.
+    pub preview_playing: bool,
+    /// Render material previews on a plane.
+    pub preview_plane: bool,
 }
 impl Default for EditorState {
     fn default() -> Self {
@@ -191,12 +217,34 @@ impl Default for EditorState {
             palette: false,
             presence: BTreeMap::new(),
             follow: None,
+            asset_path: None,
+            asset_folder: String::new(),
+            asset_grid: true,
+            resource: None,
+            canvas: Default::default(),
+            canvas_selection: BTreeSet::new(),
+            canvas_add: false,
+            resource_item: None,
+            profiler_frame: None,
+            profiler_compare: false,
+            animation_blends: false,
+            preview_playing: true,
+            preview_plane: false,
         }
     }
 }
 impl EditorState {
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
+            || self.asset_path != other.asset_path
+            || self.asset_folder != other.asset_folder
+            || self.asset_grid != other.asset_grid
+            || self.resource != other.resource
+            || self.canvas_add != other.canvas_add
+            || self.resource_item != other.resource_item
+            || self.profiler_frame != other.profiler_frame
+            || self.profiler_compare != other.profiler_compare
+            || self.animation_blends != other.animation_blends
             || self.selection != other.selection
             || self.focus != other.focus
             || self.focus_field != other.focus_field
@@ -245,7 +293,10 @@ pub fn default_layout() -> DockNode {
             split(
                 Axis::Horizontal,
                 0.73,
-                area("view", &["scene", "game"]),
+                area(
+                    "view",
+                    &["scene", "game", "material", "vfx", "animation", "profiler"],
+                ),
                 area("right", &["inspector"]),
             ),
         ),
@@ -280,6 +331,23 @@ impl Navigation {
                 .map_err(|e| anyhow::anyhow!(e.to_string()))?;
             state.layout = layout.root().clone();
         }
+        fn extend(node: &mut DockNode) {
+            match node {
+                DockNode::Area { id, tabs, .. } if id == "view" => {
+                    for panel in ["material", "vfx", "animation", "profiler"] {
+                        if !tabs.iter().any(|t| t == panel) {
+                            tabs.push(panel.into());
+                        }
+                    }
+                }
+                DockNode::Split { first, second, .. } => {
+                    extend(first);
+                    extend(second);
+                }
+                _ => {}
+            }
+        }
+        extend(&mut state.layout);
         let mut db = SchemaDb::new();
         ara_doc::register(&mut db);
         db.register::<EditorView>();
