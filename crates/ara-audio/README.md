@@ -57,9 +57,9 @@ Primary APIs reviewed: [Kira backend/renderer](https://docs.rs/kira/0.12.5/kira/
 5. Shared room effects use `add_send(SendTrackBuilder...)`,
    `TrackBuilder::with_send` and `set_send`. Apply an acoustic worker's
    `AcousticPath::reverb_send` to the appropriate room/source-group bus route.
-6. Use the **same trusted SDL3 library as ara-platform**. sdl3-sys supplies ABI
-   types with `no-link`; we load the existing runtime rather than building another
-   SDL. One audio subsystem reference is balanced on drop; process-wide SDL_Quit
+6. Call `SdlBackend::open(sample_rate)` for SDL output. `ara-sdl3-src` builds and
+   links one static SDL shared with `ara-platform`; no DLL or library path is
+   required. One audio subsystem reference is balanced on drop; process-wide SDL_Quit
    is never called. Default streams migrate automatically; format/loss polling
    never consumes platform events. The host can request `recover` after loss;
    reopening a stream preserves the engine/voices. Call `pump` frequently on the
@@ -214,7 +214,7 @@ Steam Audio's API/runtime is Apache-2.0; the binary SDK includes third-party
 notices (including its HRTF/FFT dependencies) that must ship with an export.
 The downloader preserves `steamaudio/THIRDPARTY.md` and API headers. See
 [Steam Audio source/license](https://github.com/ValveSoftware/steam-audio/tree/v4.8.1).
-SDL3 is zlib; its runtime archive's LICENSE.txt is preserved. Rust dependencies
+SDL3 is zlib; source and notices live in `ara-sdl3-src`. Rust dependencies
 remain Cargo dependencies except the explicitly vendored BSD libopus sources in
 `ara-opus-sys`. No Flax/Unity/Unreal source was transcribed.
 

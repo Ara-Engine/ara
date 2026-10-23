@@ -154,8 +154,9 @@ impl Renderer {
         );
         let mut graphics = self
             .content
-            .graphics_inputs
+            .static_inputs
             .iter()
+            .chain(&self.content.geometry_inputs)
             .map(|&(resource, access)| {
                 let id = graph.import(
                     resource,

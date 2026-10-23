@@ -68,6 +68,8 @@ pub struct Computed {
     pub border: f32,
     /// Font size in logical pixels.
     pub font_size: f32,
+    /// Whether text may wrap at the available content width.
+    pub wrap_text: bool,
     /// Intersected ancestor clip bounds in viewport coordinates.
     pub clip: bool,
     /// Paint/input translation relative to the layout box.
@@ -101,6 +103,7 @@ impl Computed {
             radius: if control { 6.0 } else { 0.0 },
             border: 0.0,
             font_size: 17.0,
+            wrap_text: true,
             clip: false,
             translate: [0.0; 2],
         }
@@ -336,6 +339,47 @@ mod tests {
         ] {
             assert!(Sheet::parse(source).is_err(), "{source}");
         }
+    }
+    #[test]
+    fn flex_basis_is_validated_and_drives_equal_weight_dock_sizes() -> Result<()> {
+        let sheet = Sheet::parse("panel { flex-basis:0px; flex-grow:1; }")?;
+        let elements = crate::source::parse("<panel id='dock' />")?;
+        assert_eq!(
+            sheet
+                .compute(&elements[0], State::default())?
+                .layout
+                .flex_basis,
+            taffy::Dimension::length(0.)
+        );
+        assert!(Sheet::parse("panel { flex-basis:-1px; }").is_err());
+        Ok(())
+    }
+    #[test]
+    fn nowrap_labels_stay_on_one_line_and_focus_can_transfer_to_a_native_view() -> Result<()> {
+        let mut ui = crate::Ui::parse(
+            "<ui id='root'><field id='field' text='x' /><button id='button' text='Move W' style='width:40px; white-space:nowrap' /></ui>",
+            "ui {width:200px; height:100px}",
+            [200., 100.],
+        )?;
+        let mut text = ara_ui_text::TextSystem::bundled()?;
+        ui.frame(&mut text)?;
+        let i = ui.find("button").expect("authored button");
+        assert_eq!(
+            ui.nodes[i]
+                .text
+                .as_ref()
+                .expect("text")
+                .layout
+                .lines()
+                .count(),
+            1
+        );
+        let mut input = crate::input::InputState::default();
+        input.focus(&mut ui, crate::source::stable_id("field"))?;
+        input.blur(&mut ui);
+        assert_eq!(input.focused(), None);
+        assert!(Sheet::parse("text {white-space:pre}").is_err());
+        Ok(())
     }
     #[test]
     fn cascade_tokens_specificity_state_and_local_override() -> Result<()> {

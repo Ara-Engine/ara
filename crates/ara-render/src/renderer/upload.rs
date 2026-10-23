@@ -13,11 +13,19 @@ pub(super) const MAX_LIGHTS: usize = 64;
 /// `Content` and retires the old one; the device, pipelines and targets survive.
 pub(super) struct Content {
     pub meshes: Vec<Mesh>,
-    /// Static resources declared to every graphics pass at their resting access.
-    pub graphics_inputs: Vec<(Resource, Access)>,
-    /// Owned resources retired when the content is replaced.
-    pub owned: Vec<Resource>,
+    /// Materials and static mesh buffers at their resting access (every graphics pass).
+    pub geometry_inputs: Vec<(Resource, Access)>,
+    /// Textures, environment and IBL images at their resting access.
+    pub static_inputs: Vec<(Resource, Access)>,
+    /// Material and light buffers; mesh buffers are retired through `meshes`.
+    pub geometry_owned: Vec<Resource>,
+    /// Texture, environment and IBL images.
+    pub static_owned: Vec<Resource>,
     pub ibl_pipelines: [Pipeline; 2],
+    /// Bindless slots of the scene textures, in scene order.
+    pub texture_indices: Vec<u32>,
+    /// Hash of the textures and environment (`update_geometry` must keep them).
+    pub static_hash: String,
     pub material_index: u32,
     pub lights: Vec<Light>,
     pub light_buffer: Buffer,
@@ -90,7 +98,7 @@ impl Renderer {
             self.compute_frame,
         )?;
         let old = std::mem::replace(&mut self.content, content);
-        for resource in old.owned {
+        for resource in old.static_owned.into_iter().chain(old.geometry_owned) {
             self.gpu.retire(resource)?;
         }
         for mesh in old.meshes {
@@ -135,7 +143,7 @@ impl Renderer {
             )?;
             let old = self.content.meshes[index].vertices;
             self.content
-                .graphics_inputs
+                .geometry_inputs
                 .retain(|(r, _)| *r != Resource::Buffer(old));
             self.gpu.retire(Resource::Buffer(old))?;
             self.content.meshes[index].vertices = buffer;
@@ -219,71 +227,55 @@ fn write_lights(gpu: &VulkanDevice, buffers: [Buffer; 2], lights: &[Light]) -> R
     Ok(())
 }
 
-fn upload_content(
+/// Uploaded materials, meshes and light lists (everything `update_geometry` swaps).
+pub(super) struct Geometry {
+    pub meshes: Vec<Mesh>,
+    pub inputs: Vec<(Resource, Access)>,
+    pub owned: Vec<Resource>,
+    pub material_index: u32,
+    pub lights: Vec<Light>,
+    pub light_buffer: Buffer,
+    pub light_index: u32,
+    pub compute_lights: Buffer,
+    pub compute_light_index: u32,
+    pub entity_names: Vec<(u64, String)>,
+}
+
+/// Validates and uploads materials, meshes and host-visible light lists. Material
+/// texture indices address `texture_indices`. Partial uploads are retired on error.
+pub(super) fn upload_geometry(
     gpu: &mut VulkanDevice,
-    scene: Scene,
-    artifacts: &Path,
-    shader_metadata: &crate::capture::ShaderMetadata,
-    compute_frame: Buffer,
-) -> Result<Content> {
+    materials: Vec<crate::scene::Material>,
+    meshes: Vec<crate::scene::Mesh>,
+    lights: Vec<Light>,
+    texture_indices: &[u32],
+) -> Result<Geometry> {
     ensure!(
-        !scene.materials.is_empty() && !scene.meshes.is_empty(),
+        !materials.is_empty() && !meshes.is_empty(),
         "Scene has no geometry/materials"
     );
     ensure!(
-        scene.lights.len() <= MAX_LIGHTS,
+        lights.len() <= MAX_LIGHTS,
         "Tiled baseline supports at most 64 local lights"
     );
+    ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
     ensure!(
-        scene.sun_direction.is_finite()
-            && scene.sun_direction.length_squared() > 0.001
-            && scene.sun_lux.is_finite(),
-        "Invalid directional light"
+        bytemuck::cast_slice::<Light, f32>(&lights)
+            .iter()
+            .all(|v| v.is_finite()),
+        "Non-finite light"
     );
-    let mut owned = Vec::new();
-    let mut hash = Sha256::new();
-    let mut graphics_inputs = Vec::new();
-    let mut texture_indices = Vec::new();
-    for texture in &scene.textures {
-        ensure!(
-            texture.rgba.len() == texture.size[0] as usize * texture.size[1] as usize * 4,
-            "Invalid texture pixels"
-        );
-        hash.update(texture.size[0].to_le_bytes());
-        hash.update(texture.size[1].to_le_bytes());
-        hash.update([u8::from(texture.srgb)]);
-        hash.update(&texture.rgba);
-        let format = if texture.srgb {
-            vk::Format::R8G8B8A8_SRGB
-        } else {
-            vk::Format::R8G8B8A8_UNORM
-        };
-        let image = upload_image(gpu, texture.size, format, &texture.rgba)?;
-        owned.push(Resource::Image(image));
-        texture_indices.push(gpu.sampled_image(image, false)?.index);
-        graphics_inputs.push((Resource::Image(image), Access::ShaderRead));
-    }
-    let mut materials = scene.materials;
-    hash.update(bytemuck::cast_slice(&materials));
-    for material in &mut materials {
-        for index in &mut material.textures {
-            *index = *texture_indices
-                .get(*index as usize)
-                .ok_or_else(|| anyhow::anyhow!("Material texture out of bounds"))?;
-        }
-    }
-    let material_buffer = upload_buffer(
-        gpu,
-        bytemuck::cast_slice(&materials),
-        vk::BufferUsageFlags::STORAGE_BUFFER,
-    )?;
-    owned.push(Resource::Buffer(material_buffer));
-    let material_index = gpu.storage_buffer(material_buffer)?.index;
-    graphics_inputs.push((Resource::Buffer(material_buffer), Access::ShaderRead));
-    let mut meshes = Vec::new();
-    let mut entity_names = Vec::new();
+    ensure!(
+        materials.iter().all(|m| m
+            .base_color
+            .iter()
+            .chain(&m.emissive_roughness)
+            .chain(&m.surface)
+            .all(|v| v.is_finite())),
+        "Non-finite material"
+    );
     let mut seen = std::collections::BTreeSet::new();
-    for mesh in scene.meshes {
+    for mesh in &meshes {
         ensure!(seen.insert(mesh.entity), "Duplicate entity ID");
         ensure!(
             mesh.material < materials.len()
@@ -299,71 +291,125 @@ fn upload_content(
             "Mesh index out of range"
         );
         ensure!(
-            mesh.vertices
+            bytemuck::cast_slice::<Vertex, f32>(&mesh.vertices)
                 .iter()
-                .all(
-                    |v| bytemuck::cast_slice::<Vertex, f32>(std::slice::from_ref(v))
-                        .iter()
-                        .all(|v| v.is_finite())
-                ),
+                .all(|v| v.is_finite()),
             "Non-finite vertex"
         );
-        hash.update(mesh.entity.to_le_bytes());
-        hash.update((mesh.name.len() as u64).to_le_bytes());
-        hash.update(mesh.name.as_bytes());
-        hash.update(bytemuck::cast_slice(&mesh.vertices));
-        hash.update(bytemuck::cast_slice(&mesh.indices));
-        hash.update((mesh.material as u64).to_le_bytes());
-        let centre = mesh
-            .vertices
-            .iter()
-            .map(|v| Vec3::from_array(v.position))
-            .sum::<Vec3>()
-            / mesh.vertices.len() as f32;
-        let vertices = upload_buffer(
-            gpu,
-            bytemuck::cast_slice(&mesh.vertices),
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-        )?;
-        let indices = upload_buffer(
-            gpu,
-            bytemuck::cast_slice(&mesh.indices),
-            vk::BufferUsageFlags::INDEX_BUFFER,
-        )?;
-        graphics_inputs.extend([
-            (Resource::Buffer(vertices), Access::Vertex),
-            (Resource::Buffer(indices), Access::Index),
-        ]);
-        entity_names.push((mesh.entity, mesh.name.clone()));
-        meshes.push(Mesh {
-            entity: mesh.entity,
-            vertices,
-            indices,
-            count: u32::try_from(mesh.indices.len())?,
-            vertex_count: mesh.vertices.len(),
-            material: mesh.material as u32,
-            transparent: materials[mesh.material].flags[0] == 2,
-            centre,
-            host: false,
-            latest: None,
-        });
     }
-    ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
-    hash.update(bytemuck::cast_slice(&scene.lights));
-    hash.update(bytemuck::bytes_of(&scene.sun_direction));
-    hash.update(bytemuck::bytes_of(&scene.sun_lux));
-    // Light lists are host-visible at full capacity so `set_lights` can rewrite them
-    // between frames; contents match the static upload exactly.
-    let bytes = (MAX_LIGHTS * std::mem::size_of::<Light>()) as u64;
-    let light_buffer = gpu.create_buffer(bytes, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-    let compute_lights = gpu.create_buffer(bytes, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
-    owned.extend([
-        Resource::Buffer(light_buffer),
-        Resource::Buffer(compute_lights),
-    ]);
-    write_lights(gpu, [light_buffer, compute_lights], &scene.lights)?;
-    let light_index = gpu.storage_buffer(light_buffer)?.index;
-    let compute_light_index = gpu.storage_buffer(compute_lights)?.index;
+    let mut materials = materials;
+    for material in &mut materials {
+        for index in &mut material.textures {
+            *index = *texture_indices
+                .get(*index as usize)
+                .ok_or_else(|| anyhow::anyhow!("Material texture out of bounds"))?;
+        }
+    }
+    let mut created = Vec::new();
+    let result = (|| -> Result<Geometry> {
+        let material_buffer = upload_buffer(
+            gpu,
+            bytemuck::cast_slice(&materials),
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+        )?;
+        created.push(Resource::Buffer(material_buffer));
+        let material_index = gpu.storage_buffer(material_buffer)?.index;
+        let mut inputs = vec![(Resource::Buffer(material_buffer), Access::ShaderRead)];
+        let mut uploaded = Vec::new();
+        let mut entity_names = Vec::new();
+        for mesh in meshes {
+            let centre = mesh
+                .vertices
+                .iter()
+                .map(|v| Vec3::from_array(v.position))
+                .sum::<Vec3>()
+                / mesh.vertices.len() as f32;
+            let vertices = upload_buffer(
+                gpu,
+                bytemuck::cast_slice(&mesh.vertices),
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+            )?;
+            created.push(Resource::Buffer(vertices));
+            let indices = upload_buffer(
+                gpu,
+                bytemuck::cast_slice(&mesh.indices),
+                vk::BufferUsageFlags::INDEX_BUFFER,
+            )?;
+            created.push(Resource::Buffer(indices));
+            inputs.extend([
+                (Resource::Buffer(vertices), Access::Vertex),
+                (Resource::Buffer(indices), Access::Index),
+            ]);
+            entity_names.push((mesh.entity, mesh.name));
+            uploaded.push(Mesh {
+                entity: mesh.entity,
+                vertices,
+                indices,
+                count: u32::try_from(mesh.indices.len())?,
+                vertex_count: mesh.vertices.len(),
+                material: mesh.material as u32,
+                transparent: materials[mesh.material].flags[0] == 2,
+                centre,
+                host: false,
+                latest: None,
+            });
+        }
+        // Host-visible at full capacity so `set_lights` rewrites them in place;
+        // contents match a static upload exactly.
+        let bytes = (MAX_LIGHTS * std::mem::size_of::<Light>()) as u64;
+        let light_buffer = gpu.create_buffer(bytes, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        created.push(Resource::Buffer(light_buffer));
+        let compute_lights =
+            gpu.create_buffer(bytes, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        created.push(Resource::Buffer(compute_lights));
+        write_lights(gpu, [light_buffer, compute_lights], &lights)?;
+        let light_index = gpu.storage_buffer(light_buffer)?.index;
+        let compute_light_index = gpu.storage_buffer(compute_lights)?.index;
+        Ok(Geometry {
+            meshes: uploaded,
+            inputs,
+            owned: vec![
+                Resource::Buffer(material_buffer),
+                Resource::Buffer(light_buffer),
+                Resource::Buffer(compute_lights),
+            ],
+            material_index,
+            lights,
+            light_buffer,
+            light_index,
+            compute_lights,
+            compute_light_index,
+            entity_names,
+        })
+    })();
+    if result.is_err() {
+        for resource in created {
+            gpu.retire(resource)?;
+        }
+        gpu.collect()?;
+    }
+    result
+}
+
+fn upload_content(
+    gpu: &mut VulkanDevice,
+    scene: Scene,
+    artifacts: &Path,
+    shader_metadata: &crate::capture::ShaderMetadata,
+    compute_frame: Buffer,
+) -> Result<Content> {
+    ensure!(
+        scene.sun_direction.is_finite()
+            && scene.sun_direction.length_squared() > 0.001
+            && scene.sun_lux.is_finite(),
+        "Invalid directional light"
+    );
+    for texture in &scene.textures {
+        ensure!(
+            texture.rgba.len() == texture.size[0] as usize * texture.size[1] as usize * 4,
+            "Invalid texture pixels"
+        );
+    }
     ensure!(
         scene.environment.len()
             == scene.environment_size[0] as usize * scene.environment_size[1] as usize,
@@ -377,9 +423,38 @@ fn upload_content(
             .all(|x| x.is_finite() && *x >= 0.),
         "HDR radiance must be finite and nonnegative"
     );
-    hash.update(scene.environment_size[0].to_le_bytes());
-    hash.update(scene.environment_size[1].to_le_bytes());
-    hash.update(bytemuck::cast_slice(&scene.environment));
+    let base_hash = super::hash::scene_hash(&scene);
+    let static_hash = super::hash::static_hash(&scene);
+    let mut static_owned = Vec::new();
+    let mut static_inputs = Vec::new();
+    let mut texture_indices = Vec::new();
+    for texture in &scene.textures {
+        let format = if texture.srgb {
+            vk::Format::R8G8B8A8_SRGB
+        } else {
+            vk::Format::R8G8B8A8_UNORM
+        };
+        let image = upload_image(gpu, texture.size, format, &texture.rgba)?;
+        static_owned.push(Resource::Image(image));
+        texture_indices.push(gpu.sampled_image(image, false)?.index);
+        static_inputs.push((Resource::Image(image), Access::ShaderRead));
+    }
+    let geometry = match upload_geometry(
+        gpu,
+        scene.materials,
+        scene.meshes,
+        scene.lights,
+        &texture_indices,
+    ) {
+        Ok(geometry) => geometry,
+        Err(error) => {
+            for resource in static_owned {
+                gpu.retire(resource)?;
+            }
+            gpu.collect()?;
+            return Err(error);
+        }
+    };
     let environment_image = upload_image(
         gpu,
         scene.environment_size,
@@ -387,16 +462,16 @@ fn upload_content(
         bytemuck::cast_slice(&scene.environment),
     )?;
     let environment = gpu.sampled_image(environment_image, false)?.index;
-    graphics_inputs.push((Resource::Image(environment_image), Access::ShaderRead));
+    static_inputs.push((Resource::Image(environment_image), Access::ShaderRead));
     let usage = vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE;
     let diffuse = gpu.create_image(32, 16, vk::Format::R32G32B32A32_SFLOAT, usage)?;
     let specular = gpu.create_image(256, 640, vk::Format::R32G32B32A32_SFLOAT, usage)?;
-    owned.extend([
+    static_owned.extend([
         Resource::Image(environment_image),
         Resource::Image(diffuse),
         Resource::Image(specular),
     ]);
-    graphics_inputs.extend([
+    static_inputs.extend([
         (Resource::Image(diffuse), Access::ShaderRead),
         (Resource::Image(specular), Access::ShaderRead),
     ]);
@@ -512,23 +587,27 @@ fn upload_content(
     }
     gpu.assert_clean()?;
     Ok(Content {
-        meshes,
-        graphics_inputs,
-        owned,
+        meshes: geometry.meshes,
+        geometry_inputs: geometry.inputs,
+        static_inputs,
+        geometry_owned: geometry.owned,
+        static_owned,
         ibl_pipelines: [irradiance_pipeline, specular_pipeline],
-        material_index,
-        lights: scene.lights,
-        light_buffer,
-        light_index,
-        compute_lights,
-        compute_light_index,
+        texture_indices,
+        static_hash,
+        material_index: geometry.material_index,
+        lights: geometry.lights,
+        light_buffer: geometry.light_buffer,
+        light_index: geometry.light_index,
+        compute_lights: geometry.compute_lights,
+        compute_light_index: geometry.compute_light_index,
         environment,
         irradiance,
         prefilter,
         sun_direction: scene.sun_direction.normalize(),
         sun_lux: scene.sun_lux,
-        base_hash: format!("{:x}", hash.finalize()),
+        base_hash,
         revision: 0,
-        entity_names,
+        entity_names: geometry.entity_names,
     })
 }
