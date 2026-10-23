@@ -109,6 +109,20 @@ pub fn vec3(v: Option<&Value>) -> Option<Vec3> {
     Some([0, 1, 2].map(|i| a[i].as_f64().unwrap_or(f64::NAN)))
 }
 
+/// A vector as JSON, with whole numbers written as integers (`[1, 1, 1]`).
+pub fn json3(v: Vec3) -> Value {
+    Value::Array(v.iter().map(|x| number(*x)).collect())
+}
+
+/// A number as JSON: whole numbers as integers.
+pub fn number(x: f64) -> Value {
+    if x.fract() == 0.0 && x.abs() < 9.0e15 {
+        Value::from(x as i64)
+    } else {
+        Value::from(x)
+    }
+}
+
 /// A number for display: `12`, `0.5`, `NaN`.
 pub fn show(x: f64) -> String {
     if x.is_nan() {

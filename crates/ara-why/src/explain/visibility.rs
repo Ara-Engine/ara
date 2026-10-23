@@ -301,7 +301,7 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                         format!("Reset `Transform.{field}`"),
                         &who.address,
                         &format!("Transform.{field}"),
-                        json!(fixed),
+                        math::json3(fixed),
                     )),
                 );
             }
@@ -331,7 +331,7 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                         "Give the scale its size back",
                         &who.address,
                         "Transform.scale",
-                        json!(fixed),
+                        math::json3(fixed),
                     )),
                 );
             }
@@ -356,7 +356,7 @@ fn transform(cx: &Ctx<'_>, f: &mut Findings) -> Affine {
                 "Reset the position",
                 &cx.e.address,
                 "Transform.position",
-                json!(math::vec3(cx.e.get("Transform", "position")).filter(|v| v.iter().all(|x| x.is_finite())).unwrap_or([0.0; 3])),
+                math::json3(math::vec3(cx.e.get("Transform", "position")).filter(|v| v.iter().all(|x| x.is_finite())).unwrap_or([0.0; 3])),
             ))
             .advice("fix what wrote the NaN (see `caused by`), or it comes back on the next play");
         f.cause(c);
@@ -743,7 +743,7 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
             )
             .evidence(format!("{} at {}; Camera far = {}", cx.e.address, show3(pos), show(far)))
             .subject(Subject::entity(cx.e.address.clone()))
-            .fix(set(format!("Raise the camera's far plane to {} m", show(new_far)), &cam.address, "Camera.far", json!(new_far))),
+            .fix(set(format!("Raise the camera's far plane to {} m", show(new_far)), &cam.address, "Camera.far", math::number(new_far))),
         );
     }
     if let Some((field, limit)) = limit
@@ -758,7 +758,7 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
                 format!("It is {} m from the nearest camera but `{path}` is {} m", show(d), show(limit)),
             )
             .subject(Subject::entity(cx.e.address.clone()))
-            .fix(set(format!("Raise `{path}`"), &cx.e.address, &path, json!((d * 1.25).ceil()))),
+            .fix(set(format!("Raise `{path}`"), &cx.e.address, &path, math::number((d * 1.25).ceil()))),
         );
     }
     f.check(

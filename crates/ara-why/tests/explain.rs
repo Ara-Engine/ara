@@ -177,7 +177,7 @@ fn an_inherited_zero_scale_points_at_the_parent() {
     assert_eq!(top(&r), (codes::RENDER_DEGENERATE_TRANSFORM, Likelihood::High));
     assert_eq!(
         command(&r),
-        json!({ "cmd": "property.set", "args": { "entity": "e_stack1", "path": "Transform.scale", "value": [1.0, 1.0, 1.0] } })
+        json!({ "cmd": "property.set", "args": { "entity": "e_stack1", "path": "Transform.scale", "value": [1, 1, 1] } })
     );
     assert!(r.text().contains("Its ancestor `Stack` (e_stack1)'s `Transform.scale` is 0 on y"), "{}", r.text());
 }

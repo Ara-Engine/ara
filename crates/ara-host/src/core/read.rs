@@ -502,13 +502,24 @@ pub(super) fn inspect(st: &mut State, p: InspectParams) -> R {
 
 pub(super) fn docs_search(st: &mut State, p: DocsSearchParams) -> R {
     let pages = docs::generate(st.store.schema(), &st.registry, &st.catalog, &st.name);
-    let hits = docs::search(&pages, &p.query, p.limit.unwrap_or(5).clamp(1, 50) as usize);
+    let limit = p.limit.unwrap_or(5).clamp(1, 50) as usize;
+    let mut hits = docs::search(&pages, &p.query, limit);
+    // A code (`ARA1302`, `ARA-EXP-AND-007`, `UNRESOLVED_REF`) answers with its whole page.
+    let code_page = ara_diag::catalog::lookup(&p.query)
+        .map(|d| format!("errors/{}", d.code))
+        .and_then(|id| pages.iter().find(|pg| pg.id == id));
+    if let Some(page) = code_page {
+        hits.retain(|h| h.id != page.id);
+        hits.insert(0, page);
+        hits.truncate(limit);
+    }
     let full = p.full.unwrap_or(false);
     let mut text = String::new();
     let results: Vec<Value> = hits
         .iter()
         .map(|page| {
-            let body = if full { page.markdown() } else { docs::snippet(page, &p.query) };
+            let whole = full || code_page.is_some_and(|c| c.id == page.id);
+            let body = if whole { page.markdown() } else { docs::snippet(page, &p.query) };
             text.push_str(&format!("## {} (ara://docs/{})\n{}\n\n", page.title, page.id, body));
             json!({ "id": page.id, "uri": format!("ara://docs/{}", page.id), "title": page.title, "summary": page.summary, "text": body })
         })

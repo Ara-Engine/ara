@@ -106,10 +106,7 @@ impl Explainer for CodeExplainer {
         }
         if records.is_empty() {
             for c in doc.causes.iter().take(3) {
-                f.cause(
-                    Cause::new(code, Likelihood::Low, *c)
-                        .advice(doc.fixes.first().copied().unwrap_or_default()),
-                );
+                f.cause(Cause::new(code, Likelihood::Low, *c));
             }
         }
         f.collect(extra, &Target::Code(code), facts);

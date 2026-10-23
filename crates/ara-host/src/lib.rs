@@ -35,23 +35,32 @@ pub use project::Project;
 pub use service::{Cx, Method, Service, parse};
 pub use session::{Approval, ApprovalRequest, Decision, DefaultPolicy};
 
-/// The core method catalog without opening a host (for offline docs generation).
+/// The method catalog of the services every host registers (core, profile, diag,
+/// why), without opening a host (offline docs generation, MCP tests).
 pub fn core_methods() -> Vec<ara_proto::MethodInfo> {
     let mut db = ara_schema::SchemaDb::new();
-    let methods = core::methods(&mut db);
-    methods
-        .into_iter()
-        .map(|m| ara_proto::MethodInfo {
-            params: db
-                .get(&m.params)
-                .map(|t| db.type_json_schema(t))
-                .unwrap_or_default(),
-            name: m.name,
-            summary: m.summary,
-            scope: m.scope,
-            hints: m.hints,
-            tool: m.tool,
-            service: "core".into(),
-        })
-        .collect()
+    let services: [Box<dyn Service>; 4] = [
+        Box::new(core::Core),
+        Box::new(profile::ProfileService),
+        Box::new(diag::DiagService),
+        Box::new(why::WhyService),
+    ];
+    let mut out = Vec::new();
+    for service in services {
+        for m in service.methods(&mut db) {
+            out.push(ara_proto::MethodInfo {
+                params: db
+                    .get(&m.params)
+                    .map(|t| db.type_json_schema(t))
+                    .unwrap_or_default(),
+                name: m.name,
+                summary: m.summary,
+                scope: m.scope,
+                hints: m.hints,
+                tool: m.tool,
+                service: service.name().into(),
+            });
+        }
+    }
+    out
 }
