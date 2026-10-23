@@ -658,6 +658,19 @@ Fixes:
 - None needed; review and commit the updated sidecar with the cooked result.
 - If the sidecar names a newer importer than this engine has, that is `ARA7303` instead: update the engine.
 
+## ARA7310 runtime::ASSET_PLACEHOLDER: Asset missing in play, placeholder shown
+owner: ara-runtime
+
+A model the scene references could not be loaded in the running game, so the runtime drew placeholder geometry and kept playing instead of failing. The play session continues; only that entity's visuals are wrong.
+
+Causes:
+- The asset's source file is missing or its import failed (see the matching `ARA7303` or `ARA21xx` diagnostic).
+- The cooked generation was removed from the cache while the player was running.
+
+Fixes:
+- Restore or re-import the asset, then Play again (or let hot reload swap it in).
+- Point the referencing field at an asset that exists (`property.set`).
+
 ## ARA7401 l10n::MISSING_KEY: Missing localization key
 owner: ara-l10n
 

@@ -354,7 +354,7 @@ impl Runtime {
         for model in &models {
             if let Err(error) = library.models.load(assets.as_ref(), model) {
                 asset_errors.push(format!(
-                    "ARA7303: {error}; showing placeholder geometry; re-import the asset"
+                    "ARA7310: {error}; showing placeholder geometry; re-import the asset"
                 ));
             }
         }
@@ -497,7 +497,7 @@ impl Runtime {
     pub fn asset_diagnostics(&self) -> impl Iterator<Item = ara_diag::Diagnostic> + '_ {
         self.asset_errors
             .iter()
-            .map(|message| ara_diag::Diagnostic::warning(ara_diag::Code(7303), message))
+            .map(|message| ara_diag::Diagnostic::warning(ara_diag::Code(7310), message))
     }
 
     /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).
