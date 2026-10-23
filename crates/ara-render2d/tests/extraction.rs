@@ -27,9 +27,9 @@ fn extraction_composes_hierarchy_basis_and_uses_absolute_physics_pose() -> anyho
     world.spawn((
         Identity("e_physics".into()),
         ChildOf(parent),
-        ara_physics2d::Body2d {
+        ara_physics2d::PhysicsPose2d {
             position: [9., 8.],
-            ..Default::default()
+            rotation: 0.,
         },
         Sprite::default(),
     ));

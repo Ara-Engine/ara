@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use ara_2d::{Atlas, Flipbook, Light2d, Sprite, Tilemap};
 use ara_components::Transform;
-use ara_physics2d::Body2d;
+use ara_physics2d::PhysicsPose2d;
 use ara_sim::{
     Identity, SceneMetadata,
     bevy_ecs::prelude::{ChildOf, Entity, World},
@@ -102,7 +102,7 @@ impl Scene2d {
             &Identity,
             Option<&SceneMetadata>,
             Option<&Transform>,
-            Option<&Body2d>,
+            Option<&PhysicsPose2d>,
             Option<&Sprite>,
             Option<&Tilemap>,
             Option<&Light2d>,
@@ -110,17 +110,17 @@ impl Scene2d {
         )>();
         let mut rows: Vec<_> = query.iter(world).collect();
         rows.sort_by(|a, b| a.1.cmp(b.1));
-        for (handle, id, name, transform, body, sprite, map, light, clip) in rows {
+        for (handle, id, name, transform, pose, sprite, map, light, clip) in rows {
             let digest = blake3::hash(id.0.as_bytes());
             let entity = u64::from_le_bytes(digest.as_bytes()[..8].try_into()?);
-            let matrix = if let Some(body) = body {
+            let matrix = if let Some(pose) = pose {
                 let scale = transform
                     .map(|t| [t.scale[0], t.scale[1], 1.])
                     .unwrap_or([1.; 3]);
                 glam::Mat4::from_scale_rotation_translation(
                     glam::Vec3::from_array(scale),
-                    glam::Quat::from_rotation_z(body.rotation),
-                    glam::Vec3::new(body.position[0], body.position[1], 0.),
+                    glam::Quat::from_rotation_z(pose.rotation),
+                    glam::Vec3::new(pose.position[0], pose.position[1], 0.),
                 )
             } else {
                 world_matrix(world, handle)?

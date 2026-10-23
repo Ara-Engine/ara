@@ -1,43 +1,75 @@
+//! Cross-process determinism: two fresh processes, opposite ECS insertion orders,
+//! must produce byte-identical solver checkpoints after 300 ticks.
 use anyhow::{Result, ensure};
-use ara_physics2d::{Body2d, BodyKind2d, Collider2d, Physics2d};
+use ara_physics2d::*;
 use ara_sim::{Identity, bevy_ecs::prelude::World};
-fn main() -> Result<()> {
-    if let Some(path) = std::env::var_os("ARA_2D_REPLAY_OUTPUT") {
-        let mut world = World::new();
-        let mut inputs = Vec::new();
-        for i in 0..64 {
-            inputs.push((
+
+fn simulate(reverse: bool) -> Result<Vec<u8>> {
+    let mut world = World::new();
+    let mut bodies: Vec<_> = (0..64)
+        .map(|i| {
+            (
                 Identity(format!("e_body{i:04}")),
-                Body2d {
-                    kind: BodyKind2d::Dynamic,
-                    position: [(i % 16) as f32 * 1.1, (i / 16) as f32 * 1.1 + 1.],
+                RigidBody2d {
+                    motion: MotionType2d::Dynamic,
                     ..Default::default()
                 },
-                Collider2d::default(),
-            ));
-        }
-        if std::env::var_os("ARA_2D_REVERSE").is_some() {
-            inputs.reverse();
-        }
-        for input in inputs {
-            world.spawn(input);
-        }
-        world.spawn((
-            Identity("e_floor".into()),
-            Body2d {
-                position: [0., -0.5],
-                ..Default::default()
-            },
-            Collider2d {
-                half_extents: [30., 0.5],
-                ..Default::default()
-            },
-        ));
-        let mut physics = Physics2d::new(60, [0., -9.81])?;
-        for _ in 0..300 {
-            physics.step(&mut world, 1. / 60.)?;
-        }
-        std::fs::write(path, physics.snapshot()?)?;
+                Collider2d {
+                    kind: if i % 3 == 0 {
+                        ColliderKind2d::Circle
+                    } else {
+                        ColliderKind2d::Box
+                    },
+                    ..Default::default()
+                },
+                PhysicsPose2d {
+                    position: [(i % 16) as f32 * 1.1, (i / 16) as f32 * 1.1 + 1.],
+                    rotation: i as f32 * 0.1,
+                },
+            )
+        })
+        .collect();
+    if reverse {
+        bodies.reverse();
+    }
+    for body in bodies {
+        world.spawn(body);
+    }
+    world.spawn((
+        Identity("e_floor".into()),
+        RigidBody2d::default(),
+        Collider2d {
+            half_extents: [30., 0.5],
+            ..Default::default()
+        },
+        PhysicsPose2d {
+            position: [0., -0.5],
+            rotation: 0.,
+        },
+    ));
+    world.spawn((
+        Identity("e_hero".into()),
+        CharacterController2d::default(),
+        CharacterInput2d {
+            desired_velocity: [2., 0.],
+            jump_speed: 0.,
+        },
+        PhysicsPose2d {
+            position: [-6., 1.],
+            rotation: 0.,
+        },
+    ));
+    world.insert_resource(Physics2d::new(Physics2dConfig::default())?);
+    for _ in 0..300 {
+        tick_ecs(&mut world)?;
+    }
+    world.resource::<Physics2d>().snapshot()
+}
+
+fn main() -> Result<()> {
+    if let Some(path) = std::env::var_os("ARA_2D_REPLAY_OUTPUT") {
+        let reverse = std::env::var_os("ARA_2D_REVERSE").is_some();
+        std::fs::write(path, simulate(reverse)?)?;
         return Ok(());
     }
     let dir = tempfile::tempdir()?;
@@ -54,6 +86,7 @@ fn main() -> Result<()> {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
+            // CREATE_NO_WINDOW: keep worker processes from flashing consoles.
             command.creation_flags(0x08000000);
         }
         ensure!(command.status()?.success(), "determinism worker failed");
@@ -62,6 +95,8 @@ fn main() -> Result<()> {
         std::fs::read(a)? == std::fs::read(b)?,
         "cross-process physics snapshots diverged"
     );
-    println!("Cross-process determinism PASS: 65 bodies, 300 ticks, reversed ECS insertion");
+    println!(
+        "Cross-process determinism PASS: 66 bodies + character, 300 ticks, reversed ECS order"
+    );
     Ok(())
 }

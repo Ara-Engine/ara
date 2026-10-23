@@ -254,7 +254,7 @@ pub fn prepare(root: &Path) -> Result<()> {
         "e_map1".into(),
         serde_json::json!({"name":"Ruins tilemap","Tilemap":map}),
     );
-    records.insert("e_hero1".into(),serde_json::json!({"name":"Scout","Transform":{"position":[-1.5,-1.75,0]},"Sprite":sprite("heroIdle",[1.,1.5],3,true,[1.;2]),"Body2d":{"kind":"kinematic","position":[-1.5,-1.75],"lockRotation":true},"Collider2d":{"halfExtents":[0.3,0.7]},"Character2d":{},"Flipbook":{"frames":[{"region":"heroIdle","ticks":8},{"region":"heroStep","ticks":8}],"looping":true}}));
+    records.insert("e_hero1".into(),serde_json::json!({"name":"Scout","Transform":{"position":[-1.5,-1.75,0]},"Sprite":sprite("heroIdle",[1.,1.5],3,true,[1.;2]),"PhysicsPose2d":{"position":[-1.5,-1.75]},"CharacterController2d":{"height":1.5},"Flipbook":{"frames":[{"region":"heroIdle","ticks":8},{"region":"heroStep","ticks":8}],"looping":true}}));
     records.insert("e_crate1".into(),serde_json::json!({"name":"Nine-slice supply crate","Transform":{"position":[1.,-1.75,0]},"Sprite":Sprite {nine_slice:true,..sprite("crate",[1.75,1.5],2,true,[1.;2])}}));
     for (id, x, y) in [("e_lamp1", -4., 1.), ("e_lamp2", 5., 0.)] {
         records.insert(id.into(),serde_json::json!({"name":"Amber lantern","Transform":{"position":[x,y,0]},"Sprite":sprite("lantern",[0.5,1.],4,false,[1.;2])}));

@@ -40,14 +40,8 @@
     },
     "e_hero1": {
       "name": "Scout",
-      "Body2d": {
-        "kind": "kinematic",
-        "position": [-1.5, -1.75],
-        "lockRotation": true
-      },
-      "Character2d": {},
-      "Collider2d": {
-        "halfExtents": [0.3, 0.7]
+      "CharacterController2d": {
+        "height": 1.5
       },
       "Flipbook": {
         "frames": [
@@ -61,6 +55,9 @@
           }
         ],
         "looping": true
+      },
+      "PhysicsPose2d": {
+        "position": [-1.5, -1.75]
       },
       "Sprite": {
         "atlas": "@art/platformer.png#at_platform1",

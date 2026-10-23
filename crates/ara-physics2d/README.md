@@ -1,52 +1,54 @@
 # Ara 2D physics
 
-Rapier2D is behind an Ara-owned API. No Rapier handle/type enters components,
-commands, scene files or caller queries. `Body2d` is the authoritative world-space
-pose/velocity; `Collider2d` carries convex geometry, filters and physical material;
-`Character2d` carries requested movement and grounded state. The renderer extracts
-Body2d poses directly. Physics state never lives in C# objects or global state.
+Rapier2D behind an Ara-owned API that mirrors `ara-physics` (3D). Rigid bodies are
+`RigidBody2d` + `Collider2d`; characters are `CharacterController2d` capsules driven by
+`CharacterInput2d`. The solver writes `PhysicsPose2d`, `Velocity2d` and
+`CharacterMotion2d` back at every fixed boundary. The renderer extracts
+`PhysicsPose2d` directly. No physics state lives in C# objects or globals.
 
-Register schemas with `register`, authoring with `commands::register`, then install
-`register_sim` before projecting scenes. Insert `Physics2d::new(hz, gravity)` into
-the session and register `step_system` after gameplay producers. A host must check
-`Physics2d::error()` after each tick and fault play on failure, restoring a complete
-session checkpoint before continuing. Exclusive callers can use fallible `step`.
-`raycast` returns stable identities and excludes sensors unless requested.
+## Integration
 
-All bodies are validated before changes and synchronized in stable Identity order.
-The solver keeps contact/island/handle caches as infrastructure. `ara-sim` snapshots
-register the entire resource alongside components, so rollback does not reconstruct
-an approximate world from transforms. The direct binary snapshot also carries a
-format version, actual Rapier version, precision, determinism policy, OS/architecture
-and tick rate; restore validates before replacing the existing solver. Snapshot
-decoding is bounded at 256 MiB. Netcode must authenticate snapshots and include the
-complete application build/features hash (as ara-sim's checkpoint contract does).
+Register schemas with `register`, authoring with `commands::register`, and
+`register_sim` before projecting scenes. Call `install(session, config)` after the
+gameplay systems that write inputs. The host checks `Physics2dStatus` after each tick
+and pauses that session on a fault; restoring a checkpoint taken before the fault
+clears it. Exclusive callers can use the fallible `tick_ecs`.
 
-## Backend choice
+ara-sim checkpoints include the `Physics2d` resource: the complete Rapier world
+(contacts, islands, broad phase, handles) plus stable-identity bindings, behind a
+build fingerprint (format, Rapier version, precision, determinism mode, OS/arch)
+and the world configuration. Rollback therefore restores the exact solver, not an
+approximation rebuilt from transforms. Netcode must still authenticate snapshots and
+include the application build hash, as ara-sim's checkpoint contract requires.
 
-Both candidates are credible. Rapier provides [enhanced determinism](https://rapier.rs/docs/user_guides/templates/determinism/)
-and [Serde solver serialization](https://www.rapier.rs/docs/user_guides/templates/serialization/).
-Box2D's current documentation also includes [snapshots](https://box2d.org/documentation/group__snapshot.html)
-and a [character mover](https://box2d.org/documentation/md_character.html); lack of
-snapshot support is not a reason to reject it.
+## Backend choice: Rapier2D over Box2D v3
 
-Rapier is selected because it is pure Rust, has a stateless kinematic controller
-and exposes the complete solver for an owned, versioned rollback boundary. It needs
-no C ABI shim or vendored C revision/build maintenance. Enhanced determinism is
-enabled; SIMD and parallel execution are not enabled by this crate. Tests measure
-same-build Windows determinism, controller grounding/wall blocking, CCD and full
-session restore. Cross-platform hash equality remains unmeasured. Moving-platform
-and stair behavior must be qualified for a game's controller settings, as with S6;
-this is not a claim of Jolt's 3D controller parity.
+| Criterion | Rapier2D 0.36 | Box2D v3.2 |
+|---|---|---|
+| Determinism | `enhanced-determinism` (cross-platform IEEE mode); bit-exact here across processes and insertion orders | Cross-platform determinism advertised since v3.1 |
+| Snapshot/restore | Serde of the complete world; versioned by us | `b2World_GetSnapshot` exists but is marked experimental with an unstable format |
+| Character control | Kinematic controller: slopes, autostep, snap-to-ground | Character mover primitives (plane solving, casts) |
+| Performance | 0.6 ms/tick for 1k boxes (dev profile, ECS sync included) | Likely faster (SIMD solver); not measured here |
+| Maintenance | Pure Rust, Cargo only, no ABI | C via an owned `cc` shim like S6 (Jolt), ~vendored revision upkeep |
 
-No Box2D comparative performance measurement was made. `measurements/solver.json`
-records ECS-inclusive Rapier timings and direct checkpoint sizes/costs. The
-`solver-before-direct-snapshot.json` baseline measures the earlier nested-byte
-envelope. Reproduce with `CARGO_BUILD_JOBS=2 cargo run -p ara-physics2d --example physics2d-timings`.
+Rapier wins on the two netcode-critical criteria: a stable, complete serialization
+path we version ourselves, and no foreign ABI to maintain for a secondary feature
+(D8). Its known costs are larger snapshots (≈1.8 MB for 1k bodies) and a slower
+restore than Jolt (S6). S6's 3D moving-platform failure is avoided by our own
+controller policy; 2D moving platforms (ground velocity) are not implemented yet.
 
-`physics2d.set` updates a complete body/collider/controller through typed ops.
-`tilemap.colliders.generate` creates/replaces only entities bearing its owner marker;
-the entire generation can be undone. Grid cells merge into rectangles; hex/diamond
-cells retain their convex silhouettes. The command's origin is explicitly world
-space, and its optional basis preserves rotation/scale/shear, so authoring hosts
+## Measurements
+
+`measurements/solver.json` (dev profile) and `solver-release.json` (release) hold
+ECS-inclusive step, snapshot size and snapshot/restore costs for 129 and 1025 bodies.
+Reproduce with `cargo run -p ara-physics2d --example physics2d-timings [--release]`.
+
+## Authoring
+
+`physics2d.set` writes a complete role (pose + body + collider, or pose + character)
+and removes the other role's components in the same transaction.
+`tilemap.colliders.generate` creates or replaces only entities carrying its owner
+marker; the whole generation is one undo item. Grid cells merge into rectangles;
+hex and diamond cells keep their convex silhouettes. The command's origin is world
+space and its optional basis preserves rotation, scale and shear, so authoring hosts
 must supply the map's resolved origin and basis.
