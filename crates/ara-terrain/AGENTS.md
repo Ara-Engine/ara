@@ -23,8 +23,11 @@ decodes payloads on an I/O thread. Hosts retain old results on
 failure and call Residency::publish only at a permitted boundary. No authoring
 change is allowed to create a blocking cook on the frame/tick thread.
 
-Physics is a borrowed `Heightfield` seam until ara-physics merges. Preserve holes
-and duplicate shared-edge samples when creating Jolt shapes. Navigation consumes
+Physics uses `Tile::cook_collider` over ara-physics. Solid tiles cook native Jolt
+heightfields; tiles with cell holes cook exact triangle meshes, because Jolt's
+vertex-hole convention removes additional neighboring cells. Empty tiles return
+None. Geometry includes the world origin; bodies use the identity pose. Native
+ray tests verify adjacent heightfields and the exact hole footprint. Navigation consumes
 `Heightfield::mesh`: assign vertices/triangles to ara_nav::Geometry and area 0 per
 triangle. Dirty tile bounds plus profile-radius halos drive incremental baking.
 GI/RT/shadow consumers use the same hole-aware mesh and tile content keys.

@@ -6,7 +6,7 @@ foreach($key in @('CARGO_BUILD_JOBS','PATH','VK_IMPLICIT_LAYER_PATH','VK_LAYER_P
 Push-Location $repo
 try {
     $env:CARGO_BUILD_JOBS='2'
-    $env:PATH="C:/VulkanSDK/1.4.363.0/Bin;$env:PATH"
+    $env:PATH="$repo/crates/ara-platform/native;C:/VulkanSDK/1.4.363.0/Bin;$env:PATH"
     New-Item -ItemType Directory -Force "$PSScriptRoot/cache/empty-layers" | Out-Null
     $env:VK_IMPLICIT_LAYER_PATH="$PSScriptRoot/cache/empty-layers"
     $env:VK_LAYER_PATH='C:/VulkanSDK/1.4.363.0/Bin'

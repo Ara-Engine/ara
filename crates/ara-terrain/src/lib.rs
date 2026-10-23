@@ -8,6 +8,7 @@ mod evaluate;
 pub mod job;
 pub mod lod;
 mod model;
+mod physics;
 pub mod stream;
 mod tile;
 

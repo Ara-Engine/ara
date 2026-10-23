@@ -7,12 +7,30 @@ impl Landscape {
         size: [u32; 2],
         cooked: &Path,
     ) -> Result<Self> {
-        data.header.validate().map_err(|d|anyhow::anyhow!(d.message))?;
-        ensure!(data.instances.iter().all(|i|i.identity[2]<3
-            &&i.position_scale.iter().chain(&i.rotation_wind).all(|v|v.is_finite())
-            &&i.position_scale[3]>0.&&i.rotation_wind[3]>=0.),"invalid foliage instance species, bounds or transform");
-        ensure!(data.samples.iter().all(|s|f32::from_bits(s[0]).is_finite()&&s[2]<=1
-            &&s[1].to_le_bytes().iter().map(|v|u32::from(*v)).sum::<u32>()==255),"invalid terrain sample atlas");
+        data.header
+            .validate()
+            .map_err(|d| anyhow::anyhow!(d.message))?;
+        ensure!(
+            data.instances.iter().all(|i| i.identity[2] < 3
+                && i.position_scale
+                    .iter()
+                    .chain(&i.rotation_wind)
+                    .all(|v| v.is_finite())
+                && i.position_scale[3] > 0.
+                && i.rotation_wind[3] >= 0.),
+            "invalid foliage instance species, bounds or transform"
+        );
+        ensure!(
+            data.samples.iter().all(|s| f32::from_bits(s[0]).is_finite()
+                && s[2] <= 1
+                && s[1]
+                    .to_le_bytes()
+                    .iter()
+                    .map(|v| u32::from(*v))
+                    .sum::<u32>()
+                    == 255),
+            "invalid terrain sample atlas"
+        );
         ensure!(
             !size.contains(&0)
                 && data.side > 1

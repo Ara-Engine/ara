@@ -89,16 +89,18 @@ pub struct FoliageGeometry {
 impl FoliageGeometry {
     /// Updates extracted culling bounds before upload, including vertex-wind sway.
     pub fn apply_bounds(&self, instances: &mut [ara_foliage::Instance]) {
-        let radii: [f32; 3] = std::array::from_fn(|species| {
+        let extents: [glam::Vec3; 3] = std::array::from_fn(|species| {
             self.meshes[species * 3..species * 3 + 3]
                 .iter()
                 .flat_map(|m| &m.vertices)
-                .map(|v| glam::Vec3::from_array(v.position).length())
-                .fold(0f32, f32::max)
+                .map(|v| glam::Vec3::from_array(v.position).abs())
+                .fold(glam::Vec3::ZERO, glam::Vec3::max)
         });
         for instance in instances {
-            if let Some(radius) = radii.get(instance.identity[2] as usize) {
-                instance.rotation_wind[3] = radius * instance.position_scale[3] * 1.25;
+            if let Some(extent) = extents.get(instance.identity[2] as usize) {
+                let sway = (extent.y * extent.y * 0.04).hypot(extent.y * 0.05)
+                    * instance.rotation_wind[2].abs();
+                instance.rotation_wind[3] = (extent.length() + sway) * instance.position_scale[3];
             }
         }
     }
@@ -126,7 +128,12 @@ impl FoliageGeometry {
                     .all(|v| v.is_finite())),
                 "nonfinite foliage vertex"
             );
-            ensure!(mesh.vertices.iter().all(|v|glam::Vec3::from_array(v.normal).length_squared()>0.01),"foliage vertices need valid normals");
+            ensure!(
+                mesh.vertices
+                    .iter()
+                    .all(|v| glam::Vec3::from_array(v.normal).length_squared() > 0.01),
+                "foliage vertices need valid normals"
+            );
             let texture = match mesh.texture {
                 Some(i) => *slots
                     .get(i)
