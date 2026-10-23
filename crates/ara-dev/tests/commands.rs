@@ -124,6 +124,51 @@ fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
 }
 
 #[test]
+fn known_failures_are_opt_in_and_do_not_hide_other_tests_in_the_same_target() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::create_dir_all(root.join("core/tests")).unwrap();
+    fs::write(
+        root.join("core/tests/scene.rs"),
+        "#[test]\nfn known() {\n    panic!(\"upstream failure\");\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("known.json"),
+        r#"[{"package":"mini-core","target":"scene","test":"known","output_contains":"upstream failure","reason":"Owned upstream"}]"#,
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = command(&root, binary, &["check", "--json"]);
+    assert!(!output.status.success());
+    let output = ok(
+        &root,
+        binary,
+        &["check", "--json", "--known-failures", "known.json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], true);
+    assert_eq!(report["known_failures"][0]["test"], "known");
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["check"] == "tests" && row["known_failure"] == true)
+    );
+    fs::write(root.join("core/tests/scene.rs"), "#[test]\nfn known() {\n    panic!(\"upstream failure\");\n}\n#[test]\nfn unexpected() {\n    panic!(\"new regression\");\n}\n").unwrap();
+    let output = command(
+        &root,
+        binary,
+        &["check", "--json", "--known-failures", "known.json"],
+    );
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], false);
+    assert_eq!(report["known_failures"][0]["test"], "known");
+}
+
+#[test]
 fn merge_commits_only_after_gate_and_stops_without_committing_other_conflicts() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

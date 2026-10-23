@@ -9,12 +9,13 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::{git, hygiene, workspace::Metadata};
+use crate::{git, hygiene, known, workspace::Metadata};
 
 #[derive(Serialize)]
 struct Row {
     check: String,
     passed: bool,
+    known_failure: bool,
     seconds: f64,
     detail: String,
 }
@@ -24,6 +25,7 @@ struct Report {
     passed: bool,
     base: String,
     affected: BTreeSet<String>,
+    known_failures: Vec<known::KnownFailure>,
     checks: Vec<Row>,
 }
 
@@ -57,6 +59,7 @@ impl Logs {
             .current_dir(root)
             .args(args)
             .env("CARGO_BUILD_JOBS", "2")
+            .env("CARGO_TERM_COLOR", "never")
             .stdout(Stdio::from(file.try_clone()?))
             .stderr(Stdio::from(file))
             .status();
@@ -68,6 +71,7 @@ impl Logs {
         self.rows.push(Row {
             check: name.into(),
             passed,
+            known_failure: false,
             seconds: start.elapsed().as_secs_f64(),
             detail,
         });
@@ -78,6 +82,7 @@ impl Logs {
         self.rows.push(Row {
             check: name.into(),
             passed: findings.is_empty(),
+            known_failure: false,
             seconds: 0.0,
             detail: if findings.is_empty() {
                 "ok".into()
@@ -100,7 +105,15 @@ pub(crate) fn selection(command: &str, affected: &BTreeSet<String>, full: bool) 
     args
 }
 
-pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<bool> {
+pub(crate) fn run(
+    root: &Path,
+    base: &str,
+    json: bool,
+    full: bool,
+    known_path: Option<&Path>,
+) -> Result<bool> {
+    let allowed = known::read(root, known_path)?;
+    let mut known_failures = Vec::new();
     // Capture before metadata, too: Cargo itself must not silently rewrite Cargo.lock.
     let before = git::TreeState::read(root)?;
     let base = git::text(root, ["merge-base", "HEAD", base])
@@ -138,7 +151,24 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
         logs.command(root, "clippy", &clippy)?;
         let mut tests = selection("test", &affected, whole_workspace);
         tests.extend(["--locked".into(), "--no-fail-fast".into()]);
-        logs.command(root, "tests", &tests)?;
+        if !logs.command(root, "tests", &tests)? && !allowed.is_empty() {
+            let output = fs::read_to_string(logs.directory.join("tests.log"))?;
+            let (accepted, observed) = known::classify(&output, &allowed);
+            known_failures = observed;
+            if accepted {
+                let row = logs
+                    .rows
+                    .last_mut()
+                    .expect("tests command appended its row");
+                row.passed = true;
+                row.known_failure = true;
+                row.detail = format!(
+                    "{} explicit known failure(s); {}",
+                    known_failures.len(),
+                    row.detail
+                );
+            }
+        }
     }
     // Coverage scans sources and C#, so always run it when code or catalog inputs change.
     let codes = changed
@@ -190,6 +220,7 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
         passed: logs.rows.iter().all(|r| r.passed),
         base,
         affected,
+        known_failures,
         checks: logs.rows,
     };
     if json {
@@ -217,9 +248,21 @@ pub(crate) fn run(root: &Path, base: &str, json: bool, full: bool) -> Result<boo
             println!(
                 "{:<22} {:<6} {:>8.1}  {}",
                 row.check,
-                if row.passed { "PASS" } else { "FAIL" },
+                if row.known_failure {
+                    "KNOWN"
+                } else if row.passed {
+                    "PASS"
+                } else {
+                    "FAIL"
+                },
                 row.seconds,
                 row.detail
+            );
+        }
+        for known in &report.known_failures {
+            println!(
+                "KNOWN {} --test {} / {}: {}",
+                known.package, known.target, known.test, known.reason
             );
         }
     }

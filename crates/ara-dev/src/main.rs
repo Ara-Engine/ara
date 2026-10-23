@@ -5,6 +5,7 @@ mod check;
 mod git;
 mod gpu;
 mod hygiene;
+mod known;
 mod merge;
 mod platform;
 mod workspace;
@@ -36,6 +37,9 @@ enum Command {
         /// Whole workspace clippy and tests, for nightly integration.
         #[arg(long)]
         full: bool,
+        /// Explicit JSON exceptions for individually documented main test failures.
+        #[arg(long)]
+        known_failures: Option<PathBuf>,
     },
     /// Merge locally, validate before committing, and optionally push.
     Merge {
@@ -44,6 +48,8 @@ enum Command {
         push: bool,
         #[arg(long)]
         full: bool,
+        #[arg(long)]
+        known_failures: Option<PathBuf>,
     },
     /// Serialize GPU benchmarks/captures across every worktree on this machine.
     Gpu {
@@ -83,8 +89,13 @@ fn run() -> Result<bool> {
         ["rev-parse", "--show-toplevel"],
     )?);
     match cli.command {
-        Command::Check { base, json, full } => {
-            let result = check::run(&root, &base, json, full);
+        Command::Check {
+            base,
+            json,
+            full,
+            known_failures,
+        } => {
+            let result = check::run(&root, &base, json, full, known_failures.as_deref());
             if json && let Err(error) = &result {
                 println!(
                     "{}",
@@ -93,7 +104,12 @@ fn run() -> Result<bool> {
             }
             result
         }
-        Command::Merge { branch, push, full } => merge::run(&root, &branch, push, full),
+        Command::Merge {
+            branch,
+            push,
+            full,
+            known_failures,
+        } => merge::run(&root, &branch, push, full, known_failures.as_deref()),
         Command::CleanWorktrees {
             yes, hours, base, ..
         } => worktrees::run(&root, yes, hours, &base),

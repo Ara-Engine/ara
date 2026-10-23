@@ -10,6 +10,8 @@ to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
 Shared intermediate caches still serialize compilation and can rebuild when
 branches use different linkers or feature sets. Cleanup inspects local target
 directories; an external shared cache needs its own explicit cleanup policy.
+Keep source changes and rebuilds out of an in-progress test/doctest run using that
+cache: replacing its dependencies can invalidate already-built Rust metadata.
 
 ## One gate
 
@@ -46,6 +48,19 @@ On Windows a gate that tests ara-dev moves its running image into a sibling
 `ara-dev-runners` directory so Cargo can replace the original executable path.
 The process and exit status stay attached to the caller; old runner images are
 reclaimed on later runs.
+
+Known main failures require explicit opt-in with
+`check --known-failures docs/dev/known-main-failures.json` (also supported by
+`merge`). The JSON array names each integration test's `package`, `target`, `test`,
+required `output_contains` failure text and ownership `reason`. Accepted failures appear as `KNOWN` and in JSON's
+`known_failures`; the gate can succeed with those exceptions. Every other failing
+test, including a second test in the same target, still fails the gate. Compiler
+errors, crashes, doctests, incomplete failure output and hygiene failures cannot
+be waived. Entries that no longer fail are not reported; remove them once main
+is fixed. Without the flag, all failures block the gate.
+
+The current file records main's Valley duplicate-identity failure, owned by
+runtime-polish. This infrastructure branch does not integrate its in-progress fix.
 
 ## One merge flow
 
@@ -145,5 +160,10 @@ kernel is unchanged.
 Serial test execution exposed a collaboration demo startup hang and a missing
 physics probe hash: libtest prefixes child output with its test name. Both child
 helpers now use quiet harness output so their protocols work with one test thread.
-The runtime and play host now share the existing ARA7303 asset diagnostic constant
-in ara-diag, removing a duplicate definition while preserving its code and meaning.
+Main's `e8ffd90` gives runtime placeholders the distinct ARA7310 code and catalog
+entry, preserving play-host's ARA7303 import failures. This branch follows that fix.
+
+The compile-queue integration fixture uses explicit origins and stable source
+files rather than depending on filesystem watcher timing relative to the agent
+quiet window. It retains exact reload order, origin and changed-member assertions;
+the compile server's queue unit test covers human preemption of pending agent work.

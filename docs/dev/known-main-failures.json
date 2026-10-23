@@ -1,0 +1,9 @@
+[
+  {
+    "package": "ara-player",
+    "target": "valley",
+    "test": "valley_plays_networked_with_terrain_streaming_ai_audio_vfx_and_csharp",
+    "output_contains": "duplicate stable identity",
+    "reason": "Known main failure: duplicate streamed Valley entity identity. Owned by runtime-polish; its fix is integrated into main by the orchestrator."
+  }
+]

@@ -6,7 +6,15 @@ use anyhow::{Result, bail, ensure};
 
 use crate::{check, git};
 
-pub(crate) fn run(root: &Path, branch: &str, push: bool, full: bool) -> Result<bool> {
+pub(crate) fn run(
+    root: &Path,
+    branch: &str,
+    push: bool,
+    full: bool,
+    known_path: Option<&Path>,
+) -> Result<bool> {
+    // Reject a malformed exception file before starting a merge.
+    crate::known::read(root, known_path)?;
     ensure!(
         git::TreeState::read(root)?.status.is_empty(),
         "merge requires a clean checkout"
@@ -63,7 +71,7 @@ pub(crate) fn run(root: &Path, branch: &str, push: bool, full: bool) -> Result<b
         bail!("workspace check failed; merge remains uncommitted. Fix it or git merge --abort");
     }
     git::bytes(root, ["add", "--", "Cargo.lock"])?;
-    if !check::run(root, &before, false, full)? {
+    if !check::run(root, &before, false, full, known_path)? {
         bail!(
             "merge gate failed; merge remains uncommitted. Fix it and run ara-dev check --base {before}, or git merge --abort"
         );
