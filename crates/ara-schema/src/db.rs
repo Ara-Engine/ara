@@ -49,6 +49,12 @@ impl SchemaDb {
         self
     }
 
+    /// True when the Rust type `T` is registered under its schema name already, so
+    /// registering it again changes nothing.
+    pub fn registers<T: Schema>(&self) -> bool {
+        self.rust.get(&T::describe().name) == Some(&TypeId::of::<T>())
+    }
+
     /// Adds a type described at runtime (dynamic, data-only types use this).
     pub fn add(&mut self, desc: TypeDesc) -> Result<(), Diagnostic> {
         if let Some(owner) = self.claimant(&desc.name) {

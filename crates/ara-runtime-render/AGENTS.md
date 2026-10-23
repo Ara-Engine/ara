@@ -19,6 +19,13 @@ renderer and per-draw upload state; no simulation, window or process code.
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2
   → RGBA8 (the renderer uploads RGBA8 today).
 - `camera(&frame)`: the frame camera as a `CameraSpec` (overview fallback).
+- `vfx::Effects`: GPU particles in captures. Each `VisualEffect` replays its cooked
+  library effect (ara-vfx-gpu `cooked/<name>`, at most 240 ticks) over the frame the
+  renderer just captured (HDR background, reversed-Z depth), camera shifted into the
+  effect's space; `Presenter::capture` composites before resizing back.
+- `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d. `atlases(world,
+  assets)` loads every referenced atlas generation (normal atlases linear);
+  `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
 
 ## Gotchas
 
@@ -29,6 +36,9 @@ renderer and per-draw upload state; no simulation, window or process code.
   light and transform edits stream. Model texture decodes are cached per generation.
 - At most 64 local lights; one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
+- VFX and 2D are capture paths today; windowed presentation draws neither yet.
+- Effects come from ara-vfx-gpu's committed cooked library (a dev-checkout path);
+  authored project effects need an asset-pipeline cook first.
 
 ## Testing
 

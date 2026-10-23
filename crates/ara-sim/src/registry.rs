@@ -71,6 +71,7 @@ impl SimRegistry {
             stream_signature: [0; 32],
         };
         registry.register_component::<ara_components::Transform>()?;
+        registry.refresh_layouts()?;
         Ok(registry)
     }
 
@@ -84,12 +85,16 @@ impl SimRegistry {
     pub fn register_component<T: Component + Schema + Serialize + DeserializeOwned>(
         &mut self,
     ) -> Result<()> {
+        // A schema that already holds `T` (engine schemas do) needs no re-verification.
+        let known = self.schema.registers::<T>();
         self.schema.register::<T>();
         let desc = T::describe();
         if !desc.is_component() {
             return Err(SimError(format!("{} is not a component schema", desc.name)));
         }
-        self.check_schema()?;
+        if !known {
+            self.check_schema()?;
+        }
         self.dynamic.remove(&desc.name);
         self.typed.insert(
             desc.name,
@@ -116,6 +121,9 @@ impl SimRegistry {
                 },
             },
         );
+        if known {
+            return Ok(());
+        }
         self.refresh_layouts()
     }
 

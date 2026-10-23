@@ -314,7 +314,6 @@ fn fox_animations(schema: &SchemaDb) -> Vec<(&'static str, String)> {
                 ..Default::default()
             },
         ],
-        ..Default::default()
     };
     let blend = machine(
         BTreeMap::from([

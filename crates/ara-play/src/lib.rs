@@ -172,7 +172,7 @@ pub struct Command {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureAudio {
-    /// WAV file to write (`.json` beside it holds the analysis).
+    /// WAV file to write (`<name>.audio.json` beside it holds the analysis).
     pub path: String,
     /// Seconds to render, in (0, 60].
     pub seconds: f64,

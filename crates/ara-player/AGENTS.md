@@ -54,7 +54,13 @@ the demo over MCP end to end (pool boot, Move 120 ticks, grounded, labelled capt
 patch latency, pause, light patch, keep changes → document, determinism via
 `test.run`, replay, Host + 2, panic/access-violation/hang isolation with restart) and
 prints the measured numbers. It builds `ara-import-worker` if missing. `evidence/` holds
-reviewed captures (walked with marks, relit after the patch, windowed).
+reviewed captures: walked with marks, relit after the patch, windowed, walked with
+the campfire VFX, the 2D platformer with marks, and the mixed scene (image, WAV and
+loudness analysis).
+`tests/two_d.rs` plays the ara-render2d platformer sample (atlases imported through
+the worker, the scout as a 2D player, an ara-render2d capture with marks).
+`tests/mixed.rs` plays the demo with its campfire effect and an agent-attached sound:
+`play.captureAudio` (offline, spatial, analysed WAV) and a VFX-composited capture.
 `tests/csharp.rs` (builds `dotnet/Ara.slnx`) plays a demo copy with the Outpost C#
 module (`demo-scripts/Outpost`: Door, UseMedkit, Gravity/Movement): published types,
 agent-added C# components, `play.command`, an agent `script.write` hot reload while

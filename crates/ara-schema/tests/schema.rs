@@ -412,10 +412,12 @@ fn record_prefixes_are_unique_per_document_kind_only() {
     };
     let mut db = SchemaDb::new();
     db.register::<MapLayer>().register::<Locale>();
-    db.add_kind(kind("map", &["MapLayer"])).unwrap();
-    db.add_kind(kind("locale", &["Locale"])).unwrap();
+    db.add_kind(kind("map", &["MapLayer"])).expect("map kind");
+    db.add_kind(kind("locale", &["Locale"]))
+        .expect("locale kind");
     assert!(db.verify().is_empty(), "{:?}", db.verify());
-    db.add_kind(kind("mixed", &["MapLayer", "Locale"])).unwrap();
+    db.add_kind(kind("mixed", &["MapLayer", "Locale"]))
+        .expect("mixed kind");
     assert!(
         db.verify()
             .iter()

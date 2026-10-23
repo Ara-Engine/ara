@@ -184,7 +184,7 @@ impl World {
         }
         std::fs::write(path, &capture.wav)?;
         let analysis = capture.analysis_json()?;
-        std::fs::write(path.with_extension("json"), &analysis)?;
+        std::fs::write(path.with_extension("audio.json"), &analysis)?;
         Ok(json!({
             "tick": self.runtime.tick(),
             "voices": voices,

@@ -29,7 +29,8 @@ tickHz, hotReload}` → `{world: "play:N", players[], bootMs, prepareMs, transpo
 `stop`, `pause`, `resume`, `step`, `until`, `input`, `timescale`, `inspect`, `read`,
 `patch` (acked after the applying tick), `capture` (hash, optional labelled PNG),
 `watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`
-(`keepState` resumes from the current tick), `debug.crash`, `pool`, `status`, and C#:
+(`keepState` resumes from the current tick), `debug.crash`, `pool`, `status`,
+`captureAudio` (offline spatial render to an analysed WAV), and C#:
 `command`, `commands`, `events`; `script.write` (MCP `ara_play` action `write`). `world` defaults to the most recent world (editor
 toolbar bindings rely on it). Pause/resume/step/input/patch/timescale broadcast to
 every player of a world; reads go to the authority.

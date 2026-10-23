@@ -286,7 +286,8 @@ pub struct PlayCaptureAudioParams {
     pub session: String,
     /// World ID from `play.start` (`play:1`); default: the most recent world.
     pub world: Option<String>,
-    /// WAV file to write; the analysis (loudness, peaks, spectrum) goes beside it as JSON.
+    /// WAV file to write; the analysis (loudness, peaks, spectrum) goes beside it
+    /// as `<name>.audio.json`.
     pub path: String,
     /// Seconds of sound to render offline from the current tick.
     #[ara(unit = Seconds, range(min = 0.01, max = 60))]

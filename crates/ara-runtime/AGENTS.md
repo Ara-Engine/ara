@@ -21,7 +21,11 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   `extract(&mut RenderFrame)`, `reload_assets`, `fault()`, `navigation_errors()`.
   `play()/play_mut()` expose `ara_sim::PlayControl` (watch, checkpoint, record, replay).
 - `components`: `MeshRenderer` (shape or imported model), `Light`, `Environment`,
-  `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`).
+  `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`),
+  `VisualEffect` (a cooked GPU particle effect). Also simulated: ara-2d sprites,
+  tilemaps, 2D lights and cameras, Rapier2D bodies (2D physics installs when the scene
+  has 2D bodies; `PlayerControl` on a `CharacterController2d` drives it), and
+  ara-audio `AudioSource`/`AudioListener` (presentation intent only).
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns

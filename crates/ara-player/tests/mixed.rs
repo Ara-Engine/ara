@@ -22,7 +22,7 @@ fn crackle() -> Vec<u8> {
         noise ^= noise << 5;
         let t = i as f32 / rate as f32;
         let tone = (t * 220.0 * std::f32::consts::TAU).sin() * 0.25;
-        let pop = if noise % 2400 == 0 { 0.6 } else { 0.0 };
+        let pop = if noise.is_multiple_of(2400) { 0.6 } else { 0.0 };
         let v = ((tone + pop) * (1.0 - t * 0.5) * i16::MAX as f32) as i16;
         samples.extend_from_slice(&v.to_le_bytes());
         samples.extend_from_slice(&v.to_le_bytes());

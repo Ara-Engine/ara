@@ -1,7 +1,9 @@
 # ara-import-worker
 
-Disposable worker executable. Registers ara-importers and calls serve_worker.
-Custom worker executables can register audio/animation/plugin importers too.
+Disposable worker executable. Registers ara-importers (glTF, FBX, textures),
+ara-import2d (ara.atlas2d, ara.tilemap2d) and ara-audio's cooker through the
+src/audio.rs adapter (ara.audio: audio.bin + audio.json), then calls serve_worker.
+Custom worker executables can register animation/plugin importers too.
 Stdout is reserved for the framed binary-safe worker protocol; log to stderr.
 
 Run cargo test -p ara-import-worker (process integration tests), cargo check,

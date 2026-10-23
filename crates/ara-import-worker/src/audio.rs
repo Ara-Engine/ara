@@ -12,14 +12,13 @@ use serde_json::{Value, json};
 pub struct AudioAsset;
 
 fn settings(value: &Value) -> Result<CookSettings, Error> {
-    let mut settings = CookSettings::default();
-    settings.usage = match value["usage"].as_str().unwrap_or("shortEffect") {
+    let usage = match value["usage"].as_str().unwrap_or("shortEffect") {
         "shortEffect" => AudioUse::ShortEffect,
         "music" => AudioUse::Music,
         "dialogue" => AudioUse::Dialogue,
         other => return Err(Error::Invalid(format!("unknown audio usage `{other}`"))),
     };
-    settings.short_codec = match value["codec"].as_str().unwrap_or("pcm") {
+    let short_codec = match value["codec"].as_str().unwrap_or("pcm") {
         "pcm" => CookCodec::Pcm,
         "adpcm" => CookCodec::Adpcm,
         other => {
@@ -28,11 +27,19 @@ fn settings(value: &Value) -> Result<CookSettings, Error> {
             )));
         }
     };
-    if let Some(bitrate) = value["opusBitrate"].as_i64() {
-        settings.opus_bitrate = i32::try_from(bitrate)
-            .map_err(|_| Error::Invalid("opusBitrate out of range".into()))?;
-    }
-    Ok(settings)
+    let defaults = CookSettings::default();
+    let opus_bitrate = match value["opusBitrate"].as_i64() {
+        Some(bitrate) => {
+            i32::try_from(bitrate).map_err(|_| Error::Invalid("opusBitrate out of range".into()))?
+        }
+        None => defaults.opus_bitrate,
+    };
+    Ok(CookSettings {
+        usage,
+        short_codec,
+        opus_bitrate,
+        ..defaults
+    })
 }
 
 impl Importer for AudioAsset {
