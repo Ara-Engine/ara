@@ -32,6 +32,8 @@ pub(crate) struct GpuFrame {
     weather: [f32; 4],
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
+    // The shader's legacy Frame prefix ends here; extensionRow reads these rows
+    // directly so optional payloads do not enlarge every transport parameter.
     reservoirs: [[u32; 4]; 2],
     extra_read: [[u32; 4]; 3],
     extra_write: [[u32; 4]; 3],

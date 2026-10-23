@@ -1,0 +1,20 @@
+// Store compensated half histories without another image. Residuals occupy the
+// unused moment channels. The exponent bias keeps bit payloads finite/normal.
+float historyBits(uint payload){return asfloat(((64+(payload>>23))<<23)|(payload&0x7fffff));}
+uint historyPayload(float encoded){uint bits=asuint(encoded);return (((bits>>23)-64)<<23)|(bits&0x7fffff);}
+float3 halfUlp(float3 rounded){return asfloat((max((asuint(rounded)>>23)&255,uint3(113))-10)<<23);}
+float3 roundedHalf(float3 value){
+    uint3 b=asuint(value);float3 result=asfloat((b+4095+((b>>13)&1))&0xffffe000u);
+    for(uint i=0;i<3;i++)if(value[i]<0.00006103515625)result[i]=round(value[i]*16777216.)*0.000000059604644775390625;
+    return result;
+}
+uint roundHistory(float3 value,uint bits,out float3 rounded){
+    value=clamp(value,float3(0),float3(65504));rounded=roundedHalf(value);
+    uint mask=(1u<<bits)-1;uint3 q=uint3(saturate((value-rounded)/halfUlp(rounded)+0.5)*mask+0.5);
+    return q.x|(q.y<<bits)|(q.z<<(2*bits));
+}
+float3 historyColour(float3 rounded,uint payload,uint bits){
+    uint mask=(1u<<bits)-1;float3 q=float3(payload&mask,(payload>>bits)&mask,(payload>>(2*bits))&mask)/mask;
+    return max(0,rounded+(q-0.5)*halfUlp(rounded));
+}
+bool mixedCoverage(float metadata){return (historyPayload(metadata)&(1u<<27))!=0;}

@@ -219,6 +219,7 @@ impl FidelityView {
                         HISTORY0 + previous,
                         MOMENTS0 + previous,
                         SPEC_HISTORY0 + previous,
+                        SPEC_MOMENTS0 + previous,
                     ]
                     .map(|i| (ids[i], Access::ShaderRead)),
                 );
@@ -436,9 +437,6 @@ impl FidelityView {
             temporal,
         )?;
         for i in 0..if reference { 1 } else { 3 } {
-            if resampling && i == 1 {
-                continue;
-            }
             let source = if i == 0 {
                 HISTORY0 + slot
             } else if i == 1 {
@@ -446,11 +444,7 @@ impl FidelityView {
             } else {
                 FILTER1
             };
-            let target = if i == 1 || (resampling && i == 0) {
-                FILTER1
-            } else {
-                FILTER0
-            };
+            let target = if i == 1 { FILTER1 } else { FILTER0 };
             let mut uses = vec![
                 (ids[source], Access::ShaderRead),
                 (ids[target], Access::Storage),
@@ -473,7 +467,7 @@ impl FidelityView {
                 } else {
                     SPEC_FILTER1
                 };
-                let target = if i <= 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
+                let target = if i == 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
                 uses.extend([
                     (ids[source], Access::ShaderRead),
                     (ids[target], Access::Storage),
@@ -484,7 +478,7 @@ impl FidelityView {
                 if reference {
                     "Reference.Copy"
                 } else {
-                    if resampling && i == 2 {
+                    if resampling && i == 1 {
                         "SVGF.Atrous.3"
                     } else {
                         ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]

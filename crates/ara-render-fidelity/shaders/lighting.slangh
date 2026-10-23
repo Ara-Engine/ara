@@ -3,36 +3,36 @@
 struct LightCandidate {uint light;uint seed;float3 value;float pdf;float3 direction;float distance;};
 uint emitterCount(Frame f){
 #ifdef EMISSIVE_LIGHTS
-    return buffers[NonUniformResourceIndex(f.scene.x)].Load(24);
+    return buffers[f.scene.x].Load(24);
 #else
     return 0;
 #endif
 }
 uint chooseLight(Frame f,inout uint rng){
-    uint4 h=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0);
+    uint4 h=buffers[f.scene.x].Load<uint4>(0);
     uint4 e=0;
 #ifdef EMISSIVE_LIGHTS
-    e=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(16);
+    e=buffers[f.scene.x].Load<uint4>(16);
 #endif
     if(h.w>0 && (e.z==0 || random(rng)<0.5))return min(uint(random(rng)*h.w),h.w-1);
     if(e.z==0)return 0xffffffff;
     float choice=random(rng)*asfloat(e.w);uint low=0,high=e.z-1;
-    while(low<high){uint mid=(low+high)/2;if(buffers[NonUniformResourceIndex(f.scene.x)].Load<float>(e.y+mid*64+12)<choice)low=mid+1;else high=mid;}
+    while(low<high){uint mid=(low+high)/2;if(buffers[f.scene.x].Load<float>(e.y+mid*64+12)<choice)low=mid+1;else high=mid;}
     return low|0x80000000;
 }
 LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
     LightCandidate c;c.light=light;c.seed=seed;c.value=0;c.pdf=1;c.direction=s.normal;c.distance=0;
     if(light==0xffffffff)return c;
-    uint4 h=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(0),e=0;
+    uint4 h=buffers[f.scene.x].Load<uint4>(0),e=0;
 #ifdef EMISSIVE_LIGHTS
-    e=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(16);
+    e=buffers[f.scene.x].Load<uint4>(16);
 #endif
     float mixture=h.w>0 && e.z>0?0.5:1;float bsdfPdf;
     if((light&0x80000000)==0){
         if(light>=h.w)return c;
         uint at=h.z+light*64;
-        float4 p=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at),colour=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at+16);
-        float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at+32),params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at+48);
+        float4 p=buffers[f.scene.x].Load<float4>(at),colour=buffers[f.scene.x].Load<float4>(at+16);
+        float4 cone=buffers[f.scene.x].Load<float4>(at+32),params=buffers[f.scene.x].Load<float4>(at+48);
         float3 delta=p.xyz-s.position;float d=length(delta),luminanceScale=colour.w/(4*PI*max(d*d,0.01));float3 l=delta/max(d,1e-6);
         c.pdf=mixture/max(h.w,1);c.distance=max(d-0.03,0.001);c.direction=coneDirection(l,0.025/max(d,0.025),seed);
         if(d>p.w)return c;
@@ -43,16 +43,21 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
 #ifdef EMISSIVE_LIGHTS
     else{
         uint id=light&0x7fffffff;if(id>=e.z)return c;uint at=e.y+id*64;
-        float4 a=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at),b=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at+16),d=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(at+32);
-        uint4 record=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(at+48);
+        float4 a=buffers[f.scene.x].Load<float4>(at),b=buffers[f.scene.x].Load<float4>(at+16),d=buffers[f.scene.x].Load<float4>(at+32);
+        uint4 record=buffers[f.scene.x].Load<uint4>(at+48);
         float u=sqrt(random(seed)),t=random(seed);float2 bary=float2(u*(1-t),u*t);
         float3 position=a.xyz*(1-u)+b.xyz*bary.x+d.xyz*bary.y,delta=position-s.position;
         float distance=length(delta);c.direction=delta/max(distance,1e-6);c.distance=max(distance-0.003,0.001);
         c.pdf=mixture*d.w/max(asfloat(e.w)*b.w,1e-20);
-        if(distance<0.003 || !accept(f,record.x,record.y,bary,seed))return c;
+        if(distance<0.003)return c;
+        if(e.x==0){if(!accept(f,record.x,record.y,bary,seed))return c;}
         float cosine=abs(dot(normalize(cross(b.xyz-a.xyz,d.xyz-a.xyz)),-c.direction));
         Material emitter=material(f,mesh(f,record.x).w);
-        float3 emission=emitter.emissiveRoughness.rgb*tex(emitter.textures.w,hitUv(f,record.x,record.y,bary)).rgb;
+        uint width,height;textures[NonUniformResourceIndex(emitter.textures.w)].GetDimensions(width,height);
+        float3 colour;
+        if(width==1 && height<=2)colour=textures[NonUniformResourceIndex(emitter.textures.w)].Load(int3(0,0,0)).rgb;
+        else colour=tex(emitter.textures.w,hitUv(f,record.x,record.y,bary)).rgb;
+        float3 emission=emitter.emissiveRoughness.rgb*colour;
         c.value=evaluate(s,v,c.direction,bsdfPdf)*emission*cosine/max(distance*distance,1e-12);
     }
 #endif
@@ -61,7 +66,7 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
 float lightTarget(float3 value){return max(dot(value,float3(0.2126,0.7152,0.0722)),0);}
 float3 risDirect(Frame f,Surface s,float3 v,inout uint rng){
     LightCandidate selected;float sum=0;float target=0;
-    uint candidates=f.transport.x==1?8:2;
+    uint candidates=f.transport.x==1?(buffers[f.scene.x].Load(12)>64?32:8):2;
     for(uint i=0;i<candidates;i++){
         // Fork a substream: reservoir roulette must not reuse the barycentric
         // variates generated inside lightAt (visibility may depend on them).
@@ -82,15 +87,15 @@ float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
 }
 float3 directLocal(Frame f,Surface s,float3 v,inout uint rng){
     float3 sum=0;
-    uint count=buffers[NonUniformResourceIndex(f.scene.x)].Load(12);
+    uint count=buffers[f.scene.x].Load(12);
 #ifdef EMISSIVE_LIGHTS
     if(emitterCount(f)>0 || count>8)return sum+risDirect(f,s,v,rng);
 #endif
     // Small non-emissive scenes retain their exact all-light estimator.
     for(uint i=0;i<count;i++){
-        uint offset=buffers[NonUniformResourceIndex(f.scene.x)].Load(8)+i*64;
-        float4 p=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset),colour=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+16);
-        float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+32),params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+48);
+        uint offset=buffers[f.scene.x].Load(8)+i*64;
+        float4 p=buffers[f.scene.x].Load<float4>(offset),colour=buffers[f.scene.x].Load<float4>(offset+16);
+        float4 cone=buffers[f.scene.x].Load<float4>(offset+32),params=buffers[f.scene.x].Load<float4>(offset+48);
         float3 delta=p.xyz-s.position;float d=length(delta);if(d>p.w)continue;float3 l=delta/max(d,1e-5);
         float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
         float fade=pow(saturate(1-pow(d/p.w,4)),2);l=coneDirection(l,0.025/max(d,0.025),rng);float pdf;
@@ -99,8 +104,9 @@ float3 directLocal(Frame f,Surface s,float3 v,inout uint rng){
 }
 float3 direct(Frame f,Surface s,float3 v,inout uint rng){float3 sun=directSun(f,s,v,rng);return sun+directLocal(f,s,v,rng);}
 float3 primarySun(Frame f,Surface s,float3 v,uint2 p,inout uint rng){
-    if(f.shadow.y!=0){
-        float4 visibility=textures[NonUniformResourceIndex(f.shadow.x)].Load(int3(p,0));
+    uint4 shadow=extensionRow(8);
+    if(shadow.y!=0){
+        float4 visibility=textures[NonUniformResourceIndex(shadow.x)].Load(int3(p,0));
         if(visibility.w>=0.5){
             float3 l=coneDirection(normalize(f.sunDirection.xyz),f.sunDirection.w,rng),sunlight=f.sunLux.rgb;float pdf;
 #ifdef SKY_ATMOSPHERE

@@ -97,30 +97,8 @@ impl Targets {
         if self.images.len() == COUNT {
             return Ok(());
         }
-        // Long low-light histories need float32: half precision can quantize an
-        // EMA's 1/256 correction away and leave persistent bright/dark patches.
-        for i in [HISTORY0, HISTORY0 + 1, DIRECT_HISTORY0, DIRECT_HISTORY0 + 1] {
-            let image = gpu.create_image(
-                size[0],
-                size[1],
-                vk::Format::R32G32B32A32_SFLOAT,
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::STORAGE
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )?;
-            let sampled = gpu.sampled_image(image, false)?.index;
-            let storage = gpu.storage_image(image)?.index;
-            gpu.retire(Resource::Image(self.images[i]))?;
-            self.images[i] = image;
-            self.sampled[i] = sampled;
-            self.storage[i] = storage;
-            self.states[i] = State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            };
-        }
         for i in self.images.len()..COUNT {
-            let format = if (SPEC_HISTORY0..SPEC_MOMENTS0 + 2).contains(&i) {
+            let format = if (SPEC_MOMENTS0..SPEC_MOMENTS0 + 2).contains(&i) {
                 vk::Format::R32G32B32A32_SFLOAT
             } else {
                 vk::Format::R16G16B16A16_SFLOAT

@@ -6,7 +6,11 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     extraStore(f,28,p,float4(0,0,0,0));
 #endif
     float3 ray=cameraRay(f,float2(p)+0.5);Hit hit;uint slot=f.control.x;
-    if(!trace(f,f.camera.xyz,ray,10000,rng,hit)){store(f,WORLD+slot,p,0);store(f,NORMAL+slot,p,0);store(f,BASE,p,0);store(f,MOTION,p,0);store(f,DEPTH,p,0);if(f.transport.x==0){store(f,DIRECT,p,0);store(f,RAW,p,float4(environment(f,ray),1));}return;}
+    if(!trace(f,f.camera.xyz,ray,10000,rng,hit)){
+#ifdef RESERVOIR_SURFACES
+        extraStore(f,28,p,float4(0,0,0,1));
+#endif
+        store(f,WORLD+slot,p,0);store(f,NORMAL+slot,p,0);store(f,BASE,p,0);store(f,MOTION,p,0);store(f,DEPTH,p,0);if(f.transport.x==0){store(f,DIRECT,p,0);store(f,RAW,p,float4(environment(f,ray),1));}return;}
     Surface s=surface(f,hit.id,hit.primitive,hit.bary);if(dot(s.normal,-ray)<0)s.normal=-s.normal;
 #ifdef RESERVOIR_SURFACES
     extraStore(f,35,p,float4(s.albedo,s.metal));extraStore(f,36,p,float4(s.geometricNormal,s.ao));

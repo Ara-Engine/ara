@@ -22,13 +22,53 @@ struct Frame {
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;uint4 read[7];uint4 write[7];
+#ifdef FULL_FRAME
     uint4 reservoirs[2];uint4 extraRead[3];uint4 extraWrite[3];uint4 shadow;
+#endif
 };
-Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
+#ifdef CACHE_EXTENSION
+struct ShaderExtension {uint4 rows[9];};
+// Invocation-private, read-only parameter cache; no state crosses dispatches.
+static ShaderExtension parameterExtension;
+#endif
+Frame frame(){
+#ifdef CACHE_EXTENSION
+    parameterExtension=buffers[root.frame].Load<ShaderExtension>(sizeof(Frame));
+#endif
+    return buffers[root.frame].Load<Frame>(0);
+}
+// Keep optional rows out of the by-value Frame passed through classic transport.
+// The Rust upload appends two reservoir, three read, three write and one shadow row.
+uint4 extensionRow(uint row){
+#ifdef CACHE_EXTENSION
+    return parameterExtension.rows[row];
+#else
+#ifdef FULL_FRAME
+    return buffers[root.frame].Load<uint4>(sizeof(Frame)-144+row*16);
+#else
+    return buffers[root.frame].Load<uint4>(sizeof(Frame)+row*16);
+#endif
+#endif
+}
 uint ri(Frame f,uint i){return f.read[i/4][i%4];}
 uint wi(Frame f,uint i){return f.write[i/4][i%4];}
-float4 extraPixel(Frame f,uint i,int2 p){uint index=f.extraRead[(i-28)/4][(i-28)%4];return textures[NonUniformResourceIndex(index)].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
-void extraStore(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(f.extraWrite[(i-28)/4][(i-28)%4])][p]=v;}
+float4 extraPixel(Frame f,uint i,int2 p){
+#ifdef FULL_FRAME
+    uint index=f.extraRead[(i-28)/4][(i-28)%4];
+#else
+    uint index=extensionRow(2+(i-28)/4)[(i-28)%4];
+#endif
+    return textures[NonUniformResourceIndex(index)].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));
+}
+void extraStore(Frame f,uint i,uint2 p,float4 v){
+#ifdef FULL_FRAME
+    uint index=f.extraWrite[(i-28)/4][(i-28)%4];
+#else
+    uint index=extensionRow(5+(i-28)/4)[(i-28)%4];
+#endif
+    images[NonUniformResourceIndex(index)][p]=v;
+}
+#include "history.slangh"
 float4 pixel(Frame f,uint i,int2 p){return textures[NonUniformResourceIndex(ri(f,i))].Load(int3(clamp(p,int2(0),int2(f.sizes.xy)-1),0));}
 float4 sampleImage(Frame f,uint i,float2 uv){return textures[NonUniformResourceIndex(ri(f,i))].SampleLevel(samplers[2],uv,0);}
 void store(Frame f,uint i,uint2 p,float4 v){images[NonUniformResourceIndex(wi(f,i))][p]=v;}
@@ -49,9 +89,9 @@ float3 environment(Frame f,float3 d){
 struct Material {float4 colour;float4 emissiveRoughness;float4 surface;uint4 textures;uint4 flags;};
 struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;};
 struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;float specular;float ao;float coat;float coatRoughness;float3 sheen;float sheenRoughness;float transmission;uint sheenLut;uint id;uint material;};
-uint4 mesh(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<uint4>(32+id*16);}
-Material material(Frame f,uint id){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Material>(buffers[NonUniformResourceIndex(f.scene.x)].Load(4)+id*80);}
-Vertex vertex(Frame f,uint offset,uint index){return buffers[NonUniformResourceIndex(f.scene.x)].Load<Vertex>(offset+index*48);}
+uint4 mesh(Frame f,uint id){return buffers[f.scene.x].Load<uint4>(32+id*16);}
+Material material(Frame f,uint id){return buffers[f.scene.x].Load<Material>(buffers[f.scene.x].Load(4)+id*80);}
+Vertex vertex(Frame f,uint offset,uint index){return buffers[f.scene.x].Load<Vertex>(offset+index*48);}
 float4 mipTex(uint i,float2 uv,uint level){
     uint w,h;textures[NonUniformResourceIndex(i)].GetDimensions(w,h);h/=2;
     if(w==1 && h==1)return textures[NonUniformResourceIndex(i)].Load(int3(0,0,0));
@@ -72,7 +112,7 @@ float4 texLod(uint i,float2 uv,float footprint,float bias){
     float lod=clamp(log2(max(1e-8,footprint*max(w,h)))+bias,0.,floor(log2(float(min(w,h)))));
     uint lo=uint(lod);float4 a=mipTex(i,uv,lo);return frac(lod)>0?lerp(a,mipTex(i,uv,lo+1),frac(lod)):a;
 }
-float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
+float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+primitive*12);return vertex(f,m.x,ix.x).uv*(1-bary.x-bary.y)+vertex(f,m.x,ix.y).uv*bary.x+vertex(f,m.x,ix.z).uv*bary.y;}
 bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
 // Only primary motion-vector extraction needs the preceding vertex table.
 float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 current){
@@ -88,7 +128,7 @@ float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 curren
     return current;
 }
 Surface surface(Frame f,uint id,uint primitive,float2 bary){
-    uint4 m=mesh(f,id);uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+primitive*12);
+    uint4 m=mesh(f,id);uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+primitive*12);
     Vertex a=vertex(f,m.x,ix.x),b=vertex(f,m.x,ix.y),c=vertex(f,m.x,ix.z);float3 w=float3(1-bary.x-bary.y,bary);
     Surface s;s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
     s.geometricNormal=normalize(cross(b.position-a.position,c.position-a.position));
@@ -121,15 +161,15 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
     while(opaque.Proceed()){}
     bool found=opaque.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
     if(found){hit.distance=opaque.CommittedRayT();hit.id=opaque.CommittedInstanceID();hit.primitive=opaque.CommittedPrimitiveIndex();hit.bary=opaque.CommittedTriangleBarycentrics();hit.front=opaque.CommittedTriangleFrontFace();if(shadow)return true;}
-    if(buffers[NonUniformResourceIndex(f.scene.x)].Load(16)==0){
+    if(buffers[f.scene.x].Load(16)==0){
         ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[NonUniformResourceIndex(f.scene.y)],RAY_FLAG_FORCE_NON_OPAQUE|terminate,2,ray);
         while(masked.Proceed()){if(masked.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,masked.CandidateInstanceID(),masked.CandidatePrimitiveIndex(),masked.CandidateTriangleBarycentrics(),rng))masked.CommitNonOpaqueTriangleHit();}
         if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
     }return found;
 #else
-    bool found=false;uint count=buffers[NonUniformResourceIndex(f.scene.x)].Load(0);
+    bool found=false;uint count=buffers[f.scene.x].Load(0);
     for(uint id=0;id<count;id++){uint4 m=mesh(f,id);for(uint p=0;p<m.z/3;p++){
-        uint3 ix=buffers[NonUniformResourceIndex(f.scene.x)].Load<uint3>(m.y+p*12);float3 a=vertex(f,m.x,ix.x).position,b=vertex(f,m.x,ix.y).position,c=vertex(f,m.x,ix.z).position;
+        uint3 ix=buffers[f.scene.x].Load<uint3>(m.y+p*12);float3 a=vertex(f,m.x,ix.x).position,b=vertex(f,m.x,ix.y).position,c=vertex(f,m.x,ix.z).position;
         float3 e1=b-a,e2=c-a,h=cross(direction,e2);float det=dot(e1,h);if(abs(det)<1e-8)continue;float inv=1/det;float3 v=origin-a;float u=dot(v,h)*inv;float3 q=cross(v,e1);float vv=dot(direction,q)*inv;float t=dot(e2,q)*inv;
         if(u>=0 && vv>=0 && u+vv<=1 && t>0.001 && t<hit.distance && accept(f,id,p,float2(u,vv),rng)){hit.distance=t;hit.id=id;hit.primitive=p;hit.bary=float2(u,vv);hit.front=det>0;found=true;}
     }}return found;
@@ -176,16 +216,17 @@ float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
     // Authored micro-occlusion modulates unresolvable normal-map horizons only.
     return result*saturate(abs(dot(s.normal,l))+2*s.ao-1);
 }
-float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){
+float3 sampleBrdfPdf(Surface s,float3 v,inout uint rng,out float3 weight,out float pdf){
     float3 l;float choice=random(rng);bool specular=choice<lerp(0.5,1.,s.metal);if(specular){
         l=reflect(-v,visibleGgx(s,v,rng));
     }else l=cosineDirection(random(rng)<s.transmission?-s.normal:s.normal,rng);
     if(s.coat>0 && random(rng)<s.coat*0.25){Surface coat=s;coat.roughness=s.coatRoughness;l=reflect(-v,visibleGgx(coat,v,rng));specular=true;}
     // GGX samples below the reflecting hemisphere are null events. They cannot
     // become diffuse transmission samples: their proposal is absent from that PDF.
-    if(specular && dot(s.normal,l)<=0){weight=0;return l;}
-    float pdf;weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
+    if(specular && dot(s.normal,l)<=0){weight=0;pdf=0;return l;}
+    weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }
+float3 sampleBrdf(Surface s,float3 v,inout uint rng,out float3 weight){float pdf;return sampleBrdfPdf(s,v,rng,weight,pdf);}
 #include "lighting.slangh"
 float2 octEncode(float3 n){n/=abs(n.x)+abs(n.y)+abs(n.z);float2 p=n.xy;if(n.z<0)p=(1-abs(p.yx))*float2(p.x>=0?1:-1,p.y>=0?1:-1);return p*0.5+0.5;}
 float3 octDecode(float2 p){p=p*2-1;float3 n=float3(p,1-abs(p.x)-abs(p.y));float t=saturate(-n.z);n.xy+=float2(n.x>=0?-t:t,n.y>=0?-t:t);return normalize(n);}
