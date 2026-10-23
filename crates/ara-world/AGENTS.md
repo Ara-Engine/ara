@@ -19,6 +19,9 @@ host-side streaming. Depends on the authoring kernel, ara-sim, ara-asset and ara
 - `CellSource`, `CookedSource`, `EditorSource`, `WorkerPool`: worker-only loading.
 - `Streaming::{update, activate}`, `Interest`: source/layer interest, bounded
   activation, unload grace, memory admission, renderer/net lifecycle callbacks.
+  `settle` = `update` + wait for every cook it started (reproducible arrivals for
+  playtests and replays); `adopt_resident` lets a fresh state count rows a restored
+  world already holds as spawned (turn it off once those cells are resident).
 
 ## Invariants
 

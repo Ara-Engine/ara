@@ -24,6 +24,7 @@ fn refresh_inner<F: SimulationFeature>(
         .collect();
     let live: BTreeMap<_, _> = state
         .session
+        .session()
         .world()
         .iter_entities()
         .filter_map(|e| e.get::<ara_sim::Identity>().map(|i| (i.0.clone(), e.id())))
@@ -88,7 +89,7 @@ fn refresh_inner<F: SimulationFeature>(
             if name == &feature {
                 continue;
             }
-            if let Some(value) = state.session.component_at(source, name)? {
+            if let Some(value) = state.session.session().component_at(source, name)? {
                 public
                     .0
                     .extend(policies.project(name, &value, Audience::Relevant)?.0);
@@ -116,7 +117,7 @@ fn refresh_inner<F: SimulationFeature>(
             e.insert(OwnerFields(private.clone()));
             actor.private = private;
         }
-        if let Some(native) = state.session.world().get::<F::State>(source) {
+        if let Some(native) = state.session.session().world().get::<F::State>(source) {
             if let Some(position) = F::position(native) {
                 state.interest.update(&actor.spawn, position)?;
                 actor.position = position;
@@ -145,9 +146,9 @@ fn refresh_inner<F: SimulationFeature>(
     if let Some(actor) = state.actors.values().next() {
         let mut e = world.entity_mut(actor.entity);
         if let Some(mut tick) = e.get_mut::<ReplicaTick>() {
-            tick.set_if_neq(ReplicaTick(state.session.tick()));
+            tick.set_if_neq(ReplicaTick(state.session.session().tick()));
         } else {
-            e.insert(ReplicaTick(state.session.tick()));
+            e.insert(ReplicaTick(state.session.session().tick()));
         }
     }
     let mut recipients: BTreeMap<NetId, BTreeSet<u64>> = BTreeMap::new();

@@ -5,9 +5,13 @@
 //! edits) and otherwise streams per-frame motion: moved or skinned meshes are
 //! re-transformed on the CPU into world space (`Renderer::update_mesh`), lights and the
 //! sun are rewritten in place. Captures are deterministic and carry numbered marks.
+//! Presented frames draw the resident terrain chunks as meshes ([`terrain_mesh`]);
+//! captures composite ara-landscape terrain and foliage instead.
 #![warn(missing_docs)]
 
 pub mod geometry;
+pub mod landscape;
+pub mod terrain_mesh;
 pub mod two_d;
 pub mod vfx;
 
@@ -49,6 +53,10 @@ pub struct PresentStats {
 pub struct Presenter {
     renderer: Option<Renderer>,
     effects: vfx::Effects,
+    landscapes: landscape::Landscapes,
+    terrain: terrain_mesh::TerrainMeshes,
+    /// Whether this frame draws terrain chunks as meshes (presented frames).
+    draw_terrain: bool,
     size: [u32; 2],
     extensions: Vec<CString>,
     cache: PathBuf,
@@ -108,6 +116,9 @@ impl Presenter {
         Self {
             renderer: None,
             effects: vfx::Effects::default(),
+            landscapes: landscape::Landscapes::default(),
+            terrain: terrain_mesh::TerrainMeshes::default(),
+            draw_terrain: false,
             size,
             extensions,
             cache: cache.into(),
@@ -154,13 +165,17 @@ impl Presenter {
                 material_key(draw),
             ));
         }
+        let tiles = self.terrain_tiles(frame);
+        for tile in &tiles {
+            self.next_layout.push((tile.entity, tile.key, 0));
+        }
         let rebuild = self.renderer.is_none() || self.next_layout != self.layout;
         self.stats = PresentStats {
             rebuilt: rebuild,
             ..Default::default()
         };
         if rebuild {
-            let scene = self.scene(frame)?;
+            let scene = self.scene(frame, &tiles)?;
             match &mut self.renderer {
                 Some(renderer) => renderer.replace_scene(scene)?,
                 None => {
@@ -180,8 +195,10 @@ impl Presenter {
         Ok(())
     }
 
-    /// Prepares and renders `frame` to the presenter's output image.
+    /// Prepares and renders `frame` to the presenter's output image, terrain chunks
+    /// drawn as meshes.
     pub fn present(&mut self, frame: &RenderFrame) -> Result<()> {
+        self.draw_terrain = true;
         self.prepare(frame)?;
         let camera = camera(frame)?;
         let exposure = frame.environment.exposure;
@@ -204,6 +221,8 @@ impl Presenter {
         marks: Option<usize>,
         seed: u64,
     ) -> Result<Capture> {
+        // Terrain comes from the landscape composite below.
+        self.draw_terrain = false;
         self.prepare(frame)?;
         let request = CaptureRequest {
             camera: camera(frame)?,
@@ -221,10 +240,47 @@ impl Presenter {
             .as_mut()
             .context("renderer missing after prepare")?;
         let mut capture = renderer.capture(&request)?;
+        let base = frame.terrain.is_some().then(|| capture.image.clone());
         // GPU particles replay over the captured frame before it is resized away.
         self.effects
             .composite(renderer, frame, &request, &mut capture)?;
+        // Terrain and foliage by depth, last: VFX deltas carry onto terrain.
+        if let Some(base) = base {
+            self.landscapes
+                .composite(renderer, frame, &request, &base, &mut capture)?;
+        }
         // Captures resize to the request; return to the presentation size.
+        renderer.resize(self.size)?;
+        Ok(capture)
+    }
+
+    /// A deterministic capture of what presented (windowed) frames draw: terrain
+    /// chunks as meshes, without the landscape and VFX composites.
+    pub fn capture_presented(
+        &mut self,
+        frame: &RenderFrame,
+        size: [u32; 2],
+        marks: Option<usize>,
+        seed: u64,
+    ) -> Result<Capture> {
+        self.draw_terrain = true;
+        self.prepare(frame)?;
+        let request = CaptureRequest {
+            camera: camera(frame)?,
+            size,
+            mode: ViewMode::Lit,
+            deterministic: true,
+            exposure: frame.environment.exposure,
+            settle_frames: 4,
+            tick: frame.tick,
+            seed,
+            marks,
+        };
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("renderer missing after prepare")?;
+        let capture = renderer.capture(&request)?;
         renderer.resize(self.size)?;
         Ok(capture)
     }
@@ -261,7 +317,25 @@ impl Presenter {
         Ok(texture)
     }
 
-    fn scene(&mut self, frame: &RenderFrame) -> Result<Scene> {
+    /// Meshes of the frame's resident terrain chunks, when this frame draws them.
+    fn terrain_tiles(&mut self, frame: &RenderFrame) -> Vec<Arc<terrain_mesh::TileMesh>> {
+        let Some(view) = frame.terrain.as_ref().filter(|_| self.draw_terrain) else {
+            return Vec::new();
+        };
+        let mut coords = view.tiles.clone();
+        coords.sort();
+        coords.dedup();
+        coords
+            .into_iter()
+            .filter_map(|c| self.terrain.tile(&view.data, c))
+            .collect()
+    }
+
+    fn scene(
+        &mut self,
+        frame: &RenderFrame,
+        tiles: &[Arc<terrain_mesh::TileMesh>],
+    ) -> Result<Scene> {
         let mut scene = Scene {
             meshes: Vec::new(),
             materials: Vec::new(),
@@ -350,6 +424,35 @@ impl Presenter {
             });
             self.uploaded
                 .insert(draw.entity, draw.world.to_cols_array());
+        }
+        for tile in tiles {
+            let slot = scene.textures.len() as u32;
+            scene.textures.push(scene::Texture {
+                size: tile.texture.size,
+                rgba: tile.texture.rgba.clone(),
+                srgb: true,
+            });
+            scene.materials.push(scene::Material {
+                base_color: [1.0; 4],
+                emissive_roughness: [0.0, 0.0, 0.0, 0.95],
+                surface: [0.0, 1.0, 1.0, 0.5],
+                textures: [slot, 1, 0, 0],
+                flags: [0; 4],
+            });
+            let mut vertices = Vec::new();
+            geometry::transform(
+                &tile.source.vertices,
+                glam::Mat4::IDENTITY,
+                None,
+                &mut vertices,
+            );
+            scene.meshes.push(scene::Mesh {
+                entity: tile.entity,
+                name: tile.label.clone(),
+                vertices,
+                indices: tile.source.indices.clone(),
+                material: scene.materials.len() - 1,
+            });
         }
         self.lights = scene.lights.clone();
         self.sun = sun(frame);

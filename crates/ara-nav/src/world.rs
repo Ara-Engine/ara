@@ -141,6 +141,14 @@ impl NavWorld {
     pub fn stage(&mut self, mesh: NavMesh) {
         self.pending.insert(mesh.profile().id, mesh);
     }
+    /// Publishes `mesh` now, replacing its profile's mesh and any staged one. For
+    /// world load and checkpoint restore, outside a tick; during play, `stage` it so
+    /// it publishes at the next tick boundary.
+    pub fn publish(&mut self, mesh: NavMesh) {
+        let profile = mesh.profile().id;
+        self.pending.remove(&profile);
+        self.meshes.insert(profile, mesh);
+    }
     /// Controls only publication; use false during Play or while approval is pending.
     pub fn allow_mesh_swap(&mut self, allow: bool) {
         self.config.allow_mesh_swap = allow;

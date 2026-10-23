@@ -1,0 +1,31 @@
+{
+  "$schema": "ara://schema/music/1",
+  "id": "mu_valley1",
+  "records": {
+    "ms_valley": {
+      "initial": "calm",
+      "intensity": 0.7,
+      "seed": 7
+    },
+    "sg_calm": {
+      "name": "calm",
+      "bars": 1,
+      "tempo": [
+        {}
+      ],
+      "stems": [
+        {
+          "name": "pad",
+          "clip": "@audio/calm.wav#as_calm",
+          "gainDb": -6
+        },
+        {
+          "name": "drums",
+          "clip": "@audio/drums.wav#as_drums",
+          "intensity": [0.4, 0.6],
+          "gainDb": -8
+        }
+      ]
+    }
+  }
+}

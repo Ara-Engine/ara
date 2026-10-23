@@ -1,14 +1,14 @@
 //! Animation controllers authored in `.animation` documents (`Animator.controller`):
 //! state machines, blend trees and motion matching over the entity model's clips.
 //!
-//! References name `.animation` documents (`@anim/fox-walk.animation#ac_foxwalk1`):
-//! asset references address documents, so each referenced document holds one record.
-//! (A record ID in the fragment also resolves, for standalone ara-anim documents.)
-//! A clip record with source keys (`clip`) is cooked as authored; one without keys
-//! binds the model animation whose name is the record's `name` (`{"name": "Walk"}` →
-//! the glTF's `Walk`). A motion-matching node's `clip` names the document holding the
-//! `motionDatabase` configuration; the database is cooked from its clips when the
-//! program compiles (tick boundary).
+//! References name records of `.animation` documents (`@anim/fox.animation#an_walk`;
+//! the kernel keeps record references, see `SchemaDb::address_records`), so one file
+//! holds a character's clips and controllers. A reference to a document ID names its
+//! only record. A clip record with source keys (`clip`) is cooked as authored; one
+//! without keys binds the model animation whose name is the record's `name`
+//! (`{"name": "Walk"}` → the glTF's `Walk`). A motion-matching node's `clip` names the
+//! record holding the `motionDatabase` configuration; the database is cooked from its
+//! clips when the program compiles (tick boundary).
 use crate::{
     Result, RuntimeError,
     model::Model,
@@ -25,12 +25,12 @@ use ara_doc::Workspace;
 use ara_schema::AssetRef;
 use std::collections::BTreeMap;
 
-/// Every `AnimAsset` record of the project's `animation` documents, by document ID
-/// (single-record documents) and by record ID.
+/// Every `AnimAsset` record of the project's `animation` documents, by (document
+/// path, record ID); documents by ID with their path and record IDs.
 #[derive(Default)]
 pub struct Documents {
-    records: BTreeMap<String, AnimAsset>,
-    documents: BTreeMap<String, Vec<String>>,
+    records: BTreeMap<(String, String), AnimAsset>,
+    documents: BTreeMap<String, (String, Vec<String>)>,
 }
 
 impl Documents {
@@ -46,30 +46,33 @@ impl Documents {
             for id in doc.records().keys() {
                 let record = ara_anim::document::asset(doc, id)
                     .map_err(|e| RuntimeError(format!("{path}#{id}: {}", e.0)))?;
-                records.insert(id.to_string(), record);
+                records.insert((path.to_owned(), id.to_string()), record);
                 ids.push(id.to_string());
             }
-            documents.insert(doc.id.to_string(), ids);
+            documents.insert(doc.id.to_string(), (path.to_owned(), ids));
         }
         Ok(Self { records, documents })
     }
 
-    /// The record a reference names: the only record of a document
-    /// (`@anim/fox.animation#ac_foxanim1`), or a record by ID.
+    /// The record a reference names: `@anim/fox.animation#an_walk`, or the only
+    /// record of a document named by its ID (`@anim/walk.animation#ac_walk0001`).
     pub fn record(&self, reference: &AssetRef) -> Result<&AnimAsset> {
-        let id = reference.0.rsplit('#').next().unwrap_or_default();
-        let record = match self.documents.get(id).map(Vec::as_slice) {
-            Some([only]) => only.as_str(),
-            Some(_) => {
-                return Err(RuntimeError(format!(
-                    "{} names a document with several records; reference documents that hold one",
-                    reference.0
-                )));
-            }
-            None => id,
+        let parts = ara_schema::grammar::parse_ref(&reference.0).map_err(RuntimeError)?;
+        let id = parts.id.unwrap_or_default();
+        let key = match self.documents.get(id) {
+            Some((path, ids)) => match ids.as_slice() {
+                [only] => (path.clone(), only.clone()),
+                _ => {
+                    return Err(RuntimeError(format!(
+                        "{} names a document with several records; name one (`@path#an_…`)",
+                        reference.0
+                    )));
+                }
+            },
+            None => (parts.path.unwrap_or_default().to_owned(), id.to_owned()),
         };
         self.records
-            .get(record)
+            .get(&key)
             .ok_or_else(|| RuntimeError(format!("no animation record {}", reference.0)))
     }
 }

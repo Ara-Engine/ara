@@ -10,10 +10,11 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   read/patch/capture/watch/record/recording/replay/diff/assets/debug.crash`).
 - Params/results: `Hello`, `Start` (+ `SnapshotRef::{Shm, Inline}`, `Role`), `Started`,
   `Input`, `Step`, `Until` + `Compare`, `Stepped` + `Sample`, `Inputs`, `Inspect`, `Read`,
-  `Patch` + `Set`, `Patched`, `CaptureParams`, `Captured` + `Mark`, `WatchParams`,
+  `Patch` + `Set`, `Patched`, `CaptureParams` (`presented`: the windowed path), `Captured` + `Mark`, `WatchParams`,
   `SaveReplay`, `Crash`, `Status`, `CrashReport`. All camelCase JSON.
 - `PlayScene`: documents (`DocumentData`), project types, seed, tick rate, asset pins
-  (`as_…` → 64-hex action digest), cache and nav-cache dirs. `encode`/`decode` (CBOR),
+  (`as_…` → 64-hex action digest), cache and nav-cache dirs, `imports` (imported
+  asset ID → path, so cell cooking resolves references). `encode`/`decode` (CBOR),
   `documents(&Workspace)`, `workspace()`. `hex`/`unhex` for digests.
 - `shm::Section::{create, open, bytes}`: named pagefile-backed sections (Windows);
   other platforms return `Unsupported` and the owner sends `Inline` bytes.
@@ -36,6 +37,10 @@ notifications (`Event`: `reload`, `diagnostic`, `restart`, `types`);
 - Accepted sockets inherit the listener's non-blocking mode; `accept` resets it.
 - Bump `PROTOCOL` only for incompatible changes; new methods are additive.
 - `Role` matches `ara-net` launch roles (Host/Dedicated/Client) plus `Local`.
+- Networked roles: `Start.net` (`NetStart`: players, per-client `LinkConditions`, and
+  for clients the `Joined` from the authority's `play.join`). The join token is private
+  launch data: owners pass it only to that client's `play.start`, never into results.
+  `Status.net` carries authority traffic or client join/prediction numbers.
 
 ## Testing
 

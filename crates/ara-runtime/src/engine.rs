@@ -19,6 +19,8 @@ pub fn register_schemas(db: &mut SchemaDb) -> Vec<Diagnostic> {
             e.to_string(),
         ));
     }
+    // Brains and perception (Brain, Perceiver, Stimulus).
+    ara_ai::register(db);
     ara_audio::register(db);
     ara_acoustics::register(db);
     ara_2d::register(db);
@@ -50,4 +52,5 @@ pub fn register_commands(registry: &mut Registry, db: &mut SchemaDb) {
     ara_foliage::commands::register(registry, db);
     ara_l10n::tools::register(registry, db);
     ara_audio_graph::commands::register(registry, db);
+    ara_ai::commands::register(registry, db);
 }

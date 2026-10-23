@@ -67,6 +67,12 @@ pub trait SessionAdapter {
     fn before_tick(&mut self, session: &mut Session) -> Result<()>;
     /// Observe a completed tick without allowing presentation to mutate gameplay.
     fn after_tick(&mut self, world: &World, record: &TickRecord) -> Result<()>;
+    /// Host streaming activation at the boundary, as in `step_with_streaming` (an
+    /// authority that also streams its world). Default: nothing streams.
+    fn stream(&mut self, boundary: &mut crate::StreamingBoundary<'_>) -> Result<()> {
+        let _ = boundary;
+        Ok(())
+    }
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -104,6 +110,8 @@ pub struct Session {
     pub(crate) pending_commands: BTreeMap<u64, Vec<BoundaryCommand>>,
     pub(crate) pending_typed: BTreeMap<u64, Vec<Box<dyn crate::command::QueuedTyped>>>,
     pub(crate) pending_ops: BTreeMap<u64, Vec<Op>>,
+    /// Commands the host already executed between ticks, recorded with the next tick.
+    pub(crate) applied: BTreeMap<u64, Vec<BoundaryCommand>>,
     pub(crate) sequences: BTreeMap<PlayerId, u64>,
     pub(crate) mode: SessionMode,
     pub(crate) record_hashes: bool,
@@ -141,6 +149,7 @@ impl Session {
             pending_commands: BTreeMap::new(),
             pending_typed: BTreeMap::new(),
             pending_ops: BTreeMap::new(),
+            applied: BTreeMap::new(),
             sequences: BTreeMap::new(),
             mode: SessionMode::Local,
             record_hashes: false,
@@ -270,8 +279,9 @@ impl Session {
     pub fn schema(&self) -> &ara_schema::SchemaDb {
         self.edit.registry.schema()
     }
-    /// Reads one registered component through a tick-stable entity handle.
-    /// Adapters resolve identities once per boundary instead of rescanning per field.
+    /// Reads one registered component through a tick-stable entity handle (`None`
+    /// for external components: their owner reads them). Adapters resolve identities
+    /// once per boundary instead of rescanning per field.
     pub fn component_at(&self, entity: Entity, name: &str) -> Result<Option<Value>> {
         self.edit
             .registry
@@ -375,6 +385,26 @@ impl Session {
         Ok(())
     }
 
+    /// Records a command the host already executed between ticks (an agent's play
+    /// command on a paused world): the next tick's record carries it, so replays and
+    /// recordings re-run it at that boundary through its registered handler. The
+    /// session assigns `sequence` (the owner's next); the payload must validate.
+    /// Replays apply it after that boundary's inputs, live patches and streaming.
+    pub fn record_applied(&mut self, mut command: BoundaryCommand) -> Result<()> {
+        self.edit.registry.prepare_command(&mut command)?;
+        let sequence = self
+            .sequences
+            .get(&command.player)
+            .map_or(1, |last| last + 1);
+        command.sequence = sequence;
+        self.sequences.insert(command.player, sequence);
+        self.applied
+            .entry(self.tick() + 1)
+            .or_default()
+            .push(command);
+        Ok(())
+    }
+
     /// Queues a committed authoring transaction for the edit/play bridge.
     /// This administrative path must never be exposed as a public gameplay RPC.
     pub fn patch(&mut self, tick: u64, transaction: &ara_ops::Transaction) -> Result<()> {
@@ -470,7 +500,8 @@ impl Session {
             context.inputs.apply(&self.actions, tick, &inputs)?;
             context.tick = tick;
         }
-        let mut commands = Vec::new();
+        // Already executed between ticks: recorded here, never re-run live.
+        let mut commands = self.applied.remove(&tick).unwrap_or_default();
         for command in pending {
             match command {
                 crate::command::Pending::Data(command) => {
@@ -507,11 +538,27 @@ impl Session {
         })
     }
 
+    /// Applies streaming arrivals outside a tick for a presentation mirror (a networked
+    /// client's never-stepped copy of the authority's world): rows spawn and despawn
+    /// exactly as at a boundary, but no systems run and the tick does not advance.
+    /// Authoritative sessions stream only through `step_with_streaming`.
+    pub fn mirror_streaming(
+        &mut self,
+        activate: impl FnOnce(&mut crate::StreamingBoundary<'_>) -> Result<()>,
+    ) -> Result<()> {
+        let mut changes = Vec::new();
+        activate(&mut crate::StreamingBoundary {
+            edit: &mut self.edit,
+            changes: &mut changes,
+            recording: false,
+        })
+    }
+
     /// Drives the same step through an optional external networking adapter.
     pub fn step_with_adapter(&mut self, adapter: &mut impl SessionAdapter) -> Result<TickRecord> {
         self.mode = adapter.mode();
         adapter.before_tick(self)?;
-        let record = self.step()?;
+        let record = self.step_with_streaming(|boundary| adapter.stream(boundary))?;
         adapter.after_tick(self.world(), &record)?;
         Ok(record)
     }

@@ -81,6 +81,9 @@ pub mod method {
     pub const COMMANDS: &str = "play.commands";
     /// Claim C# source paths as an agent edit before the owner writes them.
     pub const COMPILE: &str = "play.compile";
+    /// A networked authority issues one client's join credential ([`crate::Join`] →
+    /// [`crate::Joined`]). Private launch data: owners pass it to that client only.
+    pub const JOIN: &str = "play.join";
     /// A portable snapshot of the current tick (hex CBOR), to resume elsewhere.
     pub const SNAPSHOT: &str = "play.snapshot";
     /// Render the world's sound offline to a WAV plus analysis ([`crate::CaptureAudio`]).
@@ -117,8 +120,6 @@ pub struct Hello {
     pub window: bool,
     /// Process start → hello, in milliseconds (init cost the pool hides).
     pub init_ms: f64,
-    /// UDP address a server-role player listens on for client handshakes.
-    pub net_addr: Option<String>,
 }
 
 /// Where the snapshot bytes are.
@@ -147,8 +148,9 @@ pub struct Start {
     pub snapshot: SnapshotRef,
     /// Process role.
     pub role: Role,
-    /// Server UDP address for client roles (handshake before reporting running).
-    pub connect_to: Option<String>,
+    /// Networked roles (host, dedicated, client): players and join data.
+    #[serde(default)]
+    pub net: Option<NetStart>,
     /// Stay paused after tick 0 (otherwise run at the fixed rate).
     pub start_paused: bool,
     /// Portable snapshot (hex CBOR, from `play.snapshot`) to restore after building:
@@ -245,8 +247,61 @@ pub struct Started {
     pub build_ms: f64,
     /// First tick, in milliseconds (0 when started paused).
     pub first_tick_ms: f64,
-    /// Client ↔ server handshake, in milliseconds.
+    /// Clients: netcode connect, schema check and timeline sync with the authority,
+    /// in milliseconds.
     pub net_handshake_ms: Option<f64>,
+}
+
+/// Simulated link conditions for one client (`ara_net::Conditions`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct LinkConditions {
+    /// Added one-way latency, in milliseconds.
+    pub latency_ms: u32,
+    /// Uniform plus/minus one-way jitter, in milliseconds.
+    pub jitter_ms: u32,
+    /// Packet loss probability, in basis points (0..10000).
+    pub loss: u16,
+    /// Packet duplication probability, in basis points.
+    pub duplication: u16,
+    /// Extra-delay (reordering) probability, in basis points.
+    pub reordering: u16,
+    /// Directional bandwidth in bytes per second; 0 disables shaping.
+    pub bandwidth: u32,
+}
+
+/// Networked play settings of [`Start`] (D19: Host+N, Dedicated+N).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetStart {
+    /// Players in the session, the listen host's included (avatars up to this).
+    pub players: u64,
+    /// Authorities: one entry per client (players 2, 3, ...), conditions if simulated.
+    #[serde(default)]
+    pub clients: Vec<Option<LinkConditions>>,
+    /// Clients: the join issued by the authority ([`method::JOIN`]).
+    #[serde(default)]
+    pub join: Option<Joined>,
+}
+
+/// `play.join` params: which client's credential to issue.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Join {
+    /// Client index (player `index + 2`).
+    pub index: usize,
+}
+
+/// `play.join` result. The token is private: never log or persist it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Joined {
+    /// The client's player.
+    pub player: u64,
+    /// Where the client connects (its link proxy on the authority).
+    pub endpoint: String,
+    /// Encrypted netcode connect token, hex.
+    pub token: String,
 }
 
 /// One action injection, relative to the next tick.
@@ -445,6 +500,10 @@ pub struct CaptureParams {
     /// Maximum numbered marks (0 disables marks).
     #[serde(default = "marks")]
     pub marks: usize,
+    /// Render what windowed frames draw (terrain chunks as meshes, no landscape or
+    /// VFX composite) instead of the full capture.
+    #[serde(default)]
+    pub presented: bool,
 }
 fn width() -> u32 {
     1280
@@ -530,6 +589,12 @@ pub struct Status {
     /// A live audio device is open and fed (windowed players with sound).
     #[serde(default)]
     pub audio: bool,
+    /// Networked roles: authority traffic or client join/prediction numbers.
+    #[serde(default)]
+    pub net: Option<Value>,
+    /// Resident cells of the streamed world (empty without one).
+    #[serde(default)]
+    pub cells: Vec<String>,
 }
 
 /// `play.busy` notification.
@@ -594,6 +659,10 @@ pub struct PlayScene {
     /// C# gameplay modules, when the project has any.
     #[serde(default)]
     pub scripts: Option<ScriptScene>,
+    /// Imported asset ID → project path: the asset index the documents' references
+    /// resolve against (cooking streamed cells checks them).
+    #[serde(default)]
+    pub imports: BTreeMap<String, String>,
 }
 
 impl PlayScene {
@@ -616,7 +685,11 @@ impl PlayScene {
 
     /// Rebuilds the workspace and scene ID (records are validated by projection).
     pub fn workspace(&self) -> Result<(Workspace, AssetId), String> {
-        let mut workspace = Workspace::default();
+        let mut index = ara_doc::refs::AssetIndex::new();
+        for (id, path) in &self.imports {
+            index.insert(id.clone(), path.clone(), None);
+        }
+        let mut workspace = Workspace::new(index);
         for data in &self.documents {
             let mut doc = Document::new(data.kind.clone(), AssetId::parse(&data.id)?);
             for (id, record) in &data.records {

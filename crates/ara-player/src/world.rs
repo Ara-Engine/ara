@@ -1,6 +1,6 @@
 //! One running world inside the player: the runtime plus the `play.*` method
 //! implementations. Patches acknowledge after the tick that applied them.
-use crate::crash::LAST_TICK;
+use crate::{crash::LAST_TICK, net::Play};
 use anyhow::{Context, Result, anyhow, bail};
 use ara_asset::{Digest, FileCache};
 use ara_input::{ActionValue, Injection, PlayerId};
@@ -17,9 +17,16 @@ use ara_runtime_render::{
     two_d::{self, Presenter2d},
 };
 use ara_runtime_script::{ScriptEvent, ScriptPlugin, ScriptSettings};
+use ara_runtime_world::{CellEvent, WorldStreaming};
+use ara_schema::AssetRef;
 use ara_sim::{TickConfig, Watch};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::PathBuf, sync::atomic::Ordering, time::Instant};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
+    time::Instant,
+};
 
 /// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
 const CHUNK: u32 = 30;
@@ -36,8 +43,10 @@ pub struct PendingPatch {
 
 /// The assigned world.
 pub struct World {
-    /// The simulation and presentation source.
-    pub runtime: Runtime,
+    /// The simulation and presentation source, in its (network) role.
+    pub runtime: Play,
+    /// The first error of a frame advance (networked transport faults), for status.
+    pub fault: Option<String>,
     scene: ara_doc::AssetId,
     seed: u64,
     cache: PathBuf,
@@ -46,6 +55,16 @@ pub struct World {
     pub pending: Vec<PendingPatch>,
     /// C# modules and their host's event channel, when the scene runs any.
     scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
+    /// The streamed world's cells, when the snapshot has a world.
+    cells: Option<Cells>,
+}
+
+/// Streamed world cells: the plugin's events, each cell's baked acoustics and the
+/// resident set.
+struct Cells {
+    events: std::sync::mpsc::Receiver<CellEvent>,
+    acoustics: BTreeMap<String, AssetRef>,
+    resident: std::collections::BTreeSet<String>,
 }
 
 fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAssets> {
@@ -53,11 +72,23 @@ fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAsse
 }
 
 impl World {
-    /// Builds the world from a decoded snapshot (tick 0, paused).
-    pub fn build(scene: &PlayScene) -> Result<(Self, f64)> {
+    /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
+    /// worlds copy player avatars, install the net plugin and wrap the runtime in a
+    /// server (authorities) or connect a mirror (clients). Headless worlds settle world
+    /// streaming (reproducible arrivals); `windowed` ones stream live.
+    pub fn build(
+        scene: &PlayScene,
+        role: ara_play::Role,
+        net: Option<&ara_play::NetStart>,
+        windowed: bool,
+    ) -> Result<(Self, f64)> {
         let started = Instant::now();
         let schema = ara_runtime::schema(&scene.types)?;
-        let (workspace, id) = scene.workspace().map_err(|e| anyhow!(e))?;
+        let (mut workspace, id) = scene.workspace().map_err(|e| anyhow!(e))?;
+        if let Some(net) = net {
+            ara_runtime_net::avatars(&mut workspace, id.as_str(), net.players)
+                .map_err(|e| anyhow!(e))?;
+        }
         let pins = scene
             .assets
             .iter()
@@ -65,6 +96,9 @@ impl World {
             .collect::<Result<BTreeMap<_, _>>>()?;
         let cache = PathBuf::from(&scene.cache);
         let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = Vec::new();
+        if net.is_some() {
+            plugins.push(Box::new(ara_runtime_net::NetPlugin));
+        }
         let mut scripts = None;
         if let Some(s) = &scene.scripts {
             let settings = ScriptSettings {
@@ -75,6 +109,28 @@ impl World {
             let (plugin, events) = ScriptPlugin::new(settings.clone());
             plugins.push(Box::new(plugin));
             scripts = Some((settings, events));
+        }
+        // Last: the world workers prepare rows against the complete registry.
+        let mut cells = None;
+        if let Some((plugin, events)) = WorldStreaming::from_workspace(&workspace, id.as_str())? {
+            // Headless (agent) play settles streaming: arrivals are reproducible.
+            let plugin = if windowed {
+                plugin
+            } else {
+                plugin.settled(std::time::Duration::from_secs(10))
+            };
+            let acoustics = plugin
+                .manifest()
+                .cells
+                .iter()
+                .filter_map(|(id, cell)| Some((id.clone(), cell.acoustics.clone()?)))
+                .collect();
+            plugins.push(Box::new(plugin));
+            cells = Some(Cells {
+                events,
+                acoustics,
+                resident: Default::default(),
+            });
         }
         let runtime = Runtime::new(
             schema,
@@ -92,15 +148,18 @@ impl World {
             },
             plugins,
         )?;
+        let runtime = Play::new(runtime, role, net)?;
         Ok((
             Self {
                 runtime,
+                fault: None,
                 scene: id,
                 seed: scene.seed,
                 cache,
                 pins,
                 pending: Vec::new(),
                 scripts,
+                cells,
             },
             started.elapsed().as_secs_f64() * 1000.0,
         ))
@@ -111,29 +170,50 @@ impl World {
     pub fn resume(&mut self, hex: &str) -> Result<()> {
         let bytes = ara_play::unhex_bytes(hex).map_err(|e| anyhow!(e))?;
         let snapshot = ara_sim::Snapshot::from_bytes(&bytes)?;
-        self.runtime.play_mut().restore(&snapshot)?;
+        self.runtime.restore(&snapshot)?;
         Ok(())
     }
 
-    /// The audio listener: at the camera, facing its view direction.
-    pub fn listener(&mut self, frame: &mut RenderFrame) -> ara_audio::AudioListener {
-        self.runtime.extract(frame);
-        let mut listener = ara_audio::AudioListener::default();
-        if let Some(camera) = &frame.camera {
-            listener.position = camera.position;
-            listener.forward = camera.forward;
+    /// The asset source of the current pins, shared with presentation workers.
+    pub fn asset_source(&self) -> Result<Arc<dyn ara_runtime::assets::AssetSource>> {
+        Ok(Arc::new(assets(&self.cache, &self.pins)?))
+    }
+
+    /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`), after
+    /// draining the streaming plugin's events.
+    pub fn resident_acoustics(&mut self) -> Vec<(String, AssetRef)> {
+        let Some(cells) = &mut self.cells else {
+            return Vec::new();
+        };
+        for event in cells.events.try_iter() {
+            match event {
+                CellEvent::Ready { cell, .. } => cells.resident.insert(cell),
+                CellEvent::Removed { cell, .. } => cells.resident.remove(&cell),
+            };
         }
-        listener
+        cells
+            .resident
+            .iter()
+            .filter_map(|cell| Some((cell.clone(), cells.acoustics.get(cell)?.clone())))
+            .collect()
     }
 
-    /// One live audio update (windowed players, every presented frame).
-    pub fn audio(&mut self, audio: &mut AudioPresenter, frame: &mut RenderFrame) -> Result<()> {
-        let listener = self.listener(frame);
-        let assets = assets(&self.cache, &self.pins)?;
-        audio.update(self.runtime.world(), &listener, &mut |reference| {
-            ara_runtime_audio::clip(&assets, reference)
-        })?;
-        Ok(())
+    /// Resident streamed cells (any data), for status and tests.
+    pub fn resident_cells(&mut self) -> Vec<String> {
+        let _ = self.resident_acoustics();
+        self.cells
+            .as_ref()
+            .map(|c| c.resident.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The live audio inputs of this frame, gathered on the frame thread (draining the
+    /// streaming events): resident cells with baked acoustics and the asset source.
+    pub fn audio_inputs(&mut self) -> Result<AudioInputs> {
+        Ok(AudioInputs {
+            resident: self.resident_acoustics(),
+            assets: self.asset_source()?,
+        })
     }
 
     /// A fresh audio presenter for this world (its project mixer, room reverb).
@@ -151,10 +231,14 @@ impl World {
         frame: &mut RenderFrame,
     ) -> Result<Value> {
         let mut audio = self.audio_presenter()?;
-        let listener = self.listener(frame);
-        let assets = assets(&self.cache, &self.pins)?;
+        self.runtime.extract(frame);
+        let listener = listener(frame);
+        let AudioInputs { resident, assets } = self.audio_inputs()?;
+        let probes = audio.stream_cells(&resident, &assets);
+        audio.wait_cells(std::time::Duration::from_secs(5));
+        let probes = probes.max(audio.stream_cells(&resident, &assets));
         let heard = audio.update(self.runtime.world(), &listener, &mut |reference| {
-            ara_runtime_audio::clip(&assets, reference)
+            ara_runtime_audio::clip(assets.as_ref(), reference)
         })?;
         let capture = audio.capture(params.seconds)?;
         let path = std::path::Path::new(&params.path);
@@ -179,6 +263,8 @@ impl World {
             .collect();
         Ok(json!({
             "tick": self.runtime.tick(),
+            "acousticCells": resident.iter().map(|(cell, _)| cell.clone()).collect::<Vec<_>>(),
+            "probes": probes,
             "voices": heard.iter().map(|h| h.entity.clone()).collect::<Vec<_>>(),
             "sources": sources,
             "analysis": serde_json::from_str::<Value>(&analysis)?,
@@ -193,9 +279,13 @@ impl World {
 
     /// `play.command`: a C# command between ticks.
     pub fn command(&mut self, command: &ara_play::Command) -> Result<Value> {
-        let world = self.runtime.play_mut().session_mut().world_mut();
+        if matches!(self.runtime, Play::Mirror(..)) {
+            // Commands run on the authority; clients see their effects replicated.
+            return Ok(json!({"mirror": true}));
+        }
+        let session = self.runtime.play_mut().session_mut();
         Ok(ara_runtime_script::execute(
-            world,
+            session,
             &command.name,
             &command.params,
         )?)
@@ -256,9 +346,10 @@ impl World {
     }
 
     /// Starts host-time ticking and runs the first tick now (S5 "first tick").
+    /// Networked worlds tick on the authority's timeline once every client joined.
     pub fn start(&mut self, paused: bool, build_ms: f64) -> Result<Started> {
         let mut first_tick_ms = 0.0;
-        if !paused {
+        if !paused && !self.runtime.networked() {
             let t = Instant::now();
             self.runtime.step(1, &[])?;
             first_tick_ms = t.elapsed().as_secs_f64() * 1000.0;
@@ -363,15 +454,14 @@ impl World {
         })
     }
 
-    /// `play.input`: injections for the next tick (offsets relative to it).
+    /// `play.input`: injections for the next tick (offsets relative to it). Networked
+    /// processes keep only their own player's inputs (clients predict them).
     pub fn input(&mut self, inputs: &[Input]) -> Result<u64> {
         let next = self.runtime.tick() + 1;
         for input in inputs {
             let injection = injection(input)?;
             self.runtime
-                .play_mut()
-                .session_mut()
-                .inject(next + u64::from(input.after_ticks), vec![injection])?;
+                .input(u64::from(input.after_ticks), vec![injection])?;
         }
         Ok(next)
     }
@@ -466,6 +556,14 @@ impl World {
                     marks_wanted,
                     self.seed,
                 )?
+            } else if params.presented {
+                self.runtime.extract(frame);
+                presenter.context("no presenter")?.capture_presented(
+                    frame,
+                    size,
+                    marks_wanted,
+                    self.seed,
+                )?
             } else {
                 self.runtime.extract(frame);
                 presenter.context("no presenter")?.capture(
@@ -507,7 +605,7 @@ impl World {
     /// `play.replay`: verifies a replay file tick by tick from its initial state.
     pub fn replay(&mut self, path: &str) -> Result<Value> {
         let replay = ara_sim::Replay::from_bytes(&std::fs::read(path)?)?;
-        let hash = self.runtime.play_mut().replay(&replay)?;
+        let hash = self.runtime.replay(&replay)?;
         self.mark();
         Ok(
             json!({"tick": self.runtime.tick(), "ticks": replay.ticks.len(), "hash": hash.to_string(), "verified": true}),
@@ -533,6 +631,40 @@ impl World {
                 .collect::<Vec<_>>()
         ))
     }
+}
+
+/// The audio listener of an extracted frame: at the camera, facing its view direction.
+pub fn listener(frame: &RenderFrame) -> ara_audio::AudioListener {
+    let mut listener = ara_audio::AudioListener::default();
+    if let Some(camera) = &frame.camera {
+        listener.position = camera.position;
+        listener.forward = camera.forward;
+    }
+    listener
+}
+
+/// What a live audio update needs besides the world (see [`World::audio_inputs`]).
+pub struct AudioInputs {
+    /// Resident streamed cells with baked acoustics (cell, `Cell.acoustics`).
+    pub resident: Vec<(String, AssetRef)>,
+    /// Clips, graphs and probes resolve through the current pins.
+    pub assets: Arc<dyn ara_runtime::assets::AssetSource>,
+}
+
+/// One live audio update: streams cell probes, then evaluates acoustics against the
+/// physics scene and retargets voices. Reads the simulation only, so the player runs
+/// it on a worker thread while the frame presents (physics is not stepping then).
+pub fn update_audio(
+    audio: &mut AudioPresenter,
+    world: &ara_sim::bevy_ecs::world::World,
+    listener: &ara_audio::AudioListener,
+    inputs: &AudioInputs,
+) -> Result<()> {
+    audio.stream_cells(&inputs.resident, &inputs.assets);
+    audio.update(world, listener, &mut |reference| {
+        ara_runtime_audio::clip(inputs.assets.as_ref(), reference)
+    })?;
+    Ok(())
 }
 
 fn samples(samples: &[ara_sim::Sample]) -> Vec<Sample> {

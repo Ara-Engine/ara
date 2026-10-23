@@ -338,6 +338,66 @@ impl Default for Animator {
     }
 }
 
+/// Streams a `.world`'s cells into play around the players (`ara-runtime-world`).
+/// Put it on one entity of the level scene; the cell documents stay out of the
+/// projection and arrive at tick boundaries. With a `Terrain`, navigation then
+/// follows the resident `TerrainChunk`s.
+#[derive(Debug, Clone, Default, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "world")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct StreamedWorld {
+    /// The world manifest (`.world` document).
+    #[ara(asset_kind = "world")]
+    pub world: Option<AssetRef>,
+}
+
+/// Plays a `.music` document's interactive score (segments, transitions, intensity
+/// layers) from this entity, non-spatial. Presentation intent: gameplay writes
+/// `intensity` and `segment`; the audio presenter follows them.
+#[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "audio")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct MusicSource {
+    /// The score (`.music` document).
+    #[ara(asset_kind = "music")]
+    pub music: Option<AssetRef>,
+    /// Mixer bus the stems play on.
+    #[ara(default = "music")]
+    pub bus: String,
+    /// Intensity from 0 to 1: stems whose range contains it are audible.
+    #[ara(range(min = 0, max = 1))]
+    pub intensity: f32,
+    /// Segment to transition to (on the score's sync rule); empty follows the score.
+    pub segment: String,
+}
+impl Default for MusicSource {
+    fn default() -> Self {
+        Self {
+            music: None,
+            bus: "music".into(),
+            intensity: 0.0,
+            segment: String::new(),
+        }
+    }
+}
+
+/// Plays a procedural audio graph (an ara-audio-graph `graph` document, domain
+/// `audio`) from this entity, spatialized and attenuated by its `AudioSource` (whose
+/// clip stays empty). Gameplay writes `parameters` and bumps `triggers`; the audio
+/// presenter forwards changes sample-accurately at the next control frame.
+#[derive(Debug, Clone, Default, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "audio")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct AudioGraphSource {
+    /// The audio graph document.
+    #[ara(asset_kind = "graph")]
+    pub graph: Option<AssetRef>,
+    /// Parameter values by name (clamped to the graph's declared ranges).
+    pub parameters: std::collections::BTreeMap<String, f32>,
+    /// Trigger counters by name: each increment fires the trigger once.
+    pub triggers: std::collections::BTreeMap<String, u32>,
+}
+
 /// A GPU particle effect drawn at this entity. Presentation only: gameplay reads
 /// ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect
 /// (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).
@@ -370,5 +430,10 @@ pub fn register_schemas(db: &mut SchemaDb) {
         .register::<PlayerControl>()
         .register::<Wanderer>()
         .register::<Animator>()
-        .register::<VisualEffect>();
+        .register::<VisualEffect>()
+        .register::<StreamedWorld>()
+        .register::<MusicSource>()
+        .register::<AudioGraphSource>()
+        .register::<crate::terrain::Terrain>()
+        .register::<crate::terrain::TerrainChunk>();
 }

@@ -1,0 +1,198 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_guard1",
+  "records": {
+    "g_meta": {
+      "domain": "behavior",
+      "payload": {
+        "name": "Guard",
+        "queries": [],
+        "roots": [
+          "n_93629b884843ad6e"
+        ],
+        "vars": [
+          "n_035b2d2506e52a66",
+          "n_214b56b55de3e24a",
+          "n_c71ee11272b2df2d"
+        ]
+      }
+    },
+    "l_editor": {},
+    "n_035b2d2506e52a66": {
+      "kind": "behavior.var",
+      "payload": {
+        "name": "route",
+        "ty": "points"
+      }
+    },
+    "n_214b56b55de3e24a": {
+      "kind": "behavior.var",
+      "payload": {
+        "name": "target",
+        "ty": "entity"
+      }
+    },
+    "n_2b5a535de14af03d": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [],
+        "enter": [],
+        "exit": [],
+        "name": "GoTo",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [
+          "moveTo(noise, speed: 2, tolerance: 1.5)"
+        ],
+        "transitions": [
+          {
+            "target": "n_aa735dffc7004aa6",
+            "trigger": "done"
+          },
+          {
+            "target": "n_aa735dffc7004aa6",
+            "trigger": "failed"
+          }
+        ]
+      }
+    },
+    "n_4891eb49f4f55c2b": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [],
+        "enter": [],
+        "exit": [],
+        "name": "Search",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [
+          "moveTo(lastSeen(target), speed: 2.5, tolerance: 1)"
+        ],
+        "transitions": [],
+        "when": "known(target) and lost(target) < 5"
+      }
+    },
+    "n_4a3edad96b285559": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [],
+        "enter": [
+          "set target = nearest(\"player\")",
+          "clear noise"
+        ],
+        "exit": [],
+        "name": "Chase",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [
+          "moveTo(lastSeen(target), speed: 3, tolerance: 1.5)",
+          "face(lastSeen(target))"
+        ],
+        "transitions": [],
+        "when": "sees(nearest(\"player\"))"
+      }
+    },
+    "n_4c220c8ad6dbdd01": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [],
+        "enter": [],
+        "exit": [],
+        "name": "Patrol",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [
+          "patrol(route, speed: 1.5)"
+        ],
+        "transitions": []
+      }
+    },
+    "n_7e52b65718250d17": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [
+          "n_2b5a535de14af03d",
+          "n_aa735dffc7004aa6"
+        ],
+        "enter": [
+          "set noise = noise()"
+        ],
+        "exit": [],
+        "name": "Investigate",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [],
+        "transitions": [],
+        "when": "heard() or isSet(noise)"
+      }
+    },
+    "n_93629b884843ad6e": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [
+          "n_4a3edad96b285559",
+          "n_4891eb49f4f55c2b",
+          "n_7e52b65718250d17",
+          "n_4c220c8ad6dbdd01"
+        ],
+        "enter": [],
+        "exit": [],
+        "name": "Alert",
+        "scores": [],
+        "select": {
+          "every": 0.25,
+          "mode": "first"
+        },
+        "tasks": [],
+        "transitions": []
+      }
+    },
+    "n_aa735dffc7004aa6": {
+      "kind": "behavior.state",
+      "payload": {
+        "children": [],
+        "enter": [],
+        "exit": [
+          "clear noise"
+        ],
+        "name": "LookAround",
+        "scores": [],
+        "select": {
+          "every": 0,
+          "mode": "first"
+        },
+        "tasks": [
+          "wait(2)"
+        ],
+        "transitions": [
+          {
+            "target": "n_4c220c8ad6dbdd01",
+            "trigger": "done"
+          }
+        ]
+      }
+    },
+    "n_c71ee11272b2df2d": {
+      "kind": "behavior.var",
+      "payload": {
+        "name": "noise",
+        "ty": "vec3"
+      }
+    }
+  }
+}

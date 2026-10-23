@@ -19,7 +19,9 @@ ara-vfx-gpu = { path = "../ara-vfx-gpu" }
 ara-shader-cook = { path = "../ara-shader-cook" }
 ara-anim = { path = "../ara-anim" }
 ara-profile = { path = "../ara-profile", features = ["gpu"] }
+ara-ai = { path = "../ara-ai" }
 ara-audio-why = { path = "../ara-audio-why" }
+ara-world = { path = "../ara-world", features = ["host"] }
 ara-cmd = { path = "../ara-cmd" }
 ara-components = { path = "../ara-components" }
 ara-diag = { path = "../ara-diag" }

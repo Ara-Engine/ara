@@ -60,6 +60,9 @@ pub struct Cell {
     pub documents: Vec<String>,
     /// Optional standalone actor scene files, kept at readable stable paths.
     pub actors: Vec<String>,
+    /// Baked acoustic probes for this cell (an imported `AcousticCell` blob); play
+    /// loads and unloads them with the cell.
+    pub acoustics: Option<ara_schema::AssetRef>,
 }
 
 impl Cell {
@@ -74,7 +77,7 @@ impl Cell {
 }
 
 /// Validated immutable view of a canonical root document.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Manifest {
     /// Root document identity.
     pub id: AssetId,

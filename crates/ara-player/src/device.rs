@@ -4,7 +4,6 @@ use anyhow::Result;
 use ara_input::{ActionValue, Injection, PlayerId};
 use ara_platform::{Event, Present, Window};
 use ara_runtime::{
-    Runtime,
     components::{Environment, MeshShape},
     control::{JUMP, LOOK, MOVE, SPRINT},
     extract::{Draw, Geometry, RenderFrame},
@@ -86,9 +85,9 @@ impl Windowed {
         ))
     }
 
-    /// Drains window events into action injections for the next tick. Returns true
-    /// when the user closed the window (Esc or the close button).
-    pub fn events(&mut self, runtime: &mut Runtime) -> Result<bool> {
+    /// Drains window events into `player`'s action injections for the next tick.
+    /// Returns true when the user closed the window (Esc or the close button).
+    pub fn events(&mut self, player: PlayerId) -> Result<(bool, Vec<Injection>)> {
         let mut quit = false;
         let mut jump = false;
         for event in self.window.poll()? {
@@ -127,7 +126,6 @@ impl Windowed {
         ];
         let sprint = self.keys.contains(&LEFT_SHIFT);
         let mut inputs = Vec::new();
-        let player = PlayerId(1);
         if movement != self.sent_move {
             inputs.push(Injection {
                 player,
@@ -163,26 +161,18 @@ impl Windowed {
                 hold_ticks: 1,
             });
         }
-        if !inputs.is_empty() {
-            runtime.inject(inputs)?;
-        }
-        Ok(quit)
+        Ok((quit, inputs))
     }
 
-    /// Extracts, renders and presents one frame, recreating the swapchain on resize.
-    pub fn present(
-        &mut self,
-        runtime: &mut Runtime,
-        presenter: &mut Presenter,
-        frame: &mut RenderFrame,
-    ) -> Result<()> {
+    /// Renders and presents one extracted frame, recreating the swapchain on resize.
+    /// Touches no simulation state, so it overlaps the frame's audio worker.
+    pub fn present(&mut self, presenter: &mut Presenter, frame: &RenderFrame) -> Result<()> {
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());
         }
-        runtime.extract(frame);
         if presenter.renderer().is_some_and(|r| r.size() != size) {
             self.recreate(presenter)?;
             presenter.resize(size)?;

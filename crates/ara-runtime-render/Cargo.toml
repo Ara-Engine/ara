@@ -10,15 +10,19 @@ publish.workspace = true
 anyhow = "1"
 ara-2d = { path = "../ara-2d" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-gpu = { path = "../ara-gpu" }
+ara-landscape = { path = "../ara-landscape" }
 ara-render = { path = "../ara-render" }
 ara-render2d = { path = "../ara-render2d" }
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
+ara-terrain = { path = "../ara-terrain" }
 ara-vfx = { path = "../ara-vfx" }
 ara-vfx-gpu = { path = "../ara-vfx-gpu" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
 serde_json.workspace = true
 glam = "0.34"
+image = { version = "0.25", default-features = false, features = ["png"] }
 # ara-render's scene/camera API uses glam 0.30 types.
 glam30 = { package = "glam", version = "0.30" }
 texture2ddecoder = "0.1.2"

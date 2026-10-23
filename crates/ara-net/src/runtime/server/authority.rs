@@ -103,13 +103,13 @@ pub(super) fn receive(world: &mut World) {
                         .filter(|(p, _)| *p == player)
                         .count()
                         < 16
-                    && intent.tick >= state.session.tick().saturating_sub(60)
-                    && intent.tick <= state.session.tick().saturating_add(120)
+                    && intent.tick >= state.session.session().tick().saturating_sub(60)
+                    && intent.tick <= state.session.session().tick().saturating_add(120)
                     && intent.payload.len() <= 4096
                     && intent.target.len() <= 256
                     && intent.command.len() <= 128 =>
             {
-                let assigned = intent.tick.max(state.session.tick() + 1);
+                let assigned = intent.tick.max(state.session.session().tick() + 1);
                 state
                     .pending_intents
                     .entry(assigned)
@@ -143,7 +143,7 @@ fn tick_inner<F: SimulationFeature>(world: &mut World, state: &mut Authority) ->
         || state
             .config
             .tick_limit
-            .is_some_and(|limit| state.session.tick() >= limit)
+            .is_some_and(|limit| state.session.session().tick() >= limit)
     {
         return Ok(());
     }
@@ -154,7 +154,7 @@ fn tick_inner<F: SimulationFeature>(world: &mut World, state: &mut Authority) ->
     if tick <= origin {
         return Ok(());
     }
-    if u64::from(tick - origin) != state.session.tick() + 1 {
+    if u64::from(tick - origin) != state.session.session().tick() + 1 {
         return Err(NetError(
             "authority timeline skipped a simulation boundary".into(),
         ));
@@ -174,15 +174,18 @@ fn tick_inner<F: SimulationFeature>(world: &mut World, state: &mut Authority) ->
             });
         }
     }
-    if let Some(intents) = state.pending_intents.remove(&(state.session.tick() + 1)) {
+    if let Some(intents) = state
+        .pending_intents
+        .remove(&(state.session.session().tick() + 1))
+    {
         for (caller, intent) in intents {
             let owner = state.actors.get(&intent.target).and_then(|a| a.spawn.owner);
             state.adapter.intents.push((caller, owner, intent));
         }
     }
-    let record = state.session.step_with_adapter(&mut state.adapter)?;
+    let record = state.session.step(&mut state.adapter)?;
     if let Some(trace) = &mut state.trace {
-        trace.push(&state.session, record.clone())?;
+        trace.push(state.session.session(), record.clone())?;
     }
     if state.record {
         state.records.push(record);

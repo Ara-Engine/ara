@@ -9,9 +9,12 @@ publish.workspace = true
 [dependencies]
 ara-acoustics = { path = "../ara-acoustics", features = ["physics", "ecs"] }
 ara-audio = { path = "../ara-audio", features = ["ecs"] }
+ara-audio-graph = { path = "../ara-audio-graph" }
 ara-audio-mix = { path = "../ara-audio-mix" }
 ara-diag.workspace = true
 ara-doc.workspace = true
+ara-graph = { path = "../ara-graph" }
+ara-music = { path = "../ara-music" }
 ara-physics = { path = "../ara-physics" }
 ara-physics-jolt = { path = "../ara-physics-jolt" }
 ara-runtime = { path = "../ara-runtime" }

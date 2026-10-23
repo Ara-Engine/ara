@@ -27,8 +27,36 @@ pub fn install(world: &mut World, config: &PhysicsConfig, poses: &[(Entity, Pose
     build(world, config)
 }
 
+/// Poses simulated bodies spawned after build (streamed world cells) at their
+/// transform before the next physics push, as `install` does at build.
+pub fn adopt(world: &mut World) {
+    let mut new = Vec::new();
+    let mut query = world.query_filtered::<(Entity, &ara_components::Transform), (
+        Without<PhysicsPose>,
+        Or<(With<RigidBody>, With<CharacterController>, With<Vehicle>)>,
+    )>();
+    for (entity, transform) in query.iter(world) {
+        new.push((entity, Pose::from_transform(transform)));
+    }
+    for (entity, pose) in new {
+        let pose = world
+            .get::<crate::sync::WorldPose>(entity)
+            .map_or(pose, |w| w.0);
+        world.entity_mut(entity).insert(pose.to_physics());
+    }
+}
+
 fn build(world: &mut World, config: &PhysicsConfig) -> Result<()> {
     ara_physics::register::<JoltBackend>(world, &mut Schedule::default(), config.clone())?;
+    // Cooked shapes are handles into the native world just (re)created.
+    let mut stale = Vec::new();
+    let mut query = world
+        .query_filtered::<Entity, (With<crate::terrain::TerrainChunk>, With<CookedCollider>)>();
+    stale.extend(query.iter(world));
+    for entity in stale {
+        world.entity_mut(entity).remove::<CookedCollider>();
+    }
+    crate::terrain::cook_chunks(world)?;
     ara_physics::prepare_ecs::<JoltBackend>(world)?;
     Ok(())
 }

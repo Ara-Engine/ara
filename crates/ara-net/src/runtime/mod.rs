@@ -23,7 +23,7 @@ use std::{
 mod client;
 mod server;
 pub use client::{Client, ClientConfig, ClientStatus};
-pub use server::{Server, ServerConfig};
+pub use server::{AdapterRef, Authoritative, Server, ServerConfig};
 
 const PROTOCOL: u64 = 0xa4a0_0002_0001;
 

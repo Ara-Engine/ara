@@ -5,27 +5,39 @@
 //!
 //! # Fixed-tick system order
 //!
+//! Before the systems, the boundary applies inputs, live patches, commands and
+//! streamed cell arrivals (plugins' `stream`).
+//!
 //! | # | System | Does |
 //! |---|---|---|
 //! | 0 | `poses.remember` | last world poses become the interpolation start |
 //! | 1 | `input.cameras` | `Look` steers follow-camera rigs |
-//! | 2 | `input.players` | `Move`/`Sprint`/`Jump` → character input, facing |
+//! | 2 | `input.players`, `input.players2d` | `Move`/`Sprint`/`Jump` → character input, facing |
 //! | 3 | plugins [`Stage::Gameplay`] | C# script systems |
 //! | 4 | `ai.wander` | wanderers choose navmesh goals (session RNG) |
-//! | 5 | `navigation` | Detour crowd step (exclusive) |
-//! | 6 | `animation` ∥ `navigation.follow` | animator tick ∥ agent poses (parallel group) |
-//! | 7 | `animation.root` | root motion moves free animated entities |
-//! | 8 | `physics.push` | edited bodies teleport to their `Transform` |
-//! | 9 | `physics` | Jolt boundary: extract → step → mirror (exclusive) |
-//! | 10 | `physics.pull` | moving bodies/characters → `Transform` |
-//! | 11 | `camera.place` | rigs placed behind targets |
-//! | 12 | plugins [`Stage::Late`] | replication, audio/VFX emission |
-//! | 13 | `poses.resolve` | world poses for presentation (exclusive) |
+//! | 5 | `animation.slots`, `navigation.adopt` | streamed animators/agents/obstacles get runtime state |
+//! | 6 | `navigation.stream` | resident terrain chunks changed → streamed navmesh assembled, staged |
+//! | 7 | `navigation.obstacles` | obstacles follow their world pose |
+//! | 8 | `ai.adopt`, `ai.poses` | streamed brains; perception poses of players/props |
+//! | 9 | `ai.sync` → `ai.perceive` → `ai.think` → `ai.bridge` | brains perceive, think, steer navigation |
+//! | 10 | `navigation` | publish meshes, obstacle rebakes, ORCA crowd step (exclusive) |
+//! | 11 | `ai.locomotion` → `ai.report` | locomotion intents for animation; `ara why` reports |
+//! | 12 | `animation` ∥ `navigation.follow` | animator tick ∥ agent poses (parallel group) |
+//! | 13 | `animation.root` | root motion moves free animated entities |
+//! | 14 | `terrain.chunks`, `physics.adopt` | streamed terrain chunks / bodies get native bodies |
+//! | 15 | `physics.push` | edited bodies teleport to their `Transform` |
+//! | 16 | `physics` | Jolt boundary: extract → step → mirror (exclusive) |
+//! | 17 | `physics.pull` | moving bodies/characters → `Transform` |
+//! | 18 | 2D physics (only with 2D bodies) | Rapier2D step |
+//! | 19 | `camera.place` | rigs placed behind targets |
+//! | 20 | plugins [`Stage::Late`] | replication, audio/VFX emission |
+//! | 21 | `poses.resolve` | world poses for presentation (exclusive) |
 //!
 //! Presentation runs between ticks: [`Runtime::extract`] interpolates world poses with
 //! the fixed-tick phase and never mutates the world.
 #![warn(missing_docs)]
 
+pub mod ai;
 pub mod animation;
 pub mod assets;
 pub mod components;
@@ -41,6 +53,7 @@ pub mod physics;
 pub mod plugin;
 pub mod skin;
 pub mod sync;
+pub mod terrain;
 
 use crate::{
     animation::{AnimationProvider, AnimatorSlot, Library},
@@ -176,6 +189,12 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<ara_nav::NavMeshSurface>()?;
     registry.register_component::<ara_nav::NavLink>()?;
     registry.register_component::<ara_nav::NavArea>()?;
+    registry.register_component::<ara_nav::NavObstacle>()?;
+    registry.register_component::<ara_nav::NavAgentType>()?;
+    registry.register_component::<ara_ai::Brain>()?;
+    registry.register_component::<ara_perception::Perceiver>()?;
+    registry.register_component::<ara_perception::Stimulus>()?;
+    registry.register_component::<components::StreamedWorld>()?;
     registry.register_component::<MeshRenderer>()?;
     registry.register_component::<Light>()?;
     registry.register_component::<Environment>()?;
@@ -185,6 +204,10 @@ fn register_components(registry: &mut SimRegistry) -> std::result::Result<(), Si
     registry.register_component::<Wanderer>()?;
     registry.register_component::<Animator>()?;
     registry.register_component::<components::VisualEffect>()?;
+    registry.register_component::<components::MusicSource>()?;
+    registry.register_component::<components::AudioGraphSource>()?;
+    registry.register_component::<terrain::Terrain>()?;
+    registry.register_component::<terrain::TerrainChunk>()?;
     // Presentation sound intent; playback cursors never enter the simulation.
     registry.register_component::<ara_audio::AudioSource>()?;
     registry.register_component::<ara_audio::AudioListener>()?;
@@ -212,6 +235,46 @@ fn has_2d_physics(world: &mut World) -> bool {
         .is_some()
 }
 
+/// Every plugin's streaming at a boundary (runtime errors become a session fault).
+fn stream(
+    plugins: &mut [Box<dyn RuntimePlugin>],
+    boundary: &mut ara_sim::StreamingBoundary<'_>,
+) -> std::result::Result<(), SimError> {
+    for plugin in plugins {
+        plugin.stream(boundary).map_err(|e| SimError(e.0))?;
+    }
+    Ok(())
+}
+
+/// A network adapter with the runtime's plugins streaming at its boundary.
+struct WithPlugins<'a, A> {
+    adapter: &'a mut A,
+    plugins: &'a mut [Box<dyn RuntimePlugin>],
+}
+
+impl<A: ara_sim::SessionAdapter> ara_sim::SessionAdapter for WithPlugins<'_, A> {
+    fn mode(&self) -> ara_sim::SessionMode {
+        self.adapter.mode()
+    }
+    fn before_tick(&mut self, session: &mut Session) -> std::result::Result<(), SimError> {
+        self.adapter.before_tick(session)
+    }
+    fn stream(
+        &mut self,
+        boundary: &mut ara_sim::StreamingBoundary<'_>,
+    ) -> std::result::Result<(), SimError> {
+        stream(self.plugins, boundary)?;
+        self.adapter.stream(boundary)
+    }
+    fn after_tick(
+        &mut self,
+        world: &World,
+        record: &ara_sim::TickRecord,
+    ) -> std::result::Result<(), SimError> {
+        self.adapter.after_tick(world, record)
+    }
+}
+
 fn boxed<M>(system: impl IntoSystem<(), (), M>) -> BoxedSystem {
     Box::new(IntoSystem::into_system(system))
 }
@@ -230,6 +293,10 @@ pub struct Runtime {
     baseline: Workspace,
     /// Mirror including patches queued for the next tick.
     pending: Option<Workspace>,
+    /// Presentation systems of a networked client's mirror world (built on first use).
+    mirror: Option<Schedule>,
+    /// The authoritative tick a mirror world presents (its own session never steps).
+    presented: Option<u64>,
 }
 
 impl Runtime {
@@ -269,6 +336,19 @@ impl Runtime {
                 models.insert(asset_id(model)?.to_owned());
             }
         }
+        // Models of every document too: streamed world cells spawn entities after
+        // build, and decoding never happens inside a tick.
+        for (_, doc) in baseline.docs() {
+            for record in doc.records().values() {
+                if let Some(model) = record
+                    .get("MeshRenderer")
+                    .and_then(|r| r.get("model"))
+                    .and_then(serde_json::Value::as_str)
+                {
+                    models.insert(asset_id(&ara_schema::AssetRef(model.to_owned()))?.to_owned());
+                }
+            }
+        }
         for model in &models {
             library.models.load(assets.as_ref(), model)?;
         }
@@ -291,18 +371,30 @@ impl Runtime {
                 world.entity_mut(entity).insert(CharacterInput::default());
             }
         }
+        // Terrain evaluates (worker threads) before physics and navigation use it.
+        if let Some(state) = terrain::build(world, &baseline)? {
+            world.insert_resource(state);
+        }
         let matrices = sync::world_matrices(world);
         let poses: Vec<(Entity, Pose)> = matrices
             .iter()
             .map(|(&e, &m)| (e, Pose::from_matrix(m)))
             .collect();
         physics::install(world, &config.physics, &poses)?;
+        let streamed = world
+            .query::<&components::StreamedWorld>()
+            .iter(world)
+            .any(|s| s.world.is_some());
         navigation::install(
             world,
-            config.physics.fixed_dt,
-            config.nav_cache.clone(),
-            &poses.iter().copied().collect(),
+            navigation::NavSetup {
+                fixed_dt: config.physics.fixed_dt,
+                cache: config.nav_cache.clone(),
+                poses: &poses.iter().copied().collect(),
+                streamed,
+            },
         )?;
+        ai::install(world, &baseline, config.physics.fixed_dt)?;
         animation::ensure_slots(world, hz)?;
         // Cameras start behind their targets rather than at their authored pose.
         world
@@ -311,10 +403,12 @@ impl Runtime {
         sync::resolve_poses(world);
 
         session.add_provider(sync::PoseProvider)?;
+        session.add_provider(terrain::TerrainProvider)?;
         session.add_provider(physics::PhysicsProvider {
             config: config.physics.clone(),
         })?;
         session.add_provider(navigation::NavigationProvider)?;
+        session.add_provider(ai::AiProvider)?;
         session.add_provider(AnimationProvider { hz })?;
 
         session.add_system("poses.remember", sync::remember_poses)?;
@@ -325,12 +419,26 @@ impl Runtime {
             plugin.install(Stage::Gameplay, &mut session)?;
         }
         session.add_system("ai.wander", navigation::wander)?;
+        session.add_system("animation.slots", animation::adopt_slots)?;
+        session.add_system("navigation.adopt", navigation::adopt)?;
+        session.add_system("navigation.stream", navigation::stream)?;
+        session.add_system("navigation.obstacles", navigation::obstacles)?;
+        session.add_system("ai.adopt", ai::adopt)?;
+        session.add_system("ai.poses", ai::poses)?;
+        session.add_system("ai.sync", ara_ai::sync)?;
+        session.add_system("ai.perceive", ara_ai::perceive)?;
+        session.add_system("ai.think", ara_ai::think)?;
+        session.add_system("ai.bridge", ara_ai::bridge)?;
         session.add_system("navigation", ara_nav::tick)?;
+        session.add_system("ai.locomotion", ara_ai::locomotion)?;
+        session.add_system("ai.report", ara_ai::why::report)?;
         session.add_parallel_systems(vec![
             ("animation", boxed(animation::animate)),
             ("navigation.follow", boxed(navigation::follow)),
         ])?;
         session.add_system("animation.root", sync::apply_root_motion)?;
+        session.add_system("terrain.chunks", terrain::adopt_chunks)?;
+        session.add_system("physics.adopt", physics::adopt)?;
         session.add_system("physics.push", sync::push_poses)?;
         session.add_system("physics", physics::step)?;
         session.add_system("physics.pull", sync::pull_poses)?;
@@ -362,6 +470,8 @@ impl Runtime {
             schema,
             baseline,
             pending: None,
+            mirror: None,
+            presented: None,
         })
     }
 
@@ -379,17 +489,38 @@ impl Runtime {
     pub fn play(&self) -> &PlayControl {
         &self.play
     }
-    /// Mutable play control (watches, record, replay, restore).
+    /// Mutable play control (watches, record). Restore and replay through
+    /// [`Runtime::restore`] and [`Runtime::replay`] so plugins resynchronize.
     pub fn play_mut(&mut self) -> &mut PlayControl {
         &mut self.play
+    }
+    /// Restores a checkpoint or portable snapshot, then lets plugins resynchronize
+    /// (streamed cells resident at the checkpoint are adopted, not re-spawned).
+    pub fn restore(&mut self, snapshot: &ara_sim::Snapshot) -> Result<()> {
+        self.play.restore(snapshot)?;
+        self.pending = None;
+        for plugin in &mut self.plugins {
+            plugin.restored(self.play.session_mut())?;
+        }
+        Ok(())
+    }
+    /// Verifies a replay tick by tick from its initial state (ending at its last
+    /// tick), then lets plugins resynchronize. Returns the final state hash.
+    pub fn replay(&mut self, replay: &ara_sim::Replay) -> Result<StateHash> {
+        let hash = self.play.replay(replay)?;
+        self.pending = None;
+        for plugin in &mut self.plugins {
+            plugin.restored(self.play.session_mut())?;
+        }
+        Ok(hash)
     }
     /// The simulation world, read-only.
     pub fn world(&self) -> &World {
         self.play.session().world()
     }
-    /// Completed ticks.
+    /// Completed ticks (a networked mirror: the authoritative tick it presents).
     pub fn tick(&self) -> u64 {
-        self.play.session().tick()
+        self.presented.unwrap_or_else(|| self.play.session().tick())
     }
     /// Fixed simulation rate.
     pub fn hz(&self) -> u32 {
@@ -501,12 +632,70 @@ impl Runtime {
         Ok(self.play.session_mut().patch(next, &transaction)?)
     }
 
+    /// Runs exactly one boundary with `adapter` around the session step (a networked
+    /// authority: network input in before it, replication out after it), plugins
+    /// around that. Host time does not advance here; the caller is the clock.
+    pub fn step_with_adapter(
+        &mut self,
+        adapter: &mut impl ara_sim::SessionAdapter,
+    ) -> Result<ara_sim::TickRecord> {
+        for plugin in &mut self.plugins {
+            plugin.before_tick(self.play.session_mut())?;
+        }
+        let mut adapter = WithPlugins {
+            adapter,
+            plugins: &mut self.plugins,
+        };
+        let record = self.play.session_mut().step_with_adapter(&mut adapter)?;
+        self.pending = None;
+        if let Some(error) = self.fault() {
+            return Err(RuntimeError(error));
+        }
+        for plugin in &mut self.plugins {
+            plugin.after_tick(self.play.session().world())?;
+        }
+        Ok(record)
+    }
+
+    /// A networked client's presentation advance: the caller wrote replicated state
+    /// (transforms, velocities, player yaw) for authoritative `tick` into the world;
+    /// this runs animation, camera placement and world poses once (one tick of
+    /// animation time) without stepping the simulation. From then on [`Runtime::tick`]
+    /// reports `tick` (effects replay to it, status shows it).
+    pub fn present_mirror(&mut self, tick: u64) -> Result<()> {
+        self.presented = Some(tick);
+        for plugin in &mut self.plugins {
+            plugin.mirror(self.play.session_mut(), tick)?;
+        }
+        let mirror = self.mirror.get_or_insert_with(|| {
+            let mut schedule = Schedule::default();
+            schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
+            schedule.add_systems(
+                (
+                    animation::animate,
+                    control::place_cameras,
+                    sync::resolve_poses,
+                )
+                    .chain(),
+            );
+            schedule
+        });
+        mirror.run(self.play.session_mut().world_mut());
+        if let Some(error) = self.fault() {
+            return Err(RuntimeError(error));
+        }
+        Ok(())
+    }
+
     fn tick_once(&mut self, samples: &mut Vec<Sample>) -> Result<()> {
         for plugin in &mut self.plugins {
             plugin.before_tick(self.play.session_mut())?;
         }
         let paused = self.play.state() == PlayState::Paused;
-        let report = self.play.step(1, &[])?;
+        let plugins = &mut self.plugins;
+        let report = self
+            .play
+            .step_streaming(|boundary| stream(plugins, boundary))?;
         self.pending = None;
         samples.extend(report.samples);
         if let Some(error) = self.fault() {
@@ -530,6 +719,12 @@ impl Runtime {
             .and_then(|s| s.error.as_ref())
         {
             return Some(format!("physics: {error}"));
+        }
+        if let Some(error) = world
+            .get_resource::<navigation::NavStreaming>()
+            .and_then(|s| s.error.clone())
+        {
+            return Some(error);
         }
         world
             .iter_entities()

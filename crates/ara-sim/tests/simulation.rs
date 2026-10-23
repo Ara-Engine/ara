@@ -575,6 +575,36 @@ fn malformed_command_is_rejected_before_a_boundary_and_handler_failure_is_recove
 }
 
 #[test]
+fn commands_executed_between_ticks_are_recorded_for_replay() {
+    let mut play = control(9);
+    let target = play.session().projection().entity("e_0001").unwrap();
+    play.record().unwrap();
+    play.step(1, &[]).unwrap();
+    // The host ran the command itself between ticks (an agent's command while paused).
+    play.session_mut()
+        .world_mut()
+        .get_mut::<Transform>(target)
+        .unwrap()
+        .position[0] = 7.;
+    play.session_mut()
+        .record_applied(BoundaryCommand {
+            kind: "setPosition".into(),
+            player: PlayerId(1),
+            sequence: 0,
+            target: Some("e_0001".into()),
+            payload: json!({"x": 7}),
+        })
+        .unwrap();
+    play.step(2, &[]).unwrap();
+    let hash = play.session().state_hash().unwrap();
+    let replay = play.finish_recording().unwrap();
+    assert!(replay.ticks[0].commands.is_empty());
+    assert_eq!(replay.ticks[1].commands.len(), 1);
+    assert_eq!(replay.ticks[1].commands[0].sequence, 1);
+    assert_eq!(play.replay(&replay).unwrap(), hash);
+}
+
+#[test]
 fn replay_includes_tick_boundary_authoring_ops() {
     let mut play = control(6);
     let db = schema();
@@ -810,4 +840,22 @@ fn restore_preserves_explicit_source_defaults_used_by_queued_op_preconditions() 
     play.restore(&checkpoint).unwrap();
     play.step(2, &[]).unwrap();
     assert_eq!(play.session().state_hash().unwrap(), expected);
+}
+
+#[test]
+fn external_components_queue_for_their_owner_and_read_as_absent() {
+    let db = schema();
+    let mut registry = SimRegistry::new(db.clone()).unwrap();
+    registry.register_external("Stats").unwrap();
+    let edit = EditWorld::new(registry, scene(&db)).unwrap();
+    let mut session = Session::local(edit, TickConfig::default(), 1, actions()).unwrap();
+    let writes = &session.world().resource::<ara_sim::ExternalWrites>().0;
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].component, "Stats");
+    // The owner's column is not ara-sim's: generic readers (net replication) skip it.
+    assert_eq!(session.component("e_0001", "Stats").unwrap(), None);
+    let entity = session.entity("e_0001").unwrap();
+    assert_eq!(session.component_at(entity, "Stats").unwrap(), None);
+    session.state_hash().unwrap();
+    session.step().unwrap();
 }

@@ -83,7 +83,10 @@ impl Landscape {
                 && view.dt > 0.
                 && view.dt <= 1.
                 && view.sun.length_squared() > 0.01
-                && view.eye.distance_squared(view.target) > 0.01,
+                && view.eye.distance_squared(view.target) > 0.01
+                && view.fov_y > 0.
+                && view.fov_y < std::f32::consts::PI
+                && view.near > 0.,
             "invalid landscape view"
         );
         let forward = (view.target - view.eye).normalize();
@@ -99,9 +102,9 @@ impl Landscape {
             Vec3::Y
         };
         let vp = Mat4::perspective_infinite_reverse_rh(
-            60f32.to_radians(),
+            view.fov_y,
             self.size[0] as f32 / self.size[1] as f32,
-            0.5,
+            view.near,
         ) * Mat4::look_at_rh(view.eye, view.target, camera_up);
         let center = view.eye + (view.target - view.eye).normalize() * 350.;
         let light_vp = Mat4::orthographic_rh(-650., 650., -650., 650., 1800., 0.1)

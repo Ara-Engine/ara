@@ -7,7 +7,9 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-ai = { path = "../ara-ai" }
 ara-audio-why = { path = "../ara-audio-why" }
+ara-world = { path = "../ara-world", features = ["host"] }
 ara-profile = { path = "../ara-profile" }
 ara-diag.workspace = true
 ara-doc.workspace = true

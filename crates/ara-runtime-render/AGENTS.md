@@ -11,8 +11,13 @@ renderer and per-draw upload state; no simulation, window or process code.
   (entity, geometry, material); otherwise re-transforms moved/skinned meshes on the CPU
   (`Renderer::update_mesh`) and rewrites lights/sun in place.
 - `present(&frame)`: `prepare` + render to the output image (blit with
-  `ara_platform::Present`). `capture(&frame, size, mode, marks, seed)`: deterministic
-  capture with numbered marks and a legend whose names are `Name (e_address)`.
+  `ara_platform::Present`); resident terrain chunks draw as meshes
+  (`terrain_mesh::TerrainMeshes`: world-space heightfield, splat-coloured texture,
+  shadows and local lights like any surface). `capture(&frame, size, mode, marks,
+  seed)`: deterministic capture with numbered marks and a legend whose names are
+  `Name (e_address)`; terrain and foliage come from the landscape composite.
+  `capture_presented(&frame, size, marks, seed)`: what presented frames draw (terrain
+  meshes, no landscape/VFX composites; `play.capture {presented: true}`).
 - `stats()`: rebuilt flag, meshes updated, CPU prepare time, render time.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
@@ -23,6 +28,9 @@ renderer and per-draw upload state; no simulation, window or process code.
   library effect (ara-vfx-gpu `cooked/<name>`, at most 240 ticks) over the frame the
   renderer just captured (HDR background, reversed-Z depth), camera shifted into the
   effect's space; `Presenter::capture` composites before resizing back.
+- `landscape::Landscapes`: ara-landscape (CDLOD terrain + scattered foliage) rendered
+  from the capture camera with the scene projection and merged by depth, after VFX
+  (whose delta carries onto terrain). Square, origin-anchored terrains only.
 - `two_d`: 2D worlds (a `Camera2d`) draw through ara-render2d. `atlases(world,
   assets)` loads every referenced atlas generation (normal atlases linear);
   `Presenter2d::capture(world, atlases, tick, size, marks, seed)`.
@@ -36,7 +44,8 @@ renderer and per-draw upload state; no simulation, window or process code.
   light and transform edits stream. Model texture decodes are cached per generation.
 - At most 64 local lights; one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
-- VFX and 2D are capture paths today; windowed presentation draws neither yet.
+- VFX, 2D and foliage are capture paths today; windowed presentation draws terrain
+  chunks as meshes but no foliage, particles or 2D yet (needs GPU-side composition).
 - Effects come from ara-vfx-gpu's committed cooked library (a dev-checkout path);
   authored project effects need an asset-pipeline cook first.
 

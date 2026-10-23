@@ -50,6 +50,11 @@ pub struct View {
     pub tick: u32,
     /// Seconds per tick.
     pub dt: f32,
+    /// Vertical field of view in radians. Hosts compositing over another renderer
+    /// use that renderer's camera, so reversed-Z depths compare directly.
+    pub fov_y: f32,
+    /// Near plane of the infinite reversed-Z projection, in metres.
+    pub near: f32,
 }
 impl View {
     /// Noon view used by deterministic captures.
@@ -61,6 +66,8 @@ impl View {
             sun_color: Vec3::new(1.0, 0.96, 0.86),
             tick: 120,
             dt: 1. / 60.,
+            fov_y: 60f32.to_radians(),
+            near: 0.5,
         }
     }
     /// Same camera/geometry with dusk lighting.

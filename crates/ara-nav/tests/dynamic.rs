@@ -418,3 +418,14 @@ fn massed_group_follows_a_shared_flow_field_through_a_gap() {
             .all(|s| s.path.is_none())
     );
 }
+
+#[test]
+fn published_meshes_are_live_before_the_first_tick() {
+    let (_, mesh) = bake(&trench(LinkKind::Walk));
+    let (mut world, _) = sim(NavConfig::default());
+    let profile = mesh.profile().id;
+    world.resource_mut::<NavWorld>().stage(mesh.clone());
+    assert!(world.resource::<NavWorld>().mesh(profile).is_none());
+    world.resource_mut::<NavWorld>().publish(mesh);
+    assert!(world.resource::<NavWorld>().mesh(profile).is_some());
+}

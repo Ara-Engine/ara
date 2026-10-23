@@ -13,13 +13,17 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   (CLI, daemon, editor via `ara_play_host::open_project`) and the player register
   exactly this; clashes are returned, never silently skipped.
 - `schema(project_types)`: the engine schema world + project `*.types.json`.
+  The engine world includes brains/perception (`Brain`, `Perceiver`, `Stimulus`) and
+  the behaviour commands (`behavior.*`).
 - `Runtime::new(schema, workspace, scene, assets, RuntimeConfig, plugins)`: projects the
   scene, loads every `MeshRenderer.model` generation, builds physics/nav/animation at
   tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
   catch-up), `pause/resume/set_timescale`, `inject`, `patch_edits` (live edits →
   baseline-checked ops at the next tick), `changes()` (keep-changes diff),
   `extract(&mut RenderFrame)`, `reload_assets`, `fault()`, `navigation_errors()`.
-  `play()/play_mut()` expose `ara_sim::PlayControl` (watch, checkpoint, record, replay).
+  `play()/play_mut()` expose `ara_sim::PlayControl` (watch, checkpoint, record);
+  restore and replay through `restore(snapshot)` / `replay(replay)` so plugins
+  resynchronize (`RuntimePlugin::restored`).
 - `components`: `MeshRenderer` (shape or imported model), `Light`, `Environment`,
   `Camera`, `FollowCamera`, `PlayerControl`, `Wanderer`, `Animator` (+ `LocomotionClip`),
   `VisualEffect` (a cooked GPU particle effect). Also simulated: ara-2d sprites,
@@ -28,15 +32,33 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   ara-audio `AudioSource`/`AudioListener` plus ara-acoustics `AcousticSource`,
   `AcousticSurface`, `ReverbZone`, `AcousticPortal` (presentation intent only; played by
   `ara-runtime-audio`). Mixer and music documents are part of the engine schema world.
+  `MusicSource` (a `.music` score) and `AudioGraphSource` (a procedural audio graph)
+  are presentation intent too. `StreamedWorld` names the `.world` a scene streams
+  (`ara-runtime-world`); `Terrain` (+ `.foliage`) and `TerrainChunk` (collision,
+  navigation and landscape pages per tile; author them in world cells to stream).
+- `ai`: brains on nav v2 (`install` compiles `graph` documents of domain `behavior`
+  into `AiWorld`; `adopt`, `poses`; `AiProvider` snapshots `BrainState`,
+  `Perception`, `PerceptionPose` and the intents). Brains need a `NavAgent`.
+- `navigation`: per-profile bakes sized by the profile's `NavAgentType` (else its
+  first agent) over static boxes and terrain, registered with `set_bake_source` so
+  `NavObstacle` carve/area changes rebake; streamed worlds with terrain bake every
+  chunk's nav cell at load and `NavStreaming` follows the resident chunks
+  (`NavStreamer` assembled at the boundary, swaps recorded with their tick).
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
-- `plugin::RuntimePlugin`: seams for C# scripts (`ara-runtime-script`), ara-net, audio
-  and VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,
-  `before_tick`, `after_tick`, `frame`).
+- `plugin::RuntimePlugin` (`Send + Sync`): seams for C# scripts (`ara-runtime-script`),
+  networked play (`ara-runtime-net`), world streaming (`ara-runtime-world`), audio and
+  VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,
+  `before_tick`, `stream`, `after_tick`, `mirror`, `restored`, `frame`).
+- Networked play (`ara-runtime-net`): `step_with_adapter(adapter)` runs one boundary
+  for an ara-net server (plugins around `Session::step_with_adapter`; the server's
+  timeline is the clock). `present_mirror(tick)` advances a never-stepped client
+  mirror's presentation (animation, cameras, world poses); `tick()` then reports the
+  presented authoritative tick.
 - `controller`: `.animation` controllers (`Animator.controller`): `Documents` (every
-  `AnimAsset` record by ID), `compile` (clip records bind model animations by `name`
+  `AnimAsset` record by `@path#record`; several clips/controllers per file), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
   `MatchState` (trajectory predictor + feature query, predictor snapshotted).
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
@@ -45,17 +67,22 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
 
 ## System order
 
-Documented in `lib.rs`. Input → plugin Gameplay → wander → navigation (exclusive) →
-`animation ∥ navigation.follow` (parallel group) → root motion → physics.push →
-physics (exclusive) → physics.pull → camera.place → plugin Late → poses.resolve.
+Documented in `lib.rs`. Boundary (inputs, patches, commands, streamed arrivals) →
+input → plugin Gameplay → wander → adoption → `navigation.stream` → obstacles → AI
+(`sync → perceive → think → bridge`) → navigation (exclusive) → `ai.locomotion` →
+`animation ∥ navigation.follow` (parallel group) → root motion → terrain chunks /
+physics adoption → physics.push → physics (exclusive) → physics.pull → camera.place →
+plugin Late → poses.resolve.
 
 ## State and determinism
 
 - Gameplay state is registered components (physics mirrors, `PlayerControl.yaw`,
   `FollowCamera.yaw/pitch`, `Wanderer` cursors). Provider-owned state:
   `physics` (native world; exact in-process checkpoints, rebuilt from mirrors on a
-  portable restore), `navigation` (`NavPosition`, `NavAgentState`), `animation`
-  (`AnimatorSlot` snapshots), `poses` (derived world/previous/synced poses).
+  portable restore), `navigation` (`NavPosition`, `NavAgentState`, obstacle
+  positions, pending obstacle rebakes, streamed resident cells), `ai` (brains,
+  perception, intents), `animation` (`AnimatorSlot` snapshots), `poses` (derived
+  world/previous/synced poses), `terrain` (immutable evaluated tiles).
 - Same seed + inputs → same state hash; tests check two runtimes, exact checkpoint
   rollback and portable tick-0 snapshot restore.
 - Presentation (`extract`) only reads; it interpolates previous→current world poses.
@@ -67,9 +94,15 @@ physics (exclusive) → physics.pull → camera.place → plugin Late → poses.
 - Physics: a body is teleported only when its `Transform` differs from what physics
   last wrote (`SyncedTransform`). Static bodies keep authored transforms. Kinematic
   nav agents lift their collider so it rests on the ground.
-- Navmeshes bake at load from static box colliders inside each `NavMeshSurface`
-  (cached by tile content in `nav_cache`). `NavMeshSurface.geometry` assets are not
-  baked yet (structured error).
+- Navmeshes bake at load from static box colliders and terrain inside each
+  `NavMeshSurface` (cached by tile content in `nav_cache`). `NavMeshSurface.geometry`
+  assets are not baked yet (structured error). Streamed navigation needs terrain
+  tiles that are whole nav tiles on the same grid; streamed cells' static colliders
+  do not carve it (use `NavObstacle` with `Avoid`), and carve/area obstacles only
+  rebake static (non-streamed) meshes.
+- Terrain: one `Terrain` per level; tiles evaluate on worker threads at load (strokes
+  only; imported bases are not available in play yet). Chunk bodies are cooked Jolt
+  heightfields, re-cooked after every native rebuild.
 - Animation: tick rate must divide 48 000. The move-state cycle is the mean of the
   locomotion clip lengths. Cubic glTF channels keep key values; morph channels are
   not animated. A reloaded model restarts its animators (old snapshots are rejected).

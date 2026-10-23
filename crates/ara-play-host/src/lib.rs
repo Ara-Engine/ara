@@ -16,7 +16,9 @@ pub use scripts::ScriptPaths;
 
 use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, parse};
-use ara_play::{PlayScene, Role, SnapshotRef, Start, method, shm::Section};
+use ara_play::{
+    Joined, LinkConditions, NetStart, PlayScene, Role, SnapshotRef, Start, method, shm::Section,
+};
 use ara_proto::Scope;
 use ara_schema::SchemaDb;
 use params::*;
@@ -115,6 +117,8 @@ struct World {
     hot_reload: bool,
     /// Player events (C# reloads, diagnostics) not yet read with `play.events`.
     events: Vec<Value>,
+    /// Simulated link conditions per client (networked worlds).
+    conditions: Vec<Option<LinkConditions>>,
 }
 
 /// The `play` and `test` service. Construction is cheap; the pool and the asset
@@ -262,15 +266,34 @@ impl PlayService {
         params: Value,
         broadcast: bool,
     ) -> Result<Value, Vec<Diagnostic>> {
+        self.call_on(id, method, params, (!broadcast).then_some(0))
+    }
+
+    /// Calls one player (`Some(index)`: 0 is the authority, then clients in launch
+    /// order) or every player (`None`, answered by the authority).
+    fn call_on(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: Value,
+        target: Option<usize>,
+    ) -> Result<Value, Vec<Diagnostic>> {
         let world = self.world(id)?;
+        if target.is_some_and(|t| t >= world.players.len()) {
+            return Err(fail(
+                codes::REQUEST,
+                format!("world `{id}` has {} players", world.players.len()),
+            ));
+        }
+        let answer = target.unwrap_or(0);
         let mut first = None;
         for (index, (_, player)) in world.players.iter_mut().enumerate() {
-            if index > 0 && !broadcast {
-                break;
+            if target.is_some_and(|t| t != index) {
+                continue;
             }
             match player.call(method, &params, Duration::from_secs(120)) {
                 Ok(Ok(value)) => {
-                    if index == 0 {
+                    if index == answer {
                         first = Some(value);
                     }
                 }
@@ -361,11 +384,18 @@ impl PlayService {
                     .into_owned(),
             ),
             scripts: self.script_scene()?,
+            imports: workspace
+                .index()
+                .imports()
+                .map(|(id, path)| (id.to_owned(), path.to_owned()))
+                .collect(),
         };
         Ok((scene_id, scene.encode().map_err(|e| fail(codes::PLAY, e))?))
     }
 
-    /// Assigns players and starts them; clients handshake with the authority.
+    /// Assigns players and starts them. Networked worlds start the authority first;
+    /// each client then receives its join (issued by the authority over the trusted
+    /// player link, never returned to callers) and connects through its own proxy.
     fn launch(
         &mut self,
         roles: &[Role],
@@ -373,7 +403,16 @@ impl PlayService {
         snapshot: &SnapshotRef,
         start_paused: bool,
         resume: Option<&str>,
+        conditions: &[Option<LinkConditions>],
     ) -> Result<Launched, Vec<Diagnostic>> {
+        let clients = roles.iter().filter(|r| **r == Role::Client).count();
+        let net = NetStart {
+            players: clients as u64 + 1,
+            clients: (0..clients)
+                .map(|i| conditions.get(i).copied().flatten())
+                .collect(),
+            join: None,
+        };
         let windowed = roles
             .iter()
             .filter(|r| window && **r != Role::Dedicated)
@@ -386,9 +425,8 @@ impl PlayService {
         let mut heads = pool
             .take(headless, false, Duration::from_secs(30))
             .map_err(|e| fail(codes::PLAY, e))?;
-        let mut players = Vec::new();
+        let mut players: Vec<(Role, Player)> = Vec::new();
         let mut started = Vec::new();
-        let mut server = None;
         for &role in roles {
             let mut player = if window && role != Role::Dedicated {
                 windows.pop()
@@ -396,14 +434,48 @@ impl PlayService {
                 heads.pop()
             }
             .ok_or_else(|| fail(codes::PLAY, "pool returned too few players"))?;
+            let net = match role {
+                Role::Local => None,
+                Role::Host | Role::Dedicated => Some(net.clone()),
+                Role::Client => {
+                    let index = players.iter().filter(|(r, _)| *r == Role::Client).count();
+                    let (_, authority) = players
+                        .first_mut()
+                        .ok_or_else(|| fail(codes::PLAY, "clients need an authority"))?;
+                    let joined = match authority.call(
+                        method::JOIN,
+                        &json!({"index": index}),
+                        Duration::from_secs(30),
+                    ) {
+                        Ok(Ok(value)) => serde_json::from_value::<Joined>(value)
+                            .map_err(|e| fail(codes::PLAY, format!("play.join: {e}")))?,
+                        Ok(Err(error)) => {
+                            return Err(fail(
+                                codes::PLAY,
+                                format!("play.join failed: {}", error["message"]),
+                            ));
+                        }
+                        Err(fault) => {
+                            return Err(fail(
+                                codes::PLAYER_FAULT,
+                                fault["message"]
+                                    .as_str()
+                                    .unwrap_or("player fault")
+                                    .to_owned(),
+                            ));
+                        }
+                    };
+                    Some(NetStart {
+                        players: net.players,
+                        clients: Vec::new(),
+                        join: Some(joined),
+                    })
+                }
+            };
             let start = Start {
                 snapshot: snapshot.clone(),
                 role,
-                connect_to: if role == Role::Client {
-                    server.clone()
-                } else {
-                    None
-                },
+                net,
                 start_paused,
                 resume: resume.map(str::to_owned),
             };
@@ -430,9 +502,6 @@ impl PlayService {
                             .to_owned(),
                     ));
                 }
-            }
-            if matches!(role, Role::Host | Role::Dedicated) {
-                server = player.hello.net_addr.clone();
             }
             players.push((role, player));
         }
@@ -461,6 +530,17 @@ impl PlayService {
         if roles.len() > 17 {
             return Err(fail(codes::REQUEST, "at most 16 clients"));
         }
+        let conditions = p
+            .conditions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|c| {
+                (!c.is_null())
+                    .then(|| serde_json::from_value::<LinkConditions>(c))
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| fail(codes::REQUEST, format!("conditions: {e}")))?;
         let (scene, bytes) = self.scene_snapshot(
             cx,
             p.scene.as_deref(),
@@ -490,7 +570,8 @@ impl PlayService {
         let window = p.window.unwrap_or(false);
         let start_paused = p.start_paused.unwrap_or(false);
         let launch = Instant::now();
-        let (players, started) = self.launch(&roles, window, &snapshot, start_paused, None)?;
+        let (players, started) =
+            self.launch(&roles, window, &snapshot, start_paused, None, &conditions)?;
         let boot_ms = launch.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.clone(),
@@ -504,6 +585,7 @@ impl PlayService {
                 fault: None,
                 hot_reload: p.hot_reload.unwrap_or(false),
                 events: Vec::new(),
+                conditions,
             },
         );
         Ok(json!({
@@ -547,10 +629,12 @@ impl PlayService {
             window,
             start_paused,
             hot_reload,
+            conditions,
             ..
         } = world;
         drop(players);
-        let (players, started) = self.launch(&roles, window, &snapshot, start_paused, resume)?;
+        let (players, started) =
+            self.launch(&roles, window, &snapshot, start_paused, resume, &conditions)?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
             id.to_owned(),
@@ -564,6 +648,7 @@ impl PlayService {
                 fault: None,
                 hot_reload,
                 events: Vec::new(),
+                conditions,
             },
         );
         Ok(json!({"world": id, "bootMs": boot_ms, "players": started}))
@@ -629,6 +714,7 @@ impl PlayService {
                     seed: p.seed,
                     tick_hz: p.tick_hz,
                     hot_reload: None,
+                    conditions: None,
                 },
             )?;
             let id = world["world"].as_str().unwrap_or_default().to_owned();
@@ -808,9 +894,14 @@ impl Service for PlayService {
             _ => {
                 let id = world_of(&params);
                 let mut forward = params;
+                let mut only = None;
                 if let Some(map) = forward.as_object_mut() {
                     map.remove("session");
                     map.remove("world");
+                    only = map
+                        .remove("player")
+                        .and_then(|p| p.as_u64())
+                        .map(|p| p as usize);
                 }
                 let (target, broadcast) = match method {
                     "play.pause" | "play.resume" | "play.timescale" | "play.input"
@@ -830,13 +921,16 @@ impl Service for PlayService {
                 if target == "play.capture"
                     && let Some(map) = forward.as_object_mut()
                 {
-                    for key in ["width", "height", "marks"] {
+                    for key in ["width", "height", "marks", "presented"] {
                         if map.get(key).is_some_and(Value::is_null) {
                             map.remove(key);
                         }
                     }
                 }
-                self.call(&id, target, forward, broadcast)
+                match only {
+                    Some(index) => self.call_on(&id, target, forward, Some(index)),
+                    None => self.call(&id, target, forward, broadcast),
+                }
             }
         }
     }

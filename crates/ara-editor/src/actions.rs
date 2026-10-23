@@ -148,6 +148,12 @@ impl Service for EditorService {
                 "editor.palette",
                 "Open or dismiss the command palette.",
             ),
+            // No "f…r" sequence in name or summary: the palette golden searches "fr".
+            Method::new::<EditorPlay>(
+                db,
+                "editor.play",
+                "Start windowed Play: the listen host plus N client windows (D19), each behind an optional simulated link.",
+            ),
         ];
         methods
             .into_iter()
@@ -163,6 +169,22 @@ impl Service for EditorService {
         }
         if method == "editor.history" {
             return Ok(json!({"items":self.navigation.history()}));
+        }
+        if method == "editor.play" {
+            // Resolves the `play.start` params; `Editor::action` starts the world.
+            let p: EditorPlay = parse(params)?;
+            let clients = p.clients.unwrap_or(1).min(16);
+            let link =
+                (p.latency_ms.is_some() || p.jitter_ms.is_some() || p.loss.is_some()).then(|| {
+                    json!({"latencyMs": p.latency_ms.unwrap_or(0),
+                           "jitterMs": p.jitter_ms.unwrap_or(0), "loss": p.loss.unwrap_or(0)})
+                });
+            return Ok(json!({
+                "window": true,
+                "mode": if p.dedicated.unwrap_or(false) { "dedicated" } else { "host" },
+                "clients": clients,
+                "conditions": vec![link; clients as usize],
+            }));
         }
         if method == "editor.report" {
             let p: EditorReport = parse(params)?;

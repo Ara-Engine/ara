@@ -143,3 +143,24 @@ pub fn demo_copy(tag: &str) -> PathBuf {
     );
     dir
 }
+
+/// The repository root.
+pub fn repo() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Builds `dotnet/Ara.slnx` (Release): the JIT host, compile server and analyzers.
+pub fn build_dotnet() {
+    let out = std::process::Command::new("dotnet")
+        .args(["build", "Ara.slnx", "-c", "Release", "--nologo", "-v", "q"])
+        .current_dir(repo().join("dotnet"))
+        .output()
+        .expect("run `dotnet build` (is the .NET 10 SDK installed?)");
+    assert!(
+        out.status.success(),
+        "dotnet build failed:
+{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

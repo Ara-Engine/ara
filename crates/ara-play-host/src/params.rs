@@ -26,6 +26,10 @@ pub struct PlayStartParams {
     pub tick_hz: Option<u32>,
     /// Push newly imported asset generations into this world while it plays.
     pub hot_reload: Option<bool>,
+    /// Per-client simulated link conditions for `host`/`dedicated`, in client order:
+    /// `{latencyMs, jitterMs, loss, duplication, reordering, bandwidth}` (probabilities
+    /// in basis points, bandwidth in bytes/s) or null for a clean link.
+    pub conditions: Option<Vec<Value>>,
 }
 
 /// Params of methods addressing one world.
@@ -80,6 +84,9 @@ pub struct PlayInspectParams {
     pub entity: String,
     /// Components to read; all present when absent.
     pub components: Option<Vec<String>>,
+    /// Networked worlds: which process answers (0 = the authority, the default;
+    /// 1.. = clients in launch order, player `index + 1`).
+    pub player: Option<u32>,
 }
 
 /// Params of `play.read`.
@@ -93,6 +100,9 @@ pub struct PlayReadParams {
     pub world: Option<String>,
     /// `entity.Component.field` paths (`e_fox.Transform.position.z`).
     pub paths: Vec<String>,
+    /// Networked worlds: which process answers (0 = the authority, the default;
+    /// 1.. = clients in launch order, player `index + 1`).
+    pub player: Option<u32>,
 }
 
 /// Params of `play.patch`: live edits applied at the next tick boundary.
@@ -125,6 +135,12 @@ pub struct PlayCaptureParams {
     pub height: Option<u32>,
     /// Maximum numbered marks (default 40; 0 disables).
     pub marks: Option<u32>,
+    /// Networked worlds: which process answers (0 = the authority, the default;
+    /// 1.. = clients in launch order, player `index + 1`).
+    pub player: Option<u32>,
+    /// Render what windowed frames draw (terrain chunks as meshes; no landscape or
+    /// VFX composite) instead of the full capture (default false).
+    pub presented: Option<bool>,
 }
 
 /// Params of `play.watch`.

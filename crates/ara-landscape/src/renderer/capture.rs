@@ -90,6 +90,80 @@ impl Landscape {
         gpu.collect()?;
         Ok(())
     }
+    /// Synchronous readback of the last resolved frame for host composition: display
+    /// colour (RGBA8, row-major) and reversed-Z depth (0 = sky). Waits for the GPU.
+    pub fn read_color_depth(&mut self, gpu: &mut VulkanDevice) -> Result<(Vec<u8>, Vec<f32>)> {
+        let pixels = u64::from(self.size[0]) * u64::from(self.size[1]);
+        let color_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        let depth_read = gpu.create_buffer(pixels * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        // Graph import order: nine buffers, then colour (9) and depth (10).
+        let state =
+            |i: usize, fallback: Access| self.previous.get(i).map_or(fallback, |s| s.access);
+        let (color_state, depth_state) = (state(9, Access::Color), state(10, Access::Depth));
+        let mut r = gpu.begin(Queue::Graphics);
+        r.barriers([
+            ara_gpu::Barrier {
+                resource: Resource::Image(self.color),
+                before: color_state,
+                after: Access::CopySource,
+                handoff: None,
+            },
+            ara_gpu::Barrier {
+                resource: Resource::Image(self.depth),
+                before: depth_state,
+                after: Access::CopySource,
+                handoff: None,
+            },
+        ]);
+        r.push(Command::ReadImage {
+            source: self.color,
+            destination: color_read,
+        });
+        r.push(Command::ReadImage {
+            source: self.depth,
+            destination: depth_read,
+        });
+        r.barriers([
+            ara_gpu::Barrier {
+                resource: Resource::Buffer(color_read),
+                before: Access::CopyDestination,
+                after: Access::HostRead,
+                handoff: None,
+            },
+            ara_gpu::Barrier {
+                resource: Resource::Buffer(depth_read),
+                before: Access::CopyDestination,
+                after: Access::HostRead,
+                handoff: None,
+            },
+            ara_gpu::Barrier {
+                resource: Resource::Image(self.color),
+                before: Access::CopySource,
+                after: color_state,
+                handoff: None,
+            },
+            ara_gpu::Barrier {
+                resource: Resource::Image(self.depth),
+                before: Access::CopySource,
+                after: depth_state,
+                handoff: None,
+            },
+        ]);
+        let p = gpu.submit(r.finish(), &[])?;
+        gpu.resolve(p)?;
+        let color = gpu.read(color_read)?;
+        let depth = gpu
+            .read(depth_read)?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
+            .collect();
+        gpu.retire(Resource::Buffer(color_read))?;
+        gpu.retire(Resource::Buffer(depth_read))?;
+        gpu.collect()?;
+        Ok((color, depth))
+    }
     /// Retire all scene resources after the host has finished its last submission.
     pub fn retire(self, gpu: &mut VulkanDevice) -> Result<()> {
         for b in [

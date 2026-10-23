@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ara-2d = { path = "../ara-2d" }
+ara-ai = { path = "../ara-ai" }
 ara-anim = { path = "../ara-anim" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-format = { path = "../ara-asset-format" }
@@ -21,6 +22,7 @@ ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
 ara-foliage = { path = "../ara-foliage" }
+ara-graph = { path = "../ara-graph" }
 ara-l10n = { path = "../ara-l10n" }
 ara-material = { path = "../ara-material" }
 ara-physics2d = { path = "../ara-physics2d" }
@@ -32,6 +34,7 @@ ara-input = { path = "../ara-input" }
 ara-json.workspace = true
 ara-ops.workspace = true
 ara-nav = { path = "../ara-nav" }
+ara-perception = { path = "../ara-perception" }
 ara-physics = { path = "../ara-physics" }
 ara-physics-jolt = { path = "../ara-physics-jolt" }
 ara-schema.workspace = true

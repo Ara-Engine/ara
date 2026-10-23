@@ -1,0 +1,59 @@
+{
+  "$schema": "ara://schema/foliage/1",
+  "id": "fo_valley1",
+  "records": {
+    "f_source": {
+      "terrain": "@terrain/valley.terrain#tr_valley1"
+    },
+    "r_grass": {
+      "name": "Grass",
+      "asset": "@assets/props/rock.glb#as_rock",
+      "seed": 11,
+      "cellSize": 1,
+      "density": 0.3,
+      "height": [-2, 5],
+      "slope": [0, 30],
+      "minWeight": 0.4,
+      "noise": 0.5,
+      "scale": [0.25, 0.45],
+      "enabled": true
+    },
+    "r_rocks": {
+      "name": "Rocks",
+      "species": "rock",
+      "asset": "@assets/props/rock.glb#as_rock",
+      "seed": 13,
+      "cellSize": 3,
+      "density": 0.05,
+      "height": [1, 9],
+      "slope": [5, 60],
+      "channel": 1,
+      "minWeight": 0.4,
+      "noise": 0.5,
+      "scale": [0.4, 1],
+      "enabled": true
+    },
+    "r_trees": {
+      "name": "Trees",
+      "species": "tree",
+      "asset": "@assets/props/rock.glb#as_rock",
+      "seed": 12,
+      "cellSize": 4,
+      "density": 0.015,
+      "height": [0.3, 6],
+      "slope": [0, 28],
+      "minWeight": 0.4,
+      "noise": 0.5,
+      "scale": [0.55, 0.9],
+      "enabled": true
+    },
+    "x_190c": {
+      "center": [20, 14],
+      "radius": 3
+    },
+    "x_gn7v": {
+      "center": [16, 16],
+      "radius": 7
+    }
+  }
+}

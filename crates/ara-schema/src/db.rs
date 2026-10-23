@@ -20,6 +20,7 @@ pub struct SchemaDb {
     types: BTreeMap<String, TypeDesc>,
     aliases: BTreeMap<String, String>,
     kinds: BTreeMap<String, DocKindDesc>,
+    addressable: BTreeSet<String>,
     rust: HashMap<String, TypeId>,
     problems: Vec<Diagnostic>,
 }
@@ -109,6 +110,19 @@ impl SchemaDb {
         }
         self.kinds.insert(kind.name.clone(), kind);
         Ok(())
+    }
+
+    /// Makes the records of `kind` documents addressable assets: `@path#record`
+    /// names one record of the document at `path` (several animation clips and
+    /// controllers per `.animation` file). Reference repair keeps such references.
+    pub fn address_records(&mut self, kind: &str) -> &mut Self {
+        self.addressable.insert(kind.to_owned());
+        self
+    }
+
+    /// Whether `@path#record` references into `kind` documents name records.
+    pub fn records_addressable(&self, kind: &str) -> bool {
+        self.addressable.contains(kind)
     }
 
     /// A type by its current name.

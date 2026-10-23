@@ -1,0 +1,34 @@
+[package]
+name = "ara-runtime-world"
+description = "World streaming in play: ara-world cells stream into the running simulation at its streaming boundary, around the players."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-doc.workspace = true
+ara-physics = { path = "../ara-physics" }
+ara-runtime = { path = "../ara-runtime" }
+ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
+ara-world = { path = "../ara-world" }
+
+[dev-dependencies]
+ara-acoustics = { path = "../ara-acoustics" }
+ara-ai = { path = "../ara-ai" }
+ara-asset = { path = "../ara-asset" }
+ara-cmd.workspace = true
+ara-diag.workspace = true
+ara-foliage = { path = "../ara-foliage" }
+ara-importers = { path = "../ara-importers" }
+ara-input = { path = "../ara-input" }
+ara-music = { path = "../ara-music" }
+ara-nav = { path = "../ara-nav" }
+ara-ops.workspace = true
+ara-terrain = { path = "../ara-terrain" }
+glam = "0.34"
+serde_json.workspace = true
+
+[lints]
+workspace = true

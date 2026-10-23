@@ -1,0 +1,23 @@
+[package]
+name = "ara-runtime-net"
+description = "Networked play: the runtime as an ara-net authority (listen/dedicated), predicted player locomotion and the client mirror world."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-components.workspace = true
+ara-doc.workspace = true
+ara-input = { path = "../ara-input" }
+ara-net = { path = "../ara-net" }
+ara-physics = { path = "../ara-physics" }
+ara-runtime = { path = "../ara-runtime" }
+ara-schema.workspace = true
+ara-sim = { path = "../ara-sim" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

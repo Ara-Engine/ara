@@ -1,5 +1,6 @@
 ---
 source: crates/ara/tests/cli.rs
+assertion_line: 93
 expression: out
 ---
 {
@@ -930,6 +931,28 @@ expression: out
         }
       }
     },
+    "AudioGraphSource": {
+      "kind": "component",
+      "doc": "Plays a procedural audio graph (an ara-audio-graph `graph` document, domain `audio`) from this entity, spatialized and attenuated by its `AudioSource` (whose clip stays empty). Gameplay writes `parameters` and bumps `triggers`; the audio presenter forwards changes sample-accurately at the next control frame.",
+      "module": "audio",
+      "fields": {
+        "graph": {
+          "type": "option<asset<graph>>",
+          "doc": "The audio graph document.",
+          "default": null
+        },
+        "parameters": {
+          "type": "map<f32>",
+          "doc": "Parameter values by name (clamped to the graph's declared ranges).",
+          "default": {}
+        },
+        "triggers": {
+          "type": "map<u32>",
+          "doc": "Trigger counters by name: each increment fires the trigger once.",
+          "default": {}
+        }
+      }
+    },
     "AudioGraphTextParams": {
       "kind": "params",
       "doc": "Replaces the graph with edited `.audiograph` text; surviving names keep their IDs.",
@@ -1132,6 +1155,113 @@ expression: out
         }
       }
     },
+    "BehaviorRenameParams": {
+      "kind": "params",
+      "doc": "Renames a state, variable or query, rewriting every reference.",
+      "module": "ai",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Existing name.",
+          "required": true
+        },
+        "to": {
+          "type": "string",
+          "doc": "New unique name.",
+          "required": true
+        },
+        "restoreId": {
+          "type": "option<string>",
+          "doc": "After a plain-text rename (delete + create): the deleted node's ID, to restore.",
+          "default": null
+        }
+      }
+    },
+    "BehaviorStateAddParams": {
+      "kind": "params",
+      "doc": "Adds an empty state.",
+      "module": "ai",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "New unique state name.",
+          "required": true
+        },
+        "parent": {
+          "type": "option<string>",
+          "doc": "Parent state name; top level when absent.",
+          "default": null
+        },
+        "when": {
+          "type": "option<string>",
+          "doc": "Entry condition expression.",
+          "default": null
+        }
+      }
+    },
+    "BehaviorStateRemoveParams": {
+      "kind": "params",
+      "doc": "Removes a state, its children and transitions that target them.",
+      "module": "ai",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "State name.",
+          "required": true
+        }
+      }
+    },
+    "BehaviorTextParams": {
+      "kind": "params",
+      "doc": "Replaces the behaviour with DSL text, keeping IDs of surviving names.",
+      "module": "ai",
+      "fields": {
+        "text": {
+          "type": "string",
+          "doc": "Complete behaviour text.",
+          "required": true
+        }
+      }
+    },
+    "BehaviorTransitionParams": {
+      "kind": "params",
+      "doc": "Adds a transition.",
+      "module": "ai",
+      "fields": {
+        "from": {
+          "type": "string",
+          "doc": "Source state name.",
+          "required": true
+        },
+        "to": {
+          "type": "string",
+          "doc": "Target state name.",
+          "required": true
+        },
+        "when": {
+          "type": "string",
+          "doc": "`done`, `failed` or a condition expression.",
+          "required": true
+        }
+      }
+    },
+    "BehaviorVarParams": {
+      "kind": "params",
+      "doc": "Sets (or clears) a variable's default.",
+      "module": "ai",
+      "fields": {
+        "name": {
+          "type": "string",
+          "doc": "Variable name.",
+          "required": true
+        },
+        "default": {
+          "type": "option<string>",
+          "doc": "Default expression; absent clears it.",
+          "default": null
+        }
+      }
+    },
     "BoneRole": {
       "kind": "enum",
       "doc": "Anatomical roles shared by Mixamo, UE Mannequin and Unity Humanoid rigs.",
@@ -1205,6 +1335,28 @@ expression: out
         },
         "rightToes": {
           "doc": "Right ball/toes."
+        }
+      }
+    },
+    "Brain": {
+      "kind": "component",
+      "doc": "Runs a behaviour on this entity (authoring).",
+      "module": "ai",
+      "fields": {
+        "behavior": {
+          "type": "option<asset>",
+          "doc": "Behaviour graph asset (`@ai/guard.behavior#gr_...`).",
+          "default": null
+        },
+        "overrides": {
+          "type": "list<string>",
+          "doc": "Blackboard overrides as `name = expression` (no IDs), e.g. `route = [vec3(0, 0, 4), vec3(8, 0, 4)]`.",
+          "default": []
+        },
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether the brain thinks.",
+          "default": true
         }
       }
     },
@@ -1331,6 +1483,11 @@ expression: out
           "type": "list<string>",
           "doc": "Optional standalone actor scene files, kept at readable stable paths.",
           "default": []
+        },
+        "acoustics": {
+          "type": "option<asset>",
+          "doc": "Baked acoustic probes for this cell (an imported `AcousticCell` blob); play loads and unloads them with the cell.",
+          "default": null
         }
       }
     },
@@ -3826,6 +3983,34 @@ expression: out
         }
       }
     },
+    "MusicSource": {
+      "kind": "component",
+      "doc": "Plays a `.music` document's interactive score (segments, transitions, intensity layers) from this entity, non-spatial. Presentation intent: gameplay writes `intensity` and `segment`; the audio presenter follows them.",
+      "module": "audio",
+      "fields": {
+        "music": {
+          "type": "option<asset<music>>",
+          "doc": "The score (`.music` document).",
+          "default": null
+        },
+        "bus": {
+          "type": "string",
+          "doc": "Mixer bus the stems play on.",
+          "default": "music"
+        },
+        "intensity": {
+          "type": "f32",
+          "doc": "Intensity from 0 to 1: stems whose range contains it are audible.",
+          "default": 0,
+          "range": [0, 1]
+        },
+        "segment": {
+          "type": "string",
+          "doc": "Segment to transition to (on the score's sync rule); empty follows the score.",
+          "default": ""
+        }
+      }
+    },
     "MusicStem": {
       "kind": "struct",
       "doc": "A synchronized layer (stem) of a segment, faded in by intensity.",
@@ -4352,6 +4537,60 @@ expression: out
           "type": "u32",
           "doc": "Tile definition number; zero erases the cell.",
           "default": 0
+        }
+      }
+    },
+    "Perceiver": {
+      "kind": "component",
+      "doc": "An AI's senses: a sight cone with peripheral vision, hearing and memory.",
+      "module": "ai",
+      "fields": {
+        "sightRange": {
+          "type": "f32",
+          "doc": "Sight range in metres inside the cone.",
+          "default": 25,
+          "unit": "m",
+          "range": [0, 10000]
+        },
+        "fov": {
+          "type": "f32",
+          "doc": "Full field of view in degrees.",
+          "default": 120,
+          "unit": "deg",
+          "range": [0, 360]
+        },
+        "peripheralRange": {
+          "type": "f32",
+          "doc": "Range in metres outside the cone (peripheral awareness); 0 disables.",
+          "default": 2,
+          "unit": "m",
+          "range": [0, 1000]
+        },
+        "eyeHeight": {
+          "type": "f32",
+          "doc": "Eye height above the feet in metres.",
+          "default": 1.7,
+          "unit": "m",
+          "range": [0, 100]
+        },
+        "hearing": {
+          "type": "f32",
+          "doc": "Hearing multiplier applied to every noise radius.",
+          "default": 1,
+          "range": [0, 100]
+        },
+        "occlusion": {
+          "type": "f32",
+          "doc": "Noise radius multiplier when the sound path is occluded.",
+          "default": 0.5,
+          "range": [0, 1]
+        },
+        "memory": {
+          "type": "f32",
+          "doc": "Seconds a memory survives after the last stimulus.",
+          "default": 8,
+          "unit": "s",
+          "range": [0, 3600]
         }
       }
     },
@@ -5166,6 +5405,31 @@ expression: out
         }
       }
     },
+    "Stimulus": {
+      "kind": "component",
+      "doc": "Something perceivers can see and remember (players, corpses, thrown objects).",
+      "module": "ai",
+      "fields": {
+        "kind": {
+          "type": "string",
+          "doc": "Category name behaviours query (`player`, `corpse`).",
+          "default": ""
+        },
+        "height": {
+          "type": "f32",
+          "doc": "Height of the sight target above the feet in metres.",
+          "default": 1.2,
+          "unit": "m",
+          "range": [0, 100]
+        },
+        "visibility": {
+          "type": "f32",
+          "doc": "Detection range multiplier (0 = invisible, 0.5 = crouched in shadow).",
+          "default": 1,
+          "range": [0, 10]
+        }
+      }
+    },
     "StopAudioParams": {
       "kind": "params",
       "doc": "Schema-discoverable `audio.stop` parameters; this stops presentation only.",
@@ -5185,6 +5449,52 @@ expression: out
           "type": "u32",
           "doc": "Dry-source fade length in output frames; native DSP tails drain afterwards.",
           "default": 64
+        }
+      }
+    },
+    "StreamedWorld": {
+      "kind": "component",
+      "doc": "Streams a `.world`'s cells into play around the players (`ara-runtime-world`). Put it on one entity of the level scene; the cell documents stay out of the projection and arrive at tick boundaries. With a `Terrain`, navigation then follows the resident `TerrainChunk`s.",
+      "module": "world",
+      "fields": {
+        "world": {
+          "type": "option<asset<world>>",
+          "doc": "The world manifest (`.world` document).",
+          "default": null
+        }
+      }
+    },
+    "Terrain": {
+      "kind": "component",
+      "doc": "Puts a `.terrain` heightfield (and its `.foliage` scatter) in play: rendered by the landscape renderer, walkable for navigation, solid where `TerrainChunk`s exist.",
+      "module": "terrain",
+      "fields": {
+        "terrain": {
+          "type": "option<asset<terrain>>",
+          "doc": "The heightfield manifest (`.terrain` document).",
+          "default": null
+        },
+        "foliage": {
+          "type": "option<asset<foliage>>",
+          "doc": "Scatter rules over it (`.foliage` document), drawn by the landscape renderer.",
+          "default": null
+        }
+      }
+    },
+    "TerrainChunk": {
+      "kind": "component",
+      "doc": "Collision for one terrain tile (grid coordinates of the level's `Terrain`). Author these in world cells to stream collision with the cells.",
+      "module": "terrain",
+      "fields": {
+        "x": {
+          "type": "i32",
+          "doc": "Tile index along world X.",
+          "default": 0
+        },
+        "z": {
+          "type": "i32",
+          "doc": "Tile index along world Z.",
+          "default": 0
         }
       }
     },
@@ -6632,6 +6942,102 @@ expression: out
       "examples": [
         {
           "text": "graph Tone { param pitch = 440; let osc = sine(pitch); output out = osc; }"
+        }
+      ]
+    },
+    "behavior.rename": {
+      "kind": "command",
+      "summary": "Rename a state, variable or query, keeping its identity and rewriting references.",
+      "params": "BehaviorRenameParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "from": "Idle",
+          "to": "Rest"
+        }
+      ]
+    },
+    "behavior.state.add": {
+      "kind": "command",
+      "summary": "Add an empty state at the top level or under a parent.",
+      "params": "BehaviorStateAddParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "Search",
+          "parent": "Alert",
+          "when": "known(target)"
+        }
+      ]
+    },
+    "behavior.state.remove": {
+      "kind": "command",
+      "summary": "Remove a state with its children and every transition into them.",
+      "params": "BehaviorStateRemoveParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "Search"
+        }
+      ]
+    },
+    "behavior.text.apply": {
+      "kind": "command",
+      "summary": "Apply behaviour text as undoable graph ops, keeping IDs of unchanged names.",
+      "params": "BehaviorTextParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "text": "behavior Guard { state Idle { do wait(1); } }"
+        }
+      ]
+    },
+    "behavior.transition.add": {
+      "kind": "command",
+      "summary": "Add `on <when> -> <to>` to a state.",
+      "params": "BehaviorTransitionParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "from": "Patrol",
+          "to": "Chase",
+          "when": "sees(nearest(\"player\"))"
+        }
+      ]
+    },
+    "behavior.var.set": {
+      "kind": "command",
+      "summary": "Set or clear a variable's default value expression.",
+      "params": "BehaviorVarParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "name": "alert",
+          "default": "0.5"
         }
       ]
     },

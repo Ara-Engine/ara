@@ -105,6 +105,8 @@ impl Editor {
         })
         .map_err(anyhow::Error::msg)?;
         ara_audio_why::register(host.why());
+        host.why().register(Box::new(ara_ai::why::NpcExplainer));
+        ara_world::service::register(&mut host).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let workspace = host.store().workspace();
         let doc = main_scene
             .as_deref()
@@ -187,8 +189,12 @@ impl Editor {
     /// A reflected editor action, using the same validation as an external client.
     pub fn action(&mut self, method: &str, mut params: Value) -> Result<Value, EditorError> {
         params["session"] = self.session.clone().into();
-        self.call_for(ConnId::LOCAL, method, params)
-            .map_err(Into::into)
+        let result = self.call_for(ConnId::LOCAL, method, params)?;
+        if method == "editor.play" {
+            // Multi-player Play (palette): the service resolved the `play.start` params.
+            return self.action("play.start", result);
+        }
+        Ok(result)
     }
     /// Commit an atomic list of content commands as the window's human author.
     pub fn apply(

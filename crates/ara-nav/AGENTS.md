@@ -14,7 +14,8 @@ triangle winding. Area IDs are 0..15; 255 is non-walkable.
   arc are runtime-only and excluded from tile keys).
 - Mesh/query: `NavMesh` (`query`, `paths`, `paths_blocked`, `walls`, `links`),
   `NavQuery` (`set_blocked_links`, path/nearest/raycast/visible).
-- Runtime: `register_sim`, `tick`, `NavWorld` (`stage`, `set_bake_source`,
+- Runtime: `register_sim`, `tick`, `NavWorld` (`stage`; `publish` = live now, for
+  world load and restore; `set_bake_source`,
   `rebake_checkpoint`/`restore_rebakes`, `set_cluster_graph`), `NavConfig`
   (`crowd: CrowdSolver::{Orca, Detour}`, `replan_budget`, `link_wait_ticks`,
   `stall_ticks`, `rebake_latency_ticks`), `goto`.

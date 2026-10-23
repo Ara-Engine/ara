@@ -11,7 +11,7 @@
 //!   and follow the interpolated presentation in `frame`. They never write gameplay.
 use crate::{Result, extract::RenderFrame};
 use ara_schema::SchemaDb;
-use ara_sim::{Session, SimRegistry};
+use ara_sim::{Session, SimRegistry, StreamingBoundary};
 use bevy_ecs::prelude::World;
 
 /// Where a plugin's fixed-tick systems run (see the runtime's system order).
@@ -23,8 +23,9 @@ pub enum Stage {
     Late,
 }
 
-/// A runtime extension. Every hook has a no-op default.
-pub trait RuntimePlugin: Send {
+/// A runtime extension. Every hook has a no-op default. `Sync` so a networked
+/// authority can own the runtime (hooks still only run through `&mut self`).
+pub trait RuntimePlugin: Send + Sync {
     /// Stable name for diagnostics.
     fn name(&self) -> &'static str;
     /// Prepares the (still empty) simulation world and adds runtime-defined types
@@ -52,6 +53,27 @@ pub trait RuntimePlugin: Send {
     /// Observes a completed tick through the read-only world.
     fn after_tick(&mut self, world: &World) -> Result<()> {
         let _ = world;
+        Ok(())
+    }
+    /// Streams structural arrivals at the tick boundary, before gameplay systems
+    /// (`Session::step_with_streaming`: world cells spawning and despawning). Runs
+    /// after `before_tick`; arrivals are recorded for replay.
+    fn stream(&mut self, boundary: &mut StreamingBoundary<'_>) -> Result<()> {
+        let _ = boundary;
+        Ok(())
+    }
+    /// A networked client's never-stepped mirror presents authoritative `tick`:
+    /// streaming plugins stream around the mirror's own players here
+    /// (`Session::mirror_streaming`). Gameplay plugins do nothing.
+    fn mirror(&mut self, session: &mut Session, tick: u64) -> Result<()> {
+        let _ = (session, tick);
+        Ok(())
+    }
+    /// The session was restored (checkpoint, portable snapshot or replay): its world
+    /// now holds the restored state. Host-side state that tracks the world (streamed
+    /// cell residency) resynchronizes here; gameplay state is already restored.
+    fn restored(&mut self, session: &mut Session) -> Result<()> {
+        let _ = session;
         Ok(())
     }
     /// Follows one presented frame (interpolated); never mutates gameplay.

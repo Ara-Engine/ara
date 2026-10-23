@@ -1,0 +1,149 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_cell11",
+  "records": {
+    "e_c11beacon": {
+      "name": "Beacon",
+      "order": "a5",
+      "Light": {
+        "color": [1, 0.35, 0.15, 1],
+        "intensity": 30000,
+        "range": 22
+      },
+      "Transform": {
+        "position": [46.400001525878906, 9.75883960723877, 44.79999923706055]
+      }
+    },
+    "e_c11ground": {
+      "name": "Terrain chunk",
+      "order": "a0",
+      "AcousticSurface": {
+        "preset": "gravel"
+      },
+      "TerrainChunk": {
+        "x": 1,
+        "z": 1
+      }
+    },
+    "e_c11lamp0": {
+      "name": "Lamp post",
+      "order": "a6",
+      "MeshRenderer": {
+        "size": [0.12, 2.2, 0.12],
+        "color": [0.15, 0.13, 0.12, 1],
+        "roughness": 0.8
+      },
+      "Transform": {
+        "position": [48, 7.048974514007568, 48]
+      }
+    },
+    "e_c11lamp1": {
+      "name": "Lamp",
+      "order": "a7",
+      "Light": {
+        "color": [1, 0.75, 0.44999998807907104, 1],
+        "intensity": 9000
+      },
+      "MeshRenderer": {
+        "shape": "sphere",
+        "size": [0.25, 0.25, 0.25],
+        "color": [1, 0.75, 0.44999998807907104, 1],
+        "emissive": [900, 675, 405]
+      },
+      "Transform": {
+        "position": [48, 8.298974990844727, 48]
+      }
+    },
+    "e_c11rock0": {
+      "name": "Rock",
+      "order": "a1",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.6749999523162842, 0.5249999761581421, 0.6749999523162842]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 160
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [41.599998474121094, 3.0989959239959717, 51.20000076293945],
+        "rotation": [0, 302.39990234375, 0],
+        "scale": [1.5, 1.2000000476837158, 1.5]
+      }
+    },
+    "e_c11rock1": {
+      "name": "Rock",
+      "order": "a2",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.5400000214576721, 0.42000001668930054, 0.5400000214576721]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 161
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [49.599998474121094, 2.763899803161621, 40],
+        "rotation": [0, 115.199951171875, 0],
+        "scale": [1.2000000476837158, 0.9600000381469727, 1.2000000476837158]
+      }
+    },
+    "e_c11rock2": {
+      "name": "Rock",
+      "order": "a3",
+      "AcousticSurface": {
+        "preset": "rock"
+      },
+      "Collider": {
+        "halfExtents": [0.9900000095367432, 0.7699999809265137, 0.9900000095367432]
+      },
+      "MeshRenderer": {
+        "model": "@assets/props/rock.glb#as_rock",
+        "roughness": 0.9
+      },
+      "PhysicsId": {
+        "value": 162
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [59.20000076293945, 2.9464077949523926, 57.599998474121094],
+        "rotation": [0, 304, 0],
+        "scale": [2.200000047683716, 1.7600001096725464, 2.200000047683716]
+      }
+    },
+    "e_c11tower": {
+      "name": "Watchtower",
+      "order": "a4",
+      "AcousticSurface": {
+        "preset": "wood"
+      },
+      "Collider": {
+        "halfExtents": [0.8, 2.5, 0.8]
+      },
+      "MeshRenderer": {
+        "size": [1.6, 5, 1.6],
+        "color": [0.36, 0.3, 0.24, 1],
+        "roughness": 0.85
+      },
+      "PhysicsId": {
+        "value": 175
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [46.400001525878906, 6.658839702606201, 44.79999923706055]
+      }
+    }
+  }
+}
