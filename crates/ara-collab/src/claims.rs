@@ -1,20 +1,9 @@
-//! Claims and soft locks: a participant claims subjects for a turn, with an expiry
-//! that heartbeats extend.
-//!
-//! - **Humans:** claims are advisory. A human's edit is never blocked, and a human
-//!   may claim over someone else's claim (the overlap is reported).
-//! - **Agents:** claims are enforced. [`ClaimGuard`] (an `ara_ops::Guard`) rejects
-//!   an agent transaction touching a subject someone else claims, with `ARA2500`
-//!   naming the claimant and what to do instead. An agent asking for a subject
-//!   someone else holds gets `ARA2501`.
-
-use ara_diag::{Diagnostic, FixAction};
+//! Legacy advisory claims. They convey presence and never gate any edit or merge.
+use ara_diag::Diagnostic;
 use ara_doc::{IdGen, Op};
-use ara_ops::{Author, Guard, TxnMeta};
+use ara_ops::Author;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use crate::codes;
 use crate::participant::{Kind, Participant, ParticipantId};
 use crate::subject::Subject;
 
@@ -77,9 +66,7 @@ pub struct Claims {
 }
 
 impl Claims {
-    /// Claims every subject in `wanted` for `holder`, all or nothing. Re-claiming a
-    /// subject one already holds refreshes it. Agents fail with `ARA2501` on subjects
-    /// others hold; humans get them anyway, with the overlaps listed.
+    /// Record advisory subjects and report overlaps without rejecting anyone.
     pub fn request(
         &mut self,
         holder: &Participant,
@@ -97,12 +84,6 @@ impl Claims {
                     overlaps.push(c.clone());
                 }
             }
-        }
-        if holder.kind == Kind::Agent && !overlaps.is_empty() {
-            return Err(overlaps
-                .iter()
-                .map(|c| held(c, now, "you cannot claim it while they hold it"))
-                .collect());
         }
         let mut granted = Vec::new();
         for w in wanted {
@@ -194,14 +175,6 @@ impl Claims {
             .iter()
             .filter(move |c| &c.holder != me && c.subject.touched_by(op))
     }
-
-    /// The enforcement snapshot to install on the store, as of `now`.
-    pub fn guard(&self, now: u64) -> ClaimGuard {
-        ClaimGuard {
-            claims: self.list.clone(),
-            now,
-        }
-    }
 }
 
 /// "about 4 min left".
@@ -211,103 +184,5 @@ pub fn remaining(claim: &Claim, now: u64) -> String {
         format!("about {} min left", left.div_ceil(60_000))
     } else {
         format!("{} s left", left.div_ceil(1000))
-    }
-}
-
-fn who(c: &Claim) -> String {
-    let kind = match c.kind {
-        Kind::Human => "human",
-        Kind::Agent => "agent",
-    };
-    let why = c
-        .why
-        .as_deref()
-        .map(|w| format!(" for \"{w}\""))
-        .unwrap_or_default();
-    format!("{} ({kind}){why}", c.name)
-}
-
-/// `ARA2501`: an agent asked for a subject `c` covers.
-fn held(c: &Claim, now: u64, tail: &str) -> Diagnostic {
-    locate(
-        Diagnostic::error(
-            codes::CLAIM_HELD,
-            format!(
-                "`{}` is claimed by {} ({}); {tail}",
-                c.label,
-                who(c),
-                remaining(c, now)
-            ),
-        ),
-        c,
-    )
-}
-
-/// `ARA2500`: an agent edit touched what `c` covers. Names the claimant and offers
-/// the ways forward.
-pub fn claimed(c: &Claim, now: u64) -> Diagnostic {
-    let message = format!(
-        "`{}` is claimed by {} ({}), and agents cannot edit claimed subjects, so nothing in this batch was applied. Leave it out and apply the rest of your changes now; for the claimed part only, wait for the claim to end, ask {} to release it, or queue it in a branch session (`branch.open`, `ara_apply` with `branch`, then `submit`), which merges once the claim ends",
-        c.label,
-        who(c),
-        remaining(c, now),
-        c.name
-    );
-    locate(Diagnostic::error(codes::CLAIMED, message), c)
-        .with_fix(
-            "See who is working on what (ara_session who)",
-            FixAction::Call {
-                method: "collab.who".into(),
-                params: json!({}),
-            },
-        )
-        .with_fix(
-            "Queue just the claimed part in a branch session (ara_session branch)",
-            FixAction::Call {
-                method: "branch.open".into(),
-                params: json!({ "why": "<this change>" }),
-            },
-        )
-}
-
-fn locate(d: Diagnostic, c: &Claim) -> Diagnostic {
-    let d = d.data(json!({ "claim": c }));
-    match &c.subject {
-        Subject::Doc { doc } => d.doc(doc.as_str()),
-        Subject::Entity { doc, entity } => d.doc(doc.as_str()).record(entity.as_str()),
-        Subject::Field { doc, entity, path } => d
-            .doc(doc.as_str())
-            .record(entity.as_str())
-            .path(path.to_string()),
-        Subject::Asset { path } => d.file(path.trim_start_matches('@')),
-    }
-}
-
-/// Enforces claims for agents at commit time: a snapshot of the claims, installed on
-/// the store with `Store::set_guard` whenever they change.
-///
-/// A transaction is the claimant's own when the store's origin is the claim's
-/// session; with no origin, when the authors match. Humans are never blocked.
-#[derive(Debug, Clone)]
-pub struct ClaimGuard {
-    claims: Vec<Claim>,
-    now: u64,
-}
-
-impl Guard for ClaimGuard {
-    fn check(&self, meta: &TxnMeta, origin: Option<&str>, ops: &[Op]) -> Vec<Diagnostic> {
-        if !matches!(meta.author, Author::Agent(_)) {
-            return Vec::new();
-        }
-        let own = |c: &Claim| match origin {
-            Some(o) => c.holder.0 == o,
-            None => c.author == meta.author,
-        };
-        self.claims
-            .iter()
-            .filter(|c| !own(c) && c.expires > self.now)
-            .filter(|c| ops.iter().any(|op| c.subject.touched_by(op)))
-            .map(|c| claimed(c, self.now))
-            .collect()
     }
 }

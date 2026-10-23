@@ -19,6 +19,8 @@ pub struct JoinParams {
     pub color: Option<String>,
     /// Also return a snapshot of every document (late join of a replica).
     pub snapshot: Option<bool>,
+    /// Notification methods to receive; absent receives all collaboration events.
+    pub events: Option<Vec<String>>,
 }
 
 /// Params of `collab.presence`: the whole presence state (absent fields clear).
@@ -117,31 +119,6 @@ pub struct ConflictsParams {
     pub mine: Option<bool>,
 }
 
-/// When submitted agent branch sessions merge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Schema, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PolicyName {
-    /// As soon as nobody claims what the branch touches.
-    Immediately,
-    /// Once no human has edited or moved for `idleMs`.
-    WhenIdle,
-    /// Only when a human approves with `branch.merge`.
-    OnApproval,
-}
-
-/// Params of `collab.policy`.
-#[derive(Debug, Schema, Deserialize)]
-#[ara(params)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PolicyParams {
-    /// Session handle from `session.begin`.
-    pub session: String,
-    /// The new policy (human sessions only); absent: report the current one.
-    pub policy: Option<PolicyName>,
-    /// Idle time before `whenIdle` merges, in ms (default 2000).
-    pub idle_ms: Option<u64>,
-}
-
 /// Params of `branch.open`.
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
@@ -198,6 +175,6 @@ pub struct BranchMergeParams {
     pub branch: String,
     /// Which side wins fields both changed (default `live`).
     pub prefer: Option<PreferSide>,
-    /// Merge even if others claim what it touches.
+    /// Legacy compatibility flag; claims never block a merge.
     pub force: Option<bool>,
 }

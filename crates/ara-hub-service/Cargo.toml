@@ -1,0 +1,22 @@
+[package]
+name = "ara-hub-service"
+description = "User-level project registry, engine lifecycle and JSON-RPC API for Ara Hub."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ara-diag.workspace = true
+ara-host.workspace = true
+ara-json.workspace = true
+ara-proto.workspace = true
+ara-rpc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security"] }
+
+[lints]
+workspace = true

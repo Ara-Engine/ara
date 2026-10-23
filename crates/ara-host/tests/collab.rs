@@ -84,145 +84,246 @@ fn name_of(h: &mut Host, s: &str, entity: &str) -> Value {
 }
 
 #[test]
-fn agents_are_blocked_by_claims_and_work_in_branches_instead() {
+fn agents_apply_through_advisory_claims_and_optional_branches_merge_immediately() {
     let dir = project("claims");
     let mut h = open(&dir, 1);
     let mia = begin(&mut h, "human");
     let bot = begin(&mut h, "agent:bot");
-    // Mia's editor joins on connection 7 and claims the floor.
-    let joined = call_on(
+    call_on(
         &mut h,
         7,
         "collab.join",
-        json!({ "session": mia, "name": "Mia" }),
+        json!({"session":mia,"name":"Mia"}),
     );
-    assert_eq!(joined["participant"]["name"], "Mia");
-    let claimed = call(
+    call(
         &mut h,
         "collab.claim",
-        json!({ "session": mia, "subjects": ["name:Floor"], "why": "resizing the floor", "ttlMs": 600000 }),
+        json!({"session":mia,"subjects":["e_flr1"]}),
     );
-    assert!(
-        claimed["text"]
-            .as_str()
-            .is_some_and(|t| t.contains("levels/arena.scene#e_flr1 (Floor)"))
-    );
-
-    // The agent never joined; its edit on the floor is rejected, naming Mia.
-    let err = h
-        .call(
-            ConnId::LOCAL,
-            "cmd.apply",
-            rename(&bot, "e_flr1", "Ground", None),
-        )
-        .expect_err("claimed");
-    let d = &err.diagnostics()[0];
-    assert_eq!(d.code.to_string(), "ARA2500");
-    assert!(
-        d.message.contains("Mia (human) for \"resizing the floor\""),
-        "{}",
-        d.message
-    );
-    // A dry run tells it the same before it tries.
-    let mut dry = rename(&bot, "e_flr1", "Ground", None);
-    dry["dryRun"] = true.into();
-    assert!(h.call(ConnId::LOCAL, "cmd.apply", dry).is_err());
-    // The summary shows it what to avoid.
-    let who = call(&mut h, "collab.who", json!({ "session": bot }));
-    let text = who["text"].as_str().expect("text");
-    assert!(text.contains("- Mia (human)"), "{text}");
-    assert!(text.contains("- bot (agent, you)"), "{text}");
-    assert!(
-        text.contains("levels/arena.scene#e_flr1 (Floor): Mia \"resizing the floor\""),
-        "{text}"
-    );
-    // Agents cannot claim over a human.
-    let err = h
-        .call(
-            ConnId::LOCAL,
-            "collab.claim",
-            json!({ "session": bot, "subjects": ["e_flr1"] }),
-        )
-        .expect_err("held");
-    assert_eq!(err.diagnostics()[0].code.to_string(), "ARA2501");
-    // The agent does the work in a branch session instead.
-    let opened = call(
+    call(&mut h, "cmd.apply", rename(&bot, "e_flr1", "Ground", None));
+    assert_eq!(name_of(&mut h, &mia, "e_flr1"), "Ground");
+    let branch = call(
         &mut h,
         "branch.open",
-        json!({ "session": bot, "why": "rename the floor" }),
-    );
-    let br = opened["id"].as_str().expect("branch id").to_owned();
-    // (Forked before Mia's next edit, so both rename the floor.)
-    // Mia herself is never blocked, and her edit reaches her connection as an op.
+        json!({"session":bot,"why":"optional isolation"}),
+    )["id"]
+        .as_str()
+        .expect("branch")
+        .to_owned();
     call(
         &mut h,
         "cmd.apply",
-        rename(&mia, "e_flr1", "Big floor", None),
+        rename(&bot, "e_flr1", "New ground", Some(&branch)),
     );
-    let notes = h.drain_outbox();
-    let op = notes
-        .iter()
-        .find(|(c, n)| *c == ConnId(7) && n["method"] == "collab.op")
-        .expect("Mia's connection gets the op");
-    assert_eq!(op.1["params"]["participant"], mia.as_str());
-    let applied = call(
-        &mut h,
-        "cmd.apply",
-        rename(&bot, "e_flr1", "Ground", Some(&br)),
-    );
-    assert!(
-        applied["text"]
-            .as_str()
-            .is_some_and(|t| t.contains("not live"))
-    );
-    assert_eq!(
-        name_of(&mut h, &mia, "e_flr1"),
-        "Big floor",
-        "live untouched"
-    );
+    assert_eq!(name_of(&mut h, &mia, "e_flr1"), "Ground");
     let submitted = call(
         &mut h,
         "branch.submit",
-        json!({ "session": bot, "branch": br }),
+        json!({"session":bot,"branch":branch}),
     );
-    assert_eq!(submitted["status"], "submitted");
-    assert!(
-        submitted["text"]
-            .as_str()
-            .is_some_and(|t| t.contains("waiting on"))
-    );
+    assert_eq!(submitted["status"], "merged");
+    assert_eq!(name_of(&mut h, &mia, "e_flr1"), "New ground");
+}
 
-    // Restart: the claim (Mia's session is live) and the branch come back.
-    h.flush();
-    drop(h);
-    let mut h = open(&dir, 2);
-    let who = call(&mut h, "collab.who", json!({ "session": bot }));
-    assert!(
-        who["text"]
-            .as_str()
-            .is_some_and(|t| t.contains("e_flr1 (Floor): Mia"))
+#[test]
+fn gestures_hold_only_the_active_field_then_release_agent_ops_in_order() {
+    let dir = project("gestures");
+    let mut h = open(&dir, 11);
+    let human = begin(&mut h, "human");
+    let bot = begin(&mut h, "agent:bot");
+    let gesture = |active| json!({"session":human,"doc":"levels/arena.scene","entity":"e_flr1","path":"name","active":active});
+    call(&mut h, "editor.gesture", gesture(true));
+    let mut mixed = rename(&bot, "e_flr1", "Agent first", None);
+    mixed["commands"].as_array_mut().expect("commands").push(json!({"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position.x","value":7}}));
+    call(&mut h, "cmd.apply", mixed);
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Floor");
+    let doc = h.store().workspace().doc("sc_arena001").expect("scene");
+    assert_eq!(
+        doc.record("e_flr1").expect("floor")["Transform"]["position"][0],
+        7
     );
-    let status = call(
+    call(
         &mut h,
-        "branch.status",
-        json!({ "session": bot, "branch": br }),
+        "cmd.apply",
+        rename(&bot, "e_flr1", "Agent second", None),
     );
-    assert_eq!(status["status"], "submitted");
+    call(
+        &mut h,
+        "cmd.apply",
+        rename(&human, "e_flr1", "Human finish", None),
+    );
+    call(&mut h, "editor.gesture", gesture(false));
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Agent second");
+    let names: Vec<_> = h
+        .store()
+        .history()
+        .iter()
+        .filter(|t| t.author == ara_ops::Author::Agent("bot".into()))
+        .flat_map(|t| t.ops.iter())
+        .filter_map(|op| match op {
+            ara_doc::Op::Set { path, value, .. } if path.to_string() == "name" => {
+                value.as_ref().and_then(Value::as_str)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, vec!["Agent first", "Agent second"]);
+}
 
-    // Mia releases; the branch merges on the next tick, keeping Mia's live name
-    // (both renamed the floor) and reporting the conflict.
-    call(&mut h, "collab.release", json!({ "session": mia }));
+#[test]
+fn an_abandoned_gesture_cannot_hold_an_agent_for_more_than_two_seconds() {
+    let dir = project("gesture-timeout");
+    let mut h = open(&dir, 12);
+    let human = begin(&mut h, "human");
+    let bot = begin(&mut h, "agent:bot");
+    call(
+        &mut h,
+        "editor.gesture",
+        json!({"session":human,"doc":"levels/arena.scene","entity":"e_flr1","path":"name","active":true}),
+    );
+    call(
+        &mut h,
+        "cmd.apply",
+        rename(&bot, "e_flr1", "Timed out", None),
+    );
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Floor");
+    std::thread::sleep(Duration::from_millis(2050));
     h.tick();
-    let status = call(
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Timed out");
+}
+
+#[test]
+fn a_gesture_split_command_is_still_one_undoable_agent_turn() {
+    let dir = project("gesture-turn");
+    let mut h = open(&dir, 14);
+    let human = begin(&mut h, "human");
+    let bot = begin(&mut h, "agent:bot");
+    let initial_transform = h
+        .store()
+        .workspace()
+        .doc("sc_arena001")
+        .expect("doc")
+        .record("e_flr1")
+        .expect("floor")["Transform"]
+        .clone();
+    let gesture = |active| json!({"session":human,"doc":"levels/arena.scene","entity":"e_flr1","path":"name","active":active});
+    call(&mut h, "editor.gesture", gesture(true));
+    let mut mixed = rename(&bot, "e_flr1", "Agent floor", None);
+    mixed["commands"].as_array_mut().expect("commands").push(json!({"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position.x","value":7}}));
+    let result = call(&mut h, "cmd.apply", mixed);
+    call(
         &mut h,
-        "branch.status",
-        json!({ "session": bot, "branch": br }),
+        "cmd.apply",
+        rename(&human, "e_flr1", "Human finish", None),
     );
-    assert_eq!(status["status"], "merged", "{status}");
-    assert_eq!(status["report"]["conflicts"][0]["record"], "e_flr1");
-    assert_eq!(name_of(&mut h, &mia, "e_flr1"), "Big floor");
-    let conflicts = call(&mut h, "collab.conflicts", json!({ "session": bot }));
-    assert_eq!(conflicts["conflicts"][0]["kind"], "merge");
+    call(&mut h, "editor.gesture", gesture(false));
+    call(
+        &mut h,
+        "review.revert",
+        json!({"session":human,"txn":result["txn"]}),
+    );
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Human finish");
+    let transform = &h
+        .store()
+        .workspace()
+        .doc("sc_arena001")
+        .expect("doc")
+        .record("e_flr1")
+        .expect("floor")["Transform"];
+    assert_eq!(transform["position"], json!([0, 0, 0]));
+    assert_eq!(transform["scale"], initial_transform["scale"]);
+}
+
+#[test]
+fn replica_agent_submits_and_optional_branches_obey_gesture_safety() {
+    let dir = project("gesture-apis");
+    let mut h = open(&dir, 15);
+    let human = begin(&mut h, "human");
+    let bot = begin(&mut h, "agent:bot");
+    let gesture = |active| json!({"session":human,"doc":"levels/arena.scene","entity":"e_flr1","path":"name","active":active});
+    call(&mut h, "editor.gesture", gesture(true));
+    let submit = json!({"session":bot,"seq":1,"base":0,"why":"Replica turn","edits":[{"op":"set","doc":"sc_arena001","id":"e_flr1","path":"name","value":"Replica floor"}]});
+    let ack = call(&mut h, "collab.submit", submit.clone());
+    assert_eq!(ack["gestureHeld"], 1);
+    assert_eq!(call(&mut h, "collab.submit", submit)["replayed"], true);
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Floor");
+    call(&mut h, "editor.gesture", gesture(false));
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Replica floor");
+    let br = call(
+        &mut h,
+        "branch.open",
+        json!({"session":bot,"why":"optional branch"}),
+    )["id"]
+        .as_str()
+        .expect("branch")
+        .to_owned();
+    call(
+        &mut h,
+        "cmd.apply",
+        rename(&bot, "e_flr1", "Branch floor", Some(&br)),
+    );
+    call(&mut h, "editor.gesture", gesture(true));
+    assert_eq!(
+        call(&mut h, "branch.submit", json!({"session":bot,"branch":br}))["status"],
+        "submitted"
+    );
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Replica floor");
+    call(&mut h, "editor.gesture", gesture(false));
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Branch floor");
+}
+
+#[test]
+fn ordinary_command_overwrites_notice_both_participants_and_diagnostics() {
+    let dir = project("overwrite");
+    let mut h = open(&dir, 13);
+    let human = begin(&mut h, "human");
+    let bot = begin(&mut h, "agent:bot");
+    call_on(
+        &mut h,
+        7,
+        "collab.join",
+        json!({"session":human,"name":"Mia"}),
+    );
+    call_on(
+        &mut h,
+        8,
+        "collab.join",
+        json!({"session":bot,"name":"Builder"}),
+    );
+    call(
+        &mut h,
+        "cmd.apply",
+        rename(&human, "e_flr1", "Human floor", None),
+    );
+    h.drain_outbox();
+    call(
+        &mut h,
+        "cmd.apply",
+        rename(&bot, "e_flr1", "Agent floor", None),
+    );
+    let events = h.drain_outbox();
+    for conn in [ConnId(7), ConnId(8)] {
+        assert!(
+            events
+                .iter()
+                .any(|(c, n)| *c == conn && n["method"] == "collab.conflict")
+        );
+        assert!(
+            events
+                .iter()
+                .any(|(c, n)| *c == conn && n["method"] == "editor.overwrite")
+        );
+    }
+    let logs = call(
+        &mut h,
+        "logs",
+        json!({"session":bot,"codes":["ARA2503"],"limit":10}),
+    );
+    assert!(
+        logs["entries"].as_array().is_some_and(|e| !e.is_empty()),
+        "{logs}"
+    );
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Agent floor");
 }
 
 #[test]

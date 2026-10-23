@@ -11,18 +11,6 @@ use std::{
     path::Path,
 };
 
-/// The D20 boundary at which an agent batch may change authoring documents.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ApplyPolicy {
-    /// Apply at the next editor frame boundary.
-    #[default]
-    Immediately,
-    /// Queue while a human gesture or text edit is active.
-    WhenIdle,
-    /// Queue until a human approves the batch.
-    OnApproval,
-}
 /// Editor transform handle mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,8 +135,6 @@ pub struct EditorState {
     pub rotate_snap: f32,
     /// Scale increment.
     pub scale_snap: f32,
-    /// When to apply incoming agent batches.
-    pub policy: ApplyPolicy,
     /// Collapsed hierarchy addresses.
     pub collapsed: BTreeSet<String>,
     /// Entities hidden in the scene viewport only.
@@ -237,7 +223,6 @@ impl Default for EditorState {
             move_snap: 0.5,
             rotate_snap: 15.,
             scale_snap: 0.1,
-            policy: ApplyPolicy::Immediately,
             collapsed: BTreeSet::new(),
             hidden: BTreeSet::new(),
             locked: BTreeSet::new(),
@@ -298,7 +283,6 @@ impl EditorState {
             || self.local != other.local
             || self.centre != other.centre
             || self.snapping != other.snapping
-            || self.policy != other.policy
             || self.collapsed != other.collapsed
             || self.hidden != other.hidden
             || self.locked != other.locked
@@ -335,13 +319,7 @@ impl EditorState {
         if let Some(quality) = text("viewport.quality") {
             self.quality = quality == "fidelity";
         }
-        if let Some(policy) = text("agents.applyPolicy") {
-            self.policy = match policy.as_str() {
-                "whenIdle" => ApplyPolicy::WhenIdle,
-                "onApproval" => ApplyPolicy::OnApproval,
-                _ => ApplyPolicy::Immediately,
-            };
-        }
+
         if let Some(v) = self
             .settings
             .get("appearance.reduceMotion")

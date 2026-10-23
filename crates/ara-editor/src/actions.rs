@@ -1,8 +1,7 @@
 //! Reflected editor actions. Each successful navigation command produces reversible ops.
-use crate::state::{ApplyPolicy, EditorState, Navigation, Tool, default_layout};
+use crate::state::{EditorState, Navigation, Tool, default_layout};
 use ara_diag::Diagnostic;
 use ara_host::{Cx, Method, Service, parse};
-use ara_proto::Scope;
 use ara_schema::{Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode};
 use glam::Vec3;
@@ -20,8 +19,6 @@ pub(crate) struct EditorService {
     pub controls: Sender<Control>,
 }
 pub(crate) enum Control {
-    Approve(String),
-    Reject(String),
     ProfileFreeze {
         baseline: bool,
         job: String,
@@ -75,18 +72,6 @@ impl Service for EditorService {
                 "Read attributed human/agent navigation commands and their ops.",
             )
             .read_only(),
-            Method::new::<EditorPending>(
-                db,
-                "editor.pending.apply",
-                "Approve a deferred agent mutation at the next frame boundary.",
-            )
-            .scope(Scope::EditScene),
-            Method::new::<EditorPending>(
-                db,
-                "editor.pending.reject",
-                "Reject a deferred mutation before it changes documents.",
-            )
-            .scope(Scope::EditScene),
             Method::new::<EditorReport>(
                 db,
                 "editor.report",
@@ -95,7 +80,7 @@ impl Service for EditorService {
             Method::new::<SessionParams>(
                 db,
                 "editor.state",
-                "Read editor selection, camera, layout and policy.",
+                "Read editor selection, camera and layout.",
             )
             .read_only(),
             Method::new::<SessionParams>(
@@ -150,12 +135,6 @@ impl Service for EditorService {
                 "Collapse or expand a hierarchy subtree.",
             ),
             Method::new::<EditorSearch>(db, "editor.search", "Search a panel's indexed model."),
-            Method::new::<EditorPolicy>(
-                db,
-                "editor.policy",
-                "Choose when incoming agent changes apply.",
-            )
-            .scope(Scope::EditScene),
             Method::new::<EditorPalette>(
                 db,
                 "editor.palette",
@@ -335,26 +314,6 @@ impl Service for EditorService {
                 .map_err(|_| vec![crate::invalid("editor window has closed")])?;
             return Ok(json!({"job":job}));
         }
-        if method.starts_with("editor.pending.") {
-            let p: EditorPending = parse(params)?;
-            if !cx
-                .session()
-                .is_some_and(|s| s.author == ara_ops::Author::Human)
-            {
-                return Err(vec![crate::invalid(
-                    "a human reviewer must decide pending agent changes",
-                )]);
-            }
-            let control = if method == "editor.pending.apply" {
-                Control::Approve(p.ticket)
-            } else {
-                Control::Reject(p.ticket)
-            };
-            self.controls
-                .send(control)
-                .map_err(|_| vec![crate::invalid("editor window has closed")])?;
-            return Ok(json!({"ok":true}));
-        }
         let mut state = self.navigation.state.clone();
         let agent = cx.session().and_then(|s| {
             matches!(s.author, ara_ops::Author::Agent(_))
@@ -468,11 +427,6 @@ impl Service for EditorService {
             }
             "editor.settings.set" => {
                 let p: EditorSettingsSet = parse(params)?;
-                if p.key == "agents.applyPolicy" && !is_human(cx) {
-                    return Err(vec![crate::invalid(
-                        "only a human session may set the apply policy",
-                    )]);
-                }
                 let value = if p.reset.unwrap_or(false) {
                     None
                 } else {
@@ -832,22 +786,6 @@ impl Service for EditorService {
                 let p: EditorSearch = parse(params)?;
                 state.searches.insert(p.panel, p.query);
             }
-            "editor.policy" => {
-                let p: EditorPolicy = parse(params)?;
-                if !is_human(cx) {
-                    return Err(vec![crate::invalid(
-                        "only a human session may set the apply policy",
-                    )]);
-                }
-                let policy = match p.policy {
-                    ApplyPolicy::Immediately => "immediately",
-                    ApplyPolicy::WhenIdle => "whenIdle",
-                    ApplyPolicy::OnApproval => "onApproval",
-                };
-                self.settings
-                    .set("agents.applyPolicy", Some(json!(policy)), author(cx))?;
-                sync_settings(&mut state, &self.settings);
-            }
             "editor.palette" => {
                 let p: EditorPalette = parse(params)?;
                 state.palette = p.open;
@@ -889,10 +827,7 @@ fn author(cx: &Cx<'_>) -> ara_ops::Author {
         .map(|s| s.author.clone())
         .unwrap_or(ara_ops::Author::Human)
 }
-fn is_human(cx: &Cx<'_>) -> bool {
-    cx.session()
-        .is_some_and(|s| matches!(s.author, ara_ops::Author::Human))
-}
+
 /// Protocol rectangles are numbers; floating windows use whole desktop pixels.
 fn rect(r: [f32; 4]) -> [i32; 4] {
     r.map(|v| v.round() as i32)

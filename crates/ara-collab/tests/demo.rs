@@ -487,7 +487,7 @@ fn two_process_demo() {
                     json!({ "doc": "levels/yard.scene", "why": "rename the gate",
                         "commands": [{ "cmd": "property.set", "args": { "entity": "e_05", "path": "name", "value": "Builder gate" } }] }),
                 )
-                .expect_err("Mia claimed e_05");
+                .expect("advisory claim does not block");
             let mut cmd_ms = Vec::new();
             for i in 0..40 {
                 let id = format!("e_{}", 15 + i % 5);
@@ -558,21 +558,9 @@ fn two_process_demo() {
     // Convergence.
     assert_eq!(mia_text, truth, "Mia's replica converged");
     assert_eq!(sam_text, truth, "Sam's replica converged");
-    // Claim enforcement: the agent was told who and why.
-    let d = &blocked.diagnostics()[0];
-    assert_eq!(d.code.to_string(), "ARA2500");
-    assert!(
-        d.message.contains("Mia (human) for \"tuning the gate\""),
-        "{}",
-        d.message
-    );
-    // The branch waited for the claim, then merged keeping Mia's live name.
-    assert_eq!(submitted["status"], "submitted");
-    assert!(
-        submitted["blockedBy"][0]
-            .as_str()
-            .is_some_and(|b| b.contains("Mia"))
-    );
+    assert_eq!(blocked["ok"], true);
+    assert_eq!(submitted["status"], "merged");
+    assert_eq!(submitted["blockedBy"], json!([]));
     assert_eq!(status["status"], "merged", "{status}");
     assert_eq!(status["report"]["conflicts"][0]["record"], "e_05");
     let live: Value = serde_json::from_str(&truth).expect("scene json");

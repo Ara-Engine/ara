@@ -366,17 +366,7 @@ pub(crate) const MENUS: &[Menu] = &[
             C("tools.ui_designer"),
             S,
             Sub("C#", &[C("tools.cs.solution"), C("tools.cs.reload")]),
-            Sub(
-                "Agents",
-                &[
-                    C("window.agents"),
-                    C("agents.policy.immediately"),
-                    C("agents.policy.idle"),
-                    C("agents.policy.approval"),
-                    S,
-                    C("agents.connect"),
-                ],
-            ),
+            Sub("Agents", &[C("window.agents"), S, C("agents.connect")]),
             C("tools.vcs"),
             C("tools.plugins"),
             C("tools.terminal"),

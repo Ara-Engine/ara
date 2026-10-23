@@ -47,8 +47,7 @@ pub struct Badge {
     pub color: String,
     /// True if I hold it.
     pub mine: bool,
-    /// True if it blocks me (I am an agent and someone else holds it); humans see
-    /// it as advisory.
+    /// Always false: legacy claims are advisory for every participant (D24).
     pub blocks_me: bool,
 }
 
@@ -262,7 +261,7 @@ impl CollabView {
                 .get(&c.holder)
                 .map_or_else(|| "#888888".into(), |p| p.color.clone()),
             mine,
-            blocks_me: !mine && self.my_kind == Kind::Agent,
+            blocks_me: false,
             claim: c.clone(),
         })
     }

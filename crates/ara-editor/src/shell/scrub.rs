@@ -55,6 +55,17 @@ impl Shell {
                 bases.push((entity.clone(), f.value[axis].as_f64().unwrap_or(0.)));
             }
         }
+        let gesture_path = format!(
+            "{path}.{}",
+            if color {
+                ["r", "g", "b", "a"][axis]
+            } else {
+                ["x", "y", "z", "w"][axis]
+            }
+        );
+        for (entity, _) in &bases {
+            editor.field_gesture(entity, &gesture_path, true)?;
+        }
         self.scrub = Some(Scrub {
             path,
             axis,
@@ -121,6 +132,7 @@ impl Shell {
                 .collect();
             editor.apply(commands, "Scrub inspector value", None)?;
         }
+        editor.end_field_gestures()?;
         self.rebuild(editor)?;
         Ok(true)
     }

@@ -24,7 +24,7 @@ impl From<&str> for ParticipantId {
     }
 }
 
-/// Human or agent: claims are advisory for humans and enforced for agents.
+/// Human or agent, for attribution and presence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {

@@ -288,6 +288,7 @@ pub(super) fn rollback(st: &mut State, sid: &str, p: RollbackParams) -> R {
         )]
     })?;
     let author = s.author.clone();
+    st.cancel_held_from(sid, cp.revision);
     let targets: Vec<TxnId> = session_txns(st, sid)
         .into_iter()
         .rev()
@@ -444,7 +445,23 @@ fn targets(
                     format!("`{t}` is not an agent transaction under review"),
                 )]);
             }
-            vec![id]
+            if let Some((group, _)) = st
+                .store
+                .txn(&id)
+                .and_then(|t| crate::gesture::turn(t.label.as_deref()))
+            {
+                st.store
+                    .history()
+                    .iter()
+                    .rev()
+                    .filter(|t| {
+                        crate::gesture::turn(t.label.as_deref()).is_some_and(|(id, _)| id == group)
+                    })
+                    .map(|t| t.id.clone())
+                    .collect()
+            } else {
+                vec![id]
+            }
         }
         (None, Some(_), _) | (None, None, true) => st
             .store
@@ -512,6 +529,15 @@ pub(super) fn accept(st: &mut State, sid: &str, p: ReviewParams) -> R {
 pub(super) fn revert(st: &mut State, sid: &str, p: ReviewParams) -> R {
     let author = session(st, sid)?.author.clone();
     let picked = targets(st, &p, &[ReviewStatus::Applied, ReviewStatus::Accepted])?;
+    if let Some(group) = p
+        .txn
+        .as_ref()
+        .and_then(|id| st.store.txn(&TxnId(id.clone())))
+        .and_then(|t| crate::gesture::turn(t.label.as_deref()))
+        .map(|(id, _)| id.to_owned())
+    {
+        st.cancel_held_turn(&group);
+    }
     let mut done = Vec::new();
     for (txn, keys) in picked {
         let Some(target) = st.store.txn(&txn).cloned() else {

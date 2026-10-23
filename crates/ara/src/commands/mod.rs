@@ -5,6 +5,7 @@ mod check;
 mod docs;
 mod edit;
 mod fmt;
+pub mod hub;
 mod init;
 mod merge;
 pub mod protocol;

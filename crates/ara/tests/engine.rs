@@ -134,7 +134,10 @@ fn init_writes_the_project_template() {
             .contains(".ara/")
     );
     let mcp = json_of(&fs::read_to_string(root.join(".mcp.json")).expect("mcp"));
-    assert_eq!(mcp["mcpServers"]["ara"]["args"], json!(["mcp"]));
+    assert_eq!(
+        mcp["mcpServers"]["ara"]["args"],
+        json!(["mcp", "--root", "."])
+    );
 
     let (code, _, _) = ara_in(&root, &["check"]);
     assert_eq!(code, 0, "a fresh project checks clean");
@@ -264,6 +267,8 @@ impl Mcp {
         let mut child = Command::new(env!("CARGO_BIN_EXE_ara"))
             .current_dir(root)
             .arg("mcp")
+            .arg("--root")
+            .arg(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

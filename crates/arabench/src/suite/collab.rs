@@ -1,8 +1,4 @@
-//! Collaboration (D21): a human teammate, Mia, holds claims in the outpost level
-//! while the agent works. Claims are enforced for agents, so the agent has to find
-//! out what is claimed (from `ARA2500` or `who`) and work around it: do the rest
-//! of the job, or queue the claimed part in a branch session.
-
+//! Collaboration benchmarks: shared-scene edits apply immediately; branches are optional.
 use std::path::Path;
 
 use ara_collab::BranchStatus;
@@ -39,30 +35,9 @@ fn mia_claims(root: &Path, subjects: &[&str], why: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Checks that no agent transaction touched record `id` and no file was edited by
-/// hand (which would sidestep the claim).
-fn left_alone(c: &mut Checks, w: &World, id: &str, what: &str) {
-    let touched: Vec<String> = w
-        .txns_touching(OUTPOST, id)
-        .iter()
-        .filter(|t| matches!(t.author, Author::Agent(_)))
-        .map(|t| t.id.to_string())
-        .collect();
-    c.check(
-        format!("no agent changed {what} while it was claimed"),
-        touched.is_empty(),
-        touched.join(", "),
-    );
-    c.check(
-        "no hand edits of the scene file",
-        w.external_edits() == 0,
-        format!("{} external edits", w.external_edits()),
-    );
-}
-
-/// Work around a claimed entity: do everything else, leave the claimed light alone.
+/// Work on a shared scene: do everything else, leave the claimed light alone.
 pub const CLAIMED_LIGHTS: Task = Task {
-    id: "collab-avoid-claimed",
+    id: "collab-shared-lights",
     area: Area::Collab,
     prompt: "Double the brightness of every light in the outpost level. Heads up: a teammate is working in that level right now too.",
     fixture: Fixture::Outpost,
@@ -90,14 +65,8 @@ pub const CLAIMED_LIGHTS: Task = Task {
             }
         }
         if let Some(e) = at(c, w, OUTPOST, "e_dlamp1/e_bulb01") {
-            num_is(
-                c,
-                "Mia's claimed DoorLamp is untouched",
-                e.num("Light.intensity"),
-                800.0,
-            );
+            num_is(c, "DoorLamp is doubled", e.num("Light.intensity"), 1600.0);
         }
-        left_alone(c, w, "e_dlamp1", "the DoorLamp");
         with_why(c, w, OUTPOST, &["e_wlight1", "e_ylamp1"]);
     },
     solve: |s: &mut Solver| {
@@ -108,8 +77,9 @@ pub const CLAIMED_LIGHTS: Task = Task {
         }
         s.apply(
             OUTPOST,
-            "Double the lights Mia is not working on",
+            "Double every light in the shared scene",
             json!([
+                { "cmd": "property.set", "args": { "entity": "e_dlamp1/e_bulb01", "path": "Light.intensity", "value": 1600 } },
                 { "cmd": "property.set", "args": { "entity": "e_wlight1", "path": "Light.intensity", "value": 2400 } },
                 { "cmd": "property.set", "args": { "entity": "e_ylamp1/e_bulb01", "path": "Light.intensity", "value": 1600 } },
             ]),
@@ -118,11 +88,11 @@ pub const CLAIMED_LIGHTS: Task = Task {
     },
 };
 
-/// Queue a change to a claimed entity in a branch session instead of waiting.
+/// An explicitly requested optional branch merges on submission.
 pub const BRANCH_FOR_CLAIMED: Task = Task {
-    id: "collab-branch-claimed",
+    id: "collab-optional-branch",
     area: Area::Collab,
-    prompt: "The gate door in the outpost level should slide twice as fast. Mia is reworking the gate right now, so don't change it under her feet; set the change up so it goes in once she is done.",
+    prompt: "Make the gate door slide twice as fast. Work in an optional branch session, then submit it.",
     fixture: Fixture::Outpost,
     setup: Some(|root| mia_claims(root, &["e_door01"], "reworking the gate")),
     budget: Budget::new(25, 6),
@@ -130,12 +100,11 @@ pub const BRANCH_FOR_CLAIMED: Task = Task {
         if let Some(d) = at(c, w, OUTPOST, "e_door01") {
             num_is(
                 c,
-                "the live door is untouched while Mia works",
+                "the live door is twice as fast",
                 d.num("Door.speed"),
-                1.2,
+                2.4,
             );
         }
-        left_alone(c, w, "e_door01", "the GateDoor");
         let queued = w.branches().into_iter().find(|b| {
             matches!(b.author, Author::Agent(_))
                 && matches!(b.status, BranchStatus::Submitted | BranchStatus::Merged)

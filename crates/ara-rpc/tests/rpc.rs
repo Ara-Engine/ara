@@ -17,6 +17,7 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 #[derive(Default)]
 struct Echo {
     outbox: Vec<(ConnId, String)>,
+    stopped: bool,
 }
 
 impl Handler for Echo {
@@ -28,6 +29,7 @@ impl Handler for Echo {
             let note = jsonrpc::notification("ops", json!({ "n": 1 }));
             self.outbox.push((conn, note.to_string()));
         }
+        self.stopped = method == "stop";
         Some(jsonrpc::response(id, json!({ "method": method, "params": params })).to_string())
     }
 
@@ -40,6 +42,9 @@ impl Handler for Echo {
 
     fn outbox(&mut self) -> Vec<(ConnId, String)> {
         std::mem::take(&mut self.outbox)
+    }
+    fn stopping(&self) -> bool {
+        self.stopped
     }
 }
 
@@ -82,6 +87,29 @@ fn websocket_calls_round_trip_and_notifications_arrive() {
         .wait_notification(Duration::from_secs(5))
         .expect("a notification");
     assert_eq!(note, json!({ "method": "ops", "params": { "n": 1 } }));
+}
+
+#[test]
+fn shutdown_delivers_the_final_reply_before_the_serve_loop_returns() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("address").port();
+    let server = thread::spawn(move || {
+        serve(
+            &mut Echo::default(),
+            ServeOptions {
+                listener: Some(listener),
+                token: TOKEN.into(),
+                stdio: false,
+                tick: Duration::from_millis(10),
+            },
+        )
+    });
+    let mut client = Client::connect(port, TOKEN).expect("client");
+    assert_eq!(
+        client.call("stop", json!({})).expect("shutdown reply")["method"],
+        "stop"
+    );
+    server.join().expect("server thread").expect("serve");
 }
 
 #[test]
