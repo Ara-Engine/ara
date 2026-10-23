@@ -1,0 +1,1878 @@
+{
+  "ui": {
+    "viewport": [520, 470],
+    "nodes": [
+      {
+        "id": "pause",
+        "stable_id": 5315332399326980173,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "ui",
+            "property": "width",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "height",
+            "authored": "100%",
+            "resolved": "100%",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "background",
+            "authored": "var(--background)",
+            "resolved": "#0a0a0a",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 1
+          },
+          {
+            "selector": "ui",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 1
+          }
+        ]
+      },
+      {
+        "id": "menu",
+        "stable_id": 4827579124670394010,
+        "box": {
+          "x": 12,
+          "y": 12,
+          "w": 496,
+          "h": 439
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "panel",
+            "property": "gap",
+            "authored": "8px",
+            "resolved": "8px",
+            "byte": 258
+          },
+          {
+            "selector": "card",
+            "property": "background",
+            "authored": "var(--card)",
+            "resolved": "#111111",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "border-radius",
+            "authored": "var(--radius-base)",
+            "resolved": "10px",
+            "byte": 277
+          },
+          {
+            "selector": "card",
+            "property": "padding",
+            "authored": "12px",
+            "resolved": "12px",
+            "byte": 277
+          },
+          {
+            "local": "gap:16px; padding:28px"
+          }
+        ]
+      },
+      {
+        "id": "kicker",
+        "stable_id": 11906863174992049748,
+        "box": {
+          "x": 41,
+          "y": 41,
+          "w": 438,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": {
+          "text": "OUTPOST / LOCAL SESSION",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 23,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [50]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [56]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [55]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [51]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [50]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [55]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [47]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [50]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [38]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [36]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [47]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [44]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [50]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [49]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "title",
+        "stable_id": 15722393318163439657,
+        "box": {
+          "x": 41,
+          "y": 77,
+          "w": 438,
+          "h": 42
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": {
+          "text": "Expedition paused",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 17,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [40]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [91]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [71]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "font-size:28px"
+          }
+        ]
+      },
+      {
+        "id": "subtitle",
+        "stable_id": 6905396582762069081,
+        "box": {
+          "x": 41,
+          "y": 135,
+          "w": 438,
+          "h": 19
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": {
+          "text": "The landing bay is secure.",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 26,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [55]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [75]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [79]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 18,
+                "end": 19
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 20
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 20,
+                "end": 21
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 22
+              },
+              "rtl": false,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 22,
+                "end": 23
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 24
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 24,
+                "end": 25
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 26
+              },
+              "rtl": false,
+              "glyphs": [17]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "muted",
+            "property": "color",
+            "authored": "var(--muted-foreground)",
+            "resolved": "#818181",
+            "byte": 405
+          }
+        ]
+      },
+      {
+        "id": "health",
+        "stable_id": 9181103189905877455,
+        "box": {
+          "x": 41,
+          "y": 170,
+          "w": 438,
+          "h": 20
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": {
+          "text": "Integrity 86 / 100",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 18,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [44]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [92]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [27]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [25]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [18]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [20]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [19]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 18
+              },
+              "rtl": false,
+              "glyphs": [19]
+            }
+          ]
+        },
+        "provenance": []
+      },
+      {
+        "id": "integrity",
+        "stable_id": 6160852289089875004,
+        "box": {
+          "x": 41,
+          "y": 206,
+          "w": 438,
+          "h": 26
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": null,
+        "provenance": [
+          {
+            "selector": "slider",
+            "property": "height",
+            "authored": "26px",
+            "resolved": "26px",
+            "byte": 1297
+          },
+          {
+            "selector": "slider",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 1297
+          },
+          {
+            "selector": "slider",
+            "property": "color",
+            "authored": "var(--accent)",
+            "resolved": "#346bf1",
+            "byte": 1297
+          }
+        ]
+      },
+      {
+        "id": "resume",
+        "stable_id": 11193066290345103082,
+        "box": {
+          "x": 41,
+          "y": 248,
+          "w": 438,
+          "h": 32
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Resume expedition",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 17,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [53]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [80]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [91]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [83]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [71]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 15,
+                "end": 16
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 16,
+                "end": 17
+              },
+              "rtl": false,
+              "glyphs": [81]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          },
+          {
+            "selector": "selected",
+            "property": "background",
+            "authored": "var(--accent-surface)",
+            "resolved": "#141414",
+            "byte": 1371
+          },
+          {
+            "selector": "selected",
+            "property": "border-color",
+            "authored": "var(--accent)",
+            "resolved": "#346bf1",
+            "byte": 1371
+          }
+        ]
+      },
+      {
+        "id": "settings",
+        "stable_id": 17176567880082542056,
+        "box": {
+          "x": 41,
+          "y": 296,
+          "w": 438,
+          "h": 32
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Settings",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 8,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [54]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [76]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [74]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [86]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          }
+        ]
+      },
+      {
+        "id": "exit",
+        "stable_id": 16689862346184620389,
+        "box": {
+          "x": 41,
+          "y": 344,
+          "w": 438,
+          "h": 32
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [
+          "clipped-text-height"
+        ],
+        "text": {
+          "text": "Return to base",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 14,
+          "rtl_runs": 0,
+          "ltr_runs": 1,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 0,
+                "end": 1
+              },
+              "rtl": false,
+              "glyphs": [53]
+            },
+            {
+              "bytes": {
+                "start": 1,
+                "end": 2
+              },
+              "rtl": false,
+              "glyphs": [72]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 3
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 3,
+                "end": 4
+              },
+              "rtl": false,
+              "glyphs": [88]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 5
+              },
+              "rtl": false,
+              "glyphs": [85]
+            },
+            {
+              "bytes": {
+                "start": 5,
+                "end": 6
+              },
+              "rtl": false,
+              "glyphs": [81]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 7
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 7,
+                "end": 8
+              },
+              "rtl": false,
+              "glyphs": [87]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 9
+              },
+              "rtl": false,
+              "glyphs": [82]
+            },
+            {
+              "bytes": {
+                "start": 9,
+                "end": 10
+              },
+              "rtl": false,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 11
+              },
+              "rtl": false,
+              "glyphs": [69]
+            },
+            {
+              "bytes": {
+                "start": 11,
+                "end": 12
+              },
+              "rtl": false,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 13
+              },
+              "rtl": false,
+              "glyphs": [86]
+            },
+            {
+              "bytes": {
+                "start": 13,
+                "end": 14
+              },
+              "rtl": false,
+              "glyphs": [72]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "selector": "button",
+            "property": "height",
+            "authored": "32px",
+            "resolved": "32px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "padding",
+            "authored": "6px",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "background",
+            "authored": "var(--secondary)",
+            "resolved": "#111111",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "color",
+            "authored": "var(--foreground)",
+            "resolved": "#f5f5f5",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "font-size",
+            "authored": "13px",
+            "resolved": "13px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-radius",
+            "authored": "var(--radius-sm)",
+            "resolved": "6px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-width",
+            "authored": "1px",
+            "resolved": "1px",
+            "byte": 539
+          },
+          {
+            "selector": "button",
+            "property": "border-color",
+            "authored": "var(--border)",
+            "resolved": "#191919",
+            "byte": 539
+          }
+        ]
+      },
+      {
+        "id": "arabic",
+        "stable_id": 2532811051279289673,
+        "box": {
+          "x": 41,
+          "y": 392,
+          "w": 438,
+          "h": 30
+        },
+        "clip": {
+          "x": 0,
+          "y": 0,
+          "w": 520,
+          "h": 470
+        },
+        "warnings": [],
+        "text": {
+          "text": "استئناف الرحلة",
+          "lines": 1,
+          "missing_glyphs": 0,
+          "glyph_count": 19,
+          "rtl_runs": 3,
+          "ltr_runs": 0,
+          "clusters": [
+            {
+              "bytes": {
+                "start": 15,
+                "end": 17
+              },
+              "rtl": true,
+              "glyphs": [8]
+            },
+            {
+              "bytes": {
+                "start": 17,
+                "end": 19
+              },
+              "rtl": true,
+              "glyphs": [70]
+            },
+            {
+              "bytes": {
+                "start": 19,
+                "end": 21
+              },
+              "rtl": true,
+              "glyphs": [29]
+            },
+            {
+              "bytes": {
+                "start": 21,
+                "end": 23
+              },
+              "rtl": true,
+              "glyphs": [25]
+            },
+            {
+              "bytes": {
+                "start": 23,
+                "end": 25
+              },
+              "rtl": true,
+              "glyphs": [68]
+            },
+            {
+              "bytes": {
+                "start": 25,
+                "end": 27
+              },
+              "rtl": true,
+              "glyphs": [294, 81]
+            },
+            {
+              "bytes": {
+                "start": 14,
+                "end": 15
+              },
+              "rtl": true,
+              "glyphs": [3]
+            },
+            {
+              "bytes": {
+                "start": 0,
+                "end": 2
+              },
+              "rtl": true,
+              "glyphs": [8]
+            },
+            {
+              "bytes": {
+                "start": 2,
+                "end": 4
+              },
+              "rtl": true,
+              "glyphs": [35]
+            },
+            {
+              "bytes": {
+                "start": 4,
+                "end": 6
+              },
+              "rtl": true,
+              "glyphs": [294, 18]
+            },
+            {
+              "bytes": {
+                "start": 6,
+                "end": 8
+              },
+              "rtl": true,
+              "glyphs": [305, 16]
+            },
+            {
+              "bytes": {
+                "start": 8,
+                "end": 10
+              },
+              "rtl": true,
+              "glyphs": [288, 16]
+            },
+            {
+              "bytes": {
+                "start": 10,
+                "end": 12
+              },
+              "rtl": true,
+              "glyphs": [9]
+            },
+            {
+              "bytes": {
+                "start": 12,
+                "end": 14
+              },
+              "rtl": true,
+              "glyphs": [288, 48]
+            }
+          ]
+        },
+        "provenance": [
+          {
+            "local": "font-size:20px"
+          }
+        ]
+      }
+    ],
+    "focus_graph": [
+      {
+        "id": "integrity",
+        "tab": "resume",
+        "left": null,
+        "right": null,
+        "up": null,
+        "down": "resume"
+      },
+      {
+        "id": "resume",
+        "tab": "settings",
+        "left": null,
+        "right": null,
+        "up": "integrity",
+        "down": "settings"
+      },
+      {
+        "id": "settings",
+        "tab": "exit",
+        "left": null,
+        "right": null,
+        "up": "resume",
+        "down": "exit"
+      },
+      {
+        "id": "exit",
+        "tab": "integrity",
+        "left": null,
+        "right": null,
+        "up": "settings",
+        "down": null
+      }
+    ],
+    "batch_breaks": [
+      {
+        "command": 3,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 7,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 11,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 12,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 14,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 15,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 17,
+        "cause": "pipeline change"
+      },
+      {
+        "command": 18,
+        "cause": "texture/font atlas change"
+      },
+      {
+        "command": 19,
+        "cause": "texture/font atlas change"
+      },
+      {
+        "command": 20,
+        "cause": "texture/font atlas change"
+      }
+    ],
+    "commands": 21,
+    "glyphs": 142
+  },
+  "batches": [
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 0,
+        "end": 3
+      },
+      "break_cause": "first draw"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 3,
+        "end": 76
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 76,
+        "end": 80
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 80,
+        "end": 96
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 96,
+        "end": 98
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 98,
+        "end": 106
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Shape",
+      "texture": 0,
+      "clip": 0,
+      "instances": {
+        "start": 106,
+        "end": 108
+      },
+      "break_cause": "pipeline change"
+    },
+    {
+      "pipeline": "Mask",
+      "texture": 2147483648,
+      "clip": 0,
+      "instances": {
+        "start": 108,
+        "end": 138
+      },
+      "break_cause": "pipeline change"
+    }
+  ],
+  "atlas_bytes": 4194304
+}
