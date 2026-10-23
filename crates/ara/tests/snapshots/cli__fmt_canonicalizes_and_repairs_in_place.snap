@@ -20,7 +20,7 @@ expression: "fs::read_to_string(&file).expect(\"formatted\")"
       "name": "Box",
       "order": "a1",
       "MeshRenderer": {
-        "mesh": "@meshes/crate.glb#ms_crate001"
+        "model": "@meshes/crate.glb#ms_crate001"
       },
       "Transform": {
         "position": [1, 2.5, 0]

@@ -338,6 +338,25 @@ impl Default for Animator {
     }
 }
 
+/// A GPU particle effect drawn at this entity. Presentation only: gameplay reads
+/// ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect
+/// (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).
+#[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "vfx")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct VisualEffect {
+    /// Cooked library effect name.
+    #[ara(default = "campfire")]
+    pub effect: String,
+}
+impl Default for VisualEffect {
+    fn default() -> Self {
+        Self {
+            effect: "campfire".into(),
+        }
+    }
+}
+
 /// Registers the components the runtime simulates itself (physics, navigation and
 /// the runtime's own). Part of [`crate::engine::register_schemas`]. Idempotent.
 pub fn register_schemas(db: &mut SchemaDb) {
@@ -350,5 +369,6 @@ pub fn register_schemas(db: &mut SchemaDb) {
         .register::<FollowCamera>()
         .register::<PlayerControl>()
         .register::<Wanderer>()
-        .register::<Animator>();
+        .register::<Animator>()
+        .register::<VisualEffect>();
 }
