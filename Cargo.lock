@@ -56,12 +56,14 @@ dependencies = [
 name = "ara"
 version = "0.0.0"
 dependencies = [
- "ara-cmd",
- "ara-components",
  "ara-diag",
  "ara-doc",
+ "ara-host",
  "ara-json",
+ "ara-mcp",
  "ara-merge",
+ "ara-proto",
+ "ara-rpc",
  "ara-schema",
  "clap",
  "insta",
