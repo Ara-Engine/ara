@@ -48,7 +48,7 @@ pub(crate) fn load_hdr(path: &Path) -> Result<Vec<[f32; 4]>> {
         .collect())
 }
 
-/// Accumulate 4096 independent samples and retain the 2048-sample convergence check.
+/// Accumulate 32768 samples and check regional/full-frame residual against 16384.
 pub fn reference(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let scene = scene(root)?;
     let camera = content::camera();
@@ -108,7 +108,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     anyhow::ensure!(
         manifest["scene_hash"].as_str() == Some(view.scene_hash())
             && manifest["shader_revision"].as_str() == Some(view.shader_revision()),
-        "Cached reference is for a different scene"
+        "Cached reference scene or shader cohort differs"
     );
     let ground = load_hdr(&root.join(".sn/sponza-reference.f32"))?;
     display(&ground, SIZE, fixed_post()).save(root.join("captures/sponza-reference.png"))?;
@@ -162,7 +162,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         .count();
     write_json(
         &root.join("measurements/sponza-quality.json"),
-        &serde_json::json!({"size":SIZE,"settle_frames":192,"sampling":"256-phase Halton pixel-area integration including remodulation; four-phase transport; one-event lobe mixture; mip-filtered materials","ev100":5.5,"tone_mapper":"PBR Neutral","error":error,"corridor_roi":[170,235,430,350],"corridor_error":regional,"scene_hash":view.scene_hash(),"volume":bake.volume,"active_probes":active,"probes":bake.volume.len()}),
+        &serde_json::json!({"size":SIZE,"settle_frames":192,"sampling":"256-phase Halton pixel-area integration including remodulation; four-phase transport; one-event lobe mixture; mip-filtered materials","ev100":5.5,"tone_mapper":"PBR Neutral","error":error,"corridor_roi":[170,235,430,350],"corridor_error":regional,"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision(),"volume":bake.volume,"active_probes":active,"probes":bake.volume.len()}),
     )?;
     // Exercise real content with camera reprojection and four-phase repair.
     let mut sequence = image::RgbaImage::new(SIZE[0] * 4, SIZE[1] * 3);

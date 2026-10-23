@@ -55,6 +55,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let hdr = view.capture_radiance(gpu)?;
         hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
         let hash = view.scene_hash().to_owned();
+        let revision = view.shader_revision().to_owned();
         view.destroy(gpu)?;
         let mut reference = Reference::new(gpu, &scene, SIZE, 4096, 12, post)?;
         if name == "outdoor_day" {
@@ -76,6 +77,10 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         large::side_by_side(&hybrid, &reference_image)
             .save(root.join(format!("captures/{name}-side-by-side.png")))?;
         let error = metrics::radiance(&hdr, &ground)?;
+        let lower = (SIZE[0] * SIZE[1] / 2) as usize;
+        let surface_roi_error = metrics::radiance(&hdr[lower..], &ground[lower..])?;
+        large::save_hdr(&root.join(format!(".sn/{name}-hybrid.f32")), &hdr)?;
+        large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
         let golden = root.join(format!("tests/goldens/{name}.png"));
         if update {
@@ -90,7 +95,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
             "{name}: relative RMSE {:.5}; convergence {:.5}",
             error.relative_rmse, convergence.relative_rmse
         );
-        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
+        report.push(serde_json::json!({"scene":name,"scene_hash":hash,"shader_revision":revision,"reference_model":if name=="outdoor_day"{"independent path-traced surface transport; shared sky LUT and froxel display composition; HDR error measured before fog"}else{"independent surface path transport"},"surface_roi":"lower half, including terrain and foliage rather than predominantly sky","surface_roi_error":surface_roi_error,"size":SIZE,"camera":camera,"ev100":ev,"tone_mapper":"PBR Neutral","samples":4096,"bounces":12,"settle_frames":256,"error":error,"convergence":convergence}));
         reference.destroy(gpu)?;
     }
     write_json(&root.join("measurements/robust-quality.json"), &report)?;

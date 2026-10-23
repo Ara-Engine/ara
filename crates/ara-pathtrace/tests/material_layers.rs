@@ -37,9 +37,16 @@ fn layered_white_furnace_has_no_energy_gain() -> Result<()> {
             .map(|(_, p)| f64::from(p[0] + p[1] + p[2]) / 3.)
             .collect::<Vec<_>>();
         let average = samples.iter().sum::<f64>() / samples.len() as f64;
+        println!("{detail:?}: furnace energy {average}");
+        if detail.sheen.iter().any(|c| *c > 0.) {
+            ensure!(
+                average > 0.95,
+                "Sheen loses white-furnace energy: {average}"
+            );
+        }
         ensure!(
             average > 0.5 && average < 1.04,
-            "Layered furnace energy {average}"
+            "Layered furnace energy {average}, {detail:?}"
         );
         reference.destroy(&mut gpu)?;
     }

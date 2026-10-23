@@ -48,11 +48,15 @@ float3 atmosphereEnvironment(Frame f,float3 d,bool disk){
     }return c;
 }
 float3 sampleFroxel(Frame f,float2 uv,float distance,out float3 trans){
-    float z=clamp(log2(1+distance/2)/log2(1+4000./2)*32-0.5,0.,31.);uint lo=uint(z),hi=min(lo+1,31);
+    // Columns store cumulative values at slice ends, not slice centres.
+    float slice=log2(1+distance/2)/log2(1+4000./2)*32;
+    float z=clamp(slice-1,0.,31.);uint lo=uint(z),hi=min(lo+1,31);
     float2 a=(clamp(uv,float2(0.5/64,0.5/36),float2(63.5/64,35.5/36))*float2(64,36));
     float3 x=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((lo*128+a.x)/4096,a.y/36),0).rgb;
     float3 y=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((hi*128+a.x)/4096,a.y/36),0).rgb;
     float3 tx=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((lo*128+64+a.x)/4096,a.y/36),0).rgb;
     float3 ty=textures[NonUniformResourceIndex(ri(f,FROXELS))].SampleLevel(samplers[2],float2((hi*128+64+a.x)/4096,a.y/36),0).rgb;
-    trans=lerp(tx,ty,frac(z));return lerp(x,y,frac(z));
+    trans=lerp(tx,ty,frac(z));float3 light=lerp(x,y,frac(z));
+    if(slice<1){trans=lerp(float3(1),trans,slice);light*=slice;}
+    return light;
 }

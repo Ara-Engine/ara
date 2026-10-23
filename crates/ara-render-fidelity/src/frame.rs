@@ -144,7 +144,7 @@ impl FidelityView {
             display: [
                 p.tone_mapper as u32,
                 0,
-                0,
+                self.sheen_index,
                 u32::from(self.atmosphere.is_some()),
             ],
             lens: [

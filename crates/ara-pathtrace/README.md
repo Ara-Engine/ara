@@ -45,8 +45,8 @@ The quality gate additionally requires glossy <=8%, thin wall <=10%, furnace
 frames rendered, every fourth frame captured), and 1440p native/FSR
 readbacks. Temporal tests compare continuous accumulation against a separate
 history-reset view with matching probe evolution in the central viewport region.
-Global radiance history intentionally rejects lighting edits; disocclusion retains
-history elsewhere. The maximum central display residual must be <3.5% and reset residual <3%.
+Lighting edits use responsive radiance weights while retaining valid geometric
+history; disocclusion rejects history only where needed. The maximum central display residual must be <3.5% and reset residual <3%.
 This is a bounded diagnostic, not a perceptual ghosting oracle.
 The four-stop light-step test measures the probe field itself over 24 frames,
 against a 48-frame target, and requires 90% response within 12 frames.
@@ -213,9 +213,10 @@ worst-case moving-camera/reset budgets.
 
 Verified visually: all hybrid/reference/diff captures, native/upscaled hero views,
 baked fallback, moving-light/time-of-day/disocclusion sheets and Sponza pan sheet.
-**This does not yet pass for an Unreal 5 Lumen screenshot.** Sponza still has no
-authored normal/height maps or full PBR material conversion. At 640x360, the fixed
-corridor crop [170,235]..[430,350] has 27.17% relative RMSE and 17.39% lower mean
+**Historical round-1 verdict (40b2fa6):** this did not pass for an Unreal 5 Lumen
+screenshot. Sponza then had no
+authored normal/height maps or full PBR material conversion. At 640x360, its fixed
+corridor crop [170,235]..[430,350] had 27.17% relative RMSE and 17.39% lower mean
 luminance than the reference, despite 7.28% whole-image error. Bright architecture
 dominates the global energy denominator. Lighting-reset sequences show visible
 low-sample mottling, and the daylight alpha canopies are procedural stand-ins.
@@ -231,3 +232,42 @@ The final detached verification run reaccumulated the three 4096-spp references,
 passed strict display goldens, RMSE/temporal/budget gates, both crates' tests,
 clippy with warnings denied, rustfmt checks and all 17 SPIR-V validations.
 No capture PNG changed from checkpoint 1044f81; the result is deterministic.
+
+## Lumen parity round 2
+
+Commands: `-Mode Sponza-Reference`, `Sponza-Quality`, `Lighting-Sequence`,
+`Robust-Quality`, `Robust-Timings`, then `Check`, with CARGO_BUILD_JOBS=2.
+Sponza uses 32,768 independent samples at 640x360 / 12 bounces, including a
+16,384-sample regional convergence check. The corridor is [170,235]..[430,350].
+Both whole-image and regional radiance are measured before fixed EV100 5.5/PBR
+Neutral. Cached references must match scene, camera and cooked shader cohort.
+Material detail is enhanced in this round; each renderer uses the same materials
+and lighting as its matched reference. This is not a 1440p reference claim.
+
+`Lighting-Sequence` sweeps the sun over 16 frames, toggles a 12,000-lumen local light
+on/off, and renders 192 frames after each event. Convergence uses filtered indirect
+radiance (direct subtracted): eight consecutive ROI means must be within 5% of the
+final 32-frame steady state. Frame-to-frame HDR ROI variance and per-pixel display
+RMS (decoded linear sRGB) quantify flicker. Strip rows are sun/on/off; columns are
+frames 0,3,7,31,160,168,176,184. These are simulation frames at 1/60 second.
+
+The outdoor fixture extracts a real ARTH landscape tile, extends the actual
+landscape height function through distant LODs, and adds branches, individual
+serrated leaf cutouts, transmission and ground cover. It uses physical sky LUTs,
+shadowed volumetric height fog and a lit planar cloud layer. Its 4096-spp reference
+has independent surface transport but shares atmosphere LUTs/froxel composition;
+HDR RMSE is before fog. This does not validate the medium against an independent
+volumetric path tracer. The lower-half ROI separately records terrain/foliage error.
+The night fixture remains emissive-only and uses the same bounded gather preset.
+
+Furnace tests check coat, sheen and thin-sheet energy, including the GGX null-event
+PDF contract. A separate GPU test checks atmosphere attenuation against the analytic
+Beer-Lambert law. The sheen albedo LUT is an engine asset, not a capture/cache.
+The OBJ, original copyright, HDR caches and intermediate cooks remain ignored.
+
+The final timing table below uses the full steady RT frame, warm caches and 240
+Sponza samples / 60 robust-scene samples. GPU pass sums are not CPU wall time or
+async frame times. Reset, lighting-response and extensive-disocclusion peaks are
+not covered by this steady-camera budget. Background load is recorded, including
+CPU/free-RAM snapshots and GPU utilization/clocks; ten agents share the machine.
+Failed prototype/contended timing runs are retained in the round-2 JSON report.

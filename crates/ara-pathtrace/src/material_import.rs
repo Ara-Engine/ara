@@ -106,7 +106,24 @@ mod tests {
     use super::*;
     #[test]
     fn uv_tangent_tracks_rotation_and_mirroring() {
-        let mut mesh = crate::scenes::quad(1, "UV test", Vec3::ZERO, Vec3::X, Vec3::Z, 0);
+        let mut mesh = Mesh {
+            entity: 1,
+            name: "UV test".into(),
+            material: 0,
+            indices: vec![0, 1, 2],
+            vertices: [
+                ([0., 0., 0.], [0., 0.]),
+                ([1., 0., 0.], [1., 0.]),
+                ([0., 0., 1.], [0., 1.]),
+            ]
+            .map(|(position, uv)| ara_render::scene::Vertex {
+                position,
+                uv,
+                normal: [0., -1., 0.],
+                tangent: [1., 0., 0., 1.],
+            })
+            .to_vec(),
+        };
         tangents(&mut mesh);
         let first = mesh.vertices[0].tangent;
         for v in &mut mesh.vertices {

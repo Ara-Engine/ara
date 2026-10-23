@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "476493b7deaf81840194218e4aeff47706e262e5a2c0d4dd92f4b72f6723411e",
+  "key": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da",
   "stages": [
     {
-      "dxil": "476493b7deaf81840194218e4aeff47706e262e5a2c0d4dd92f4b72f6723411e/hybridRasterMain.dxil",
-      "dxil_hash": "5486b7c8be4a76796f39271f6038fcb3ad62b3bfad9d2e639ec58c0f471c3547",
+      "dxil": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da/hybridRasterMain.dxil",
+      "dxil_hash": "b84fa954615625e830395f632c42eb58ead1123a55b0782b0e4c8bcc9cd83fd5",
       "source_entry": "hybridRasterMain",
-      "spirv": "476493b7deaf81840194218e4aeff47706e262e5a2c0d4dd92f4b72f6723411e/hybridRasterMain.spv",
+      "spirv": "e3c2b18343a9482bf8537b65e9f5442e0aaa8ad9a2e5c11cf82dcf709ad148da/hybridRasterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "150f026d6b6fb312d7f08688d1c095ba7e825fd96a6309ad6933512021dd313e",
+      "spirv_hash": "2ce2a9943598666917407ce154119f2fa799858b0f1088dd645fa5455a286129",
       "stage": "compute"
     }
   ],

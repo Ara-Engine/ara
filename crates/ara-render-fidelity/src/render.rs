@@ -48,6 +48,16 @@ impl FidelityView {
             },
         );
         shared.push((f, Access::ShaderRead));
+        shared.push((
+            graph.import(
+                Resource::Image(self.sheen_lut),
+                State {
+                    access: Access::ShaderRead,
+                    queue: Queue::Graphics,
+                },
+            ),
+            Access::ShaderRead,
+        ));
         let lut = graph.import(
             Resource::Image(self.lut),
             State {
@@ -404,9 +414,17 @@ impl FidelityView {
             [(ids[OUTPUT], Access::CopySource)],
         );
         let compiled = graph.compile()?;
-        let mut points = Vec::new();
+        anyhow::ensure!(
+            compiled
+                .passes
+                .iter()
+                .all(|p| p.queue == Queue::Graphics && p.waits.is_empty()),
+            "Fidelity batch requires a single graphics queue"
+        );
+        // Preserve every graph barrier and timestamp while submitting one frame
+        // packet. Per-pass submissions needlessly expose scheduling gaps under load.
+        let mut c = gpu.begin(Queue::Graphics);
         for pass in &compiled.passes {
-            let mut c = gpu.begin(pass.queue);
             c.push(Command::BeginPass(pass.name.to_owned()));
             c.barriers(pass.before.iter().copied());
             if pass.id != ready {
@@ -422,13 +440,9 @@ impl FidelityView {
             }
             c.barriers(pass.after.iter().copied());
             c.push(Command::EndPass);
-            let waits = pass.waits.iter().map(|i| points[*i]).collect::<Vec<_>>();
-            points.push(gpu.submit(c.finish(), &waits)?);
         }
-        self.timings.clear();
-        for p in points {
-            self.timings.extend(gpu.resolve(p)?);
-        }
+        let point = gpu.submit(c.finish(), &[])?;
+        self.timings = gpu.resolve(point)?;
         for (i, id) in ids.iter().enumerate() {
             self.targets.states[i] = compiled.final_states[id.0];
         }

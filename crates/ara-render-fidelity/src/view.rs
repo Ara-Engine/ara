@@ -35,6 +35,8 @@ pub struct FidelityView {
     pub(crate) exposure_state: State,
     pub(crate) lut: Image,
     pub(crate) lut_index: u32,
+    pub(crate) sheen_lut: Image,
+    pub(crate) sheen_index: u32,
     pub(crate) previous_vp: Mat4,
     pub(crate) previous_jitter: glam::Vec2,
     pub(crate) previous_camera: Vec3,
@@ -118,6 +120,13 @@ impl FidelityView {
             bytemuck::cast_slice(&lut_data),
         )?;
         let lut_index = gpu.sampled_image(lut, false)?.index;
+        let sheen_lut = upload_image(
+            gpu,
+            [32, 32],
+            vk::Format::R32G32B32A32_SFLOAT,
+            include_bytes!("../shaders/sheen-albedo.bin"),
+        )?;
+        let sheen_index = gpu.sampled_image(sheen_lut, false)?.index;
         let artifacts = Path::new(env!("CARGO_MANIFEST_DIR")).join("cooked");
         let mut pipelines = BTreeMap::new();
         let names = if settings.tier == Tier::Rt {
@@ -199,6 +208,8 @@ impl FidelityView {
             exposure_state: state,
             lut,
             lut_index,
+            sheen_lut,
+            sheen_index,
             previous_vp: Mat4::IDENTITY,
             previous_jitter: glam::Vec2::ZERO,
             previous_camera: Vec3::ZERO,
@@ -436,6 +447,7 @@ impl FidelityView {
             gpu.retire(Resource::Buffer(b))?;
         }
         gpu.retire(Resource::Image(self.lut))?;
+        gpu.retire(Resource::Image(self.sheen_lut))?;
         for (_, p) in self.pipelines {
             gpu.retire_pipeline(p)?;
         }
