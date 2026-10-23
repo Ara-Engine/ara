@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621",
+  "key": "d055f80c73297464f7bd482d77d49e79e6a92ab25234811ceecd2a454893ac4d",
   "stages": [
     {
-      "dxil": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621/hybridLayersMain.dxil",
-      "dxil_hash": "04109e0613bfd34555d959625fff85673f886676e117093aeae09eedee68e9f3",
+      "dxil": "d055f80c73297464f7bd482d77d49e79e6a92ab25234811ceecd2a454893ac4d/hybridLayersMain.dxil",
+      "dxil_hash": "b9782fa007a5fd8806a8ba3f1f7fbdca716b5d3f44401d249d055fdd240cd252",
       "source_entry": "hybridLayersMain",
-      "spirv": "3fab3d7d01718ac4b42a74e33fa63ee377add0f6be57b99817e465f0cfa72621/hybridLayersMain.spv",
+      "spirv": "d055f80c73297464f7bd482d77d49e79e6a92ab25234811ceecd2a454893ac4d/hybridLayersMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "4e7fbd7c047f519f52e941259695fdf921bc49c5a1fe8d5bf41b65f5832e6e89",
+      "spirv_hash": "47c117d6c568b9a6a5d73284af13220eb5725233f69c45d1e9f150c6cee69216",
       "stage": "compute"
     }
   ],

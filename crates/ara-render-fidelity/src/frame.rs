@@ -33,8 +33,8 @@ pub(crate) struct GpuFrame {
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
     reservoirs: [[u32; 4]; 2],
-    extra_read: [[u32; 4]; 2],
-    extra_write: [[u32; 4]; 2],
+    extra_read: [[u32; 4]; 3],
+    extra_write: [[u32; 4]; 3],
     shadow: [u32; 4],
 }
 impl FidelityView {
@@ -84,8 +84,8 @@ impl FidelityView {
                 bounces,
             ),
         };
-        let mut extra_read = [[0; 4]; 2];
-        let mut extra_write = [[0; 4]; 2];
+        let mut extra_read = [[0; 4]; 3];
+        let mut extra_write = [[0; 4]; 3];
         for i in 28..crate::targets::COUNT {
             extra_read[(i - 28) / 4][(i - 28) % 4] = self.targets.sampled[i];
             extra_write[(i - 28) / 4][(i - 28) % 4] = self.targets.storage[i];

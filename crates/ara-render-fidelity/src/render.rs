@@ -176,7 +176,17 @@ impl FidelityView {
                 RAW,
             ]
             .map(|i| (ids[i], Access::Storage))
-            .to_vec(),
+            .into_iter()
+            .chain(if resampling {
+                vec![
+                    (ids[SPEC_RAW], Access::Storage),
+                    (ids[SURFACE_ALBEDO], Access::Storage),
+                    (ids[SURFACE_GEOMETRY], Access::Storage),
+                ]
+            } else {
+                vec![]
+            })
+            .collect(),
         )?;
         if rt && !reference {
             add(
@@ -196,6 +206,8 @@ impl FidelityView {
                 (ids[NORMAL0 + slot], Access::ShaderRead),
                 (ids[BASE], Access::ShaderRead),
                 (ids[MOTION], Access::ShaderRead),
+                (ids[SURFACE_ALBEDO], Access::ShaderRead),
+                (ids[SURFACE_GEOMETRY], Access::ShaderRead),
                 (probes[self.probe_slot], Access::ShaderRead),
             ];
             if !reset {
@@ -204,6 +216,9 @@ impl FidelityView {
                         WORLD0 + previous,
                         NORMAL0 + previous,
                         DIRECT_HISTORY0 + previous,
+                        HISTORY0 + previous,
+                        MOMENTS0 + previous,
+                        SPEC_HISTORY0 + previous,
                     ]
                     .map(|i| (ids[i], Access::ShaderRead)),
                 );
@@ -231,7 +246,7 @@ impl FidelityView {
                     "reservoir_init"
                 },
                 0,
-                dispatch,
+                [render[0].div_ceil(16), render[1].div_ceil(16), 1],
                 init,
             )?;
             let mut trace = guides.to_vec();
@@ -247,15 +262,30 @@ impl FidelityView {
                 },
                 0,
                 if reset || lighting_response {
-                    dispatch
+                    [render[0].div_ceil(16), render[1].div_ceil(16), 1]
                 } else {
                     [
-                        render[0].div_ceil(8 * self.transport_stride),
-                        render[1].div_ceil(8),
+                        render[0].div_ceil(16 * self.transport_stride),
+                        render[1].div_ceil(16),
                         1,
                     ]
                 },
                 trace,
+            )?;
+            let mut specular = guides.to_vec();
+            specular.push((ids[SPEC_RAW], Access::Storage));
+            add(
+                "ReSTIR.Specular.Dense",
+                if self.atmosphere.is_some() {
+                    "reservoir_specular_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_specular_layers"
+                } else {
+                    "reservoir_specular"
+                },
+                0,
+                dispatch,
+                specular,
             )?;
             guides.extend([
                 (r[2], Access::ShaderRead),
@@ -406,6 +436,9 @@ impl FidelityView {
             temporal,
         )?;
         for i in 0..if reference { 1 } else { 3 } {
+            if resampling && i == 1 {
+                continue;
+            }
             let source = if i == 0 {
                 HISTORY0 + slot
             } else if i == 1 {
@@ -413,7 +446,11 @@ impl FidelityView {
             } else {
                 FILTER1
             };
-            let target = if i == 1 { FILTER1 } else { FILTER0 };
+            let target = if i == 1 || (resampling && i == 0) {
+                FILTER1
+            } else {
+                FILTER0
+            };
             let mut uses = vec![
                 (ids[source], Access::ShaderRead),
                 (ids[target], Access::Storage),
@@ -436,7 +473,7 @@ impl FidelityView {
                 } else {
                     SPEC_FILTER1
                 };
-                let target = if i == 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
+                let target = if i <= 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
                 uses.extend([
                     (ids[source], Access::ShaderRead),
                     (ids[target], Access::Storage),
@@ -447,7 +484,11 @@ impl FidelityView {
                 if reference {
                     "Reference.Copy"
                 } else {
-                    ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
+                    if resampling && i == 2 {
+                        "SVGF.Atrous.3"
+                    } else {
+                        ["SVGF.Atrous.1", "SVGF.Atrous.2", "SVGF.Atrous.4"][i]
+                    }
                 },
                 if resampling { "atrous_split" } else { "atrous" },
                 i as u32,

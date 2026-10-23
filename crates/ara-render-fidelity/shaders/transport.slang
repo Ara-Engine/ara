@@ -2,9 +2,15 @@
 [shader("compute")][numthreads(8,8,1)]
 void primaryMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint rng=hash(p.y*f.sizes.x+p.x+f.control.w*7919);
+#ifdef RESERVOIR_SURFACES
+    extraStore(f,28,p,float4(0,0,0,0));
+#endif
     float3 ray=cameraRay(f,float2(p)+0.5);Hit hit;uint slot=f.control.x;
     if(!trace(f,f.camera.xyz,ray,10000,rng,hit)){store(f,WORLD+slot,p,0);store(f,NORMAL+slot,p,0);store(f,BASE,p,0);store(f,MOTION,p,0);store(f,DEPTH,p,0);if(f.transport.x==0){store(f,DIRECT,p,0);store(f,RAW,p,float4(environment(f,ray),1));}return;}
     Surface s=surface(f,hit.id,hit.primitive,hit.bary);if(dot(s.normal,-ray)<0)s.normal=-s.normal;
+#ifdef RESERVOIR_SURFACES
+    extraStore(f,35,p,float4(s.albedo,s.metal));extraStore(f,36,p,float4(s.geometricNormal,s.ao));
+#endif
     float3 previousWorld=previousPosition(f,hit.id,hit.primitive,hit.bary,s.position);
     float4 previous=mul(f.previousVp,float4(previousWorld,1));float4 current=mul(f.vp,float4(s.position,1));
     float2 previousUv=float2(previous.x,-previous.y)/previous.w*0.5+0.5;float2 currentUv=float2(current.x,-current.y)/current.w*0.5+0.5;
@@ -12,7 +18,11 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
     store(f,BASE,p,float4(hit.bary,float(hit.primitive),float(modulation.x|(modulation.y<<8)|(modulation.z<<16))));
     store(f,MOTION,p,float4(previousUv-currentUv,length(previousWorld-f.previousCamera.xyz),max(max(s.emissive.x,s.emissive.y),s.emissive.z)>1?1:0));
     store(f,DEPTH,p,float4(current.w,0,0,0));
-    if(f.transport.x==0){float3 lighting=primarySun(f,s,-ray,p,rng);if(f.reservoirs[0].w==0)lighting+=directLocal(f,s,-ray,rng);store(f,DIRECT,p,float4(s.emissive+lighting,1));store(f,RAW,p,0);}
+    if(f.transport.x==0){float3 lighting=primarySun(f,s,-ray,p,rng);
+#ifndef RESERVOIR_SURFACES
+        lighting+=directLocal(f,s,-ray,rng);
+#endif
+        store(f,DIRECT,p,float4(s.emissive+lighting,1));store(f,RAW,p,0);}
 }
 float3 gather(Frame f,Surface s,float3 direction,inout uint rng){
     float3 result=0,throughput=1;

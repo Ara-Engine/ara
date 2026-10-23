@@ -31,27 +31,30 @@ fn feature_hdr_binds_filter_slot_and_reuses_bloom_post() -> Result<()> {
         lighting_changed: false,
         deterministic: true,
     };
-    let mut view = FidelityView::new(&mut gpu, &scene, settings, None)?;
-    view.render(&mut gpu, &frame)?;
-    let before = view.capture(&mut gpu)?;
-    let inputs = view.feature_inputs()?;
-    view.post_process(&mut gpu, &frame, inputs.radiance)?;
-    let after = view.capture(&mut gpu)?;
-    ensure!(
-        before
-            .as_raw()
-            .iter()
-            .zip(after.as_raw())
-            .all(|(a, b)| a.abs_diff(*b) <= 1),
-        "Feature composition sampled a different HDR slot or changed bloom semantics"
-    );
-    ensure!(
-        view.timings()
-            .iter()
-            .any(|p| p.pass == "Feature.Bloom.Horizontal"),
-        "Feature post did not execute the shared bloom pipeline"
-    );
-    view.destroy(&mut gpu)?;
+    for reservoirs in [false, true] {
+        let mut view = FidelityView::new(&mut gpu, &scene, settings, None)?;
+        view.set_reservoir_sampling(&mut gpu, reservoirs)?;
+        view.render(&mut gpu, &frame)?;
+        let before = view.capture(&mut gpu)?;
+        let inputs = view.feature_inputs()?;
+        view.post_process(&mut gpu, &frame, inputs.radiance)?;
+        let after = view.capture(&mut gpu)?;
+        ensure!(
+            before
+                .as_raw()
+                .iter()
+                .zip(after.as_raw())
+                .all(|(a, b)| a.abs_diff(*b) <= 1),
+            "Feature composition sampled a different HDR slot or changed bloom semantics"
+        );
+        ensure!(
+            view.timings()
+                .iter()
+                .any(|p| p.pass == "Feature.Bloom.Horizontal"),
+            "Feature post did not execute the shared bloom pipeline"
+        );
+        view.destroy(&mut gpu)?;
+    }
     gpu.assert_clean()?;
     Ok(())
 }

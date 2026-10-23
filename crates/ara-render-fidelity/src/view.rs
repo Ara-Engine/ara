@@ -149,15 +149,6 @@ impl FidelityView {
                 "ddgi_layers",
                 "hybrid_layers",
                 "reference_layers",
-                "reservoir_init",
-                "reservoir_spatial",
-                "reservoir_trace",
-                "reservoir_init_layers",
-                "reservoir_trace_layers",
-                "reservoir_spatial_layers",
-                "reservoir_init_atmosphere",
-                "reservoir_spatial_atmosphere",
-                "reservoir_trace_atmosphere",
             ]
         } else {
             vec!["primary_raster", "hybrid_raster"]
@@ -166,8 +157,6 @@ impl FidelityView {
         for name in names.into_iter().chain([
             "temporal",
             "atrous",
-            "temporal_split",
-            "atrous_split",
             "bloom",
             "exposure",
             "post",

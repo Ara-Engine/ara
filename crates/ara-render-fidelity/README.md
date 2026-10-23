@@ -186,7 +186,9 @@ after the primary camera hit, so later BSDF hits omit emission to avoid double
 counting. All lobes have finite roughness; no delta paths are dropped. Probe-origin
 rays retain first-hit emission. Separate prewarmed emitter shader variants remove
 this distribution and its register pressure from non-emissive scenes. Highly glossy
-small-emitter paths would benefit from BSDF/light MIS; this is not ReSTIR.
+small-emitter paths would benefit from BSDF/light MIS. The classic mode remains
+available; the optional reservoir mode below replaces its primary local-light
+estimator and indirect gather.
 
 The terrain fixture uses ara-landscape's actual sample tile and ara-terrain's
 hole-aware heightfield mesh, with logarithmic distant terrain, branch geometry
@@ -291,3 +293,66 @@ retains previous geometry for one frame; signal lighting edits with
 `upscaler_input` still exports scene-linear colour at pre-exposure 1, depth, motion,
 jitter and both sizes. `output()` is the completed offscreen SDR image in CopySource
 state; the editor must import/transition it before sampling, outlining or gizmos.
+
+## Reservoir low-light mode
+
+At a completed frame boundary, `set_reservoir_sampling(gpu, true)` selects Ara's
+direct-light reservoirs and diffuse path reconnection. This RT-only mode is
+explicit: classic DDGI remains the default and baked Raster/Mobile remains
+available. Local lights are bounded at 4096; emissive triangles use the same
+area-times-power distribution as the independent reference. Direct candidates
+use independent emitter-position and reservoir-roulette random substreams.
+An occluded rectangle test compares this estimator against numerical integration,
+and a 1000-point-light test checks absolute BRDF/light energy after reuse.
+
+DI reservoirs retain light ID, random seed, normalization, effective count and
+visibility. Targets are reevaluated at the receiving surface. Temporal reuse
+checks depth, normal, stable ID and roughness; spatial reuse reconnects only
+compatible geometry. Visibility is reused only at an exactly matching receiver,
+expires after eight frames and is discarded on lighting/geometry changes.
+The design follows [ReSTIR DI](https://research.nvidia.com/publication/2020-07_spatiotemporal-reservoir-resampling-real-time-ray-tracing-dynamic-direct).
+
+The GI reservoir stores the next vertex, normal and an eleven-event radiance
+estimate. Area-measure reconnection includes the secondary cosine/distance-squared
+Jacobian and retests visibility. Glossy secondary vertices and extreme Jacobians
+limit reuse; rejected spatial proposals retain their effective sample counts.
+This is an approximate, bounded path-reconnection estimator inspired by
+[ReSTIR GI](https://research.nvidia.com/publication/2021-06_restir-gi-path-resampling-real-time-path-tracing),
+not an unbiased implementation of its full path-space MIS. Stationary rough
+diffuse hits can terminate in previous screen-space radiance after ID, depth,
+normal, maturity and lighting checks; off-screen/disoccluded hits trace paths.
+This includes indirect energy and avoids a direct-only screen cache. Glossy
+primary pixels retain full-rate GGX samples. Complex coat/sheen/
+transmission materials retain full shared-BRDF path sampling instead of an
+unsupported diffuse reconnection. The reference never uses reservoirs or caches.
+
+Candidates occupy a rotating 2x2 grid; receivers reevaluate their targets at full
+resolution. The compact trace pass additionally rotates the selected transport
+stride. Thin geometry without a compatible candidate uses independent path
+sampling. Private albedo/geometric-normal guides avoid repeating textured vertex
+evaluation at each reservoir stage. Public G-buffer slots and `FILTER0=12` remain
+unchanged; the feature/bloom integration test exercises the same HDR composition.
+
+Diffuse and GGX specular signals have separate histories and moments. Two
+variance-guided geometry-aware a-trous iterations use steps 1 and 3 in reservoir
+mode; classic mode retains steps 1/2/4. Motion/light changes clamp
+history to compatible current neighborhoods; static histories preserve rare
+energy. Low-light histories use float32 because a long half-float EMA can lose
+small corrections. Reprojection rejects disocclusions; lighting flags discard
+reservoir reuse and use responsive weights. This is an Ara implementation, not
+NRD/ReBLUR/ReLAX integration or a claim of equivalent quality. Reservoir resources
+and extra guides are allocated on selection; a native view requires substantial
+additional memory (six reservoirs alone use 288 bytes per render pixel).
+
+## VSM sun source
+
+`SunShadowSource::VirtualShadowMap` borrows a completed, render-size RGBA32F mask
+from `ara_render_geo::shadows::VirtualShadows::output()`. RGB is linear sun
+visibility; A>=0.5 means resident. Query `render_jitter(input)` before producing
+the mask with the same camera, then publish it using `set_sun_shadow_source`.
+The caller resolves the producer submission and retains the image through the
+fidelity frame. The graph declares its Graphics/ShaderRead access. Invalid pages
+fall back to scene ray queries; secondary receivers and local lights keep ray
+visibility. Resize clears the borrowed mask. A GPU test checks black/white masks,
+missing-page fallback, dimensions and jitter agreement. External virtual-geometry
+surface import remains a separate adapter; this hook does not claim that wiring.

@@ -47,15 +47,34 @@ bool compatible(Frame f,uint2 p,int2 q,bool previous){
 }
 Surface primarySurface(Frame f,uint2 p,out float3 v){
     float4 w=pixel(f,WORLD+f.control.x,p),h=pixel(f,BASE,p);v=-cameraRay(f,float2(p)+0.5);
+#ifndef MATERIAL_LAYERS
+    Surface s=(Surface)0;float4 a=extraPixel(f,35,p),g=extraPixel(f,36,p),n=pixel(f,NORMAL+f.control.x,p);
+    s.position=w.xyz;s.id=uint(w.w)-1;s.albedo=a.rgb;s.metal=a.w;s.normal=n.xyz;s.roughness=n.w;s.geometricNormal=g.xyz;s.ao=g.w;s.specular=1;return s;
+#else
     Surface s=surface(f,uint(w.w)-1,uint(h.z),h.xy);if(dot(s.normal,v)<0)s.normal=-s.normal;return s;
+#endif
 }
+uint2 gridPhase(Frame f){return uint2(f.control.w&1,(f.control.w>>1)&1);}
+int2 gridPoint(Frame f,int2 p){int2 phase=int2(gridPhase(f));int2 q=max((p-phase)/2,int2(0))*2+phase;return min(q,int2(f.sizes.xy)-1-((int2(f.sizes.xy)-1-phase)&1));}
 // Cache a bounded path estimate, not an interpolated probe terminal. In narrow
 // low-light rooms, that terminal's bias otherwise survives reservoir averaging.
+bool screenRadiance(Frame f,Surface s,out float3 value){
+    value=0;if(f.transport.w!=1 || f.temporal.x!=0 || f.temporal.y!=0 || s.roughness<0.5 || s.metal>0.1 || layeredMaterial(s))return false;
+    float4 clip=mul(f.previousVp,float4(s.position,1));if(clip.w<=0)return false;
+    float2 uv=float2(clip.x,-clip.y)/clip.w*0.5+0.5;int2 at=int2(uv*f.sizes.xy+f.jitter.zw);
+    if(any(at<0) || any(at>=int2(f.sizes.xy)))return false;
+    float4 world=pixel(f,WORLD+1-f.control.x,at),normal=pixel(f,NORMAL+1-f.control.x,at),h=pixel(f,HISTORY+1-f.control.x,at);
+    if(world.w!=float(s.id+1) || distance(world.xyz,s.position)>max(0.015,clip.w*0.002) || abs(dot(normal.xyz,s.normal))<0.99 || h.w<16)return false;
+    uint packed=asuint(pixel(f,MOMENTS+1-f.control.x,at).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));
+    value=max(0,pixel(f,DIRECT_HISTORY+1-f.control.x,at).rgb-s.emissive)+h.rgb*modulation+extraPixel(f,29+1-f.control.x,at).rgb;
+    return all(isfinite(value));
+}
 float3 cachedPath(Frame f,Surface s,float3 v,inout uint rng){
     float3 result=0,beta=1;
-    for(uint bounce=0;bounce<6;bounce++){
+    for(uint bounce=0;bounce<11;bounce++){
+        float3 reused;if(screenRadiance(f,s,reused)){result+=beta*reused;break;}
         result+=beta*direct(f,s,v,rng);
-        if(bounce==5)break;
+        if(bounce==10)break;
         float3 weight;float3 l=sampleBrdf(s,v,rng,weight);beta*=weight;
         if(any(!isfinite(beta)) || max(max(beta.x,beta.y),beta.z)<1e-7)break;
         if(bounce>=2){float survival=clamp(max(max(beta.x,beta.y),beta.z),0.05,0.95);if(random(rng)>survival)break;beta/=survival;}
@@ -72,15 +91,15 @@ float3 cachedRay(Frame f,Surface s,float3 direction,inout uint rng){
 // at the receiving surface; retain the original proposal normalization and count.
 [shader("compute")][numthreads(8,8,1)]
 void reservoirInit(uint3 tid:SV_DispatchThreadID){
-    Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*7919);
+    Frame f=frame();uint2 p=tid.xy*2+gridPhase(f);if(any(p>=f.sizes.xy))return;uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*7919);
     DIReservoir dr=(DIReservoir)0;dr.light=0xffffffff;dr.owner=float(index);
     GIReservoir gr=(GIReservoir)0;
     if(pixel(f,WORLD+f.control.x,p).w==0){
         buffers[NonUniformResourceIndex(f.reservoirs[0].y)].Store(index*32,dr);
-        buffers[NonUniformResourceIndex(f.reservoirs[1].y)].Store(index*64,gr);extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;
+        buffers[NonUniformResourceIndex(f.reservoirs[1].y)].Store(index*64,gr);return;
     }
     float3 v;Surface s=primarySurface(f,p,v);
-    for(uint i=0;i<2;i++){
+    for(uint i=0;i<1;i++){
         DIReservoir c=(DIReservoir)0;c.light=chooseLight(f,rng);c.seed=hash(rng^0xa511e9b3u);random(rng);c.owner=float(index);c.visibility=-1;
         LightCandidate light=lightAt(f,s,v,c.light,c.seed);updateDI(dr,c,lightTarget(light.value)/max(light.pdf,1e-20),1,rng);
     }
@@ -96,10 +115,11 @@ void reservoirInit(uint3 tid:SV_DispatchThreadID){
     }
     float target=lightTarget(lightAt(f,s,v,dr.light,dr.seed).value);dr.W=target>0?dr.W/max(dr.M*target,1e-20):0;
     buffers[NonUniformResourceIndex(f.reservoirs[0].y)].Store(index*32,dr);
-    extraStore(f,SPEC_RAW,p,float4(0,0,0,0));
     if(history){
         GIReservoir old=readGI(f.reservoirs[1].x,uint(at.y)*f.sizes.x+uint(at.x));
-        if(!layeredMaterial(s) && old.radiance.w==0 && old.stats.z<12 && reconnectable(s,old)){
+        uint owner=uint(old.normal.w);float4 source=pixel(f,WORLD+1-f.control.x,int2(owner%f.sizes.x,owner/f.sizes.x));
+        bool local=source.w==float(s.id+1) && distance(source.xyz,s.position)<0.025;
+        if(!layeredMaterial(s) && (old.radiance.w==0 || local) && old.stats.z<12 && reconnectable(s,old)){
             gr=old;gr.stats.y=min(gr.stats.y,12.);gr.stats.z+=1;gr.stats.w=reconnectionGeometry(s,gr);
         }
     }
@@ -113,6 +133,7 @@ void reservoirTrace(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;uint stride=max(f.reservoirs[1].w>>1,2);
     uint phase=f.control.w^(f.control.w>>2)^(f.control.w>>4);
     if(f.temporal.x==0 && f.temporal.y==0)p.x=p.x*stride+((p.y+phase)&(stride-1));
+    p=p*2+gridPhase(f);
     if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0)return;
     uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*7919);float3 v;Surface s=primarySurface(f,p,v);
     if(layeredMaterial(s)){
@@ -140,11 +161,22 @@ void reservoirTrace(uint3 tid:SV_DispatchThreadID){
     gr.stats.w=reconnectionGeometry(s,gr);
     buffers[NonUniformResourceIndex(f.reservoirs[1].y)].Store(index*64,gr);
     float3 specular=0;
-    if(fresh){
+    if(fresh && s.roughness>=0.3){
         float3 h=visibleGgx(s,v,rng),l=reflect(-v,h);float nl=dot(s.normal,l);
         float3 f0=lerp(float3(0.04*s.specular),s.albedo,s.metal);
         if(nl>0)specular=cachedRay(f,s,l,rng)*fresnel(max(dot(v,h),0),f0)*smith(nl,pow(s.roughness,4));
     }extraStore(f,SPEC_RAW,p,float4(specular,fresh?1:0));
+}
+
+// Glossy primary pixels need their own full-rate samples; coarse diffuse-path
+// candidates cannot carry the view-dependent GGX lobe without visible speckles.
+[shader("compute")][numthreads(8,8,1)]
+void specularTrace(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy) || pixel(f,WORLD+f.control.x,p).w==0 || pixel(f,NORMAL+f.control.x,p).w>=0.3)return;
+    uint rng=hash((p.y*f.sizes.x+p.x)^f.control.w*8737);float3 v;Surface s=primarySurface(f,p,v);if(layeredMaterial(s))return;
+    float3 h=visibleGgx(s,v,rng),l=reflect(-v,h),result=0;float nl=dot(s.normal,l);
+    if(nl>0)result=cachedRay(f,s,l,rng)*fresnel(max(dot(v,h),0),lerp(float3(0.04*s.specular),s.albedo,s.metal))*smith(nl,pow(s.roughness,4));
+    extraStore(f,SPEC_RAW,p,float4(result,1));
 }
 
 // Reconnect diffuse paths in area measure; cos(theta_secondary)/distance^2 is
@@ -154,17 +186,19 @@ void reservoirSpatial(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint index=p.y*f.sizes.x+p.x,rng=hash(index+f.control.w*4567);
     if(pixel(f,WORLD+f.control.x,p).w==0){extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;}
     float3 v;Surface s=primarySurface(f,p,v);DIReservoir dr=(DIReservoir)0;dr.light=0xffffffff;GIReservoir gr=(GIReservoir)0;
-    for(uint i=0;i<3;i++){
-        int2 q=int2(p);if(i>0){float angle=random(rng)*2*PI;float radius=4+random(rng)*12;q+=int2(cos(angle)*radius,sin(angle)*radius);}
+    for(uint i=0;i<2;i++){
+        int2 q=int2(p);if(i>0){float angle=random(rng)*2*PI;float radius=4+random(rng)*12;q+=int2(cos(angle)*radius,sin(angle)*radius);}q=gridPoint(f,q);
         if(!compatible(f,p,q,false))continue;uint owner=uint(q.y)*f.sizes.x+uint(q.x);
         DIReservoir d=readDI(f.reservoirs[0].y,owner);float m=min(d.M,20.);
         float target=lightTarget(lightAt(f,s,v,d.light,d.seed).value);if(i>0)d.visibility=-1;
         updateDI(dr,d,target*d.W*m,m,rng);
         if(layeredMaterial(s))continue;
-        GIReservoir g=readGI(f.reservoirs[1].y,owner);if(i>0 && (g.radiance.w>0 || !reconnectable(s,g)))continue;
+        GIReservoir g=readGI(f.reservoirs[1].y,owner);
+        if((i>0 && g.radiance.w>0) || !reconnectable(s,g)){gr.stats.y+=min(g.stats.y,16.);continue;}
         float3 direction;float distance;target=lightTarget(giValue(s,v,g,direction,distance));m=min(g.stats.y,16.);
         updateGI(gr,g,target*g.stats.x*m,m,rng);
     }
+    if(dr.M==0){float3 local=risDirect(f,s,v,rng);float3 weight;float3 direction=sampleBrdf(s,v,rng,weight);store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+local,1));store(f,RAW,p,float4(cachedRay(f,s,direction,rng)*weight/demodulation(f,p),1));buffers[NonUniformResourceIndex(f.reservoirs[0].z)].Store(index*32,dr);buffers[NonUniformResourceIndex(f.reservoirs[1].z)].Store(index*64,gr);return;}
     LightCandidate selected=lightAt(f,s,v,dr.light,dr.seed);float target=lightTarget(selected.value);
     dr.W=target>0?dr.W/max(dr.M*target,1e-20):0;
     if(dr.W>0 && dr.visibility<0){dr.visibility=occluded(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng)?0:1;dr.age=0;}

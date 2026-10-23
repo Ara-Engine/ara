@@ -26,7 +26,8 @@ fn main() -> Result<()> {
     match command.as_str() {
         "night-probe" => round3::night_probe(&mut gpu, root)?,
         "night-components" => night_components::run(&mut gpu, root)?,
-        "night-noise" => night_noise::run(&mut gpu, root)?,
+        "night-noise" => night_noise::run(&mut gpu, root, false)?,
+        "many-noise" => night_noise::run(&mut gpu, root, true)?,
         "many-timings" => round3_timings::run(&mut gpu, root, true)?,
         "beauty-timings" => round3_timings::run(&mut gpu, root, false)?,
         "many-lights" => round3::quality(&mut gpu, root, true)?,

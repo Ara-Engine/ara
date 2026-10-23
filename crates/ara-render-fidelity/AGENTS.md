@@ -12,6 +12,8 @@ No authoritative gameplay or authoring state lives here.
 - `Reference`: high-sample, undenoised reference transport, shared shader semantics.
 - `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
 - `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
+- `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
+- `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
@@ -35,6 +37,9 @@ frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
 Feature inputs remain owned by the view; consume them at a completed boundary.
 External HDR post input returns Graphics/ShaderRead; output remains CopySource.
+Keep the first 28 target slots, FILTER0=12 and the frame's seven read/write rows
+stable for features/VFX. Reservoir guides and histories append private slots.
+Reference transport remains independent; never enable reservoirs in Reference mode.
 Frames currently serialize because the merged GPU API serializes diagnostics.
 After changing the sheen BRDF, run ara-pathtrace's `bake_sheen` example before
 cooking; its 16 KiB directional-albedo asset participates in the shader cohort.

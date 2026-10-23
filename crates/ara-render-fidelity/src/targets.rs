@@ -29,7 +29,9 @@ pub(crate) const SPEC_HISTORY0: usize = 29;
 pub(crate) const SPEC_MOMENTS0: usize = 31;
 pub(crate) const SPEC_FILTER0: usize = 33;
 pub(crate) const SPEC_FILTER1: usize = 34;
-pub(crate) const COUNT: usize = 35;
+pub(crate) const SURFACE_ALBEDO: usize = 35;
+pub(crate) const SURFACE_GEOMETRY: usize = 36;
+pub(crate) const COUNT: usize = 37;
 
 pub(crate) struct Targets {
     pub images: Vec<Image>,
@@ -92,8 +94,33 @@ impl Targets {
     /// Preserve the classic view's descriptor/memory footprint until split signals
     /// are requested. Public G-buffer and feature slots remain the first 28 images.
     pub fn enable_split(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
+        if self.images.len() == COUNT {
+            return Ok(());
+        }
+        // Long low-light histories need float32: half precision can quantize an
+        // EMA's 1/256 correction away and leave persistent bright/dark patches.
+        for i in [HISTORY0, HISTORY0 + 1, DIRECT_HISTORY0, DIRECT_HISTORY0 + 1] {
+            let image = gpu.create_image(
+                size[0],
+                size[1],
+                vk::Format::R32G32B32A32_SFLOAT,
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )?;
+            let sampled = gpu.sampled_image(image, false)?.index;
+            let storage = gpu.storage_image(image)?.index;
+            gpu.retire(Resource::Image(self.images[i]))?;
+            self.images[i] = image;
+            self.sampled[i] = sampled;
+            self.storage[i] = storage;
+            self.states[i] = State {
+                access: Access::Undefined,
+                queue: Queue::Graphics,
+            };
+        }
         for i in self.images.len()..COUNT {
-            let format = if (SPEC_MOMENTS0..SPEC_MOMENTS0 + 2).contains(&i) {
+            let format = if (SPEC_HISTORY0..SPEC_MOMENTS0 + 2).contains(&i) {
                 vk::Format::R32G32B32A32_SFLOAT
             } else {
                 vk::Format::R16G16B16A16_SFLOAT

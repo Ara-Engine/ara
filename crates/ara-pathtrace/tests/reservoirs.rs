@@ -107,6 +107,46 @@ fn area_light_occlusion_matches_independent_quad_integral() -> Result<()> {
         "Area-light RIS is biased: expected {expected}, got {actual}"
     );
     reference.destroy(&mut gpu)?;
+    let settings = Settings {
+        render_size: [65, 37],
+        display_size: [65, 37],
+        tier: Tier::Rt,
+        mode: Mode::Hybrid,
+        upscaler: Upscaler::Taau,
+        probe_ray_budget: 64,
+        reflection_cutoff: 0.6,
+        post: PostSettings {
+            ev100: Some(0.),
+            bloom: 0.,
+            ..Default::default()
+        },
+    };
+    let mut hybrid = FidelityView::new(&mut gpu, &scene, settings, None)?;
+    hybrid.set_reservoir_sampling(&mut gpu, true)?;
+    for tick in 0..256 {
+        hybrid.render(
+            &mut gpu,
+            &FrameInput {
+                camera: &camera,
+                tick,
+                delta_seconds: 1. / 60.,
+                reset: false,
+                lighting_changed: false,
+                deterministic: true,
+            },
+        )?;
+    }
+    let data = hybrid.capture_direct_radiance(&mut gpu)?;
+    let actual = (17..20)
+        .flat_map(|y| (31..34).map(move |x| y * 65 + x))
+        .map(|i| f64::from(data[i][0]))
+        .sum::<f64>()
+        / 9.;
+    ensure!(
+        (actual / expected - 1.).abs() < 0.05,
+        "Reused area-light energy expected {expected}, got {actual}"
+    );
+    hybrid.destroy(&mut gpu)?;
     gpu.assert_clean()?;
     Ok(())
 }

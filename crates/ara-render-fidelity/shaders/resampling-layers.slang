@@ -2,4 +2,5 @@
 #define reservoirInit reservoirInitLayers
 #define reservoirTrace reservoirTraceLayers
 #define reservoirSpatial reservoirSpatialLayers
+#define specularTrace specularTraceLayers
 #include "resampling.slang"

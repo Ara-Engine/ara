@@ -88,8 +88,13 @@ float3 directLocal(Frame f,Surface s,float3 v,inout uint rng){
 #endif
     // Small non-emissive scenes retain their exact all-light estimator.
     for(uint i=0;i<count;i++){
-        LightCandidate c=lightAt(f,s,v,i,rng);random(rng);
-        if(any(c.value>0) && !occluded(f,rayOrigin(s,c.direction),c.direction,c.distance,rng))sum+=c.value;
+        uint offset=buffers[NonUniformResourceIndex(f.scene.x)].Load(8)+i*64;
+        float4 p=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset),colour=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+16);
+        float4 cone=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+32),params=buffers[NonUniformResourceIndex(f.scene.x)].Load<float4>(offset+48);
+        float3 delta=p.xyz-s.position;float d=length(delta);if(d>p.w)continue;float3 l=delta/max(d,1e-5);
+        float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));
+        float fade=pow(saturate(1-pow(d/p.w,4)),2);l=coneDirection(l,0.025/max(d,0.025),rng);float pdf;
+        if((dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,max(d-0.03,0.001),rng))sum+=evaluate(s,v,l,pdf)*colour.rgb*(colour.w/(4*PI*max(d*d,0.01)))*spot*fade;
     }return sum;
 }
 float3 direct(Frame f,Surface s,float3 v,inout uint rng){float3 sun=directSun(f,s,v,rng);return sun+directLocal(f,s,v,rng);}

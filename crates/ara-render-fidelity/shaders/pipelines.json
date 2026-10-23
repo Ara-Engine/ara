@@ -321,6 +321,48 @@
       "vertex_stride": 0
     }
   },
+  "primary_reservoir": {
+    "entries": {
+      "primaryReservoirMain": "compute"
+    },
+    "source": "primary-reservoir.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "primary_reservoir_atmosphere": {
+    "entries": {
+      "primaryReservoirAtmosphereMain": "compute"
+    },
+    "source": "primary-reservoir-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "primary_reservoir_layers": {
+    "entries": {
+      "primaryReservoirLayersMain": "compute"
+    },
+    "source": "primary-reservoir-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "reference": {
     "entries": {
       "referenceMain": "compute"
@@ -450,6 +492,48 @@
   "reservoir_spatial_layers": {
     "entries": {
       "reservoirSpatialLayers": "compute"
+    },
+    "source": "resampling-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_specular": {
+    "entries": {
+      "specularTrace": "compute"
+    },
+    "source": "resampling.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_specular_atmosphere": {
+    "entries": {
+      "specularTraceAtmosphere": "compute"
+    },
+    "source": "resampling-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_specular_layers": {
+    "entries": {
+      "specularTraceLayers": "compute"
     },
     "source": "resampling-layers.slang",
     "state": {

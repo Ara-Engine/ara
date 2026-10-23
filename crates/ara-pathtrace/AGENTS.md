@@ -18,6 +18,10 @@ Set CARGO_BUILD_JOBS=2. `./run.ps1 -Mode Check` runs local tests/clippy/fmt.
 `fetch-sponza.ps1` fetches pinned local content; `-Mode Content` records its honest
 per-pass timing distributions separately from the diagnostic budget gate.
 Use `-Mode Smoke` for a bounded 160x90 hardware/validation integration check.
+`fetch-beauty.ps1` obtains pinned CC0 PBR assets; licenses live in THIRD_PARTY_NOTICES.md.
+`-Mode Beauty` is the main authored-content golden; `-Mode Many-Lights` traces
+the 1000-light corridor independently. Matching *-Timings modes measure full frames.
+`-Mode Night-Noise` records 16x16 block and per-pixel luminance deltas and a strip.
 Goldens update only with `ARA_UPDATE_FIDELITY_GOLDENS=1`; regular tests compare.
 All output/provenance goes under this crate; root files/docs remain untouched.
 Runtime shader cooking is forbidden. Recook fidelity offline before testing edits.

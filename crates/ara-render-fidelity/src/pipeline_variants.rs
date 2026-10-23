@@ -15,6 +15,15 @@ impl FidelityView {
                 _ => "hybrid_raster",
             };
         }
+        if matches!(kind, Transport::Primary) && self.reservoirs.is_some() {
+            return if self.atmosphere.is_some() {
+                "primary_reservoir_atmosphere"
+            } else if self.scene.has_layers {
+                "primary_reservoir_layers"
+            } else {
+                "primary_reservoir"
+            };
+        }
         let names = if self.atmosphere.is_some() {
             [
                 "primary_atmosphere",

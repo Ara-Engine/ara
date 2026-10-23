@@ -22,15 +22,28 @@ fn blocks(data: &[[f32; 4]]) -> Vec<f64> {
     out
 }
 /// Measure an independent-sampling ablation and reservoir reuse with the same rig.
-pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
-    let scene = ara_pathtrace::robust_scenes::night();
-    let camera = ara_pathtrace::robust_scenes::camera(false);
+pub fn run(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
+    let scene = if many {
+        ara_pathtrace::many_lights::scene()
+    } else {
+        ara_pathtrace::robust_scenes::night()
+    };
+    let camera = if many {
+        ara_pathtrace::many_lights::camera()
+    } else {
+        ara_pathtrace::robust_scenes::camera(false)
+    };
+    let name = if many {
+        "many-lights-noise"
+    } else {
+        "night-noise"
+    };
     let mut strip = image::RgbaImage::new(480 * 8, 270 * 2);
     let mut report = Vec::new();
     for (row, reservoirs) in [false, true].into_iter().enumerate() {
         let mut s = settings(SIZE, SIZE);
         s.post = PostSettings {
-            ev100: Some(5.),
+            ev100: Some(if many { 6. } else { 5. }),
             ..large::fixed_post()
         };
         let mut view = FidelityView::new(gpu, &scene, s, None)?;
@@ -86,8 +99,8 @@ pub fn run(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         report.push(serde_json::json!({"reservoirs":reservoirs,"size":SIZE,"warmup":256,"frames":64,"block_size":16,"roi":[0,144,480,256],"low_frequency_luminance_delta_rms":block_rms,"pixel_luminance_delta_rms":(pixel_delta/pixel_energy.max(1e-20)).sqrt(),"scene_hash":view.scene_hash(),"shader_revision":view.shader_revision()}));
         view.destroy(gpu)?;
     }
-    strip.save(root.join("captures/night-noise-strip.png"))?;
-    write_json(&root.join("measurements/night-noise.json"), &report)?;
+    strip.save(root.join(format!("captures/{name}-strip.png")))?;
+    write_json(&root.join(format!("measurements/{name}.json")), &report)?;
     gpu.assert_clean()?;
     Ok(())
 }

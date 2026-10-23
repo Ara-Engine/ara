@@ -36,6 +36,7 @@ fn cases() -> Result<
 /// Record independently converged references and compare deterministic display goldens.
 pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     let mut report = Vec::new();
+    let mut passed = true;
     let update = std::env::var("ARA_UPDATE_FIDELITY_GOLDENS").as_deref() == Ok("1");
     for (name, scene, camera, ev) in cases()? {
         let post = PostSettings {
@@ -79,6 +80,11 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
         let error = metrics::radiance(&hdr, &ground)?;
         let lower = (SIZE[0] * SIZE[1] / 2) as usize;
         let surface_roi_error = metrics::radiance(&hdr[lower..], &ground[lower..])?;
+        passed &= if name == "night_interior" {
+            surface_roi_error.relative_rmse <= 0.08
+        } else {
+            error.relative_rmse <= 0.1
+        };
         large::save_hdr(&root.join(format!(".sn/{name}-hybrid.f32")), &hdr)?;
         large::save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
         let convergence = metrics::radiance(&half, &ground)?;
@@ -100,6 +106,10 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path) -> Result<()> {
     }
     write_json(&root.join("measurements/robust-quality.json"), &report)?;
     gpu.assert_clean()?;
+    anyhow::ensure!(
+        passed,
+        "Robust scene radiance target failed; see robust-quality.json"
+    );
     Ok(())
 }
 

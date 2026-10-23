@@ -125,18 +125,20 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
     let shader = view.shader_revision().to_owned();
     hybrid.save(root.join(format!("captures/{name}-hybrid.png")))?;
     view.destroy(gpu)?;
-    let mut reference = Reference::new(gpu, &scene, size, 4096, 12, s.post)?;
+    let samples = if many { 16384 } else { 4096 };
+    let batches = samples / 8;
+    let mut reference = Reference::new(gpu, &scene, size, samples, 12, s.post)?;
     if !many {
         reference.set_atmosphere(Some(Default::default()))?;
     }
     let mut half = Vec::new();
-    for batch in 0..512 {
+    for batch in 0..batches {
         reference.step(gpu, &camera, false)?;
-        if batch == 255 {
+        if batch + 1 == batches / 2 {
             half = reference.radiance(gpu)?;
         }
         if batch % 64 == 63 {
-            println!("{name}: {} /4096 spp", (batch + 1) * 8);
+            println!("{name}: {} /{samples} spp", (batch + 1) * 8);
         }
     }
     let ground = reference.radiance(gpu)?;
@@ -146,6 +148,9 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
         .save(root.join(format!("captures/{name}-side-by-side.png")))?;
     let error = metrics::radiance(&radiance, &ground)?;
     let convergence = metrics::radiance(&half, &ground)?;
+    let lower = (size[0] * size[1] / 2) as usize;
+    let surface_roi_error = metrics::radiance(&radiance[lower..], &ground[lower..])?;
+    let surface_roi_convergence = metrics::radiance(&half[lower..], &ground[lower..])?;
     println!(
         "{name}: relative RMSE {:.5}, reference residual {:.5}",
         error.relative_rmse, convergence.relative_rmse
@@ -163,7 +168,7 @@ pub fn quality(gpu: &mut VulkanDevice, root: &Path, many: bool) -> Result<()> {
     );
     write_json(
         &root.join(format!("measurements/{name}-quality.json")),
-        &serde_json::json!({"size":size,"reference_samples":4096,"bounces":12,"ev100":ev,"scene_hash":hash,"shader_revision":shader,"error":error,"convergence":convergence,"point_lights":scene.lights.len(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"source":if many{"500 points + 500 emissive panels, 1000 semantic lights"}else{"CC0 Poly Haven PBR furniture; see THIRD_PARTY_NOTICES.md"}}),
+        &serde_json::json!({"size":size,"reference_samples":samples,"bounces":12,"ev100":ev,"scene_hash":hash,"shader_revision":shader,"error":error,"convergence":convergence,"surface_roi":"lower half","surface_roi_error":surface_roi_error,"surface_roi_convergence":surface_roi_convergence,"point_lights":scene.lights.len(),"triangles":scene.meshes.iter().map(|m|m.indices.len()/3).sum::<usize>(),"source":if many{"500 points + 500 emissive panels, 1000 semantic lights"}else{"CC0 Poly Haven PBR furniture; see THIRD_PARTY_NOTICES.md"},"reference_model":if many {"independent surface path transport"} else {"independent surface transport; shared sky/froxel composition, HDR error before fog"}}),
     )?;
     save_hdr(&root.join(format!(".sn/{name}-reference.f32")), &ground)?;
     reference.destroy(gpu)?;

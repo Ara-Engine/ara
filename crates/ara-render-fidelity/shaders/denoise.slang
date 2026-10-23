@@ -78,8 +78,8 @@ groupshared float4 filterSpecular[256];
 void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
-    uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
-    int step=1<<root.pass;uint width=8+2*step;
+    uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1 || (splitSignals && root.pass==0)?FILTER1:FILTER0;
+    int step=splitSignals && root.pass==2?3:1<<root.pass;uint width=8+2*step;
     uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
     for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at);filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at);}
     GroupMemoryBarrierWithGroupSync();
@@ -105,6 +105,6 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         }
     }uint packed=asuint(pixel(f,MOMENTS+slot,p).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));
     float3 spec=specSum/max(specTotal,1e-6);
-    if(splitSignals)extraStore(f,root.pass==1?SPEC_FILTER1:SPEC_FILTER0,p,float4(spec,1));
+    if(splitSignals)extraStore(f,root.pass==0 || root.pass==1?SPEC_FILTER1:SPEC_FILTER0,p,float4(spec,1));
     store(f,target,p,float4(root.pass==2?sum/max(total,1e-6)*modulation+pixel(f,DIRECT_HISTORY+slot,p).rgb+spec:sum/max(total,1e-6),1));
 }

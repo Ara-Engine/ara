@@ -22,7 +22,7 @@ struct Frame {
     float4 origin;float4 spacing;uint4 counts;uint4 probes;
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;uint4 read[7];uint4 write[7];
-    uint4 reservoirs[2];uint4 extraRead[2];uint4 extraWrite[2];uint4 shadow;
+    uint4 reservoirs[2];uint4 extraRead[3];uint4 extraWrite[3];uint4 shadow;
 };
 Frame frame(){return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
 uint ri(Frame f,uint i){return f.read[i/4][i%4];}
