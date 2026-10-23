@@ -19,7 +19,7 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
   (serde: camelCase; ops tagged `"op": "set"`).
 - `Author::{Human, Agent(name)}` ↔ `"human"` / `"agent:<name>"`.
 - Undo: `undo(txn, by)` (selective, e.g. review revert), `undo_last(author)`,
-  `redo_last(author)`.
+  `redo_last(author)`; `next_undo`/`next_redo(author)` peek for menu labels.
 - `undo_rebased(txn, by, foreign) -> Rebased { txn, skipped }`: per-participant
   undo (D21); ops whose paths a later `foreign` transaction touched are skipped.
 - `Guard` (`check(meta, origin, ops) -> errors`): `set_guard` installs one (the

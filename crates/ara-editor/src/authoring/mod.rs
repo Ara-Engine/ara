@@ -15,7 +15,7 @@ struct CreateParams {
     session: String,
     /// New project-relative asset document path.
     path: String,
-    /// material, vfx, graph or animation.
+    /// material, vfx, graph, animation or scene (an empty scene document).
     domain: String,
     /// Optional complete domain source for material/VFX import.
     source: Option<String>,
@@ -96,6 +96,11 @@ impl Service for AuthoringService {
             return cx.apply(parse(json!({"session":p.session,"doc":doc,"commands":commands,"why":p.why.unwrap_or_else(||"Edit animation canvas".into())}))?);
         }
         let p: CreateParams = parse(params)?;
+        if p.domain == "scene" {
+            // An empty scene document; File › New Scene opens it.
+            let doc = cx.create_document(&p.path, "scene").map_err(|d| vec![d])?;
+            return Ok(json!({"doc":doc,"path":p.path}));
+        }
         if !matches!(
             p.domain.as_str(),
             "material" | "vfx" | "graph" | "animation"

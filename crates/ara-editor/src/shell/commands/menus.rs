@@ -1,0 +1,720 @@
+//! Menu bar and context-menu layouts. Every entry names a registry command, so
+//! menus, the palette and shortcuts cannot drift apart (ANALYSIS Appendix A).
+/// One menu entry.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Item {
+    /// A registry command id.
+    Command(&'static str),
+    /// A separator line.
+    Separator,
+    /// A nested menu.
+    Sub(&'static str, &'static [Item]),
+    /// Entries generated at runtime from a parameterised command.
+    Dynamic(Dynamic),
+}
+/// Runtime-generated entries; each still runs a registry command with a target.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Dynamic {
+    /// Scenes in the project, run with `file.open_scene`.
+    RecentScenes,
+    /// Floating windows, run with `window.focus_window`.
+    Windows,
+    /// Layouts saved under `.ara/layouts`, run with `layout.load`.
+    SavedLayouts,
+}
+impl Dynamic {
+    /// The registry command dynamic entries run.
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::RecentScenes => "file.open_scene",
+            Self::Windows => "window.focus_window",
+            Self::SavedLayouts => "layout.load",
+        }
+    }
+}
+/// A top-level menu with its Alt mnemonic.
+pub(crate) struct Menu {
+    pub title: &'static str,
+    pub mnemonic: char,
+    pub items: &'static [Item],
+}
+use Item::{Command as C, Separator as S, Sub};
+/// The nine top-level menus.
+pub(crate) const MENUS: &[Menu] = &[
+    Menu {
+        title: "File",
+        mnemonic: 'F',
+        items: &[
+            C("file.new_scene"),
+            C("file.new_project"),
+            C("file.open"),
+            C("file.open_project"),
+            Sub("Open Recent", &[Item::Dynamic(Dynamic::RecentScenes)]),
+            S,
+            C("file.save"),
+            C("file.save_as"),
+            C("file.save_all"),
+            C("file.revert"),
+            S,
+            C("assets.import"),
+            C("file.export_selection"),
+            S,
+            Sub(
+                "Build & Export",
+                &[
+                    C("build.profiles"),
+                    C("build.current"),
+                    C("build.package"),
+                    C("build.open_folder"),
+                ],
+            ),
+            S,
+            C("file.close_document"),
+            C("file.close_project"),
+            C("file.exit"),
+        ],
+    },
+    Menu {
+        title: "Edit",
+        mnemonic: 'E',
+        items: &[
+            C("edit.undo"),
+            C("edit.redo"),
+            C("edit.history"),
+            S,
+            C("edit.cut"),
+            C("edit.copy"),
+            C("edit.paste"),
+            C("edit.paste_child"),
+            C("edit.duplicate"),
+            C("edit.delete"),
+            C("edit.rename"),
+            C("edit.copy_reference"),
+            S,
+            C("edit.select_all"),
+            C("edit.deselect"),
+            C("edit.invert_selection"),
+            Sub(
+                "Select",
+                &[
+                    C("select.children"),
+                    C("select.parent"),
+                    C("select.siblings"),
+                    C("select.same_type"),
+                    C("select.same_asset"),
+                    C("select.layer"),
+                ],
+            ),
+            S,
+            C("edit.find_scene"),
+            C("edit.find_project"),
+            C("edit.palette"),
+            C("edit.goto"),
+            S,
+            Sub(
+                "Snapping",
+                &[
+                    C("snap.toggle"),
+                    C("snap.grid"),
+                    C("snap.rotation"),
+                    C("snap.scale"),
+                    C("snap.surface"),
+                    C("snap.vertex"),
+                    S,
+                    C("snap.settings"),
+                ],
+            ),
+            Sub(
+                "Transform",
+                &[
+                    C("transform.reset_position"),
+                    C("transform.reset_rotation"),
+                    C("transform.reset_scale"),
+                    S,
+                    C("transform.align_view"),
+                    C("transform.move_to_view"),
+                    C("edit.transform.drop"),
+                ],
+            ),
+            S,
+            C("edit.preferences"),
+            C("edit.project_settings"),
+            C("edit.shortcuts"),
+        ],
+    },
+    Menu {
+        title: "View",
+        mnemonic: 'V',
+        items: &[
+            Sub(
+                "Camera",
+                &[
+                    C("view.camera.perspective"),
+                    C("view.camera.default"),
+                    S,
+                    C("view.camera.top"),
+                    C("view.camera.bottom"),
+                    C("view.camera.front"),
+                    C("view.camera.back"),
+                    C("view.camera.left"),
+                    C("view.camera.right"),
+                    S,
+                    C("view.frame"),
+                    C("view.frame_all"),
+                    S,
+                    C("view.camera.speed_up"),
+                    C("view.camera.speed_down"),
+                    C("view.camera.bookmarks"),
+                    C("view.camera.pilot"),
+                ],
+            ),
+            Sub(
+                "View Mode",
+                &[
+                    C("view.mode.lit"),
+                    C("view.mode.base_color"),
+                    C("view.mode.normals"),
+                    C("view.mode.depth"),
+                    C("view.mode.roughness_metal"),
+                    C("view.mode.entity_ids"),
+                    C("view.mode.shadow_cascades"),
+                    S,
+                    C("view.mode.wireframe"),
+                    C("view.mode.overdraw"),
+                    C("view.mode.gi_debug"),
+                ],
+            ),
+            Sub(
+                "Show",
+                &[
+                    C("view.show.grid"),
+                    C("view.show.outline"),
+                    C("view.show.gizmos"),
+                    C("view.show.orientation"),
+                    S,
+                    C("view.show.bounds"),
+                    C("view.show.colliders"),
+                    C("view.show.stats"),
+                ],
+            ),
+            C("view.game"),
+            C("view.hide_overlays"),
+            C("view.fidelity"),
+            C("view.environment"),
+            C("view.layout_quad"),
+            S,
+            C("window.maximize"),
+            C("view.fullscreen"),
+            Sub(
+                "UI Zoom",
+                &[C("view.zoom_in"), C("view.zoom_out"), C("view.zoom_reset")],
+            ),
+            Sub(
+                "Density",
+                &[C("view.density.compact"), C("view.density.comfortable")],
+            ),
+            Sub("Theme", &[C("view.theme.dark"), C("view.theme.light")]),
+            C("view.reduce_motion"),
+        ],
+    },
+    Menu {
+        title: "Create",
+        mnemonic: 'C',
+        items: &[
+            C("create.empty"),
+            C("create.empty_child"),
+            C("create.group"),
+            C("create.at_cursor"),
+            S,
+            Sub(
+                "3D Shapes",
+                &[
+                    C("create.cube"),
+                    C("create.sphere"),
+                    C("create.plane"),
+                    C("create.capsule"),
+                    C("create.cylinder"),
+                ],
+            ),
+            C("create.mesh"),
+            Sub(
+                "Lights",
+                &[
+                    C("create.light.sun"),
+                    C("create.light.point"),
+                    C("create.light.spot"),
+                    C("create.light.sky"),
+                    C("create.light.probe"),
+                ],
+            ),
+            C("create.camera"),
+            Sub(
+                "Effects",
+                &[C("create.vfx"), C("create.decal"), C("create.fog")],
+            ),
+            Sub(
+                "Physics",
+                &[
+                    C("create.physics.body"),
+                    C("create.physics.collider"),
+                    C("create.physics.character"),
+                    C("create.physics.trigger"),
+                ],
+            ),
+            Sub(
+                "Audio",
+                &[C("create.audio.source"), C("create.audio.listener")],
+            ),
+            Sub(
+                "Navigation",
+                &[C("create.nav.volume"), C("create.nav.link")],
+            ),
+            Sub(
+                "World",
+                &[C("create.world.terrain"), C("create.world.foliage")],
+            ),
+            Sub("2D", &[C("create.2d.sprite"), C("create.2d.tilemap")]),
+            Sub("UI", &[C("create.ui.screen"), C("create.ui.world")]),
+            Sub(
+                "Gameplay",
+                &[C("create.gameplay.player"), C("create.gameplay.spawn")],
+            ),
+            S,
+            C("create.prefab"),
+        ],
+    },
+    Menu {
+        title: "Assets",
+        mnemonic: 'A',
+        items: &[
+            Sub(
+                "Create",
+                &[
+                    C("assets.create.folder"),
+                    C("assets.create.scene"),
+                    C("assets.create.material"),
+                    C("assets.create.vfx"),
+                    C("assets.create.animation"),
+                    C("assets.create.script"),
+                    C("assets.create.prefab"),
+                ],
+            ),
+            C("assets.import"),
+            C("assets.reimport"),
+            C("assets.reimport_changed"),
+            S,
+            C("assets.open"),
+            C("assets.show"),
+            C("assets.reveal"),
+            C("assets.copy_reference"),
+            C("assets.references"),
+            S,
+            C("assets.rename"),
+            C("assets.duplicate"),
+            C("assets.delete"),
+            S,
+            C("assets.validate"),
+            C("assets.rebuild_thumbnails"),
+            C("assets.clear_cache"),
+            C("assets.import_defaults"),
+        ],
+    },
+    Menu {
+        title: "Play",
+        mnemonic: 'P',
+        items: &[
+            C("play.start"),
+            C("play.pause"),
+            C("play.step"),
+            C("play.stop"),
+            C("play.restart"),
+            C("play.simulate"),
+            C("play.eject"),
+            S,
+            Sub(
+                "Mode",
+                &[
+                    C("play.mode.local"),
+                    C("play.mode.host"),
+                    C("play.mode.dedicated"),
+                    S,
+                    C("play.clients.more"),
+                    C("play.clients.fewer"),
+                ],
+            ),
+            C("play.start_paused"),
+            C("play.network_profile"),
+            S,
+            C("play.review"),
+            C("play.settings"),
+        ],
+    },
+    Menu {
+        title: "Tools",
+        mnemonic: 'T',
+        items: &[
+            C("window.profiler"),
+            C("tools.gpu_capture"),
+            C("tools.why"),
+            C("tools.references"),
+            C("tools.table"),
+            S,
+            C("tools.localization"),
+            C("tools.input_actions"),
+            C("tools.physics_debugger"),
+            C("tools.terrain"),
+            C("tools.ui_designer"),
+            S,
+            Sub("C#", &[C("tools.cs.solution"), C("tools.cs.reload")]),
+            Sub(
+                "Agents",
+                &[
+                    C("window.agents"),
+                    C("agents.policy.immediately"),
+                    C("agents.policy.idle"),
+                    C("agents.policy.approval"),
+                    S,
+                    C("agents.connect"),
+                ],
+            ),
+            C("tools.vcs"),
+            C("tools.plugins"),
+            C("tools.terminal"),
+        ],
+    },
+    Menu {
+        title: "Window",
+        mnemonic: 'W',
+        items: &[
+            Sub(
+                "Layouts",
+                &[
+                    C("layout.default"),
+                    C("layout.level_design"),
+                    C("layout.materials"),
+                    C("layout.animation"),
+                    C("layout.profiling"),
+                    C("layout.laptop"),
+                    Item::Dynamic(Dynamic::SavedLayouts),
+                    S,
+                    C("layout.save"),
+                    C("layout.saved"),
+                    C("layout.reset"),
+                ],
+            ),
+            S,
+            C("window.hierarchy"),
+            C("window.inspector"),
+            C("window.assets"),
+            C("window.console"),
+            C("window.agents"),
+            C("window.profiler"),
+            C("window.history"),
+            S,
+            C("window.float"),
+            Sub(
+                "Move Panel To",
+                &[
+                    C("window.move.left"),
+                    C("window.move.right"),
+                    C("window.move.bottom"),
+                    C("window.move.center"),
+                    C("window.float"),
+                ],
+            ),
+            C("window.maximize"),
+            C("window.close_panel"),
+            C("window.auto_hide"),
+            S,
+            C("window.next_document"),
+            S,
+            C("window.gather"),
+            Item::Dynamic(Dynamic::Windows),
+        ],
+    },
+    Menu {
+        title: "Help",
+        mnemonic: 'H',
+        items: &[
+            C("help.search"),
+            S,
+            C("help.docs"),
+            C("help.shortcuts"),
+            C("help.cs_api"),
+            S,
+            C("agents.connect"),
+            C("help.agent_guide"),
+            S,
+            C("help.report"),
+            C("help.logs"),
+            C("help.system"),
+            C("help.about"),
+        ],
+    },
+];
+/// What was right-clicked; selects a context-menu layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Context {
+    /// A hierarchy row or a viewport object.
+    Entity,
+    /// Empty hierarchy space.
+    Hierarchy,
+    /// Empty viewport space.
+    Viewport,
+    /// An asset tile or row.
+    Asset,
+    /// A folder.
+    Folder,
+    /// Empty asset browser space.
+    Assets,
+    /// An inspector field.
+    Field,
+    /// An inspector component header.
+    Component,
+    /// A dock tab or panel header.
+    Tab,
+    /// A graph node.
+    Node,
+    /// Empty graph canvas.
+    Canvas,
+    /// A console row.
+    Console,
+    /// A profiler span or frame.
+    Profiler,
+    /// A status bar chip.
+    Status,
+    /// The Play cluster's mode button.
+    Play,
+    /// A VFX module row.
+    Module,
+    /// Viewport toolbar: camera views.
+    Camera,
+    /// Viewport toolbar: view modes.
+    ViewModes,
+    /// Viewport toolbar: show flags.
+    Show,
+}
+/// Context-menu layout for a target kind.
+pub(crate) fn context(kind: Context) -> &'static [Item] {
+    match kind {
+        Context::Entity => &[
+            Sub(
+                "Create Child",
+                &[
+                    C("create.empty_child"),
+                    C("create.cube"),
+                    C("create.sphere"),
+                    C("create.light.point"),
+                ],
+            ),
+            S,
+            C("edit.rename"),
+            C("edit.duplicate"),
+            C("edit.delete"),
+            C("edit.copy_reference"),
+            S,
+            C("view.frame"),
+            C("select.children"),
+            C("edit.hide"),
+            C("edit.lock"),
+            S,
+            C("prefab.unpack"),
+            C("assets.show"),
+        ],
+        Context::Hierarchy => &[
+            C("create.empty"),
+            Sub(
+                "Create",
+                &[
+                    C("create.cube"),
+                    C("create.sphere"),
+                    C("create.plane"),
+                    C("create.light.point"),
+                    C("create.camera"),
+                ],
+            ),
+            S,
+            C("edit.select_all"),
+            C("edit.deselect"),
+            C("edit.unhide_all"),
+        ],
+        Context::Viewport => &[
+            Sub(
+                "Create",
+                &[
+                    C("create.empty"),
+                    C("create.cube"),
+                    C("create.sphere"),
+                    C("create.plane"),
+                    C("create.light.point"),
+                    C("create.camera"),
+                ],
+            ),
+            S,
+            C("view.frame_all"),
+            Sub(
+                "View Mode",
+                &[
+                    C("view.mode.lit"),
+                    C("view.mode.base_color"),
+                    C("view.mode.normals"),
+                ],
+            ),
+            C("view.show.grid"),
+            C("view.game"),
+        ],
+        Context::Asset => &[
+            C("assets.open"),
+            C("assets.reveal"),
+            C("assets.copy_reference"),
+            C("assets.references"),
+            S,
+            C("assets.reimport"),
+            C("assets.rename"),
+            C("assets.delete"),
+        ],
+        Context::Folder => &[
+            C("assets.open"),
+            C("assets.reveal"),
+            S,
+            C("assets.create.folder"),
+            C("assets.create.material"),
+            C("assets.import"),
+        ],
+        Context::Assets => &[
+            Sub(
+                "Create",
+                &[
+                    C("assets.create.folder"),
+                    C("assets.create.material"),
+                    C("assets.create.vfx"),
+                    C("assets.create.animation"),
+                ],
+            ),
+            C("assets.import"),
+            C("assets.reveal"),
+            C("assets.rebuild_thumbnails"),
+        ],
+        Context::Field => &[
+            C("field.copy"),
+            C("field.paste"),
+            C("field.reset"),
+            C("field.copy_path"),
+            S,
+            C("field.why"),
+        ],
+        Context::Component => &[
+            C("component.reset"),
+            C("component.remove"),
+            C("component.copy"),
+            S,
+            C("component.add"),
+        ],
+        Context::Tab => &[
+            C("window.float"),
+            Sub(
+                "Move To",
+                &[
+                    C("window.move.left"),
+                    C("window.move.right"),
+                    C("window.move.bottom"),
+                    C("window.move.center"),
+                ],
+            ),
+            C("window.maximize"),
+            C("window.close_panel"),
+            S,
+            C("layout.reset"),
+        ],
+        Context::Node => &[
+            C("graph.delete"),
+            C("graph.group"),
+            C("graph.frame"),
+            S,
+            C("graph.add"),
+        ],
+        Context::Canvas => &[
+            C("graph.add"),
+            C("graph.comment"),
+            C("graph.reroute"),
+            S,
+            C("graph.frame"),
+            C("graph.select_all"),
+        ],
+        Context::Console => &[C("console.copy"), C("console.clear")],
+        Context::Profiler => &[
+            C("profiler.record"),
+            C("profiler.freeze"),
+            C("profiler.baseline"),
+            C("profiler.compare"),
+        ],
+        Context::Status => &[
+            C("window.console"),
+            C("window.agents"),
+            C("window.profiler"),
+        ],
+        Context::Module => &[
+            C("vfx.module.up"),
+            C("vfx.module.down"),
+            C("vfx.module.duplicate"),
+            S,
+            C("vfx.module.delete"),
+        ],
+        Context::Camera => &[
+            C("view.camera.perspective"),
+            C("view.camera.default"),
+            S,
+            C("view.camera.top"),
+            C("view.camera.bottom"),
+            C("view.camera.front"),
+            C("view.camera.back"),
+            C("view.camera.left"),
+            C("view.camera.right"),
+            S,
+            C("view.frame"),
+            C("view.frame_all"),
+            S,
+            C("view.camera.speed_up"),
+            C("view.camera.speed_down"),
+        ],
+        Context::ViewModes => &[
+            C("view.mode.lit"),
+            C("view.mode.base_color"),
+            C("view.mode.normals"),
+            C("view.mode.depth"),
+            C("view.mode.roughness_metal"),
+            C("view.mode.entity_ids"),
+            C("view.mode.shadow_cascades"),
+            S,
+            C("view.mode.wireframe"),
+            C("view.mode.overdraw"),
+            C("view.mode.gi_debug"),
+            S,
+            C("view.fidelity"),
+        ],
+        Context::Show => &[
+            C("view.show.grid"),
+            C("view.show.outline"),
+            C("view.show.gizmos"),
+            C("view.show.orientation"),
+            S,
+            C("view.show.bounds"),
+            C("view.show.colliders"),
+            C("view.show.stats"),
+            S,
+            C("view.game"),
+            C("view.hide_overlays"),
+        ],
+        Context::Play => &[
+            C("play.mode.local"),
+            C("play.mode.host"),
+            C("play.mode.dedicated"),
+            S,
+            C("play.clients.more"),
+            C("play.clients.fewer"),
+            C("play.start_paused"),
+            S,
+            C("play.settings"),
+        ],
+    }
+}

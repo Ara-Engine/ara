@@ -99,10 +99,12 @@ pub(crate) fn mirror_rtl(ui: &mut Ui) {
                 node,
                 rect: r,
                 image,
+                tint,
             } => Draw::Image {
                 node,
                 rect: rect(r),
                 image,
+                tint,
             },
             Draw::PushClip { rect: r } => Draw::PushClip { rect: rect(r) },
             Draw::PushRoundedClip { rect: r, radius } => Draw::PushRoundedClip {
@@ -200,10 +202,16 @@ pub(crate) fn physical_list(list: &DisplayList, scale: f32) -> DisplayList {
                     radius: radius * scale,
                     width: width * scale,
                 },
-                Draw::Image { node, rect, image } => Draw::Image {
+                Draw::Image {
+                    node,
+                    rect,
+                    image,
+                    tint,
+                } => Draw::Image {
                     node: *node,
                     rect: scaled(*rect, scale),
                     image: *image,
+                    tint: *tint,
                 },
                 Draw::GlyphRun {
                     node,

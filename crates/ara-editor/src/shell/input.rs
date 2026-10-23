@@ -48,6 +48,7 @@ impl Shell {
                     if let Some(index) = self.ui.by_id(action.node) {
                         let id = &self.ui.nodes[index].element.id;
                         if let Some(path) = id.strip_prefix("splitter-root") {
+                            // Floating-window and maximized splits resize natively but are not persisted.
                             let path: Vec<_> = path
                                 .split('-')
                                 .filter(|s| !s.is_empty())
@@ -108,10 +109,6 @@ impl Shell {
                             );
                         }
                     }
-                    Binding::ResourceCreate(domain) => {
-                        self.create_resource(editor, domain)?;
-                        rebuild = true;
-                    }
                     Binding::ResourceText(doc, _domain) => {
                         self.resource_text =
                             Some((doc.clone(), action.value.as_str().unwrap_or("").into()));
@@ -124,22 +121,131 @@ impl Shell {
                         editor.action("editor.workspace", json!({"plane":plane}))?;
                         rebuild = true;
                     }
-                    Binding::GraphLayout(kind) => {
-                        self.edit_graph_layout(editor, kind)?;
-                        rebuild = true;
-                    }
                     Binding::ComponentCollapse(name) => {
                         if !self.collapsed_components.remove(name) {
                             self.collapsed_components.insert(name.clone());
                         }
                         rebuild = true;
                     }
-                    Binding::ComponentMenu(name) => {
-                        self.component_menu = if self.component_menu.as_ref() == Some(name) {
-                            None
+                    Binding::Command(id, target) => {
+                        let (id, target) = (*id, target.clone());
+                        let close_palette = editor.state.palette;
+                        self.remember(id);
+                        self.menu = None;
+                        self.mnemonics = false;
+                        if close_palette {
+                            editor.action("editor.palette", json!({"open":false}))?;
+                        }
+                        self.execute(editor, id, &target)?;
+                        rebuild = true;
+                    }
+                    Binding::MenuBar(index) => {
+                        if self.menu.as_ref().and_then(|m| m.bar()) == Some(*index) {
+                            self.menu = None;
                         } else {
-                            Some(name.clone())
-                        };
+                            self.open_bar(*index, false);
+                        }
+                        self.mnemonics = false;
+                        rebuild = true;
+                    }
+                    Binding::EnumMenu(path, options) => {
+                        let at = self
+                            .ui
+                            .by_id(action.node)
+                            .map(|i| {
+                                let r = self.ui.nodes[i].rect;
+                                [r.x, r.y + r.h + 2.]
+                            })
+                            .unwrap_or(self.pointer);
+                        self.open_menu_at(
+                            super::menu::Source::Enum(path.clone(), options.clone()),
+                            at,
+                        );
+                        rebuild = true;
+                    }
+                    Binding::MenuSub(level, row) => {
+                        if let Some(menu) = &mut self.menu {
+                            menu.open.truncate(*level);
+                            menu.open.push(*row);
+                            menu.active = None;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::MenuFilter => {
+                        if let Some(menu) = &mut self.menu {
+                            menu.query = action.value.as_str().unwrap_or("").into();
+                            menu.open.clear();
+                            menu.active = None;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::ContextMenu(kind, target) => {
+                        let at = self
+                            .ui
+                            .by_id(action.node)
+                            .map(|i| {
+                                let r = self.ui.nodes[i].rect;
+                                [r.x, r.y + r.h + 2.]
+                            })
+                            .unwrap_or(self.pointer);
+                        self.open_menu_at(super::menu::Source::Context(*kind, target.clone()), at);
+                        rebuild = true;
+                    }
+                    Binding::Setting(key) => {
+                        if let Some(v) = action.value.as_bool() {
+                            editor.action("editor.settings.set", json!({"key":key,"value":v}))?;
+                            rebuild = true;
+                        } else {
+                            self.drafts.insert(
+                                format!("@setting|{key}"),
+                                action.value.as_str().unwrap_or("").into(),
+                            );
+                        }
+                    }
+                    Binding::SettingChoice(key, value) => {
+                        if key == "@view" {
+                            editor.action("editor.settings.view", value.clone())?;
+                        } else if value.is_null() {
+                            editor
+                                .action("editor.settings.set", json!({"key":key,"reset":true}))?;
+                        } else {
+                            editor
+                                .action("editor.settings.set", json!({"key":key,"value":value}))?;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::ShortcutRecord(id) => {
+                        self.recording = Some(*id);
+                        self.key_search = false;
+                        rebuild = true;
+                    }
+                    Binding::ShortcutReset(id) => {
+                        let mut map = editor
+                            .state
+                            .settings
+                            .get("input.shortcuts")
+                            .and_then(Value::as_object)
+                            .cloned()
+                            .unwrap_or_default();
+                        map.remove(*id);
+                        editor.action(
+                            "editor.settings.set",
+                            json!({"key":"input.shortcuts","value":map}),
+                        )?;
+                        rebuild = true;
+                    }
+                    Binding::KeySearch => {
+                        self.key_search = !self.key_search;
+                        self.recording = None;
+                        rebuild = true;
+                    }
+                    Binding::DialogText => {
+                        if let Some(Dialog::SaveLayout { name }) = &mut self.dialog {
+                            *name = action.value.as_str().unwrap_or("").into();
+                        }
+                    }
+                    Binding::DialogAction(which) => {
+                        self.dialog_action(editor, which)?;
                         rebuild = true;
                     }
                     Binding::ResourceContent(doc, commands, why) => {
@@ -209,7 +315,7 @@ impl Shell {
                     }
                     Binding::Content(commands, why) => {
                         editor.apply(commands.clone(), why, None)?;
-                        self.context = false;
+                        self.menu = None;
                         if editor.state.palette {
                             editor.action("editor.palette", json!({"open":false}))?;
                         }
@@ -217,19 +323,34 @@ impl Shell {
                     }
                     Binding::Select(entity) => {
                         let key = crate::world::render_id(entity);
+                        let row = self.ui.by_id(action.node).map(|i| self.ui.nodes[i].rect);
+                        let x = self.pointer[0];
                         let chevron = self.hierarchy_style.get(&key).is_some_and(|s| {
                             s.children
-                                && self.ui.by_id(action.node).is_some_and(|i| {
-                                    self.pointer[0]
-                                        < self.ui.nodes[i].rect.x
-                                            + 24.
-                                            + s.depth.min(32) as f32 * 14.
-                                })
+                                && row.is_some_and(|r| x < r.x + 24. + s.depth.min(32) as f32 * 16.)
                         });
                         if chevron {
                             editor.action("editor.collapse",json!({"entity":entity,"enabled":!editor.state.collapsed.contains(entity)}))?;
                             rebuild = true;
                             continue;
+                        }
+                        // Hover gutter: eye toggles viewport visibility, lock blocks picking.
+                        if let Some(r) = row {
+                            let right = r.x + r.w;
+                            if (right - super::polish::EYE..right - super::polish::EYE + 16.)
+                                .contains(&x)
+                            {
+                                editor.action("editor.visibility",json!({"entity":entity,"enabled":!editor.state.hidden.contains(entity)}))?;
+                                rebuild = true;
+                                continue;
+                            }
+                            if (right - super::polish::LOCK..right - super::polish::LOCK + 16.)
+                                .contains(&x)
+                            {
+                                editor.action("editor.lock",json!({"entity":entity,"enabled":!editor.state.locked.contains(entity)}))?;
+                                rebuild = true;
+                                continue;
+                            }
                         }
 
                         if let Some(path) = self.pick_field.take() {
@@ -353,23 +474,9 @@ impl Shell {
                         }
                         rebuild = true;
                     }
-                    Binding::Rename => {
-                        self.rename = true;
-                        self.context = false;
-                        rebuild = true;
-                    }
                     Binding::RenameValue => {
                         self.drafts
                             .insert("@name".into(), action.value.as_str().unwrap_or("").into());
-                    }
-                    Binding::AddComponent => {
-                        self.palette_command = Some("@components".into());
-                        editor.action("editor.palette", json!({"open":true}))?;
-                        rebuild = true;
-                    }
-                    Binding::Context => {
-                        self.context = !self.context;
-                        rebuild = true;
                     }
                 }
             }
@@ -433,6 +540,31 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
+        let setting_keys = self
+            .drafts
+            .keys()
+            .filter(|k| k.starts_with("@setting|"))
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in &setting_keys {
+            let text = self.drafts.remove(key).unwrap_or_default();
+            let name = &key["@setting|".len()..];
+            let value = match crate::settings::def_of(name).map(|d| d.kind) {
+                Some(crate::settings::Kind::Number { .. }) => json!(
+                    text.trim()
+                        .trim_end_matches(['%', 'x', '×'])
+                        .trim()
+                        .parse::<f64>()
+                        .map_err(|_| format!("{name} needs a number"))?
+                ),
+                _ => json!(text),
+            };
+            editor.action("editor.settings.set", json!({"key":name,"value":value}))?;
+        }
+        if !setting_keys.is_empty() && self.drafts.is_empty() {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         let imported = self.commit_import_fields(editor)?;
         let vfx_keys = self
             .drafts
@@ -483,7 +615,28 @@ impl Shell {
                 .fields
                 .get(path)
                 .ok_or("inspector schema field disappeared")?;
-            let value = if matches!(
+            let value = if axis.is_empty()
+                && matches!(
+                    field.widget,
+                    crate::inspector::Widget::Vector { color: true, .. }
+                ) {
+                // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
+                let hex = text.trim().trim_start_matches('#');
+                if hex.len() != 6 {
+                    return Err("Enter a colour as #RRGGBB".into());
+                }
+                let channel = |n: usize| -> ara_ui::Result<f64> {
+                    Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
+                };
+                let alpha = field.value.get(3).and_then(Value::as_f64).unwrap_or(1.);
+                let round = |v: f64| (v * 10000.).round() / 10000.;
+                json!([
+                    round(channel(0)?),
+                    round(channel(1)?),
+                    round(channel(2)?),
+                    alpha
+                ])
+            } else if matches!(
                 field.widget,
                 crate::inspector::Widget::Number { .. } | crate::inspector::Widget::Vector { .. }
             ) {

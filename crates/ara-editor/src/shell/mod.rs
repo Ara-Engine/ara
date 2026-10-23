@@ -1,14 +1,27 @@
 //! Retained native panel composition and semantic interaction helpers.
+//!
+//! The main window and each floating window are separate retained `Ui` trees
+//! ("surfaces"). Panel code always works on `self.ui`; [`Shell::enter`] swaps a
+//! floating surface in and [`Shell::leave`] swaps it back, so panels need not
+//! know which OS window hosts them.
 mod assets;
 mod axis;
+mod chrome;
+pub mod commands;
+mod dialog;
 mod drag;
 pub(crate) mod icons;
 mod input;
 mod keyboard;
+mod menu;
 mod motion;
+mod ops;
 mod polish;
 mod scrub;
+mod settings_panel;
+mod testing;
 use drag::Drag;
+pub use testing::MenuRow;
 mod animation_panel;
 mod assets_panel;
 mod graph_annotations;
@@ -32,21 +45,37 @@ use ara_ui::{
     virtualize::{VirtualList, VirtualView},
 };
 use ara_ui_text::TextSystem;
+pub(crate) use dialog::Dialog;
+pub(crate) use ops::{WindowRequest, open_docs, open_external, open_terminal};
 use panels::{button, escape};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+/// A floating OS window's retained UI, swapped into `Shell::ui` while it is handled.
+pub struct Surface {
+    /// Floating window id from the layout.
+    pub id: String,
+    /// Retained runtime tree and display list.
+    pub ui: Ui,
+    /// The window's own focus and capture.
+    pub input: InputState,
+    /// Pointer in this window's logical pixels.
+    pub pointer: [f32; 2],
+}
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
-    /// Native runtime tree and renderer-neutral display list.
+    /// Native runtime tree and renderer-neutral display list of the current surface.
     pub ui: Ui,
     /// Explicit bundled fonts and retained shaping contexts.
     pub text: TextSystem,
-    /// Native focus, capture and keyboard navigation.
+    /// Native focus, capture and keyboard navigation of the current surface.
     pub input: InputState,
+    /// Floating windows; the current one (if any) is swapped into `ui`.
+    pub floats: Vec<Surface>,
+    current: Option<String>,
     /// Active schema field models keyed by widget identity.
     pub fields: BTreeMap<String, Field>,
-    /// Pointer location in logical pixels.
+    /// Pointer location in logical pixels of the current surface.
     pub pointer: [f32; 2],
     /// Shift/control/alt modifiers, updated from physical keys.
     pub modifiers: [bool; 3],
@@ -58,10 +87,13 @@ pub struct Shell {
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
     hierarchy_view: Option<VirtualView>,
+    /// Surface hosting the hierarchy's virtual rows (`None` is the main window).
+    hierarchy_surface: Option<String>,
     browser: assets::Browser,
     asset_rows: VirtualList,
     asset_entries: BTreeMap<u64, assets::Asset>,
     asset_view: Option<VirtualView>,
+    asset_surface: Option<String>,
     asset_offset: f32,
     thumbnails: crate::asset_tools::thumbnails::Thumbnails,
     thumbnail_slots: BTreeMap<String, usize>,
@@ -75,9 +107,9 @@ pub struct Shell {
     asset_grid_size: [f32; 2],
     asset_grid_dirty: bool,
     drafts: BTreeMap<String, String>,
-    pub(crate) context: bool,
     pub(crate) palette_command: Option<String>,
     pub(crate) palette_params: BTreeMap<String, Value>,
+    palette_active: usize,
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
     pub(crate) drag: Option<Drag>,
@@ -89,7 +121,6 @@ pub struct Shell {
     modal_open: bool,
     canvas_modal_open: bool,
     collapsed_components: std::collections::BTreeSet<String>,
-    component_menu: Option<String>,
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
     selected_rows: std::collections::BTreeSet<u64>,
     pub(crate) version: u64,
@@ -107,9 +138,37 @@ pub struct Shell {
     vfx_ready: bool,
     vfx_error: Option<String>,
     axis_camera: crate::state::Camera,
+    /// Open menu bar menu, context menu or value menu.
+    pub(crate) menu: Option<menu::MenuState>,
+    menu_anchors: Vec<f32>,
+    mnemonics: bool,
+    alt_tap: bool,
+    /// Modal information or input dialog.
+    pub(crate) dialog: Option<Dialog>,
+    /// OS window work for the window owner (full screen, raise, import dialog, quit).
+    pub window_request: Option<WindowRequest>,
+    pub(crate) status_note: Option<String>,
+    /// GPU, driver and Vulkan summary for Help › System Info.
+    pub device_info: String,
+    pub(crate) entity_clipboard: Option<Vec<Value>>,
+    pub(crate) field_clipboard: Option<Value>,
+    pending_clipboard: Option<String>,
+    recent_docs: Vec<String>,
+    recent_commands: Vec<&'static str>,
+    /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
+    pub(crate) recording: Option<&'static str>,
+    key_search: bool,
+    label_width: f32,
+    keymap: commands::keys::Keymap,
+    /// Live tab drag target, painted as a lit region with an action label.
+    pub(crate) drop_preview: Option<drag::DropPreview>,
+
+    /// Main window's desktop rectangle (x, y, width, height), kept by the window owner.
+    pub main_rect: [i32; 4],
 }
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
+    Command(&'static str, commands::Target),
     Content(Vec<Value>, String),
     Field(String, Option<usize>),
     Search(String),
@@ -121,11 +180,9 @@ pub(crate) enum Binding {
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
     ImportChoice(String, String, Value),
-    ResourceCreate(String),
     ResourceText(String, String),
     ResourceApply,
     PreviewShape(bool),
-    GraphLayout(String),
     VfxPlayback(bool),
     AnimationEdit(String),
     AnimationField(String, String, String),
@@ -136,15 +193,23 @@ pub(crate) enum Binding {
     Approve(String),
     Reject(String),
     PickField(String),
-    Rename,
     RenameValue,
-    AddComponent,
-    Context,
     ColorPicker(String),
     ComponentCollapse(String),
-    ComponentMenu(String),
     Scrub(String, usize),
     Diagnostic(ara_diag::Diagnostic),
+    MenuBar(usize),
+    MenuSub(usize, usize),
+    MenuFilter,
+    ContextMenu(commands::menus::Context, commands::Target),
+    EnumMenu(String, Vec<String>),
+    Setting(String),
+    SettingChoice(String, Value),
+    ShortcutRecord(&'static str),
+    ShortcutReset(&'static str),
+    KeySearch,
+    DialogText,
+    DialogAction(&'static str),
 }
 impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
@@ -162,6 +227,8 @@ impl Shell {
             ui,
             text,
             input: InputState::default(),
+            floats: Vec::new(),
+            current: None,
             fields: BTreeMap::new(),
             pointer: [0.; 2],
             modifiers: [false; 3],
@@ -172,10 +239,12 @@ impl Shell {
             hierarchy_tints: BTreeMap::new(),
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             hierarchy_view: None,
+            hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
             asset_rows: VirtualList { items: Vec::new() },
             asset_entries: BTreeMap::new(),
             asset_view: None,
+            asset_surface: None,
             asset_offset: 0.,
             thumbnails: crate::asset_tools::thumbnails::Thumbnails::new(editor.host.root()),
             thumbnail_slots: BTreeMap::new(),
@@ -189,9 +258,9 @@ impl Shell {
             asset_grid_size: [0.; 2],
             asset_grid_dirty: false,
             drafts: BTreeMap::new(),
-            context: false,
             palette_command: None,
             palette_params: BTreeMap::new(),
+            palette_active: 0,
             pick_field: None,
             rename: false,
             drag: None,
@@ -203,7 +272,6 @@ impl Shell {
             modal_open: false,
             canvas_modal_open: false,
             collapsed_components: Default::default(),
-            component_menu: None,
             hierarchy_style: BTreeMap::new(),
             selected_rows: Default::default(),
             version: 0,
@@ -221,21 +289,72 @@ impl Shell {
             vfx_ready: false,
             vfx_error: None,
             axis_camera: Default::default(),
+            menu: None,
+            menu_anchors: Vec::new(),
+            mnemonics: false,
+            alt_tap: false,
+            dialog: None,
+            window_request: None,
+            status_note: None,
+            device_info: String::new(),
+            entity_clipboard: None,
+            field_clipboard: None,
+            pending_clipboard: None,
+            recent_docs: Vec::new(),
+            recent_commands: Vec::new(),
+            recording: None,
+            key_search: false,
+            label_width: 0.4,
+            keymap: commands::keymap(&editor.state),
+            drop_preview: None,
+            main_rect: [0, 0, size[0] as i32, size[1] as i32],
         };
         shell.rebuild(editor)?;
         Ok(shell)
     }
+    /// Swap a floating surface into `ui`/`input`/`pointer`; false if it does not exist.
+    pub fn enter(&mut self, id: &str) -> bool {
+        if self.current.as_deref() == Some(id) {
+            return true;
+        }
+        self.leave();
+        let Some(index) = self.floats.iter().position(|s| s.id == id) else {
+            return false;
+        };
+        let surface = &mut self.floats[index];
+        std::mem::swap(&mut self.ui, &mut surface.ui);
+        std::mem::swap(&mut self.input, &mut surface.input);
+        std::mem::swap(&mut self.pointer, &mut surface.pointer);
+        self.current = Some(id.to_owned());
+        true
+    }
+    /// Swap the current floating surface back; the main window is current afterwards.
+    pub fn leave(&mut self) {
+        let Some(id) = self.current.take() else {
+            return;
+        };
+        if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
+            std::mem::swap(&mut self.ui, &mut surface.ui);
+            std::mem::swap(&mut self.input, &mut surface.input);
+            std::mem::swap(&mut self.pointer, &mut surface.pointer);
+        }
+    }
+    /// The floating window currently swapped in, if any.
+    pub fn current(&self) -> Option<&str> {
+        self.current.as_deref()
+    }
     /// Reconcile a document/navigation notification. Unchanged idle frames never rebuild panels.
     pub fn rebuild(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        self.rebuild_layout(editor, true)
+        let returning = self.current.clone();
+        self.leave();
+        let result = self.rebuild_all(editor);
+        if let Some(id) = returning {
+            self.enter(&id);
+        }
+        result
     }
-    fn rebuild_layout(
-        &mut self,
-        editor: &mut Editor,
-        allow_asset_reflow: bool,
-    ) -> ara_ui::Result<()> {
-        let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
-        let focus = self.input.focused();
+    fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.keymap = commands::keymap(&editor.state);
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
         self.bindings.clear();
@@ -244,55 +363,148 @@ impl Shell {
         self.asset_view = None;
         self.browser.poll();
         self.vfx_visible = false;
-        let mut markup = String::from("<ui id='editor'>");
-        markup.push_str("<panel id='topbar' class='topbar'>");
-        markup.push_str(&format!("<text id='brand' class='brand' text='ara' /><text id='project-name' text='{}' /><text id='project-divider' class='muted' text='/' /><text id='scene-name' class='muted' text='{}' /><panel id='top-spacer' style='flex-grow:1' />",escape(&project_name(editor)),escape(editor.host.store().workspace().path_of(&editor.state.doc).unwrap_or("Scene"))));
-        // Play opens the scene in a pooled ara-player window; controls act on the latest world.
-        markup.push_str(&format!("<panel id='play-controls' class='play-pill' style='position:absolute;left:{}px;top:8px;width:164px'>",(self.ui.size[0]-164.)*0.5));
-        for (id, text, method, params) in [
-            ("play", "Play", "play.start", json!({"window": true})),
-            ("pause", "Pause", "play.pause", json!({})),
-            ("resume", "Resume", "play.resume", json!({})),
-            ("step", "Step", "play.step", json!({"ticks": 1})),
-            ("stop", "Stop", "play.stop", json!({})),
-        ] {
-            markup.push_str(&self.bind_button(
-                id,
-                text,
-                Binding::Protocol(method, params),
-                "segment-button quiet",
-            ));
+        self.rebuild_main(editor, true)?;
+        // Floating surfaces follow the layout: drop closed ones, build open ones.
+        let floating = editor.state.floating.clone();
+        self.floats
+            .retain(|s| floating.iter().any(|f| f.id == s.id));
+        for window in &floating {
+            if !self.floats.iter().any(|s| s.id == window.id) {
+                let size = [
+                    window.rect[2].max(160) as f32,
+                    window.rect[3].max(120) as f32,
+                ];
+                self.floats.push(Surface {
+                    id: window.id.clone(),
+                    ui: Ui::editor("<ui id='float' />", include_str!("editor.css"), size)?,
+                    input: InputState::default(),
+                    pointer: [0.; 2],
+                });
+            }
+            self.enter(&window.id);
+            let result = self.rebuild_float(editor, window);
+            self.leave();
+            result?;
         }
-        markup.push_str("</panel><panel id='top-spacer2' style='flex-grow:1' />");
-        markup.push_str(&self.bind_button(
-            "palette-open",
-            "Commands    Ctrl K",
-            Binding::Protocol("editor.palette", json!({"open":true})),
-            "quiet",
-        ));
-        markup.push_str(&self.bind_button(
-            "theme",
-            if editor.state.light { "Dark" } else { "Light" },
-            Binding::Protocol("editor.theme", json!({"light":!editor.state.light})),
-            "quiet",
-        ));
-        markup.push_str(&self.bind_button(
-            "motion",
-            if editor.state.reduce_motion {
-                "Motion off"
-            } else {
-                "Motion on"
-            },
-            Binding::Protocol(
-                "editor.preferences",
-                json!({"reduceMotion":!editor.state.reduce_motion}),
-            ),
-            "quiet small",
-        ));
-        markup.push_str(
-            "</panel><panel id='dock-root' style='flex-grow:1; flex-basis:0px; min-height:0px'>",
+        if !self.vfx_visible {
+            self.vfx_stream.pause();
+        }
+        Ok(())
+    }
+    fn stylesheet(editor: &Editor) -> String {
+        let mut css = include_str!("editor.css").to_owned();
+        if editor.state.comfortable() {
+            css.push_str(include_str!("editor-comfortable.css"));
+        }
+        css
+    }
+    /// Parse markup into the current surface and run the shared mount/paint steps.
+    fn mount(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
+        let mut ui = Ui::editor(markup, &Self::stylesheet(editor), self.ui.size)?;
+        for hidden in ["tooltip", "drop-label", "gizmo-readout"] {
+            if let Some(i) = ui.find(hidden) {
+                ui.set_visible(i, false)?;
+            }
+        }
+        self.tooltip_text = None;
+        if editor.state.light {
+            ui.switch_theme(ara_ui::theme::EditorTheme::Light)?;
+        }
+        ui.frame(&mut self.text)?;
+        let row = if editor.state.comfortable() { 26. } else { 22. };
+        if let Some(index) = ui.find("hierarchy-rows") {
+            let height = ui.nodes[index].rect.h.max(row);
+            let width = ui.nodes[index].rect.w.max(80.);
+            let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
+            view.scroll(&mut ui, &self.hierarchy, self.hierarchy_offset, height)?;
+            for (id, entity) in &self.hierarchy_entities {
+                self.bindings.insert(
+                    view.identity(*id),
+                    if self.hierarchy_ghosts.contains(id) {
+                        Binding::Protocol("editor.focus", json!({"panel":"agents"}))
+                    } else {
+                        Binding::Select(entity.clone())
+                    },
+                );
+            }
+            self.hierarchy_view = Some(view);
+            self.hierarchy_surface = self.current.clone();
+        }
+        if let Some(index) = ui.find("asset-rows") {
+            let height = ui.nodes[index].rect.h.max(row);
+            let width = ui.nodes[index].rect.w.max(80.);
+            let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
+            view.scroll(&mut ui, &self.asset_rows, self.asset_offset, height)?;
+            for (key, asset) in &self.asset_entries {
+                self.bindings
+                    .insert(view.identity(*key), Binding::Asset(asset.clone()));
+            }
+            self.asset_view = Some(view);
+            self.asset_surface = self.current.clone();
+        }
+        ui.frame(&mut self.text)?;
+        self.ui = ui;
+        self.decorate_hierarchy();
+        if self.asset_surface == self.current
+            && let Some(view) = &self.asset_view
+        {
+            for index in view.visible_nodes() {
+                for n in 0..self.ui.nodes[*index].element.children.len() {
+                    let child = self.ui.nodes[*index].element.children[n];
+                    let node = &mut self.ui.nodes[child];
+                    node.element.attrs.insert("style".into(),format!("height:{row}px;width:100%;padding:2px;padding-left:30px;overflow:hidden;font-size:12px"));
+                    node.dirty.style = true;
+                }
+            }
+        }
+        self.ui.frame(&mut self.text)?;
+        Ok(())
+    }
+    fn rebuild_float(
+        &mut self,
+        editor: &mut Editor,
+        window: &ara_ui::docking::Floating,
+    ) -> ara_ui::Result<()> {
+        let mut markup = String::from(
+            "<ui id='float'><panel id='float-root' class='dock-root' style='padding-top:4px'>",
         );
-        self.dock(&editor.state.layout.clone(), "root", editor, &mut markup)?;
+        self.dock(
+            &window.root,
+            &format!("f{}", window.id),
+            editor,
+            &mut markup,
+        )?;
+        markup.push_str("</panel>");
+        self.overlays(editor, &mut markup)?;
+        markup.push_str(POPUP_TAIL);
+        markup.push_str("</ui>");
+        self.mount(editor, &markup)?;
+        self.after_mount(editor)
+    }
+    fn rebuild_main(
+        &mut self,
+        editor: &mut Editor,
+        allow_asset_reflow: bool,
+    ) -> ara_ui::Result<()> {
+        let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
+        let mut markup = String::from("<ui id='editor'>");
+        self.menubar(editor, &mut markup);
+        if editor.state.playing.is_some() {
+            markup.push_str("<panel id='play-line' class='play-line' />");
+        }
+        markup.push_str("<panel id='dock-root' class='dock-root'>");
+        let layout = editor.state.layout.clone();
+        match editor.state.maximized.clone() {
+            Some(panel) if crate::state::panel_visible(&editor.state, &panel) => {
+                let area = ara_ui::docking::DockNode::Area {
+                    id: "maximized".into(),
+                    tabs: vec![panel],
+                    active: 0,
+                };
+                self.dock(&area, "max", editor, &mut markup)?;
+            }
+            _ => self.dock(&layout, "root", editor, &mut markup)?,
+        }
         markup.push_str("</panel>");
         if editor.state.canvas_add
             && !editor.state.palette
@@ -300,34 +512,14 @@ impl Shell {
         {
             self.node_palette(editor, &mut markup, &doc)?;
         }
-        if !self.vfx_visible {
-            self.vfx_stream.pause();
-        }
-        let jobs = editor.action("jobs.list", json!({})).unwrap_or(Value::Null);
-        let running = jobs["jobs"]
-            .as_array()
-            .map(|j| j.iter().filter(|j| j["status"] == "running").count())
-            .unwrap_or(0);
-        let job_text = jobs["jobs"]
-            .as_array()
-            .and_then(|j| j.iter().find(|j| j["status"] == "running"))
-            .map(|j| {
-                format!(
-                    "{} {:0.0}%  {}",
-                    j["name"].as_str().unwrap_or("Job"),
-                    j["progress"].as_f64().unwrap_or(0.) * 100.,
-                    j["message"].as_str().unwrap_or("")
-                )
-            })
-            .unwrap_or_else(|| "All jobs complete".into());
-        markup.push_str(&format!("<panel id='statusbar' class='statusbar'><panel id='connection-dot' style='width:6px; height:6px; border-radius:3px; background:var(--success-foreground)' /><text id='status' class='muted' text='Connected' />{}<text id='status-docs' class='muted' text='{} entities' /><panel id='status-fill' style='flex-grow:1' />{}<text id='status-jobs' class='muted' text='{}' />{}<text id='status-timing' class='muted' text='144 Hz / 6.94 ms' /></panel>",icons::icon("status-entities","box"),self.hierarchy.items.len(),icons::icon("status-jobs",if running>0 {"activity"} else {"circle-check"}),escape(&job_text),icons::icon("status-frame","gauge")));
-
-        let _ = running;
-        if self.context {
-            self.context_menu(editor, &mut markup);
-        }
+        self.statusbar(editor, &mut markup);
+        self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
+        }
+        if let Some(dialog) = self.dialog.take() {
+            self.dialog_markup(&dialog, &mut markup);
+            self.dialog = Some(dialog);
         }
         if self.rename
             && let Some(id) = editor.state.selection.first()
@@ -343,49 +535,15 @@ impl Shell {
                 ara_ui::source::stable_id("entity-rename-value"),
                 Binding::RenameValue,
             );
-            markup.push_str(&format!("<field id='entity-rename-value' style='position:absolute;left:0px;top:0px;width:180px;height:26px' text='{}' label='Entity name' action='Dispatch' />",escape(name)));
+            markup.push_str(&format!("<field id='entity-rename-value' style='position:absolute;left:0px;top:0px;width:180px;height:22px' text='{}' label='Entity name' action='Dispatch' />",escape(name)));
         }
-        markup.push_str("<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip>");
+        markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
-        let mut ui = Ui::editor(&markup, include_str!("editor.css"), self.ui.size)?;
-        if let Some(i) = ui.find("tooltip") {
-            ui.set_visible(i, false)?;
-        }
-        self.tooltip_text = None;
-        if editor.state.light {
-            ui.switch_theme(ara_ui::theme::EditorTheme::Light)?;
-        }
-        ui.frame(&mut self.text)?;
-        if let Some(index) = ui.find("hierarchy-rows") {
-            let height = ui.nodes[index].rect.h.max(26.);
-            let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(&mut ui, index, 26., height, vec![width])?;
-            view.scroll(&mut ui, &self.hierarchy, self.hierarchy_offset, height)?;
-            for (id, entity) in &self.hierarchy_entities {
-                self.bindings.insert(
-                    view.identity(*id),
-                    if self.hierarchy_ghosts.contains(id) {
-                        Binding::Protocol("editor.focus", json!({"panel":"agents"}))
-                    } else {
-                        Binding::Select(entity.clone())
-                    },
-                );
-            }
-            self.hierarchy_view = Some(view);
-        }
-        if let Some(index) = ui.find("asset-rows") {
-            let height = ui.nodes[index].rect.h.max(26.);
-            let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(&mut ui, index, 26., height, vec![width])?;
-            view.scroll(&mut ui, &self.asset_rows, self.asset_offset, height)?;
-            for (key, asset) in &self.asset_entries {
-                self.bindings
-                    .insert(view.identity(*key), Binding::Asset(asset.clone()));
-            }
-            self.asset_view = Some(view);
-        }
-        ui.frame(&mut self.text)?;
-        self.ui = ui;
+        self.mount(editor, &markup)?;
+        self.menu_anchors = (0..commands::menus::MENUS.len())
+            .filter_map(|i| self.ui.find(&format!("menu-title-{i}")))
+            .map(|i| self.ui.nodes[i].rect.x)
+            .collect();
         if editor.state.focus == "vfx"
             && let Some(item) = editor.state.resource_item.as_deref()
         {
@@ -410,23 +568,11 @@ impl Shell {
                 }
             }
         }
-        self.decorate_hierarchy();
         if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
             let r = self.ui.nodes[cube].rect;
-            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 108. - r.x, rect.y + 12. - r.y];
+            self.ui.nodes[cube].paint_offset = [rect.x + rect.w - 68. - r.x, rect.y + 12. - r.y];
             self.ui.nodes[cube].dirty.paint = true;
         }
-        if let Some(view) = &self.asset_view {
-            for index in view.visible_nodes() {
-                for n in 0..self.ui.nodes[*index].element.children.len() {
-                    let child = self.ui.nodes[*index].element.children[n];
-                    let node = &mut self.ui.nodes[child];
-                    node.element.attrs.insert("style".into(),"height:26px;width:100%;padding:4px;padding-left:32px;overflow:hidden;font-size:12px".into());
-                    node.dirty.style = true;
-                }
-            }
-        }
-
         self.ui.frame(&mut self.text)?;
         if previous_canvas != self.canvas_doc.as_deref().map(ara_ui::source::stable_id)
             && editor.state.canvas == crate::graph::Camera::default()
@@ -435,6 +581,7 @@ impl Shell {
             self.ui.frame(&mut self.text)?;
         }
         if allow_asset_reflow
+            && self.asset_surface.is_none()
             && self.ui.find("asset-grid").is_some_and(|i| {
                 let rect = self.ui.nodes[i].rect;
                 (rect.w - self.asset_grid_size[0]).abs() > 0.5
@@ -442,7 +589,7 @@ impl Shell {
             })
         {
             // One measured reflow handles first-open, splitter and monitor-size changes.
-            return self.rebuild_layout(editor, false);
+            return self.rebuild_main(editor, false);
         }
         let canvas_modal = editor.state.canvas_add
             && !editor.state.palette
@@ -450,19 +597,25 @@ impl Shell {
         if !canvas_modal && self.canvas_modal_open {
             self.input.pop(&mut self.ui);
         }
-        if editor.state.palette && !self.modal_open {
+        let modal = editor.state.palette || self.dialog.is_some();
+        if modal && !self.modal_open {
             self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
+            let (root, field) = if editor.state.palette {
+                ("palette", Some("palette-search"))
+            } else {
+                ("dialog", self.dialog.as_ref().and_then(Dialog::field))
+            };
             self.input.push(
                 &mut self.ui,
-                ara_ui::source::stable_id("palette"),
-                Some(ara_ui::source::stable_id("palette-search")),
+                ara_ui::source::stable_id(root),
+                field.map(ara_ui::source::stable_id),
                 true,
             )?;
         }
-        if !editor.state.palette && self.modal_open {
+        if !modal && self.modal_open {
             self.input.pop(&mut self.ui);
         }
-        self.modal_open = editor.state.palette;
+        self.modal_open = modal;
         if canvas_modal && !self.canvas_modal_open {
             self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
             self.input.push(
@@ -473,12 +626,20 @@ impl Shell {
             )?;
         }
         self.canvas_modal_open = canvas_modal;
-        if let Some(id) = focus {
-            let _ = self.input.focus(&mut self.ui, id);
-        }
         if editor.state.palette {
-            let id = ara_ui::source::stable_id("palette-search");
-            let _ = self.input.focus(&mut self.ui, id);
+            let _ = self
+                .input
+                .focus(&mut self.ui, ara_ui::source::stable_id("palette-search"));
+        } else if let Some(field) = self.dialog.as_ref().and_then(Dialog::field) {
+            let _ = self
+                .input
+                .focus(&mut self.ui, ara_ui::source::stable_id(field));
+        } else if self.menu.is_some()
+            && let Some(_) = self.ui.find("menu-filter")
+        {
+            let _ = self
+                .input
+                .focus(&mut self.ui, ara_ui::source::stable_id("menu-filter"));
         }
         if canvas_modal {
             let _ = self
@@ -491,6 +652,7 @@ impl Shell {
             if let Some(row) = editor.state.selection.first().and_then(|e| {
                 self.hierarchy_view
                     .as_ref()
+                    .filter(|_| self.hierarchy_surface.is_none())
                     .and_then(|v| self.ui.by_id(v.identity(crate::world::render_id(e))))
             }) {
                 let r = self.ui.nodes[row].rect;
@@ -503,11 +665,41 @@ impl Shell {
                 ara_ui::source::stable_id("entity-rename-value"),
             )?;
         }
+        self.after_mount(editor)
+    }
+    /// Paint-time decorations shared by every surface. They are spliced in under the
+    /// popup layer (menus, palette, dialogs, tooltips), which stays on top.
+    fn paint_decorations(&mut self) {
+        let start = self.ui.display.commands.len();
         self.paint_swatches();
         self.paint_polish();
-        self.paint_axis();
         self.paint_graph();
-        if self.field_request != editor.state.focus_field {
+        self.paint_drop_preview();
+        if let Some(at) = self.popup_start()
+            && at < start
+        {
+            let decorations: Vec<_> = self.ui.display.commands.drain(start..).collect();
+            self.ui.display.commands.splice(at..at, decorations);
+        }
+        // The axis triad splices its stems in under its own caps.
+        self.paint_axis();
+    }
+    /// Display-list index of the first node painted after the dock tree: the
+    /// status bar, then menus, the palette, dialogs and tooltips.
+    fn popup_start(&self) -> Option<usize> {
+        let ui = &self.ui;
+        let root = ui.find("dock-root").or_else(|| ui.find("float-root"))?;
+        let siblings = &ui.nodes[ui.nodes[root].element.parent?].element.children;
+        let later = &siblings[siblings.iter().position(|c| *c == root)? + 1..];
+        let at = ui.paint_order.iter().position(|i| later.contains(i))?;
+        ui.paint_starts.get(at).copied()
+    }
+    /// Run after every mount: decorations, a pending Inspector field reveal, motion.
+    fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.paint_decorations();
+        if self.field_request != editor.state.focus_field
+            && self.ui.find("inspector-scroll").is_some()
+        {
             if let Some(path) = editor.state.focus_field.as_deref() {
                 self.reveal_field(path)?;
             }
@@ -529,7 +721,11 @@ impl Shell {
             })
             .unwrap_or((path, None));
         let id = path.replace('.', "-");
-        let Some(row) = self.ui.find(&format!("field-{id}")) else {
+        let Some(row) = self
+            .ui
+            .find(&format!("field-{id}"))
+            .or_else(|| self.ui.find(&format!("component-{id}")))
+        else {
             return Ok(());
         };
         if let Some(scroll) = self.ui.find("inspector-scroll") {
@@ -565,11 +761,12 @@ impl Shell {
     /// Update the low-frequency status readout without rebuilding panels.
     pub fn frame_timing(&mut self, hz: f64, ms: f64) -> ara_ui::Result<()> {
         if let Some(i) = self.ui.find("status-timing") {
-            self.ui.set_text(i, &format!("{hz:.0} FPS / {ms:.2} ms"))?;
+            self.ui.set_text(i, &format!("{hz:.0} FPS · {ms:.2} ms"))?;
         }
         Ok(())
     }
-    /// Run retained style/layout/paint work; unchanged frames return zero work counters.
+    /// Run retained style/layout/paint work for the current surface; unchanged frames
+    /// return zero work counters.
     pub fn frame(&mut self) -> ara_ui::Result<ara_ui::Work> {
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
@@ -587,10 +784,7 @@ impl Shell {
         }
         let mut work = self.ui.frame(&mut self.text)?;
         if work.paint_nodes > 0 {
-            self.paint_swatches();
-            self.paint_polish();
-            self.paint_axis();
-            self.paint_graph();
+            self.paint_decorations();
         }
         if self.motion.apply(
             &mut self.ui.display,
@@ -600,6 +794,23 @@ impl Shell {
             work.paint_nodes = work.paint_nodes.max(1);
         }
         Ok(work)
+    }
+    /// Frame a floating surface in place; its display list stays on the surface.
+    pub fn frame_surface(&mut self, id: &str) -> ara_ui::Result<ara_ui::Work> {
+        let returning = self.current.clone();
+        if !self.enter(id) {
+            return Ok(ara_ui::Work::default());
+        }
+        let result = self.frame();
+        self.leave();
+        if let Some(back) = returning {
+            self.enter(&back);
+        }
+        result
+    }
+    /// Text copied by a command, for the window owner to put on the OS clipboard.
+    pub fn take_clipboard(&mut self) -> Option<String> {
+        self.pending_clipboard.take()
     }
     pub(crate) fn poll_assets(&mut self) -> bool {
         let browser_changed = self.browser.poll();
@@ -682,8 +893,11 @@ impl Shell {
         }
         Ok(changed)
     }
-    /// Current scene image rectangle, also the picking and spatial-input boundary.
+    /// Current scene image rectangle in the main window; also the picking boundary.
     pub fn viewport(&self) -> Option<Box2> {
+        if self.current.is_some() {
+            return None;
+        }
         self.ui
             .find("viewport-image")
             .map(|i| self.ui.nodes[i].rect)
@@ -754,6 +968,7 @@ impl Shell {
         let view = self
             .hierarchy_view
             .as_ref()
+            .filter(|_| self.hierarchy_surface == self.current)
             .ok_or("hierarchy panel is not visible")?;
         let id = view.identity(crate::world::render_id(entity));
         let index = self
@@ -761,7 +976,7 @@ impl Shell {
             .by_id(id)
             .ok_or("entity is outside the hierarchy viewport")?;
         let r = self.ui.nodes[index].rect;
-        let p = [r.x + 64., r.y + 13.];
+        let p = [r.x + 64., r.y + r.h * 0.5];
         self.pointer = p;
         self.input.event(
             &mut self.ui,
@@ -784,11 +999,107 @@ impl Shell {
         self.bindings.insert(ara_ui::source::stable_id(id), binding);
         button(id, text, class)
     }
+    /// Bind a toolbar or chrome control to a registry command.
+    pub(crate) fn bind_command(
+        &mut self,
+        id: &str,
+        command: &'static str,
+        target: commands::Target,
+    ) {
+        self.bindings.insert(
+            ara_ui::source::stable_id(id),
+            Binding::Command(command, target),
+        );
+    }
+    /// Every chrome/toolbar/menu control's registry command, for UI tests.
+    pub fn command_bindings(&self) -> Vec<(String, &'static str)> {
+        self.ui
+            .nodes
+            .iter()
+            .filter_map(
+                |n| match self.bindings.get(&ara_ui::source::stable_id(&n.element.id)) {
+                    Some(Binding::Command(c, _)) => Some((n.element.id.clone(), *c)),
+                    _ => None,
+                },
+            )
+            .collect()
+    }
+    /// Buttons in the current surface whose binding is not a registry command.
+    pub fn uncommanded_buttons(&self, prefixes: &[&str]) -> Vec<String> {
+        self.ui
+            .nodes
+            .iter()
+            .filter(|n| {
+                n.element.tag == "button" && prefixes.iter().any(|p| n.element.id.starts_with(p))
+            })
+            .filter(|n| {
+                !matches!(
+                    self.bindings.get(&ara_ui::source::stable_id(&n.element.id)),
+                    Some(
+                        Binding::Command(..)
+                            | Binding::MenuBar(_)
+                            | Binding::MenuSub(..)
+                            | Binding::ContextMenu(..)
+                    )
+                )
+            })
+            .map(|n| n.element.id.clone())
+            .collect()
+    }
+}
+/// Hidden nodes every surface keeps for in-place updates: tooltip and drop label.
+const POPUP_TAIL: &str = "<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip><panel id='drop-label' class='drop-label' style='left:0px;top:0px;width:180px'><text id='drop-label-text' text='' /></panel>";
+impl Shell {
+    /// Show (or hide) the gizmo readout pill next to the pointer, without a rebuild.
+    pub fn show_readout(&mut self, readout: Option<(String, [f32; 2])>) {
+        let (Some(pill), Some(text), Some(rect)) = (
+            self.ui.find("gizmo-readout"),
+            self.ui.find("gizmo-readout-text"),
+            self.viewport(),
+        ) else {
+            return;
+        };
+        match readout {
+            Some((value, at)) => {
+                let _ = self.ui.set_text(text, &value);
+                let _ = self.ui.set_visible(pill, true);
+                let node = &mut self.ui.nodes[pill];
+                let base = [
+                    node.rect.x - node.paint_offset[0],
+                    node.rect.y - node.paint_offset[1],
+                ];
+                let x = (at[0] + 18.).min(rect.x + rect.w - 220.);
+                let y = (at[1] + 18.).min(rect.y + rect.h - 30.);
+                node.paint_offset = [x - base[0], y - base[1]];
+                node.dirty.paint = true;
+            }
+            None => {
+                let _ = self.ui.set_visible(pill, false);
+            }
+        }
+    }
 }
 fn project_name(editor: &Editor) -> String {
-    std::fs::read_to_string(editor.host.root().join("ara.project.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v["name"].as_str().map(str::to_owned))
+    editor
+        .state
+        .settings
+        .get("project.name")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
         .unwrap_or_else(|| "Project".into())
+}
+impl Shell {
+    /// Set a floating surface's logical size after its OS window opened or resized.
+    pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) {
+        if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
+            surface.ui.size = size;
+        } else if self.current.as_deref() == Some(id) {
+            self.ui.size = size;
+        }
+    }
+    /// A floating surface's display list and size, for its window's renderer.
+    pub fn surface(&self, id: &str) -> Option<&Surface> {
+        self.floats.iter().find(|s| s.id == id)
+    }
 }

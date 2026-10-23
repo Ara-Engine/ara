@@ -24,6 +24,8 @@ pub struct Options {
     pub screenshot: bool,
     /// Run the native authoring panels, import and 500-node navigation suite.
     pub verify_panels: bool,
+    /// Run the Editor UX v2 capture route (menus, Settings, floating windows, tabs).
+    pub verify_ux: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -38,6 +40,7 @@ impl Default for Options {
             panel: None,
             screenshot: false,
             verify_panels: false,
+            verify_ux: false,
         }
     }
 }

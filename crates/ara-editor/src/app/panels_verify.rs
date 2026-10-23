@@ -52,7 +52,7 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     }
     Ok(())
 }
-fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
+pub(super) fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
     let preferred = format!(
         "samples/{domain}.{}",
         if domain == "animation" {

@@ -462,6 +462,11 @@ impl Host {
         &mut self.st.profiler
     }
 
+    /// Whether any document has changes not yet written (they save after a short debounce).
+    pub fn unsaved(&self) -> bool {
+        !self.st.files.changed.is_empty()
+    }
+
     /// Writes every document with unsaved changes now.
     pub fn flush(&mut self) {
         self.st.drain();

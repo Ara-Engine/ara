@@ -31,3 +31,6 @@ Tests cover CRLF, Unicode, quote styles, comments, structural edits, inverses an
 
 CSS per-edge padding accepts padding-top/right/bottom/left; the runtime applies
 these after shorthand padding, matching native inspector gutters.
+
+`tint` is a recognized attribute (`<image tint='true'>`): the runtime tints the image
+by its computed text color.

@@ -1,26 +1,27 @@
 //! Bounded virtual-row decorations. Model size never affects paint work.
 use super::*;
-use ara_ui::{paint::Draw, source::stable_id};
+use ara_ui::{paint::Draw, source::stable_id, style::Color};
 
 pub(super) struct RowStyle {
     pub depth: usize,
-    pub prefab: bool,
     pub changed: bool,
     pub icon: &'static str,
+    /// Icon tint class (`tint-light`, …); empty is muted.
+    pub tint: &'static str,
     pub children: bool,
     pub collapsed: bool,
     pub locked: bool,
     pub hidden: bool,
 }
+/// Hover gutter: the eye sits 44 px and the lock 24 px from the row's right edge.
+pub(super) const EYE: f32 = 44.;
+pub(super) const LOCK: f32 = 24.;
 impl Shell {
     pub(super) fn paint_polish(&mut self) {
-        let color = |name: &str| {
-            self.ui
-                .sheet
-                .color_token(name)
-                .unwrap_or(ara_ui::style::Color(0, 0, 0, 0))
-        };
+        let color = |name: &str| self.ui.sheet.color_token(name).unwrap_or(Color(0, 0, 0, 0));
         let primary = color("--primary");
+        let muted = color("--muted-foreground");
+        let on_selection = color("--selection-foreground");
         let mut draws = Vec::new();
         for node in &self.ui.nodes {
             if !node.visible || !node.rect.intersects(node.clip) {
@@ -37,16 +38,26 @@ impl Shell {
                 draws.push(Draw::Rect {
                     node: stable_id(&format!("{}-underline", node.element.id)),
                     rect: Box2 {
-                        x: r.x + 8.,
-                        y: r.y + r.h - 2.,
-                        w: (r.w - 16.).max(0.),
+                        x: r.x,
+                        y: r.y,
+                        w: r.w,
                         h: 2.,
                     },
                     color: primary,
                 });
             }
         }
-        if let Some(view) = &self.hierarchy_view {
+        if self.hierarchy_surface == self.current
+            && let Some(view) = &self.hierarchy_view
+        {
+            let tint = |name: &str| match name {
+                "tint-light" => color("--warning-foreground"),
+                "tint-camera" => color("--chart-4"),
+                "tint-vfx" => color("--chart-5"),
+                "tint-audio" => color("--chart-2"),
+                "tint-prefab" => color("--info-foreground"),
+                _ => muted,
+            };
             for index in view.visible_nodes() {
                 let n = &self.ui.nodes[*index];
                 let Some(key) = n
@@ -59,31 +70,22 @@ impl Shell {
                 };
                 let r = n.rect;
                 let id = stable_id(&n.element.id);
+                let selected = self.selected_rows.contains(&key);
+                let hovered = r.contains(self.pointer[0], self.pointer[1]);
+                let icon_y = r.y + (r.h - 16.) * 0.5;
                 draws.push(Draw::PushClip {
                     rect: n.clip.intersection(r),
                 });
-                if self.selected_rows.contains(&key) {
-                    draws.push(Draw::RoundedRect {
-                        node: id ^ 0xfffe_0000_0000,
-                        rect: Box2 {
-                            x: r.x + 1.,
-                            y: r.y + 4.,
-                            w: 2.,
-                            h: r.h - 8.,
-                        },
-                        radius: 1.,
-                        color: primary,
-                    });
-                }
                 if let Some(s) = self.hierarchy_style.get(&key) {
-                    let x = r.x + 8. + s.depth.min(32) as f32 * 14.;
+                    let x = r.x + 6. + s.depth.min(32) as f32 * 16.;
+                    let base = if selected { on_selection } else { muted };
                     if s.children {
                         image(
                             &mut draws,
                             id,
                             Box2 {
                                 x,
-                                y: r.y + 5.,
+                                y: icon_y,
                                 w: 16.,
                                 h: 16.,
                             },
@@ -92,38 +94,27 @@ impl Shell {
                             } else {
                                 "chevron-down"
                             },
+                            base,
                         );
                     }
                     image(
                         &mut draws,
-                        id,
+                        id ^ 0x1,
                         Box2 {
-                            x: x + 16.,
-                            y: r.y + 5.,
+                            x: x + 18.,
+                            y: icon_y,
                             w: 16.,
                             h: 16.,
                         },
                         s.icon,
+                        if selected { on_selection } else { tint(s.tint) },
                     );
-                    if s.prefab {
-                        image(
-                            &mut draws,
-                            id,
-                            Box2 {
-                                x: r.x + r.w - 54.,
-                                y: r.y + 5.,
-                                w: 16.,
-                                h: 16.,
-                            },
-                            "package",
-                        );
-                    }
                     if s.changed {
                         draws.push(Draw::RoundedRect {
                             node: id ^ 0xffff_1111_0000,
                             rect: Box2 {
-                                x: r.x + r.w - 10.,
-                                y: r.y + 10.,
+                                x: r.x + r.w - 58.,
+                                y: r.y + r.h * 0.5 - 3.,
                                 w: 6.,
                                 h: 6.,
                             },
@@ -137,24 +128,42 @@ impl Shell {
                             )),
                         });
                     }
-                    if s.locked || s.hidden {
+                    // Visibility and lock: always shown when set, otherwise on hover only.
+                    if s.hidden || hovered {
                         image(
                             &mut draws,
-                            id,
+                            id ^ 0x2,
                             Box2 {
-                                x: r.x + r.w - 32.,
-                                y: r.y + 5.,
+                                x: r.x + r.w - EYE,
+                                y: icon_y,
                                 w: 16.,
                                 h: 16.,
                             },
-                            if s.locked { "lock" } else { "eye-off" },
+                            if s.hidden { "eye-off" } else { "eye" },
+                            base,
+                        );
+                    }
+                    if s.locked || hovered {
+                        image(
+                            &mut draws,
+                            id ^ 0x3,
+                            Box2 {
+                                x: r.x + r.w - LOCK,
+                                y: icon_y,
+                                w: 16.,
+                                h: 16.,
+                            },
+                            if s.locked { "lock" } else { "lock-open" },
+                            base,
                         );
                     }
                 }
                 draws.push(Draw::PopClip);
             }
         }
-        if let Some(view) = &self.asset_view {
+        if self.asset_surface == self.current
+            && let Some(view) = &self.asset_view
+        {
             for index in view.visible_nodes() {
                 let n = &self.ui.nodes[*index];
                 let Some(key) = n
@@ -174,17 +183,12 @@ impl Shell {
                         stable_id(&n.element.id),
                         Box2 {
                             x: n.rect.x + 8.,
-                            y: n.rect.y + 5.,
+                            y: n.rect.y + (n.rect.h - 16.) * 0.5,
                             w: 16.,
                             h: 16.,
                         },
-                        match a.kind.as_str() {
-                            "scene" | "prefab" => "box",
-                            "glb" | "gltf" => "package",
-                            "png" | "jpg" => "file-image",
-                            "cs" | "json" => "file-code",
-                            _ => "file",
-                        },
+                        assets_panel::asset_icon(a),
+                        muted,
                     );
                     draws.push(Draw::PopClip);
                 }
@@ -193,11 +197,12 @@ impl Shell {
         self.ui.display.commands.extend(draws);
     }
 }
-fn image(draws: &mut Vec<Draw>, node: u64, rect: Box2, name: &str) {
+fn image(draws: &mut Vec<Draw>, node: u64, rect: Box2, name: &str, tint: Color) {
     draws.push(Draw::Image {
         node,
         rect,
         image: stable_id(&format!("icon-{name}")) as u32 & 0x7fff_ffff,
+        tint,
     });
 }
 
@@ -231,13 +236,13 @@ impl Shell {
                     .push(ara_ui::paint::Draw::RoundedRect {
                         node: ara_ui::source::stable_id(&self.ui.nodes[i].element.id),
                         rect: Box2 {
-                            x: r.x + 3.,
-                            y: r.y + 3.,
-                            w: (r.w - 6.).max(0.),
-                            h: (r.h - 6.).max(0.),
+                            x: r.x + 2.,
+                            y: r.y + 2.,
+                            w: (r.w - 4.).max(0.),
+                            h: (r.h - 4.).max(0.),
                         },
                         radius: 3.,
-                        color: ara_ui::style::Color(
+                        color: Color(
                             (channel(0).powf(1. / 2.2) * 255.) as u8,
                             (channel(1).powf(1. / 2.2) * 255.) as u8,
                             (channel(2).powf(1. / 2.2) * 255.) as u8,

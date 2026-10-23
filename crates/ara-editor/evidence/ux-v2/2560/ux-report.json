@@ -1,0 +1,154 @@
+{
+  "size": [2560, 1369],
+  "steps": [
+    {
+      "step": "main",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "menu-file",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "menu-edit",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "menu-view",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "menu-create",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "menu-window",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "context-hierarchy",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "context-viewport",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "context-field",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "context-tab",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "palette",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "palette-entities",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "settings",
+      "viewportShare": null,
+      "floatingWindows": 1,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "shortcuts",
+      "viewportShare": null,
+      "floatingWindows": 1,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "float-inspector",
+      "viewportShare": 0.7537536025047302,
+      "floatingWindows": 1,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-material",
+      "viewportShare": null,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-vfx",
+      "viewportShare": null,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-animation",
+      "viewportShare": null,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-profiler",
+      "viewportShare": null,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-game",
+      "viewportShare": null,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-console",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-agents",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "tab-assets",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    },
+    {
+      "step": "empty-inspector",
+      "viewportShare": 0.5716410279273987,
+      "floatingWindows": 0,
+      "uncommandedToolbarButtons": []
+    }
+  ],
+  "commands": {
+    "total": 272,
+    "enabled": 155,
+    "disabledWithReason": 117
+  }
+}

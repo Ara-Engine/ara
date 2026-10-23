@@ -81,6 +81,9 @@ pub struct NativeUi {
     sampler: vk::Sampler,
     target: Option<Image>,
     target_ready: bool,
+    /// Targets of other OS windows, keyed by surface; one is active at a time.
+    parked: BTreeMap<u32, (Option<Image>, bool)>,
+    active: u32,
     instance_buffer: Option<Buffer>,
     mask_buffer: Option<Buffer>,
     textures: BTreeMap<u32, Texture>,
@@ -115,12 +118,14 @@ impl NativeUi {
             sampler: vk::Sampler::null(),
             target: None,
             target_ready: false,
+            parked: BTreeMap::new(),
+            active: 0,
             instance_buffer: None,
             mask_buffer: None,
             textures: BTreeMap::new(),
             external: BTreeMap::new(),
             external_images: BTreeMap::new(),
-            free_slots: (0..128).rev().collect(),
+            free_slots: (0..256).rev().collect(),
             instances: Vec::new(),
             masks: Vec::new(),
             draws: Vec::new(),
@@ -179,6 +184,28 @@ impl NativeUi {
         self.write_texture(slot, view);
         self.external_images.insert(id, image);
         Ok(())
+    }
+    /// Render into the target of another OS window (0 is the main window). Every
+    /// window keeps its own target; textures, atlases and pipelines are shared.
+    pub fn select_target(&mut self, surface: u32) {
+        if surface == self.active {
+            return;
+        }
+        let current = (self.target.take(), self.target_ready);
+        self.parked.insert(self.active, current);
+        let (target, ready) = self.parked.remove(&surface).unwrap_or((None, false));
+        self.target = target;
+        self.target_ready = ready;
+        self.active = surface;
+    }
+    /// Drop a closed window's target after the queue is idle.
+    pub fn release_target(&mut self, surface: u32) {
+        if surface == self.active {
+            self.target = None;
+            self.target_ready = false;
+        } else {
+            self.parked.remove(&surface);
+        }
     }
     /// Completed RGBA8 target, in CopySource layout, suitable for ara-platform presentation.
     pub fn output(&self) -> Result<(vk::Image, [u32; 2])> {

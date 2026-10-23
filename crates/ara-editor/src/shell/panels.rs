@@ -1,61 +1,29 @@
+//! Dock areas and the shared panel template: a 28 px header (one panel) or tab
+//! strip (several), optional toolbar, body and footer, with a ⋯ menu built from
+//! the registry and a real empty state when there is nothing to show.
+use super::commands::{Target, menus::Context};
 use super::*;
 use ara_ui::docking::{Axis, DockNode};
 pub(super) fn escape(s: &str) -> String {
     ara_ui::source::escape(s, b'\'')
 }
+/// A text button; ids with a known icon render icon-only or icon + label.
 pub(super) fn button(id: &str, text: &str, class: &str) -> String {
     let (name, only) = match id {
-        "tool-Translate" => ("move-3d", true),
-        "tool-Rotate" => ("rotate-3d", true),
-        "tool-Scale" => ("scaling", true),
-        "tool-space" => ("globe", true),
-        "tool-pivot" => ("crosshair", true),
-        "tool-snap" => ("magnet", true),
-        "play" => ("play", true),
-        "pause" => ("pause", true),
-        "step" => ("step-forward", true),
-        "resume" => ("circle-play", true),
-        "stop" => ("square", true),
         "entity-create" => ("plus", true),
-        "hierarchy-menu" => ("ellipsis", true),
-        "hierarchy-collapse" => ("chevron-down", true),
-        "hierarchy-lock" => ("lock", true),
-        "hierarchy-hide" => ("eye", true),
-        "frame" => ("focus", true),
         "theme" => (if text == "Dark" { "moon" } else { "sun" }, true),
-        "palette-open" => ("command", false),
-        "add-component" => ("plus", false),
-        _ if id.starts_with("remove-") => ("ellipsis", true),
-        _ if id.starts_with("collapse-component-") => (
-            if text == "Expand" {
-                "chevron-right"
-            } else {
-                "chevron-down"
-            },
-            true,
-        ),
         _ if id.starts_with("pick-") => ("folder", false),
         _ if id.starts_with("accept-") => ("check", false),
         _ if id.starts_with("revert-") => ("undo-2", false),
-        _ if id.starts_with("tab-") => (
-            match &id[4..] {
-                "scene" => "box",
-                "game" => "play",
-                "hierarchy" => "layers",
-                "inspector" => "settings-2",
-                "agents" => "bot",
-                "console" => "activity",
-                _ => "folder",
-            },
-            false,
-        ),
         _ => ("", false),
     };
     if name.is_empty() {
         return format!(
-            "<button id='{}' class='{}' text='{}' action='Dispatch' />",
+            "<button id='{}' class='{}' label='{}' action='Dispatch'><text id='{}-label' text='{}' /></button>",
             escape(id),
             class,
+            escape(text),
+            escape(id),
             escape(text)
         );
     }
@@ -63,7 +31,7 @@ pub(super) fn button(id: &str, text: &str, class: &str) -> String {
         "<button id='{}' class='{} {}' label='{}' description='{}' action='Dispatch'>{}{}</button>",
         escape(id),
         class,
-        if only { "icon-button" } else { "" },
+        if only { "icon-button ghost" } else { "" },
         escape(text),
         escape(text),
         super::icons::icon(id, name),
@@ -71,11 +39,47 @@ pub(super) fn button(id: &str, text: &str, class: &str) -> String {
             String::new()
         } else {
             format!(
-                "<text id='{id}-label' text='{}' style='font-size:12px' />",
+                "<text id='{id}-label' text='{}' />",
                 escape(text.trim_start_matches("+ "))
             )
         }
     )
+}
+/// Human panel title.
+pub(super) fn title(panel: &str) -> &str {
+    match panel {
+        "material" => "Material",
+        "vfx" => "VFX",
+        "animation" => "Animation",
+        "profiler" => "Profiler",
+        "scene" => "Scene",
+        "game" => "Game",
+        "hierarchy" => "Hierarchy",
+        "inspector" => "Inspector",
+        "assets" => "Assets",
+        "console" => "Console",
+        "agents" => "Agents",
+        "settings" => "Settings",
+        _ => panel,
+    }
+}
+/// One icon per concept (Appendix B).
+pub(super) fn panel_icon(panel: &str) -> &'static str {
+    match panel {
+        "scene" => "clapperboard",
+        "game" => "gamepad-2",
+        "material" => "contrast",
+        "vfx" => "sparkles",
+        "animation" => "person-standing",
+        "profiler" => "gauge",
+        "hierarchy" => "list-tree",
+        "inspector" => "sliders-horizontal",
+        "assets" => "folder",
+        "console" => "terminal",
+        "agents" => "bot",
+        "settings" => "settings-2",
+        _ => "square",
+    }
 }
 impl Shell {
     pub(super) fn dock(
@@ -93,116 +97,310 @@ impl Shell {
                 second,
             } => {
                 let row = *axis == Axis::Horizontal;
-                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:1px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
+                out.push_str(&format!("<panel id='split-{path}' style='flex-grow:1; flex-basis:0px; flex-direction:{}; gap:0px'><panel id='dock-first-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{"row"}else{"column"},ratio));
                 self.dock(first, &format!("{path}-a"), editor, out)?;
-                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='width:{}px; height:{}px' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{3}else{0},if row{0}else{3},1.-ratio));
+                out.push_str(&format!("</panel><splitter id='splitter-{path}' class='splitter' style='width:{}px; height:{}px' action='ResizeDock' /><panel id='dock-second-{path}' style='flex-grow:{}; flex-basis:0px; min-width:0px; min-height:0px'>",if row{4}else{0},if row{0}else{4},1.-ratio));
                 self.dock(second, &format!("{path}-b"), editor, out)?;
                 out.push_str("</panel></panel>");
             }
             DockNode::Area { id, tabs, active } => {
-                out.push_str(&format!(
-                    "<panel id='area-{}' class='dock'><panel id='tabs-{}' class='tabbar'>",
-                    escape(id),
-                    escape(id)
-                ));
-                for (index, tab) in tabs.iter().enumerate() {
-                    out.push_str(&self.bind_button(
-                        &format!("tab-{tab}"),
-                        title(tab),
-                        Binding::Protocol("editor.layout", json!({"panel":tab})),
-                        if index == *active {
-                            "tab tab-selected"
+                out.push_str(&format!("<panel id='area-{}' class='dock'>", escape(id)));
+                let current = tabs.get(*active).cloned();
+                if tabs.len() <= 1 {
+                    let panel = current.clone().unwrap_or_default();
+                    out.push_str(&format!("<panel id='header-{panel}' class='panel-header'>{}<text id='header-title-{panel}' class='panel-title' text='{}' /><panel id='header-fill-{panel}' class='fill' />",icons::icon(&format!("header-{panel}"),panel_icon(&panel)),escape(title(&panel))));
+                } else {
+                    out.push_str(&format!("<panel id='tabs-{}' class='tabbar'>", escape(id)));
+                    // Narrow areas show inactive tabs as icons; the tooltip names them.
+                    let width = self
+                        .ui
+                        .find(&format!("area-{id}"))
+                        .map(|i| self.ui.nodes[i].rect.w)
+                        .unwrap_or(f32::MAX);
+                    let compact = width < tabs.len() as f32 * 96. + 40.;
+                    for (index, tab) in tabs.iter().enumerate() {
+                        let tab_id = format!("tab-{tab}");
+                        self.bind_command(&tab_id, "window.show_panel", Target::Panel(tab.clone()));
+                        let active = index == *active;
+                        let label = if active || !compact {
+                            format!("<text id='{tab_id}-label' text='{}' />", escape(title(tab)))
                         } else {
-                            "tab muted"
-                        },
+                            String::new()
+                        };
+                        out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
+                    }
+                    out.push_str(&format!(
+                        "<panel id='tabs-fill-{}' class='fill' />",
+                        escape(id)
                     ));
                 }
+                if let Some(panel) = &current {
+                    self.bindings.insert(
+                        ara_ui::source::stable_id(&format!("panel-menu-{panel}")),
+                        Binding::ContextMenu(Context::Tab, Target::Panel(panel.clone())),
+                    );
+                    out.push_str(&format!("<button id='panel-menu-{panel}' class='ghost icon-button' label='{} options' description='Move, float, maximize or close' action='Dispatch'>{}</button>",escape(title(panel)),icons::icon(&format!("panel-menu-{panel}"),"ellipsis")));
+                }
                 out.push_str("</panel>");
-                if let Some(panel) = tabs.get(*active) {
-                    match panel.as_str(){"hierarchy"=>self.hierarchy_panel(editor,out)?,"scene"=>self.scene_panel(editor,out),"game"=>out.push_str("<panel id='game-empty' class='body'><text id='game-title' text='Game' /><text id='game-message' class='muted' text='Start a play session to view the game.' /><text id='game-reason' class='muted' text='Play opens the game in a player window; the in-editor game viewport (shared GPU texture) comes next.' /></panel>"),"material"=>self.material_panel(editor,out)?,"vfx"=>self.vfx_panel(editor,out)?,"profiler"=>self.profiler_panel(editor,out)?,"animation"=>self.animation_panel(editor,out)?,"inspector"=>self.inspector_panel(editor,out)?,"assets"=>self.assets_panel(editor,out),"console"=>self.console_panel(editor,out),"agents"=>self.agents_panel(editor,out),_=>{}}
+                match current.as_deref() {
+                    None => self.empty(
+                        out,
+                        &format!("area-empty-{id}"),
+                        "layout-grid",
+                        "Empty area",
+                        "Drag a tab here, or open a panel from the Window menu.",
+                        &[],
+                    ),
+                    Some(panel) => self.panel_body(panel, editor, out)?,
                 }
                 out.push_str("</panel>");
             }
         }
         Ok(())
     }
-    pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
-        out.push_str("<panel id='scene-tools' class='toolbar'><panel id='transform-segment' class='segment'>");
-        for (tool, label) in [
-            (crate::state::Tool::Translate, "Move  W"),
-            (crate::state::Tool::Rotate, "Rotate  E"),
-            (crate::state::Tool::Scale, "Scale  R"),
-        ] {
-            out.push_str(&self.bind_button(
-                &format!("tool-{tool:?}"),
-                label,
-                Binding::Protocol("editor.tool", json!({"tool":tool})),
-                if editor.state.tool == tool {
-                    "segment-button selected"
-                } else {
-                    "segment-button quiet"
-                },
-            ));
+    fn panel_body(
+        &mut self,
+        panel: &str,
+        editor: &mut Editor,
+        out: &mut String,
+    ) -> ara_ui::Result<()> {
+        match panel {
+            "hierarchy" => self.hierarchy_panel(editor, out)?,
+            "scene" => self.scene_panel(editor, out),
+            "game" => self.empty(out, "game-empty", "gamepad-2", "Game view", "Play opens the game in a player window. The in-editor Game view through a shared GPU texture (D19) comes next.", &[("game-play", "Play", "play.start")]),
+            "material" => self.material_panel(editor, out)?,
+            "vfx" => self.vfx_panel(editor, out)?,
+            "profiler" => self.profiler_panel(editor, out)?,
+            "animation" => self.animation_panel(editor, out)?,
+            "inspector" => self.inspector_panel(editor, out)?,
+            "assets" => self.assets_panel(editor, out),
+            "console" => self.console_panel(editor, out),
+            "agents" => self.agents_panel(editor, out),
+            "settings" => self.settings_panel(editor, out),
+            other => self.empty(out, &format!("unknown-{other}"), "square", "Unknown panel", "This layout names a panel this editor does not have.", &[("unknown-reset", "Reset layout", "layout.reset")]),
         }
-        out.push_str("</panel><panel id='space-segment' class='segment'>");
-        out.push_str(&self.bind_button(
-            "tool-space",
-            if editor.state.local { "Local" } else { "World" },
-            Binding::Protocol(
-                "editor.tool",
-                json!({"tool":editor.state.tool,"local":!editor.state.local}),
-            ),
-            "segment-button quiet",
-        ));
-        out.push_str(&self.bind_button(
-            "tool-pivot",
-            if editor.state.centre {
-                "Centre"
-            } else {
-                "Pivot"
-            },
-            Binding::Protocol(
-                "editor.tool",
-                json!({"tool":editor.state.tool,"centre":!editor.state.centre}),
-            ),
-            "segment-button quiet",
-        ));
-        out.push_str(&self.bind_button(
-            "tool-snap",
-            if editor.state.snapping {
-                "Snap on"
-            } else {
-                "Snap off"
-            },
-            Binding::Protocol(
-                "editor.tool",
-                json!({"tool":editor.state.tool,"snapping":!editor.state.snapping}),
-            ),
-            "segment-button quiet",
-        ));
-        out.push_str("</panel><panel id='scene-fill' style='flex-grow:1' />");
-        out.push_str(&self.bind_button(
-            "frame",
-            "Frame  F",
-            Binding::Protocol("editor.frame", json!({})),
-            "segment-button quiet",
-        ));
-        out.push_str(&self.bind_button(
-            "viewport-quality",
-            if editor.state.quality {
-                "Fidelity"
-            } else {
-                "Raster"
-            },
-            Binding::Protocol(
-                "editor.preferences",
-                json!({"quality":!editor.state.quality}),
-            ),
-            "small quiet",
-        ));
-        out.push_str("</panel><panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' />");
-        self.axis_markup(editor, out);
+        Ok(())
+    }
+    /// A real empty state: icon, one line, a hint and up to three command buttons.
+    pub(super) fn empty(
+        &mut self,
+        out: &mut String,
+        id: &str,
+        icon: &str,
+        headline: &str,
+        hint: &str,
+        actions: &[(&str, &str, &'static str)],
+    ) {
+        out.push_str(&format!("<panel id='{id}' class='empty'>{}<text id='{id}-title' class='empty-title' text='{}' /><text id='{id}-hint' class='empty-hint' text='{}' />",icons::icon_in(id,icon,"icon-lg"),escape(headline),escape(hint)));
+        if !actions.is_empty() {
+            out.push_str(&format!("<panel id='{id}-actions' class='empty-actions'>"));
+            for (n, (button, label, command)) in actions.iter().enumerate() {
+                self.bind_command(button, command, Target::None);
+                let keys = self
+                    .keymap
+                    .chords(command)
+                    .first()
+                    .map(|c| format!(" · {}", c.text()))
+                    .unwrap_or_default();
+                out.push_str(&format!("<button id='{button}' class='{}' label='{}' description='{}{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if n==0{"primary"}else{""},escape(label),escape(label),escape(&keys),escape(label)));
+            }
+            out.push_str("</panel>");
+        }
         out.push_str("</panel>");
+    }
+    /// An icon-only toolbar button bound to a registry command, with a tooltip.
+    pub(super) fn tool_icon(
+        &mut self,
+        out: &mut String,
+        id: &str,
+        command: &'static str,
+        icon: &str,
+        editor: &Editor,
+        on: bool,
+    ) {
+        self.bind_command(id, command, Target::None);
+        let spec = commands::get(command);
+        let keys = self
+            .keymap
+            .chords(command)
+            .first()
+            .map(|c| format!(" · {}", c.text()))
+            .unwrap_or_default();
+        let title = spec
+            .map(|s| s.title(&self.ctx(editor, &Target::None)))
+            .unwrap_or_default();
+        out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{}' description='{}{}' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},escape(&title),escape(&title),escape(&keys),if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
+    }
+    /// A labelled toolbar button (icon + text) bound to a registry command.
+    pub(super) fn tool_text(
+        &mut self,
+        out: &mut String,
+        id: &str,
+        command: &'static str,
+        icon: &str,
+        text: &str,
+        class: &str,
+    ) {
+        self.bind_command(id, command, Target::None);
+        let summary = commands::get(command).map(|c| c.summary).unwrap_or("");
+        out.push_str(&format!("<button id='{id}' class='{class}' label='{}' description='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button>",escape(text),escape(summary),icons::icon(id,icon),escape(text)));
+    }
+    /// A dropdown button that opens a registry-built menu.
+    pub(super) fn tool_menu(
+        &mut self,
+        out: &mut String,
+        id: &str,
+        context: Context,
+        icon: &str,
+        text: &str,
+        description: &str,
+    ) {
+        self.bindings.insert(
+            ara_ui::source::stable_id(id),
+            Binding::ContextMenu(context, Target::None),
+        );
+        out.push_str(&format!("<button id='{id}' class='ghost' style='padding-left:6px;padding-right:4px' label='{}' description='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' />{}</button>",escape(text),escape(description),icons::icon(id,icon),escape(text),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
+    }
+    pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
+        if !editor.state.hide_overlays {
+            out.push_str("<panel id='scene-tools' class='viewport-bar'><panel id='transform-segment' class='segment'>");
+            let tool = editor.state.tool;
+            let gizmos = !editor.state.hide_gizmos;
+            for (id, command, icon, label, on) in [
+                (
+                    "tool-select",
+                    "view.tool.select",
+                    "mouse-pointer",
+                    "Select",
+                    !gizmos,
+                ),
+                (
+                    "tool-Translate",
+                    "view.tool.move",
+                    "move-3d",
+                    "Move",
+                    gizmos && tool == crate::state::Tool::Translate,
+                ),
+                (
+                    "tool-Rotate",
+                    "view.tool.rotate",
+                    "rotate-3d",
+                    "Rotate",
+                    gizmos && tool == crate::state::Tool::Rotate,
+                ),
+                (
+                    "tool-Scale",
+                    "view.tool.scale",
+                    "scaling",
+                    "Scale",
+                    gizmos && tool == crate::state::Tool::Scale,
+                ),
+            ] {
+                self.bind_command(id, command, Target::None);
+                let keys = self
+                    .keymap
+                    .chords(command)
+                    .first()
+                    .map(|c| c.text())
+                    .unwrap_or_default();
+                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='{label} · {keys}' action='Dispatch'>{}{}</button>",if on{" selected"}else{""},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)},if on{format!("<text id='{id}-label' text='{label}' />")}else{String::new()}));
+            }
+            out.push_str("</panel>");
+            self.tool_text(
+                out,
+                "tool-space",
+                "view.space",
+                "globe",
+                if editor.state.local { "Local" } else { "World" },
+                "ghost",
+            );
+            self.tool_text(
+                out,
+                "tool-pivot",
+                "view.pivot",
+                "crosshair",
+                if editor.state.centre {
+                    "Centre"
+                } else {
+                    "Pivot"
+                },
+                "ghost",
+            );
+            out.push_str("<panel id='snap-sep' class='toolbar-sep' />");
+            let snap = editor.state.snapping;
+            for (id, value_command, icon, value) in [
+                (
+                    "snap-move",
+                    "snap.grid",
+                    "grid-2x2",
+                    format!("{} m", editor.state.move_snap),
+                ),
+                (
+                    "snap-rotate",
+                    "snap.rotation",
+                    "rotate-3d",
+                    format!("{}°", editor.state.rotate_snap),
+                ),
+                (
+                    "snap-scale",
+                    "snap.scale",
+                    "scaling",
+                    format!("{}", editor.state.scale_snap),
+                ),
+            ] {
+                self.bind_command(&format!("{id}-toggle"), "snap.toggle", Target::None);
+                self.bind_command(&format!("{id}-value"), value_command, Target::None);
+                out.push_str(&format!("<panel id='{id}' class='split{}'><button id='{id}-toggle' class='split-main' label='Snap {}' description='Snapping {} · click to toggle' action='Dispatch'>{}<text id='{id}-text' class='value' text='{}' /></button><button id='{id}-value' class='split-more' label='Snap increment' description='Choose the increment' action='Dispatch'>{}</button></panel>",if snap{" split-on"}else{""},escape(&value),if snap{"on"}else{"off"},if snap{icons::icon_in(&format!("{id}-toggle"),icon,"accent")}else{icons::icon(&format!("{id}-toggle"),icon)},escape(&value),icons::icon_in(&format!("{id}-value"),"chevron-down","icon-sm")));
+            }
+            out.push_str("<panel id='scene-fill' class='fill' />");
+            self.tool_menu(
+                out,
+                "view-camera",
+                Context::Camera,
+                "video",
+                "Perspective",
+                "Camera views and speed",
+            );
+            let mode = match editor.state.view_mode.as_str() {
+                "baseColor" => "Base color",
+                "normals" => "Normals",
+                "depth" => "Depth",
+                "roughnessMetal" => "Rough / metal",
+                "entityIds" => "Entity IDs",
+                "shadowCascades" => "Cascades",
+                _ => {
+                    if editor.state.quality {
+                        "Lit · Fidelity"
+                    } else {
+                        "Lit · Raster"
+                    }
+                }
+            };
+            self.tool_menu(
+                out,
+                "view-mode",
+                Context::ViewModes,
+                "sun-medium",
+                mode,
+                "View mode and rendering quality",
+            );
+            self.tool_menu(
+                out,
+                "view-show",
+                Context::Show,
+                "eye",
+                "Show",
+                "Grid, outlines, gizmos and overlays",
+            );
+            self.tool_icon(out, "frame", "view.frame", "focus", editor, false);
+            out.push_str("</panel>");
+        }
+        out.push_str("<panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' />");
+        if !editor.state.hide_overlays && !editor.state.hide_orientation && !editor.state.game_view
+        {
+            self.axis_markup(editor, out);
+        }
+        out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 }
 pub(super) fn display(v: &Value) -> String {
@@ -218,21 +416,5 @@ pub(super) fn display(v: &Value) -> String {
             }
         }
         _ => v.to_string(),
-    }
-}
-fn title(panel: &str) -> &str {
-    match panel {
-        "material" => "Material",
-        "vfx" => "VFX",
-        "animation" => "Animation",
-        "profiler" => "Profiler",
-        "scene" => "Scene",
-        "game" => "Game",
-        "hierarchy" => "Hierarchy",
-        "inspector" => "Inspector",
-        "assets" => "Assets",
-        "console" => "Console / Problems",
-        "agents" => "Agents",
-        _ => panel,
     }
 }

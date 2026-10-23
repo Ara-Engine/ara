@@ -18,10 +18,12 @@ impl Ui {
         text_system: &TextSystem,
     ) -> Result<()> {
         self.paint_order.push(index);
+        self.paint_starts.push(self.display.commands.len());
         let node = &mut self.nodes[index];
         let l = *self.tree.layout(node.layout_id)?;
         if self.tree.style(node.layout_id)?.display == Display::None {
             self.paint_order.pop();
+            self.paint_starts.pop();
             return Ok(());
         }
         let local = [
@@ -99,6 +101,12 @@ impl Ui {
                         .get("src")
                         .map(|s| stable_id(s) as u32 & 0x7fff_ffff)
                         .unwrap_or(0),
+                    // `tint` images (white icons) take their element's text color.
+                    tint: if node.element.attrs.contains_key("tint") {
+                        node.computed.color
+                    } else {
+                        crate::style::Color(255, 255, 255, 255)
+                    },
                 });
             }
             if let Some(text) = &node.text {

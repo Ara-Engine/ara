@@ -276,11 +276,17 @@ impl Renderer {
                     }
                     self.push(Pipeline::Shape, 0, clip, instance);
                 }
-                Draw::Image { rect: r, image, .. } => {
+                Draw::Image {
+                    rect: r,
+                    image,
+                    tint,
+                    ..
+                } => {
                     if !self.images.contains_key(image) {
                         return Err(format!("ARA7051: missing image resource {image}").into());
                     }
                     instance.rect = array(rect(*r));
+                    instance.color = color_array(*tint);
                     self.push(Pipeline::Image, *image, clip, instance);
                 }
                 Draw::GlyphRun {

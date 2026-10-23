@@ -60,12 +60,12 @@ impl Shell {
         if let Some(diagnostic) = self.canvas.as_ref().and_then(|c| c.diagnostic.as_deref()) {
             out.push_str(&format!("<text id='graph-diagnostic' class='destructive' text='{}' style='height:28px;padding:4px' />",escape(diagnostic)));
         }
-        out.push_str("</panel><panel id='material-source-pane' style='flex-grow:0.38;flex-basis:0px;border-width:1px;border-color:var(--border);min-height:0px'><panel id='material-source-header' class='toolbar'><text id='material-source-title' class='field-label' text='Material DSL' /><panel id='material-source-fill' style='flex-grow:1' />");
+        out.push_str("</panel><panel id='material-source-pane' style='flex-grow:0.38;flex-basis:0px;min-height:0px;background:var(--panel-header)'><panel id='material-source-header' class='toolbar'><text id='material-source-title' class='caption' text='Material DSL' style='padding-left:4px' /><panel id='material-source-fill' class='fill' />");
         out.push_str(&self.bind_button(
             "material-source-apply",
-            "Apply  Ctrl Enter",
+            "Apply  Ctrl+Enter",
             Binding::ResourceApply,
-            "small quiet",
+            "primary",
         ));
         let draft = self
             .resource_text
@@ -179,38 +179,62 @@ impl Shell {
         domain: &str,
         doc: Option<&str>,
     ) {
-        out.push_str(&format!("<panel id='{domain}-toolbar' class='toolbar'><text id='{domain}-document' class='muted' text='{}' /><panel id='{domain}-toolbar-fill' style='flex-grow:1' />",escape(doc.and_then(|d|editor.host.store().workspace().path_of(d)).unwrap_or("No asset open"))));
+        out.push_str(&format!("<panel id='{domain}-toolbar' class='toolbar'>"));
         if domain != "vfx" {
-            out.push_str(&self.bind_button(
-                "graph-add",
-                "+ Add node",
-                Binding::Protocol("editor.canvas", json!({"add":!editor.state.canvas_add})),
-                "small",
-            ));
-            for (id, label, kind) in [
-                ("graph-frame", "Frame  F", "frame"),
-                ("graph-comment", "Comment", "comment"),
-                ("graph-group", "Group", "group"),
-                ("graph-reroute", "Reroute", "reroute"),
-            ] {
-                out.push_str(&self.bind_button(
-                    id,
-                    label,
-                    Binding::GraphLayout(kind.into()),
-                    "small quiet",
-                ));
-            }
+            self.tool_text(out, "graph-add", "graph.add", "plus", "Add node", "ghost");
+            out.push_str("<panel id='graph-sep' class='toolbar-sep' />");
+            self.tool_icon(out, "graph-frame", "graph.frame", "focus", editor, false);
+            self.tool_icon(
+                out,
+                "graph-comment",
+                "graph.comment",
+                "file-plus",
+                editor,
+                false,
+            );
+            self.tool_icon(
+                out,
+                "graph-group",
+                "graph.group",
+                "layout-grid",
+                editor,
+                false,
+            );
+            self.tool_icon(
+                out,
+                "graph-reroute",
+                "graph.reroute",
+                "git-compare",
+                editor,
+                false,
+            );
         }
-        out.push_str(&self.bind_button(
+        out.push_str(&format!("<panel id='{domain}-toolbar-fill' class='fill' /><text id='{domain}-document' class='caption' text='{}' />",escape(doc.and_then(|d|editor.host.store().workspace().path_of(d)).unwrap_or("No asset open"))));
+        let command = match domain {
+            "material" => "assets.create.material",
+            "vfx" => "assets.create.vfx",
+            _ => "assets.create.animation",
+        };
+        self.tool_text(
+            out,
             &format!("resource-create-{domain}"),
+            command,
+            "plus",
             "New",
-            Binding::ResourceCreate(domain.into()),
-            "small quiet",
-        ));
+            "ghost",
+        );
         out.push_str("</panel>");
     }
-    fn resource_empty(&self, out: &mut String, domain: &str) {
-        out.push_str(&format!("<panel id='{domain}-empty' class='body' style='align-items:center;justify-content:center;gap:12px'><text id='{domain}-welcome' style='font-size:18px' text='Create or open a {domain} asset' /><text id='{domain}-hint' class='muted' text='Choose an asset in the browser, or create one with New.' /></panel>"));
+    fn resource_empty(&mut self, out: &mut String, domain: &str) {
+        let (icon, title, command) = match domain {
+            "material" => ("contrast", "No material open", "assets.create.material"),
+            _ => (
+                "person-standing",
+                "No controller open",
+                "assets.create.animation",
+            ),
+        };
+        self.empty(out, &format!("{domain}-empty"), icon, title, "Open one from Assets, or create a new one. Graph and text views edit the same document.", &[(&format!("{domain}-empty-new"), "Create", command)]);
     }
     fn load_canvas(&mut self, editor: &Editor, doc: &str) -> ara_ui::Result<()> {
         if self.canvas_doc.as_deref() != Some(doc)

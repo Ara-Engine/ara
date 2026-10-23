@@ -49,3 +49,6 @@ leaving display-list geometry logical. Apply the same scale in the native target
 ScalableGlyphRun forces MSDF for cached graph labels; MSDF outlines share one
 48px atlas entry across requested sizes. Line uses mode 6 in the unchanged 64-byte
 instance ABI: UV stores local endpoints and parameters.x stores the half width.
+
+`Draw::Image.tint` becomes the instance color: white leaves images unchanged, a text
+color tints white icons (both backends multiply color by the sampled texel).

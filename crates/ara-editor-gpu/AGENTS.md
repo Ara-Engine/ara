@@ -9,7 +9,7 @@ All queue access is serialized on the window thread. End waits for completion;
 the completed RGBA8 UNORM target is CopySource for ara-platform presentation.
 
 The shared instance ABI is exactly 64 bytes, aligned to 16, with no padding.
-Bindings: 0 instances, 1 fixed 128 sampled images, 2 immutable linear-clamp sampler,
+Bindings: 0 instances, 1 fixed 256 sampled images, 2 immutable linear-clamp sampler,
 3 rounded clip masks. Push constants are 32 bytes. Preserve painter order.
 Rounded ancestor masks intersect in the fragment shader; rectangular bounds also
 intersect the physical-pixel scissor. Raster and MSDF atlases use the same uploads.
@@ -29,3 +29,8 @@ editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
+
+Floating editor windows (D23) share this adapter: `select_target(window)` swaps the
+active render target (0 is the main window); textures, atlases and pipelines are
+shared. Drop a closed window's target with `release_target` after queue idle.
+Overlays apply only where the viewport image is drawn.

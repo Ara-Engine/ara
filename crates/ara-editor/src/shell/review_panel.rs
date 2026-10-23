@@ -4,7 +4,10 @@ impl Shell {
     pub(super) fn console_panel(&mut self, editor: &mut Editor, out: &mut String) {
         out.push_str("<panel id='console-toolbar' class='toolbar'>");
         self.search(out, "console", editor);
-        out.push_str("<text id='console-hint' class='muted' text='Filter by code, message or severity' /></panel><scroll id='console-scroll' class='body'>");
+        out.push_str(
+            "</panel><scroll id='console-scroll' class='body' style='padding:4px;gap:0px'>",
+        );
+        let mut shown = 0;
         let logs = editor
             .action("logs", json!({"limit":300}))
             .unwrap_or(Value::Null);
@@ -32,45 +35,61 @@ impl Shell {
                 {
                     continue;
                 }
-                out.push_str(&format!("<panel id='diagnostic-{index}' class='row'>"));
-                out.push_str(&self.bind_button(
-                    &format!("diagnostic-open-{index}"),
-                    &label,
+                shown += 1;
+                let (icon, tint) = match diagnostic.severity {
+                    ara_diag::Severity::Error => ("circle-x", "destructive"),
+                    ara_diag::Severity::Warning => ("triangle-alert", "warning"),
+                    _ => ("info", "info"),
+                };
+                let open = format!("diagnostic-open-{index}");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&open),
                     Binding::Diagnostic(diagnostic.clone()),
-                    "quiet",
-                ));
+                );
+                out.push_str(&format!("<panel id='diagnostic-{index}' class='row' style='min-height:22px;padding-left:4px;gap:6px;flex-shrink:0'>{}<button id='{open}' class='ghost' style='flex-grow:1;flex-basis:0px;justify-content:start;height:22px' label='{}' description='Select the entity and reveal the field' action='Dispatch'><text id='{open}-code' class='caption mono' text='{}' /><text id='{open}-text' class='fg' text='{}' /><panel id='{open}-fill' class='fill' /><text id='{open}-count' class='caption' text='×{}' /></button>",icons::icon_in(&open,icon,tint),escape(&label),escape(&diagnostic.code.to_string()),escape(&diagnostic.message),entry["count"]));
                 for (fix_index, fix) in diagnostic.fixes.iter().enumerate() {
                     out.push_str(&self.bind_button(
                         &format!("fix-{index}-{fix_index}"),
                         &fix.title,
                         Binding::Fix(diagnostic.clone(), fix_index),
-                        "small",
+                        "primary",
                     ));
                 }
                 out.push_str("</panel>");
             }
         }
+        if shown == 0 {
+            out.push_str("</scroll>");
+            self.empty(out, "console-empty", "circle-check", if query.is_empty() { "No problems" } else { "No matching messages" }, "Diagnostics from the engine, importers and agents appear here, with one-click fixes.", &[]);
+            return;
+        }
         out.push_str("</scroll>");
     }
     pub(super) fn agents_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let compact = self.ui.size[1] < 800.;
-        out.push_str("<panel id='agents-toolbar' class='toolbar'><text id='policy-label' class='muted' text='Apply agent changes' />");
-        for (policy, label) in [
-            (crate::state::ApplyPolicy::Immediately, "Immediately"),
-            (crate::state::ApplyPolicy::WhenIdle, "When idle"),
-            (crate::state::ApplyPolicy::OnApproval, "On approval"),
+        out.push_str("<panel id='agents-toolbar' class='toolbar'><text id='policy-label' class='caption' text='Apply' style='padding-left:4px' /><panel id='policy-segment' class='segment'>");
+        for (policy, label, command) in [
+            (
+                crate::state::ApplyPolicy::Immediately,
+                "Now",
+                "agents.policy.immediately",
+            ),
+            (
+                crate::state::ApplyPolicy::WhenIdle,
+                "When idle",
+                "agents.policy.idle",
+            ),
+            (
+                crate::state::ApplyPolicy::OnApproval,
+                "On approval",
+                "agents.policy.approval",
+            ),
         ] {
-            out.push_str(&self.bind_button(
-                &format!("policy-{policy:?}"),
-                label,
-                Binding::Protocol("editor.policy", json!({"policy":policy})),
-                if editor.state.policy == policy {
-                    "small selected"
-                } else {
-                    "small quiet"
-                },
-            ));
+            let id = format!("policy-{policy:?}");
+            self.bind_command(&id, command, commands::Target::None);
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='Apply {label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.policy == policy {" selected"} else {""}));
         }
+        out.push_str("</panel>");
         out.push_str(if compact {
             "</panel><scroll id='agents-scroll' class='body' style='padding:4px;gap:8px'>"
         } else {
@@ -115,6 +134,14 @@ impl Shell {
         let review = editor
             .action("review.list", json!({"limit":100}))
             .unwrap_or(Value::Null);
+        let nothing = editor.state.presence.is_empty()
+            && editor.pending().as_array().is_none_or(Vec::is_empty)
+            && review["items"].as_array().is_none_or(Vec::is_empty);
+        if nothing {
+            out.push_str("</scroll>");
+            self.empty(out, "agents-empty", "bot", "No agent changes to review", "Agents connected over MCP edit through the same commands as you. Their changes appear here with a reason and a diff.", &[("agents-empty-connect", "Connect an agent", "agents.connect")]);
+            return;
+        }
         let names =
             crate::world::resolve(editor.host.store(), &editor.state.doc).unwrap_or_default();
         if let Some(items) = review["items"].as_array() {
@@ -122,24 +149,30 @@ impl Shell {
                 let Some(id) = item["txn"].as_str() else {
                     continue;
                 };
-                out.push_str(&format!("<panel id='turn-{id}' class='section agent-card'><panel id='turn-header-{id}' class='row'><panel id='avatar-{id}' class='avatar'>{}</panel><text id='turn-title-{id}' text='{}' /><text id='turn-meta-{id}' class='badge' text='Turn {}' />{}<panel id='turn-fill-{id}' style='flex-grow:1' />",icons::icon(&format!("avatar-{id}"),"bot"),escape(item["author"].as_str().unwrap_or("Agent")),escape(&id.chars().take(8).collect::<String>()),if compact{format!("<text id='turn-why-{id}' class='muted' text='{}' />",escape(item["why"].as_str().unwrap_or("Agent changes")))}else{String::new()}));
+                // Title, reason and actions stack so narrow docks keep every control reachable.
+                out.push_str(&format!("<panel id='turn-{id}' class='agent-card'><panel id='turn-header-{id}' class='row'><panel id='avatar-{id}' class='avatar'>{}</panel><text id='turn-title-{id}' class='fg' text='{}' /><panel id='turn-fill-{id}' class='fill' /><text id='turn-meta-{id}' class='caption mono' text='{}' /></panel><text id='turn-why-{id}' class='dialog-text' style='color:var(--foreground)' text='{}' />",icons::icon(&format!("avatar-{id}"),"bot"),escape(item["author"].as_str().unwrap_or("Agent")),escape(&id.chars().take(8).collect::<String>()),escape(item["why"].as_str().unwrap_or("No reason supplied"))));
+                if !compact {
+                    out.push_str(&format!(
+                        "<text id='turn-commands-{id}' class='caption' text='{}' />",
+                        escape(item["label"].as_str().unwrap_or("Commands"))
+                    ));
+                }
+                out.push_str(&format!(
+                    "<panel id='turn-actions-{id}' class='row' style='gap:4px'>"
+                ));
                 out.push_str(&self.bind_button(
                     &format!("accept-{id}"),
                     "Accept",
                     Binding::Protocol("review.accept", json!({"txn":id})),
-                    "small",
+                    "primary",
                 ));
                 out.push_str(&self.bind_button(
                     &format!("revert-{id}"),
                     "Revert",
                     Binding::Protocol("review.revert", json!({"txn":id})),
-                    "small quiet",
+                    "",
                 ));
                 out.push_str("</panel>");
-                if !compact {
-                    out.push_str(&format!("<panel id='turn-summary-{id}' class='row'><text id='turn-why-{id}' text='{}' /><text id='turn-commands-{id}' class='badge' text='{}' /></panel>",escape(item["why"].as_str().unwrap_or("No reason supplied")),escape(item["label"].as_str().unwrap_or("Commands"))));
-                }
-
                 if let Some(tx) = editor.host.store().txn(&ara_ops::TxnId(id.into())) {
                     for (index, op) in tx.ops.iter().enumerate() {
                         let text = match op {

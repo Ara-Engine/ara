@@ -3,8 +3,10 @@ mod capture;
 mod controller;
 mod panels_verify;
 mod setup;
+mod ux_verify;
 mod verify;
 mod viewport;
+mod windows;
 use crate::{
     Editor,
     gpu::NativeUi,
@@ -32,10 +34,17 @@ use std::{
 };
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
-    if options.verify_panels {
+    if options.verify_panels || options.verify_ux {
         panels_verify::fixtures(&options.project)?;
     }
-    let mut editor = Editor::open(&options.project)?;
+    // Verification and screenshots keep preferences in the output folder, never the user's profile.
+    let user_settings =
+        if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
+            Some(options.output.join("user-settings.json"))
+        } else {
+            crate::settings::user_settings_path()
+        };
+    let mut editor = Editor::open_with(&options.project, user_settings)?;
     setup::prepare(&mut editor, &options)?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
@@ -53,14 +62,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     );
     let window = Window::new(&title, options.size)?;
     let mut native = Native::attach(&title)?;
-    if options.verify || options.verify_panels || options.screenshot {
+    if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
         native.verification_extent(options.size)?;
     }
     let mut clipboard = OsClipboard;
-    let dpi = options.dpi.unwrap_or_else(|| native.dpi());
+    crate::native::frame::style(window.raw(), editor.state.light);
+    let main_id = window.id();
+    let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
-    if options.verify || options.verify_panels {
+    if options.verify || options.verify_panels || options.verify_ux {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
@@ -79,6 +90,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     )?;
     // SAFETY: Renderer/device are declared before the UI adapter, and survive its destruction.
     let mut gpu = unsafe { NativeUi::new(renderer.gpu().context())? };
+    shell.device_info =
+        serde_json::to_string_pretty(&renderer.gpu().context().info).unwrap_or_default();
+    let mut floats = windows::Floats::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
     crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
@@ -106,10 +120,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
-    if panel_verification.is_some() {
+    let mut ux_verification = if options.verify_ux {
+        Some(ux_verify::UxVerification::new(
+            &mut editor,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
+    if panel_verification.is_some() || ux_verification.is_some() {
         shell.rebuild(&mut editor)?;
     }
 
+    let (import_send, imports) = std::sync::mpsc::channel::<PathBuf>();
+    if let Ok(mut guard) = IMPORTS.lock() {
+        *guard = Some(import_send);
+    }
     let result = (|| -> ara_ui::Result<()> {
         let mut last_revision = editor.host.store().revision();
         let mut last_view = editor.view_revision;
@@ -122,6 +148,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut dirty = true;
         let mut scene_dirty = true;
         let mut frames = 0u64;
+        let mut exit_requested = false;
         let mut controller = controller::Controller::default();
         let mut idle_samples = Vec::new();
         let mut render_samples = Vec::new();
@@ -148,31 +175,40 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut graph_start = None;
             let dt = frame_start.duration_since(previous).as_secs_f32().min(0.05);
             previous = frame_start;
-            let events = window.poll()?;
+            let events = Window::poll_tagged()?;
             let interaction_start = (!events.is_empty()).then(Instant::now);
             let mut quit = false;
-            for event in events {
-                match controller.event(
-                    native.logical_event(event, options.dpi.unwrap_or_else(|| native.dpi())),
+            let main_dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
+            for (sdl, event) in events {
+                let routed = route_event(
+                    sdl,
+                    event,
+                    main_id,
+                    main_dpi,
+                    &window,
+                    &mut floats,
+                    &mut controller,
                     &mut editor,
                     &mut shell,
                     &renderer,
                     &view,
                     &mut clipboard,
-                ) {
+                );
+                match routed {
                     Ok((ui, scene, close)) => {
                         dirty |= ui;
                         scene_dirty |= scene;
                         quit |= close;
                     }
                     Err(error) => {
+                        shell.leave();
                         editor.report_error(&error.to_string());
                         dirty = true;
                     }
                 }
             }
             drop(input_scope);
-            if quit || editor.host.stopping() {
+            if quit || exit_requested || editor.host.stopping() {
                 drop(profile_scope);
                 if profile_frame.is_some() {
                     let _ = editor
@@ -182,14 +218,65 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 break;
             }
+            // IME text goes to the window with keyboard focus.
+            let focus = crate::native::keyboard_focus();
+            let focused_float = floats
+                .windows
+                .iter()
+                .find(|f| f.sdl == focus)
+                .map(|f| f.id.clone());
+            if let Some(id) = &focused_float {
+                shell.enter(id);
+            }
             match native.input(&mut shell.ui, &mut shell.input) {
                 Ok(changed) => dirty |= changed,
                 Err(error) => editor.report_error(&error.to_string()),
             }
+            shell.leave();
             match shell.dispatch(&mut editor) {
                 Ok(changed) => dirty |= changed,
                 Err(error) => editor.report_error(&error.to_string()),
             }
+            for id in floats
+                .windows
+                .iter()
+                .map(|f| f.id.clone())
+                .collect::<Vec<_>>()
+            {
+                if shell.enter(&id) {
+                    let result = shell.dispatch(&mut editor);
+                    shell.leave();
+                    match result {
+                        Ok(changed) => dirty |= changed,
+                        Err(error) => editor.report_error(&error.to_string()),
+                    }
+                }
+            }
+            if let Some(request) = shell.window_request.take() {
+                match request {
+                    crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
+                    crate::shell::WindowRequest::Raise(id) => {
+                        if let Some(f) = floats.windows.iter().find(|f| f.id == id) {
+                            f.window.raise();
+                        }
+                    }
+                    crate::shell::WindowRequest::Gather => floats.gather(&window)?,
+                    crate::shell::WindowRequest::Import => import_dialog(&window, &editor),
+                    crate::shell::WindowRequest::Quit => exit_requested = true,
+                }
+                dirty = true;
+            }
+            for path in imports.try_iter() {
+                if let Err(error) = import_file(&mut editor, &path) {
+                    editor.report_error(&error.to_string());
+                }
+                dirty = true;
+            }
+            if let Some(text) = shell.take_clipboard() {
+                use ara_ui_text::Clipboard;
+                let _ = clipboard.write(&text);
+            }
+            shell.main_rect = window.rect()?;
             match controller.fly(&mut editor, &shell, dt) {
                 Ok(changed) => {
                     dirty |= changed;
@@ -197,7 +284,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 Err(error) => editor.report_error(&error.to_string()),
             }
-            if verification.as_ref().is_some_and(|v| v.finished())
+            if (verification.as_ref().is_some_and(|v| v.finished())
+                || ux_verification.as_ref().is_some_and(|v| v.finished()))
                 && frames >= 32
                 && camera_samples.len() < 240
             {
@@ -211,6 +299,35 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
             server.pump(&mut editor);
             editor.tick();
+            if shell.run_queued(&mut editor) {
+                dirty = true;
+            }
+            if floats.windows.len() != editor.state.floating.len()
+                || floats
+                    .windows
+                    .iter()
+                    .zip(&editor.state.floating)
+                    .any(|(a, b)| a.id != b.id)
+            {
+                dirty |= floats.sync(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    &renderer,
+                    &mut gpu,
+                    last_dpi,
+                )?;
+            } else if frames.is_multiple_of(30) {
+                floats.persist_rects(&mut editor, controller.buttons_down())?;
+                dirty |= floats.sync(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    &renderer,
+                    &mut gpu,
+                    last_dpi,
+                )?;
+            }
             if shell.poll_assets() {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
@@ -278,6 +395,28 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty |= changed;
                 scene_dirty |= dirty;
             }
+            if let Some(suite) = &mut ux_verification {
+                let was_finished = suite.finished();
+                let changed = suite.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                    &floats,
+                )?;
+                if changed {
+                    icon_state = (!editor.state.light, last_dpi);
+                }
+                dirty |= changed;
+                scene_dirty |= changed;
+                if !was_finished && suite.finished() {
+                    idle_samples.clear();
+                    wall_samples.clear();
+                    render_samples.clear();
+                    interaction_samples.clear();
+                }
+            }
             if let Some(suite) = &mut panel_verification {
                 let was_finished = suite.finished();
                 graph_start = suite.benchmarking().then(Instant::now);
@@ -308,7 +447,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
-            let dpi = options.dpi.unwrap_or_else(|| native.dpi());
+            let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
             if physical != last_physical || dpi != last_dpi {
                 // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
                 unsafe {
@@ -368,11 +507,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     for id in view.ghosts().keys() {
                         changed.insert(crate::world::render_id(id), "destructive-foreground");
                     }
-                    let mut overlays =
-                        overlay::build(&view, &editor.state, rect, &renderer, &changed)?;
+                    let mut overlays = overlay::build(
+                        &view,
+                        &editor.state,
+                        rect,
+                        &renderer,
+                        &changed,
+                        controller.gizmo_state(),
+                    )?;
                     if rect.contains(shell.pointer[0], shell.pointer[1])
                         && !editor.state.palette
-                        && !shell.context
+                        && shell.menu.is_none()
                         && shell
                             .ui
                             .hit_test(shell.pointer[0], shell.pointer[1])
@@ -404,6 +549,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
                     icon_state = (editor.state.light, dpi);
                 }
+                gpu.select_target(0);
+                gpu.set_dpi(dpi)?;
                 ui_renderer.render(
                     &mut gpu,
                     &shell.ui.display,
@@ -419,8 +566,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 let graph_present = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 if work.paint_nodes > 0 || work.layout_passes > 0 || shell.version != last_ui {
-                    native.update(&shell.ui, &shell.input, dpi)?;
+                    if focused_float.is_none() {
+                        native.update(&shell.ui, &shell.input, dpi)?;
+                    }
                     last_ui = shell.version;
+                }
+                for float in &mut floats.windows {
+                    float.dirty = true;
                 }
                 render_samples.push(render_start.elapsed().as_secs_f64() * 1000.);
                 if let Some(start) = camera_start {
@@ -460,6 +612,45 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     idle_samples.push(frame_start.elapsed().as_secs_f64() * 1000.);
                     wall_samples.push(interval);
                 }
+            }
+            // Floating windows render after the main window, each into its own target.
+            for float in &mut floats.windows {
+                let work = shell.frame_surface(&float.id)?;
+                if !(float.dirty || work.paint_nodes > 0 || work.layout_passes > 0) {
+                    continue;
+                }
+                let float_dpi = options.dpi.unwrap_or_else(|| float.window.display_scale())
+                    * windows::ui_scale(&editor);
+                let Some(surface) = shell.surface(&float.id) else {
+                    continue;
+                };
+                gpu.select_target(float.key);
+                gpu.set_dpi(float_dpi)?;
+                ui_renderer.render(
+                    &mut gpu,
+                    &surface.ui.display,
+                    &shell.text.assets,
+                    surface.ui.size.map(|v| v.round() as u32),
+                    TextMode::Raster,
+                )?;
+                let (image, size) = gpu.output()?;
+                // SAFETY: UI submission is complete, image is CopySource and both native owners are live.
+                unsafe {
+                    float
+                        .present
+                        .display(renderer.gpu().context(), image, size)?;
+                }
+                if focused_float.as_deref() == Some(float.id.as_str()) {
+                    native.text_input(
+                        float.window.raw(),
+                        &surface.ui,
+                        &surface.input,
+                        float_dpi,
+                    )?;
+                }
+                gpu.select_target(0);
+                gpu.set_dpi(last_dpi)?;
+                float.dirty = false;
             }
             if let Ok(task) = editor.captures.try_recv() {
                 let prepared = capture::prepare(&task, &mut renderer, &mut gpu, &shell, &editor);
@@ -518,6 +709,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 || panel_verification
                     .as_ref()
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 1500)
+                || ux_verification.as_ref().is_some_and(|v| {
+                    v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
+                })
             {
                 break;
             }
@@ -531,6 +725,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         if panel_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("native panel verification did not finish".into());
         }
+        if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
+            return Err("UX verification did not finish".into());
+        }
         editor.host.flush();
         if options.screenshot {
             std::fs::create_dir_all(&options.output)?;
@@ -541,7 +738,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             )?;
         }
         renderer.gpu().assert_clean()?;
-        if options.verify || options.verify_panels {
+        if options.verify || options.verify_panels || options.verify_ux {
             std::fs::create_dir_all(&options.output)?;
             let timings = json!({"targetHz":144,"requestedPixels":options.size,"logicalSize":shell.ui.size,"dpi":last_dpi,"graph500PanZoomInputToPresentMs":panel_verification.as_ref().map(|v|statistics(&v.samples)),"warmCameraToPresentMs":statistics(&camera_samples),"idleFrameIntervalMs":statistics(&wall_samples),"idleCpuMs":statistics(&idle_samples),"dirtyRenderAndPresentMs":statistics(&render_samples),"nativeInputToPresentMs":statistics(&interaction_samples),"idleSamplesMs":idle_samples,"renderSamplesMs":render_samples,"warmCameraSamplesMs":camera_samples,"idleIntervalSamplesMs":wall_samples,"interactionSamplesMs":interaction_samples,"device":renderer.gpu().context().info,"note":"CPU active time excludes idle sleep; native presentation and current renderer serialize. Scripted timings are recorded separately."});
             std::fs::write(
@@ -557,6 +754,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         renderer.gpu().context().device.device_wait_idle()?;
         present.destroy(renderer.gpu().context());
     }
+    floats.destroy(&renderer);
     result
 }
 fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
@@ -618,4 +816,223 @@ fn recording_profiler_visible(editor: &mut Editor) -> bool {
     active(&editor.state.layout)
         && editor.profile_current.is_none()
         && editor.host.profiler().is_recording()
+}
+
+/// Route one tagged SDL event: main-window events go straight to the controller,
+/// floating-window events run with that window's surface swapped in, and tab drags
+/// track the pointer across every window on the desktop.
+#[allow(clippy::too_many_arguments)]
+fn route_event(
+    sdl: u32,
+    event: Event,
+    main_id: u32,
+    dpi: f32,
+    window: &Window,
+    floats: &mut windows::Floats,
+    controller: &mut controller::Controller,
+    editor: &mut Editor,
+    shell: &mut Shell,
+    renderer: &Renderer,
+    view: &crate::world::DocumentView,
+    clipboard: &mut OsClipboard,
+) -> ara_ui::Result<(bool, bool, bool)> {
+    // Tab drags follow the desktop pointer: preview in whichever window is under it.
+    if shell.dragged_tab().is_some() {
+        match &event {
+            Event::MouseMotion { .. } => {
+                let global = Window::global_mouse();
+                track_tab_drag(global, dpi, window, floats, shell)?;
+                for f in &mut floats.windows {
+                    f.dirty = true;
+                }
+                return Ok((true, false, false));
+            }
+            Event::MouseButton {
+                button: 1,
+                pressed: false,
+            } => {
+                let global = Window::global_mouse();
+                let rect = [(global[0] - 60.) as i32, (global[1] - 14.) as i32, 420, 560];
+                shell.leave();
+                let dropped = shell.finish_tab_drag(editor, Some(rect));
+                controller.release(1);
+                shell.event(InputEvent::Cancel, clipboard)?;
+                dropped?;
+                return Ok((true, false, false));
+            }
+            _ => {}
+        }
+    }
+    if sdl == 0 || sdl == main_id {
+        return controller.event(
+            crate::native::logical_event_for(window.raw(), event, dpi),
+            editor,
+            shell,
+            renderer,
+            view,
+            clipboard,
+        );
+    }
+    let Some(float) = floats.by_sdl(sdl) else {
+        return Ok((false, false, false));
+    };
+    float.dirty = true;
+    let id = float.id.clone();
+    let float_dpi = float.window.display_scale() * windows::ui_scale(editor);
+    match event {
+        Event::Quit => {
+            // Closing a floating window closes its panels; Window reopens them docked.
+            let panels = editor
+                .state
+                .floating
+                .iter()
+                .find(|f| f.id == id)
+                .map(|f| panels_of(&f.root))
+                .unwrap_or_default();
+            for panel in panels {
+                editor.action("editor.layout.close", json!({"panel": panel}))?;
+            }
+            Ok((true, false, false))
+        }
+        Event::Resize(size) => {
+            if size.contains(&0) {
+                return Ok((false, false, false));
+            }
+            float.physical = size;
+            // SAFETY: Wait before replacing a swapchain referenced by presentation.
+            unsafe {
+                renderer.gpu().context().device.device_wait_idle()?;
+                float.present.destroy(renderer.gpu().context());
+                float.present = Present::new(renderer.gpu().context(), &float.window)?;
+            }
+            shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi));
+            shell.rebuild(editor)?;
+            Ok((true, false, false))
+        }
+        event => {
+            let event = crate::native::logical_event_for(float.window.raw(), event, float_dpi);
+            if !shell.enter(&id) {
+                return Ok((false, false, false));
+            }
+            let result = controller.event(event, editor, shell, renderer, view, clipboard);
+            shell.leave();
+            result
+        }
+    }
+}
+/// Point the tab-drag preview at the window under a desktop point.
+fn track_tab_drag(
+    global: [f32; 2],
+    dpi: f32,
+    window: &Window,
+    floats: &windows::Floats,
+    shell: &mut Shell,
+) -> ara_ui::Result<()> {
+    if let Some(float) = floats.at(global) {
+        let scale =
+            crate::native::points_to_logical(float.window.raw(), float.window.display_scale());
+        let local = [
+            (global[0] - float.rect[0] as f32) * scale,
+            (global[1] - float.rect[1] as f32) * scale,
+        ];
+        if shell.enter(&float.id) {
+            shell.pointer = local;
+            shell.drag_over();
+            shell.leave();
+        }
+        return Ok(());
+    }
+    let m = window.rect()?;
+    let inside = global[0] >= m[0] as f32
+        && global[1] >= m[1] as f32
+        && global[0] < (m[0] + m[2]) as f32
+        && global[1] < (m[1] + m[3]) as f32;
+    shell.leave();
+    if inside {
+        let scale = crate::native::points_to_logical(window.raw(), dpi);
+        shell.pointer = [
+            (global[0] - m[0] as f32) * scale,
+            (global[1] - m[1] as f32) * scale,
+        ];
+        shell.drag_over();
+    } else {
+        shell.drag_outside();
+    }
+    Ok(())
+}
+fn panels_of(node: &ara_ui::docking::DockNode) -> Vec<String> {
+    match node {
+        ara_ui::docking::DockNode::Area { tabs, .. } => tabs.clone(),
+        ara_ui::docking::DockNode::Split { first, second, .. } => {
+            let mut out = panels_of(first);
+            out.extend(panels_of(second));
+            out
+        }
+    }
+}
+/// Files chosen in the OS import dialog; SDL may call back on another thread.
+static IMPORTS: std::sync::Mutex<Option<std::sync::mpsc::Sender<PathBuf>>> =
+    std::sync::Mutex::new(None);
+/// Show the OS open-file dialog; chosen files arrive on the import channel.
+fn import_dialog(window: &Window, editor: &Editor) {
+    unsafe extern "C" fn chosen(
+        _: *mut std::ffi::c_void,
+        files: *const *const std::ffi::c_char,
+        _: std::ffi::c_int,
+    ) {
+        if files.is_null() {
+            return;
+        }
+        // SAFETY: SDL passes a null-terminated array of UTF-8 paths valid for this call.
+        unsafe {
+            let mut at = files;
+            while !(*at).is_null() {
+                let path =
+                    PathBuf::from(std::ffi::CStr::from_ptr(*at).to_string_lossy().into_owned());
+                if let Ok(guard) = IMPORTS.lock()
+                    && let Some(send) = guard.as_ref()
+                {
+                    let _ = send.send(path);
+                }
+                at = at.add(1);
+            }
+        }
+    }
+    let folder = std::ffi::CString::new(
+        editor
+            .host
+            .root()
+            .join(&editor.state.asset_folder)
+            .to_string_lossy()
+            .into_owned(),
+    )
+    .ok();
+    // SAFETY: The window is live; SDL copies the location and calls back on the main thread.
+    unsafe {
+        sdl3_sys::dialog::SDL_ShowOpenFileDialog(
+            Some(chosen),
+            std::ptr::null_mut(),
+            window.raw(),
+            std::ptr::null(),
+            0,
+            folder.as_ref().map_or(std::ptr::null(), |f| f.as_ptr()),
+            true,
+        );
+    }
+}
+/// Copy an external file into the current asset folder and import it.
+fn import_file(editor: &mut Editor, source: &std::path::Path) -> ara_ui::Result<()> {
+    let name = source.file_name().ok_or("import path has no file name")?;
+    let folder = editor.state.asset_folder.clone();
+    let relative = if folder.is_empty() {
+        name.to_string_lossy().into_owned()
+    } else {
+        format!("{folder}/{}", name.to_string_lossy())
+    };
+    let destination = editor.host.root().join(&relative);
+    if destination != source {
+        std::fs::copy(source, &destination)?;
+    }
+    editor.action("editor.asset.import", json!({"path": relative}))?;
+    Ok(())
 }

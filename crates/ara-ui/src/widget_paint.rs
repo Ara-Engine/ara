@@ -27,10 +27,13 @@ pub(crate) fn decorations(
     };
     match widget {
         Some(Widget::Toggle(checked)) => {
+            // Centred vertically; 28 px toggles keep their 7 px inset.
+            let x = rect.x + rect.w - 22.0;
+            let y = rect.y + ((rect.h - 14.0) * 0.5).max(0.0);
             draw(
                 Box2 {
-                    x: rect.x + rect.w - 22.0,
-                    y: rect.y + 7.0,
+                    x,
+                    y,
                     w: 14.0,
                     h: 14.0,
                 },
@@ -40,6 +43,23 @@ pub(crate) fn decorations(
                     Color(100, 100, 100, 100)
                 },
             );
+            if *checked {
+                // A white check mark stamped from 2 px squares along its two strokes.
+                for (a, b) in [([3.5, 7.0], [6.0, 9.5]), ([6.0, 9.5], [10.5, 4.5])] {
+                    for i in 0..=6 {
+                        let t = i as f32 / 6.0;
+                        draw(
+                            Box2 {
+                                x: x + a[0] + (b[0] - a[0]) * t - 1.0,
+                                y: y + a[1] + (b[1] - a[1]) * t - 1.0,
+                                w: 2.0,
+                                h: 2.0,
+                            },
+                            Color(255, 255, 255, 255),
+                        );
+                    }
+                }
+            }
         }
         Some(Widget::Slider {
             value, min, max, ..

@@ -277,7 +277,7 @@ fn gizmos_use_visible_local_world_axes_and_rotation_rings() {
             .find_map(|n| {
                 let [a, b] = handles.ring_segment(axis, n)?;
                 let p = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
-                (overlay::hit(&handles, p) == Some(axis)).then_some(p)
+                (overlay::hit(&handles, p) == Some(overlay::Handle::Axis(axis))).then_some(p)
             })
             .expect("visible ring must be pickable");
         let point =

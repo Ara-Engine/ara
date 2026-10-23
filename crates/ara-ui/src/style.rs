@@ -60,6 +60,8 @@ pub struct Computed {
     pub background: Color,
     /// Foreground or glyph tint color.
     pub color: Color,
+    /// `color: inherit`: use the parent's computed color (labels follow their button's state).
+    pub inherit_color: bool,
     /// Border/focus outline color.
     pub border_color: Color,
     /// Clamped corner radius in logical pixels.
@@ -103,6 +105,7 @@ impl Computed {
                 Color(0, 0, 0, 0)
             },
             color: Color(225, 232, 241, 255),
+            inherit_color: false,
             border_color: Color(77, 92, 111, 255),
             radius: if control { 6.0 } else { 0.0 },
             border: 0.0,

@@ -1,0 +1,31 @@
+.menubar { height:40px; }
+.panel-header { height:32px; }
+.tabbar { height:32px; }
+.tab { height:32px; }
+.toolbar { height:32px; }
+.viewport-bar { height:32px; }
+.statusbar { height:28px; }
+button { height:26px; }
+.small { height:26px; }
+.icon-button { width:28px; height:28px; padding:6px; }
+field { height:26px; padding-top:3px; }
+dropdown { height:26px; padding-top:3px; }
+.vector-cell { height:26px; }
+.vector-input { height:24px; padding-top:3px; }
+.axis { height:24px; }
+.search { height:26px; }
+.search-icon { top:5px; }
+.placeholder { top:4px; }
+.virtual-row { height:26px; }
+.prop-row { height:28px; }
+.prop-label { height:28px; }
+.component-header { height:30px; }
+.menu-item { height:30px; }
+.module-row { height:28px; }
+.shortcut-row { height:30px; }
+.settings-cat { height:28px; }
+.segment { height:28px; }
+.segment-button { height:24px; }
+.split { height:28px; }
+.split-main { height:26px; }
+.split-more { height:26px; }

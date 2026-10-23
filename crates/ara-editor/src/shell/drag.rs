@@ -14,6 +14,33 @@ pub(crate) enum Drag {
         panel: String,
         start: [f32; 2],
     },
+    /// Resizing the inspector's label column.
+    Column {
+        start: [f32; 2],
+    },
+}
+/// Where a dragged tab would land.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum DropTarget {
+    /// Add as a tab of an area.
+    Tab(String),
+    /// Split an area: vertical stacks, `before` puts the panel first.
+    Split {
+        area: String,
+        vertical: bool,
+        before: bool,
+    },
+    /// Release outside every window: a new floating window.
+    Float,
+}
+/// The lit region and action label shown while a tab is dragged.
+#[derive(Clone, Debug)]
+pub(crate) struct DropPreview {
+    pub target: DropTarget,
+    pub rect: Box2,
+    pub label: String,
+    /// Surface showing the preview (`None` is the main window).
+    pub surface: Option<String>,
 }
 impl Shell {
     /// Scroll a finite row pool over the full hierarchy model.
@@ -60,7 +87,10 @@ impl Shell {
             return;
         };
         let id = &self.ui.nodes[index].element.id;
-        if let Some(panel) = id.strip_prefix("tab-") {
+        if let Some(panel) = id
+            .strip_prefix("tab-")
+            .or_else(|| id.strip_prefix("header-"))
+        {
             self.drag = Some(Drag::Tab {
                 panel: panel.into(),
                 start: self.pointer,
@@ -85,10 +115,14 @@ impl Shell {
             return Ok(false);
         };
         let start = match &drag {
-            Drag::Entity { start, .. } | Drag::Asset { start, .. } | Drag::Tab { start, .. } => {
-                start
-            }
+            Drag::Entity { start, .. }
+            | Drag::Asset { start, .. }
+            | Drag::Tab { start, .. }
+            | Drag::Column { start, .. } => start,
         };
+        if matches!(drag, Drag::Column { .. }) {
+            return Ok(true);
+        }
         if (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1]) < 6. {
             return Ok(false);
         }
@@ -200,31 +234,251 @@ impl Shell {
                 }
             }
             Drag::Tab { panel, .. } => {
-                let target = self.ui.nodes.iter().find(|n| {
-                    n.element.id.starts_with("area-")
-                        && n.rect.contains(self.pointer[0], self.pointer[1])
-                });
-                if let Some(target) = target {
-                    let area = target.element.id.trim_start_matches("area-");
-                    let r = target.rect;
-                    let dx = (self.pointer[0] - r.x).min(r.x + r.w - self.pointer[0]);
-                    let dy = (self.pointer[1] - r.y).min(r.y + r.h - self.pointer[1]);
-                    let params = if dx < 30. || dy < 30. {
-                        let vertical = dy < dx;
-                        let before = if vertical {
-                            self.pointer[1] < r.y + r.h * 0.5
-                        } else {
-                            self.pointer[0] < r.x + r.w * 0.5
-                        };
-                        json!({"panel":panel,"area":area,"newArea":format!("dock-{}",editor.host.store().revision()),"vertical":vertical,"before":before})
-                    } else {
-                        json!({"panel":panel,"area":area})
-                    };
-                    editor.action("editor.layout", params)?;
+                if let Some(preview) = self.drop_preview.take() {
+                    self.drop_tab(editor, &panel, &preview.target, None)?;
                 }
             }
+            Drag::Column { .. } => {}
         }
         self.rebuild(editor)?;
         Ok(true)
+    }
+}
+impl Shell {
+    /// Resolve the drop target under the pointer of the current surface.
+    pub(crate) fn drop_target(&self, panel: &str) -> Option<(DropTarget, Box2, String)> {
+        let p = self.pointer;
+        let area = self.ui.nodes.iter().rev().find(|n| {
+            n.element.id.starts_with("area-") && n.visible && n.rect.contains(p[0], p[1])
+        })?;
+        let id = area.element.id.trim_start_matches("area-").to_owned();
+        let r = area.rect;
+        let name = panels::title(panel).to_owned();
+        let dx = (p[0] - r.x) / r.w.max(1.);
+        let dy = (p[1] - r.y) / r.h.max(1.);
+        let edge = 0.28;
+        let (target, rect, label) = if dx < edge {
+            (
+                DropTarget::Split {
+                    area: id,
+                    vertical: false,
+                    before: true,
+                },
+                Box2 { w: r.w * 0.5, ..r },
+                format!("Split left · {name}"),
+            )
+        } else if dx > 1. - edge {
+            (
+                DropTarget::Split {
+                    area: id,
+                    vertical: false,
+                    before: false,
+                },
+                Box2 {
+                    x: r.x + r.w * 0.5,
+                    w: r.w * 0.5,
+                    ..r
+                },
+                format!("Split right · {name}"),
+            )
+        } else if dy < edge {
+            (
+                DropTarget::Split {
+                    area: id,
+                    vertical: true,
+                    before: true,
+                },
+                Box2 { h: r.h * 0.5, ..r },
+                format!("Split up · {name}"),
+            )
+        } else if dy > 1. - edge {
+            (
+                DropTarget::Split {
+                    area: id,
+                    vertical: true,
+                    before: false,
+                },
+                Box2 {
+                    y: r.y + r.h * 0.5,
+                    h: r.h * 0.5,
+                    ..r
+                },
+                format!("Split down · {name}"),
+            )
+        } else {
+            (DropTarget::Tab(id), r, format!("Add as tab · {name}"))
+        };
+        Some((target, rect, label))
+    }
+    /// Update the live preview for a tab drag at the current surface's pointer.
+    pub(crate) fn drag_over(&mut self) -> bool {
+        let Some(Drag::Tab { panel, start }) = &self.drag else {
+            return false;
+        };
+        if self.current.is_none()
+            && (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1]) < 6.
+        {
+            return false;
+        }
+        let panel = panel.clone();
+        let next = self
+            .drop_target(&panel)
+            .map(|(target, rect, label)| DropPreview {
+                target,
+                rect,
+                label,
+                surface: self.current.clone(),
+            });
+        let changed = match (&next, &self.drop_preview) {
+            (Some(a), Some(b)) => a.target != b.target || a.surface != b.surface,
+            (None, None) => false,
+            _ => true,
+        };
+        self.drop_preview = next;
+        if changed {
+            for n in &mut self.ui.nodes {
+                n.dirty.paint = true;
+            }
+        }
+        changed
+    }
+    /// Preview a release outside every window: a new floating window.
+    pub(crate) fn drag_outside(&mut self) -> bool {
+        let Some(Drag::Tab { panel, .. }) = &self.drag else {
+            return false;
+        };
+        let label = format!("New window · {}", panels::title(panel));
+        let changed = !matches!(&self.drop_preview, Some(p) if p.target == DropTarget::Float);
+        self.drop_preview = Some(DropPreview {
+            target: DropTarget::Float,
+            rect: Box2::default(),
+            label,
+            surface: None,
+        });
+        changed
+    }
+    /// The panel being dragged, if a tab drag is active.
+    pub fn dragged_tab(&self) -> Option<&str> {
+        match &self.drag {
+            Some(Drag::Tab { panel, .. }) => Some(panel),
+            _ => None,
+        }
+    }
+    /// Finish a tab drag with the current preview; `rect` places a new window.
+    pub fn finish_tab_drag(
+        &mut self,
+        editor: &mut Editor,
+        rect: Option<[i32; 4]>,
+    ) -> ara_ui::Result<bool> {
+        let Some(Drag::Tab { panel, .. }) = self.drag.take() else {
+            return Ok(false);
+        };
+        let Some(preview) = self.drop_preview.take() else {
+            return Ok(false);
+        };
+        self.drop_tab(editor, &panel, &preview.target, rect)?;
+        self.rebuild(editor)?;
+        Ok(true)
+    }
+    /// Apply a tab drop through the layout protocol; `rect` places new windows.
+    pub(crate) fn drop_tab(
+        &mut self,
+        editor: &mut Editor,
+        panel: &str,
+        target: &DropTarget,
+        rect: Option<[i32; 4]>,
+    ) -> ara_ui::Result<()> {
+        match target {
+            DropTarget::Tab(area) => {
+                editor.action("editor.layout", json!({"panel": panel, "area": area}))?;
+            }
+            DropTarget::Split {
+                area,
+                vertical,
+                before,
+            } => {
+                let new_area = format!(
+                    "{panel}-{}",
+                    editor.host.store().revision() + editor.view_revision
+                );
+                editor.action(
+                    "editor.layout",
+                    json!({"panel": panel, "area": area, "newArea": new_area, "vertical": vertical, "before": before}),
+                )?;
+            }
+            DropTarget::Float => {
+                if panel == "scene" {
+                    return Err(
+                        "The Scene viewport stays in the main window; float tool panels and graphs"
+                            .into(),
+                    );
+                }
+                let rect = rect.unwrap_or_else(|| self.float_rect([420, 560]));
+                editor.action(
+                    "editor.layout.move",
+                    json!({"panel": panel, "slot": "float", "rect": rect}),
+                )?;
+            }
+        }
+        Ok(())
+    }
+    /// Lit drop region over the target area of this surface.
+    pub(super) fn paint_drop_preview(&mut self) {
+        let Some(preview) = &self.drop_preview else {
+            if let Some(i) = self.ui.find("drop-label")
+                && self.ui.nodes[i].visible
+            {
+                let _ = self.ui.set_visible(i, false);
+            }
+            return;
+        };
+        if preview.surface != self.current || preview.rect.w <= 0. {
+            return;
+        }
+        let token = |name: &str| {
+            self.ui
+                .sheet
+                .color_token(name)
+                .unwrap_or(ara_ui::style::Color(52, 107, 241, 255))
+        };
+        let mut fill = token("--primary");
+        fill.3 = 46;
+        let line = token("--primary");
+        let r = preview.rect;
+        let inset = Box2 {
+            x: r.x + 3.,
+            y: r.y + 3.,
+            w: (r.w - 6.).max(0.),
+            h: (r.h - 6.).max(0.),
+        };
+        let id = ara_ui::source::stable_id("drop-preview");
+        self.ui
+            .display
+            .commands
+            .push(ara_ui::paint::Draw::RoundedRect {
+                node: id,
+                rect: inset,
+                radius: 8.,
+                color: fill,
+            });
+        self.ui.display.commands.push(ara_ui::paint::Draw::Border {
+            node: id ^ 1,
+            rect: inset,
+            radius: 8.,
+            color: line,
+            width: 2.,
+        });
+        let label = preview.label.clone();
+        if let Some(i) = self.ui.find("drop-label") {
+            if let Some(t) = self.ui.find("drop-label-text") {
+                let _ = self.ui.set_text(t, &label);
+            }
+            let _ = self.ui.set_visible(i, true);
+            let node = &mut self.ui.nodes[i];
+            node.paint_offset = [
+                inset.x + inset.w * 0.5 - 90. - (node.rect.x - node.paint_offset[0]),
+                inset.y + inset.h * 0.5 - 12. - (node.rect.y - node.paint_offset[1]),
+            ];
+        }
     }
 }

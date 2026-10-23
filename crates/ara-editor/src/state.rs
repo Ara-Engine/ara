@@ -2,7 +2,7 @@
 use ara_doc::{AssetId, Document, Edit, RecordId, Workspace};
 use ara_ops::{Author, Store, TxnMeta};
 use ara_schema::{FieldPath, Schema, SchemaDb};
-use ara_ui::docking::{Axis, DockLayout, DockNode};
+use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode, Floating};
 use glam::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -189,6 +189,34 @@ pub struct EditorState {
     pub preview_playing: bool,
     /// Render material previews on a plane.
     pub preview_plane: bool,
+    /// Panels torn off into their own OS windows; persisted with the layout.
+    pub floating: Vec<Floating>,
+    /// Effective settings of both scopes, mirrored from `editor.settings`.
+    pub settings: BTreeMap<String, Value>,
+    /// Label of the human's next settings undo, if any.
+    pub settings_undo: Option<String>,
+    /// Label of the human's next settings redo, if any.
+    pub settings_redo: Option<String>,
+    /// Settings window scope: `user` (Preferences) or `project`.
+    pub settings_scope: String,
+    /// Settings window category; empty shows every category.
+    pub settings_category: String,
+    /// Settings window lists only values that differ from their defaults.
+    pub settings_modified: bool,
+    /// Live viewport debug view: `lit`, `baseColor`, `normals`, `depth`, …
+    pub view_mode: String,
+    /// Hide every editor visual in the viewport (G).
+    pub game_view: bool,
+    /// Hide the viewport toolbar and widgets (Shift+G).
+    pub hide_overlays: bool,
+    /// Select tool: no transform handles on the selection.
+    pub hide_gizmos: bool,
+    /// Hide the orientation widget.
+    pub hide_orientation: bool,
+    /// Panel filling the main window (Shift+Space), if any.
+    pub maximized: Option<String>,
+    /// Play session: `None` stopped, `Some(true)` running, `Some(false)` paused.
+    pub playing: Option<bool>,
 }
 impl Default for EditorState {
     fn default() -> Self {
@@ -230,6 +258,20 @@ impl Default for EditorState {
             animation_blends: false,
             preview_playing: true,
             preview_plane: false,
+            floating: Vec::new(),
+            settings: BTreeMap::new(),
+            settings_undo: None,
+            settings_redo: None,
+            settings_scope: "user".into(),
+            settings_category: String::new(),
+            settings_modified: false,
+            view_mode: "lit".into(),
+            game_view: false,
+            hide_overlays: false,
+            hide_gizmos: false,
+            hide_orientation: false,
+            maximized: None,
+            playing: None,
         }
     }
 }
@@ -264,44 +306,305 @@ impl EditorState {
             || self.palette != other.palette
             || self.presence != other.presence
             || self.follow != other.follow
+            || self.floating != other.floating
+            || self.settings != other.settings
+            || self.settings_undo != other.settings_undo
+            || self.settings_redo != other.settings_redo
+            || self.settings_scope != other.settings_scope
+            || self.settings_category != other.settings_category
+            || self.settings_modified != other.settings_modified
+            || self.view_mode != other.view_mode
+            || self.game_view != other.game_view
+            || self.hide_overlays != other.hide_overlays
+            || self.hide_gizmos != other.hide_gizmos
+            || self.hide_orientation != other.hide_orientation
+            || self.maximized != other.maximized
+            || self.playing != other.playing
     }
+    /// Mirror settings that older navigation fields expose.
+    pub(crate) fn apply_settings(&mut self) {
+        let text = |key: &str| {
+            self.settings
+                .get(key)
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        if let Some(theme) = text("appearance.theme") {
+            self.light = theme == "light";
+        }
+        if let Some(quality) = text("viewport.quality") {
+            self.quality = quality == "fidelity";
+        }
+        if let Some(policy) = text("agents.applyPolicy") {
+            self.policy = match policy.as_str() {
+                "whenIdle" => ApplyPolicy::WhenIdle,
+                "onApproval" => ApplyPolicy::OnApproval,
+                _ => ApplyPolicy::Immediately,
+            };
+        }
+        if let Some(v) = self
+            .settings
+            .get("appearance.reduceMotion")
+            .and_then(Value::as_bool)
+        {
+            self.reduce_motion = v;
+        }
+    }
+    /// A setting's number, or `default`.
+    pub fn number(&self, key: &str, default: f64) -> f64 {
+        self.settings
+            .get(key)
+            .and_then(Value::as_f64)
+            .unwrap_or(default)
+    }
+    /// Comfortable density adds 4 px to rows and controls.
+    pub fn comfortable(&self) -> bool {
+        self.settings
+            .get("appearance.density")
+            .and_then(Value::as_str)
+            == Some("comfortable")
+    }
+    /// The validated dock model for the main tree and floating windows.
+    pub fn dock(&self) -> ara_ui::Result<DockLayout> {
+        DockLayout::with_floating(self.layout.clone(), self.floating.clone())
+    }
+    /// Store a dock model back into navigation state. Focus returns to the Scene
+    /// when the focused panel is no longer open.
+    pub fn set_dock(&mut self, dock: &DockLayout) {
+        self.layout = dock.root().clone();
+        self.floating = dock.floating().to_vec();
+        if !dock.contains(&self.focus) {
+            self.focus = "scene".into();
+        }
+    }
+}
+/// Whether a panel is open in the main window or a floating window.
+pub fn panel_visible(state: &EditorState, panel: &str) -> bool {
+    state.dock().is_ok_and(|d| d.contains(panel))
+}
+/// The area a panel returns to when shown from the Window menu.
+fn home(panel: &str) -> &'static str {
+    match panel {
+        "hierarchy" => "left",
+        "inspector" => "right",
+        "assets" | "console" | "agents" => "bottom",
+        _ => "view",
+    }
+}
+/// Show a panel: activate it where it is, or open it in its home slot.
+pub fn show_panel(dock: &mut DockLayout, panel: &str) -> ara_ui::Result<()> {
+    if !dock.contains(panel) {
+        move_panel(dock, panel, home(panel))?;
+    }
+    dock.activate(panel)
+}
+/// Dock a panel into a slot (`left`, `right`, `bottom`, `view`), creating the
+/// slot's column by splitting the main window when it does not exist.
+pub fn move_panel(dock: &mut DockLayout, panel: &str, slot: &str) -> ara_ui::Result<()> {
+    fn has_area(n: &DockNode, id: &str) -> bool {
+        match n {
+            DockNode::Area { id: a, .. } => a == id,
+            DockNode::Split { first, second, .. } => has_area(first, id) || has_area(second, id),
+        }
+    }
+    fn first_area(n: &DockNode) -> String {
+        match n {
+            DockNode::Area { id, .. } => id.clone(),
+            DockNode::Split { first, .. } => first_area(first),
+        }
+    }
+    let target = if has_area(dock.root(), slot) {
+        slot.to_owned()
+    } else if slot == "view" {
+        first_area(dock.root())
+    } else {
+        String::new()
+    };
+    if !target.is_empty() {
+        if dock.contains(panel) {
+            dock.drop_tab(
+                panel,
+                DockDrop::Tab {
+                    area: target,
+                    index: usize::MAX,
+                },
+            )?;
+        } else {
+            add_tab(dock, &target, panel)?;
+        }
+        return Ok(());
+    }
+    // Split the whole main tree so the new column spans the window.
+    let mut root = dock.root().clone();
+    let floating = dock.floating().to_vec();
+    let mut fresh = DockLayout::with_floating(root.clone(), floating.clone())?;
+    if fresh.contains(panel) {
+        fresh.close(panel)?;
+        root = fresh.root().clone();
+    }
+    let added = DockNode::Area {
+        id: slot.into(),
+        tabs: vec![panel.into()],
+        active: 0,
+    };
+    let (axis, ratio, before) = match slot {
+        "left" => (Axis::Horizontal, 0.18, true),
+        "right" => (Axis::Horizontal, 0.78, false),
+        _ => (Axis::Vertical, 0.74, false),
+    };
+    let (first, second) = if before { (added, root) } else { (root, added) };
+    let root = DockNode::Split {
+        axis,
+        ratio,
+        first: Box::new(first),
+        second: Box::new(second),
+    };
+    *dock = DockLayout::with_floating(root, fresh.floating().to_vec())?;
+    Ok(())
+}
+fn add_tab(dock: &mut DockLayout, area: &str, panel: &str) -> ara_ui::Result<()> {
+    fn visit(n: &mut DockNode, area: &str, panel: &str) -> bool {
+        match n {
+            DockNode::Area { id, tabs, active } if id == area => {
+                tabs.push(panel.into());
+                *active = tabs.len() - 1;
+                true
+            }
+            DockNode::Split { first, second, .. } => {
+                visit(first, area, panel) || visit(second, area, panel)
+            }
+            _ => false,
+        }
+    }
+    let mut root = dock.root().clone();
+    let mut floating = dock.floating().to_vec();
+    if !visit(&mut root, area, panel)
+        && !floating.iter_mut().any(|f| visit(&mut f.root, area, panel))
+    {
+        return Err("ARA7042: dock destination missing".into());
+    }
+    *dock = DockLayout::with_floating(root, floating)?;
+    Ok(())
 }
 /// The registered default arrangement; IDs are stable protocol and persistence keys.
 pub fn default_layout() -> DockNode {
-    fn area(id: &str, tabs: &[&str]) -> DockNode {
-        DockNode::Area {
-            id: id.into(),
-            tabs: tabs.iter().map(|s| s.to_string()).collect(),
-            active: 0,
-        }
+    preset_layout("default").unwrap_or_else(|| area("view", &["scene"]))
+}
+fn area(id: &str, tabs: &[&str]) -> DockNode {
+    DockNode::Area {
+        id: id.into(),
+        tabs: tabs.iter().map(|s| s.to_string()).collect(),
+        active: 0,
     }
-    fn split(axis: Axis, ratio: f32, first: DockNode, second: DockNode) -> DockNode {
-        DockNode::Split {
-            axis,
-            ratio,
-            first: Box::new(first),
-            second: Box::new(second),
-        }
+}
+fn split(axis: Axis, ratio: f32, first: DockNode, second: DockNode) -> DockNode {
+    DockNode::Split {
+        axis,
+        ratio,
+        first: Box::new(first),
+        second: Box::new(second),
     }
-    split(
-        Axis::Vertical,
-        0.75,
-        split(
-            Axis::Horizontal,
-            0.18,
-            area("left", &["hierarchy"]),
+}
+/// Built-in layouts (Window › Layouts). The viewport keeps the full window height
+/// in every preset; Assets and Console share the left column under Hierarchy.
+pub fn preset_layout(name: &str) -> Option<DockNode> {
+    use Axis::{Horizontal as H, Vertical as V};
+    const DOCUMENTS: &[&str] = &["scene", "game", "material", "vfx", "animation", "profiler"];
+    Some(match name {
+        "default" => split(
+            H,
+            0.17,
             split(
-                Axis::Horizontal,
-                0.73,
+                V,
+                0.5,
+                area("left", &["hierarchy"]),
+                area("bottom", &["assets", "console", "agents"]),
+            ),
+            split(
+                H,
+                0.76,
+                area("view", DOCUMENTS),
+                area("right", &["inspector"]),
+            ),
+        ),
+        "levelDesign" => split(
+            H,
+            0.78,
+            split(
+                V,
+                0.8,
+                area("view", DOCUMENTS),
+                area("bottom", &["assets", "console", "agents"]),
+            ),
+            split(
+                V,
+                0.42,
+                area("left", &["hierarchy"]),
+                area("right", &["inspector"]),
+            ),
+        ),
+        "materials" => split(
+            H,
+            0.17,
+            split(
+                V,
+                0.62,
+                area("bottom", &["assets", "console"]),
+                area("left", &["hierarchy", "agents"]),
+            ),
+            split(
+                H,
+                0.76,
                 area(
                     "view",
-                    &["scene", "game", "material", "vfx", "animation", "profiler"],
+                    &["material", "vfx", "scene", "game", "animation", "profiler"],
                 ),
                 area("right", &["inspector"]),
             ),
         ),
-        area("bottom", &["assets", "console", "agents"]),
-    )
+        "animation" => split(
+            H,
+            0.17,
+            split(
+                V,
+                0.5,
+                area("left", &["hierarchy"]),
+                area("bottom", &["assets", "console", "agents"]),
+            ),
+            split(
+                H,
+                0.76,
+                area(
+                    "view",
+                    &["animation", "scene", "game", "material", "vfx", "profiler"],
+                ),
+                area("right", &["inspector"]),
+            ),
+        ),
+        "profiling" => split(
+            V,
+            0.45,
+            split(
+                H,
+                0.8,
+                area("view", &["scene", "game", "material", "vfx", "animation"]),
+                area("right", &["inspector", "hierarchy"]),
+            ),
+            area("bottom", &["profiler", "console", "assets", "agents"]),
+        ),
+        "laptop" => split(
+            H,
+            0.19,
+            area("left", &["hierarchy", "assets"]),
+            split(
+                H,
+                0.74,
+                area("view", DOCUMENTS),
+                area("right", &["inspector", "console", "agents"]),
+            ),
+        ),
+        _ => return None,
+    })
 }
 /// View payload stored as a reflected component in the navigation op document.
 #[derive(Schema)]
@@ -326,28 +629,11 @@ impl Navigation {
         if path.exists() {
             let mut layout =
                 DockLayout::new(default_layout()).map_err(|e| anyhow::anyhow!(e.to_string()))?;
-            layout
-                .restore(&std::fs::read_to_string(path)?)
-                .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-            state.layout = layout.root().clone();
-        }
-        fn extend(node: &mut DockNode) {
-            match node {
-                DockNode::Area { id, tabs, .. } if id == "view" => {
-                    for panel in ["material", "vfx", "animation", "profiler"] {
-                        if !tabs.iter().any(|t| t == panel) {
-                            tabs.push(panel.into());
-                        }
-                    }
-                }
-                DockNode::Split { first, second, .. } => {
-                    extend(first);
-                    extend(second);
-                }
-                _ => {}
+            // A layout from an older editor that fails validation falls back to the default.
+            if layout.restore(&std::fs::read_to_string(path)?).is_ok() {
+                state.set_dock(&layout);
             }
         }
-        extend(&mut state.layout);
         let mut db = SchemaDb::new();
         ara_doc::register(&mut db);
         db.register::<EditorView>();
@@ -377,7 +663,8 @@ impl Navigation {
         why: &str,
         root: &Path,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
-        let layout_changed = candidate.layout != self.state.layout;
+        let layout_changed =
+            candidate.layout != self.state.layout || candidate.floating != self.state.floating;
         let value =
             serde_json::to_value(&candidate).map_err(|e| vec![crate::invalid(e.to_string())])?;
         let mut meta = TxnMeta::by(author);
@@ -394,7 +681,7 @@ impl Navigation {
         let commit = self.store.transact(meta, [edit])?;
         let result = json!({"state":candidate,"txn":commit.txn(),"revision":self.store.revision()});
         if layout_changed {
-            persist_layout(root, &candidate.layout).map_err(|e| {
+            persist_layout(root, &candidate).map_err(|e| {
                 vec![ara_diag::Diagnostic::error(
                     ara_diag::codes::IO,
                     e.to_string(),
@@ -405,13 +692,35 @@ impl Navigation {
         Ok(result)
     }
 }
-pub(crate) fn persist_layout(root: &Path, layout: &DockNode) -> anyhow::Result<()> {
-    let path = root.join(".ara/editor-layout.json");
+/// Write the main dock tree and floating windows with the canonical writer.
+pub(crate) fn persist_layout(root: &Path, state: &EditorState) -> anyhow::Result<()> {
+    write_layout(&root.join(".ara/editor-layout.json"), state)
+}
+/// Save a named layout (Window › Layouts › Save Layout As…).
+pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {
+    let text = state
+        .dock()
+        .and_then(|d| d.serialize())
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let temp = path.with_extension("json.tmp");
-    std::fs::write(
-        &temp,
-        ara_json::to_canonical_string(&serde_json::to_value(layout)?),
-    )?;
+    std::fs::write(&temp, text)?;
     std::fs::rename(temp, path)?;
     Ok(())
+}
+/// Project-local saved layouts, by file stem.
+pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(root.join(".ara/layouts"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let path = e.path();
+            (path.extension()? == "json").then(|| path.file_stem()?.to_str().map(str::to_owned))?
+        })
+        .collect();
+    names.sort();
+    names
 }

@@ -210,6 +210,17 @@ impl Renderer {
         self.render_frame(camera, exposure, false, crate::capture::ViewMode::Lit)?;
         Ok(())
     }
+    /// Render live in a debug view mode (base color, normals, depth, …), as captures do,
+    /// without a readback. Editors use it for their viewport View Mode menu.
+    pub fn render_view(
+        &mut self,
+        camera: &CameraSpec,
+        exposure: f32,
+        mode: crate::capture::ViewMode,
+    ) -> Result<()> {
+        self.render_frame(camera, exposure, false, mode)?;
+        Ok(())
+    }
     /// Render an agent request, with reset history and an explicit settle frame count.
     pub fn capture(&mut self, request: &CaptureRequest) -> Result<Capture> {
         self.resize(request.size)?;

@@ -2,56 +2,113 @@
 use super::*;
 impl Shell {
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
+        // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
-        self.search(out, "assets", editor);
-        for (id, label, grid) in [
-            ("assets-grid", "Grid", true),
-            ("assets-list", "List", false),
-        ] {
-            out.push_str(&self.bind_button(
-                id,
-                label,
-                Binding::Protocol("editor.workspace", json!({"grid":grid})),
-                if editor.state.asset_grid == grid {
-                    "small selected"
-                } else {
-                    "small quiet"
-                },
-            ));
-        }
-        out.push_str("<text id='asset-hint' class='badge' text='type:mesh  type:texture  type:material' /></panel><panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'><scroll id='asset-folders' style='width:168px;min-width:168px;flex-basis:168px;flex-shrink:0;padding:8px;gap:2px;border-width:1px;border-color:var(--border)'>");
-        out.push_str(&self.bind_button(
-            "asset-folder-root",
-            "Project",
-            Binding::Protocol("editor.workspace", json!({"folder":""})),
-            "small quiet folder-row",
-        ));
-        let mut folders = std::collections::BTreeSet::new();
-        for asset in &self.browser.items {
-            let mut parts = asset.path.split('/').collect::<Vec<_>>();
-            parts.pop();
-            for n in 1..=parts.len() {
-                folders.insert(parts[..n].join("/"));
-            }
-        }
-        for (n, path) in folders.iter().enumerate() {
-            let label = format!(
-                "{}{}",
-                "  ".repeat(path.matches('/').count()),
-                path.rsplit('/').next().unwrap_or(path)
+        self.bindings.insert(
+            ara_ui::source::stable_id("asset-create"),
+            Binding::ContextMenu(commands::menus::Context::Assets, commands::Target::None),
+        );
+        out.push_str(&format!("<button id='asset-create' class='ghost' style='padding-left:4px;padding-right:2px' label='Create' description='Create folders, materials, effects and controllers' action='Dispatch'>{}{}</button>",icons::icon("asset-create","plus"),icons::icon_in("asset-create-more","chevron-down","icon-sm")));
+        let content = self
+            .ui
+            .find("assets-content")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(self.ui.size[0]);
+        // Narrow docks show Import as an icon and drop the breadcrumb and folder column.
+        let narrow = content < 420.;
+        if narrow {
+            self.tool_icon(
+                out,
+                "asset-import",
+                "assets.import",
+                "file-plus",
+                editor,
+                false,
             );
-            out.push_str(&self.bind_button(
-                &format!("asset-folder-{n}"),
-                &label,
-                Binding::Protocol("editor.workspace", json!({"folder":path})),
-                if *path == editor.state.asset_folder {
-                    "small selected folder-row"
-                } else {
-                    "small quiet folder-row"
-                },
-            ));
+        } else {
+            self.tool_text(
+                out,
+                "asset-import",
+                "assets.import",
+                "file-plus",
+                "Import",
+                "ghost",
+            );
         }
-        out.push_str("</scroll>");
+        let folder = editor.state.asset_folder.clone();
+        if !narrow {
+            self.bindings.insert(
+                ara_ui::source::stable_id("asset-crumb-root"),
+                Binding::Protocol("editor.workspace", json!({"folder":""})),
+            );
+            out.push_str("<panel id='asset-crumbs' class='row' style='gap:2px;padding-left:4px;overflow:hidden;flex-shrink:1'><button id='asset-crumb-root' class='ghost' label='Project' action='Dispatch'><text id='asset-crumb-root-label' text='Project' /></button>");
+            let mut path = String::new();
+            for (n, part) in folder.split('/').filter(|p| !p.is_empty()).enumerate() {
+                if !path.is_empty() {
+                    path.push('/');
+                }
+                path.push_str(part);
+                let id = format!("asset-crumb-{n}");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::Protocol("editor.workspace", json!({"folder":path})),
+                );
+                out.push_str(&format!(
+                    "{}<button id='{id}' class='ghost' label='{}' action='Dispatch'><text id='{id}-label' text='{}' /></button>",
+                    icons::icon(&format!("{id}-sep"), "chevron-right"),
+                    escape(part),
+                    escape(part)
+                ));
+            }
+            out.push_str("</panel>");
+        }
+        self.search(out, "assets", editor);
+        for (id, label, icon, grid) in [
+            ("assets-grid", "Grid", "layout-grid", true),
+            ("assets-list", "List", "list-tree", false),
+        ] {
+            self.bindings.insert(
+                ara_ui::source::stable_id(id),
+                Binding::Protocol("editor.workspace", json!({"grid":grid})),
+            );
+            let on = editor.state.asset_grid == grid;
+            out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
+        }
+        let side = if content < 420. {
+            0.
+        } else if content < 720. {
+            140.
+        } else {
+            168.
+        };
+        out.push_str("</panel><panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
+        if side > 0. {
+            out.push_str(&format!("<scroll id='asset-folders' style='width:{side}px;min-width:{side}px;flex-basis:{side}px;flex-shrink:0;padding:4px;gap:0px;background:var(--panel-header)'>"));
+            self.bindings.insert(
+                ara_ui::source::stable_id("asset-folder-root"),
+                Binding::Protocol("editor.workspace", json!({"folder":""})),
+            );
+            out.push_str(&format!("<button id='asset-folder-root' class='folder-row{}' label='Project' action='Dispatch'>{}<text id='asset-folder-root-label' text='Project' /></button>",if folder.is_empty(){" selected"}else{""},icons::icon("asset-folder-root","package-open")));
+            let mut folders = std::collections::BTreeSet::new();
+            for asset in &self.browser.items {
+                let mut parts = asset.path.split('/').collect::<Vec<_>>();
+                parts.pop();
+                for n in 1..=parts.len() {
+                    folders.insert(parts[..n].join("/"));
+                }
+            }
+            for (n, path) in folders.iter().enumerate() {
+                let depth = path.matches('/').count();
+                let id = format!("asset-folder-{n}");
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::Protocol("editor.workspace", json!({"folder":path})),
+                );
+                let on = *path == folder;
+                out.push_str(&format!("<button id='{id}' class='folder-row{}' style='padding-left:{}px' label='{}' action='Dispatch'>{}<text id='{id}-label' text='{}' /></button>",if on{" selected"}else{""},8+12*(depth+1),escape(path),if on{icons::icon_in(&id,"folder-open","on-selection")}else{icons::icon(&id,"folder")},escape(path.rsplit('/').next().unwrap_or(path))));
+            }
+            out.push_str("</scroll>");
+        }
         let query = editor
             .state
             .searches
@@ -78,15 +135,44 @@ impl Shell {
             self.asset_rows.items.push((key, asset.path.clone()));
             self.asset_entries.insert(key, asset.clone());
         }
+        if items.is_empty() {
+            self.empty(
+                out,
+                "assets-empty",
+                "inbox",
+                if query.is_empty() {
+                    "This folder is empty"
+                } else {
+                    "No matching assets"
+                },
+                if query.is_empty() {
+                    "Import files, or drop them into this folder from your file manager."
+                } else {
+                    "Try type:mesh, type:texture or type:material."
+                },
+                &[
+                    ("assets-empty-import", "Import…", "assets.import"),
+                    (
+                        "assets-empty-material",
+                        "New material",
+                        "assets.create.material",
+                    ),
+                ],
+            );
+            out.push_str("</panel>");
+            self.asset_footer(out, items.len(), editor);
+            return;
+        }
         if !editor.state.asset_grid {
             out.push_str("<scroll id='asset-rows' class='body asset-list' /></panel>");
+            self.asset_footer(out, items.len(), editor);
             return;
         }
         let width = self
             .ui
             .find("assets-content")
-            .map(|i| self.ui.nodes[i].rect.w - 168.)
-            .unwrap_or(self.ui.size[0] - 168.);
+            .map(|i| self.ui.nodes[i].rect.w - side)
+            .unwrap_or(self.ui.size[0] - side);
         let height = self
             .ui
             .find("assets-content")
@@ -98,7 +184,7 @@ impl Shell {
         let (card_width, card_height, thumbnail) = if compact {
             (168., 64., 48.)
         } else {
-            (104., 108., 68.)
+            (92., 104., 64.)
         };
         let column_step = card_width + 8.;
         let row_step = card_height + 8.;
@@ -121,13 +207,30 @@ impl Shell {
             if compact {
                 out.push_str(&format!("<panel id='{id}-caption' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:3px'>"));
             }
-            out.push_str(&format!("<text id='{id}-name' style='width:92px;font-size:11px;overflow:hidden' text='{}' /><text id='{id}-kind' class='badge' text='{}' />",escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
+            let color = match asset.kind.as_str() {
+                "glb" | "gltf" | "fbx" => "chart-1",
+                "png" | "jpg" | "jpeg" | "hdr" | "exr" => "chart-2",
+                "graph" | "material" => match asset.domain.as_deref() {
+                    Some("vfx") => "chart-5",
+                    _ => "chart-3",
+                },
+                "scene" | "prefab" => "chart-4",
+                "animation" => "chart-6",
+                _ => "muted-foreground",
+            };
+            out.push_str(&format!("<panel id='{id}-bar' class='type-bar' style='width:{}px;background:var(--{color})' />",if compact{40.}else{thumbnail}));
+            let selected = editor.state.asset_path.as_deref() == Some(&asset.path);
+            out.push_str(&format!("<text id='{id}-name' style='width:{}px;font-size:11px;overflow:hidden' class='{}' text='{}' /><text id='{id}-kind' class='{}' style='font-size:10px' text='{}' />",card_width-8.,if selected{"on-selection"}else{"fg"},escape(asset.path.rsplit('/').next().unwrap_or(&asset.path)),if selected{"on-selection"}else{"caption"},escape(asset.domain.as_deref().unwrap_or(&asset.kind))));
             if compact {
                 out.push_str("</panel>");
             }
             out.push_str("</button>");
         }
         out.push_str("</panel></panel>");
+        self.asset_footer(out, items.len(), editor);
+    }
+    fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {
+        out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} items{}' /></panel>",if editor.state.asset_path.is_some(){" · 1 selected"}else{""}));
     }
     pub(super) fn asset_thumbnail(
         &mut self,
@@ -159,8 +262,26 @@ impl Shell {
             {
                 self.thumbnails.request(&asset.path);
             }
-            out.push_str(&format!("<panel id='{id}-placeholder' style='width:{size}px;height:{size}px;align-items:center;justify-content:center;background:var(--background);border-radius:var(--radius-sm)'>{}</panel>",icons::icon(id,match asset.kind.as_str(){"png"|"jpg"=>"file-image","glb"|"gltf"|"fbx"=>"package","graph"|"material"=>"layers",_=>"file"})));
+            out.push_str(&format!("<panel id='{id}-placeholder' style='width:{size}px;height:{size}px;align-items:center;justify-content:center;background:var(--background);border-radius:var(--radius-sm)'>{}</panel>",icons::icon_in(id,asset_icon(asset),"icon-lg")));
         }
+    }
+}
+/// One icon per asset concept.
+pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
+    match asset.kind.as_str() {
+        "png" | "jpg" | "jpeg" | "hdr" | "exr" => "image",
+        "glb" | "gltf" | "fbx" => "package",
+        "scene" => "clapperboard",
+        "prefab" => "box",
+        "animation" => "person-standing",
+        "graph" | "material" => match asset.domain.as_deref() {
+            Some("vfx") => "sparkles",
+            Some("material") => "contrast",
+            _ => "layers",
+        },
+        "cs" => "file-code",
+        "json" => "file-code",
+        _ => "file",
     }
 }
 fn matches_query(asset: &assets::Asset, query: &str) -> bool {

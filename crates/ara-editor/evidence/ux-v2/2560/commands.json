@@ -1,0 +1,2892 @@
+{
+  "commands": [
+    {
+      "id": "file.new_scene",
+      "title": "New Scene…",
+      "menu": "File",
+      "summary": "Create an empty scene under levels/ and open it.",
+      "shortcuts": [
+        "Ctrl+N"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.new_project",
+      "title": "New Project…",
+      "menu": "File",
+      "summary": "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."
+    },
+    {
+      "id": "file.open",
+      "title": "Open…",
+      "menu": "File",
+      "summary": "Quick-open a scene or asset by name.",
+      "shortcuts": [
+        "Ctrl+O"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.open_project",
+      "title": "Open Project…",
+      "menu": "File",
+      "summary": "One editor process owns one project; start `ara-editor <project>` for another.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "One editor process owns one project; start `ara-editor <project>` for another."
+    },
+    {
+      "id": "file.open_scene",
+      "title": "Open Scene",
+      "menu": "",
+      "summary": "Open a scene document in the Scene view.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.save",
+      "title": "Save",
+      "menu": "File",
+      "summary": "Write every changed document to disk now.",
+      "shortcuts": [
+        "Ctrl+S"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.save_as",
+      "title": "Save As…",
+      "menu": "File",
+      "summary": "Documents save in place through the host journal; Save As needs a typed document-copy command.",
+      "shortcuts": [
+        "Ctrl+Shift+S"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Documents save in place through the host journal; Save As needs a typed document-copy command."
+    },
+    {
+      "id": "file.save_all",
+      "title": "Save All",
+      "menu": "File",
+      "summary": "Write every changed document to disk now.",
+      "shortcuts": [
+        "Ctrl+Alt+S"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.revert",
+      "title": "Revert to Saved",
+      "menu": "File",
+      "summary": "Use Undo or `ara revert`; reloading from disk needs a host revert-to-file command.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Use Undo or `ara revert`; reloading from disk needs a host revert-to-file command."
+    },
+    {
+      "id": "assets.import",
+      "title": "Import…",
+      "menu": "File",
+      "summary": "Copy files into the current asset folder and import them.",
+      "shortcuts": [
+        "Ctrl+Shift+I"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.export_selection",
+      "title": "Export Selection…",
+      "menu": "File",
+      "summary": "Selection export lands with ara-export presets in the editor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Selection export lands with ara-export presets in the editor."
+    },
+    {
+      "id": "build.profiles",
+      "title": "Build Profiles…",
+      "menu": "File › Build & Export",
+      "summary": "Export presets run from `ara export`; the in-editor Build window is not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Export presets run from `ara export`; the in-editor Build window is not built yet."
+    },
+    {
+      "id": "build.current",
+      "title": "Build Current Profile",
+      "menu": "File › Build & Export",
+      "summary": "Run `ara export` for now; the in-editor Build window is not built yet.",
+      "shortcuts": [
+        "Ctrl+Shift+B"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Run `ara export` for now; the in-editor Build window is not built yet."
+    },
+    {
+      "id": "build.package",
+      "title": "Package…",
+      "menu": "File › Build & Export",
+      "summary": "Run `ara pack` for now; packaging from the editor is not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Run `ara pack` for now; packaging from the editor is not built yet."
+    },
+    {
+      "id": "build.open_folder",
+      "title": "Open Build Folder",
+      "menu": "File › Build & Export",
+      "summary": "Show the project's build output folder.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.close_document",
+      "title": "Close Document",
+      "menu": "File",
+      "summary": "Close the active tool document tab.",
+      "shortcuts": [
+        "Ctrl+W"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "file.close_project",
+      "title": "Close Project",
+      "menu": "File",
+      "summary": "One editor process owns one project; close the window to close it.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "One editor process owns one project; close the window to close it."
+    },
+    {
+      "id": "file.exit",
+      "title": "Exit",
+      "menu": "File",
+      "summary": "Close the editor; documents are saved first.",
+      "shortcuts": [
+        "Alt+F4"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.undo",
+      "title": "Undo “Prepare UX verification control…”",
+      "menu": "Edit",
+      "summary": "Undo your last change in the focused context.",
+      "shortcuts": [
+        "Ctrl+Z"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.redo",
+      "title": "Redo",
+      "menu": "Edit",
+      "summary": "Redo your last undone change.",
+      "shortcuts": [
+        "Ctrl+Y",
+        "Ctrl+Shift+Z"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Nothing to redo"
+    },
+    {
+      "id": "edit.history",
+      "title": "History…",
+      "menu": "Edit",
+      "summary": "The History panel (typed command stack) arrives with the Phase 2 tool rebuilds; `ara history` lists it now.",
+      "shortcuts": [
+        "Ctrl+H"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The History panel (typed command stack) arrives with the Phase 2 tool rebuilds; `ara history` lists it now."
+    },
+    {
+      "id": "edit.cut",
+      "title": "Cut",
+      "menu": "Edit",
+      "summary": "Copy the selected entities, then delete them.",
+      "shortcuts": [
+        "Ctrl+X"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.copy",
+      "title": "Copy",
+      "menu": "Edit",
+      "summary": "Copy the selected entities.",
+      "shortcuts": [
+        "Ctrl+C"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.paste",
+      "title": "Paste",
+      "menu": "Edit",
+      "summary": "Paste copied entities into the scene.",
+      "shortcuts": [
+        "Ctrl+V"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Copy an entity first"
+    },
+    {
+      "id": "edit.paste_child",
+      "title": "Paste as Child",
+      "menu": "Edit",
+      "summary": "Paste copied entities under the selected entity.",
+      "shortcuts": [
+        "Ctrl+Shift+V"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Copy an entity first"
+    },
+    {
+      "id": "edit.duplicate",
+      "title": "Duplicate",
+      "menu": "Edit",
+      "summary": "Duplicate the selected entity subtree.",
+      "shortcuts": [
+        "Ctrl+D"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.delete",
+      "title": "Delete",
+      "menu": "Edit",
+      "summary": "Delete the selected entities.",
+      "shortcuts": [
+        "Del"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.rename",
+      "title": "Rename",
+      "menu": "Edit",
+      "summary": "Rename the selected entity inline.",
+      "shortcuts": [
+        "F2"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.copy_reference",
+      "title": "Copy Reference",
+      "menu": "Edit",
+      "summary": "Copy `@path#id` for the selected entity.",
+      "shortcuts": [
+        "Ctrl+Shift+C"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.select_all",
+      "title": "Select All",
+      "menu": "Edit",
+      "summary": "Select every entity in the scene.",
+      "shortcuts": [
+        "Ctrl+A"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.select_entity",
+      "title": "Select Entity",
+      "menu": "",
+      "summary": "Select and frame an entity (target entity).",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.deselect",
+      "title": "Deselect",
+      "menu": "Edit",
+      "summary": "Clear the selection.",
+      "shortcuts": [
+        "Ctrl+Shift+A"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.invert_selection",
+      "title": "Invert Selection",
+      "menu": "Edit",
+      "summary": "Select every entity that is not selected.",
+      "shortcuts": [
+        "Ctrl+I"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "select.children",
+      "title": "Select Children",
+      "menu": "Edit › Select",
+      "summary": "Select the direct children of the selected entities.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "select.parent",
+      "title": "Select Parent",
+      "menu": "Edit › Select",
+      "summary": "Select the parent of the selected entity.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "select.siblings",
+      "title": "Select Siblings",
+      "menu": "Edit › Select",
+      "summary": "Select entities that share the selected entity's parent.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "select.same_type",
+      "title": "Select Same Type",
+      "menu": "Edit › Select",
+      "summary": "Select entities with the same component set.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "select.same_asset",
+      "title": "Select Same Asset",
+      "menu": "Edit › Select",
+      "summary": "Select entities that draw the same model.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "select.layer",
+      "title": "By Layer…",
+      "menu": "Edit › Select",
+      "summary": "Layers and tags are not in the schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Layers and tags are not in the schema yet."
+    },
+    {
+      "id": "edit.find_scene",
+      "title": "Find in Scene",
+      "menu": "Edit",
+      "summary": "Search the hierarchy.",
+      "shortcuts": [
+        "Ctrl+F"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.find_project",
+      "title": "Find in Project",
+      "menu": "Edit",
+      "summary": "Search project assets.",
+      "shortcuts": [
+        "Ctrl+Shift+F"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.palette",
+      "title": "Command Palette",
+      "menu": "Edit",
+      "summary": "Search and run any command.",
+      "shortcuts": [
+        "Ctrl+K",
+        "Ctrl+Shift+P"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.goto",
+      "title": "Go to Entity or Asset",
+      "menu": "Edit",
+      "summary": "Jump to an entity, scene or asset by name.",
+      "shortcuts": [
+        "Ctrl+P"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.toggle",
+      "title": "Snap",
+      "menu": "Edit › Snapping",
+      "summary": "Toggle transform snapping.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.grid",
+      "title": "Grid Snap Size…",
+      "menu": "Edit › Snapping",
+      "summary": "Choose the move snap increment.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.rotation",
+      "title": "Rotation Snap Size…",
+      "menu": "Edit › Snapping",
+      "summary": "Choose the rotation snap increment.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.scale",
+      "title": "Scale Snap Size…",
+      "menu": "Edit › Snapping",
+      "summary": "Choose the scale snap increment.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.set",
+      "title": "Set Snap Increment",
+      "menu": "",
+      "summary": "Set a snap increment: target `move:0.25`, `rotate:15` or `scale:0.1`.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "snap.surface",
+      "title": "Surface Snap",
+      "menu": "Edit › Snapping",
+      "summary": "Surface snapping needs scene raycasts from ara-physics queries in the editor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Surface snapping needs scene raycasts from ara-physics queries in the editor."
+    },
+    {
+      "id": "snap.vertex",
+      "title": "Vertex Snap (hold V)",
+      "menu": "Edit › Snapping",
+      "summary": "Vertex snapping needs mesh vertex queries from ara-asset in the editor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Vertex snapping needs mesh vertex queries from ara-asset in the editor."
+    },
+    {
+      "id": "snap.settings",
+      "title": "Snap Settings…",
+      "menu": "Edit › Snapping",
+      "summary": "Open snap and viewport preferences.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "transform.reset_position",
+      "title": "Reset Position",
+      "menu": "Edit › Transform",
+      "summary": "Reset position to the default or prefab value.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "transform.reset_rotation",
+      "title": "Reset Rotation",
+      "menu": "Edit › Transform",
+      "summary": "Reset rotation to the default or prefab value.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "transform.reset_scale",
+      "title": "Reset Scale",
+      "menu": "Edit › Transform",
+      "summary": "Reset scale to the default or prefab value.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "transform.align_view",
+      "title": "Align to View",
+      "menu": "Edit › Transform",
+      "summary": "Aligning rotation to the camera needs a view-matrix to Euler command.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Aligning rotation to the camera needs a view-matrix to Euler command."
+    },
+    {
+      "id": "transform.move_to_view",
+      "title": "Move to View",
+      "menu": "Edit › Transform",
+      "summary": "Move the selection to the camera's focus point.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.transform.drop",
+      "title": "Drop to Floor",
+      "menu": "Edit › Transform",
+      "summary": "Dropping to the floor needs physics raycasts in the editor.",
+      "shortcuts": [
+        "End"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Dropping to the floor needs physics raycasts in the editor."
+    },
+    {
+      "id": "edit.preferences",
+      "title": "Preferences…",
+      "menu": "Edit",
+      "summary": "Open your editor preferences.",
+      "shortcuts": [
+        "Ctrl+,"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.project_settings",
+      "title": "Project Settings…",
+      "menu": "Edit",
+      "summary": "Open settings shared by the project.",
+      "shortcuts": [
+        "Ctrl+Alt+,"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.shortcuts",
+      "title": "Keyboard Shortcuts…",
+      "menu": "Edit",
+      "summary": "Search, rebind and choose keymap presets.",
+      "shortcuts": [
+        "Ctrl+Alt+K"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "edit.hide",
+      "title": "Hide",
+      "menu": "",
+      "summary": "Hide the entity in the viewport only.",
+      "shortcuts": [
+        "H"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "edit.unhide_all",
+      "title": "Show All",
+      "menu": "",
+      "summary": "Show every hidden entity.",
+      "shortcuts": [
+        "Alt+H"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Nothing is hidden"
+    },
+    {
+      "id": "edit.lock",
+      "title": "Lock",
+      "menu": "",
+      "summary": "Prevent picking the entity in the viewport.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "prefab.unpack",
+      "title": "Unpack Prefab",
+      "menu": "",
+      "summary": "Turn a prefab instance into ordinary entities.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "view.camera.perspective",
+      "title": "Perspective / Orthographic",
+      "menu": "View › Camera",
+      "summary": "The renderer's camera is perspective-only; orthographic projection needs ara-render support.",
+      "shortcuts": [
+        "Num5"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The renderer's camera is perspective-only; orthographic projection needs ara-render support."
+    },
+    {
+      "id": "view.camera.default",
+      "title": "Default View",
+      "menu": "View › Camera",
+      "summary": "Return to the default three-quarter perspective.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.top",
+      "title": "Top",
+      "menu": "View › Camera",
+      "summary": "Look straight down.",
+      "shortcuts": [
+        "Num7"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.bottom",
+      "title": "Bottom",
+      "menu": "View › Camera",
+      "summary": "Look straight up.",
+      "shortcuts": [
+        "Ctrl+Num7"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.front",
+      "title": "Front",
+      "menu": "View › Camera",
+      "summary": "Look along −Z.",
+      "shortcuts": [
+        "Num1"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.back",
+      "title": "Back",
+      "menu": "View › Camera",
+      "summary": "Look along +Z.",
+      "shortcuts": [
+        "Ctrl+Num1"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.left",
+      "title": "Left",
+      "menu": "View › Camera",
+      "summary": "Look along +X.",
+      "shortcuts": [
+        "Ctrl+Num3"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.right",
+      "title": "Right",
+      "menu": "View › Camera",
+      "summary": "Look along −X.",
+      "shortcuts": [
+        "Num3"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.frame",
+      "title": "Frame Selected",
+      "menu": "View › Camera",
+      "summary": "Frame the selection, or the scene when nothing is selected.",
+      "shortcuts": [
+        "F"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.frame_all",
+      "title": "Frame All",
+      "menu": "View › Camera",
+      "summary": "Frame every entity.",
+      "shortcuts": [
+        "Home"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.speed_up",
+      "title": "Faster Camera",
+      "menu": "View › Camera",
+      "summary": "Double the fly speed.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.speed_down",
+      "title": "Slower Camera",
+      "menu": "View › Camera",
+      "summary": "Halve the fly speed.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.camera.bookmarks",
+      "title": "Bookmarks",
+      "menu": "View › Camera",
+      "summary": "Camera bookmarks need a per-scene editor sidecar; they are not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Camera bookmarks need a per-scene editor sidecar; they are not built yet."
+    },
+    {
+      "id": "view.camera.pilot",
+      "title": "Pilot Selected Camera",
+      "menu": "View › Camera",
+      "summary": "Piloting a scene camera needs the Game view through the shared texture (D19).",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Piloting a scene camera needs the Game view through the shared texture (D19)."
+    },
+    {
+      "id": "view.mode.lit",
+      "title": "Lit",
+      "menu": "View › View Mode",
+      "summary": "Final lighting.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.base_color",
+      "title": "Base Color",
+      "menu": "View › View Mode",
+      "summary": "Unlit material base color.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.normals",
+      "title": "Normals",
+      "menu": "View › View Mode",
+      "summary": "World normals.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.depth",
+      "title": "Depth",
+      "menu": "View › View Mode",
+      "summary": "Reversed-Z depth.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.roughness_metal",
+      "title": "Roughness / Metal",
+      "menu": "View › View Mode",
+      "summary": "Red roughness, green metallic.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.entity_ids",
+      "title": "Entity IDs",
+      "menu": "View › View Mode",
+      "summary": "Stable pseudocolors per entity.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.shadow_cascades",
+      "title": "Shadow Cascades",
+      "menu": "View › View Mode",
+      "summary": "Cascade selection times shadow visibility.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.mode.wireframe",
+      "title": "Wireframe",
+      "menu": "View › View Mode",
+      "summary": "ara-render has no wireframe pass yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "ara-render has no wireframe pass yet."
+    },
+    {
+      "id": "view.mode.overdraw",
+      "title": "Overdraw",
+      "menu": "View › View Mode",
+      "summary": "ara-render has no overdraw visualisation yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "ara-render has no overdraw visualisation yet."
+    },
+    {
+      "id": "view.mode.gi_debug",
+      "title": "GI Debug",
+      "menu": "View › View Mode",
+      "summary": "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."
+    },
+    {
+      "id": "view.show.grid",
+      "title": "Grid",
+      "menu": "View › Show",
+      "summary": "Show the ground grid.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.show.outline",
+      "title": "Selection Outline",
+      "menu": "View › Show",
+      "summary": "Outline selected entities.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.show.gizmos",
+      "title": "Transform Gizmo",
+      "menu": "View › Show",
+      "summary": "Show transform handles on the selection.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.show.orientation",
+      "title": "Orientation Widget",
+      "menu": "View › Show",
+      "summary": "Show the axis widget in the top-right corner.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.show.bounds",
+      "title": "Bounds",
+      "menu": "View › Show",
+      "summary": "Bounds drawing needs mesh bounds from the extraction; it is not wired yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Bounds drawing needs mesh bounds from the extraction; it is not wired yet."
+    },
+    {
+      "id": "view.show.colliders",
+      "title": "Colliders",
+      "menu": "View › Show",
+      "summary": "Collider shapes need an ara-physics debug-draw feed into the editor overlay.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Collider shapes need an ara-physics debug-draw feed into the editor overlay."
+    },
+    {
+      "id": "view.show.stats",
+      "title": "Stats Overlay",
+      "menu": "View › Show",
+      "summary": "The viewport Stats overlay arrives with Profiler v2.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The viewport Stats overlay arrives with Profiler v2."
+    },
+    {
+      "id": "view.game",
+      "title": "Game View",
+      "menu": "View",
+      "summary": "Hide every editor visual in the viewport.",
+      "shortcuts": [
+        "G"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.hide_overlays",
+      "title": "Hide Overlays",
+      "menu": "View",
+      "summary": "Hide the viewport toolbar and widgets.",
+      "shortcuts": [
+        "Shift+G"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.fidelity",
+      "title": "Fidelity Rendering",
+      "menu": "View",
+      "summary": "Switch between ray-traced Fidelity and the Raster preview.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.environment",
+      "title": "Environment Preview",
+      "menu": "View",
+      "summary": "Time-of-day and weather previews need the sky system in the editor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Time-of-day and weather previews need the sky system in the editor."
+    },
+    {
+      "id": "view.layout_quad",
+      "title": "Viewport Layout",
+      "menu": "View",
+      "summary": "Several viewports need one render target per view; quad view is not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Several viewports need one render target per view; quad view is not built yet."
+    },
+    {
+      "id": "window.maximize",
+      "title": "Maximize Panel",
+      "menu": "View",
+      "summary": "Fill the window with the active panel; again to restore.",
+      "shortcuts": [
+        "Shift+Space"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.fullscreen",
+      "title": "Full Screen",
+      "menu": "View",
+      "summary": "Toggle full-screen for the main window.",
+      "shortcuts": [
+        "F11"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.zoom_in",
+      "title": "Zoom In",
+      "menu": "View › UI Zoom",
+      "summary": "Increase UI scale.",
+      "shortcuts": [
+        "Ctrl+="
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.zoom_out",
+      "title": "Zoom Out",
+      "menu": "View › UI Zoom",
+      "summary": "Decrease UI scale.",
+      "shortcuts": [
+        "Ctrl+-"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.zoom_reset",
+      "title": "Reset Zoom",
+      "menu": "View › UI Zoom",
+      "summary": "Restore 100% UI scale.",
+      "shortcuts": [
+        "Ctrl+0"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "view.density.compact",
+      "title": "Compact",
+      "menu": "View › Density",
+      "summary": "22 px rows; the default.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.density.comfortable",
+      "title": "Comfortable",
+      "menu": "View › Density",
+      "summary": "26 px rows and roomier controls.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.theme.dark",
+      "title": "Dark",
+      "menu": "View › Theme",
+      "summary": "Ara Dark.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.theme.light",
+      "title": "Light",
+      "menu": "View › Theme",
+      "summary": "Ara Light.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.reduce_motion",
+      "title": "Reduce Motion",
+      "menu": "View",
+      "summary": "Turn off decorative transitions.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.tool.select",
+      "title": "Select Tool",
+      "menu": "",
+      "summary": "Pick and box-select without handles.",
+      "shortcuts": [
+        "Q"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.tool.move",
+      "title": "Move Tool",
+      "menu": "",
+      "summary": "Translate along axes or planes.",
+      "shortcuts": [
+        "W"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "view.tool.rotate",
+      "title": "Rotate Tool",
+      "menu": "",
+      "summary": "Rotate around an axis.",
+      "shortcuts": [
+        "E"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.tool.scale",
+      "title": "Scale Tool",
+      "menu": "",
+      "summary": "Scale along an axis or uniformly.",
+      "shortcuts": [
+        "R"
+      ],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.space",
+      "title": "World / Local Space",
+      "menu": "",
+      "summary": "Toggle world or local handle axes.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "view.pivot",
+      "title": "Pivot / Centre",
+      "menu": "",
+      "summary": "Toggle the handle between each pivot and the selection centre.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "create.empty",
+      "title": "Empty Entity",
+      "menu": "Create",
+      "summary": "Create an entity with only a Transform.",
+      "shortcuts": [
+        "Ctrl+Shift+N"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.empty_child",
+      "title": "Empty Child",
+      "menu": "Create",
+      "summary": "Create an empty entity under the selection.",
+      "shortcuts": [
+        "Shift+Alt+N"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "create.group",
+      "title": "Group Selection",
+      "menu": "Create",
+      "summary": "Grouping needs an atomic reparent-under-new-parent command; reparent by dragging for now.",
+      "shortcuts": [
+        "Ctrl+G"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Grouping needs an atomic reparent-under-new-parent command; reparent by dragging for now."
+    },
+    {
+      "id": "create.at_cursor",
+      "title": "Create…",
+      "menu": "Create",
+      "summary": "Search every Create command.",
+      "shortcuts": [
+        "Shift+A"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.cube",
+      "title": "Cube",
+      "menu": "Create › 3D Shapes",
+      "summary": "Box mesh, 1 m.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.sphere",
+      "title": "Sphere",
+      "menu": "Create › 3D Shapes",
+      "summary": "Sphere mesh, 1 m diameter.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.plane",
+      "title": "Plane",
+      "menu": "Create › 3D Shapes",
+      "summary": "Upward-facing quad, 1 m.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.capsule",
+      "title": "Capsule",
+      "menu": "Create › 3D Shapes",
+      "summary": "Upright capsule.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.cylinder",
+      "title": "Cylinder",
+      "menu": "Create › 3D Shapes",
+      "summary": "MeshShape offers box, sphere, capsule and plane; import a cylinder model for now.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "MeshShape offers box, sphere, capsule and plane; import a cylinder model for now."
+    },
+    {
+      "id": "create.mesh",
+      "title": "Mesh from Asset…",
+      "menu": "Create",
+      "summary": "Pick a model in Assets and drop it into the scene.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.light.sun",
+      "title": "Sun",
+      "menu": "Create › Lights",
+      "summary": "Directional light with cascaded shadows.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.light.point",
+      "title": "Point Light",
+      "menu": "Create › Lights",
+      "summary": "Omnidirectional light.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.light.spot",
+      "title": "Spot Light",
+      "menu": "Create › Lights",
+      "summary": "Cone light along −Z.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.light.sky",
+      "title": "Sky & Atmosphere",
+      "menu": "Create › Lights",
+      "summary": "Procedural sky and exposure.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.light.probe",
+      "title": "Reflection Probe",
+      "menu": "Create › Lights",
+      "summary": "Probes are automatic in the fidelity renderer; authored probes are not in the schema.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Probes are automatic in the fidelity renderer; authored probes are not in the schema."
+    },
+    {
+      "id": "create.camera",
+      "title": "Camera",
+      "menu": "Create",
+      "summary": "Viewpoint along −Z.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.vfx",
+      "title": "VFX System",
+      "menu": "Create › Effects",
+      "summary": "Entity that plays a VFX graph.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.decal",
+      "title": "Decal",
+      "menu": "Create › Effects",
+      "summary": "Decals are not in the renderer schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Decals are not in the renderer schema yet."
+    },
+    {
+      "id": "create.fog",
+      "title": "Fog Volume",
+      "menu": "Create › Effects",
+      "summary": "Fog volumes are not in the renderer schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Fog volumes are not in the renderer schema yet."
+    },
+    {
+      "id": "create.physics.body",
+      "title": "Rigid Body",
+      "menu": "Create › Physics",
+      "summary": "Box with a dynamic body and collider.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.physics.collider",
+      "title": "Collider",
+      "menu": "Create › Physics",
+      "summary": "Static collision shape.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.physics.character",
+      "title": "Character Controller",
+      "menu": "Create › Physics",
+      "summary": "Kinematic character capsule.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.physics.trigger",
+      "title": "Trigger Volume",
+      "menu": "Create › Physics",
+      "summary": "Trigger volumes need a sensor flag on Collider; it is not in the schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Trigger volumes need a sensor flag on Collider; it is not in the schema yet."
+    },
+    {
+      "id": "create.audio.source",
+      "title": "Audio Source",
+      "menu": "Create › Audio",
+      "summary": "Positional sound emitter.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.audio.listener",
+      "title": "Listener",
+      "menu": "Create › Audio",
+      "summary": "Where the mix is heard from.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.nav.volume",
+      "title": "Nav Mesh Surface",
+      "menu": "Create › Navigation",
+      "summary": "Bakes a navigation mesh.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.nav.link",
+      "title": "Nav Link",
+      "menu": "Create › Navigation",
+      "summary": "Off-mesh connection.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.world.terrain",
+      "title": "Terrain",
+      "menu": "Create › World",
+      "summary": "Terrain authoring in the editor arrives with Terrain Tools.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Terrain authoring in the editor arrives with Terrain Tools."
+    },
+    {
+      "id": "create.world.foliage",
+      "title": "Foliage",
+      "menu": "Create › World",
+      "summary": "Foliage painting arrives with Terrain Tools.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Foliage painting arrives with Terrain Tools."
+    },
+    {
+      "id": "create.2d.sprite",
+      "title": "Sprite",
+      "menu": "Create › 2D",
+      "summary": "2D sprite.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.2d.tilemap",
+      "title": "Tilemap",
+      "menu": "Create › 2D",
+      "summary": "2D tile grid.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.ui.screen",
+      "title": "Screen UI Document",
+      "menu": "Create › UI",
+      "summary": "UI document components are not in the runtime schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "UI document components are not in the runtime schema yet."
+    },
+    {
+      "id": "create.ui.world",
+      "title": "World-space UI",
+      "menu": "Create › UI",
+      "summary": "World-space UI components are not in the runtime schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "World-space UI components are not in the runtime schema yet."
+    },
+    {
+      "id": "create.gameplay.player",
+      "title": "Player",
+      "menu": "Create › Gameplay",
+      "summary": "Capsule driven by PlayerControl.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "create.gameplay.spawn",
+      "title": "Spawn Point",
+      "menu": "Create › Gameplay",
+      "summary": "Spawn points are not in the gameplay schema yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Spawn points are not in the gameplay schema yet."
+    },
+    {
+      "id": "create.prefab",
+      "title": "Prefab from Selection",
+      "menu": "Create",
+      "summary": "Creating a prefab document from entities needs a typed prefab.create command.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Creating a prefab document from entities needs a typed prefab.create command."
+    },
+    {
+      "id": "assets.create.folder",
+      "title": "Folder",
+      "menu": "Assets › Create",
+      "summary": "Create a folder in the current asset folder.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.create.scene",
+      "title": "Scene",
+      "menu": "Assets › Create",
+      "summary": "Create an empty scene.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.create.material",
+      "title": "Material",
+      "menu": "Assets › Create",
+      "summary": "Create a material graph and open it.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.create.vfx",
+      "title": "VFX System",
+      "menu": "Assets › Create",
+      "summary": "Create a VFX graph and open it.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.create.animation",
+      "title": "Animation Controller",
+      "menu": "Assets › Create",
+      "summary": "Create an animation controller and open it.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.create.script",
+      "title": "C# Script",
+      "menu": "Assets › Create",
+      "summary": "Create scripts in your IDE; the C# host hot-reloads them.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Create scripts in your IDE; the C# host hot-reloads them."
+    },
+    {
+      "id": "assets.create.prefab",
+      "title": "Prefab",
+      "menu": "Assets › Create",
+      "summary": "Prefab documents need a typed prefab.create command.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Prefab documents need a typed prefab.create command."
+    },
+    {
+      "id": "assets.reimport",
+      "title": "Reimport",
+      "menu": "Assets",
+      "summary": "Run the importer again for the selected asset.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an asset in the Assets panel first"
+    },
+    {
+      "id": "assets.reimport_changed",
+      "title": "Reimport All Changed",
+      "menu": "Assets",
+      "summary": "Changed sources reimport automatically when the host sees them on disk.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Changed sources reimport automatically when the host sees them on disk."
+    },
+    {
+      "id": "assets.open",
+      "title": "Open",
+      "menu": "Assets",
+      "summary": "Open the asset in its editor, or the folder.",
+      "shortcuts": [
+        "Enter"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an asset in the Assets panel first"
+    },
+    {
+      "id": "assets.show",
+      "title": "Show in Assets",
+      "menu": "Assets",
+      "summary": "Reveal the selected entity's model, or the asset, in Assets.",
+      "shortcuts": [
+        "Ctrl+B"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.reveal",
+      "title": "Show in Explorer",
+      "menu": "Assets",
+      "summary": "Open the containing folder in the OS file manager.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.copy_reference",
+      "title": "Copy Reference",
+      "menu": "Assets",
+      "summary": "Copy the asset's `@path#id`.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an asset in the Assets panel first"
+    },
+    {
+      "id": "assets.references",
+      "title": "Find References",
+      "menu": "Assets",
+      "summary": "Show what uses the asset and what it uses.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an asset in the Assets panel first"
+    },
+    {
+      "id": "assets.rename",
+      "title": "Rename",
+      "menu": "Assets",
+      "summary": "Asset renames must rewrite every `@path#id` reference; the typed move command is not built yet.",
+      "shortcuts": [
+        "F2"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Asset renames must rewrite every `@path#id` reference; the typed move command is not built yet."
+    },
+    {
+      "id": "assets.duplicate",
+      "title": "Duplicate",
+      "menu": "Assets",
+      "summary": "Asset duplication needs new stable IDs from a typed asset.copy command.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Asset duplication needs new stable IDs from a typed asset.copy command."
+    },
+    {
+      "id": "assets.delete",
+      "title": "Delete",
+      "menu": "Assets",
+      "summary": "Deleting assets needs the reference-count warning from asset.delete; not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Deleting assets needs the reference-count warning from asset.delete; not built yet."
+    },
+    {
+      "id": "assets.validate",
+      "title": "Validate Project",
+      "menu": "Assets",
+      "summary": "Run `ara check` for now; the in-editor validation report arrives with Problems.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Run `ara check` for now; the in-editor validation report arrives with Problems."
+    },
+    {
+      "id": "assets.rebuild_thumbnails",
+      "title": "Rebuild Thumbnails",
+      "menu": "Assets",
+      "summary": "Re-render every asset thumbnail off the UI thread.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "assets.clear_cache",
+      "title": "Clear Cache",
+      "menu": "Assets",
+      "summary": "Clearing caches while jobs run is unsafe; delete .ara/cache with the editor closed.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Clearing caches while jobs run is unsafe; delete .ara/cache with the editor closed."
+    },
+    {
+      "id": "assets.import_defaults",
+      "title": "Import Defaults…",
+      "menu": "Assets",
+      "summary": "Per-type import defaults arrive with the Assets settings page.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Per-type import defaults arrive with the Assets settings page."
+    },
+    {
+      "id": "play.start",
+      "title": "Play",
+      "menu": "Play",
+      "summary": "Play the scene with the project's play settings; resumes when paused.",
+      "shortcuts": [
+        "F5"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "play.pause",
+      "title": "Pause",
+      "menu": "Play",
+      "summary": "Pause the running world.",
+      "shortcuts": [
+        "F6"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Nothing is playing"
+    },
+    {
+      "id": "play.step",
+      "title": "Step One Tick",
+      "menu": "Play",
+      "summary": "Advance a paused world by one fixed tick (F10 is the Windows menu key).",
+      "shortcuts": [
+        "F7"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Start Play first"
+    },
+    {
+      "id": "play.stop",
+      "title": "Stop",
+      "menu": "Play",
+      "summary": "Stop every player process.",
+      "shortcuts": [
+        "Shift+F5"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Nothing is playing"
+    },
+    {
+      "id": "play.restart",
+      "title": "Restart",
+      "menu": "Play",
+      "summary": "Restart the world from tick 0.",
+      "shortcuts": [
+        "Ctrl+Shift+F5"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Nothing is playing"
+    },
+    {
+      "id": "play.simulate",
+      "title": "Simulate",
+      "menu": "Play",
+      "summary": "Simulating without a player needs the in-editor Game view (D19 shared texture).",
+      "shortcuts": [
+        "Alt+F5"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Simulating without a player needs the in-editor Game view (D19 shared texture)."
+    },
+    {
+      "id": "play.eject",
+      "title": "Eject / Possess",
+      "menu": "Play",
+      "summary": "Eject needs the in-editor Game view (D19 shared texture).",
+      "shortcuts": [
+        "F8"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Eject needs the in-editor Game view (D19 shared texture)."
+    },
+    {
+      "id": "play.mode.local",
+      "title": "Local",
+      "menu": "Play › Mode",
+      "summary": "One local player.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "play.mode.host",
+      "title": "Host + Clients",
+      "menu": "Play › Mode",
+      "summary": "A listen host plus client processes.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "play.mode.dedicated",
+      "title": "Dedicated + Clients",
+      "menu": "Play › Mode",
+      "summary": "A dedicated server plus client processes.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "play.clients.more",
+      "title": "Add Client (1 now)",
+      "menu": "Play › Mode",
+      "summary": "One more client process.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "play.clients.fewer",
+      "title": "Remove Client",
+      "menu": "Play › Mode",
+      "summary": "One fewer client process.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "play.start_paused",
+      "title": "Start Paused",
+      "menu": "Play",
+      "summary": "Begin at tick 0 and step explicitly.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "play.network_profile",
+      "title": "Network Profile",
+      "menu": "Play",
+      "summary": "Per-client network conditions need ara-net link shaping exposed through play.start.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Per-client network conditions need ara-net link shaping exposed through play.start."
+    },
+    {
+      "id": "play.review",
+      "title": "Review Kept Changes…",
+      "menu": "Play",
+      "summary": "Open the review queue.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "play.settings",
+      "title": "Play Settings…",
+      "menu": "Play",
+      "summary": "Open Networking & Play settings.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.profiler",
+      "title": "Profiler",
+      "menu": "Tools",
+      "summary": "Record and compare editor frames.",
+      "shortcuts": [
+        "Alt+8"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "tools.gpu_capture",
+      "title": "GPU Frame Capture",
+      "menu": "Tools",
+      "summary": "GPU captures run through RenderDoc for now; the integrated capture viewer is not built.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "GPU captures run through RenderDoc for now; the integrated capture viewer is not built."
+    },
+    {
+      "id": "tools.why",
+      "title": "Diagnostics: Why?",
+      "menu": "Tools",
+      "summary": "Run `ara why` (MCP: ara_why); the in-editor Why panel arrives with Problems.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Run `ara why` (MCP: ara_why); the in-editor Why panel arrives with Problems."
+    },
+    {
+      "id": "tools.references",
+      "title": "Reference Viewer",
+      "menu": "Tools",
+      "summary": "The reference graph view arrives with Asset browser v2.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The reference graph view arrives with Asset browser v2."
+    },
+    {
+      "id": "tools.table",
+      "title": "Table View…",
+      "menu": "Tools",
+      "summary": "Spreadsheet bulk editing is backlog item 26.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Spreadsheet bulk editing is backlog item 26."
+    },
+    {
+      "id": "tools.localization",
+      "title": "Localization",
+      "menu": "Tools",
+      "summary": "ara-l10n tables are edited as files; the editor panel is not built.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "ara-l10n tables are edited as files; the editor panel is not built."
+    },
+    {
+      "id": "tools.input_actions",
+      "title": "Input Actions",
+      "menu": "Tools",
+      "summary": "Input action maps are edited as files; the editor panel is not built.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Input action maps are edited as files; the editor panel is not built."
+    },
+    {
+      "id": "tools.physics_debugger",
+      "title": "Physics Debugger",
+      "menu": "Tools",
+      "summary": "Needs an ara-physics debug-draw feed into the editor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Needs an ara-physics debug-draw feed into the editor."
+    },
+    {
+      "id": "tools.terrain",
+      "title": "Terrain Tools",
+      "menu": "Tools",
+      "summary": "Terrain sculpting and painting tools are not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Terrain sculpting and painting tools are not built yet."
+    },
+    {
+      "id": "tools.ui_designer",
+      "title": "UI Designer",
+      "menu": "Tools",
+      "summary": "The UI designer over ara-ui-document ops is not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The UI designer over ara-ui-document ops is not built yet."
+    },
+    {
+      "id": "tools.cs.solution",
+      "title": "Open Solution in IDE",
+      "menu": "Tools › C#",
+      "summary": "Generate the solution with `ara script` and open it in your IDE.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Generate the solution with `ara script` and open it in your IDE."
+    },
+    {
+      "id": "tools.cs.reload",
+      "title": "Reload Scripts",
+      "menu": "Tools › C#",
+      "summary": "C# reloads automatically when sources change; a manual trigger is not exposed yet.",
+      "shortcuts": [
+        "Ctrl+R"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "C# reloads automatically when sources change; a manual trigger is not exposed yet."
+    },
+    {
+      "id": "window.agents",
+      "title": "Agents Panel",
+      "menu": "Tools › Agents",
+      "summary": "Review agent changes and the apply policy.",
+      "shortcuts": [
+        "Alt+6"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "agents.policy.immediately",
+      "title": "Apply Immediately",
+      "menu": "Tools › Agents",
+      "summary": "Agent changes apply at the next frame.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "agents.policy.idle",
+      "title": "Apply When Idle",
+      "menu": "Tools › Agents",
+      "summary": "Agent changes wait while you are typing or dragging.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "agents.policy.approval",
+      "title": "Apply On Approval",
+      "menu": "Tools › Agents",
+      "summary": "Agent changes wait in Agents for your approval.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "agents.connect",
+      "title": "Connect an Agent (MCP)…",
+      "menu": "Tools › Agents",
+      "summary": "Show how to connect Claude Code, Codex or another MCP client.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "tools.vcs",
+      "title": "Version Control",
+      "menu": "Tools",
+      "summary": "Use git; the in-editor changes view is not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Use git; the in-editor changes view is not built yet."
+    },
+    {
+      "id": "tools.plugins",
+      "title": "Plugins…",
+      "menu": "Tools",
+      "summary": "Plugin packages (D22) are not built yet.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Plugin packages (D22) are not built yet."
+    },
+    {
+      "id": "tools.terminal",
+      "title": "Open Terminal Here",
+      "menu": "Tools",
+      "summary": "Open a terminal at the project root.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.default",
+      "title": "Default",
+      "menu": "Window › Layouts",
+      "summary": "Hierarchy, Scene, Inspector and a bottom Assets/Console strip.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.level_design",
+      "title": "Level Design",
+      "menu": "Window › Layouts",
+      "summary": "Scene-first: Hierarchy and Inspector share the right column.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.materials",
+      "title": "Materials & VFX",
+      "menu": "Window › Layouts",
+      "summary": "Graph documents with Assets on the left and Inspector on the right.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.animation",
+      "title": "Animation",
+      "menu": "Window › Layouts",
+      "summary": "Animation graph with Scene preview and Inspector.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.profiling",
+      "title": "Profiling",
+      "menu": "Window › Layouts",
+      "summary": "Profiler across the window, Scene above it.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.laptop",
+      "title": "Laptop (1440 × 900)",
+      "menu": "Window › Layouts",
+      "summary": "Narrow side columns; Assets and Console tabbed with the Inspector.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.save",
+      "title": "Save Layout As…",
+      "menu": "Window › Layouts",
+      "summary": "Save the current arrangement, including floating windows.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.load",
+      "title": "Load Layout",
+      "menu": "",
+      "summary": "Apply a saved layout by name (target text).",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "layout.saved",
+      "title": "Manage Layouts…",
+      "menu": "Window › Layouts",
+      "summary": "Rename and delete layouts in .ara/layouts for now; a manager page is not built.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Rename and delete layouts in .ara/layouts for now; a manager page is not built."
+    },
+    {
+      "id": "layout.reset",
+      "title": "Reset Layout",
+      "menu": "Window › Layouts",
+      "summary": "Restore the default arrangement and close floating windows.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.show_panel",
+      "title": "Show Panel",
+      "menu": "",
+      "summary": "Activate a panel tab (target panel).",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.hierarchy",
+      "title": "Hierarchy",
+      "menu": "Window",
+      "summary": "Show the Hierarchy.",
+      "shortcuts": [
+        "Alt+1"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "window.inspector",
+      "title": "Inspector",
+      "menu": "Window",
+      "summary": "Show the Inspector.",
+      "shortcuts": [
+        "Alt+2"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "window.assets",
+      "title": "Assets",
+      "menu": "Window",
+      "summary": "Show the asset browser.",
+      "shortcuts": [
+        "Alt+3",
+        "Ctrl+Space"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "window.console",
+      "title": "Console",
+      "menu": "Window",
+      "summary": "Show the console and problems.",
+      "shortcuts": [
+        "Alt+4",
+        "Ctrl+`"
+      ],
+      "enabled": true,
+      "checked": true,
+      "disabledReason": null
+    },
+    {
+      "id": "window.history",
+      "title": "History",
+      "menu": "Window",
+      "summary": "The History panel arrives with the Phase 2 tool rebuilds.",
+      "shortcuts": [
+        "Alt+7"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The History panel arrives with the Phase 2 tool rebuilds."
+    },
+    {
+      "id": "window.float",
+      "title": "Move Panel to New Window",
+      "menu": "Window",
+      "summary": "Tear the panel off into its own OS window.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.move.left",
+      "title": "Left",
+      "menu": "Window › Move Panel To",
+      "summary": "Dock the panel in the left column.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.move.right",
+      "title": "Right",
+      "menu": "Window › Move Panel To",
+      "summary": "Dock the panel in the right column.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.move.bottom",
+      "title": "Bottom",
+      "menu": "Window › Move Panel To",
+      "summary": "Dock the panel in the bottom area.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.move.center",
+      "title": "Document Area",
+      "menu": "Window › Move Panel To",
+      "summary": "Dock the panel with the Scene and graph documents.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.close_panel",
+      "title": "Close Panel",
+      "menu": "Window",
+      "summary": "Hide the panel; reopen it from Window.",
+      "shortcuts": [
+        "Shift+Esc"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.auto_hide",
+      "title": "Auto-hide Panel",
+      "menu": "Window",
+      "summary": "Auto-hide rails and drawers are Docking v2 step 2.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Auto-hide rails and drawers are Docking v2 step 2."
+    },
+    {
+      "id": "window.next_document",
+      "title": "Next Document",
+      "menu": "Window",
+      "summary": "Activate the next tab in the document area.",
+      "shortcuts": [
+        "Ctrl+Tab"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "window.gather",
+      "title": "Gather Floating Windows",
+      "menu": "Window",
+      "summary": "Move every floating window onto the main window's monitor.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "No floating windows"
+    },
+    {
+      "id": "window.focus_window",
+      "title": "Focus Window",
+      "menu": "",
+      "summary": "Raise a floating window.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.search",
+      "title": "Search Commands & Docs",
+      "menu": "Help",
+      "summary": "Search commands with their descriptions.",
+      "shortcuts": [
+        "F1"
+      ],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.docs",
+      "title": "Documentation",
+      "menu": "Help",
+      "summary": "Open the engine documentation folder.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.shortcuts",
+      "title": "Keyboard Shortcuts Reference",
+      "menu": "Help",
+      "summary": "Open the Keyboard Shortcuts page.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.cs_api",
+      "title": "C# API Reference",
+      "menu": "Help",
+      "summary": "Generate it with `ara docs` (writes .ara/docs).",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Generate it with `ara docs` (writes .ara/docs)."
+    },
+    {
+      "id": "help.agent_guide",
+      "title": "Agent Guide",
+      "menu": "Help",
+      "summary": "The project's AGENTS.md is the agent guide; open it from Assets.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "The project's AGENTS.md is the agent guide; open it from Assets."
+    },
+    {
+      "id": "help.report",
+      "title": "Report a Problem…",
+      "menu": "Help",
+      "summary": "Diagnostics bundles come with the diagnostics bus (`ara why`).",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Diagnostics bundles come with the diagnostics bus (`ara why`)."
+    },
+    {
+      "id": "help.logs",
+      "title": "Open Logs Folder",
+      "menu": "Help",
+      "summary": "Open the project's .ara folder.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.system",
+      "title": "System Info",
+      "menu": "Help",
+      "summary": "GPU, driver and Vulkan details.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "help.about",
+      "title": "About Ara",
+      "menu": "Help",
+      "summary": "Version and licenses.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "field.copy",
+      "title": "Copy Value",
+      "menu": "",
+      "summary": "Copy the field's value as JSON.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "field.paste",
+      "title": "Paste Value",
+      "menu": "",
+      "summary": "Paste a copied value into the field.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Copy a value first"
+    },
+    {
+      "id": "field.set",
+      "title": "Set Value",
+      "menu": "",
+      "summary": "Set a field on the selection (target `Path=json`).",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "field.reset",
+      "title": "Reset to Default",
+      "menu": "",
+      "summary": "Reset to the default or prefab value.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "field.copy_path",
+      "title": "Copy Property Path",
+      "menu": "",
+      "summary": "Copy `@scene#entity/Component.field`.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "field.why",
+      "title": "Why This Value?",
+      "menu": "",
+      "summary": "Show where the value comes from.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "component.reset",
+      "title": "Reset Component",
+      "menu": "",
+      "summary": "Restore every field of the component to its default.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "component.remove",
+      "title": "Remove Component",
+      "menu": "",
+      "summary": "Remove the component from the selection.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "component.copy",
+      "title": "Copy Component",
+      "menu": "",
+      "summary": "Component clipboard arrives with Inspector v2.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Component clipboard arrives with Inspector v2."
+    },
+    {
+      "id": "component.add",
+      "title": "Add Component…",
+      "menu": "",
+      "summary": "Search components to add.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select an entity first"
+    },
+    {
+      "id": "graph.delete",
+      "title": "Delete Nodes",
+      "menu": "",
+      "summary": "Delete the selected graph nodes.",
+      "shortcuts": [
+        "Del"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.frame",
+      "title": "Frame Graph",
+      "menu": "",
+      "summary": "Fit the graph in the canvas.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.add",
+      "title": "Add Node…",
+      "menu": "",
+      "summary": "Search nodes to add at the pointer.",
+      "shortcuts": [
+        "Space"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.comment",
+      "title": "Add Comment",
+      "menu": "",
+      "summary": "Add a comment at the pointer.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.group",
+      "title": "Group Selection",
+      "menu": "",
+      "summary": "Group the selected nodes.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.reroute",
+      "title": "Add Reroute",
+      "menu": "",
+      "summary": "Add a reroute point to a wire.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "graph.select_all",
+      "title": "Select All Nodes",
+      "menu": "",
+      "summary": "Select every node.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Open a material, VFX or animation graph first"
+    },
+    {
+      "id": "vfx.module.up",
+      "title": "Move Module Up",
+      "menu": "",
+      "summary": "Move the module earlier in its stage.",
+      "shortcuts": [
+        "Alt+Up"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select a VFX module first"
+    },
+    {
+      "id": "vfx.module.down",
+      "title": "Move Module Down",
+      "menu": "",
+      "summary": "Move the module later in its stage.",
+      "shortcuts": [
+        "Alt+Down"
+      ],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select a VFX module first"
+    },
+    {
+      "id": "vfx.module.duplicate",
+      "title": "Duplicate Module",
+      "menu": "",
+      "summary": "Insert a copy after the module.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select a VFX module first"
+    },
+    {
+      "id": "vfx.module.delete",
+      "title": "Delete Module",
+      "menu": "",
+      "summary": "Remove the module from its stage.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Select a VFX module first"
+    },
+    {
+      "id": "console.copy",
+      "title": "Copy Message",
+      "menu": "",
+      "summary": "Copy the diagnostic text.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "console.clear",
+      "title": "Clear",
+      "menu": "",
+      "summary": "Diagnostics clear when their cause is fixed; a log stream with Clear arrives with Console v2.",
+      "shortcuts": [],
+      "enabled": false,
+      "checked": null,
+      "disabledReason": "Diagnostics clear when their cause is fixed; a log stream with Clear arrives with Console v2."
+    },
+    {
+      "id": "profiler.record",
+      "title": "Record",
+      "menu": "",
+      "summary": "Start recording editor frames.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "profiler.freeze",
+      "title": "Freeze Capture",
+      "menu": "",
+      "summary": "Freeze and save the current trace.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "profiler.baseline",
+      "title": "Set Baseline",
+      "menu": "",
+      "summary": "Freeze the trace as the comparison baseline.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    },
+    {
+      "id": "profiler.compare",
+      "title": "Compare",
+      "menu": "",
+      "summary": "Compare the frozen capture with the baseline.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": false,
+      "disabledReason": null
+    },
+    {
+      "id": "settings.close",
+      "title": "Close Settings",
+      "menu": "",
+      "summary": "Close the Settings window.",
+      "shortcuts": [],
+      "enabled": true,
+      "checked": null,
+      "disabledReason": null
+    }
+  ]
+}

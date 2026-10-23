@@ -311,3 +311,120 @@ pub(super) struct EditorPreferences {
     /// Use hardware fidelity lighting, or the fast raster view.
     pub quality: Option<bool>,
 }
+/// Set or reset one setting; the edit is an undoable op attributed to the session.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorSettingsSet {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Setting key from `editor.settings`, e.g. `appearance.theme`.
+    pub key: String,
+    /// New value; omit with `reset: true` to restore the default.
+    pub value: Option<Value>,
+    /// Restore the default value.
+    pub reset: Option<bool>,
+}
+/// Undo or redo the session's latest settings edit.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorSettingsUndo {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Redo instead of undo.
+    pub redo: Option<bool>,
+}
+/// Settings window navigation: scope, category page and the modified-only filter.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorSettingsView {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// `user` (Preferences) or `project`.
+    pub scope: Option<String>,
+    /// Category page; empty shows all.
+    pub category: Option<String>,
+    /// Show only values that differ from their defaults.
+    pub modified: Option<bool>,
+}
+/// Run a registry command (the same commands as menus, the palette and shortcuts).
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorCommand {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Command id from `editor.commands`, e.g. `create.cube`.
+    pub id: String,
+    /// Optional target: `{"entity": "e_…"}`, `{"asset": "path"}`, `{"panel": "inspector"}`, `{"field": "Transform.position"}`.
+    pub target: Option<Value>,
+}
+/// Viewport presentation: debug view, game view, overlays and the maximized panel.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorView {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// `lit`, `baseColor`, `normals`, `depth`, `roughnessMetal`, `entityIds` or `shadowCascades`.
+    pub view_mode: Option<String>,
+    /// Hide every editor visual in the viewport.
+    pub game_view: Option<bool>,
+    /// Hide the viewport toolbar and widgets.
+    pub hide_overlays: Option<bool>,
+    /// Show transform handles (false is the Select tool).
+    pub gizmos: Option<bool>,
+    /// Show the orientation widget.
+    pub orientation: Option<bool>,
+    /// Panel to maximize; an empty string restores the layout.
+    pub maximized: Option<String>,
+    /// Play state shown by the toolbar: `playing`, `paused` or `stopped`.
+    pub play: Option<String>,
+}
+/// A named layout: a built-in (`default`, `levelDesign`, `materials`, `animation`,
+/// `profiling`, `laptop`) or one saved under `.ara/layouts`.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorLayoutName {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Layout name.
+    pub name: String,
+}
+/// Show, close or move one panel.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorLayoutPanel {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Panel id, e.g. `inspector`.
+    pub panel: String,
+    /// Destination for moves: `left`, `right`, `bottom`, `view` or `float`.
+    pub slot: Option<String>,
+    /// Desktop rectangle (x, y, width, height) for a floating window.
+    pub rect: Option<[f32; 4]>,
+}
+/// Record a floating window's position after the OS moved or resized it.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorWindow {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// Floating window id.
+    pub id: String,
+    /// Desktop rectangle: x, y, width, height.
+    pub rect: [f32; 4],
+}

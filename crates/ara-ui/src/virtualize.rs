@@ -326,6 +326,10 @@ impl VirtualView {
         self.first = first;
         Ok(())
     }
+    /// Fixed row height in logical pixels.
+    pub fn row_height(&self) -> f32 {
+        self.row_height
+    }
     /// Retained row handles in visual/tab order.
     pub fn visible_nodes(&self) -> &[usize] {
         &self.order
