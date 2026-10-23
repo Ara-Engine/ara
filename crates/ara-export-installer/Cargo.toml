@@ -1,0 +1,18 @@
+[package]
+name = "ara-export-installer"
+description = "Dependency-free installer template for Ara portable builds"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0.103"
+blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
+zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

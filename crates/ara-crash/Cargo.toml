@@ -1,0 +1,43 @@
+[package]
+name = "ara-crash"
+description = "Local crash capture, native minidumps and build-matched symbolization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+symbols = ["dep:dump_syms", "dep:minidump", "dep:minidump-processor", "dep:breakpad-symbols", "dep:futures-executor", "dep:goblin"]
+explain = ["dep:ara-why"]
+
+[[bin]]
+name = "ara-crash"
+path = "src/bin/ara-crash.rs"
+required-features = ["symbols"]
+
+[dependencies]
+ara-diag.workspace = true
+ara-json.workspace = true
+ara-schema.workspace = true
+anyhow = "1.0.103"
+blake3 = { version = "1.8.7", default-features = false, features = ["std", "pure"] }
+serde.workspace = true
+serde_json.workspace = true
+ara-why = { path = "../ara-why", optional = true }
+dump_syms = { version = "2.3.9", default-features = false, optional = true }
+minidump = { version = "0.27", optional = true }
+minidump-processor = { version = "0.27", default-features = false, optional = true }
+breakpad-symbols = { version = "0.27", default-features = false, optional = true }
+futures-executor = { version = "0.3", optional = true }
+goblin = { version = "0.10", optional = true }
+
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+crash-handler = "0.8.1"
+minidumper = "0.11"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
