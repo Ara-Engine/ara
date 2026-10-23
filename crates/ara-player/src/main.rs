@@ -5,6 +5,7 @@
 //! (windowed through SDL3, or headless) and exits on `play.stop`.
 mod crash;
 mod device;
+mod net;
 mod world;
 
 use anyhow::{Context, Result, anyhow};
@@ -19,7 +20,6 @@ use ara_runtime_render::{Presenter, two_d::Presenter2d};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::{
-    net::UdpSocket,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -87,7 +87,6 @@ struct Player {
     world: Option<World>,
     /// Keeps the snapshot section mapped for the session (diff baselines, restarts).
     _section: Option<Section>,
-    udp: UdpSocket,
     last_status: Instant,
     last_advance: Instant,
     max_late: Duration,
@@ -98,9 +97,6 @@ fn run(args: Args) -> Result<()> {
     let init = Instant::now();
     let size = parse_size(&args.size)?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
-    // Server roles answer client handshakes on this socket (the ara-net seam).
-    let udp = UdpSocket::bind("127.0.0.1:0")?;
-    udp.set_nonblocking(true)?;
     // Windowed pool players create the window, device and pipelines before Play.
     let (window, presenter) = if args.window {
         let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache)?;
@@ -116,7 +112,6 @@ fn run(args: Args) -> Result<()> {
         name: args.name.clone(),
         window: args.window,
         init_ms: init.elapsed().as_secs_f64() * 1000.0,
-        net_addr: Some(udp.local_addr()?.to_string()),
     };
     match link.call(HELLO, &hello, Duration::from_secs(10), |_| {})? {
         Ok(_) => {}
@@ -133,7 +128,6 @@ fn run(args: Args) -> Result<()> {
         frame: RenderFrame::default(),
         world: None,
         _section: None,
-        udp,
         last_status: Instant::now(),
         last_advance: Instant::now(),
         max_late: Duration::ZERO,
@@ -156,7 +150,6 @@ impl Player {
                 self.handle(message)?;
                 continue;
             }
-            self.answer_handshakes();
             if idle {
                 if self.last_status.elapsed() >= Duration::from_millis(250) {
                     self.status()?;
@@ -179,26 +172,30 @@ impl Player {
         let elapsed = now - self.last_advance;
         self.last_advance = now;
         if let Some(world) = &mut self.world {
-            let running = world.runtime.running();
-            if let Some(window) = &mut self.window
-                && window.events(&mut world.runtime)?
-            {
-                self.stop = true;
-            }
-            if running {
-                let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
-                match world.runtime.advance(elapsed) {
-                    Ok(frame) => {
-                        if frame.ticks > 0 {
-                            self.max_late = self
-                                .max_late
-                                .max(period.mul_f64(f64::from(frame.alpha.clamp(0.0, 1.0) as f32)));
-                        }
-                    }
-                    Err(e) => eprintln!("ara-player: {e}"),
+            if let Some(window) = &mut self.window {
+                let (quit, inputs) = window.events(world.runtime.player())?;
+                self.stop |= quit;
+                if !inputs.is_empty()
+                    && let Err(e) = world.runtime.input(0, inputs)
+                {
+                    eprintln!("ara-player: input: {e:#}");
                 }
-                world.mark();
             }
+            let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
+            match world.runtime.advance(elapsed) {
+                Ok(Some(frame)) if frame.ticks > 0 => {
+                    self.max_late = self
+                        .max_late
+                        .max(period.mul_f64(f64::from(frame.alpha.clamp(0.0, 1.0) as f32)));
+                }
+                Ok(_) => {}
+                Err(e) if world.fault.is_none() => {
+                    eprintln!("ara-player: {e:#}");
+                    world.fault = Some(format!("{e:#}"));
+                }
+                Err(_) => {}
+            }
+            world.mark();
             let tick = world.runtime.tick();
             let due: Vec<PendingPatch> = {
                 let (ready, waiting) = std::mem::take(&mut world.pending)
@@ -251,15 +248,16 @@ impl Player {
             .window
             .as_mut()
             .map_or((0.0, 0.0), device::Windowed::take_stats);
-        let status = match &self.world {
+        let status = match &mut self.world {
             Some(world) => Status {
                 tick: world.runtime.tick(),
-                paused: !world.runtime.running(),
+                paused: !world.runtime.running() && !world.runtime.networked(),
                 max_late_us: self.max_late.as_micros() as u64,
                 fps,
                 frame_ms_p95,
-                fault: world.runtime.fault(),
+                fault: world.runtime.fault().or_else(|| world.fault.clone()),
                 audio: self.audio.is_some(),
+                net: world.runtime.stats(),
             },
             None => Status {
                 tick: 0,
@@ -269,23 +267,13 @@ impl Player {
                 frame_ms_p95,
                 fault: None,
                 audio: false,
+                net: None,
             },
         };
         self.link.notify(STATUS, &status)?;
         self.max_late = Duration::ZERO;
         self.last_status = Instant::now();
         Ok(())
-    }
-
-    /// Server roles answer `hello` datagrams with `welcome`.
-    fn answer_handshakes(&mut self) {
-        let mut buffer = [0u8; 64];
-        // WSAECONNRESET from an ICMP unreachable is "retry", like WouldBlock.
-        while let Ok((n, from)) = self.udp.recv_from(&mut buffer) {
-            if &buffer[..n] == b"ara-hello" {
-                let _ = self.udp.send_to(b"ara-welcome", from);
-            }
-        }
     }
 
     fn handle(&mut self, message: Message) -> Result<()> {
@@ -319,6 +307,7 @@ impl Player {
         let outcome = (|| -> std::result::Result<Option<Value>, Failure> {
             let patch: ara_play::Patch = parse(params)?;
             let world = self.world.as_mut().ok_or_else(no_world)?;
+            world.runtime.local_only("play.patch")?;
             let tick = world.patch(&patch)?;
             if world.runtime.running() {
                 world.pending.push(PendingPatch {
@@ -385,12 +374,30 @@ impl Player {
                     frame_ms_p95: 0.0,
                     fault: None,
                     audio: false,
+                    net: None,
                 };
                 let _ = link.notify(STATUS, &status);
                 let _ = link.flush();
             }
         };
+        if matches!(
+            method,
+            method::PAUSE
+                | method::RESUME
+                | method::TIMESCALE
+                | method::STEP
+                | method::UNTIL
+                | method::RECORD
+                | method::SAVE_REPLAY
+                | method::REPLAY
+        ) {
+            world.runtime.local_only(method)?;
+        }
         let value = match method {
+            method::JOIN => {
+                let join: ara_play::Join = parse(params)?;
+                serde_json::to_value(world.runtime.join(join.index)?)?
+            }
             method::PAUSE => {
                 world.runtime.pause()?;
                 json!({"tick": world.runtime.tick()})
@@ -515,13 +522,13 @@ impl Player {
             }
         };
         let decode_ms = decode.elapsed().as_secs_f64() * 1000.0;
+        let (mut world, build_ms) = World::build(&scene, start.role, start.net.as_ref())?;
         let mut handshake = None;
-        if let (ara_play::Role::Client, Some(server)) = (start.role, &start.connect_to) {
+        if start.role == ara_play::Role::Client {
             let t = Instant::now();
-            client_handshake(&self.udp, server)?;
+            world.runtime.connect(Duration::from_secs(20))?;
             handshake = Some(t.elapsed().as_secs_f64() * 1000.0);
         }
-        let (mut world, build_ms) = World::build(&scene)?;
         if let Some(resume) = &start.resume {
             world.resume(resume)?;
         }
@@ -555,26 +562,6 @@ fn busy(link: &mut Link, what: &str) -> Result<()> {
     )?;
     link.flush()?;
     Ok(())
-}
-
-/// Client roles complete a UDP hello/welcome with their server before reporting
-/// running (S5). `ara-net` replaces this with its encrypted transport.
-fn client_handshake(udp: &UdpSocket, server: &str) -> Result<()> {
-    let start = Instant::now();
-    let mut buffer = [0u8; 64];
-    while start.elapsed() < Duration::from_secs(5) {
-        udp.send_to(b"ara-hello", server)?;
-        let wait = Instant::now();
-        while wait.elapsed() < Duration::from_millis(20) {
-            if let Ok((n, _)) = udp.recv_from(&mut buffer)
-                && &buffer[..n] == b"ara-welcome"
-            {
-                return Ok(());
-            }
-            std::thread::sleep(Duration::from_micros(200));
-        }
-    }
-    Err(anyhow!("server {server} did not answer the handshake"))
 }
 
 /// Method failure classes mapped to JSON-RPC codes.

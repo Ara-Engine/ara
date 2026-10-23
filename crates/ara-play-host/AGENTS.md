@@ -64,9 +64,10 @@ every player of a world; reads go to the authority.
   progressive previews on here: a preview is published before it is on disk, so a
   player pinned to it fails with "asset … has no published generation" (a race).
   Generations published during Play reach a world only with `hotReload`.
-- Multi-instance without `ara-net`: every process runs the same deterministic world
-  from the same snapshot and broadcast inputs; clients do the S5 UDP hello/welcome.
-  `ara-net` replaces this with replication on the same roles.
+- `host`/`dedicated` worlds are replicated (`ara-runtime-net`): the authority starts
+  first, each client then gets its join from the authority (`play.join`) and connects
+  through its own proxy (`conditions[i]` simulates the link). `play.capture`,
+  `play.read` and `play.inspect` take `player` (0 = authority, 1.. = clients).
 - Players inherit the daemon's environment: SDL3.dll (ara-platform) on PATH, and in
   debug builds the Vulkan validation layer (`VK_LAYER_PATH`) for captures/windows.
 

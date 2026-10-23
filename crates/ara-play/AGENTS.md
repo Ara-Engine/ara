@@ -36,6 +36,10 @@ notifications (`Event`: `reload`, `diagnostic`, `restart`, `types`);
 - Accepted sockets inherit the listener's non-blocking mode; `accept` resets it.
 - Bump `PROTOCOL` only for incompatible changes; new methods are additive.
 - `Role` matches `ara-net` launch roles (Host/Dedicated/Client) plus `Local`.
+- Networked roles: `Start.net` (`NetStart`: players, per-client `LinkConditions`, and
+  for clients the `Joined` from the authority's `play.join`). The join token is private
+  launch data: owners pass it only to that client's `play.start`, never into results.
+  `Status.net` carries authority traffic or client join/prediction numbers.
 
 ## Testing
 

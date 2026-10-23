@@ -1,6 +1,6 @@
 //! One running world inside the player: the runtime plus the `play.*` method
 //! implementations. Patches acknowledge after the tick that applied them.
-use crate::crash::LAST_TICK;
+use crate::{crash::LAST_TICK, net::Play};
 use anyhow::{Context, Result, anyhow, bail};
 use ara_asset::{Digest, FileCache};
 use ara_input::{ActionValue, Injection, PlayerId};
@@ -36,8 +36,10 @@ pub struct PendingPatch {
 
 /// The assigned world.
 pub struct World {
-    /// The simulation and presentation source.
-    pub runtime: Runtime,
+    /// The simulation and presentation source, in its (network) role.
+    pub runtime: Play,
+    /// The first error of a frame advance (networked transport faults), for status.
+    pub fault: Option<String>,
     scene: ara_doc::AssetId,
     seed: u64,
     cache: PathBuf,
@@ -53,11 +55,21 @@ fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAsse
 }
 
 impl World {
-    /// Builds the world from a decoded snapshot (tick 0, paused).
-    pub fn build(scene: &PlayScene) -> Result<(Self, f64)> {
+    /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
+    /// worlds copy player avatars, install the net plugin and wrap the runtime in a
+    /// server (authorities) or connect a mirror (clients).
+    pub fn build(
+        scene: &PlayScene,
+        role: ara_play::Role,
+        net: Option<&ara_play::NetStart>,
+    ) -> Result<(Self, f64)> {
         let started = Instant::now();
         let schema = ara_runtime::schema(&scene.types)?;
-        let (workspace, id) = scene.workspace().map_err(|e| anyhow!(e))?;
+        let (mut workspace, id) = scene.workspace().map_err(|e| anyhow!(e))?;
+        if let Some(net) = net {
+            ara_runtime_net::avatars(&mut workspace, id.as_str(), net.players)
+                .map_err(|e| anyhow!(e))?;
+        }
         let pins = scene
             .assets
             .iter()
@@ -65,6 +77,9 @@ impl World {
             .collect::<Result<BTreeMap<_, _>>>()?;
         let cache = PathBuf::from(&scene.cache);
         let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = Vec::new();
+        if net.is_some() {
+            plugins.push(Box::new(ara_runtime_net::NetPlugin));
+        }
         let mut scripts = None;
         if let Some(s) = &scene.scripts {
             let settings = ScriptSettings {
@@ -92,9 +107,11 @@ impl World {
             },
             plugins,
         )?;
+        let runtime = Play::new(runtime, role, net)?;
         Ok((
             Self {
                 runtime,
+                fault: None,
                 scene: id,
                 seed: scene.seed,
                 cache,
@@ -193,6 +210,10 @@ impl World {
 
     /// `play.command`: a C# command between ticks.
     pub fn command(&mut self, command: &ara_play::Command) -> Result<Value> {
+        if matches!(self.runtime, Play::Mirror(..)) {
+            // Commands run on the authority; clients see their effects replicated.
+            return Ok(json!({"mirror": true}));
+        }
         let world = self.runtime.play_mut().session_mut().world_mut();
         Ok(ara_runtime_script::execute(
             world,
@@ -256,9 +277,10 @@ impl World {
     }
 
     /// Starts host-time ticking and runs the first tick now (S5 "first tick").
+    /// Networked worlds tick on the authority's timeline once every client joined.
     pub fn start(&mut self, paused: bool, build_ms: f64) -> Result<Started> {
         let mut first_tick_ms = 0.0;
-        if !paused {
+        if !paused && !self.runtime.networked() {
             let t = Instant::now();
             self.runtime.step(1, &[])?;
             first_tick_ms = t.elapsed().as_secs_f64() * 1000.0;
@@ -363,15 +385,14 @@ impl World {
         })
     }
 
-    /// `play.input`: injections for the next tick (offsets relative to it).
+    /// `play.input`: injections for the next tick (offsets relative to it). Networked
+    /// processes keep only their own player's inputs (clients predict them).
     pub fn input(&mut self, inputs: &[Input]) -> Result<u64> {
         let next = self.runtime.tick() + 1;
         for input in inputs {
             let injection = injection(input)?;
             self.runtime
-                .play_mut()
-                .session_mut()
-                .inject(next + u64::from(input.after_ticks), vec![injection])?;
+                .input(u64::from(input.after_ticks), vec![injection])?;
         }
         Ok(next)
     }

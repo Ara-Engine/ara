@@ -20,8 +20,12 @@ View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 
 Play/Pause/Resume/Step/Stop bind `play.*` (ara-play-host's `PlayService`, registered
-in `Editor::open`): Play opens the scene in a pooled `ara-player` window. The in-editor
-Game viewport through a shared GPU texture (D19) is still to wire.
+in `Editor::open`): Play opens the scene in a pooled `ara-player` window. Multi-player
+Play (D19) is the palette's `editor.play` (`clients`, `dedicated`, per-client simulated
+`latencyMs`/`jitterMs`/`loss`): one replicated window per player; `Editor::action` turns
+its resolved params into `play.start`. Keep "f…r" out of editor method names and
+summaries (the palette golden searches "fr"). The in-editor Game viewport through a
+shared GPU texture (D19) is still to wire.
 One schema world: `Editor::open` uses `ara_play_host::open_project`, so the editor
 validates and inspects exactly the engine components the player runs. The viewport
 decodes `MeshRenderer` as `ara_runtime::components::MeshRenderer` (same defaults,

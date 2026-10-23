@@ -47,6 +47,57 @@ impl Default for ServerConfig {
     }
 }
 
+/// What an authority steps each fixed boundary. A bare [`Session`] steps itself; an
+/// embedding runtime (ara-runtime's play world) wraps its session so its own work
+/// (plugins, presentation bookkeeping) runs around every boundary, while the server's
+/// timeline stays the clock. The server keeps it for its lifetime: reach it again with
+/// [`Server::driver`] / [`Server::driver_mut`].
+pub trait Authoritative: std::any::Any + Send + Sync {
+    /// The simulation (replication, intents, traces read it).
+    fn session(&self) -> &Session;
+    /// The simulation, mutably (listen-host input, hash sampling).
+    fn session_mut(&mut self) -> &mut Session;
+    /// Runs exactly one boundary: `adapter` delivers network input before it and
+    /// observes the completed tick after it.
+    fn step(
+        &mut self,
+        adapter: &mut dyn SessionAdapter,
+    ) -> std::result::Result<TickRecord, ara_sim::SimError>;
+}
+
+/// Lets a `&mut dyn SessionAdapter` drive `Session::step_with_adapter`.
+pub struct AdapterRef<'a>(pub &'a mut dyn SessionAdapter);
+impl SessionAdapter for AdapterRef<'_> {
+    fn mode(&self) -> SessionMode {
+        self.0.mode()
+    }
+    fn before_tick(&mut self, session: &mut Session) -> std::result::Result<(), ara_sim::SimError> {
+        self.0.before_tick(session)
+    }
+    fn after_tick(
+        &mut self,
+        world: &World,
+        record: &TickRecord,
+    ) -> std::result::Result<(), ara_sim::SimError> {
+        self.0.after_tick(world, record)
+    }
+}
+
+impl Authoritative for Session {
+    fn session(&self) -> &Session {
+        self
+    }
+    fn session_mut(&mut self) -> &mut Session {
+        self
+    }
+    fn step(
+        &mut self,
+        adapter: &mut dyn SessionAdapter,
+    ) -> std::result::Result<TickRecord, ara_sim::SimError> {
+        self.step_with_adapter(&mut AdapterRef(adapter))
+    }
+}
+
 /// Optional authority adapter driven through ara-sim's Session seam.
 struct Adapter {
     mode: SessionMode,
@@ -86,7 +137,7 @@ struct Actor {
 struct ByteBudget(u32);
 #[derive(Resource)]
 struct Authority {
-    session: Session,
+    session: Box<dyn Authoritative>,
     adapter: Adapter,
     config: ServerConfig,
     actors: BTreeMap<String, Actor>,
@@ -115,8 +166,14 @@ pub struct Server<F: SimulationFeature> {
     poll_interval: Duration,
 }
 impl<F: SimulationFeature> Server<F> {
-    /// Starts a Listen/Dedicated server from the same world/systems used offline.
-    pub fn new(session: Session, policies: PolicyRegistry, config: ServerConfig) -> Result<Self> {
+    /// Starts a Listen/Dedicated server from the same world/systems used offline:
+    /// a [`Session`], or any [`Authoritative`] wrapping one.
+    pub fn new(
+        authority: impl Authoritative,
+        policies: PolicyRegistry,
+        config: ServerConfig,
+    ) -> Result<Self> {
+        let session = authority.session();
         if PolicyRegistry::new(session.schema().clone())?.hash() != policies.hash() {
             return Err(NetError("simulation/network schema mismatch".into()));
         }
@@ -136,7 +193,7 @@ impl<F: SimulationFeature> Server<F> {
             1.0 / f64::from(config.snapshot_hz),
         )));
         app.insert_resource(Authority {
-            session,
+            session: Box::new(authority),
             adapter: Adapter {
                 mode: config.mode,
                 gate: IntentGate::new(policies.schema().clone()),
@@ -332,10 +389,10 @@ impl<F: SimulationFeature> Server<F> {
     /// Enables optional recording/hash sampling for deterministic tests and replay.
     pub fn record(&mut self, build: ara_sim::StateHash, link_seeds: Vec<u64>) -> Result<()> {
         let mut state = self.app.world_mut().resource_mut::<Authority>();
-        let trace = crate::Trace::begin(&state.session, build, link_seeds)?;
+        let trace = crate::Trace::begin(state.session.session(), build, link_seeds)?;
         state.trace = Some(trace);
         state.record = true;
-        state.session.set_hash_sampling(true);
+        state.session.session_mut().set_hash_sampling(true);
         Ok(())
     }
     /// Full arbitrary-initial-state replay with first-field divergence diagnostics.
@@ -348,7 +405,23 @@ impl<F: SimulationFeature> Server<F> {
     }
     /// Read-only authority simulation for editor inspection and convergence assertions.
     pub fn session(&self) -> &Session {
-        &self.app.world().resource::<Authority>().session
+        self.app.world().resource::<Authority>().session.session()
+    }
+    /// The driver given to [`Server::new`], when it is an `A` (read between polls).
+    pub fn driver<A: Authoritative>(&self) -> Option<&A> {
+        let driver: &dyn std::any::Any = &*self.app.world().resource::<Authority>().session;
+        driver.downcast_ref()
+    }
+    /// The driver, mutably, between polls (patches, captures). Changes to simulation
+    /// state outside a boundary are the caller's responsibility to keep deterministic.
+    pub fn driver_mut<A: Authoritative>(&mut self) -> Option<&mut A> {
+        let authority = self
+            .app
+            .world_mut()
+            .resource_mut::<Authority>()
+            .into_inner();
+        let driver: &mut dyn std::any::Any = &mut *authority.session;
+        driver.downcast_mut()
     }
     /// Direct listen-host input. This is injected once, with no network round trip.
     pub fn inject_host(&mut self, tick: u64, input: Injection) -> Result<()> {
@@ -357,15 +430,15 @@ impl<F: SimulationFeature> Server<F> {
             return Err(NetError("host input requires Listen mode".into()));
         }
         F::input(Some(input.value))?;
-        state.session.inject(tick, vec![input])?;
+        state.session.session_mut().inject(tick, vec![input])?;
         Ok(())
     }
     /// Submits a listen owner's intent through the same exposure/ownership/rate gate.
     pub fn intent_host(&mut self, intent: Intent) -> Result<()> {
         let mut state = self.app.world_mut().resource_mut::<Authority>();
         if state.config.mode != SessionMode::Listen
-            || intent.tick < state.session.tick().saturating_sub(60)
-            || intent.tick > state.session.tick().saturating_add(120)
+            || intent.tick < state.session.session().tick().saturating_sub(60)
+            || intent.tick > state.session.session().tick().saturating_add(120)
             || intent.payload.len() > 4096
             || intent.target.len() > 256
             || intent.command.len() > 128
@@ -375,7 +448,7 @@ impl<F: SimulationFeature> Server<F> {
         }
         let player = state.config.local_owner;
         state.adapter.gate.authenticate(player);
-        let assigned = intent.tick.max(state.session.tick() + 1);
+        let assigned = intent.tick.max(state.session.session().tick() + 1);
         state
             .pending_intents
             .entry(assigned)

@@ -23,8 +23,9 @@ pub enum Stage {
     Late,
 }
 
-/// A runtime extension. Every hook has a no-op default.
-pub trait RuntimePlugin: Send {
+/// A runtime extension. Every hook has a no-op default. `Sync` so a networked
+/// authority can own the runtime (hooks still only run through `&mut self`).
+pub trait RuntimePlugin: Send + Sync {
     /// Stable name for diagnostics.
     fn name(&self) -> &'static str;
     /// Prepares the (still empty) simulation world and adds runtime-defined types

@@ -18,7 +18,9 @@ pub use launch::{LaunchPlan, PlayerPool, PlayerRole, RunningPlayers, player_work
 pub use lifecycle::{ConnectionView, DeferredReferences, Interest, NetId, Spawn, WorldIds};
 pub use policy::{FieldBytes, FieldId, PolicyRegistry, Projection};
 pub use replay::{Divergence, Trace};
-pub use runtime::{Client, ClientConfig, ClientStatus, JoinToken, Server, ServerConfig};
+pub use runtime::{
+    AdapterRef, Authoritative, Client, ClientConfig, ClientStatus, JoinToken, Server, ServerConfig,
+};
 pub use service::{NetControl, NetService, WorldControl, register};
 
 /// A rejected network configuration, packet, or session operation.

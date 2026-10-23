@@ -230,6 +230,10 @@ pub struct Runtime {
     baseline: Workspace,
     /// Mirror including patches queued for the next tick.
     pending: Option<Workspace>,
+    /// Presentation systems of a networked client's mirror world (built on first use).
+    mirror: Option<Schedule>,
+    /// The authoritative tick a mirror world presents (its own session never steps).
+    presented: Option<u64>,
 }
 
 impl Runtime {
@@ -362,6 +366,8 @@ impl Runtime {
             schema,
             baseline,
             pending: None,
+            mirror: None,
+            presented: None,
         })
     }
 
@@ -387,9 +393,9 @@ impl Runtime {
     pub fn world(&self) -> &World {
         self.play.session().world()
     }
-    /// Completed ticks.
+    /// Completed ticks (a networked mirror: the authoritative tick it presents).
     pub fn tick(&self) -> u64 {
-        self.play.session().tick()
+        self.presented.unwrap_or_else(|| self.play.session().tick())
     }
     /// Fixed simulation rate.
     pub fn hz(&self) -> u32 {
@@ -499,6 +505,54 @@ impl Runtime {
             ops,
         };
         Ok(self.play.session_mut().patch(next, &transaction)?)
+    }
+
+    /// Runs exactly one boundary with `adapter` around the session step (a networked
+    /// authority: network input in before it, replication out after it), plugins
+    /// around that. Host time does not advance here; the caller is the clock.
+    pub fn step_with_adapter(
+        &mut self,
+        adapter: &mut impl ara_sim::SessionAdapter,
+    ) -> Result<ara_sim::TickRecord> {
+        for plugin in &mut self.plugins {
+            plugin.before_tick(self.play.session_mut())?;
+        }
+        let record = self.play.session_mut().step_with_adapter(adapter)?;
+        self.pending = None;
+        if let Some(error) = self.fault() {
+            return Err(RuntimeError(error));
+        }
+        for plugin in &mut self.plugins {
+            plugin.after_tick(self.play.session().world())?;
+        }
+        Ok(record)
+    }
+
+    /// A networked client's presentation advance: the caller wrote replicated state
+    /// (transforms, velocities, player yaw) for authoritative `tick` into the world;
+    /// this runs animation, camera placement and world poses once (one tick of
+    /// animation time) without stepping the simulation. From then on [`Runtime::tick`]
+    /// reports `tick` (effects replay to it, status shows it).
+    pub fn present_mirror(&mut self, tick: u64) -> Result<()> {
+        self.presented = Some(tick);
+        let mirror = self.mirror.get_or_insert_with(|| {
+            let mut schedule = Schedule::default();
+            schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
+            schedule.add_systems(
+                (
+                    animation::animate,
+                    control::place_cameras,
+                    sync::resolve_poses,
+                )
+                    .chain(),
+            );
+            schedule
+        });
+        mirror.run(self.play.session_mut().world_mut());
+        if let Some(error) = self.fault() {
+            return Err(RuntimeError(error));
+        }
+        Ok(())
     }
 
     fn tick_once(&mut self, samples: &mut Vec<Sample>) -> Result<()> {

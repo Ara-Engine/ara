@@ -6,7 +6,9 @@ link Lightyear, Replicon, App, sockets, histories or network services.
 ## APIs and boundaries
 
 - `Server<F>` drives an existing ara-sim Session through SessionAdapter in Listen
-  or Dedicated mode. `SimulationFeature` belongs to ara-sim: one typed input,
+  or Dedicated mode. It owns an `Authoritative` (a bare `Session`, or an embedding
+  runtime that steps its own plugins around each boundary via `AdapterRef`); reach
+  it between polls with `driver::<A>()`/`driver_mut::<A>()`. `SimulationFeature` belongs to ara-sim: one typed input,
   complete restorable ECS state and one step function. Gameplay imports no backend.
 - `Client<F>` uses native Lightyear input histories, selective owner rollback and
   remote interpolation. Inject device/bot actions or attach an immutable input

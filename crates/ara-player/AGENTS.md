@@ -15,7 +15,11 @@ Never run by hand: it needs an owner and the token.
 
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
-  method dispatch, the S5 UDP hello/welcome for client roles.
+  method dispatch.
+- `net.rs`: `Play` (derefs to the runtime in every role): `Local`, `Host` (ara-net
+  server owns the runtime and steps it; `play.join` issues client tokens) or `Mirror`
+  (a client's never-stepped presentation world). Networked processes keep only their
+  own player's inputs; step/until/pause/patch/replay are local-only.
 - `world.rs`: one world: build from `PlayScene` (pinned asset generations from the
   content-addressed cache), step/until in 30-tick chunks (heartbeats between), input,
   inspect, `read_path` (`entity.Component.field`, `x/y/z/w`, `r/g/b/a`), patch (edits →
@@ -33,7 +37,8 @@ Never run by hand: it needs an owner and the token.
 - Patches apply at the next tick boundary. Running: acked after that tick. Paused:
   the player steps exactly one tick to reach it, then acks.
 - Device input and agent `play.input` both go through `Session::inject`, so they are
-  recorded and replayable. Players are input owner 1.
+  recorded and replayable. Local and listen-host players are input owner 1; clients
+  are players 2.. (their `Move` is predicted through `ara-runtime-net`).
 - Headless players create a GPU device only on their first `play.capture` with a path.
 
 ## Demo

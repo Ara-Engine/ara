@@ -1234,6 +1234,7 @@ dependencies = [
  "ara-render",
  "ara-runtime",
  "ara-runtime-audio",
+ "ara-runtime-net",
  "ara-runtime-render",
  "ara-runtime-script",
  "ara-schema",
@@ -1410,6 +1411,23 @@ dependencies = [
  "ara-schema",
  "ara-sim",
  "bevy_ecs",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-runtime-net"
+version = "0.0.0"
+dependencies = [
+ "ara-components",
+ "ara-doc",
+ "ara-input",
+ "ara-net",
+ "ara-physics",
+ "ara-runtime",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
+ "serde",
  "serde_json",
 ]
 

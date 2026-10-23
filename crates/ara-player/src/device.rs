@@ -86,9 +86,9 @@ impl Windowed {
         ))
     }
 
-    /// Drains window events into action injections for the next tick. Returns true
-    /// when the user closed the window (Esc or the close button).
-    pub fn events(&mut self, runtime: &mut Runtime) -> Result<bool> {
+    /// Drains window events into `player`'s action injections for the next tick.
+    /// Returns true when the user closed the window (Esc or the close button).
+    pub fn events(&mut self, player: PlayerId) -> Result<(bool, Vec<Injection>)> {
         let mut quit = false;
         let mut jump = false;
         for event in self.window.poll()? {
@@ -127,7 +127,6 @@ impl Windowed {
         ];
         let sprint = self.keys.contains(&LEFT_SHIFT);
         let mut inputs = Vec::new();
-        let player = PlayerId(1);
         if movement != self.sent_move {
             inputs.push(Injection {
                 player,
@@ -163,10 +162,7 @@ impl Windowed {
                 hold_ticks: 1,
             });
         }
-        if !inputs.is_empty() {
-            runtime.inject(inputs)?;
-        }
-        Ok(quit)
+        Ok((quit, inputs))
     }
 
     /// Extracts, renders and presents one frame, recreating the swapchain on resize.

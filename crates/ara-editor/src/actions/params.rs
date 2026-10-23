@@ -104,6 +104,28 @@ pub(super) struct EditorTheme {
     /// True chooses Ara Light; false chooses Ara Dark.
     pub light: bool,
 }
+/// Parameters for windowed multi-player Play (D19): one window per player.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorPlay {
+    /// Live protocol session.
+    #[expect(
+        dead_code,
+        reason = "Host validates the session before service dispatch"
+    )]
+    pub session: String,
+    /// Client windows besides the host's (default 1, at most 16).
+    pub clients: Option<u32>,
+    /// A renderer-free authority without a player window of its own.
+    pub dedicated: Option<bool>,
+    /// Simulated one-way latency for every client, in milliseconds.
+    pub latency_ms: Option<u32>,
+    /// Simulated jitter for every client, in milliseconds.
+    pub jitter_ms: Option<u32>,
+    /// Simulated packet loss for every client, in basis points (100 = 1%).
+    pub loss: Option<u16>,
+}
 /// Parameters for a dock move, activation or splitter adjustment.
 #[derive(Schema, Deserialize)]
 #[ara(params)]

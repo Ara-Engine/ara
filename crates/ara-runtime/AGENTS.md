@@ -32,9 +32,14 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
-- `plugin::RuntimePlugin`: seams for C# scripts (`ara-runtime-script`), ara-net, audio
-  and VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,
-  `before_tick`, `after_tick`, `frame`).
+- `plugin::RuntimePlugin` (`Send + Sync`): seams for C# scripts (`ara-runtime-script`),
+  networked play (`ara-runtime-net`), audio and VFX (`prepare(world, schema)` before
+  projection, `register`, `install(Stage)`, `before_tick`, `after_tick`, `frame`).
+- Networked play (`ara-runtime-net`): `step_with_adapter(adapter)` runs one boundary
+  for an ara-net server (plugins around `Session::step_with_adapter`; the server's
+  timeline is the clock). `present_mirror(tick)` advances a never-stepped client
+  mirror's presentation (animation, cameras, world poses); `tick()` then reports the
+  presented authoritative tick.
 - `controller`: `.animation` controllers (`Animator.controller`): `Documents` (every
   `AnimAsset` record by ID), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),

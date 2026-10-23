@@ -68,9 +68,17 @@ pub enum ScriptEvent {
 pub struct ScriptPlugin {
     settings: ScriptSettings,
     events: Sender<ScriptEvent>,
-    host: Option<ScriptHost>,
+    host: Prepared,
     components: Vec<String>,
 }
+
+/// The host between `prepare` and `install`. Only reachable through `&mut self`.
+struct Prepared(Option<ScriptHost>);
+
+// SAFETY: `Prepared` has no `&self` access to its contents (the plugin reads and
+// writes it only in `prepare`/`install`, which take `&mut self`), so a shared
+// `&Prepared` exposes nothing; `ScriptHost` itself is `Send`.
+unsafe impl Sync for Prepared {}
 
 impl ScriptPlugin {
     /// A plugin for `settings` and the receiving end of its event channel.
@@ -80,7 +88,7 @@ impl ScriptPlugin {
             Self {
                 settings,
                 events,
-                host: None,
+                host: Prepared(None),
                 components: Vec::new(),
             },
             receiver,
@@ -146,7 +154,7 @@ impl RuntimePlugin for ScriptPlugin {
             .into_iter()
             .map(str::to_owned)
             .collect();
-        self.host = Some(host);
+        self.host = Prepared(Some(host));
         Ok(())
     }
 
@@ -163,6 +171,7 @@ impl RuntimePlugin for ScriptPlugin {
         }
         let host = self
             .host
+            .0
             .take()
             .ok_or_else(|| RuntimeError("the C# host was not prepared".into()))?;
         let world = session.world_mut();
