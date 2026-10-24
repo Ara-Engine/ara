@@ -368,6 +368,7 @@ command!(
 
 /// Registers material text/graph edits, renames and machine-applicable fixes.
 pub fn register(registry: &mut Registry, db: &mut SchemaDb) {
+    crate::create::register(registry);
     crate::instance_asset::register_commands(registry, db);
     registry
         .command::<ApplyText>(db)

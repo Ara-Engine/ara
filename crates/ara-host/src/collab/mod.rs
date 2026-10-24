@@ -486,6 +486,7 @@ impl Service for CollabService {
             }
             "branch.submit" => {
                 let p: BranchSubmitParams = parse(params)?;
+                check_branch_creations(st, &p.branch)?;
                 st.refresh_branch_gestures(now, true);
                 let info =
                     st.collab
@@ -496,6 +497,7 @@ impl Service for CollabService {
             }
             "branch.merge" => {
                 let p: BranchMergeParams = parse(params)?;
+                check_branch_creations(st, &p.branch)?;
                 let prefer = match p.prefer {
                     Some(PreferSide::Branch) => Prefer::Branch,
                     _ => Prefer::Live,
@@ -694,6 +696,14 @@ pub(crate) fn branch_apply(st: &mut State, sid: &str, branch: &str, p: &ApplyPar
     let (doc, batch) = st.batch(p)?;
     let registry = &st.registry;
     let store = st.collab.hub.branch_store(branch, &pid(sid))?;
+    let mut preview = batch.clone();
+    preview.dry_run = true;
+    let preview = registry
+        .apply(store, &preview, &session.cmd_session())
+        .map_err(relocate)?;
+    if !preview.replayed {
+        crate::project_settings::check_creations(&st.root, &preview.ops)?;
+    }
     let result = registry
         .apply(store, &batch, &session.cmd_session())
         .map_err(relocate)?;
@@ -719,4 +729,21 @@ pub(crate) fn branch_apply(st: &mut State, sid: &str, branch: &str, p: &ApplyPar
         "diff": diff_summary(&result.ops),
         "ops": result.ops,
     }))
+}
+
+fn check_branch_creations(st: &State, branch: &str) -> Result<(), Vec<Diagnostic>> {
+    let branch = st.collab.hub.branch(branch)?;
+    let ops: Vec<_> = branch
+        .store()
+        .history()
+        .iter()
+        .flat_map(|t| &t.ops)
+        .filter(|op| {
+            matches!(op, ara_doc::Op::Document { kind: Some(_), .. })
+                && branch.store().workspace().doc(op.doc().as_str()).is_some()
+                && st.store.workspace().doc(op.doc().as_str()).is_none()
+        })
+        .cloned()
+        .collect();
+    crate::project_settings::check_creations(&st.root, &ops)
 }

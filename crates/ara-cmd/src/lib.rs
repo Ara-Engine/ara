@@ -24,5 +24,6 @@ pub mod select;
 
 pub use ctx::{EditCtx, JobCtx, ReadCtx, Target};
 pub use registry::{
-    Batch, BatchResult, Call, Command, Hints, Info, Job, Kind, Query, Registry, Session,
+    Batch, BatchResult, Call, Command, DocumentTemplate, Hints, Info, Job, Kind, Query, Registry,
+    Session,
 };

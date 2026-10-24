@@ -170,6 +170,16 @@ pub(super) fn diff(st: &mut State, sid: &str, p: SessionDiffParams) -> R {
             let key = (op.doc().to_string(), op.id().to_string());
             let c = changes.entry(key.clone()).or_default();
             match op {
+                Op::Document { kind, prev, .. } => {
+                    c.created = kind.is_some();
+                    c.deleted = kind.is_none();
+                    note(
+                        &mut c.fields,
+                        "kind".into(),
+                        prev.clone().map(Value::String),
+                        kind.clone().map(Value::String),
+                    );
+                }
                 Op::Create { .. } => {
                     c.created = !c.deleted;
                     c.deleted = false;
@@ -505,13 +515,21 @@ fn record_review(st: &mut State, txn: &TxnId, entity: Option<&str>, status: Revi
 }
 
 pub(super) fn accept(st: &mut State, sid: &str, p: ReviewParams) -> R {
-    if session(st, sid)?.author != Author::Human {
-        return Err(vec![Diagnostic::error(
-            codes::NOT_REVIEWABLE,
-            "only human sessions accept agent changes; agents can revert (`review.revert`) or undo their own",
-        )]);
+    session(st, sid)?;
+    // Compatibility with scripts written before D24: accepting an already-applied
+    // build is an idempotent no-op. Explicit targets are still checked for typos.
+    if p.all == Some(true)
+        && p.txn.is_none()
+        && p.entity.is_none()
+        && st
+            .review
+            .with_entity_status(ReviewStatus::Applied)
+            .next()
+            .is_none()
+    {
+        return Ok(json!({"accepted": []}));
     }
-    let picked = targets(st, &p, &[ReviewStatus::Applied])?;
+    let picked = targets(st, &p, &[ReviewStatus::Applied, ReviewStatus::Accepted])?;
     let mut done = Vec::new();
     for (txn, keys) in picked {
         for key in &keys {

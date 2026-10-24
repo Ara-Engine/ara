@@ -6,9 +6,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::project_settings::{read, read_header};
 use ara_cmd::Registry;
 use ara_diag::{Diagnostic, FixAction, codes};
-use ara_doc::{AssetIndex, Workspace, read, read_header};
+use ara_doc::{AssetIndex, Document, ReadResult, Workspace};
 use ara_schema::SchemaDb;
 use serde_json::Value;
 
@@ -90,7 +91,8 @@ impl Project {
         ara_doc::register(&mut db);
         ara_components::register(&mut db);
         let mut registry = Registry::builtin(&mut db);
-        let engine = register(&mut db, &mut registry);
+        let mut engine = crate::ui_document::register(&mut registry, &mut db);
+        engine.extend(register(&mut db, &mut registry));
 
         let mut files = Vec::new();
         walk(&root, &root, &mut files);
@@ -125,7 +127,7 @@ impl Project {
         }
         for file in project.docs.clone() {
             if let Ok(text) = fs::read_to_string(&file)
-                && let Some((kind, id)) = read_header(&text, &project.db)
+                && let Some((kind, id)) = read_header(&text, &project.rel(&file), &project.db)
             {
                 project
                     .index
@@ -246,6 +248,16 @@ impl Project {
             }
         }
         (ws, diags)
+    }
+
+    /// Reads a native document format with project reference repair and diagnostics.
+    pub fn read_document(&self, text: &str, path: &str) -> ReadResult {
+        read(text, path, &self.db, Some(&self.index))
+    }
+
+    /// Writes a document in its native canonical format, including lossless UI XML.
+    pub fn write_document(&self, doc: &Document) -> Result<String, Diagnostic> {
+        crate::project_settings::write(doc, &self.db)
     }
 }
 

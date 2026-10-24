@@ -241,6 +241,15 @@ pub trait Importer: Send + Sync {
     fn dependencies(&self, _source: &[u8]) -> Result<Vec<String>> {
         Ok(Vec::new())
     }
+    /// Discovers source files selected by settings as well as the source document.
+    /// Runs in the isolated worker; returned bytes become immutable action inputs.
+    fn dependencies_with_settings(
+        &self,
+        source: &[u8],
+        _settings: &serde_json::Value,
+    ) -> Result<Vec<String>> {
+        self.dependencies(source)
+    }
     /// Cooks only the supplied snapshot, with no environment-dependent state.
     fn import(&self, input: &ImportInput, context: &mut ImportContext<'_>) -> Result<ImportOutput>;
 }

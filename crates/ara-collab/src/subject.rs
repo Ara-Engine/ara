@@ -85,6 +85,9 @@ impl Subject {
         if self.doc() != Some(op.doc()) {
             return false;
         }
+        if matches!(op, Op::Document { .. }) {
+            return true;
+        }
         op.touches()
             .iter()
             .any(|t| scopes_overlap((record, path), (Some(op.id()), t.as_ref())))

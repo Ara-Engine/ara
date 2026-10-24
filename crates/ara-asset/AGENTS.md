@@ -1,5 +1,9 @@
 # ara-asset
 
+`AssetPipeline::configure` accepts command-authored in-memory settings; subsequent
+snapshots use them before a debounced sidecar save. `unregister` cancels deleted
+sources while preserving published cache generations for existing players and redo.
+
 Pure importer contracts, BLAKE3 action/object cache, process jobs, reflected import
 sidecars, dependency queries, filesystem events and D20 boundary publication.
 
@@ -13,8 +17,20 @@ Run `cargo check -p ara-asset`, `cargo test -p ara-asset`,
 
 Importers are installed only in worker executables. Do not invoke importer code on
 an editor frame. Source snapshots and cache I/O belong on background threads.
+`ProcessWorker` admits at most four native child processes per host process,
+shared across handles, discovery and cooks. Set `ARA_IMPORT_WORKERS` before startup
+to override (positive integer, always capped by `available_parallelism`; invalid or
+zero uses four). Excess jobs stay queued in `ImportJob` and launch when polled;
+queued time does not consume the native worker deadline. Cancellation drops queued
+requests; a background supervisor reaps children and releases their slots even if
+their completed replies have not been polled. Cancellation returns without waiting
+for the child. The cold-batch process test is
+`cargo test -p ara-asset --test worker_limit` (artifacts under `target/`).
 HotReload only publishes from apply_boundary; never install results from poll.
 Cancellation/supersession invalidate epochs. Keep current assets alive on errors.
+Settings-selected source files use Importer::dependencies_with_settings and
+ProcessWorker::discover_with_settings. snapshot includes their exact bytes, so
+companion edits participate in action identity and filesystem invalidation.
 
 Sidecars are import documents with one i_settings record. Commands return kernel
 Edits; submit these through ara-ops with author/revision metadata. Persist only the

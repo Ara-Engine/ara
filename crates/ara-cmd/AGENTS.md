@@ -14,6 +14,9 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 - `Registry::builtin(&mut db)`; `reg.command::<C>(&mut db)`, `.query::<Q>()`,
   `.job::<J>()` (registers the params type too); `info(name)`, `infos()`,
   `catalog()` (the `commands` section of reflection.json), `check_examples(&db)`.
+- `document_template(kind, factory)` initializes a format's canonical skeleton
+  through staged edits; `EditCtx::create_from_template` dispatches it. Factories
+  call `create_document` for the lifecycle and `apply_edit` for initial records.
 - `reg.apply(&mut store, &Batch, &Session) -> Result<BatchResult, Vec<Diagnostic>>`;
   `reg.run(..., progress)` also reports job progress.
 - `Batch { doc, calls: Vec<Call { command, params }>, why, idempotencyKey, base,
@@ -23,7 +26,8 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 - `BatchResult { dryRun, txn, replayed, revision, outputs, symbols, ops }`.
 - Contexts: `ReadCtx` (`schema`, `workspace`, `doc`, `target`, `resolved`, `entity`,
   `has_component`, `order_at`, `check_value`), `EditCtx` (`read`, `new_id`,
-  `create`, `set`, `delete`, `move_to`, `set_entity`), `JobCtx` (`edit`, `progress`).
+  `create`, `set`, `delete`, `move_to`, `set_entity`, `create_document`,
+  `apply_edit`), `JobCtx` (`edit`, `progress`).
 - `Target::{Plain(id), Prefab { instance, inner }}`: an addressed entity.
 - `select`: entity selectors. `Selector::parse` (address, `$symbol`, `name:A/B`,
   bare), `by_names`, `find`, `describe`, `resolve(db, params_type, params,
@@ -35,6 +39,7 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 `entity.create`, `entity.delete`, `entity.reparent`, `component.add`,
 `component.remove`, `property.set`, `transform.set`, `prefab.instantiate`,
 `prefab.override.set`, `prefab.override.revert`; query `entity.inspect`.
+`doc.create`, `project.setMain` and `transform.lookAt` share this registry too.
 
 Edits to a prefab instance, or to an entity inside one (`e_4f9a/e_lid1`), become
 overrides on the instance record; deleting an inner entity adds it to `removed` and
@@ -42,7 +47,8 @@ drops overrides aimed at it.
 
 ## Batch semantics
 
-- One batch is one transaction on one document. All calls run in order against the
+- One batch is one transaction anchored to a document; workspace commands may
+  create or configure other documents. All calls run in order against the
   live staged state; any error rolls everything back.
 - Params are validated against their schema before `run` (diagnostic paths start
   with `params.`), then deserialized with serde.

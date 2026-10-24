@@ -304,6 +304,7 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                         )?;
                     }
                 }
+                sample_thumbnail(&path, &stage.join("templates"))?;
             }
         }
         if samples.join("assets.lock.json").is_file() {
@@ -312,6 +313,30 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 &stage.join("templates/assets.lock.json"),
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Keep the Hub's template preview, which lives in the excluded `evidence/`: the
+/// Play capture of the sample's main scene becomes `thumbnail.png` (the rule
+/// `ara_hub_service::DirectoryTemplates` applies in a checkout).
+fn sample_thumbnail(sample: &Path, templates: &Path) -> Result<()> {
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(sample.join("ara.project.json"))?)?;
+    let Some(stem) = marker["main"]
+        .as_str()
+        .and_then(|main| Path::new(main).file_stem())
+    else {
+        return Ok(());
+    };
+    let preview = sample
+        .join("evidence")
+        .join(format!("{}-player.png", stem.to_string_lossy()));
+    let target = templates
+        .join(sample.file_name().context("sample directory")?)
+        .join("thumbnail.png");
+    if preview.is_file() && !target.exists() {
+        copy(&preview, &target)?;
     }
     Ok(())
 }

@@ -358,6 +358,7 @@ impl Runtime {
                 ));
             }
         }
+        asset_errors.extend(library.models.validate_renderers(&baseline));
         library.documents = controller::Documents::load(&baseline)?;
         world.insert_resource(library);
         let mut players = Vec::new();

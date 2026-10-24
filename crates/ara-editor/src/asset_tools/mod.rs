@@ -1,5 +1,6 @@
-//! Import settings are commands; native importers run only in disposable workers.
-mod commands;
+//! Import settings are the shared `import.initialize`/`import.configure` commands
+//! (registered by `ara_play_host::open_project`); native importers run only in
+//! disposable workers.
 pub(crate) mod cooked_mesh;
 mod material_preview;
 pub(crate) mod thumbnails;
@@ -20,13 +21,8 @@ use std::{
     time::Duration,
 };
 
-use commands::register;
-
 /// Install schemas before the host loads project documents.
 pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
-    ara_asset::register_schema(&mut project.db);
-    ara_importers::registry()?.register_schemas(&mut project.db);
-    register(&mut project.registry, &mut project.db);
     // The shared play-host schema world already owns graph/material/animation kinds
     // and material/VFX commands. Only generic canvas commands are editor additions.
     ara_graph::commands::register(&mut project.registry, &mut project.db);
@@ -159,28 +155,9 @@ impl Service for AssetService {
                 .docs()
                 .any(|(path, _)| path == sidecar)
         {
-            let registry =
-                ara_importers::registry().map_err(|e| vec![crate::invalid(e.to_string())])?;
-            let extension = relative.extension().and_then(|s| s.to_str()).unwrap_or("");
-            let importer = registry
-                .get(match extension {
-                    "glb" | "gltf" => "ara.gltf",
-                    "fbx" => "ara.fbx",
-                    _ => "ara.texture",
-                })
-                .map_err(|e| vec![crate::invalid(e.to_string())])?;
-            let settings = ImportSettings {
-                importer: importer.id().into(),
-                version: importer.version().into(),
-                preset: ara_asset::CookPreset::Fast,
-                settings: json!({}),
-                dependencies: Vec::new(),
-            };
-            let doc = cx
-                .create_document(&sidecar, "import")
-                .map_err(|d| vec![d])?;
+            // The shared command picks the importer and its installed version.
             let batch = parse(
-                json!({"session":p.session,"doc":doc,"why":"Import source media","commands":[{"cmd":"editor.import.initialize","args":{"settings":settings}}]}),
+                json!({"session":p.session,"why":"Import source media","commands":[{"cmd":"import.initialize","args":{"source":p.path,"preset":"fast"}}]}),
             )?;
             cx.apply(batch)?;
         }

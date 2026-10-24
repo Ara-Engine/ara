@@ -19,6 +19,7 @@ Manual paint includes all points from one gesture. One batch creates one undo
 entry. Erase whole stroke records; rules referenced by paint cannot be deleted.
 The host should register both terrain and foliage schemas/commands in its shared
 SchemaDb/Registry, then invalidate extraction for affected tiles after op commit.
+`foliage.exclude` accepts a stable `id` or batch symbol for reproducible builds.
 No frame code performs regeneration. Spawn workers below normal priority and
 publish last-good instance buffers at a D20-permitted boundary.
 

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use ara_diag::{Diagnostic, Location};
+use ara_diag::{Diagnostic, Location, codes};
 use ara_schema::SchemaDb;
 use ara_schema::grammar::parse_ref;
 
@@ -10,7 +10,7 @@ use crate::document::Document;
 use crate::prefab::{DocLookup, Resolved, resolve};
 use crate::refs::AssetIndex;
 use crate::validate::{check_entity_refs, check_record, check_structure};
-use crate::{AssetId, RecordId};
+use crate::{AssetId, Edit, Op, RecordId};
 
 /// Loaded documents keyed by asset ID, each with its project-relative path.
 #[derive(Debug, Clone, Default)]
@@ -20,6 +20,111 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    /// Reverse a staged op during rollback or optimistic rebase.
+    pub fn revert(&mut self, op: &Op, db: &SchemaDb) {
+        if matches!(op, Op::Document { .. }) {
+            self.apply(op.inverse().to_edit(), db)
+                .expect("staged lifecycle inverse applies");
+        } else if let Some(doc) = self.doc_mut(op.doc().as_str()) {
+            doc.revert(op, db);
+        }
+    }
+    /// Apply an edit, including an empty document's lifecycle, inside a transaction.
+    pub fn apply(&mut self, edit: Edit, db: &SchemaDb) -> Result<Op, Diagnostic> {
+        if let Edit::Document { doc, path, kind } = edit {
+            let relative = std::path::Path::new(&path);
+            if path.is_empty()
+                || path.contains([':', '\\'])
+                || path
+                    .split('/')
+                    .any(|part| part.is_empty() || part == "." || part == "..")
+                || relative.is_absolute()
+                || relative
+                    .components()
+                    .any(|p| !matches!(p, std::path::Component::Normal(_)))
+            {
+                return Err(Diagnostic::error(
+                    codes::INVALID_PARAMS,
+                    "document path must stay inside the project",
+                ));
+            }
+            if let Some(kind) = &kind {
+                let desc = db.kind(kind).ok_or_else(|| {
+                    Diagnostic::error(
+                        codes::UNKNOWN_SCHEMA,
+                        format!("unknown document kind `{kind}`"),
+                    )
+                })?;
+                if doc.prefix() != desc.id_prefix
+                    || !path.ends_with(&format!(".{}", desc.extension))
+                {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "document ID prefix and file extension must match its kind",
+                    ));
+                }
+                if self.doc(doc.as_str()).is_some()
+                    || self.index.path_of(doc.as_str()).is_some()
+                    || self.docs().any(|(p, _)| {
+                        if cfg!(windows) {
+                            p.eq_ignore_ascii_case(&path)
+                        } else {
+                            p == path
+                        }
+                    })
+                    || self.index.id_of(&path).is_some()
+                {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "document ID or path already exists",
+                    ));
+                }
+                let source = if kind == "import" {
+                    path.trim_end_matches(".import.json").to_owned()
+                } else {
+                    path.clone()
+                };
+                self.insert_with_asset_path(path.clone(), Document::new(kind, doc.clone()), source);
+                Ok(Op::Document {
+                    doc,
+                    path,
+                    kind: Some(kind.clone()),
+                    prev: None,
+                })
+            } else {
+                let existing = self.doc(doc.as_str()).ok_or_else(|| {
+                    Diagnostic::error(codes::DOC_NOT_FOUND, "document is not loaded")
+                })?;
+                if self.path_of(doc.as_str()) != Some(path.as_str())
+                    || !existing.records().is_empty()
+                {
+                    return Err(Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "only the addressed empty document can be removed; undo its records first",
+                    ));
+                }
+                let prev = Some(existing.kind.clone());
+                self.remove(doc.as_str());
+                Ok(Op::Document {
+                    doc,
+                    path,
+                    kind: None,
+                    prev,
+                })
+            }
+        } else {
+            let doc = edit.doc().clone();
+            self.doc_mut(doc.as_str())
+                .ok_or_else(|| {
+                    Diagnostic::error(
+                        codes::DOC_NOT_FOUND,
+                        format!("no document `{doc}` is loaded"),
+                    )
+                })?
+                .apply(edit, db)
+        }
+    }
+
     /// A workspace over a project index (which may list assets that aren't loaded).
     pub fn new(index: AssetIndex) -> Self {
         Workspace {
@@ -43,8 +148,8 @@ impl Workspace {
         asset_path: impl Into<String>,
     ) {
         let path = path.into();
-        self.index
-            .insert(doc.id.to_string(), asset_path, Some(doc.kind.clone()));
+        let kind = (doc.kind != "import").then(|| doc.kind.clone());
+        self.index.insert(doc.id.to_string(), asset_path, kind);
         self.docs.insert(doc.id.clone(), (path, doc));
     }
 

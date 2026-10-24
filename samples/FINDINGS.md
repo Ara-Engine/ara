@@ -92,6 +92,9 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     their own fence), `KHR_materials_emissive_strength`, `KHR_materials_transmission`.
     Poly Haven glTF downloads also ship colour maps as JPG with opacity in separate maps;
     nothing in the pipeline can merge them (the build does it, `kit::cutout`).
+    **Cooked data fixed (`9f2813f`):** independent texture transforms/UV selectors,
+    emissive strength, transmission and cook-time companion opacity maps. Renderer
+    consumption is tracked by the renderer workstream.
 12. **Physical sky, fog, exposure and post cannot be authored in a scene.** `Environment`
     is a 3-colour gradient plus a linear exposure; the fidelity atmosphere, height fog,
     EV100/auto-exposure, tone mapper and bloom are view settings only. The samples keep
@@ -109,6 +112,12 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     whole file against a fixed 64 MiB budget (`audio capacity exhausted: resident decode
     budget`), even for streamed music; not a sidecar setting. The 4-minute CC0 track was
     swapped for a 2-minute one.
+    **Fixed (`27f3523`):** music/dialogue import uses bounded decode/resample staging;
+    the reflected `decodedBudget` sidecar setting controls resident PCM staging.
+    A 181-second import passes with a 64 KiB budget.
+    **Play fixed (`e649345`):** music and ordinary sources keep streamed imports
+    compressed, with bounded PCM queues, producer-side loops and deterministic
+    offline refills. A 181-second score imports and plays through headless MCP.
 15. **The editor viewport cannot show real content** (`*-editor.png`). It draws imported
     models with their flat `MeshRenderer.color` only: no textures and no glTF material
     factors, so all 18 showcase material balls are the same white. Terrain documents are
@@ -135,11 +144,18 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
     must be written by hand as empty canonical skeletons before commands can fill them.
     `ara init` seeds `levels/main.scene` with a random ID; renaming it or pointing
     `main` elsewhere is a hand edit of `ara.project.json`.
+    **Fixed (`27f3523`, `be491fa`):** transactional `doc.create` supports all eight
+    requested kinds, including authoritative material graphs and native UI XML;
+    `project.setMain` updates settings with history/undo and immediate Play defaults.
 20. **Import sidecars have no CLI/MCP command** (`editor.import.initialize` exists only in
     the editor host). An agent with only `ara`/MCP writes `*.import.json` by hand and
     must know the importer's exact version string (the build asks the worker).
+    **Fixed (`27f3523`):** shared `import.initialize` and `import.configure` select
+    the importer and installed version; sample builders use these commands.
 21. **`.animation` and `.music` documents have no commands** (`AnimationCommand` is a Rust
     API; the demo writes music with the canonical writer).
+    **Fixed (`27f3523`):** reflected animation and music commands expose the typed
+    Rust APIs through CLI/MCP; sample builders use attributed batches.
 22. **`MeshRenderer` can't address part of a model or override its material.** Poly Haven
     ships variant sheets (4 rocks, 5 bushes, a 103-piece pole kit in one file) and lamps
     with their bulbs off; each needs a derived glTF (`kit::variant`). There is no material
@@ -151,18 +167,27 @@ target/release/ara-samples editor outpost levels/outpost.scene outpost --camera 
 24. **Aiming lights and cameras needs Euler math.** `Transform.rotation` is intrinsic XYZ
     degrees; there is no look-at helper or `direction` field, and the obvious
     pitch/yaw split yields upside-down cameras for targets behind −Z.
+    **Fixed (`27f3523`):** `transform.lookAt` accepts world points or entities and
+    an up vector, handles parent transforms and deterministic pole fallbacks.
 25. **The landscape renderer requires an origin-anchored square terrain**, so a level
     centred in a terrain has to be offset by hand (`outpost::SHIFT`).
+    **Fixed (`4a50664`, `9a27a8f`):** CPU extraction supports nonzero origins and
+    signed tile bounds; parented scene translation reaches render, foliage, nav
+    and collision data. GPU translation/streaming and collision tests pass.
 26. **A scripted agent build cannot finish its own review.** Every agent edit enters
     review and `ara accept --all` from the same agent fails (`ARA1813`), so a freshly
     built project shows every entity as "unreviewed" in the editor until a human
     accepts. The journal lives in the gitignored `.ara/`, so a fresh clone starts clean;
     the editor capture deletes the local journal for the same reason.
+    **Fixed (`27f3523`):** agent transactions apply as accepted under amended D24;
+    same-agent `ara accept --all` succeeds and attribution/history/undo remain.
 27. **Terrain strokes and foliage exclusions get random IDs.** `terrain.raise`/`paint`
     and `foliage.exclude` take no `id`/`as`, so every scripted rebuild rewrites
     ~2 100 lines of `outpost.terrain` (stroke IDs and the per-tile stroke lists) and
     reorders `outpost.foliage` with no content change. Entities don't have this
     problem because `entity.create` accepts an ID.
+    **Fixed (`27f3523`):** strokes/exclusions accept stable IDs and batch symbols;
+    terrain tile IDs derive from coordinates. Sample builders supply these IDs.
 28. **What worked well:** typed batches with `@file` args, deterministic record IDs,
     exact diagnostics with JSON paths (`commands[6].args.components[NavMeshSurface].size`),
     `ara check`, terrain/foliage commands, the import worker (107 assets cook in 166 s

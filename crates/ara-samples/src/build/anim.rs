@@ -1,18 +1,16 @@
-//! Character animation controllers, authored through ara-anim's typed
-//! `AnimationCommand`s and its canonical writer (no CLI command authors `.animation`
-//! documents yet). Clip records bind the model's animations by name.
+//! Character animation controllers authored through the CLI's typed animation
+//! commands. Clip records bind the model's animations by name.
 use super::Ctx;
 use anyhow::{Context, Result};
 use ara_anim::{
-    document::{AnimAsset, AnimationCommand},
+    document::AnimAsset,
     graph::{
         BlendSample, Comparison, Condition, ControllerData, Node, NodeKind, Parameter,
         ParameterKind, State, Transition,
     },
 };
-use ara_doc::{AssetId, Document, RecordId, Workspace};
 use ara_schema::AssetRef;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
 
 /// Clip timebase of controller durations (ticks per second).
@@ -38,14 +36,7 @@ pub fn locomotion(
     idle: &str,
     gaits: &[Gait<'_>],
 ) -> Result<()> {
-    let schema = ara_runtime::schema(&[]).map_err(|e| anyhow::anyhow!("{e:?}"))?;
     let lengths = clip_lengths(model)?;
-    let mut workspace = Workspace::default();
-    workspace.insert(
-        path,
-        Document::new("animation", AssetId::parse(id).map_err(anyhow::Error::msg)?),
-    );
-    let mut store = ara_ops::Store::new(schema.clone(), workspace);
     let record = |name: &str| format!("an_{}", name.to_ascii_lowercase().replace(['_', ' '], ""));
     let reference = |name: &str| AssetRef(format!("@{path}#{}", record(name)));
     let clip = |name: &str| Node {
@@ -149,24 +140,20 @@ pub fn locomotion(
             },
         ));
     }
-    let doc = AssetId::parse(id).map_err(anyhow::Error::msg)?;
-    for (rid, asset) in records {
-        AnimationCommand::Create(asset)
-            .apply(
-                &mut store,
-                ara_ops::TxnMeta::by(ara_ops::Author::Agent("ara-samples".into())),
-                doc.clone(),
-                RecordId::parse(&rid).map_err(anyhow::Error::msg)?,
-            )
-            .map_err(|d| anyhow::anyhow!("{d:?}"))?;
-    }
-    let document = store.workspace().doc(id).context("animation document")?;
-    let file = ctx.root.join(path);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(file, ara_anim::document::write(document, store.schema()))?;
-    Ok(())
+    ctx.new_document(path, "animation", id)?;
+    let calls = records
+        .into_iter()
+        .map(|(id, asset)| {
+            ara_json::to_value(&asset)
+                .map(|asset| ("animation.create", json!({"id": id, "asset": asset})))
+                .map_err(anyhow::Error::msg)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    ctx.apply(
+        path,
+        "Author locomotion controller and clip bindings",
+        calls,
+    )
 }
 
 /// Every animation's length in seconds (largest sampler input time), by name.

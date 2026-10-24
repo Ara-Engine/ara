@@ -6,8 +6,8 @@
 //!   scope checks and params validation happen here, before any service runs.
 //! - [`Service`] is how subsystems (simulation, capture, play, the C# worker) add
 //!   methods and MCP tools; the core methods are the `core` service.
-//! - Agent transactions are tracked for review (`applied` → `accepted`/`reverted`);
-//!   agent turns get automatic checkpoints.
+//! - Agent transactions apply as accepted; attribution, history and automatic
+//!   turn checkpoints remain available for undo.
 //! - Documents are always saved: debounced canonical flushes. External edits are
 //!   merged in and reported, never silently overwritten.
 //! - [`docs`] generates `llms.txt` and per-type pages from the registries.
@@ -24,18 +24,21 @@ pub mod journal;
 pub mod params;
 mod profile;
 pub mod project;
+mod project_settings;
 pub mod query;
 pub mod review;
 mod service;
 pub mod session;
 pub mod text;
 pub mod tree;
+mod ui_document;
 pub mod why;
 
 pub use host::{Host, HostConfig, RESERVED};
 pub use project::Project;
 pub use service::{Cx, Method, Service, parse};
 pub use session::{Approval, ApprovalRequest, Decision, DefaultPolicy};
+pub use ui_document::{UiSource, UiSourceApplyParams};
 
 /// The method catalog of the services every host registers (core, profile, diag,
 /// why, collab), without opening a host (offline docs generation, MCP tests).

@@ -1,6 +1,5 @@
 ---
 source: crates/ara/tests/cli.rs
-assertion_line: 93
 expression: out
 ---
 {
@@ -663,6 +662,164 @@ expression: out
         }
       }
     },
+    "AnimationClipSetParams": {
+      "kind": "params",
+      "doc": "Replace animation clip keys.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "ClipData",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationControllerSetParams": {
+      "kind": "params",
+      "doc": "Replace an animation controller graph.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "AnimController",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationCreateParams": {
+      "kind": "params",
+      "doc": "Create one animation asset (skeleton, clip, controller or procedural setup).",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Stable record ID or batch symbol; generated when omitted.",
+          "default": null
+        },
+        "asset": {
+          "type": "AnimAsset",
+          "doc": "Typed animation source asset.",
+          "required": true
+        }
+      }
+    },
+    "AnimationIkSetParams": {
+      "kind": "params",
+      "doc": "Replace procedural animation contact chains.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "IkSetup",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationMotionDatabaseSetParams": {
+      "kind": "params",
+      "doc": "Replace pose-search database configuration.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "MatchConfig",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationPropertySetParams": {
+      "kind": "params",
+      "doc": "Edit one schema-addressed field of an animation record.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Animation record ID.",
+          "required": true
+        },
+        "path": {
+          "type": "string",
+          "doc": "Reflected field path, including nested graph and curve fields.",
+          "required": true
+        },
+        "value": {
+          "type": "json",
+          "doc": "Typed JSON replacement; null removes the stored value to its default.",
+          "required": true
+        }
+      }
+    },
+    "AnimationRagdollSetParams": {
+      "kind": "params",
+      "doc": "Replace a physical animation ragdoll profile.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "RagdollProfile",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationRigSetParams": {
+      "kind": "params",
+      "doc": "Replace semantic humanoid bone bindings.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "RigMap",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
+    "AnimationSkeletonSetParams": {
+      "kind": "params",
+      "doc": "Replace animation skeleton source.",
+      "module": "animation",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Existing animation record ID or a symbol created earlier in the batch.",
+          "required": true
+        },
+        "value": {
+          "type": "SkeletonData",
+          "doc": "Replacement typed source data.",
+          "required": true
+        }
+      }
+    },
     "Animator": {
       "kind": "component",
       "doc": "Skeletal animation for this entity's `MeshRenderer.model`, compiled to an ara-anim program: the `controller` document when set, else an `idle` state and a `move` state whose 1D blend tree is driven by the entity's ground speed, cross-faded at `moveThreshold`.",
@@ -831,6 +988,19 @@ expression: out
         }
       }
     },
+    "AudioEffectCodec": {
+      "kind": "enum",
+      "doc": "Codec for resident sound effects; streamed audio always uses Opus.",
+      "module": "asset",
+      "variants": {
+        "pcm": {
+          "doc": "Signed 16-bit PCM."
+        },
+        "adpcm": {
+          "doc": "IMA ADPCM."
+        }
+      }
+    },
     "AudioGraphAddParams": {
       "kind": "params",
       "doc": "Adds an operation node.",
@@ -962,6 +1132,60 @@ expression: out
           "type": "string",
           "doc": "Complete `.audiograph` source.",
           "required": true
+        }
+      }
+    },
+    "AudioImportSettings": {
+      "kind": "struct",
+      "doc": "Audio sidecar settings, validated identically by authoring commands and workers.",
+      "module": "asset",
+      "fields": {
+        "usage": {
+          "type": "AudioImportUse",
+          "doc": "Resident effect, streamed music or streamed dialogue.",
+          "default": "shortEffect",
+          "options": [
+            "shortEffect",
+            "music",
+            "dialogue"
+          ]
+        },
+        "codec": {
+          "type": "AudioEffectCodec",
+          "doc": "Codec for resident effects.",
+          "default": "pcm",
+          "options": [
+            "pcm",
+            "adpcm"
+          ]
+        },
+        "opusBitrate": {
+          "type": "i32",
+          "doc": "Stereo Opus bitrate for music/dialogue, in bits per second.",
+          "default": 128000,
+          "range": [6000, 512000]
+        },
+        "decodedBudget": {
+          "type": "u64",
+          "doc": "Resident decoded PCM budget in bytes; streamed cooking uses bounded blocks.",
+          "default": 67108864,
+          "range": [65536, null]
+        }
+      }
+    },
+    "AudioImportUse": {
+      "kind": "enum",
+      "doc": "Audio use selects resident effects or streamed music/dialogue.",
+      "module": "asset",
+      "variants": {
+        "shortEffect": {
+          "doc": "Resident sound effect."
+        },
+        "music": {
+          "doc": "Streamed music encoded as Opus."
+        },
+        "dialogue": {
+          "doc": "Streamed dialogue encoded as Opus."
         }
       }
     },
@@ -2045,6 +2269,22 @@ expression: out
         }
       }
     },
+    "CookPreset": {
+      "kind": "enum",
+      "doc": "Encoding quality is an explicit cook input, independent of the execution budget. Direct/ shipping cooks default to high quality; editor previews use `Fast`.",
+      "module": "asset",
+      "variants": {
+        "highQuality": {
+          "doc": "ISPC BC7 slow and BC6H very slow, for background recooks and shipping."
+        },
+        "fast": {
+          "doc": "ISPC BC7 ultrafast and BC6H fast, for the first interactive generation."
+        },
+        "balanced": {
+          "doc": "ISPC BC7/BC6H basic, for projects choosing a middle quality/speed tradeoff."
+        }
+      }
+    },
     "Curve": {
       "kind": "struct",
       "doc": "An animation curve addressing the same property path as the inspector.",
@@ -2068,6 +2308,27 @@ expression: out
             "linear",
             "step"
           ]
+        }
+      }
+    },
+    "DocCreateParams": {
+      "kind": "params",
+      "doc": "Parameters of `doc.create`.",
+      "fields": {
+        "path": {
+          "type": "string",
+          "doc": "Project-relative output path, with the document kind's extension.",
+          "required": true
+        },
+        "kind": {
+          "type": "option<string>",
+          "doc": "Registered kind, or the material template (.graph); inferred from the path when omitted.",
+          "default": null
+        },
+        "id": {
+          "type": "option<string>",
+          "doc": "Stable asset ID or batch symbol; generated when omitted.",
+          "default": null
         }
       }
     },
@@ -2302,6 +2563,11 @@ expression: out
       "doc": "Exclusion insertion parameters.",
       "module": "foliage",
       "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Optional concrete or symbolic exclusion ID for reproducible authoring.",
+          "default": null
+        },
         "zone": {
           "type": "FoliageExclusion",
           "doc": "Circular exclusion zone.",
@@ -2821,6 +3087,113 @@ expression: out
           "type": "FootSettings",
           "doc": "Ground probe, slope and pelvis bounds.",
           "default": {}
+        }
+      }
+    },
+    "ImportConfigureParams": {
+      "kind": "params",
+      "doc": "Parameters of `import.configure`.",
+      "module": "asset",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Source media path whose existing sidecar should change.",
+          "required": true
+        },
+        "settings": {
+          "type": "option<json>",
+          "doc": "Replacement importer-specific settings; omitted retains them.",
+          "default": null
+        },
+        "preset": {
+          "type": "option<CookPreset>",
+          "doc": "Replacement shipping preset; omitted retains it.",
+          "default": null,
+          "options": [
+            "highQuality",
+            "fast",
+            "balanced"
+          ]
+        },
+        "dependencies": {
+          "type": "option<list<asset>>",
+          "doc": "Replacement authoring dependencies; omitted retains them.",
+          "default": null
+        }
+      }
+    },
+    "ImportInitializeParams": {
+      "kind": "params",
+      "doc": "Parameters of `import.initialize`.",
+      "module": "asset",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Existing source media path, relative to the project.",
+          "required": true
+        },
+        "id": {
+          "type": "option<string>",
+          "doc": "Stable asset ID or batch symbol; generated when omitted.",
+          "default": null
+        },
+        "settings": {
+          "type": "option<json>",
+          "doc": "Importer-specific settings; defaults when omitted.",
+          "default": null
+        },
+        "preset": {
+          "type": "option<CookPreset>",
+          "doc": "Shipping cook quality; defaults to the engine's shipping preset.",
+          "default": null,
+          "options": [
+            "highQuality",
+            "fast",
+            "balanced"
+          ]
+        },
+        "dependencies": {
+          "type": "option<list<asset>>",
+          "doc": "Referenced authoring assets used by the cook.",
+          "default": null
+        }
+      }
+    },
+    "ImportSettings": {
+      "kind": "record",
+      "doc": "Declarative importer configuration, stored as the single `i_settings` record.",
+      "module": "asset",
+      "prefix": "i",
+      "fields": {
+        "preset": {
+          "type": "CookPreset",
+          "doc": "Final shipping quality; the editor may show a fast generation first.",
+          "default": "highQuality",
+          "options": [
+            "highQuality",
+            "fast",
+            "balanced"
+          ]
+        },
+        "importer": {
+          "type": "string",
+          "doc": "Stable worker importer ID.",
+          "default": ""
+        },
+        "version": {
+          "type": "string",
+          "doc": "Exact importer version, including encoder implementation versions.",
+          "default": ""
+        },
+        "settings": {
+          "type": "json",
+          "doc": "Importer-specific typed settings, canonicalized recursively.",
+          "default": null
+        },
+        "dependencies": {
+          "type": "list<asset>",
+          "doc": "Referenced authoring assets, using project-relative `@path#id` syntax.",
+          "default": []
         }
       }
     },
@@ -3779,6 +4152,16 @@ expression: out
             "mesh"
           ]
         },
+        "node": {
+          "type": "option<string>",
+          "doc": "Source node name or numeric glTF index. `name:3` selects a numeric name. The drawable subtree retains source rotation/scale and restores its pivot to the entity origin. Absent selects the complete default scene.",
+          "default": null
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Zero-based primitive within the selected subtree (or whole model).",
+          "default": null
+        },
         "color": {
           "type": "color",
           "doc": "Linear base color multiplier and opacity.",
@@ -3801,8 +4184,59 @@ expression: out
         },
         "emissive": {
           "type": "vec3",
-          "doc": "Emitted radiance in candela per square metre (linear RGB).",
+          "doc": "Procedural emitted radiance, or the RGB multiplier of a model's emission. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
           "default": [0, 0, 0]
+        },
+        "emissiveEnabled": {
+          "type": "bool",
+          "doc": "Enables emission without modifying the source model or its materials.",
+          "default": true
+        },
+        "emissiveStrength": {
+          "type": "f32",
+          "doc": "Emission multiplier, applied once after the source or overridden factor.",
+          "default": 1,
+          "range": [0, null]
+        },
+        "emissiveFactor": {
+          "type": "option<vec3>",
+          "doc": "Optional linear RGB replacement for the source emissive factor, useful for lamps.",
+          "default": null,
+          "range": [0, null]
+        },
+        "emissiveMaterials": {
+          "type": "list<string>",
+          "doc": "Source material names or numeric indices affected by `emissiveFactor`. Empty targets all; `name:3` disambiguates a numeric material name.",
+          "default": []
+        }
+      }
+    },
+    "MeshSettings": {
+      "kind": "struct",
+      "doc": "Deterministic geometry cook policy.",
+      "module": "asset",
+      "fields": {
+        "lodCount": {
+          "type": "u32",
+          "doc": "Maximum number of LODs, including the original (1–8).",
+          "default": 4,
+          "range": [1, 8]
+        },
+        "lodError": {
+          "type": "f32",
+          "doc": "Relative simplification error ceiling.",
+          "default": 0.01,
+          "range": [0, null]
+        },
+        "virtualGeometry": {
+          "type": "bool",
+          "doc": "Cook a versioned virtual-geometry DAG for each static material primitive. Skinned and morph-deformed meshes retain the classic path.",
+          "default": true
+        },
+        "opacityMaps": {
+          "type": "map<string>",
+          "doc": "glTF base-color image URI (or #image-index) to companion opacity image URI. The mask's red channel multiplies existing alpha; paths are relative to the model.",
+          "default": {}
         }
       }
     },
@@ -3952,6 +4386,23 @@ expression: out
         }
       }
     },
+    "MusicSegmentSetParams": {
+      "kind": "params",
+      "doc": "Create or replace a music segment with stems and tempo map.",
+      "module": "audio",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Existing record ID, stable new ID or batch symbol; generated when omitted.",
+          "default": null
+        },
+        "segment": {
+          "type": "MusicSegment",
+          "doc": "Complete typed music record; omitted fields take their reflected defaults.",
+          "required": true
+        }
+      }
+    },
     "MusicSettings": {
       "kind": "record",
       "doc": "Music-wide settings (one record).",
@@ -3980,6 +4431,18 @@ expression: out
           "type": "u32",
           "doc": "Seed for weighted follow-ups (deterministic resequencing).",
           "default": 0
+        }
+      }
+    },
+    "MusicSettingsSetParams": {
+      "kind": "params",
+      "doc": "Music-wide starting segment, intensity, layer fade and deterministic seed.",
+      "module": "audio",
+      "fields": {
+        "settings": {
+          "type": "MusicSettings",
+          "doc": "Complete music settings, stored in the unique ms_settings record.",
+          "required": true
         }
       }
     },
@@ -4076,6 +4539,23 @@ expression: out
         }
       }
     },
+    "MusicStingerSetParams": {
+      "kind": "params",
+      "doc": "Create or replace a grid-aligned music stinger.",
+      "module": "audio",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Existing record ID, stable new ID or batch symbol; generated when omitted.",
+          "default": null
+        },
+        "stinger": {
+          "type": "MusicStinger",
+          "doc": "Complete typed music record; omitted fields take their reflected defaults.",
+          "required": true
+        }
+      }
+    },
     "MusicSync": {
       "kind": "enum",
       "doc": "Where a transition or stinger may land.",
@@ -4157,6 +4637,23 @@ expression: out
           "type": "string",
           "doc": "Optional bridge segment played between them.",
           "default": ""
+        }
+      }
+    },
+    "MusicTransitionSetParams": {
+      "kind": "params",
+      "doc": "Create or replace a synchronized music transition.",
+      "module": "audio",
+      "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Existing record ID, stable new ID or batch symbol; generated when omitted.",
+          "default": null
+        },
+        "transition": {
+          "type": "MusicTransition",
+          "doc": "Complete typed music record; omitted fields take their reflected defaults.",
+          "required": true
         }
       }
     },
@@ -4863,6 +5360,30 @@ expression: out
           "doc": "Local position of the instance.",
           "default": null,
           "unit": "m"
+        }
+      }
+    },
+    "ProjectSetMainParams": {
+      "kind": "params",
+      "doc": "Parameters of `project.setMain`.",
+      "fields": {
+        "scene": {
+          "type": "asset<scene>",
+          "doc": "Existing scene path or asset reference to open when the project starts.",
+          "required": true
+        }
+      }
+    },
+    "ProjectSettings": {
+      "kind": "record",
+      "doc": "Project marker represented as a record so project changes share history and undo.",
+      "module": "core",
+      "prefix": "p",
+      "fields": {
+        "settings": {
+          "type": "json",
+          "doc": "Project settings, including fields owned by plugins and future engine versions.",
+          "default": null
         }
       }
     },
@@ -5762,6 +6283,11 @@ expression: out
       "doc": "A whole gesture, including every dab; do not issue one transaction per mouse sample.",
       "module": "terrain",
       "fields": {
+        "id": {
+          "type": "option<string>",
+          "doc": "Optional concrete or symbolic stroke ID for reproducible authoring.",
+          "default": null
+        },
         "layer": {
           "type": "string",
           "doc": "Existing layer ID.",
@@ -5814,6 +6340,69 @@ expression: out
           "type": "list<string>",
           "doc": "Gesture IDs touching this tile, in transaction order.",
           "default": []
+        }
+      }
+    },
+    "TextureSettings": {
+      "kind": "struct",
+      "doc": "Declarative texture import settings.",
+      "module": "asset",
+      "fields": {
+        "usage": {
+          "type": "TextureUsage",
+          "doc": "How color/normal/mask values are interpreted.",
+          "default": "color",
+          "options": [
+            "color",
+            "linear",
+            "normal",
+            "mask",
+            "hdr"
+          ]
+        },
+        "mipmaps": {
+          "type": "bool",
+          "doc": "Generate the complete mip chain through 1×1.",
+          "default": true
+        },
+        "flipNormalY": {
+          "type": "bool",
+          "doc": "Invert normal Y for DirectX-authored tangent-space inputs.",
+          "default": false
+        },
+        "maskChannel": {
+          "type": "u8",
+          "doc": "Source channel for BC4, R=0/G=1/B=2/A=3.",
+          "default": 0,
+          "range": [0, 3]
+        },
+        "maxDimension": {
+          "type": "u32",
+          "doc": "Maximum permitted source dimension (decode limits are also enforced).",
+          "default": 16384,
+          "range": [1, 16384]
+        }
+      }
+    },
+    "TextureUsage": {
+      "kind": "enum",
+      "doc": "Semantic texture usage selects transfer functions, mip filtering and BC format.",
+      "module": "asset",
+      "variants": {
+        "color": {
+          "doc": "sRGB color (alpha remains linear), BC7 sRGB."
+        },
+        "linear": {
+          "doc": "Linear RGBA data, BC7 UNORM."
+        },
+        "normal": {
+          "doc": "Tangent-space normals, normalized mips and BC5 XY."
+        },
+        "mask": {
+          "doc": "A single linear scalar channel, BC4."
+        },
+        "hdr": {
+          "doc": "Nonnegative linear radiance, BC6H UFLOAT."
         }
       }
     },
@@ -6178,6 +6767,33 @@ expression: out
         }
       }
     },
+    "TransformLookAtParams": {
+      "kind": "params",
+      "doc": "Parameters of `transform.lookAt`.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Camera, light or other entity whose local -Z axis should face the target.",
+          "required": true
+        },
+        "point": {
+          "type": "option<vec3>",
+          "doc": "World-space target position. Supply exactly one of point or target.",
+          "default": null,
+          "unit": "m"
+        },
+        "target": {
+          "type": "option<entity>",
+          "doc": "Target entity in this document; its world position is used.",
+          "default": null
+        },
+        "up": {
+          "type": "option<vec3>",
+          "doc": "Preferred world-space up vector; defaults to +Y. At a pole a stable perpendicular axis is used.",
+          "default": null
+        }
+      }
+    },
     "TransformSetParams": {
       "kind": "params",
       "doc": "Parameters of `transform.set`.",
@@ -6311,6 +6927,31 @@ expression: out
           "type": "map<string>",
           "doc": "Complete translated ICU patterns keyed by the requested source keys.",
           "default": {}
+        }
+      }
+    },
+    "UiSource": {
+      "kind": "record",
+      "doc": "Lossless UI source; persistence writes native XML through `SourceDocument`.",
+      "module": "ui",
+      "prefix": "us",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Complete XML, including comments and stable asset identity metadata.",
+          "default": ""
+        }
+      }
+    },
+    "UiSourceApplyParams": {
+      "kind": "params",
+      "doc": "Replaces a UI document's native markup through revision-checked source ops.",
+      "module": "ui",
+      "fields": {
+        "source": {
+          "type": "string",
+          "doc": "Complete native UI XML. Existing identity metadata may be retained or omitted.",
+          "required": true
         }
       }
     },
@@ -6621,6 +7262,31 @@ expression: out
         }
       }
     },
+    "VirtualGeometrySettings": {
+      "kind": "struct",
+      "doc": "Offline cook policy; every value participates in the cache identity.",
+      "module": "geo",
+      "fields": {
+        "groupSize": {
+          "type": "u32",
+          "doc": "Desired neighboring clusters per simplification group (2..=32).",
+          "default": 8,
+          "range": [2, 32]
+        },
+        "maxLevels": {
+          "type": "u32",
+          "doc": "Maximum hierarchy depth (1..=32).",
+          "default": 24,
+          "range": [1, 32]
+        },
+        "relativeError": {
+          "type": "f32",
+          "doc": "Relative error allowed in a single reduction (0..=1).",
+          "default": 0.1,
+          "range": [0, 1]
+        }
+      }
+    },
     "VisualEffect": {
       "kind": "component",
       "doc": "A GPU particle effect drawn at this entity. Presentation only: gameplay reads ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).",
@@ -6758,6 +7424,15 @@ expression: out
         "GraphEditor"
       ]
     },
+    "import": {
+      "doc": "Binary source asset identity and pure importer settings.",
+      "schema": "ara://schema/import/1",
+      "idPrefix": "as",
+      "extension": "import.json",
+      "records": [
+        "ImportSettings"
+      ]
+    },
     "l10n": {
       "doc": "One locale's messages, review provenance and explicit font fallback.",
       "schema": "ara://schema/l10n/1",
@@ -6811,6 +7486,15 @@ expression: out
       ],
       "singleRoot": true
     },
+    "project": {
+      "doc": "Project startup and plugin settings; persisted as ara.project.json.",
+      "schema": "ara://schema/project/1",
+      "idPrefix": "pj",
+      "extension": "project.json",
+      "records": [
+        "ProjectSettings"
+      ]
+    },
     "scene": {
       "doc": "A level or sub-level: a flat map of entities.",
       "schema": "ara://schema/scene/1",
@@ -6832,6 +7516,15 @@ expression: out
         "TerrainTile"
       ]
     },
+    "ui": {
+      "doc": "Lossless native UI XML, edited through attributed source operations.",
+      "schema": "ara://schema/ui/1",
+      "idPrefix": "ui",
+      "extension": "ui",
+      "records": [
+        "UiSource"
+      ]
+    },
     "world": {
       "doc": "Partitioned world manifest.",
       "schema": "ara://schema/world/1",
@@ -6845,6 +7538,153 @@ expression: out
     }
   },
   "commands": {
+    "animation.clip.set": {
+      "kind": "command",
+      "summary": "Replace animation clip keys.",
+      "params": "AnimationClipSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.controller.set": {
+      "kind": "command",
+      "summary": "Replace an animation controller graph.",
+      "params": "AnimationControllerSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.create": {
+      "kind": "command",
+      "summary": "Create a typed animation skeleton, clip or controller record.",
+      "params": "AnimationCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "asset": {
+            "name": "Idle"
+          }
+        }
+      ]
+    },
+    "animation.ik.set": {
+      "kind": "command",
+      "summary": "Replace procedural animation contact chains.",
+      "params": "AnimationIkSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.motionDatabase.set": {
+      "kind": "command",
+      "summary": "Replace pose-search database configuration.",
+      "params": "AnimationMotionDatabaseSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.property.set": {
+      "kind": "command",
+      "summary": "Set or reset a schema-addressed animation field.",
+      "params": "AnimationPropertySetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "path": "name",
+          "value": "Rest"
+        }
+      ]
+    },
+    "animation.ragdoll.set": {
+      "kind": "command",
+      "summary": "Replace a physical animation ragdoll profile.",
+      "params": "AnimationRagdollSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.rig.set": {
+      "kind": "command",
+      "summary": "Replace semantic humanoid bone bindings.",
+      "params": "AnimationRigSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
+    "animation.skeleton.set": {
+      "kind": "command",
+      "summary": "Replace animation skeleton source.",
+      "params": "AnimationSkeletonSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "an_idle",
+          "value": {}
+        }
+      ]
+    },
     "audiograph.input.set": {
       "kind": "command",
       "summary": "Wire or set one audio graph input (or graph output) to a literal or another node.",
@@ -7092,6 +7932,22 @@ expression: out
         }
       ]
     },
+    "doc.create": {
+      "kind": "command",
+      "summary": "Create a canonical empty scene, prefab or other registered document.",
+      "params": "DocCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "path": "levels/arena.scene",
+          "id": "sc_arena001"
+        }
+      ]
+    },
     "entity.create": {
       "kind": "command",
       "summary": "Create an entity, optionally with a parent, a position among its siblings and components.",
@@ -7284,6 +8140,40 @@ expression: out
             "scale": [0.8, 1.2],
             "enabled": true
           }
+        }
+      ]
+    },
+    "import.configure": {
+      "kind": "command",
+      "summary": "Configure a source's import settings and refresh its installed importer version.",
+      "params": "ImportConfigureParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "models/crate.glb",
+          "settings": {
+            "lodCount": 3
+          }
+        }
+      ]
+    },
+    "import.initialize": {
+      "kind": "command",
+      "summary": "Create an import sidecar with automatic importer selection and installed version.",
+      "params": "ImportInitializeParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "models/crate.glb",
+          "id": "as_crate"
         }
       ]
     },
@@ -7565,6 +8455,76 @@ expression: out
         }
       ]
     },
+    "music.segment.set": {
+      "kind": "command",
+      "summary": "Create or replace a music segment with stems and tempo map.",
+      "params": "MusicSegmentSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "sg_ambient",
+          "segment": {
+            "name": "Ambient"
+          }
+        }
+      ]
+    },
+    "music.settings.set": {
+      "kind": "command",
+      "summary": "Set the music's initial segment, intensity, fade and seed.",
+      "params": "MusicSettingsSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "settings": {
+            "initial": "Ambient"
+          }
+        }
+      ]
+    },
+    "music.stinger.set": {
+      "kind": "command",
+      "summary": "Create or replace a grid-aligned music stinger.",
+      "params": "MusicStingerSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "stinger": {
+            "name": "Discovery"
+          }
+        }
+      ]
+    },
+    "music.transition.set": {
+      "kind": "command",
+      "summary": "Create or replace a synchronized music transition.",
+      "params": "MusicTransitionSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "transition": {
+            "to": "Combat",
+            "sync": "bar"
+          }
+        }
+      ]
+    },
     "physics2d.set": {
       "kind": "command",
       "summary": "Set a validated 2D rigid body (body + collider) or capsule character, with its pose.",
@@ -7648,6 +8608,21 @@ expression: out
           "entity": "e_4f9a/e_m4tz",
           "path": "MeshRenderer.tint",
           "value": [1, 0, 0, 1]
+        }
+      ]
+    },
+    "project.setMain": {
+      "kind": "command",
+      "summary": "Set ara.project.json's startup scene with history and undo.",
+      "params": "ProjectSetMainParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "scene": "@levels/arena.scene#sc_arena001"
         }
       ]
     },
@@ -8016,6 +8991,23 @@ expression: out
         }
       ]
     },
+    "transform.lookAt": {
+      "kind": "command",
+      "summary": "Aim local -Z at a world point or entity with a preferred world up vector.",
+      "params": "TransformLookAtParams",
+      "hints": {
+        "idempotent": true,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_camera",
+          "point": [0, 1, 0],
+          "up": [0, 1, 0]
+        }
+      ]
+    },
     "transform.set": {
       "kind": "command",
       "summary": "Set the local position, rotation and/or scale of entities.",
@@ -8032,6 +9024,21 @@ expression: out
           ],
           "position": [2, 0, 3],
           "rotation": [0, 45, 0]
+        }
+      ]
+    },
+    "ui.source.apply": {
+      "kind": "command",
+      "summary": "Apply lossless native UI markup with validation, attribution and undo.",
+      "params": "UiSourceApplyParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "source": "<ui id=\"hud\"><text id=\"title\" text=\"Hello\" /></ui>\n"
         }
       ]
     },

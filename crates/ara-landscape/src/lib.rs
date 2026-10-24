@@ -5,6 +5,7 @@ pub mod material;
 mod pages;
 mod renderer;
 pub mod sample;
+mod space;
 mod upload;
 pub use geometry::*;
 pub use renderer::*;

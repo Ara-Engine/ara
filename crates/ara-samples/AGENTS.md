@@ -33,10 +33,10 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
 - `kit`: generated glTF geometry (boxes/cylinders/spheres/ribbons with metre-based
   UVs over fetched texture sets) and derived glTFs of fetched models (`variant`:
   node selection, GLB → glTF, cut-out alpha merge, lamps switched on, image swaps).
-- `build/`: `Ctx` (CLI batches, empty-document skeletons, canonical sidecars),
+- `build/`: `Ctx` (CLI batches, doc.create, project.setMain, import.initialize),
   `place` (props + separate collider entities, ground sampling, layout shift),
   `kits` (containers, hut, hangar shell, mast, fence, embers, panels…), `anim`
-  (locomotion controllers via `AnimationCommand`), `outpost`, `hangar`, `showcase`.
+  (locomotion controllers via animation.create), `outpost`, `hangar`, `showcase`.
 - `capture/`: `world` (play-host asset pipeline → `Runtime`), `convert` (frame →
   fidelity snapshot), `atlas` (UV-square materials packed into 4096² pages),
   `vfx` (cooked effects composited through `feature_inputs`/`post_process`),
@@ -58,8 +58,8 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   origin-anchored terrain). Look shots are world coordinates.
 - Keep generated files deterministic so a rebuild leaves `git status` clean apart
   from intended changes.
-- Agents cannot accept their own edits (`ARA1813`), so a fresh build shows every
-  entity as unreviewed in the editor; `editor` deletes the local `.ara/journal` first.
+- Agent edits apply immediately under amended D24, with attribution, why and undo.
+  Terrain strokes and foliage exclusions use stable IDs so rebuilds retain identity.
 
 ## Testing
 

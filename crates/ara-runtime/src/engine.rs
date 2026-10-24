@@ -44,6 +44,8 @@ pub fn register_schemas(db: &mut SchemaDb) -> Vec<Diagnostic> {
 /// Registers every engine authoring command, query and job (and their params) in a
 /// host's registry, next to the kernel's builtin commands.
 pub fn register_commands(registry: &mut Registry, db: &mut SchemaDb) {
+    ara_anim::commands::register(registry, db);
+    ara_music::commands::register(registry, db);
     ara_material::commands::register(registry, db);
     ara_vfx::commands::register(registry, db);
     ara_2d::commands::register(registry, db);

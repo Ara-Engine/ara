@@ -162,7 +162,35 @@ impl Host {
         let state_dir = project.root.join(STATE_DIR);
         fs::create_dir_all(&state_dir).map_err(|e| io_error("create", &state_dir, e))?;
         let lock = lock(&state_dir)?;
-        let (ws, per_file) = project.load(&[]);
+        let (mut ws, per_file) = project.load(&[]);
+        // Canonical import sidecars are editable documents too. Source-only legacy
+        // identity stubs remain index entries until explicitly initialized.
+        if project.db.kind("import").is_some() {
+            for (id, path) in project.index.imports() {
+                let sidecar = format!("{path}.import.json");
+                if let Ok(text) = fs::read_to_string(project.root.join(&sidecar)) {
+                    let result = ara_doc::read(&text, &sidecar, &project.db, Some(&project.index));
+                    if let Some(doc) = result
+                        .doc
+                        .filter(|d| d.kind == "import" && d.id.as_str() == id)
+                    {
+                        ws.insert_with_asset_path(sidecar, doc, path);
+                    }
+                }
+            }
+        }
+        let marker = fs::read_to_string(project.root.join(crate::project::MARKER))
+            .map_err(|e| io_error("read", &project.root.join(crate::project::MARKER), e))?;
+        let settings =
+            crate::project_settings::read(&marker, crate::project::MARKER, &project.db, None);
+        let settings = settings.doc.ok_or_else(|| {
+            settings
+                .diags
+                .into_iter()
+                .next()
+                .expect("invalid settings has a diagnostic")
+        })?;
+        ws.insert(crate::project::MARKER, settings);
         let name = project.name();
         let main = project.main_scene();
         let Project {
@@ -258,6 +286,7 @@ impl Host {
             _lock: lock,
         };
         st.recover(&entries);
+        st.refresh_project_settings();
         st.collab_open(config.seed);
         st.collab.hub.set_overwrite_window(
             config
@@ -704,7 +733,18 @@ impl State {
             let now = Instant::now();
             for op in &txn.ops {
                 self.files.changed.insert(op.doc().clone(), now);
+                if let ara_doc::Op::Document {
+                    doc, path, kind, ..
+                } = op
+                {
+                    if kind.is_none() {
+                        self.files.deleted.insert(doc.clone(), path.clone());
+                    } else {
+                        self.files.deleted.remove(doc);
+                    }
+                }
             }
+            self.refresh_project_settings();
             self.track_review(&txn);
             let summary = self.txn_summary(&txn);
             self.notify(Topic::History, summary);
@@ -719,10 +759,10 @@ impl State {
                 self.review.set(target, None, ReviewStatus::Reverted);
             }
             Some(target) => {
-                // Undoing an undo (redo) brings the original change back for review.
+                // Redo restores the original immediate acceptance as well as its ops.
                 let original = self.store.txn(target).and_then(|t| t.reverts.clone());
                 if let Some(original) = original.filter(|o| self.review.is_tracked(o)) {
-                    self.review.set(&original, None, ReviewStatus::Applied);
+                    self.review.set(&original, None, ReviewStatus::Accepted);
                 }
             }
             None if matches!(txn.author, Author::Agent(_)) && !self.untracked => {
@@ -783,6 +823,25 @@ impl State {
             on_disk.insert(id.clone(), rev);
         }
         let (mut replayed, mut stopped, mut skipped) = (0usize, false, BTreeSet::new());
+        for entry in entries {
+            if let Entry::Txn { txn, .. } = entry {
+                for op in &txn.ops {
+                    if let ara_doc::Op::Document { doc, path, .. } = op
+                        && !self.root.join(path).exists()
+                    {
+                        let rev = flushes
+                            .get(doc.as_str())
+                            .and_then(|list| {
+                                list.iter()
+                                    .rev()
+                                    .find(|(_, hash)| *hash == journal::hash("deleted"))
+                            })
+                            .map_or(base, |(rev, _)| *rev);
+                        on_disk.entry(doc.clone()).or_insert(Some(rev));
+                    }
+                }
+            }
+        }
         for e in entries {
             match e {
                 Entry::Txn { session, txn } => {
@@ -797,7 +856,13 @@ impl State {
                             _ => None,
                         })
                         .collect();
-                    let apply = !needs.is_empty() && needs.iter().all(|n| *n == Some(true));
+                    let apply: BTreeSet<_> = txn
+                        .ops
+                        .iter()
+                        .zip(&needs)
+                        .filter(|(_, needed)| **needed == Some(true))
+                        .map(|(op, _)| op.doc().clone())
+                        .collect();
                     for op in &txn.ops {
                         if matches!(on_disk.get(op.doc()), Some(None))
                             && flushes
@@ -808,12 +873,22 @@ impl State {
                             skipped.insert(op.doc().clone());
                         }
                     }
-                    match self.store.restore(txn.clone(), apply) {
+                    match self.store.restore_documents(txn.clone(), &apply) {
                         Ok(()) => {
-                            if apply {
+                            if !apply.is_empty() {
                                 replayed += 1;
-                                for op in &txn.ops {
+                                for op in txn.ops.iter().filter(|op| apply.contains(op.doc())) {
                                     self.files.changed.insert(op.doc().clone(), Instant::now());
+                                    if let ara_doc::Op::Document {
+                                        doc, path, kind, ..
+                                    } = op
+                                    {
+                                        if kind.is_none() {
+                                            self.files.deleted.insert(doc.clone(), path.clone());
+                                        } else {
+                                            self.files.deleted.remove(doc);
+                                        }
+                                    }
                                 }
                             }
                             if let Some(s) = session {
@@ -849,9 +924,14 @@ impl State {
                     txn,
                     entity,
                     status,
-                } => self
-                    .review
-                    .set(&TxnId(txn.clone()), entity.as_deref(), *status),
+                } => self.review.set(
+                    &TxnId(txn.clone()),
+                    entity.as_deref(),
+                    match status {
+                        ReviewStatus::Applied => ReviewStatus::Accepted,
+                        status => *status,
+                    },
+                ),
                 Entry::Base { .. } | Entry::Flush { .. } => {}
             }
         }

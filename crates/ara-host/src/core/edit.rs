@@ -126,6 +126,14 @@ pub(crate) fn apply_text(
         };
         let here = current.and_then(|d| d.record(id));
         match op {
+            Op::Document {
+                kind: Some(kind),
+                path,
+                ..
+            } => created.push((id, format!("{path} ({kind})"))),
+            Op::Document {
+                kind: None, path, ..
+            } => deleted.push((id, path.clone())),
             Op::Create { record, .. } => created.push((id, line(here.or(Some(record))))),
             Op::Delete { snapshot, .. } => {
                 created.retain(|(c, _)| *c != id);
@@ -170,6 +178,8 @@ pub(crate) fn diff_summary(ops: &[Op]) -> Value {
     for op in ops {
         let id = op.id().to_string();
         match op {
+            Op::Document { kind: Some(_), .. } => created.push(id),
+            Op::Document { kind: None, .. } => deleted.push(id),
             Op::Create { .. } => created.push(id),
             Op::Delete { .. } => {
                 created.retain(|c| *c != id);
@@ -201,7 +211,18 @@ impl State {
             })
             .flatten()
             .collect();
-        let doc = pick(self, p.doc.as_deref(), &refs)?;
+        let workspace_command = !p.commands.is_empty()
+            && p.commands.iter().all(|c| {
+                matches!(
+                    c.cmd.as_str(),
+                    "doc.create" | "project.setMain" | "import.initialize" | "import.configure"
+                )
+            });
+        let doc = if workspace_command && p.doc.is_none() {
+            find_doc(self, crate::project::MARKER)?
+        } else {
+            pick(self, p.doc.as_deref(), &refs)?
+        };
         let mut calls = Vec::new();
         let mut problems = Vec::new();
         for (i, c) in p.commands.iter().enumerate() {
@@ -305,6 +326,21 @@ impl State {
             return Err(errors);
         }
         let before = self.store.revision();
+        if batch
+            .calls
+            .iter()
+            .any(|c| matches!(c.command.as_str(), "doc.create" | "import.initialize"))
+        {
+            let mut preview = batch.clone();
+            preview.dry_run = true;
+            let preview = self
+                .registry
+                .apply(&mut self.store, &preview, &session.cmd_session())
+                .map_err(relocate)?;
+            if !preview.replayed {
+                crate::project_settings::check_creations(&self.root, &preview.ops)?;
+            }
+        }
         let result = match self
             .gesture_apply(sid, &batch, &session.cmd_session())
             .map_err(relocate)?

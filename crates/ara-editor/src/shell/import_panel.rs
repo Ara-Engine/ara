@@ -1,4 +1,6 @@
 //! Importer settings and bidirectional dependency links for the selected source.
+//! Settings edits apply the shared `import.configure` command (the same one the CLI
+//! and agents use), so importer selection and versions stay engine-owned.
 use super::*;
 impl Shell {
     pub(super) fn import_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
@@ -53,25 +55,28 @@ impl Shell {
             let settings: ara_asset::ImportSettings =
                 serde_json::from_value(Value::Object(record.clone()))?;
             out.push_str(&format!("<text id='import-engine' class='badge' text='{}' /><text id='import-settings-title' class='heading' text='Import settings' />",escape(&settings.importer)));
-            let defaults = if settings.importer == "ara.texture" {
-                ara_json::to_value(&ara_importers::TextureSettings::default())?
-            } else {
-                ara_json::to_value(&ara_importers::MeshSettings::default())?
+            let (defaults, schema) = match settings.importer.as_str() {
+                "ara.texture" => (
+                    ara_json::to_value(&ara_importers::TextureSettings::default())?,
+                    "TextureSettings",
+                ),
+                "ara.audio" => (
+                    ara_json::to_value(&ara_importers::audio::Settings::default())?,
+                    "AudioImportSettings",
+                ),
+                _ => (
+                    ara_json::to_value(&ara_importers::MeshSettings::default())?,
+                    "MeshSettings",
+                ),
             };
             let db = editor.host.store().schema();
-            let metadata = db
-                .get(if settings.importer == "ara.texture" {
-                    "TextureSettings"
+            let metadata = db.get(schema).and_then(|ty| {
+                if let ara_schema::Shape::Struct { fields, .. } = &ty.shape {
+                    Some(fields)
                 } else {
-                    "MeshSettings"
-                })
-                .and_then(|ty| {
-                    if let ara_schema::Shape::Struct { fields, .. } = &ty.shape {
-                        Some(fields)
-                    } else {
-                        None
-                    }
-                });
+                    None
+                }
+            });
             if let Some(fields) = defaults.as_object() {
                 for (key, default) in fields {
                     let value = settings.settings.get(key).unwrap_or(default);
@@ -79,14 +84,13 @@ impl Shell {
                     let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
                     let help = desc.map(|f| f.doc.as_str()).unwrap_or("");
                     let label = match key.as_str() {
-                        "lodCount" => "LOD count",
-                        "lodError" => "LOD error",
-                        "flipNormalY" => "Flip normal Y",
-                        "maskChannel" => "Mask channel",
-                        "maxDimension" => "Maximum dimension",
-                        _ => key,
+                        "lodCount" => "LOD count".to_owned(),
+                        "lodError" => "LOD error".to_owned(),
+                        "flipNormalY" => "Flip normal Y".to_owned(),
+                        "maxDimension" => "Maximum dimension".to_owned(),
+                        _ => super::inspector_panel::sentence(key),
                     };
-                    out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' description='{}' />",escape(label),escape(help)));
+                    out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' description='{}' />",escape(&label),escape(help)));
                     self.bindings.insert(
                         ara_ui::source::stable_id(&id),
                         Binding::ImportField(doc.id.to_string(), key.clone()),
@@ -122,7 +126,7 @@ impl Shell {
                             .get(&format!("@import|{}|{key}", doc.id))
                             .cloned()
                             .unwrap_or_else(|| panels::display(value));
-                        out.push_str(&format!("<field id='{id}' class='{}' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(label),escape(help)));
+                        out.push_str(&format!("<field id='{id}' class='{}' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&label),escape(help)));
                     }
                     out.push_str("</panel>");
                 }
@@ -133,7 +137,7 @@ impl Shell {
                 ara_asset::CookPreset::Balanced,
                 ara_asset::CookPreset::HighQuality,
             ] {
-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),&format!("{preset:?}"),Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"editor.import.settings","args":{"settings":settings.settings,"preset":preset}})],"Change import quality".into()),if preset==settings.preset{"small selected"}else{"small quiet"}));
+                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),&format!("{preset:?}"),Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if preset==settings.preset{"small selected"}else{"small quiet"}));
             }
             out.push_str("</panel>");
             out.push_str(&self.bind_button(
@@ -142,10 +146,7 @@ impl Shell {
                 Binding::Protocol("editor.asset.reimport", json!({"path":path})),
                 "",
             ));
-        } else if matches!(
-            asset.kind.as_str(),
-            "png" | "jpg" | "jpeg" | "hdr" | "exr" | "glb" | "gltf" | "fbx"
-        ) {
+        } else if ara_importers::commands::importer_for_source(path).is_ok() {
             out.push_str("<text id='import-new-help' class='muted' text='Create settings and cook this source in an isolated worker.' style='white-space:normal' />");
             out.push_str(&self.bind_button(
                 "asset-import",
@@ -226,32 +227,41 @@ impl Shell {
         if keys.is_empty() {
             return Ok(false);
         }
-        let mut documents = BTreeMap::<String, Value>::new();
+        // Per sidecar document: its source path and the edited settings object.
+        let mut documents = BTreeMap::<String, (String, Value)>::new();
         for key in &keys {
             let mut parts = key.split('|');
             let _ = parts.next();
             let doc = parts.next().ok_or("invalid import draft")?;
             let field = parts.next().ok_or("invalid import field")?;
             if !documents.contains_key(doc) {
-                let settings = editor
-                    .host
-                    .store()
-                    .workspace()
+                let workspace = editor.host.store().workspace();
+                let source = workspace
+                    .path_of(doc)
+                    .and_then(|p| p.strip_suffix(".import.json"))
+                    .ok_or("import document disappeared")?
+                    .to_owned();
+                let settings = workspace
                     .doc(doc)
                     .and_then(|d| d.record("i_settings"))
-                    .ok_or("import document disappeared")?;
-                let mut value = Value::Object(settings.clone());
-                if !value["settings"].is_object() {
-                    value["settings"] = json!({});
-                }
-                documents.insert(doc.into(), value);
+                    .and_then(|r| r.get("settings"))
+                    .filter(|s| s.is_object())
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                documents.insert(doc.into(), (source, settings));
             }
-            let record = documents.get_mut(doc).ok_or("import draft missing")?;
+            let (_, settings) = documents.get_mut(doc).ok_or("import draft missing")?;
             let text = self.drafts.get(key).ok_or("import draft missing")?;
-            record["settings"][field] = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+            settings[field] = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
         }
-        for (doc, record) in documents {
-            editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":record["settings"],"preset":record.get("preset").cloned().unwrap_or(json!("highQuality"))}})],"Edit importer settings")?;
+        for (doc, (source, settings)) in documents {
+            editor.apply_to(
+                &doc,
+                vec![
+                    json!({"cmd":"import.configure","args":{"source":source,"settings":settings}}),
+                ],
+                "Edit importer settings",
+            )?;
         }
         for key in keys {
             self.drafts.remove(&key);

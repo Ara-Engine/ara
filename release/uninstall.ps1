@@ -18,6 +18,9 @@ $targets = foreach ($relative in $paths) {
     }
     $path
 }
+# An open Hub window would restart the service from this installation; close it first.
+$hubWindows = @(Get-Process -Name 'ara-hub' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) })
+if ($hubWindows.Count -gt 0) { throw 'Close the Ara Hub window before uninstalling' }
 $ara = Join-Path $root 'ara.exe'
 & $ara hub unregister-engine
 if ($LASTEXITCODE -ne 0) { throw 'Close projects using this engine before uninstalling' }

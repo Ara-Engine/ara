@@ -533,7 +533,7 @@ fn import_settings_are_typed_attributed_and_undoable() {
         editor.host.store().workspace().path_of(&doc),
         Some("paint.png.import.json")
     );
-    editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
+    editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"paint.png","settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
     assert_eq!(
         editor
             .host
@@ -557,7 +557,7 @@ fn import_settings_are_typed_attributed_and_undoable() {
             .unwrap()["settings"],
         json!({})
     );
-    assert!(editor.apply_to(&doc,vec![json!({"cmd":"editor.import.settings","args":{"settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
+    assert!(editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"paint.png","settings":{"unknown":true},"preset":"fast"}})],"Invalid setting").is_err());
     assert!(
         editor
             .action("editor.asset.import", json!({"path":"../escape.png"}))

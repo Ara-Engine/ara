@@ -10,6 +10,8 @@ renderer, file IO, clock, task pool or importer in the production library.
 - `document`: schema/kind registration, canonical documents and typed op edits.
   Records are addressable: one `.animation` holds several clips/controllers and
   references name records (`@anim/fox.animation#an_walk`).
+- `commands::register`: shared CLI/MCP/editor commands over `AnimationCommand`,
+  including record creation, typed setters and arbitrary property edits.
 - `Skeleton::cook`, `CookedClip::cook`: validate off-thread; publish at a tick boundary.
 - `Pose`, `Sampler`: preallocate, then sample without allocation.
 - `Sampler::sample_prefix`: opt-in presentation bone LOD; excluded joints use bind.

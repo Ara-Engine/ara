@@ -46,6 +46,7 @@ pub fn warm_frame() -> RenderFrame {
         roughness: 0.5,
         metallic: 0.0,
         emissive: [0.0; 3],
+        emissive_factor: None,
         skin: None,
     });
     warm

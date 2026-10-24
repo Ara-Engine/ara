@@ -59,6 +59,36 @@ pub struct Models {
 }
 
 impl Models {
+    /// Checks model selectors of scene, prefab and streamed-cell records against
+    /// loaded content. Missing imports already have their own load diagnostic.
+    pub(crate) fn validate_renderers(&self, workspace: &ara_doc::Workspace) -> Vec<String> {
+        let mut errors = Vec::new();
+        for (path, document) in workspace.docs() {
+            for (id, record) in document.records() {
+                let Some(value) = record.get("MeshRenderer") else {
+                    continue;
+                };
+                let checked = (|| -> Result<()> {
+                    let renderer: crate::components::MeshRenderer =
+                        serde_json::from_value(value.clone())?;
+                    if let Some(reference) = &renderer.model {
+                        if let Some(model) = self.get(asset_id(reference)?) {
+                            model.validate_renderer(&renderer)?;
+                        }
+                    } else if renderer.node.is_some() || renderer.primitive.is_some() {
+                        return Err(RuntimeError(
+                            "node/primitive selectors require a model".into(),
+                        ));
+                    }
+                    Ok(())
+                })();
+                if let Err(error) = checked {
+                    errors.push(format!("ARA7310: {path}#{id}: {error}"));
+                }
+            }
+        }
+        errors
+    }
     /// The decoded live model for an asset ID.
     pub fn get(&self, asset: &str) -> Option<&Arc<Model>> {
         self.models.get(asset)

@@ -6,6 +6,7 @@
 //! at an exact output frame, so segment changes, layers and stingers land on the grid in
 //! live play and in deterministic offline captures alike.
 
+pub mod commands;
 mod desc;
 mod grid;
 mod player;

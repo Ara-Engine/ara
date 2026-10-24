@@ -36,7 +36,8 @@ pub struct CookSettings {
     pub short_codec: CookCodec,
     /// Opus bits per second for stereo; mobile quality changes this, not the codec set.
     pub opus_bitrate: i32,
-    /// Maximum decoded stereo PCM bytes during import; worker process memory is separate.
+    /// Resident stereo PCM staging budget. Music/dialogue use bounded blocks and
+    /// require at least 65536 bytes; compressed payloads and codec/meter scratch are separate.
     pub decoded_budget: usize,
 }
 impl Default for CookSettings {
@@ -93,8 +94,8 @@ impl Importer for AudioImporter {
         "ara.audio"
     }
     fn version(&self) -> u32 {
-        // v2: codec pin/configuration changed. v3: artifacts carry loudness and peak metadata.
-        3
+        // v4: bounded PCM staging for streamed music/dialogue instead of whole-clip decoding.
+        4
     }
     fn extensions(&self) -> &'static [&'static str] {
         &["wav", "flac", "ogg", "vorbis", "opus"]
@@ -108,9 +109,6 @@ impl Importer for AudioImporter {
                 input.extension,
             )?)
         };
-        let clip = decode_clip(decoder.as_mut(), input.settings.decoded_budget)?;
-        let loudness = crate::loudness::integrated(clip.sample_rate(), clip.frames())?;
-        let peak = clip.peak();
         let codec = match input.settings.usage {
             AudioUse::Music | AudioUse::Dialogue => CookCodec::Opus,
             AudioUse::ShortEffect => match input.settings.short_codec {
@@ -122,16 +120,21 @@ impl Importer for AudioImporter {
                 codec => codec,
             },
         };
-        let (bytes, sample_rate) = match codec {
-            CookCodec::Pcm => (
-                pcm_wav(clip.sample_rate(), clip.frames())?,
-                clip.sample_rate(),
-            ),
-            CookCodec::Adpcm => (adpcm_wav(&clip)?, clip.sample_rate()),
-            CookCodec::Opus => {
-                let frames = resample(&clip, 48000, input.settings.decoded_budget)?;
-                (opus_ogg(&frames, input.settings.opus_bitrate)?, 48000)
-            }
+        let (bytes, sample_rate, loudness, peak) = if codec == CookCodec::Opus {
+            let mut source =
+                crate::import_stream::Source::new(decoder.as_mut(), input.settings.decoded_budget)?;
+            let bytes = opus_ogg(|| source.next(), input.settings.opus_bitrate)?;
+            let (loudness, peak) = source.measurement()?;
+            (bytes, 48000, loudness, peak)
+        } else {
+            let clip = decode_clip(decoder.as_mut(), input.settings.decoded_budget)?;
+            let loudness = crate::loudness::integrated(clip.sample_rate(), clip.frames())?;
+            let bytes = if codec == CookCodec::Pcm {
+                pcm_wav(clip.sample_rate(), clip.frames())?
+            } else {
+                adpcm_wav(&clip)?
+            };
+            (bytes, clip.sample_rate(), loudness, clip.peak())
         };
         let hash = blake3::hash(&bytes).to_hex().to_string();
         Ok(ImportOutput {
@@ -178,39 +181,7 @@ fn pcm(sample: f32) -> i16 {
     (sample.clamp(-1.0, 1.0) * 32767.0).round() as i16
 }
 
-fn resample(clip: &Clip, rate: u32, max_bytes: usize) -> Result<Vec<Frame>> {
-    let len = (clip.len() as u64 * rate as u64).div_ceil(clip.sample_rate() as u64) as usize;
-    if len.saturating_mul(size_of::<Frame>()) > max_bytes {
-        return Err(AudioError::Capacity("resampled cook budget"));
-    }
-    if rate == clip.sample_rate() {
-        return Ok(clip.frames().to_vec());
-    }
-    let ratio = clip.sample_rate() as f64 / rate as f64;
-    let cutoff = (1.0 / ratio).min(1.0) * 0.95;
-    let mut out = Vec::with_capacity(len);
-    for i in 0..len {
-        let position = i as f64 * ratio;
-        let center = position.floor() as i64;
-        let mut sum = Frame::ZERO;
-        let mut weight = 0.0_f64;
-        for tap in -32..=32 {
-            let index = center + tap;
-            let x = index as f64 - position;
-            let z = std::f64::consts::PI * x * cutoff;
-            let sinc = if z.abs() < 1e-12 { 1.0 } else { z.sin() / z };
-            let window = 0.5 + 0.5 * (std::f64::consts::PI * x / 33.0).cos();
-            let w = sinc * window * cutoff;
-            let frame = clip.frames()[index.clamp(0, clip.len() as i64 - 1) as usize];
-            sum += frame * w as f32;
-            weight += w;
-        }
-        out.push(sum * (1.0 / weight) as f32);
-    }
-    Ok(out)
-}
-
-fn opus_ogg(frames: &[Frame], bitrate: i32) -> Result<Vec<u8>> {
+fn opus_ogg(mut next: impl FnMut() -> Result<Option<Frame>>, bitrate: i32) -> Result<Vec<u8>> {
     if !(6000..=512000).contains(&bitrate) {
         return Err(AudioError::Invalid("Opus bitrate"));
     }
@@ -231,21 +202,36 @@ fn opus_ogg(frames: &[Frame], bitrate: i32) -> Result<Vec<u8>> {
     let mut writer = ogg::PacketWriter::new(&mut out);
     writer.write_packet(head, 1, PacketWriteEndInfo::EndPage, 0)?;
     writer.write_packet(tags, 1, PacketWriteEndInfo::EndPage, 0)?;
-    let total = (frames.len() + skip as usize).div_ceil(960) * 960;
     let mut pcm = [0.0; 1920];
     let mut encoded = [0_u8; 4000];
-    for offset in (0..total).step_by(960) {
+    let (mut frames, mut offset, mut eof) = (0_u64, 0_u64, false);
+    loop {
         pcm.fill(0.0);
-        for (i, frame) in frames.iter().skip(offset).take(960).enumerate() {
-            pcm[i * 2] = frame.left;
-            pcm[i * 2 + 1] = frame.right;
+        for pair in pcm.as_chunks_mut::<2>().0 {
+            if eof {
+                break;
+            }
+            match next()? {
+                Some(frame) => {
+                    *pair = [frame.left, frame.right];
+                    frames += 1;
+                }
+                None => {
+                    eof = true;
+                    break;
+                }
+            }
+        }
+        if eof && frames == 0 {
+            return Err(AudioError::Invalid("empty audio source"));
         }
         let len = encoder.encode_float(&pcm, &mut encoded).map_err(err)?;
-        let last = offset + 960 == total;
+        offset += 960;
+        let last = eof && offset >= frames + u64::from(skip);
         let granule = if last {
-            frames.len() as u64 + skip as u64
+            frames + u64::from(skip)
         } else {
-            (offset + 960) as u64
+            offset
         };
         writer.write_packet(
             encoded[..len].to_vec(),
@@ -257,6 +243,9 @@ fn opus_ogg(frames: &[Frame], bitrate: i32) -> Result<Vec<u8>> {
             },
             granule,
         )?;
+        if last {
+            break;
+        }
     }
     Ok(out)
 }

@@ -32,7 +32,7 @@ pub struct Vertex {
     pub source_index: u32,
 }
 /// Deterministic geometry cook policy.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ara_schema::Schema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
 #[ara(module = "asset")]
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct MeshSettings {
@@ -46,6 +46,10 @@ pub struct MeshSettings {
     /// Skinned and morph-deformed meshes retain the classic path.
     #[ara(default = true)]
     pub virtual_geometry: bool,
+    /// glTF base-color image URI (or #image-index) to companion opacity image URI.
+    /// The mask's red channel multiplies existing alpha; paths are relative to the model.
+    #[serde(default)]
+    pub opacity_maps: std::collections::BTreeMap<String, String>,
 }
 impl Default for MeshSettings {
     fn default() -> Self {
@@ -53,6 +57,7 @@ impl Default for MeshSettings {
             lod_count: 4,
             lod_error: 0.01,
             virtual_geometry: true,
+            opacity_maps: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -92,7 +97,23 @@ pub(crate) fn normals(vertices: &mut [Vertex], indices: &[u32]) {
 }
 /// Optimizes cache/fetch locality, quantizes attributes, builds simplification LODs
 /// and meshlets. Returns the renderer's validated ARAF v1 mesh bytes.
-pub fn cook_mesh(vertices: &[Vertex], indices: &[u32], settings: MeshSettings) -> Result<Vec<u8>> {
+pub fn cook_mesh(
+    vertices: &[Vertex],
+    indices: &[u32],
+    settings: impl std::borrow::Borrow<MeshSettings>,
+) -> Result<Vec<u8>> {
+    let settings = settings.borrow();
+    cook_mesh_with_tangent_uv(vertices, indices, settings, |v| v.uv0)
+}
+
+/// Generates missing tangents from the normal texture's selected/transformed UVs,
+/// preserving both original coordinate sets and all supplied tangent attributes.
+pub(crate) fn cook_mesh_with_tangent_uv(
+    vertices: &[Vertex],
+    indices: &[u32],
+    settings: &MeshSettings,
+    tangent_uv: impl Fn(&Vertex) -> [f32; 2],
+) -> Result<Vec<u8>> {
     if !cfg!(target_endian = "little") {
         return Err(Error::Invalid(
             "cooking requires a little-endian host".into(),
@@ -127,7 +148,7 @@ pub fn cook_mesh(vertices: &[Vertex], indices: &[u32], settings: MeshSettings) -
     let needs_tangents = vertices.iter().all(|v| v.tangent == [0.0; 4]);
     let (prepared, source_indices) = if needs_tangents {
         let mut corners: Vec<_> = indices.iter().map(|&i| vertices[i as usize]).collect();
-        mikktspace::generate_tangents(&mut TangentGeometry(&mut corners));
+        mikktspace::generate_tangents(&mut TangentGeometry(&mut corners, &tangent_uv));
         let (count, remap) = meshopt::generate_vertex_remap(&corners, None);
         (
             meshopt::remap_vertex_buffer(&corners, count, &remap),
@@ -291,8 +312,8 @@ fn snorm(value: f32) -> i16 {
     meshopt::quantize_snorm(value, 16) as i16
 }
 
-struct TangentGeometry<'a>(&'a mut [Vertex]);
-impl mikktspace::Geometry for TangentGeometry<'_> {
+struct TangentGeometry<'a, F>(&'a mut [Vertex], &'a F);
+impl<F: Fn(&Vertex) -> [f32; 2]> mikktspace::Geometry for TangentGeometry<'_, F> {
     fn num_faces(&self) -> usize {
         self.0.len() / 3
     }
@@ -306,7 +327,7 @@ impl mikktspace::Geometry for TangentGeometry<'_> {
         self.0[face * 3 + vert].normal
     }
     fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        self.0[face * 3 + vert].uv0
+        (self.1)(&self.0[face * 3 + vert])
     }
     fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
         self.0[face * 3 + vert].tangent = tangent;

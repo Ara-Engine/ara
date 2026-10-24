@@ -553,7 +553,13 @@ fn two_process_demo() {
         .call("collab.sync", json!({ "session": s, "snapshot": true }))
         .expect("snapshot");
     let snap: Snapshot = serde_json::from_value(snap["snapshot"].clone()).expect("snapshot");
-    let truth = snap.docs[0].text.clone();
+    let truth = snap
+        .docs
+        .iter()
+        .find(|doc| doc.path == "levels/yard.scene")
+        .expect("yard scene")
+        .text
+        .clone();
 
     // Convergence.
     assert_eq!(mia_text, truth, "Mia's replica converged");

@@ -74,6 +74,56 @@ fn pcm_adpcm_and_opus_follow_policy_and_decode() {
 }
 
 #[test]
+fn three_minute_music_cooks_and_decodes_with_a_small_pcm_budget() {
+    let rate = 48000;
+    let count = rate as usize * 181;
+    let frames = tone(rate, count);
+    let wav = pcm_wav(rate, &frames).unwrap();
+    drop(frames);
+    let cooked = AudioImporter
+        .import(&ImportInput {
+            extension: "wav",
+            bytes: &wav,
+            settings: CookSettings {
+                usage: AudioUse::Music,
+                decoded_budget: 65536,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(cooked.codec, CookCodec::Opus);
+    assert!(cooked.loudness.is_some());
+    assert!(cooked.peak > 0.24);
+    let mut decoder = OpusDecoder::open(Cursor::new(cooked.bytes)).unwrap();
+    let mut block = [Frame::ZERO; 4096];
+    let mut decoded = 0;
+    loop {
+        let n = decoder.read_frames(&mut block).unwrap();
+        if n == 0 {
+            break;
+        }
+        decoded += n;
+    }
+    assert_eq!(
+        decoded, count,
+        "Opus EOS trimming must retain the exact duration"
+    );
+    assert!(
+        AudioImporter
+            .import(&ImportInput {
+                extension: "wav",
+                bytes: &wav,
+                settings: CookSettings {
+                    decoded_budget: 65536,
+                    ..Default::default()
+                },
+            })
+            .is_err(),
+        "short effects remain subject to the resident budget"
+    );
+}
+
+#[test]
 fn opus_cooking_resamples_and_trims_lookahead() {
     let wav = pcm_wav(44100, &tone(44100, 4410)).unwrap();
     let cooked = AudioImporter

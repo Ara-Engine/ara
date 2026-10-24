@@ -37,6 +37,7 @@ serde_json.workspace = true
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel"] }
 
 [dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
 ara-host.workspace = true
 ara-import2d = { path = "../ara-import2d" }
 ara-importers = { path = "../ara-importers" }
@@ -44,7 +45,6 @@ ara-json.workspace = true
 ara-mcp.workspace = true
 ara-ops.workspace = true
 ara-play-host = { path = "../ara-play-host" }
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

@@ -21,12 +21,16 @@ Steam Audio 4.8.1 HRTF/direct effects, bounded streaming and agent evidence.
   one independent DSP state per voice. `AcousticScene` is a geometry-worker seam.
 - `MediaDecoder`, `OpusDecoder`, `PackSlice`, `StreamBudget`: incremental media,
   range-confined pack reads and bounded aggregate PCM queues.
-- `AudioImporter`: pure local importer contract; adapt its envelope to ara-asset
-  later. Opus music/dialogue; PCM/IMA ADPCM short SFX on every platform.
+- `AudioImporter`: pure local importer contract, adapted by ara-importers.
+  Music/dialogue stream through bounded PCM blocks to Opus; PCM/IMA ADPCM short
+  SFX remain resident. `decodedBudget` excludes compressed data and codec/meter
+  scratch (64 MiB default; streamed cooks require at least 64 KiB).
 - `capture_audio`: bounded offline WAV + canonical JSON, LUFS/peaks/spectrum,
   silence, clipping, pre-limiter overloads and a WAV BLAKE3 hash. `Analysis::buses`
   (per-bus/aux peak + RMS over the window) is filled by `capture_audio`;
   `occlusion` (ara-acoustics) and `graphs` (ara-audio-graph) are attached by callers.
+  `capture_audio_prepared` refills offline stream producers before each quantum;
+  decoding never moves into the allocation-free renderer.
 
 ## Audio v2 mechanisms (additive)
 

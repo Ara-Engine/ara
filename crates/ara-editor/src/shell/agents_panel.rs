@@ -138,6 +138,10 @@ impl Shell {
                         ara_doc::Op::Move { id, .. } => {
                             ("info", format!("{} moved", name(id.as_str())))
                         }
+                        ara_doc::Op::Document { path, kind, .. } => match kind {
+                            Some(kind) => ("success", format!("+ {path} ({kind})")),
+                            None => ("destructive", format!("− {path}")),
+                        },
                     };
                     out.push_str(&format!(
                         "<text id='{id}-op-{index}' class='feed-op {class}' text='{}' />",

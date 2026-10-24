@@ -28,6 +28,8 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - `subscribe() -> mpsc::Receiver<Transaction>`.
 - `restore(txn, apply)`: put a journaled transaction back into history after a
   restart (same ID and revisions); `apply` re-applies its ops first.
+- `restore_documents(txn, documents)`: replay only the unsaved files of a
+  transaction interrupted during a multi-document flush, retaining full history.
 - `load_doc(path, doc)` / `unload_doc(id)`: a document file appeared or was
   deleted. Not edits: no ops are recorded.
 - `load_doc_with_asset_path(save_path, doc, source_path)`: load sidecar settings

@@ -37,6 +37,12 @@ pub struct MeshRenderer {
     // Migration: early editor documents wrote `mesh`; reading renames it.
     #[ara(alias = "mesh")]
     pub model: Option<AssetRef>,
+    /// Source node name or numeric glTF index. `name:3` selects a numeric name.
+    /// The drawable subtree retains source rotation/scale and restores its pivot
+    /// to the entity origin. Absent selects the complete default scene.
+    pub node: Option<String>,
+    /// Zero-based primitive within the selected subtree (or whole model).
+    pub primitive: Option<u32>,
     /// Linear base color multiplier and opacity.
     // Migration: early editor documents wrote `tint`; reading renames it.
     #[ara(alias = "tint")]
@@ -47,8 +53,21 @@ pub struct MeshRenderer {
     /// Metalness.
     #[ara(range(min = 0, max = 1))]
     pub metallic: f32,
-    /// Emitted radiance in candela per square metre (linear RGB).
+    /// Procedural emitted radiance, or the RGB multiplier of a model's emission.
+    /// Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.
     pub emissive: [f32; 3],
+    /// Enables emission without modifying the source model or its materials.
+    #[ara(default = true)]
+    pub emissive_enabled: bool,
+    /// Emission multiplier, applied once after the source or overridden factor.
+    #[ara(default = 1, range(min = 0))]
+    pub emissive_strength: f32,
+    /// Optional linear RGB replacement for the source emissive factor, useful for lamps.
+    #[ara(range(min = 0))]
+    pub emissive_factor: Option<[f32; 3]>,
+    /// Source material names or numeric indices affected by `emissiveFactor`.
+    /// Empty targets all; `name:3` disambiguates a numeric material name.
+    pub emissive_materials: Vec<String>,
 }
 impl Default for MeshRenderer {
     fn default() -> Self {
@@ -56,11 +75,38 @@ impl Default for MeshRenderer {
             shape: MeshShape::Box,
             size: [1.0; 3],
             model: None,
+            node: None,
+            primitive: None,
             color: Color([1.0; 4]),
             roughness: 0.6,
             metallic: 0.0,
             emissive: [0.0; 3],
+            emissive_enabled: true,
+            emissive_strength: 1.0,
+            emissive_factor: None,
+            emissive_materials: Vec::new(),
         }
+    }
+}
+
+impl MeshRenderer {
+    /// Whether a source material receives this renderer's optional emission factor.
+    pub fn targets_emissive_material(&self, index: usize, name: &str) -> bool {
+        self.emissive_materials.is_empty()
+            || self
+                .emissive_materials
+                .iter()
+                .any(|selector| matches_emissive_material(selector, index, name))
+    }
+}
+
+pub(crate) fn matches_emissive_material(selector: &str, index: usize, name: &str) -> bool {
+    if let Some(name_selector) = selector.strip_prefix("name:") {
+        name == name_selector
+    } else if let Ok(selected) = selector.parse::<usize>() {
+        index == selected
+    } else {
+        name == selector
     }
 }
 

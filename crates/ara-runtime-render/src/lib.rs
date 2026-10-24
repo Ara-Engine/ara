@@ -12,6 +12,8 @@
 mod composite;
 pub mod geometry;
 pub mod landscape;
+#[cfg(test)]
+mod landscape_tests;
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
@@ -116,6 +118,12 @@ fn material_key(draw: &Draw) -> u64 {
         .chain(draw.emissive.iter())
     {
         h = fnv(h, &v.to_bits().to_le_bytes());
+    }
+    h = fnv(h, &[u8::from(draw.emissive_factor.is_some())]);
+    if let Some(factor) = draw.emissive_factor {
+        for value in factor {
+            h = fnv(h, &value.to_bits().to_le_bytes());
+        }
     }
     h
 }
@@ -475,12 +483,19 @@ impl Presenter {
             let palette = draw.skin.clone().map(|r| &frame.palettes[r]);
             let mut vertices = Vec::new();
             geometry::transform(&source.vertices, draw.world, palette, &mut vertices);
+            // A model without a material has zero source emission; shapes use radiance.
+            let default_emissive = if matches!(&draw.geometry, Geometry::Model { .. }) {
+                let factor = draw.emissive_factor.unwrap_or([0.; 3]);
+                std::array::from_fn(|i| factor[i] * draw.emissive[i])
+            } else {
+                draw.emissive
+            };
             let mut material = scene::Material {
                 base_color: draw.color,
                 emissive_roughness: [
-                    draw.emissive[0],
-                    draw.emissive[1],
-                    draw.emissive[2],
+                    default_emissive[0],
+                    default_emissive[1],
+                    default_emissive[2],
                     draw.roughness,
                 ],
                 surface: [draw.metallic, 1.0, 1.0, 0.5],
@@ -499,12 +514,11 @@ impl Presenter {
                 {
                     *out = a * b;
                 }
-                // glTF emissive factors are relative; the entity's emissive radiance
-                // (cd/m²) scales them, so imported emitters stay dark until lit.
+                let emissive = draw.emissive_factor.unwrap_or(m.emissive);
                 material.emissive_roughness = [
-                    m.emissive[0] * draw.emissive[0],
-                    m.emissive[1] * draw.emissive[1],
-                    m.emissive[2] * draw.emissive[2],
+                    emissive[0] * draw.emissive[0],
+                    emissive[1] * draw.emissive[1],
+                    emissive[2] * draw.emissive[2],
                     m.roughness,
                 ];
                 material.surface = [m.metallic, m.normal_scale, 1.0, m.alpha_cutoff];

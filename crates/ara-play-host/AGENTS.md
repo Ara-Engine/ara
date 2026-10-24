@@ -22,6 +22,9 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
   (imports in worker processes, non-progressive); `pins` waits for published
   generations, which are always persisted final-preset cooks players can load.
+  `synchronize` follows in-memory import document revisions, including imports made
+  after the pipeline started. New Play pins wait for pending configured generations;
+  failed cooks retain the last good generation and report their existing diagnostic.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`

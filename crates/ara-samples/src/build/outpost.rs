@@ -49,7 +49,6 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         ],
     )?;
     remove_sidecars(&ctx.root.join("assets/third_party"))?;
-    ctx.project_settings("Outpost", SCENE.0)?;
     let models = models(ctx)?;
     terrain(ctx)?;
     let ground = Ground::load(ctx, TERRAIN.0)?.shifted(SHIFT);
@@ -82,6 +81,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     )?;
     exterior(ctx, &models, &ground)?;
     super::hangar::build(ctx, &models)?;
+    ctx.set_main(SCENE.0, SCENE.1)?;
     ctx.check()?;
     Ok(())
 }
@@ -584,11 +584,11 @@ fn terrain(ctx: &Ctx) -> Result<()> {
                 "terrain.layer.add",
                 json!({"id": "l_sculpt", "layer": {"name": "Sculpt", "priority": 0, "enabled": true, "opacity": 1}}),
             ),
-            ("terrain.raise", json!({"layer": "l_sculpt", "dabs": raise})),
-            ("terrain.raise", json!({"layer": "l_sculpt", "dabs": peaks})),
-            ("terrain.paint", json!({"layer": "l_sculpt", "channel": 2, "dabs": [dab(96.0, 96.0, 320.0, 1.0)]})),
-            ("terrain.paint", json!({"layer": "l_sculpt", "channel": 1, "dabs": rock})),
-            ("terrain.paint", json!({"layer": "l_sculpt", "channel": 0, "dabs": grass})),
+            ("terrain.raise", json!({"id":"s_ground", "layer": "l_sculpt", "dabs": raise})),
+            ("terrain.raise", json!({"id":"s_peaks", "layer": "l_sculpt", "dabs": peaks})),
+            ("terrain.paint", json!({"id":"s_soil", "layer": "l_sculpt", "channel": 2, "dabs": [dab(96.0, 96.0, 320.0, 1.0)]})),
+            ("terrain.paint", json!({"id":"s_rock", "layer": "l_sculpt", "channel": 1, "dabs": rock})),
+            ("terrain.paint", json!({"id":"s_grass", "layer": "l_sculpt", "channel": 0, "dabs": grass})),
         ],
     )
 }
@@ -678,10 +678,10 @@ fn foliage(ctx: &Ctx, models: &Models) -> Result<()> {
     ];
     let mut zones = vec![(C.x, C.y + 4.0, 37.0)];
     zones.extend(road_path().iter().map(|p| (p.x, p.y, 5.0)));
-    for (x, z, r) in zones {
+    for (i, (x, z, r)) in zones.into_iter().enumerate() {
         calls.push((
             "foliage.exclude",
-            json!({"zone": {"center": [x + SHIFT.x, z + SHIFT.z], "radius": r}}),
+            json!({"id":format!("x_clear{i}"), "zone": {"center": [x + SHIFT.x, z + SHIFT.z], "radius": r}}),
         ));
     }
     ctx.apply(
@@ -706,34 +706,22 @@ fn audio(ctx: &Ctx) -> Result<()> {
         ),
     ] {
         let entry = ctx.lock.get(asset).expect("audio pinned");
-        ctx.sidecar(&entry.relative(file), id, "ara.audio", settings)?;
+        ctx.sidecar(&entry.relative(file), id, settings)?;
     }
     music(ctx)
 }
 
-/// One looping segment of the CC0 "Calm Track", written with the canonical writer
-/// (no command authors `.music` documents yet).
+/// One looping segment of the CC0 "Calm Track", authored through music commands.
 fn music(ctx: &Ctx) -> Result<()> {
-    let schema = ara_runtime::schema(&[]).map_err(|e| anyhow::anyhow!("{e:?}"))?;
     let track = ctx.lock.get("oga_lonelyhood").expect("music pinned");
-    let mut doc = ara_doc::Document::new(
-        "music",
-        ara_doc::AssetId::parse(MUSIC.1).map_err(anyhow::Error::msg)?,
-    );
-    let record = |v: Value| v.as_object().cloned().unwrap_or_default();
-    doc.insert_unchecked(
-        ara_doc::RecordId::parse("ms_outpost").map_err(anyhow::Error::msg)?,
-        record(json!({"initial": "dusk", "intensity": 0.5, "seed": 7})),
-    );
-    doc.insert_unchecked(
-        ara_doc::RecordId::parse("sg_dusk").map_err(anyhow::Error::msg)?,
-        record(json!({"name": "dusk", "bars": 64, "tempo": [{"bpm": 60}],
-            "stems": [{"name": "lonelyhood", "clip": format!("@{}#as_lonelyhood", track.relative("Lonelyhood.ogg")), "gainDb": -10}]})),
-    );
-    let file = ctx.root.join(MUSIC.0);
-    std::fs::create_dir_all(file.parent().expect("music dir"))?;
-    std::fs::write(file, ara_doc::write(&doc, &schema))?;
-    Ok(())
+    ctx.new_document(MUSIC.0, "music", MUSIC.1)?;
+    ctx.apply(MUSIC.0, "Compose the dusk music score", vec![
+        ("music.settings.set", json!({"settings": {"initial": "dusk", "intensity": 0.5, "seed": 7}})),
+        ("music.segment.set", json!({"id": "sg_dusk", "segment": {
+            "name": "dusk", "bars": 64, "tempo": [{"bpm": 60}],
+            "stems": [{"name": "lonelyhood", "clip": format!("@{}#as_lonelyhood", track.relative("Lonelyhood.ogg")), "gainDb": -10}]
+        }})),
+    ])
 }
 
 /// Euler rotation (degrees) aiming local −Z along `direction` (lights, cameras).
