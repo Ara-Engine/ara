@@ -36,6 +36,7 @@ pub(super) fn prepare(
     gpu: &mut NativeUi,
     shell: &Shell,
     editor: &Editor,
+    scene_view: &viewport::SceneView,
 ) -> anyhow::Result<Work> {
     let target = task.params.target.as_deref().unwrap_or("viewport");
     let relative = task
@@ -54,17 +55,20 @@ pub(super) fn prepare(
     if target == "editor" {
         return Ok(Work::Editor(gpu.pixels()?, path, shell.layout_report()));
     }
-    let capture = renderer.capture(&CaptureRequest {
-        camera: editor.state.camera.spec(),
-        size: renderer.size(),
-        mode: ViewMode::Lit,
-        deterministic: true,
-        exposure: 0.0015,
-        settle_frames: 1,
-        tick: 0,
-        seed: 7,
-        marks: Some(task.params.marks.unwrap_or(100).min(1000) as usize),
-    })?;
+    let capture = scene_view.capture(
+        renderer,
+        &CaptureRequest {
+            camera: editor.state.camera.spec(),
+            size: renderer.size(),
+            mode: ViewMode::Lit,
+            deterministic: true,
+            exposure: 0.0015,
+            settle_frames: 1,
+            tick: 0,
+            seed: 7,
+            marks: Some(task.params.marks.unwrap_or(100).min(1000) as usize),
+        },
+    )?;
     let entities = editor
         .view()?
         .entities()

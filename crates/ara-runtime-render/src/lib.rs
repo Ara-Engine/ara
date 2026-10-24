@@ -17,7 +17,7 @@ pub mod landscape;
 mod landscape_tests;
 mod material;
 mod presentation;
-pub use presentation::{QualityChoice, QualityPreset};
+pub use presentation::{PresentationImage, QualityChoice, QualityPreset};
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;

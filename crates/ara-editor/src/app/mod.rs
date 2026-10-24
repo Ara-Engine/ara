@@ -724,7 +724,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 float.dirty = false;
             }
             if let Ok(task) = editor.captures.try_recv() {
-                let prepared = capture::prepare(&task, &mut renderer, &mut gpu, &shell, &editor);
+                let prepared =
+                    capture::prepare(&task, &mut renderer, &mut gpu, &shell, &editor, &scene_view);
                 let completed = editor.completed.clone();
                 match prepared {
                     Ok(work) => {
@@ -841,6 +842,23 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         Some(crate::settings::user_settings_path()?),
     )?;
     setup::prepare(&mut editor, &options)?;
+    // Headless has no editor tick loop to publish completed imports. This capture
+    // job owns one asset-ready boundary; SceneView itself remains read-only.
+    // The editor owner can fold this block into its shared asset-ready boundary.
+    let _published_assets = ara_play_host::PublishedAssets::for_project(editor.host.root())
+        .map_err(anyhow::Error::msg)?;
+    let worker = ara_play_host::PlayConfig::for_project(editor.host.root()).import_worker;
+    ara_play_host::package_scene_with_progress(editor.host.root(), &worker, |progress| {
+        eprintln!(
+            "Scene capture cooking: {}/{} complete ({:.1}s elapsed, {:.1}s since completion)",
+            progress.completed,
+            progress.total,
+            progress.elapsed.as_secs_f64(),
+            progress.stalled.as_secs_f64()
+        );
+        Ok(())
+    })
+    .map_err(anyhow::Error::msg)?;
     let view = editor.view()?;
     let mut renderer = Renderer::new(
         view.scene(editor.host.root(), &editor.state, None)?,
@@ -848,19 +866,25 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         &[],
         editor.host.root().join(".ara/gpu"),
     )?;
-    renderer
-        .capture(&CaptureRequest {
-            camera: editor.state.camera.spec(),
-            size: options.size,
-            mode: ViewMode::Lit,
-            deterministic: true,
-            exposure: 0.0015,
-            settle_frames: 4,
-            tick: 0,
-            seed: 0,
-            marks: Some(16),
-        })?
+    let mut scene_view = viewport::SceneView::default();
+    scene_view.render(&mut renderer, &editor, &view, 64)?;
+    scene_view
+        .capture(
+            &mut renderer,
+            &CaptureRequest {
+                camera: editor.state.camera.spec(),
+                size: options.size,
+                mode: ViewMode::Lit,
+                deterministic: true,
+                exposure: 0.0015,
+                settle_frames: 4,
+                tick: 0,
+                seed: 0,
+                marks: Some(16),
+            },
+        )?
         .write(&options.output.join("editor-scene.png"))?;
+    scene_view.destroy(&mut renderer)?;
     editor.host.flush();
     renderer.gpu().assert_clean()?;
     Ok(())

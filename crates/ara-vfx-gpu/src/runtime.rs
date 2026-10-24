@@ -220,6 +220,12 @@ pub struct GpuSystem {
     pub(crate) last_frame: Frame,
 }
 impl GpuSystem {
+    /// Completed GPU pass timestamps from the most recent step or render. Reading
+    /// these host-side measurements performs no particle-buffer readback.
+    pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
+        &self.timings
+    }
+
     /// Advance one fixed tick and render it through declared graph passes.
     pub fn step(&mut self, gpu: &mut VulkanDevice, view: &View) -> Result<()> {
         self.run_frame(gpu, view, false, true)
