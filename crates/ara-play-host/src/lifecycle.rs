@@ -207,6 +207,7 @@ mod tests {
                 fault: None,
                 hot_reload: false,
                 streaming_assets: false,
+                import_revision: 0,
                 commands: Value::Null,
                 startup: Value::Null,
                 events: Vec::new(),

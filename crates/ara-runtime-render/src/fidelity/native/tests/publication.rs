@@ -139,12 +139,22 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
         let mut baseline = None;
         for iteration in 0..24 {
             raster.prepare(renderer, &frame, plan, look, || {
-                Content::resolve_available(&frame, &workspace, &schema, &library, &source)
+                let mut content =
+                    Content::resolve_available(&frame, &workspace, &schema, &library, &source)?;
+                for draw in &frame.draws {
+                    if matches!(draw.geometry, Geometry::Shape { .. }) {
+                        content
+                            .unpublished_models
+                            .insert(draw.address.to_owned(), models[&draw.address].to_owned());
+                    }
+                }
+                Ok(content)
             })?;
             if iteration == 0 {
                 let arrivals = placeholders.take_arrivals();
                 assert_eq!(arrivals.len(), usize::from(stage > 0));
-                raster.fade_models(&arrivals)?;
+                // Root arrivals now fade automatically, just like foliage,
+                // from the previous generation's unpublished asset identities.
             }
             raster.render(renderer, &frame, &camera, ViewMode::Lit)?;
             if stage == 1 && matches!(iteration, 0 | 5) {

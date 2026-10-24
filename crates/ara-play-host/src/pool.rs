@@ -1,7 +1,8 @@
 //! Pre-spawned, single-use `ara-player` processes (S5): spawned ahead of Play,
 //! authenticated by the per-session token in `player.hello`, idle at zero CPU until
 //! taken. Faults are classified from the exit code, the stderr crash line and the
-//! 250 ms heartbeat (a 1 s silence is a hang; the player is killed).
+//! Independent 250 ms heartbeats (five seconds of silence, beyond announced busy
+//! grace, is a hang; the player is killed).
 //! Launches run on background threads (CreateProcess of the player image costs
 //! 10-200 ms on Windows), and players that exit before their hello back the refill
 //! off (0.5 s doubling to 30 s), so a broken player never stalls the host tick.
@@ -20,7 +21,7 @@ use std::{
 };
 
 /// How long a running player may stay silent before it is declared hung.
-pub const WATCHDOG: Duration = Duration::from_secs(1);
+pub const WATCHDOG: Duration = Duration::from_secs(5);
 
 /// A connected player process.
 pub struct Player {
@@ -128,7 +129,7 @@ impl Player {
                 Ok(None) => {}
                 Err(_) => return Err(self.closed()),
             }
-            // Busy players keep heartbeating between tick chunks; silence is a hang.
+            // IO-thread heartbeats continue through simulation and uploads.
             if self.hung() {
                 let _ = self.child.kill();
                 let _ = self.child.wait();

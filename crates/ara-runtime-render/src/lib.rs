@@ -162,6 +162,14 @@ fn material_key(draw: &Draw) -> u64 {
 }
 
 impl Presenter {
+    /// Update loading/failed bounds at an import-status boundary. This changes
+    /// only existing native material rows and retains geometry and last-good models.
+    pub fn update_model_placeholders(&mut self, is_pending: impl Fn(&str) -> bool) -> Result<()> {
+        if let (Some(raster), Some(renderer)) = (&mut self.raster, &mut self.renderer) {
+            raster.style_unpublished(renderer, is_pending)?;
+        }
+        Ok(())
+    }
     /// A presenter for `size` pixels. `extensions` are the window's Vulkan instance
     /// extensions (empty for headless); `cache` holds the pipeline cache.
     pub fn new(size: [u32; 2], extensions: Vec<CString>, cache: impl Into<PathBuf>) -> Self {

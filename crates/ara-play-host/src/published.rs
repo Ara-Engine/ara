@@ -159,6 +159,19 @@ pub(crate) struct Publisher {
     progress_dirty: bool,
 }
 impl Publisher {
+    pub(crate) fn import_revision(&self) -> u64 {
+        self.reader.progress_revision()
+    }
+    pub(crate) fn import_state(&self) -> ara_play::ImportState {
+        ara_play::ImportState {
+            revision: self.import_revision(),
+            pending: self
+                .progress
+                .as_ref()
+                .map(|p| p.pending.clone())
+                .unwrap_or_default(),
+        }
+    }
     pub(crate) fn new(root: &Path, cache: FileCache) -> Result<Self, String> {
         let reader = PublishedAssets::for_project(root)?;
         let current = reader.snapshot().unwrap_or_else(|| {

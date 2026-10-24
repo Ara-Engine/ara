@@ -82,6 +82,12 @@ fn sidecars(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 impl Assets {
+    pub(crate) fn import_revision(&self) -> u64 {
+        self.published.import_revision()
+    }
+    pub(crate) fn import_state(&self) -> ara_play::ImportState {
+        self.published.import_state()
+    }
     /// Snapshot completed generations immediately. A live Play world can start
     /// with placeholders while this same owner continues importing/publishing.
     pub fn ready_pins(&mut self, wanted: &BTreeSet<String>) -> BTreeMap<String, String> {
