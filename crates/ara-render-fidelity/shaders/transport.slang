@@ -13,7 +13,10 @@ void primaryMain(uint3 tid:SV_DispatchThreadID){
         store(f,WORLD+slot,p,0);store(f,NORMAL+slot,p,0);store(f,BASE,p,0);store(f,MOTION,p,0);store(f,DEPTH,p,0);if(f.transport.x==0){store(f,DIRECT,p,0);store(f,RAW,p,float4(environment(f,ray),1));}return;}
     Surface s=surface(f,hit.id,hit.primitive,hit.bary);if(dot(s.normal,-ray)<0)s.normal=-s.normal;
 #ifdef RESERVOIR_SURFACES
-    extraStore(f,35,p,float4(s.albedo,s.metal));extraStore(f,36,p,float4(s.geometricNormal,s.ao));
+    // Compact surface for reservoir passes. AO >= 2 tags pixels whose layers
+    // (coat, sheen, transmission) or specular scale the compact form cannot carry.
+    bool full=s.coat>0 || any(s.sheen>0) || s.transmission>0 || s.specular!=1;
+    extraStore(f,35,p,float4(s.albedo,s.metal));extraStore(f,36,p,float4(s.geometricNormal,s.ao+(full?2:0)));
 #endif
     float3 previousWorld=previousPosition(f,hit.id,hit.primitive,hit.bary,s.position);
     float4 previous=mul(f.previousVp,float4(previousWorld,1));float4 current=mul(f.vp,float4(s.position,1));

@@ -83,14 +83,17 @@ bool compatible(Frame f,uint2 p,int2 q,bool previous){
     if(!previous)plane=plane && dot(g,extraPixel(f,36,q).xyz)>0.9;
     return a.w>0 && a.w==b.w && dot(na.xyz,nb.xyz)>0.5 && abs(na.w-nb.w)<0.4 && plane;
 }
+// Plain pixels rebuild their surface from the primary pass's compact targets; only
+// layered ones (tagged AO >= 2) re-evaluate the material. Layer-capable variants
+// (atmosphere/layers) used to re-evaluate every pixel in each of four passes.
 Surface primarySurface(Frame f,uint2 p,out float3 v){
-    float4 w=pixel(f,WORLD+f.control.x,p),h=pixel(f,BASE,p);v=-cameraRay(f,float2(p)+0.5);
-#ifndef MATERIAL_LAYERS
-    Surface s=(Surface)0;float4 a=extraPixel(f,35,p),g=extraPixel(f,36,p),n=pixel(f,NORMAL+f.control.x,p);
-    s.position=w.xyz;s.id=uint(w.w)-1;s.albedo=a.rgb;s.metal=a.w;s.normal=n.xyz;s.roughness=n.w;s.geometricNormal=g.xyz;s.ao=g.w;s.specular=1;return s;
-#else
-    Surface s=surface(f,uint(w.w)-1,uint(h.z),h.xy);if(dot(s.normal,v)<0)s.normal=-s.normal;return s;
+    float4 w=pixel(f,WORLD+f.control.x,p),h=pixel(f,BASE,p),g=extraPixel(f,36,p);v=-cameraRay(f,float2(p)+0.5);
+#ifdef MATERIAL_LAYERS
+    [branch]if(g.w>=2){Surface s=surface(f,uint(w.w)-1,uint(h.z),h.xy);if(dot(s.normal,v)<0)s.normal=-s.normal;return s;}
 #endif
+    Surface s=(Surface)0;float4 a=extraPixel(f,35,p),n=pixel(f,NORMAL+f.control.x,p);
+    s.position=w.xyz;s.id=uint(w.w)-1;s.albedo=a.rgb;s.metal=a.w;s.normal=n.xyz;s.roughness=n.w;s.geometricNormal=g.xyz;s.ao=g.w>=2?g.w-2:g.w;s.specular=1;
+    s.sheenLut=f.display.z;s.coatRoughness=0.15;s.sheenRoughness=0.5;return s;
 }
 // Firefly suppression for one-sample specular estimates: cap a sample at sixteen
 // display-white units under the current exposure. Converged highlights of real
