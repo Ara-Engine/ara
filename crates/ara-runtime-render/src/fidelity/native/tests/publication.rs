@@ -146,6 +146,27 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
                 marks: None,
             })?
             .write(&root.join(format!("stage-{stage}.png")))?;
+        if stage == 3 {
+            // Extraction accepts the pose before a later quality failure. Retrying
+            // must still publish that pose, rather than forgetting its dirty row.
+            let mut changed = frame;
+            changed.draws[0].world.w_axis.x += 1.;
+            let mut invalid = plan;
+            invalid.quality.shadows.resolution = 0;
+            assert!(
+                raster
+                    .prepare(renderer, &changed, invalid, look, || Ok(Content::default()))
+                    .is_err()
+            );
+            let recovered =
+                raster.prepare(renderer, &changed, plan, look, || Ok(Content::default()))?;
+            assert!(
+                recovered.rebuilt,
+                "rejected preparation must not consume pending pose edits"
+            );
+            raster.render(renderer, &changed, &camera, ViewMode::Lit)?;
+            renderer.gpu().assert_clean()?;
+        }
     }
     raster.destroy(renderer.as_mut().context("test renderer")?)?;
     Ok(())

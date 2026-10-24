@@ -11,6 +11,7 @@ use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
+    raster_snapshot_dirty: bool,
     fidelity: Option<FidelityView>,
     content: Option<crate::world::gltf::FidelityContent>,
     prepared: Option<Prepared>,
@@ -27,6 +28,8 @@ pub(super) struct SceneView {
     lit: bool,
     /// Transient typed drafts, projected through the same native extraction as commits.
     preview_view: Option<crate::world::DocumentView>,
+    /// Pose already incorporated by the native patch path (no repeated extraction).
+    patched_pose: Option<u64>,
 }
 impl SceneView {
     /// Re-extract native input at the next render boundary, retaining GPU content
@@ -35,11 +38,89 @@ impl SceneView {
         self.revision = None;
         self.failed = None;
         self.remaining = self.remaining.max(8);
+        self.patched_pose = None;
     }
     /// Project typed Inspector drafts without authoring documents or baking meshes.
     pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
         self.preview_view = view;
         self.invalidate();
+    }
+    /// Update only `patch` on the retained native frame. A typed preview remains
+    /// projected for later publication/resize rebuilds. False requests extraction.
+    pub(super) fn apply_patch(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        committed: &crate::world::DocumentView,
+        preview: Option<crate::world::DocumentView>,
+        patch: &crate::world::Patch,
+    ) -> ara_ui::Result<bool> {
+        ara_gpu::cpu_scope!("SceneView.apply_patch");
+        if !renderer.is_native() || self.failed.is_some() {
+            return Ok(false);
+        }
+        let (Some(frame), Some(raster), Some(content), Some(revision)) = (
+            &mut self.raster_frame,
+            &mut self.raster,
+            &mut self.content,
+            self.revision,
+        ) else {
+            return Ok(false);
+        };
+        let publication = content.revision();
+        if publication != revision.3 {
+            return Ok(false);
+        }
+        let store = editor.host.store();
+        let settings = crate::world::gltf::render_settings(store.workspace())?;
+        let choice = editor
+            .state
+            .render_quality
+            .unwrap_or(settings.quality.into());
+        let plan = Plan::resolve(
+            choice,
+            &Capabilities::of(renderer.gpu()),
+            renderer.size(),
+            ara_runtime_render::RenderOptions {
+                ray_tracing: settings.ray_tracing,
+            },
+        )?;
+        let RenderPath::Raster(_) = plan.path else {
+            return Ok(false);
+        };
+        let target = preview.as_ref().unwrap_or(committed);
+        if !content.patch(
+            frame,
+            target,
+            store.workspace(),
+            patch,
+            editor.gesture.as_ref(),
+            &editor.state.hidden,
+        )? {
+            return Ok(false);
+        }
+        // Upload once at render_raster's normal frame boundary, rather than once
+        // per input event and again when that frame is drawn.
+        for draw in &frame.draws {
+            if patch.renamed.contains(&draw.address) {
+                renderer.rename(draw.entity, draw.label.to_owned())?;
+                raster.rename(draw.entity, &draw.label)?;
+            }
+        }
+        if patch.materials || patch.lights {
+            renderer.reset_temporal_history();
+        }
+        self.preview_view = preview;
+        self.raster_snapshot_dirty = true;
+        self.patched_pose = pose_key(editor.gesture.as_ref());
+        self.revision = Some((
+            store.revision(),
+            editor.extraction_revision,
+            editor.review_revision,
+            publication,
+        ));
+        self.remaining = self.remaining.max(8);
+        Ok(true)
     }
     pub fn timings(&self) -> &[ara_gpu::commands::PassTiming] {
         self.fidelity
@@ -154,6 +235,7 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
+        ara_gpu::cpu_scope!("SceneView.render_raster");
         let store = editor.host.store();
         let settings = crate::world::gltf::render_settings(store.workspace())?;
         let choice = editor
@@ -198,7 +280,7 @@ impl SceneView {
             return Ok(());
         }
         if self.revision != Some(revision)
-            || editor.gesture.is_some()
+            || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
             || self.raster_frame.is_none()
         {
             self.failed = Some(revision);
@@ -217,19 +299,21 @@ impl SceneView {
                 content.content(&frame, store.workspace(), store.schema())
             })?;
             self.raster_frame = Some(frame);
+            self.raster_snapshot_dirty = false;
             self.revision = Some(revision);
             self.failed = None;
             self.remaining = 64;
         } else {
             let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
             let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
-            self.raster.as_mut().ok_or("raster view")?.prepare(
-                renderer,
-                frame,
-                plan,
-                look,
-                || content.content(frame, store.workspace(), store.schema()),
-            )?;
+            let raster = self.raster.as_mut().ok_or("raster view")?;
+            let resolve = || content.content(frame, store.workspace(), store.schema());
+            if self.raster_snapshot_dirty {
+                raster.prepare(renderer, frame, plan, look, resolve)?;
+            } else {
+                raster.prepare_unchanged(renderer, frame, plan, look, resolve)?;
+            }
+            self.raster_snapshot_dirty = false;
         }
         if self.camera != Some(editor.state.camera) {
             self.remaining = self.remaining.max(8);
@@ -515,6 +599,22 @@ fn texture_config() -> NativeConfig {
     }
 }
 
+fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    gesture.map(|gesture| {
+        let mut hash = std::hash::DefaultHasher::new();
+        for (id, matrix) in &gesture.current {
+            id.hash(&mut hash);
+            for word in matrix.to_cols_array() {
+                word.to_bits().hash(&mut hash);
+            }
+        }
+        hash.finish()
+    })
+}
+
+#[cfg(test)]
+mod patch_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -589,6 +689,9 @@ mod tests {
             assert!(scene.active);
             assert!(renderer.presentation_ready());
             submit_ui(&scene, &renderer, &mut ui)?;
+            if !ray_tracing {
+                super::patch_tests::exercise(&mut scene, &mut renderer, &mut editor, &view, &root)?;
+            }
             assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
             // The empty publication lands later. Neither no snapshot nor an
             // unpublished model may attach undefined images or kill the Scene.

@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 mod document;
 mod geometry;
-pub use document::document_frame;
+pub use document::{document_frame, document_frame_selected};
 mod material;
 mod pending;
 pub use pending::when_published;
@@ -44,6 +44,7 @@ pub struct Prepared {
     /// Native BC mip tails, with no RGBA expansion or atlas generation.
     pub textures: NativeResidency,
     bindings: sync::Bindings,
+    changes: render::Changes,
 }
 
 struct Builder {
@@ -93,6 +94,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         scene: builder.scene,
         textures: builder.textures,
         bindings,
+        changes: render::Changes::default(),
     })
 }
 

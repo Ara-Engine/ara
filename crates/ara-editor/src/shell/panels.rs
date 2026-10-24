@@ -202,22 +202,31 @@ impl Shell {
                 let tab_id = format!("tab-{tab}");
                 self.bind_command(&tab_id, "window.show_panel", Target::Panel(tab.clone()));
                 let active = index == active;
-                let label = if active || !compact {
-                    format!("<text id='{tab_id}-label' text='{}' />", escape(title(tab)))
-                } else {
-                    String::new()
-                };
+                // Every tab keeps its label (hidden on a narrow area's inactive tabs),
+                // so a tab switch only changes classes and reconciles in place.
+                let label = format!(
+                    "<text id='{tab_id}-label'{} text='{}' />",
+                    if active || !compact {
+                        ""
+                    } else {
+                        " class='tab-label-hidden'"
+                    },
+                    escape(title(tab))
+                );
                 out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
             }
             out.push_str(&format!("<panel id='tabs-fill-{area}' class='fill' />"));
             format!("tabs-{area}")
         };
         if let Some(panel) = &current {
+            // One options button per area (its binding names the panel), so switching
+            // tabs keeps the header's shape.
+            let menu = format!("panel-menu-{area}");
             self.bindings.insert(
-                ara_ui::source::stable_id(&format!("panel-menu-{panel}")),
+                ara_ui::source::stable_id(&menu),
                 Binding::ContextMenu(Context::Tab, Target::Panel(panel.clone())),
             );
-            out.push_str(&format!("<button id='panel-menu-{panel}' class='ghost icon-button' label='{} options' description='Move, float, maximize or close' action='Dispatch'>{}</button>",escape(title(panel)),icons::icon(&format!("panel-menu-{panel}"),"ellipsis")));
+            out.push_str(&format!("<button id='{menu}' class='ghost icon-button' label='{} options' description='Move, float, maximize or close' action='Dispatch'>{}</button>",escape(title(panel)),icons::icon(&menu,"ellipsis")));
         }
         out.push_str("</panel>");
         host
@@ -237,7 +246,13 @@ impl Shell {
             "profiler" => self.profiler_panel(editor, out)?,
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
-            "assets" => self.assets_panel(editor, out),
+            "assets" => {
+                let editor: &Editor = editor;
+                let key = self.assets_key(editor);
+                self.memoized("assets", key, out, |shell, out| {
+                    shell.assets_panel(editor, out);
+                });
+            }
             "console" => self.console_panel(editor, out),
             "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),

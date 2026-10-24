@@ -140,11 +140,11 @@ never add a capture route that shows a window. `--verify-journey` (`app/journey.
 writes `journey.json` after every step. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
 frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
-area headers and tab bodies as parts (`Ui::reconcile_parts`: unchanged ones keep their rows);
-inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`).
-Only `scene_changed` state re-renders the Scene; icons re-rasterize on DPI only.
-Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a
-breadcrumb toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
-Swatches paint after layout, never raw colours. VFX: preview-only Hide/Isolate; timeline
-drives `asset_tools/vfx_stream.rs` (rate, restart, step, counters updated in place).
+menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`); inactive
+`panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`). Memoized
+panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
+test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
+Only `scene_changed` state re-renders the Scene. Tool pages (`docs/design/editor-tool-pages.md`)
+share a breadcrumb toolbar, side column and status strip; `graph/style.rs` names nodes/pins;
+swatches paint after layout. VFX Hide/Isolate are preview-only; its timeline drives `vfx_stream`.
 Imports use the shared `import.initialize`/`import.configure` commands.

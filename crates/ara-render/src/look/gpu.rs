@@ -51,6 +51,7 @@ pub(crate) struct Pipelines {
     pub bloom: Pipeline,
     pub post: Pipeline,
     pub gi_relight: Pipeline,
+    pub gi_scatter: Pipeline,
     pub ao_trace: Pipeline,
     pub ao_denoise: Pipeline,
     pub gi_gather: Pipeline,
@@ -88,6 +89,10 @@ pub(crate) struct LookGpu {
     pub deferred_history: Option<usize>,
     /// Probe-volume GI, when the scene has acquired probe surfaces.
     pub gi: Option<GiGpu>,
+    /// Distant shadows past the cascades (`Shadows::far`).
+    pub far: Option<super::far::FarMap>,
+    /// Reused host staging for probe records: buffer, capacity, storage index.
+    pub probe_staging: Option<(Buffer, usize, u32)>,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -97,6 +102,8 @@ pub(crate) struct LookIds {
     pub frame: ResourceId,
     /// Surface caches, meta, moments, irradiance read and irradiance write.
     pub gi: Option<[ResourceId; 5]>,
+    /// The far shadow map.
+    pub far: Option<ResourceId>,
 }
 
 impl LookIds {
@@ -134,6 +141,7 @@ impl LookGpu {
             bloom: load("look_bloom")?,
             post: load("look_post")?,
             gi_relight: load("look_gi_relight")?,
+            gi_scatter: load("look_gi_scatter")?,
             ao_trace: load("look_ao_trace")?,
             ao_denoise: load("look_ao_denoise")?,
             gi_gather: load("look_gi_gather")?,
@@ -171,6 +179,8 @@ impl LookGpu {
             deferred: false,
             deferred_history: None,
             gi: None,
+            far: None,
+            probe_staging: None,
         })
     }
 
@@ -323,6 +333,10 @@ impl LookGpu {
                     queue: Queue::Graphics,
                 },
             ),
+            far: self
+                .far
+                .as_ref()
+                .map(|far| graph.import(Resource::Image(far.image), far.state)),
             gi: self.gi.as_ref().map(|gi| {
                 let state = |access| State {
                     access,
@@ -355,6 +369,9 @@ impl LookGpu {
             let (read, write) = (1 - gi.slot, gi.slot);
             gi.access[read] = final_states[ids[3].0].access;
             gi.access[write] = final_states[ids[4].0].access;
+        }
+        if let (Some(far), Some(id)) = (&mut self.far, ids.far) {
+            far.state = final_states[id.0];
         }
     }
 }

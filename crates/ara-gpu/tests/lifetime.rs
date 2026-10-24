@@ -18,8 +18,11 @@ fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Res
     );
     let source = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
     let destination = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_DST, true)?;
-    let expected = [1u32, 7, 42, 100];
-    gpu.upload(source, bytemuck::cast_slice(&expected))?;
+    gpu.upload(source, bytemuck::cast_slice(&[1u32, 7, 42, 100]))?;
+    gpu.upload_range(source, 4, bytemuck::cast_slice(&[9u32]))?;
+    assert!(gpu.upload_range(source, 15, &[0, 0]).is_err());
+    assert!(gpu.upload_range(source, u64::MAX, &[0]).is_err());
+    let expected = [1u32, 9, 42, 100];
     let mut commands = gpu.begin(Queue::Graphics);
     commands.push(Command::CopyBuffer {
         source,

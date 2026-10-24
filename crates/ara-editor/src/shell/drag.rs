@@ -62,6 +62,7 @@ impl Shell {
                 self.asset_offset = (self.asset_offset + delta)
                     .clamp(0., (self.asset_rows.items.len() as f32 * 26. - r.h).max(0.));
                 view.scroll(&mut self.ui, &self.asset_rows, self.asset_offset, r.h)?;
+                self.bind_asset_rows();
                 return Ok(true);
             }
         }
@@ -78,6 +79,7 @@ impl Shell {
         self.hierarchy_offset = (self.hierarchy_offset + delta)
             .clamp(0., (self.hierarchy.items.len() as f32 * 26. - r.h).max(0.));
         view.scroll(&mut self.ui, &self.hierarchy, self.hierarchy_offset, r.h)?;
+        self.bind_hierarchy_rows();
         self.decorate_hierarchy();
         Ok(true)
     }
@@ -164,10 +166,12 @@ impl Shell {
             Drag::Asset { asset, .. } => {
                 let reference = asset.current_reference(editor.host.store().workspace());
                 let Some(reference) = reference else {
-                    return Err(
-                        "Mesh/prefab needs a stable asset ID from its document or import sidecar"
-                            .into(),
+                    let why = format!(
+                        "{} has no asset ID yet: it is still importing. Drop it again when it is ready",
+                        asset.name()
                     );
+                    self.status_note = Some(why.clone());
+                    return Err(why.into());
                 };
                 if let Some(i) = self.shown_node("animation-clip-field")
                     && self.ui.nodes[i]
@@ -199,6 +203,10 @@ impl Shell {
                     })
                     .map(|f| f.path.clone());
                 if let Some(field) = field {
+                    if let Err(why) = self.asset_for_field(editor, &asset, &field) {
+                        self.status_note = Some(why.clone());
+                        return Err(why.into());
+                    }
                     editor.apply(
                         crate::inspector::edit_commands(
                             &editor.state.selection,

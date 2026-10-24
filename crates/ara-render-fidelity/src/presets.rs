@@ -7,7 +7,7 @@
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::vulkan::VulkanDevice;
-use ara_render::look::{AmbientOcclusion, Quality, Reflections, Shadows};
+use ara_render::look::{AmbientOcclusion, FarShadows, Quality, Reflections, Shadows};
 
 /// User-facing quality tier. D27: every tier is raster by default
 /// ([`QualityPreset::raster_quality`]); with [`RenderOptions::ray_tracing`] on an RT
@@ -258,10 +258,16 @@ impl QualityPreset {
     /// Raster budgets for this preset (D27 record targets at 2560x1440 on an RTX
     /// 4070 SUPER: Low 1.0 ms, Medium 1.75, High 3.0, Epic 5.0).
     pub fn raster_quality(self) -> Quality {
-        let shadows = |cascades, resolution, distance| Shadows {
+        // Far maps keep distant hills and buildings self-shadowed past the
+        // cascades on every preset.
+        let shadows = |cascades, resolution, distance, far: (u32, f32)| Shadows {
             cascades,
             resolution,
             distance,
+            far: Some(FarShadows {
+                resolution: far.0,
+                distance: far.1,
+            }),
         };
         let ssr = |max_roughness, distance, steps| {
             Some(Reflections {
@@ -279,28 +285,28 @@ impl QualityPreset {
         };
         match self {
             Self::Low => Quality {
-                shadows: shadows(2, 1024, 60.),
+                shadows: shadows(2, 1024, 60., (1024, 600.)),
                 ambient_occlusion: None,
                 reflections: None,
                 gi_budget: 1024,
                 bloom: false,
             },
             Self::Medium => Quality {
-                shadows: shadows(3, 1024, 100.),
+                shadows: shadows(3, 1024, 100., (1024, 1000.)),
                 ambient_occlusion: ao(2, 4),
                 reflections: ssr(0.4, 20., 16),
                 gi_budget: 2048,
                 bloom: true,
             },
             Self::High => Quality {
-                shadows: shadows(4, 2048, 150.),
+                shadows: shadows(4, 2048, 150., (2048, 1500.)),
                 ambient_occlusion: ao(2, 6),
                 reflections: ssr(0.5, 30., 24),
                 gi_budget: 2048,
                 bloom: true,
             },
             Self::Epic => Quality {
-                shadows: shadows(4, 2048, 250.),
+                shadows: shadows(4, 2048, 250., (2048, 2000.)),
                 ambient_occlusion: ao(3, 8),
                 reflections: ssr(0.6, 50., 32),
                 gi_budget: 4096,

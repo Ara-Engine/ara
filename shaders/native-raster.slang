@@ -58,15 +58,18 @@ float4 sampleMap(NativeMaterial m,uint slot,Varying v){
     bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
     return ntSampleColorLevel(root.sample,id,uv,lod,decode);
 }
+// Unit `v`, or `fallback` for zero-length or non-finite input (degenerate skinned or
+// UV-less tangent frames would otherwise turn shading into NaN/inf fireflies).
+float3 safeNormalize(float3 v,float3 fallback){float l=dot(v,v);return l>1e-12 && l<1e30?v*rsqrt(l):fallback;}
 Surface surfaceMaterial(NativeMaterial m,Varying v){
     Surface s;float4 base=sampleMap(m,0,v)*m.pbr.color;
     s.albedo=max(0,base.rgb);s.alpha=base.a;
-    float3 normal=normalize(v.normal),t=v.tangent.xyz-normal*dot(v.tangent.xyz,normal);float handedness=v.tangent.w;
+    float3 normal=safeNormalize(v.normal,float3(0,1,0)),t=v.tangent.xyz-normal*dot(v.tangent.xyz,normal);float handedness=v.tangent.w;
     if(m.slots.w!=0){
         float2 uv=coordinates(m.uv[1],v),a=ddx(uv),b=ddy(uv);float determinant=a.x*b.y-a.y*b.x;
         if(abs(determinant)>1e-10){float3 e1=ddx(v.world),e2=ddy(v.world);t=(e1*b.y-e2*a.y)/determinant;t-=normal*dot(t,normal);float3 bitangent=(e2*a.x-e1*b.x)/determinant;handedness=dot(cross(normal,t),bitangent)<0?-1:1;}
     }
-    t=normalize(t);float3 n=sampleMap(m,1,v).xyz;
+    t=safeNormalize(t,normalize(cross(normal,abs(normal.y)<0.99?float3(0,1,0):float3(1,0,0))));float3 n=sampleMap(m,1,v).xyz;
     s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);

@@ -85,6 +85,11 @@ impl Bindings {
 }
 
 impl Prepared {
+    /// Publication-local rows changed by the last `update_frame`. Raster consumes
+    /// these without rescanning static foliage, geometry or material blocks.
+    pub fn changes(&self) -> &render::Changes {
+        &self.changes
+    }
     /// Reserves independent root material slots and skin scratch at a content
     /// boundary, before GPU upload. Static capture snapshots retain material sharing.
     pub fn enable_motion(&mut self) {
@@ -120,6 +125,7 @@ impl Prepared {
             "enable native motion before streaming frames"
         );
         let bindings = &mut self.bindings;
+        self.changes.clear();
         if frame.draws.len() != bindings.links.len()
             || frame.environment.sky != bindings.environment.sky
             || frame.environment.horizon != bindings.environment.horizon
@@ -150,9 +156,11 @@ impl Prepared {
             if world != instance.world {
                 instance.world = world;
                 poses += 1;
+                self.changes.instances.push(index);
             }
             let current = source(draw);
             let material = &mut self.scene.materials[instance.material];
+            let previous = *material;
             if current != link.source {
                 let mut replacement = Material::default();
                 if let Some(source) = Source::of(draw)
@@ -164,6 +172,9 @@ impl Prepared {
                 link.source = current;
             }
             material::apply_draw(material, draw, Source::of(draw));
+            if bytemuck::bytes_of(material) != bytemuck::bytes_of(&previous) {
+                self.changes.materials.push(instance.material);
+            }
             if let Some(range) = &draw.skin {
                 let palette = frame
                     .palettes
@@ -189,6 +200,7 @@ impl Prepared {
                     );
                     link.palette.copy_from_slice(palette);
                     skins += 1;
+                    self.changes.geometries.push(instance.geometry);
                 }
             }
         }

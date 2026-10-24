@@ -9,10 +9,13 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec4;
 
 mod batches;
+mod culling;
 mod environment;
 #[cfg(test)]
 mod tests;
-use batches::{Batch, Groups};
+mod updates;
+use batches::Groups;
+use culling::Culling;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -40,14 +43,11 @@ pub(super) struct Native {
     previous_vp: Option<Mat4>,
     bounds: Vec<[Vec3; 2]>,
     groups: Groups,
-    draws: [Vec<Batch>; 6],
-    visible_rows: Vec<[u32; 2]>,
-    transparent: Vec<(f32, usize, u32)>,
-    staging: Vec<u8>,
+    culling: Culling,
+    changes: updates::Updates,
     pipelines: [Pipeline; 3],
     upload: TextureStats,
     material_dirty: bool,
-    pose_changed: bool,
     update_gpu_ms: f64,
 }
 
@@ -137,6 +137,25 @@ impl Renderer {
     /// Update current transforms and changed skin poses without replacing shared
     /// geometry or textures. Structural edits require `replace_native_scene`.
     pub fn update_native(&mut self, scene: &NativeScene) -> Result<()> {
+        self.update_native_inner(scene, None)
+    }
+
+    /// Apply publication-local dirty rows. The producer must report every changed
+    /// instance, material and skin; use `update_native` for a snapshot without a
+    /// change list. Structural/layout edits still require scene replacement.
+    pub fn update_native_changed(
+        &mut self,
+        scene: &NativeScene,
+        changes: &crate::instanced::Changes,
+    ) -> Result<()> {
+        self.update_native_inner(scene, Some(changes))
+    }
+
+    fn update_native_inner(
+        &mut self,
+        scene: &NativeScene,
+        changes: Option<&crate::instanced::Changes>,
+    ) -> Result<()> {
         ensure!(
             scene.lights.len() <= upload::MAX_LIGHTS
                 && bytemuck::cast_slice::<_, f32>(&scene.lights)
@@ -154,7 +173,7 @@ impl Renderer {
             .native
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
-        native.update(&mut self.gpu, scene)?;
+        native.update(&mut self.gpu, scene, changes)?;
         if bytemuck::cast_slice::<_, u8>(&self.content.lights)
             != bytemuck::cast_slice::<_, u8>(&scene.lights)
         {
@@ -177,6 +196,40 @@ impl Renderer {
         }
         self.content.revision += 1;
         Ok(())
+    }
+
+    /// Dirty caster bounds from the most recently prepared native frame. New
+    /// content invalidates all shadows; a settled idle frame reports no bounds.
+    pub fn native_caster_changes(&self) -> Option<crate::instanced::CasterChanges<'_>> {
+        self.native
+            .as_ref()
+            .map(|native| crate::instanced::CasterChanges {
+                all: native.changes.caster_all,
+                bounds: &native.changes.caster_bounds,
+            })
+    }
+
+    /// CPU traversal and upload counters for the last prepared native frame.
+    pub fn native_frame_work(&self) -> Option<crate::instanced::FrameWork> {
+        self.native.as_ref().map(|native| native.changes.work)
+    }
+
+    /// Prepare opaque (including alpha-masked) casters against an arbitrary light
+    /// matrix, using the main camera's selected LODs. Call after native preparation
+    /// and before declaring the shadow pass resources; record it as native pass 6.
+    pub fn cull_native_shadow(&mut self, matrix: Mat4) -> Result<()> {
+        let native = self
+            .native
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
+        native.culling.shadow(
+            &self.gpu,
+            native.visible,
+            &native.groups,
+            &native.bounds,
+            matrix,
+            &mut native.changes.work,
+        )
     }
 
     /// Compressed texture upload costs of the last completed native frame.
@@ -246,7 +299,7 @@ impl Native {
                 128 + scene.instances.len() * std::mem::size_of::<InstanceRow>(),
                 &mut owned,
             )?;
-            let visible = host_buffer(gpu, (scene.instances.len() * 6 * 8).max(16), &mut owned)?;
+            let visible = host_buffer(gpu, (scene.instances.len() * 7 * 8).max(16), &mut owned)?;
             for name in ["native_shadow", "native_gbuffer", "native_forward"] {
                 let cooked = serde_json::from_slice(&std::fs::read(
                     artifacts.join(format!("{name}.json")),
@@ -280,11 +333,13 @@ impl Native {
                 }
             };
         let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
+        let groups = Groups::new(scene, &pool)?;
+        let culling = Culling::new(&groups, scene.instances.len());
         let result = Self {
             material_index,
             instance_index,
             visible_index,
-            groups: Groups::new(scene, &pool)?,
+            groups,
             pool,
             textures,
             texture_digest,
@@ -305,99 +360,16 @@ impl Native {
                 .iter()
                 .map(|i| i.bounds(&scene.geometry[i.geometry]))
                 .collect(),
-            draws: std::array::from_fn(|_| Vec::new()),
-            visible_rows: Vec::with_capacity(scene.instances.len() * 6),
-            transparent: Vec::with_capacity(scene.instances.len()),
-            staging: Vec::with_capacity(
-                128 + scene.instances.len() * std::mem::size_of::<InstanceRow>(),
-            ),
+            culling,
+            changes: updates::Updates::new(scene.instances.len()),
             pipelines: pipelines
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("Native raster pipeline count"))?,
             upload,
             material_dirty: true,
-            pose_changed: false,
             update_gpu_ms: 0.,
         };
         Ok(result)
-    }
-
-    fn update(&mut self, gpu: &mut VulkanDevice, scene: &NativeScene) -> Result<()> {
-        ara_gpu::cpu_scope!("RasterNative.update");
-        self.update_gpu_ms = 0.;
-        ensure!(
-            scene.instances.len() == self.rows.len()
-                && scene.materials.len() == self.material_data.len(),
-            "Native raster layout changed"
-        );
-        self.groups.validate(scene)?;
-        for (revision, geometry) in self.geometry_revisions.iter_mut().zip(&scene.geometry) {
-            *revision = geometry.revision;
-        }
-        ensure!(
-            scene
-                .instances
-                .iter()
-                .all(|instance| instance.world.is_finite()
-                    && instance.world.determinant().abs() > 1e-12),
-            "Invalid native instance transform"
-        );
-        ensure!(
-            scene.materials.iter().all(|material| material
-                .pbr
-                .base_color
-                .iter()
-                .chain(&material.pbr.emissive_roughness)
-                .chain(&material.pbr.surface)
-                .all(|value| value.is_finite())),
-            "Non-finite native material"
-        );
-        // Pose preparation never builds BLASes when GeometryGpu was created for raster.
-        if let Some(pose) = self.pool.prepare_pose(gpu, scene)? {
-            self.update_gpu_ms = pose.milliseconds;
-            self.pool.commit_pose(gpu, pose)?;
-            self.pose_changed = true;
-            gpu.collect()?;
-        }
-        if bytemuck::cast_slice::<_, u8>(&self.material_data)
-            != bytemuck::cast_slice::<_, u8>(&scene.materials)
-        {
-            self.material_data.copy_from_slice(&scene.materials);
-            gpu.upload(self.materials, bytemuck::cast_slice(&self.material_data))?;
-            self.material_dirty = true;
-        }
-        for (index, instance) in scene.instances.iter().enumerate() {
-            self.rows[index] = row(instance, self.presented[index]);
-            self.bounds[index] = instance.bounds(&scene.geometry[instance.geometry]);
-        }
-        Ok(())
-    }
-
-    pub(super) fn prepare(
-        &mut self,
-        gpu: &mut VulkanDevice,
-        frame: &frame::Frame,
-        camera: &crate::scene::Camera,
-    ) -> Result<()> {
-        ara_gpu::cpu_scope!("RasterNative.prepare");
-        self.upload = self.textures.refine(gpu)?;
-        for (row, previous) in self.rows.iter_mut().zip(&self.presented) {
-            row.previous = *previous;
-            row.meta[1] = u32::from(self.pose_changed);
-        }
-        let vp = camera.projection * camera.view;
-        self.staging.clear();
-        self.staging.extend_from_slice(bytemuck::bytes_of(&vp));
-        self.staging
-            .extend_from_slice(bytemuck::bytes_of(&self.previous_vp.unwrap_or(vp)));
-        self.staging
-            .extend_from_slice(bytemuck::cast_slice(&self.rows));
-        gpu.upload(self.instances, &self.staging)?;
-        self.prepare_batches(frame, camera);
-        if !self.visible_rows.is_empty() {
-            gpu.upload(self.visible, bytemuck::cast_slice(&self.visible_rows))?;
-        }
-        Ok(())
     }
 
     pub(super) fn resources(&self, visit: &mut dyn FnMut(Resource, Access)) {
@@ -420,7 +392,7 @@ impl Native {
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(
-            self.pipelines[if pass < 4 {
+            self.pipelines[if pass < 4 || pass == 6 {
                 0
             } else if pass == 4 {
                 1
@@ -428,7 +400,10 @@ impl Native {
                 2
             }],
         ));
-        for batch in &self.draws[pass] {
+        for batch in &self.culling.draws[pass] {
+            if batch.count == 0 {
+                continue;
+            }
             let mut constants = root;
             constants.words[1] = self.material_index;
             constants.words[2] = self.instance_index;
@@ -442,16 +417,6 @@ impl Native {
                 instances: batch.count,
             });
         }
-    }
-
-    pub(super) fn presented(&mut self, camera: &crate::scene::Camera) {
-        for (previous, row) in self.presented.iter_mut().zip(&self.rows) {
-            *previous = row.world;
-        }
-        self.previous_vp = Some(camera.projection * camera.view);
-        self.material_dirty = false;
-        self.pose_changed = false;
-        self.pool.presented();
     }
 
     pub(super) fn hash(&self, hash: &mut sha2::Sha256) {

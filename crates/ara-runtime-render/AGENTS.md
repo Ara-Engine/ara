@@ -16,6 +16,10 @@ device and per-view upload state; no simulation, window or process code.
   Presenter. `prepare` adopts published native generations, `render` draws native
   terrain/foliage and particles through the shared look. `capture` settles residency,
   probe acquisition and temporal history. It never discovers, cooks or imports.
+- `RasterView::prepare_unchanged` is for a retained immutable extraction (editor
+  accumulation/camera frames); it polls GI without revisiting root draws. Edits use
+  `prepare` and its exact dirty rows. Any failed preparation discards that candidate
+  CPU snapshot so retry cannot forget an accepted pose; GPU last-good stays live.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; live
   frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.
 - `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
@@ -38,10 +42,16 @@ device and per-view upload state; no simulation, window or process code.
 - Raster look: `set_render_options(RenderOptions)` (D27: raster by default; RT opt-in),
   `set_look_override` (look development/scoring), `set_probe_gi(true)` +
   `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a
-  worker (one bake at a time, newest request queued, disk cache under the pipeline
-  cache). RT adapters bake with a temporary `VulkanDevice::new` + fidelity view
-  (`gi.rs`); others bake on the CPU (`gi_cpu.rs`: SAH BVH over coarsest LODs, map
-  means via `NativeResidency::mean_texel`). `ARA_PROBE_GI_CPU=1` forces the CPU bake.
+  worker (one job at a time, newest request queued, full bakes disk-cached under the
+  pipeline cache). RT adapters bake with a temporary `VulkanDevice::new` + fidelity
+  view (`gi.rs`); others bake on the CPU (`gi_cpu.rs`: per-geometry SAH BVHs under
+  an instance top level, map means via `NativeResidency::mean_texel`).
+  `ARA_PROBE_GI_CPU=1` forces the CPU bake. GI follows edits: `gi::Mobility` keeps
+  instances that moved within 30 frames (and deforming geometry) out of the
+  surfaces; when that set changes, or a new generation fits the lattice, the
+  worker's persistent CPU tracer re-traces only nearby probes
+  (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
+  `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy

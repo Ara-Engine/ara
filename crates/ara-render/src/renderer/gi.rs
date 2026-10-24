@@ -1,39 +1,79 @@
-//! Uploads acquired probe surfaces (`look::gi`) into the renderer.
-use super::transfer::{upload_buffer, upload_image};
+//! Writes acquired probe surfaces (`look::gi`) into the renderer: packed probe
+//! records are uploaded and scattered by a compute pass (`giScatterMain`) into the
+//! surface cache, meta and bordered moment tiles. A new lattice first gets an
+//! empty volume, cleared on the GPU (every probe inactive and dark).
 use super::*;
-use crate::look::gi::{GiGpu, ProbeSurfaces, STATIC_VECTORS, atlas_width};
-use ara_gpu::vulkan::Command;
+use crate::look::gi::{GiGpu, ProbeSurfaces, ProbeUpdate, SURFACE_TEXELS, atlas_width};
+use anyhow::Context;
+use ara_gpu::{RootConstants, vulkan::Command};
 
-/// Folds a bordered tile coordinate (-1..=size) onto the octahedral interior, so
-/// border texels repeat their neighbours across the folded edge (DDGI borders).
-fn fold(mut x: i32, mut y: i32, size: i32) -> usize {
-    if x < 0 {
-        x = -x - 1;
-        y = size - 1 - y;
-    } else if x >= size {
-        x = 2 * size - 1 - x;
-        y = size - 1 - y;
-    }
-    if y < 0 {
-        y = -y - 1;
-        x = size - 1 - x;
-    } else if y >= size {
-        y = 2 * size - 1 - y;
-        x = size - 1 - x;
-    }
-    (y * size + x) as usize
-}
+/// Probes per scatter dispatch (one workgroup each).
+const DISPATCH_PROBES: usize = 65_535;
 
 impl Renderer {
     /// Replaces the probe volume used for global illumination; `None` returns to
     /// sky-only ambient light. Irradiance starts dark and converges over the next
     /// frames (one more bounce per relight).
     pub fn set_probe_surfaces(&mut self, surfaces: Option<&ProbeSurfaces>) -> Result<()> {
-        let replacement = match surfaces {
-            None => None,
-            Some(surfaces) => Some(self.upload_probes(surfaces)?),
-        };
-        if let Some(old) = std::mem::replace(&mut self.look.gi, replacement) {
+        self.drop_probe_volume()?;
+        match surfaces {
+            None => Ok(()),
+            Some(surfaces) => self.update_probe_surfaces(&ProbeUpdate::new(surfaces, None)?),
+        }
+    }
+
+    /// Writes `update`'s probe records into the volume in place: one upload of just
+    /// those records and a compute scatter. Relighting blends them in from the
+    /// irradiance already converged, so stale light fades rather than flashing to
+    /// sky-only; probes not written yet stay as they were. A different lattice
+    /// first replaces the volume with an empty one.
+    pub fn update_probe_surfaces(&mut self, update: &ProbeUpdate) -> Result<()> {
+        update.validate()?;
+        let same = self.look.gi.as_ref().is_some_and(|gi| {
+            gi.origin == update.origin && gi.spacing == update.spacing && gi.counts == update.counts
+        });
+        if !same {
+            self.drop_probe_volume()?;
+            let volume = self.empty_volume(update)?;
+            self.look.gi = Some(volume);
+            // Every probe is inactive and dark until its record arrives.
+            self.scatter(None, update.probes(), Access::Undefined)?;
+        }
+        if update.is_empty() {
+            return Ok(());
+        }
+        // One host staging buffer, grown as needed and reused: each scatter
+        // completes before the next upload.
+        let needed = update.records.len();
+        if self
+            .look
+            .probe_staging
+            .is_none_or(|(_, capacity, _)| capacity < needed)
+        {
+            if let Some((old, _, _)) = self.look.probe_staging.take() {
+                self.gpu.retire(Resource::Buffer(old))?;
+                self.gpu.collect()?;
+            }
+            let capacity = needed.next_power_of_two();
+            let buffer = self.gpu.create_buffer(
+                capacity as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?;
+            let index = self.gpu.storage_buffer(buffer)?.index;
+            self.look.probe_staging = Some((buffer, capacity, index));
+        }
+        let (staging, _, index) = self.look.probe_staging.context("probe staging")?;
+        self.gpu.upload(staging, &update.records)?;
+        self.scatter(Some(index), update.len(), Access::ShaderRead)?;
+        if let Some(gi) = self.look.gi.as_mut() {
+            gi.bias = update.bias();
+        }
+        Ok(())
+    }
+
+    fn drop_probe_volume(&mut self) -> Result<()> {
+        if let Some(old) = self.look.gi.take() {
             self.gpu.retire(Resource::Buffer(old.cache))?;
             self.gpu.retire(Resource::Buffer(old.meta))?;
             for image in [old.moments, old.irradiance[0], old.irradiance[1]] {
@@ -44,47 +84,42 @@ impl Renderer {
         Ok(())
     }
 
-    fn upload_probes(&mut self, surfaces: &ProbeSurfaces) -> Result<GiGpu> {
-        surfaces.validate()?;
-        let probes = surfaces.len();
+    /// A volume for `update`'s lattice: storage for the surface cache, meta,
+    /// bordered moment tiles and both irradiance atlases (uninitialized: clear it
+    /// with `scatter(None, ..)`).
+    fn empty_volume(&mut self, update: &ProbeUpdate) -> Result<GiGpu> {
+        let probes = update.probes();
         let atlas = atlas_width(probes);
         let rows = (probes as u32).div_ceil(atlas);
-        let usage = vk::BufferUsageFlags::STORAGE_BUFFER;
-        let cache = upload_buffer(&mut self.gpu, bytemuck::cast_slice(&surfaces.texels), usage)?;
-        let meta: Vec<[f32; 4]> = (0..probes)
-            .map(|p| surfaces.statics[p * STATIC_VECTORS + 64])
-            .collect();
-        let meta = upload_buffer(&mut self.gpu, bytemuck::cast_slice(&meta), usage)?;
-        // Static moments: bordered 10x10 tiles of the 8x8 octahedral moments (RGBA32F:
-        // the upload path copies no two-channel float formats).
-        let size = [atlas * 10, rows * 10];
-        let mut moments = vec![[0f32; 4]; (size[0] * size[1]) as usize];
-        for p in 0..probes {
-            let origin = [(p as u32 % atlas) * 10, (p as u32 / atlas) * 10];
-            for y in 0..10i32 {
-                for x in 0..10i32 {
-                    let v = surfaces.statics[p * STATIC_VECTORS + fold(x - 1, y - 1, 8)];
-                    let at = (origin[1] + y as u32) * size[0] + origin[0] + x as u32;
-                    moments[at as usize] = [v[0], v[1], 0., 0.];
-                }
-            }
-        }
-        let moments = upload_image(
-            &mut self.gpu,
-            size,
-            vk::Format::R32G32B32A32_SFLOAT,
-            bytemuck::cast_slice(&moments),
-        )?;
+        let storage = vk::BufferUsageFlags::STORAGE_BUFFER;
+        let cache =
+            self.gpu
+                .create_buffer((probes * SURFACE_TEXELS * 16) as u64, storage, false)?;
+        let meta = self
+            .gpu
+            .create_buffer((probes * 16) as u64, storage, false)?;
+        // Capture boundaries zero the irradiance with a copy (`reset_capture_history`).
+        let image = |gpu: &mut VulkanDevice, size: u32, format| {
+            gpu.create_image(
+                atlas * size,
+                rows * size,
+                format,
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::TRANSFER_DST,
+            )
+        };
+        let moments = image(&mut self.gpu, 10, vk::Format::R32G32B32A32_SFLOAT)?;
         let irradiance = [
-            self.dark_atlas([atlas * 8, rows * 8])?,
-            self.dark_atlas([atlas * 8, rows * 8])?,
+            image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
+            image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
         ];
-        Ok(GiGpu {
-            origin: surfaces.origin,
-            spacing: surfaces.spacing,
-            counts: surfaces.counts,
+        let volume = GiGpu {
+            origin: update.origin,
+            spacing: update.spacing,
+            counts: update.counts,
             probes: probes as u32,
-            bias: surfaces.bias(),
+            bias: update.bias(),
             atlas,
             indices: [
                 self.gpu.storage_buffer(cache)?.index,
@@ -99,6 +134,7 @@ impl Renderer {
                 self.gpu.storage_image(irradiance[0])?.index,
                 self.gpu.storage_image(irradiance[1])?.index,
             ],
+            moments_storage: self.gpu.storage_image(moments)?.index,
             cache,
             meta,
             moments,
@@ -106,51 +142,56 @@ impl Renderer {
             access: [Access::ShaderRead; 2],
             slot: 0,
             cursor: 0,
-        })
+        };
+        Ok(volume)
     }
 
-    /// A zeroed RGBA16F storage atlas, left in ShaderRead.
-    fn dark_atlas(&mut self, size: [u32; 2]) -> Result<Image> {
-        let image = self.gpu.create_image(
-            size[0],
-            size[1],
-            vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageUsageFlags::SAMPLED
-                | vk::ImageUsageFlags::STORAGE
-                | vk::ImageUsageFlags::TRANSFER_DST,
-        )?;
-        let zeros = vec![0u8; (size[0] * size[1]) as usize * 8];
-        let source = upload_buffer(&mut self.gpu, &zeros, vk::BufferUsageFlags::TRANSFER_SRC)?;
-        let mut recorder = self.gpu.begin(Queue::Graphics);
-        let barrier = |before, after| ara_gpu::Barrier {
-            resource: Resource::Image(image),
+    /// Runs `giScatterMain` over `count` probes of the current volume: records from
+    /// the `staging` buffer, or (without one) clearing every probe. `before` is the
+    /// volume's prior access (Undefined for a new volume).
+    fn scatter(&mut self, staging: Option<u32>, count: usize, before: Access) -> Result<()> {
+        let gi = self.look.gi.as_ref().context("probe volume")?;
+        let clear = staging.is_none();
+        let mut targets = vec![
+            Resource::Buffer(gi.cache),
+            Resource::Buffer(gi.meta),
+            Resource::Image(gi.moments),
+        ];
+        if clear {
+            targets.extend(gi.irradiance.map(Resource::Image));
+        }
+        let barrier = |resource, before, after| ara_gpu::Barrier {
+            resource,
             before,
             after,
             handoff: None,
         };
-        recorder.barriers([barrier(Access::Undefined, Access::CopyDestination)]);
-        recorder.push(Command::UploadImage {
-            source,
-            destination: image,
-        });
-        recorder.barriers([barrier(Access::CopyDestination, Access::ShaderRead)]);
+        let mut words = [
+            0,
+            staging.unwrap_or(0),
+            gi.indices[0],
+            gi.indices[1],
+            gi.moments_storage,
+            gi.atlas | (u32::from(clear) << 31),
+            gi.irradiance_storage[0],
+            gi.irradiance_storage[1],
+        ];
+        let mut recorder = self.gpu.begin(Queue::Graphics);
+        recorder.barriers(targets.iter().map(|&r| barrier(r, before, Access::Storage)));
+        recorder.push(Command::Pipeline(self.look.pipelines.gi_scatter));
+        for first in (0..count).step_by(DISPATCH_PROBES) {
+            words[0] = first as u32;
+            recorder.push(Command::Constants(RootConstants { words }));
+            let groups = (count - first).min(DISPATCH_PROBES) as u32;
+            recorder.push(Command::Dispatch([groups, 1, 1]));
+        }
+        recorder.barriers(
+            targets
+                .iter()
+                .map(|&r| barrier(r, Access::Storage, Access::ShaderRead)),
+        );
         let point = self.gpu.submit(recorder.finish(), &[])?;
         self.gpu.resolve(point)?;
-        self.gpu.retire(Resource::Buffer(source))?;
-        Ok(image)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::fold;
-
-    #[test]
-    fn borders_fold_onto_the_octahedral_interior() {
-        // Interior texels map to themselves; edges mirror with a flip.
-        assert_eq!(fold(3, 2, 6), 2 * 6 + 3);
-        assert_eq!(fold(-1, 0, 6), 5 * 6);
-        assert_eq!(fold(6, 0, 6), 5 * 6 + 5);
-        assert_eq!(fold(-1, -1, 6), 5 * 6 + 5);
+        Ok(())
     }
 }

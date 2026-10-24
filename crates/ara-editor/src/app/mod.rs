@@ -162,6 +162,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         .verify_responsiveness
         .then(|| responsiveness::Probe::new(&options.output));
     if probe.is_some() {
+        // Measure what a release build does: memoized panels are not double-checked.
+        shell.memo_check = false;
         // Measure from the default layout and theme, whatever an earlier run left.
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
@@ -191,7 +193,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
         // Value edits, typed drafts and gizmo drags patch the Scene in place.
-        let mut scene_sync = scene_sync::SceneSync::new(models_at_open);
+        let mut scene_sync =
+            scene_sync::SceneSync::new(models_at_open, editor.host.store().revision());
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;

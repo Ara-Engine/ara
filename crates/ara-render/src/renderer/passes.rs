@@ -13,9 +13,14 @@ use ara_gpu::{
 };
 
 /// What each declared graph pass records.
+/// Native draw list of the arbitrary-matrix shadow pass (`cull_native_shadow`).
+const FAR_SHADOW_PASS: usize = 6;
+
 #[derive(Clone, Copy)]
 enum Recipe {
     Shadow,
+    /// The far shadow map (`look::far`), only when its view changed.
+    FarShadow,
     GBuffer,
     Tile,
     Lighting,
@@ -36,6 +41,7 @@ impl Renderer {
         mode: ViewMode,
         capture: bool,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Raster.render_frame");
         ensure!(
             exposure.is_finite() && exposure > 0.,
             "Exposure must be a finite positive multiplier"
@@ -51,6 +57,35 @@ impl Renderer {
             native.prepare(&mut self.gpu, &frame, &camera)?;
         }
         self.gpu.upload(self.frame, bytemuck::bytes_of(&frame))?;
+        // The far map redraws only when its view, content or casters inside it
+        // changed; its draws read the far matrix as cascade 0 of their own frame
+        // record, and native casters come from a culled pass of their own.
+        if let Some(mut far) = self.look.far.take() {
+            match self.native_caster_changes() {
+                Some(changes) => far.cache.observe(changes.all, changes.bounds),
+                None => far.cache.observe(false, &[]),
+            }
+            self.look.far = Some(far);
+        }
+        let far_draw = match &self.look.far {
+            Some(far) => {
+                let (matrix, view) = crate::look::far::FarMap::fit(
+                    far.settings,
+                    camera.position,
+                    self.content.sun_direction,
+                );
+                far.cache.needs_draw(&view).then_some((matrix, view))
+            }
+            None => None,
+        };
+        if let (Some((matrix, _)), Some(far)) = (far_draw, &self.look.far) {
+            let mut far_frame = frame;
+            far_frame.shadows[0] = matrix;
+            self.gpu.upload(far.frame, bytemuck::bytes_of(&far_frame))?;
+            if self.native.is_some() {
+                self.cull_native_shadow(matrix)?;
+            }
+        }
         let mut compute_frame = frame;
         compute_frame.lighting[3] = self.content.compute_light_index;
         self.gpu
@@ -70,6 +105,15 @@ impl Renderer {
             },
         );
         let mut look_frame = look_frame;
+        if let Some(far) = &self.look.far {
+            let drawn = far_draw
+                .map(|(matrix, _)| matrix)
+                .or(far.cache.view.map(|_| far.cache.matrix));
+            if let Some(matrix) = drawn {
+                look_frame.far_shadow = matrix.to_cols_array_2d();
+                look_frame.far_info = [far.sampled, far.settings.resolution, 1, 0];
+            }
+        }
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
             look_frame.gi_gather = self.look.gather_indices();
@@ -163,6 +207,11 @@ impl Renderer {
             [(ids[SHADOW], Access::Depth)],
         );
         declare(shadow, Recipe::Shadow);
+        if let (Some(far), Some(_)) = (look.far, far_draw) {
+            let pass = graph.pass("ShadowAtlas.Far", Queue::Graphics, [(far, Access::Depth)]);
+            declare(pass, Recipe::FarShadow);
+        }
+        let far_read = look.far.map(|far| (far, Access::ShaderRead));
         let gbuffer = graph.pass(
             "GBuffer",
             Queue::Graphics,
@@ -194,6 +243,7 @@ impl Renderer {
         }
         let mut sky_shared = graphics.clone();
         sky_shared.push((ids[SHADOW], Access::ShaderRead));
+        sky_shared.extend(far_read);
         let sun = {
             let d = self.content.sun_direction;
             let l = self.content.sun_lux;
@@ -227,6 +277,7 @@ impl Renderer {
                 (ids[HDR], Access::Color),
             ]
             .into_iter()
+            .chain(far_read)
             .chain(look_reads.iter().copied()),
         );
         declare(lighting, Recipe::Lighting);
@@ -245,6 +296,7 @@ impl Renderer {
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
+            .chain(far_read)
             .chain(look_reads.iter().copied())
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
@@ -296,7 +348,9 @@ impl Renderer {
                     (ids[ID], Access::ShaderRead),
                     (ids[DEPTH], Access::ShaderRead),
                     (ids[SHADOW], Access::ShaderRead),
-                ],
+                ]
+                .into_iter()
+                .chain(far_read),
             );
             declare(tonemap, Recipe::Tonemap);
             shaded.push(tonemap);
@@ -406,6 +460,45 @@ impl Renderer {
                             recorder.push(Command::Constants(constants));
                             recorder.push(Command::Draw(draw(mesh)));
                         }
+                    }
+                    recorder.push(Command::EndRendering);
+                }
+                Recipe::FarShadow => {
+                    let far = self
+                        .look
+                        .far
+                        .as_ref()
+                        .expect("a far pass is declared only with a far map");
+                    recorder.push(Command::Pipeline(self.pipelines.shadow));
+                    recorder.push(Command::BeginRendering {
+                        colors: Vec::new(),
+                        depth: Some(Attachment {
+                            image: far.image,
+                            clear: Some([0.; 4]),
+                        }),
+                        size: [far.settings.resolution; 2],
+                    });
+                    recorder.push(Command::Viewport {
+                        origin: [0, 0],
+                        size: [far.settings.resolution; 2],
+                    });
+                    let mut constants = root;
+                    constants.words[0] = far.frame_index;
+                    constants.words[4] = 0;
+                    if let Some(native) = &self.native {
+                        native.record(&mut recorder, constants, FAR_SHADOW_PASS);
+                    }
+                    for (index, mesh) in self
+                        .content
+                        .meshes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| self.native.is_none() && !m.transparent)
+                    {
+                        constants.words[2] = mesh.material;
+                        constants.words[3] = index as u32 + 1;
+                        recorder.push(Command::Constants(constants));
+                        recorder.push(Command::Draw(draw(mesh)));
                     }
                     recorder.push(Command::EndRendering);
                 }
@@ -584,6 +677,9 @@ impl Renderer {
             self.targets.states[i] = compiled.final_states[id.0];
         }
         self.look.finish(&look, &compiled.final_states);
+        if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
+            far.cache.drawn(matrix, view);
+        }
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);
         }

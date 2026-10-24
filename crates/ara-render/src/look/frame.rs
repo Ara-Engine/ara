@@ -43,6 +43,10 @@ pub(crate) struct LookFrame {
     pub ssr: [f32; 4],
     pub ssr_images: [u32; 4],
     pub weather: [f32; 4],
+    /// Light view-projection of the far shadow map.
+    pub far_shadow: [[f32; 4]; 4],
+    /// x far map (sampled), y texels per side, z drawn (0: cascades fade to lit).
+    pub far_info: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -122,6 +126,8 @@ impl LookFrame {
             ssr: [0.; 4],
             ssr_images: [0; 4],
             weather: [sky.cloud_coverage, sky.cloud_height, 0., 0.],
+            far_shadow: [[0.; 4]; 4],
+            far_info: [0; 4],
         }
     }
 }

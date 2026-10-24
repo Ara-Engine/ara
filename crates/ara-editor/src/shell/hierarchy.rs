@@ -167,6 +167,25 @@ impl Shell {
         out.push_str(&format!("<panel id='hierarchy-footer' class='footer'><text id='hierarchy-count' text='{} entities{}' /></panel>",resolved.len(),if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())}));
         Ok(())
     }
+    /// Bind the hierarchy rows on screen: select the entity, or open Agents for a
+    /// deletion ghost. Only visible rows can be clicked, so rebuilds and scrolls bind
+    /// just these (binding every entity cost ~0.3 ms per rebuild on Outpost).
+    pub(super) fn bind_hierarchy_rows(&mut self) {
+        let Some(view) = &self.hierarchy_view else {
+            return;
+        };
+        for key in view.visible_keys() {
+            let Some(entity) = self.hierarchy_entities.get(&key) else {
+                continue;
+            };
+            let binding = if self.hierarchy_ghosts.contains(&key) {
+                Binding::Protocol("editor.focus", json!({"panel":"agents"}))
+            } else {
+                Binding::Select(entity.clone())
+            };
+            self.bindings.insert(view.identity(key), binding);
+        }
+    }
     pub(super) fn decorate_hierarchy(&mut self) {
         if self.hierarchy_surface != self.current {
             return;

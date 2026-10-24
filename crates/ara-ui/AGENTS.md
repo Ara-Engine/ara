@@ -13,7 +13,8 @@ Public API:
   `Ui` per change. `Ui::set_stylesheet` swaps CSS (no-op when equal).
 - `Ui::reconcile_parts(skeleton, parts)`: parts (host ID, markup) replace the skeleton
   element with that ID. An unchanged part keeps its subtree wholesale (runtime rows and
-  widget state too; nodes only change index, `Ui::moved_index`); a no-op touches nothing.
+  widget state too; nodes only change index, `Ui::moved_index`); a no-op touches nothing,
+  and changed parts that keep their shape (IDs, tags, nesting) update in place.
   `VirtualView::remap` follows kept rows, `VirtualView::fit` resizes a kept pool.
 - Hidden subtrees (`set_visible(false)`, `display:none`) stay mounted with their state but
   leave layout, paint, hit testing and focus; `Ui::shown(index)` says whether a node is

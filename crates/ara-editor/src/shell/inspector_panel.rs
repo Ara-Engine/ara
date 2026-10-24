@@ -369,7 +369,7 @@ impl Shell {
                     .unwrap_or("None");
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("asset-field-{id}")),
-                    Binding::PickField(field.path.clone()),
+                    Binding::AssetPicker(field.path.clone(), kind.clone()),
                 );
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("pick-{id}")),
@@ -458,6 +458,15 @@ impl Shell {
                 );
                 out.push_str(&format!("<panel id='picker-{id}-{axis}' class='prop-row'><panel id='picker-label-{id}-{axis}' class='prop-label' style='width:{label}px'><text id='picker-name-{id}-{axis}' text='{}' /></panel><panel id='picker-value-{id}-{axis}' class='prop-value'><slider id='{widget}' style='flex-grow:1' min='0' max='1' step='0.01' value='{}' label='{}' action='Dispatch' /></panel></panel>",["Red","Green","Blue","Alpha"][axis],field.value[axis].as_f64().unwrap_or(1.).clamp(0.,1.),["Red","Green","Blue","Alpha"][axis]));
             }
+        }
+        if self.pick_field.as_deref() == Some(field.path.as_str()) {
+            let what = match &field.widget {
+                Widget::Asset { kind } => {
+                    super::assets::field_accepts(kind.as_deref(), &field.path).1
+                }
+                _ => "an entity in the Scene or Hierarchy",
+            };
+            out.push_str(&format!("<panel id='picking-row-{id}' class='row' style='padding-left:{}px;min-height:18px'><text id='picking-{id}' class='chip-accent' text='Click {what} to use it · Esc cancels' /></panel>",label+4.));
         }
         if let Some(was) = &field.was {
             out.push_str(&format!("<panel id='was-row-{id}' class='row' style='padding-left:{}px;min-height:18px'><text id='was-{id}' class='chip-warning' text='{} → {}' /></panel>",label+4.,escape(&display(was)),escape(&display(&field.value))));
