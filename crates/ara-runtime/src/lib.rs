@@ -52,6 +52,7 @@ pub mod model;
 pub mod navigation;
 pub mod physics;
 pub mod plugin;
+mod preload;
 pub mod skin;
 pub mod sync;
 pub mod terrain;
@@ -305,8 +306,9 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Projects `scene` from `workspace`, loads every referenced model generation and
-    /// builds the complete world at tick 0, paused. Missing models use diagnosed
+    /// Projects `scene` from `workspace`, preloads model generations reachable through
+    /// its prefabs, streamed cells and foliage, and builds the world at tick 0, paused.
+    /// Missing models use diagnosed
     /// placeholders; schema, projection, bake and physics errors fail the build.
     pub fn new(
         schema: SchemaDb,
@@ -319,6 +321,7 @@ impl Runtime {
         let hz = config.tick.hz;
         config.physics.fixed_dt = 1.0 / hz as f32;
         let baseline = workspace.clone();
+        let preload_models = preload::models(&baseline, &scene)?;
         let mut schema = schema;
         let mut world = World::new();
         for plugin in &mut plugins {
@@ -334,7 +337,7 @@ impl Runtime {
             Session::local(edit, config.tick, config.seed, control::default_actions())?;
         let world = session.world_mut();
         let mut library = Library::default();
-        let mut models = BTreeSet::new();
+        let mut models = preload_models;
         let mut query = world.query::<&MeshRenderer>();
         for renderer in query.iter(world) {
             if let Some(model) = &renderer.model {
@@ -349,15 +352,6 @@ impl Runtime {
             ) && let Some(asset) = &collider.asset
             {
                 models.insert(asset_id(asset)?.to_owned());
-            }
-        }
-        // Models of every document too: streamed world cells spawn entities after
-        // build, and decoding never happens inside a tick.
-        for (_, doc) in baseline.docs() {
-            for record in doc.records().values() {
-                for (key, value) in record {
-                    assets::model_references(key, value, &mut models)?;
-                }
             }
         }
         let mut asset_errors = Vec::new();
@@ -663,10 +657,14 @@ impl Runtime {
                     path,
                     value: Some(value),
                     ..
-                } => assets::model_references(&path.to_string(), value, &mut models)?,
+                } => {
+                    assets::model_references(&path.to_string(), value, &mut models)?;
+                    preload::extend(&self.baseline, value, &mut models)?;
+                }
                 Op::Create { record, .. } => {
                     for (key, value) in record {
                         assets::model_references(key, value, &mut models)?;
+                        preload::extend(&self.baseline, value, &mut models)?;
                     }
                 }
                 _ => {}

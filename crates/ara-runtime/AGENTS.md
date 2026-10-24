@@ -16,7 +16,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   The engine world includes brains/perception (`Brain`, `Perceiver`, `Stimulus`) and
   the behaviour commands (`behavior.*`).
 - `Runtime::new(schema, workspace, scene, assets, RuntimeConfig, plugins)`: projects the
-  scene, loads every `MeshRenderer.model` generation, builds physics/nav/animation at
+  scene, preloads model generations reachable through its prefabs, streamed cells
+  and foliage rules, builds physics/nav/animation at
   tick 0 and returns **paused**. `step`, `step_until`, `advance(elapsed)` (bounded
   catch-up), `pause/resume/set_timescale`, `inject`, `patch_edits` (live edits →
   baseline-checked ops at the next tick), `changes()` (keep-changes diff),
@@ -46,6 +47,9 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   (`NavStreamer` assembled at the boundary, swaps recorded with their tick).
 - `assets`: `AssetSource` (published generations by `as_…` ID), `CachedAssets`
   (FileCache pinned by action digest), `MemoryAssets`, `Models`.
+  Optional `AssetSource::digest` reads immutable metadata without payload I/O;
+  `Models::load` reuses an unchanged decoded generation. New prefab references
+  prepare their reachable models at the live-edit control boundary before adoption.
 - Missing/broken model generations produce `asset_errors()` (`ARA7303`) and magenta
   shape placeholders. Failed IDs remain eligible for a later hot-reload recovery.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns

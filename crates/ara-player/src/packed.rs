@@ -7,6 +7,10 @@ use std::{collections::BTreeMap, sync::Arc};
 
 pub(super) struct SharedAssets(pub(super) Arc<dyn AssetSource>);
 impl AssetSource for SharedAssets {
+    fn digest(&self, asset: &str) -> Option<Digest> {
+        self.0.digest(asset)
+    }
+
     fn load(&self, asset: &str) -> ara_runtime::Result<Option<(Digest, CachedImport)>> {
         self.0.load(asset)
     }
@@ -68,6 +72,10 @@ impl PackedAssets {
 }
 
 impl AssetSource for PackedAssets {
+    fn digest(&self, asset: &str) -> Option<Digest> {
+        self.pins.get(asset).copied()
+    }
+
     fn load(&self, asset: &str) -> ara_runtime::Result<Option<(Digest, CachedImport)>> {
         self.generation(asset)
             .map_err(|error| RuntimeError(format!("{error:#}")))
