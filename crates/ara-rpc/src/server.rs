@@ -14,6 +14,7 @@ use ara_proto::{ConnId, RpcError, jsonrpc, lines};
 use tungstenite::{Message, WebSocket};
 
 use crate::http::{self, HttpRequest, HttpResponse};
+use crate::transport::{self, Stream};
 
 /// The connection ID of the stdio channel.
 pub const STDIO: ConnId = ConnId(1);
@@ -217,6 +218,7 @@ fn connection(
     tx: &Sender<Event>,
 ) -> io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     let Some(head) = http::peek_head(&stream)? else {
         return Ok(());
     };
@@ -242,8 +244,9 @@ fn connection(
         return http::write_response(&mut stream, &resp);
     }
     // Already authenticated from the peeked head; the handshake re-reads it.
-    let mut ws = tungstenite::accept(stream).map_err(io::Error::other)?;
-    ws.get_mut().set_read_timeout(Some(POLL))?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut ws = transport::handshake(tungstenite::accept(Stream(stream)), deadline)?;
+    ws.get_mut().0.set_read_timeout(Some(POLL))?;
     let (out_tx, out_rx) = channel();
     if tx.send(Event::Opened(id, out_tx)).is_err() {
         return Ok(());
@@ -255,7 +258,7 @@ fn connection(
 
 /// Moves frames in both directions until either side closes.
 fn pump(
-    ws: &mut WebSocket<TcpStream>,
+    ws: &mut WebSocket<Stream<TcpStream>>,
     id: ConnId,
     tx: &Sender<Event>,
     out: &Receiver<Outgoing>,
@@ -281,9 +284,15 @@ fn pump(
         }
         while let Ok(message) = out.try_recv() {
             match message {
-                Outgoing::Text(text) => ws.send(Message::text(text)).map_err(io::Error::other)?,
+                Outgoing::Text(text) => transport::send(
+                    ws,
+                    Message::text(text),
+                    Instant::now() + Duration::from_secs(10),
+                )
+                .map_err(io::Error::other)?,
                 Outgoing::Flushed(ack) => {
-                    ws.flush().map_err(io::Error::other)?;
+                    transport::flush(ws, Instant::now() + Duration::from_secs(10))
+                        .map_err(io::Error::other)?;
                     let _ = ack.send(());
                 }
             }
