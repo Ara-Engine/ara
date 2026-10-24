@@ -5,6 +5,7 @@ mod game;
 mod journey;
 mod panels_verify;
 mod responsiveness;
+mod scene_sync;
 mod setup;
 mod ux_verify;
 mod verify;
@@ -180,7 +181,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_panels = editor.panels_revision;
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
-        let mut preview_present = false;
+        // Value edits, typed drafts and gizmo drags patch the Scene in place.
+        let mut scene_sync = scene_sync::SceneSync::default();
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;
@@ -449,38 +451,24 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
             let geometry_at = Instant::now();
-            let (mut view_ms, mut extract_ms, mut upload_ms) = (0., 0., 0.);
+            let mut view_ms = 0.;
+            let mut stages = scene_sync::Stages::default();
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 let at = Instant::now();
-                view = editor.view()?;
-                editor.report_missing_sources(&view);
+                let next = editor.view()?;
+                editor.report_missing_sources(&next);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
-                let at = Instant::now();
-                let scene = view.scene(
-                    editor.host.root(),
-                    &editor.state,
-                    editor.gesture.as_ref(),
-                    &mut editor.models,
-                )?;
-                extract_ms = at.elapsed().as_secs_f64() * 1000.;
-                let at = Instant::now();
-                renderer.update_geometry(scene)?;
-                upload_ms = at.elapsed().as_secs_f64() * 1000.;
+                stages = scene_sync.commit(&view, &next, &mut editor, &mut renderer)?;
+                view = next;
                 shell.rebuild_if_stale(&mut editor)?;
                 dirty = true;
                 scene_dirty = true;
-                preview_present = editor.gesture.is_some();
             }
             if editor.extraction_revision != last_extraction {
                 last_extraction = editor.extraction_revision;
                 view = editor.view()?;
-                renderer.update_geometry(view.scene(
-                    editor.host.root(),
-                    &editor.state,
-                    editor.gesture.as_ref(),
-                    &mut editor.models,
-                )?)?;
+                scene_sync.rebuild(&view, &mut editor, &mut renderer)?;
                 dirty = true;
                 scene_dirty = true;
             }
@@ -488,14 +476,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_review = editor.review_revision;
                 let next = editor.view()?;
                 if next.ghosts() != view.ghosts() {
-                    renderer.update_geometry(next.scene(
-                        editor.host.root(),
-                        &editor.state,
-                        editor.gesture.as_ref(),
-                        &mut editor.models,
-                    )?)?;
+                    scene_sync.rebuild(&next, &mut editor, &mut renderer)?;
                 }
                 view = next;
+                dirty = true;
+                scene_dirty = true;
+            }
+            if scene_sync.preview(&view, &mut editor, &shell, &mut renderer)? {
                 dirty = true;
                 scene_dirty = true;
             }
@@ -647,15 +634,6 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
                     if scene_dirty {
-                        if editor.gesture.is_some() || preview_present {
-                            renderer.update_geometry(view.scene(
-                                editor.host.root(),
-                                &editor.state,
-                                editor.gesture.as_ref(),
-                                &mut editor.models,
-                            )?)?;
-                            preview_present = editor.gesture.is_some();
-                        }
                         scene_view.render(&mut renderer, &editor, &view, 1)?;
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
@@ -875,8 +853,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     geometry_ms,
                     view_ms,
-                    extract_ms,
-                    upload_ms,
+                    extract_ms: stages.extract_ms,
+                    upload_ms: stages.upload_ms,
+                    patched: stages.patched,
                     scene_ms,
                     icons_ms,
                     render_ms,

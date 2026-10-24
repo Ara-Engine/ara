@@ -54,12 +54,51 @@ enum Act {
     Play,
     /// Move an entity through a typed command (an Inspector edit), then settle.
     Edit,
-    /// Type a colour into the Inspector's hex field one character per frame, then
+    /// Type into an Inspector field of a selected mesh one character per frame, then
     /// press Enter (the commit).
-    Type,
+    Type(Typed),
+    /// Drag a selected mesh with the move gizmo's gesture for `DRAG_FRAMES` frames,
+    /// then release (the commit).
+    Drag,
 }
-/// What the Type scenario types, one character per frame.
-const TYPED: &str = "#3366aa";
+/// Frames a Drag act moves the gesture before releasing it.
+const DRAG_FRAMES: u32 = 12;
+/// What a Type act types, and where.
+#[derive(Clone, Copy)]
+struct Typed {
+    /// Scenario name: `type-{name}-{stage}`.
+    name: &'static str,
+    /// The field's element ID.
+    field: &'static str,
+    /// The text, one character per frame; every other act types `alternate`, so each
+    /// commit changes the value.
+    text: &'static str,
+    alternate: &'static str,
+}
+impl Typed {
+    fn text(&self, index: usize) -> &'static str {
+        if index.is_multiple_of(2) {
+            self.text
+        } else {
+            self.alternate
+        }
+    }
+}
+/// A colour (a material edit) and a position (a transform edit, which patches).
+const TYPED: [Typed; 2] = [
+    Typed {
+        name: "color",
+        field: "edit-MeshRenderer-color",
+        text: "#3366aa",
+        alternate: "#aa6633",
+    },
+    Typed {
+        name: "position",
+        field: "edit-Transform-position-0",
+        text: "2.5",
+        alternate: "-1.5",
+    },
+];
 
 /// A Play attempt in flight.
 struct PlayRun {
@@ -93,13 +132,15 @@ pub(super) struct Sample {
     pub ui_ms: f64,
     /// The authority's tick (server pump, `Editor::tick`).
     pub tick_ms: f64,
-    /// Scene re-extraction and geometry upload after document changes.
+    /// Scene updates after document changes, and typed or gizmo previews.
     pub geometry_ms: f64,
-    /// Of `geometry_ms`: `Editor::view` (resolve), `DocumentView::scene` (extract) and
-    /// `Renderer::update_geometry` (upload).
+    /// Of `geometry_ms`, for a document change: `Editor::view` (resolve), extraction
+    /// and upload. A patch (`patched`) extracts and uploads only what moved, timed
+    /// together as upload.
     pub view_ms: f64,
     pub extract_ms: f64,
     pub upload_ms: f64,
+    pub patched: bool,
     /// The Scene view's render and overlays (when the frame is dirty).
     pub scene_ms: f64,
     /// Re-rasterizing toolbar icons (theme or DPI changes).
@@ -156,8 +197,13 @@ impl Probe {
         for _ in 0..6 {
             acts.push(Act::Edit);
         }
+        for typed in TYPED {
+            for _ in 0..3 {
+                acts.push(Act::Type(typed));
+            }
+        }
         for _ in 0..3 {
-            acts.push(Act::Type);
+            acts.push(Act::Drag);
         }
         acts.push(Act::Idle("idle-after", 120));
         for _ in 0..3 {
@@ -192,12 +238,21 @@ impl Probe {
             Some(Act::Theme(_)) => "theme".into(),
             Some(Act::Play) => "play".into(),
             Some(Act::Edit) => "edit".into(),
-            Some(Act::Type) => match self.age {
-                n if n <= 3 => "type-focus".into(),
-                n if n < 4 + TYPED.len() as u32 => "type-keystroke".into(),
-                n if n == 4 + TYPED.len() as u32 => "type-commit".into(),
-                _ => "type-settle".into(),
+            Some(Act::Drag) => match self.age {
+                0 | 1 => "drag-begin".into(),
+                n if n < 2 + DRAG_FRAMES => "drag-move".into(),
+                n if n == 2 + DRAG_FRAMES => "drag-commit".into(),
+                _ => "drag-settle".into(),
             },
+            Some(Act::Type(typed)) => {
+                let stage = match self.age {
+                    n if n <= 3 => "focus",
+                    n if n < 4 + typed.text(self.index).len() as u32 => "keystroke",
+                    n if n == 4 + typed.text(self.index).len() as u32 => "commit",
+                    _ => "settle",
+                };
+                format!("type-{}-{stage}", typed.name)
+            }
             None => "done".into(),
         }
     }
@@ -317,21 +372,18 @@ impl Probe {
                     }
                 }
             }
-            Some(Act::Type) => {
-                let typed = TYPED.len() as u32;
+            Some(Act::Type(typed)) => {
+                let (field, text) = (typed.field, typed.text(self.index));
+                let typed = text.len() as u32;
                 match self.age {
                     0 => {
-                        let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
-                            .map_err(|d| format!("{d:?}"))?
-                            .into_iter()
-                            .find(|(_, e)| e.record.contains_key("MeshRenderer"))
-                            .map(|(id, _)| id)
-                            .ok_or("responsiveness: no mesh entity to type into")?;
+                        let entity = mesh_entity(editor)?;
                         editor.action("editor.select", json!({"entities": [entity]}))?;
                     }
                     2 => {
-                        let point = centre(shell, "edit-MeshRenderer-color")
-                            .ok_or("responsiveness: no colour field in the Inspector")?;
+                        let point = centre(shell, field).ok_or_else(|| {
+                            format!("responsiveness: no `{field}` in the Inspector")
+                        })?;
                         push(events, motion(at(point)));
                         push(events, button(true));
                         push(events, button(false));
@@ -341,7 +393,7 @@ impl Probe {
                         &mut OsClipboard,
                     )?,
                     n if (4..4 + typed).contains(&n) => {
-                        let c = &TYPED[(n - 4) as usize..(n - 3) as usize];
+                        let c = &text[(n - 4) as usize..(n - 3) as usize];
                         self.injected = Some(Instant::now());
                         shell.event(
                             InputEvent::Edit(ara_ui_text::EditEvent::Insert(c.into())),
@@ -356,15 +408,31 @@ impl Probe {
                     _ => {}
                 }
             }
+            Some(Act::Drag) => match self.age {
+                0 => {
+                    let entity = mesh_entity(editor)?;
+                    editor.action("editor.select", json!({"entities": [entity]}))?;
+                }
+                1 => editor.begin_gesture()?,
+                n if n < 2 + DRAG_FRAMES => {
+                    self.injected = Some(Instant::now());
+                    let sign = if self.index.is_multiple_of(2) {
+                        1.
+                    } else {
+                        -1.
+                    };
+                    if let Some(gesture) = &mut editor.gesture {
+                        gesture.update(glam::Vec3::new(sign * 0.05 * (n - 1) as f32, 0., 0.));
+                    }
+                }
+                n if n == 2 + DRAG_FRAMES => {
+                    self.injected = Some(Instant::now());
+                    editor.finish_gesture(false)?;
+                }
+                _ => {}
+            },
             Some(Act::Edit) if self.age == 0 => {
-                let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
-                    .map_err(|d| format!("{d:?}"))?
-                    .into_iter()
-                    .find(|(_, e)| {
-                        e.record.contains_key("Transform") && e.record.contains_key("MeshRenderer")
-                    })
-                    .map(|(id, _)| id)
-                    .ok_or("responsiveness: no mesh entity to edit")?;
+                let entity = mesh_entity(editor)?;
                 self.injected = Some(Instant::now());
                 let y = if self.index.is_multiple_of(2) {
                     0.25
@@ -445,7 +513,8 @@ impl Probe {
         let done = match self.acts.get(self.index) {
             Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
             Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
-            Some(Act::Type) => self.age >= 12 + TYPED.len() as u32,
+            Some(Act::Type(typed)) => self.age >= 12 + typed.text(self.index).len() as u32,
+            Some(Act::Drag) => self.age >= 10 + DRAG_FRAMES,
             // A click's target was not on screen yet (`inject` retries, then fails).
             Some(Act::Click(..) | Act::Play) => false,
             None => true,
@@ -523,6 +592,19 @@ impl Probe {
     }
 }
 
+/// The first entity with a Transform and a MeshRenderer (what Type and Drag edit).
+fn mesh_entity(editor: &Editor) -> ara_ui::Result<String> {
+    Ok(
+        crate::world::resolve(editor.host.store(), &editor.state.doc)
+            .map_err(|d| format!("{d:?}"))?
+            .into_iter()
+            .find(|(_, e)| {
+                e.record.contains_key("Transform") && e.record.contains_key("MeshRenderer")
+            })
+            .map(|(id, _)| id)
+            .ok_or("responsiveness: no mesh entity to edit")?,
+    )
+}
 fn motion(position: [f32; 2]) -> Event {
     Event::MouseMotion {
         position,
