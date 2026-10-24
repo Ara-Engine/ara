@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_aircon",
+  "records": {
+    "e_part0": {
+      "name": "exterior_aircon_unit_rusted",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/exterior_aircon_unit/exterior_aircon_unit_1k.gltf#as_exteriorairconunit",
+        "node": "exterior_aircon_unit_rusted"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "aircon",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

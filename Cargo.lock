@@ -1524,8 +1524,10 @@ name = "ara-render-fidelity"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-asset-format",
  "ara-gpu",
  "ara-render",
+ "ara-texture-stream",
  "bytemuck",
  "glam 0.30.9",
  "image",
@@ -1687,24 +1689,31 @@ dependencies = [
  "ara-2d",
  "ara-asset",
  "ara-asset-format",
+ "ara-components",
  "ara-doc",
+ "ara-foliage",
  "ara-gpu",
  "ara-importers",
  "ara-input",
  "ara-landscape",
  "ara-render",
+ "ara-render-fidelity",
  "ara-render2d",
  "ara-runtime",
  "ara-schema",
  "ara-sim",
  "ara-terrain",
+ "ara-texture-stream",
  "ara-vfx",
  "ara-vfx-gpu",
  "bevy_ecs",
+ "bytemuck",
  "glam 0.30.9",
  "glam 0.34.1",
  "image",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "texture2ddecoder",
 ]
 
@@ -7645,8 +7654,6 @@ dependencies = [
 [[package]]
 name = "lightyear_sync"
 version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82eceb35d8eace3b1808e19e27582ed3b669964a335df4abf7723bfe922403e8"
 dependencies = [
  "bevy_app",
  "bevy_derive",
@@ -7699,8 +7706,6 @@ dependencies = [
 [[package]]
 name = "lightyear_transport"
 version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af892d197389fab9d663f81f023b4db0640ca488d5ac2e6cf7b6db36d2edd40d"
 dependencies = [
  "bevy_app",
  "bevy_ecs",

@@ -57,6 +57,9 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   `MeshRenderer` emission defaults to the imported factor, with explicit enable,
   strength, optional factor and material selectors; `Draw.emissive_factor` replaces
   the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance.
+  `MeshRenderer.material_overrides` resolves graph/instance assets into immutable
+  `material::MaterialAsset` data at content boundaries; `Draw.material` replaces one
+  subtree-local primitive slot. Texture generation metadata stays aligned with bytes.
 - `plugin::RuntimePlugin` (`Send + Sync`): seams for C# scripts (`ara-runtime-script`),
   networked play (`ara-runtime-net`), world streaming (`ara-runtime-world`), audio and
   VFX (`prepare(world, schema)` before projection, `register`, `install(Stage)`,
@@ -103,6 +106,9 @@ plugin Late → poses.resolve.
 - Physics: a body is teleported only when its `Transform` differs from what physics
   last wrote (`SyncedTransform`). Static bodies keep authored transforms. Kinematic
   nav agents lift their collider so it rests on the ground.
+  Model colliders share MeshRenderer's selectors and pivot, bake world scale, and
+  rebuild native handles on portable restore. Omitted/zero PhysicsIds receive stable
+  unique values before binding; automatic IDs are marked driven in keep-changes.
 - Navmeshes bake at load from static box colliders and terrain inside each
   `NavMeshSurface` (cached by tile content in `nav_cache`). `NavMeshSurface.geometry`
   assets are not baked yet (structured error). Streamed navigation needs terrain

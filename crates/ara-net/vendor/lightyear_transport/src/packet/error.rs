@@ -1,0 +1,27 @@
+//! Errors for building packets
+
+use crate::channel::receive::ChannelReceiveError;
+use lightyear_serde::SerializationError;
+
+pub type Result<T> = core::result::Result<T, PacketError>;
+#[derive(thiserror::Error, Debug)]
+pub enum PacketError {
+    #[error("serialization error: {0}")]
+    Serialization(#[from] SerializationError),
+    #[error("channel was not found")]
+    ChannelNotFound,
+    #[error("receiver channel error: {0}")]
+    ChannelReceiveError(#[from] ChannelReceiveError),
+    #[error("compression is not supported by this build or transport configuration")]
+    UnsupportedCompression,
+    #[error("packet payload could not be compressed")]
+    CompressionFailed,
+    #[error("compressed packet payload could not be decompressed")]
+    DecompressionFailed,
+    #[error("decompressed packet payload size {actual} exceeds configured limit {limit}")]
+    DecompressedPayloadTooLarge { actual: usize, limit: usize },
+    #[error("packet size {actual} exceeds MTU {mtu}")]
+    PacketTooLarge { actual: usize, mtu: usize },
+    #[error("link MTU {actual} is too small for fragment packets; minimum is {min}")]
+    MtuTooSmall { actual: usize, min: usize },
+}

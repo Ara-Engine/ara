@@ -12,6 +12,11 @@ use ara_sim::{SimError, StateProvider, TrustedState};
 use bevy_ecs::prelude::*;
 use serde_json::Value;
 use std::{any::TypeId, sync::Arc};
+pub mod commands;
+mod identity;
+mod model;
+#[cfg(test)]
+mod tests;
 
 /// Installs the Jolt world and gives every body without a `PhysicsPose` one from its
 /// world transform, then builds native bodies without advancing time.
@@ -38,16 +43,23 @@ pub fn adopt(world: &mut World) {
     for (entity, transform) in query.iter(world) {
         new.push((entity, Pose::from_transform(transform)));
     }
-    for (entity, pose) in new {
-        let pose = world
-            .get::<crate::sync::WorldPose>(entity)
-            .map_or(pose, |w| w.0);
-        world.entity_mut(entity).insert(pose.to_physics());
+    if !new.is_empty() {
+        let matrices = crate::sync::world_matrices(world);
+        for (entity, pose) in new {
+            let pose = matrices
+                .get(&entity)
+                .map_or(pose, |matrix| Pose::from_matrix(*matrix));
+            world.entity_mut(entity).insert(pose.to_physics());
+        }
+    }
+    if let Err(error) = identity::assign_ids(world).and_then(|()| model::cook(world)) {
+        world.resource_mut::<PhysicsStatus>().error = Some(ara_physics::PhysicsError(error.0));
     }
 }
 
 fn build(world: &mut World, config: &PhysicsConfig) -> Result<()> {
     ara_physics::register::<JoltBackend>(world, &mut Schedule::default(), config.clone())?;
+    model::reset(world);
     // Cooked shapes are handles into the native world just (re)created.
     let mut stale = Vec::new();
     let mut query = world
@@ -57,6 +69,8 @@ fn build(world: &mut World, config: &PhysicsConfig) -> Result<()> {
         world.entity_mut(entity).remove::<CookedCollider>();
     }
     crate::terrain::cook_chunks(world)?;
+    identity::assign_ids(world)?;
+    model::cook(world)?;
     ara_physics::prepare_ecs::<JoltBackend>(world)?;
     Ok(())
 }
@@ -94,6 +108,7 @@ impl StateProvider for PhysicsProvider {
     fn owned_types(&self) -> Vec<TypeId> {
         let mut types = ara_physics::infrastructure_type_ids::<JoltBackend>().to_vec();
         types.push(TypeId::of::<CookedCollider>());
+        types.push(TypeId::of::<model::Generation>());
         types
     }
     fn capture(&self, world: &World) -> std::result::Result<Value, SimError> {

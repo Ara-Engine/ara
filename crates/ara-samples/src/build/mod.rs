@@ -4,8 +4,11 @@
 //! agent session. Documents, import sidecars and animation controllers use the same
 //! typed commands available to agents through the CLI and MCP.
 pub mod anim;
+mod bounds;
 pub mod hangar;
 pub mod kits;
+mod materials;
+mod native;
 pub mod outpost;
 pub mod place;
 pub mod showcase;
@@ -64,8 +67,6 @@ impl Ctx {
                 .arg("init")
                 .arg(&root)
                 .args(["--name", title]))?;
-            // `ara init` seeds an empty main scene; the samples name their own levels.
-            let _ = std::fs::remove_file(root.join("levels/main.scene"));
         }
         Ok(Self {
             root,
@@ -134,7 +135,7 @@ impl Ctx {
                 "why": why,
                 "commands": chunk.iter().map(|(cmd, args)| json!({"cmd": cmd, "args": args})).collect::<Vec<_>>(),
             });
-            std::fs::write(&file, serde_json::to_string_pretty(&batch)?)?;
+            std::fs::write(&file, ara_json::to_canonical_string(&batch))?;
             let arg = format!("@{}", file.display());
             self.ara(&["do", "--args", &arg])
                 .with_context(|| format!("batch {}", file.display()))?;
@@ -196,23 +197,69 @@ fn run(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
-/// Removes generated content so a build starts from the same state every time.
-pub fn clean(root: &Path, paths: &[&str]) -> Result<()> {
-    for path in paths {
-        let path = root.join(path);
-        if path.is_dir() {
-            std::fs::remove_dir_all(&path)?;
-        } else if path.exists() {
-            std::fs::remove_file(&path)?;
+/// Regenerates documents through typed lifecycle ops, retaining the build journal.
+/// Only non-document generated assets and scratch files are removed directly.
+pub fn clean(ctx: &Ctx, paths: &[&str]) -> Result<()> {
+    fn collect(dir: &Path, documents: &mut std::collections::BTreeSet<String>) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
         }
+        for entry in std::fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                collect(&path, documents)?;
+                continue;
+            }
+            let name = path.to_string_lossy();
+            if ![
+                ".scene",
+                ".prefab",
+                ".terrain",
+                ".foliage",
+                ".animation",
+                ".music",
+                ".graph",
+                ".materialinstance",
+                ".import.json",
+            ]
+            .iter()
+            .any(|extension| name.ends_with(extension))
+            {
+                continue;
+            }
+            let value: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+            if let Some(id) = value["id"].as_str() {
+                documents.insert(id.to_owned());
+            }
+        }
+        Ok(())
     }
-    // A fresh journal: history describes this build only.
-    let state = root.join(".ara");
-    if state.is_dir() {
-        for entry in std::fs::read_dir(&state)?.flatten() {
-            let name = entry.file_name();
-            if name == "journal" || name == "lock" {
-                std::fs::remove_file(entry.path())?;
+    let mut documents = std::collections::BTreeSet::new();
+    for path in paths {
+        collect(&ctx.root.join(path), &mut documents)?;
+    }
+    collect(&ctx.root.join("assets/third_party"), &mut documents)?;
+    let calls = documents
+        .iter()
+        .map(|id| ("doc.delete", json!({"document":format!("@#{id}")})))
+        .collect();
+    ctx.apply(
+        "ara.project.json",
+        "Regenerate sample documents with history and undo",
+        calls,
+    )?;
+    let root = std::fs::canonicalize(&ctx.root)?;
+    for path in paths {
+        let path = ctx.root.join(path);
+        if path.exists() {
+            ensure!(
+                std::fs::canonicalize(&path)?.starts_with(&root),
+                "generated cleanup must stay inside the sample project"
+            );
+            if path.is_dir() {
+                std::fs::remove_dir_all(&path)?;
+            } else {
+                std::fs::remove_file(&path)?;
             }
         }
     }

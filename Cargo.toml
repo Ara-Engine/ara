@@ -100,3 +100,8 @@ debug = false
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+# Deterministic transport clock patches: crates/ara-net/vendor/PATCHES.md.
+[patch.crates-io]
+lightyear_sync = { path = "crates/ara-net/vendor/lightyear_sync" }
+lightyear_transport = { path = "crates/ara-net/vendor/lightyear_transport" }

@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
+ara-texture-stream = { path = "../ara-texture-stream" }
 anyhow = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 glam = { workspace = true, features = ["bytemuck", "serde"] }
@@ -18,3 +19,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 image = { workspace = true, features = ["png"] }
+
+[dev-dependencies]
+ara-asset-format = { path = "../ara-asset-format" }

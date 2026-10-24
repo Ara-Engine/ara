@@ -674,10 +674,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "concrete_block_wall_arm_1k.jpg",
@@ -711,10 +708,7 @@
       "projects": [
         "showcase"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "concrete_floor_02_arm_1k.jpg",
@@ -749,10 +743,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        3.0,
-        3.0000002
-      ],
+      "meters": [3, 3.0000002],
       "files": [
         {
           "path": "concrete_floor_worn_001_arm_1k.jpg",
@@ -876,10 +867,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        1.94,
-        1.9399998
-      ],
+      "meters": [1.94, 1.9399998],
       "files": [
         {
           "path": "container_side_arm_2k.jpg",
@@ -914,10 +902,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.7,
-        2.7
-      ],
+      "meters": [2.7, 2.7],
       "files": [
         {
           "path": "corrugated_iron_02_arm_1k.jpg",
@@ -1231,10 +1216,7 @@
       "projects": [
         "showcase"
       ],
-      "meters": [
-        0.1,
-        0.099999994
-      ],
+      "meters": [0.1, 0.099999994],
       "files": [
         {
           "path": "denim_fabric_arm_1k.jpg",
@@ -1358,10 +1340,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        4.0,
-        4.0
-      ],
+      "meters": [4, 4],
       "files": [
         {
           "path": "dry_ground_01_arm_2k.jpg",
@@ -1395,10 +1374,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        4.0,
-        4.0
-      ],
+      "meters": [4, 4],
       "files": [
         {
           "path": "dry_ground_rocks_arm_2k.jpg",
@@ -1543,10 +1519,7 @@
       "projects": [
         "showcase"
       ],
-      "meters": [
-        0.5,
-        0.49999994
-      ],
+      "meters": [0.5, 0.49999994],
       "files": [
         {
           "path": "fabric_leather_02_arm_1k.jpg",
@@ -1580,10 +1553,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        1.0,
-        1.0
-      ],
+      "meters": [1, 1],
       "files": [
         {
           "path": "green_metal_rust_arm_1k.jpg",
@@ -1662,10 +1632,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "hangar_concrete_floor_arm_2k.jpg",
@@ -2269,10 +2236,7 @@
       "projects": [
         "showcase"
       ],
-      "meters": [
-        1.5,
-        1.5
-      ],
+      "meters": [1.5, 1.5],
       "files": [
         {
           "path": "marble_01_arm_1k.jpg",
@@ -2307,10 +2271,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        0.5,
-        0.5
-      ],
+      "meters": [0.5, 0.5],
       "files": [
         {
           "path": "metal_grate_rusty_arm_1k.jpg",
@@ -2480,10 +2441,7 @@
         "outpost",
         "showcase"
       ],
-      "meters": [
-        0.5,
-        0.5
-      ],
+      "meters": [0.5, 0.5],
       "files": [
         {
           "path": "metal_plate_arm_1k.jpg",
@@ -2764,6 +2722,88 @@
           "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_airduct_rectangular_01/modular_airduct_rectangular_01_parts02_nor_gl_1k.jpg",
           "size": 88121,
           "blake3": "136f1bcba8d575023814df15fd4c7951ccdfd4eba74aa545e5f932bfc292edc8"
+        }
+      ]
+    },
+    {
+      "id": "modular_chainlink_fence",
+      "title": "Modular Chainlink Fence",
+      "kind": "model",
+      "source": "https://polyhaven.com/a/modular_chainlink_fence",
+      "license": "CC0-1.0",
+      "authors": [
+        "James Ray Cock",
+        "Amal Kumar"
+      ],
+      "projects": [
+        "outpost"
+      ],
+      "files": [
+        {
+          "path": "modular_chainlink_fence.bin",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/modular_chainlink_fence/modular_chainlink_fence.bin",
+          "size": 3168016,
+          "blake3": "8921accc0e6094d65689c7aa1d50ff7aa1aa6a38ede25977552174e2879ca2b8"
+        },
+        {
+          "path": "modular_chainlink_fence_1k.gltf",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_chainlink_fence/modular_chainlink_fence_1k.gltf",
+          "size": 41838,
+          "blake3": "ba118f501923b0326f5cda6f5206ae86d38c69b49d5572ca9a58d2b446e1aa0e"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_posts_alpha_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/modular_chainlink_fence/modular_chainlink_fence_posts_alpha_1k.png",
+          "size": 47948,
+          "blake3": "1ad8d754fc6cbd63f04568f4ec983d07f009f39e506043adf3d782b1e01513c6"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_posts_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_arm_1k.jpg",
+          "size": 839858,
+          "blake3": "1aff2908fab9dea6010fe588a54b2f3dfef6f45e12339914973b301f57ecfb78"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_posts_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_diff_1k.jpg",
+          "size": 707116,
+          "blake3": "e719285d59d75bf95bdf034fefe186a80583a607733b400627cdf951072cd708"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_posts_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_nor_gl_1k.jpg",
+          "size": 505743,
+          "blake3": "72fa650622f61bfac236b6c929722696be9e7ded4f2f1304b0ae45043cae5923"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_wire_alpha_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/modular_chainlink_fence/modular_chainlink_fence_wire_alpha_1k.png",
+          "size": 162276,
+          "blake3": "680ebbe6718dd3323254cb6876c503ad1bec4ffadf3303f7d5b597f3a9055ba8"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_wire_arm_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_arm_1k.jpg",
+          "size": 694743,
+          "blake3": "bd5aecb23a1118d634f7439e0d3b169c439c60bf429d64facdda5472e8e40032"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_wire_diff_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_diff_1k.jpg",
+          "size": 670536,
+          "blake3": "11a82b66197b39fd50da92f784cc2e5445a11b207fcac0f4f85906f46e4c2029"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_wire_nor_gl_1k.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_nor_gl_1k.jpg",
+          "size": 664165,
+          "blake3": "f7739cf089f8ec945485d2bbbeca9b9a1b6fd2942a4129d72927d084d747ac60"
+        },
+        {
+          "path": "textures/modular_chainlink_fence_wire_opacity_1k.png",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/modular_chainlink_fence/modular_chainlink_fence_wire_opacity_1k.png",
+          "size": 162276,
+          "blake3": "680ebbe6718dd3323254cb6876c503ad1bec4ffadf3303f7d5b597f3a9055ba8"
         }
       ]
     },
@@ -3669,10 +3709,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "painted_metal_shutter_arm_1k.jpg",
@@ -4274,10 +4311,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        90.0,
-        90.0
-      ],
+      "meters": [90, 90],
       "files": [
         {
           "path": "rocky_terrain_02_arm_2k.jpg",
@@ -4311,10 +4345,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "rocky_trail_arm_2k.jpg",
@@ -4444,10 +4475,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0,
-        2.0
-      ],
+      "meters": [2, 2],
       "files": [
         {
           "path": "rusty_corrugated_iron_arm_1k.jpg",
@@ -4482,10 +4510,7 @@
         "outpost",
         "showcase"
       ],
-      "meters": [
-        1.0,
-        1.0
-      ],
+      "meters": [1, 1],
       "files": [
         {
           "path": "rusty_metal_02_arm_1k.jpg",
@@ -4519,10 +4544,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        2.0999994,
-        2.0999994
-      ],
+      "meters": [2.0999994, 2.0999994],
       "files": [
         {
           "path": "sandy_gravel_arm_1k.jpg",
@@ -5372,10 +5394,7 @@
       "projects": [
         "showcase"
       ],
-      "meters": [
-        1.5,
-        1.5000001
-      ],
+      "meters": [1.5, 1.5000001],
       "files": [
         {
           "path": "wood_table_001_arm_1k.jpg",
@@ -5681,10 +5700,7 @@
       "projects": [
         "outpost"
       ],
-      "meters": [
-        1.7999996,
-        1.7999996
-      ],
+      "meters": [1.7999996, 1.7999996],
       "files": [
         {
           "path": "worn_corrugated_iron_arm_1k.jpg",

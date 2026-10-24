@@ -11,6 +11,14 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `gpu()` access for diagnostics/native presentation. Resize resets history.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and
   camera pose/bounds requests. Materials use bindless texture indices.
+- `instanced::Scene`: native model-space content contract for shared geometry,
+  current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
+  vertices and 320-byte materials with six independent map transforms, AO,
+  transmission and authored terrain layer IDs. Texture IDs address the native
+  residency table; u32::MAX means neutral texels. This input is separate from
+  the legacy `Scene` ABI; GPU consumers are being integrated.
+  Validate only at content publication; do not hash/traverse static vertices
+  when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.

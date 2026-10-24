@@ -237,6 +237,15 @@ impl<F: SimulationFeature> Client<F> {
         }
         Ok(())
     }
+    /// Advances transport and prediction with caller-supplied elapsed time.
+    /// Drive every peer and its links from one clock; do not mix with [`Self::poll`].
+    pub fn advance(&mut self, elapsed: Duration) -> Result<()> {
+        super::advance(&mut self.app, elapsed);
+        if let Some(fault) = &self.app.world().resource::<Owner>().fault {
+            return Err(fault.clone());
+        }
+        Ok(())
+    }
     /// Timeline/rollback/interpolation diagnostics without exposing backend types.
     pub fn status(&mut self) -> ClientStatus {
         let world = self.app.world_mut();
@@ -331,8 +340,7 @@ impl<F: SimulationFeature> Client<F> {
             component,
         )?))
     }
-    /// Forces one prediction-only error on the first available tick at or after `tick`.
-    /// A late baseline or timeline synchronization may skip the exact requested tick.
+    /// Forces a reproducible prediction-only error for reconciliation diagnostics.
     pub fn perturb_prediction(&mut self, tick: u64, run: fn(&mut F::State)) {
         self.app.insert_resource(Perturb::<F> {
             tick,

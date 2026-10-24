@@ -12,6 +12,50 @@ use std::{
 use support::*;
 
 #[test]
+fn explicit_clock_preserves_ticks_inputs_and_replay_across_frame_sizes() -> Result<()> {
+    let make_server = || -> Result<Server<Movement>> {
+        let mut server = Server::<Movement>::new(
+            session()?,
+            policies()?,
+            ServerConfig {
+                mode: SessionMode::Listen,
+                start_clients: 0,
+                tick_limit: Some(600),
+                ..Default::default()
+            },
+        )?;
+        configure(&mut server)?;
+        server.record(build(), vec![])?;
+        for tick in 1..=600 {
+            server.inject_host(
+                tick,
+                Injection {
+                    player: PlayerId(0),
+                    action: "Move".into(),
+                    value: script(tick, PlayerId(0)).unwrap(),
+                    hold_ticks: 1,
+                },
+            )?;
+        }
+        Ok(server)
+    };
+    let mut coarse = make_server()?;
+    let mut fine = make_server()?;
+    for _ in 0..1500 {
+        coarse.advance(Duration::from_millis(10))?;
+        fine.advance(Duration::from_millis(5))?;
+        fine.advance(Duration::from_millis(5))?;
+    }
+    assert_eq!(coarse.session().tick(), 600);
+    assert_eq!(fine.session().tick(), 600);
+    assert_eq!(coarse.session().state_hash()?, fine.session().state_hash()?);
+    assert_eq!(coarse.records(), fine.records());
+    assert_eq!(coarse.trace().unwrap().replay(&mut session()?)?, None);
+    assert_eq!(fine.trace().unwrap().replay(&mut session()?)?, None);
+    Ok(())
+}
+
+#[test]
 fn spawn_baselines_preserve_projection_ownership() -> Result<()> {
     let mut registry = ara_sim::SimRegistry::new(schema())?;
     registry.register_component::<Item>()?;
@@ -538,14 +582,17 @@ fn run(mode: SessionMode) -> Result<()> {
         }
     }
     let start = Instant::now();
+    let frame = Duration::from_secs_f64(1.0 / 60.0);
+    let mut elapsed = Duration::ZERO;
     let mut heal = std::collections::BTreeSet::new();
     let mut late_baseline = 0;
     let mut measure_start = None;
     let mut measure_end = None;
     let mut deferred_seen = false;
     loop {
-        let now = Instant::now();
-        if start.elapsed() > Duration::from_secs(30) {
+        elapsed += frame;
+        let now = start + elapsed;
+        if elapsed > Duration::from_secs(30) {
             panic!(
                 "convergence deadline {:?} at {}: {:?}",
                 mode,
@@ -580,12 +627,12 @@ fn run(mode: SessionMode) -> Result<()> {
         for link in links.iter_mut().skip(remote_start) {
             link.pump(now, measure)?;
         }
-        server.poll()?;
+        server.advance(frame)?;
         if server.session().tick() >= 100 {
             server.position("e_0003", [0.0; 2])?;
         }
         for (&p, client) in &mut clients {
-            client.poll()?;
+            client.advance(frame)?;
             let status = client.status();
             deferred_seen |= status.pending_references > 0;
             if p == 3 && status.tick > 0 && late_baseline == 0 {
@@ -614,6 +661,7 @@ fn run(mode: SessionMode) -> Result<()> {
             let spawns = clients.values_mut().next().unwrap().spawns();
             let converged = clients.iter_mut().all(|(&p, c)| {
                 c.status().tick == 600
+                    && c.status().predicted_tick >= 608
                     && spawns
                         .iter()
                         .filter(|s| s.identity.starts_with("player"))
@@ -632,9 +680,23 @@ fn run(mode: SessionMode) -> Result<()> {
                 break;
             }
         }
-        std::thread::sleep(Duration::from_millis(2));
     }
     assert!(late_baseline >= 180);
+    // The 180-tick neutral tail exceeds the link delay and input redundancy.
+    // Check what the authority actually consumed, rather than only final state.
+    for record in server.records().iter().filter(|r| r.tick >= 420) {
+        for input in &record.inputs {
+            if input.action == "Move" {
+                assert_eq!(
+                    input.value,
+                    ara_input::ActionValue::Axis2([0.0; 2]),
+                    "motion remained at tick {} for {:?}",
+                    record.tick,
+                    input.player
+                );
+            }
+        }
+    }
     assert_eq!(server.budgets()[&PlayerId(remote_start as u64)], 3200);
     assert!(
         deferred_seen,

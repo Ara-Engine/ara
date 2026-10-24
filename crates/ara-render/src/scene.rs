@@ -2,6 +2,13 @@
 use glam::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
 
+/// `Material.flags[1]`: decode base-color RGB after raw UNORM filtering.
+/// Alpha stays raw; linear factors multiply after this exact sRGB conversion.
+pub const BASE_COLOR_DECODE_SRGB: u32 = 1 << 25;
+/// `Material.flags[1]`: decode emissive RGB after raw UNORM filtering.
+/// Source glTF textures use hardware sRGB views and leave this bit clear.
+pub const EMISSIVE_DECODE_SRGB: u32 = 1 << 26;
+
 /// Interleaved position/normal/UV/tangent vertex ABI, 48 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -27,7 +34,8 @@ pub struct Material {
     pub surface: [f32; 4],
     /// Scene texture indices: base color (sRGB), normal, metallic/roughness (G/B), emissive (sRGB).
     pub textures: [u32; 4],
-    /// Alpha mode: zero opaque, one mask, two blend; remaining words reserved.
+    /// Word 0: alpha mode (opaque/mask/blend). Word 1: layer/AO bits 0..24 and
+    /// decode-after-sampling bits 25/26. Word 3 is reserved for the fidelity tag.
     pub flags: [u32; 4],
 }
 impl Default for Material {

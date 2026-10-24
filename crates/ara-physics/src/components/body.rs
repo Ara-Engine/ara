@@ -60,6 +60,10 @@ pub enum ColliderKind {
     Cylinder,
     /// Immutable cooked hull, mesh, terrain or compound, attached as `CookedCollider`.
     Cooked,
+    /// Convex hull from the selected cooked model geometry; supports moving bodies.
+    ModelConvex,
+    /// Triangle surface from the selected cooked model geometry; static bodies only.
+    ModelMesh,
 }
 
 /// Collision geometry, material, layer and trigger settings.
@@ -69,6 +73,10 @@ pub enum ColliderKind {
 pub struct Collider {
     /// Primitive type or externally cooked shape.
     pub kind: ColliderKind,
+    /// Shape center in body-local metres, after visual scale is baked. The body
+    /// origin remains at Transform/PhysicsPose; rotation also rotates this offset.
+    #[ara(unit = Meters)]
+    pub center: [f32; 3],
     /// Box half extents; scale must be baked before physics extraction.
     #[ara(default = [0.5,0.5,0.5], unit = Meters, range(min = 0.0001))]
     pub half_extents: [f32; 3],
@@ -80,6 +88,10 @@ pub struct Collider {
     pub half_height: f32,
     /// Cooked collision asset (`@path#id`); resolve into `CookedCollider` before ticking.
     pub asset: Option<AssetRef>,
+    /// Source model node name/index for model-derived geometry; absent uses its default scene.
+    pub node: Option<String>,
+    /// Subtree-local primitive for model-derived geometry; absent uses the complete subtree.
+    pub primitive: Option<u32>,
     /// Zero selects static/moving defaults from the body; 1..15 select an explicit group.
     #[ara(range(min = 0, max = 15))]
     pub layer: u32,
@@ -96,10 +108,13 @@ impl Default for Collider {
     fn default() -> Self {
         Self {
             kind: ColliderKind::Box,
+            center: [0.; 3],
             half_extents: [0.5; 3],
             radius: 0.5,
             half_height: 0.5,
             asset: None,
+            node: None,
+            primitive: None,
             layer: 0,
             sensor: false,
             friction: 0.6,

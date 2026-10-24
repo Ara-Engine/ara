@@ -67,6 +67,7 @@ impl Windowed {
             metallic: 0.0,
             emissive: [0.0; 3],
             emissive_factor: None,
+            material: None,
             skin: None,
         });
         presenter.prepare(&warm)?;

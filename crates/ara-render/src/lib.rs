@@ -3,6 +3,7 @@
 //! Ara's render graph, PBR baseline and deterministic visual feedback API.
 pub mod capture;
 pub mod graph;
+pub mod instanced;
 pub mod renderer;
 pub mod scene;
 pub use renderer::Renderer;

@@ -13,6 +13,7 @@ use bevy_ecs::{
 };
 use bevy_reflect::Reflect;
 use bevy_replicon::prelude::{AppVisibilityExt, ScopeLifetime, SingleComponent, VisibilityFilter};
+use bevy_time::{Real, Time, TimeUpdateStrategy, Virtual};
 use lightyear::{prelude::input::native::*, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -195,6 +196,19 @@ fn base<F: SimulationFeature>(server: bool, policies: PolicyRegistry, hz: u32) -
 fn finish(app: &mut App) {
     app.finish();
     app.cleanup();
+}
+fn advance(app: &mut App, elapsed: Duration) {
+    // The first Bevy update initializes its epoch without consuming a duration.
+    // Prime it so every explicit advance accounts for exactly the supplied time.
+    let mut time = app.world_mut().resource_mut::<Time<Real>>();
+    if time.last_update().is_none() {
+        time.update_with_duration(Duration::ZERO);
+    }
+    app.world_mut()
+        .resource_mut::<Time<Virtual>>()
+        .set_max_delta(Duration::MAX);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(elapsed));
+    app.update();
 }
 fn send(world: &mut World, link: Entity, message: ToClient) {
     if let Some(mut sender) = world.get_mut::<MessageSender<ToClient>>(link) {

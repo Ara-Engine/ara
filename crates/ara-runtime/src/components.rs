@@ -21,6 +21,17 @@ pub enum MeshShape {
     Plane,
 }
 
+/// One native material graph/instance replacing a selected model primitive's material.
+#[derive(Debug, Clone, PartialEq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrimitiveMaterialOverride {
+    /// Zero-based primitive within the selected subtree, before `primitive` filtering.
+    pub primitive: u32,
+    /// Authoritative material graph or material-instance asset (`@path#id`).
+    pub material: AssetRef,
+}
+
 /// Draws geometry at the entity's interpolated world transform.
 #[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
@@ -43,6 +54,8 @@ pub struct MeshRenderer {
     pub node: Option<String>,
     /// Zero-based primitive within the selected subtree (or whole model).
     pub primitive: Option<u32>,
+    /// Native material assets by subtree-local primitive slot; omitted slots use the model.
+    pub material_overrides: Vec<PrimitiveMaterialOverride>,
     /// Linear base color multiplier and opacity.
     // Migration: early editor documents wrote `tint`; reading renames it.
     #[ara(alias = "tint")]
@@ -53,7 +66,7 @@ pub struct MeshRenderer {
     /// Metalness.
     #[ara(range(min = 0, max = 1))]
     pub metallic: f32,
-    /// Procedural emitted radiance, or the RGB multiplier of a model's emission.
+    /// Default procedural radiance, or an RGB emission multiplier with a model/material asset.
     /// Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.
     pub emissive: [f32; 3],
     /// Enables emission without modifying the source model or its materials.
@@ -77,6 +90,7 @@ impl Default for MeshRenderer {
             model: None,
             node: None,
             primitive: None,
+            material_overrides: Vec::new(),
             color: Color([1.0; 4]),
             roughness: 0.6,
             metallic: 0.0,
@@ -468,7 +482,8 @@ impl Default for VisualEffect {
 pub fn register_schemas(db: &mut SchemaDb) {
     ara_physics::register_schemas(db);
     ara_nav::register(db);
-    db.register::<MeshRenderer>()
+    db.register::<PrimitiveMaterialOverride>()
+        .register::<MeshRenderer>()
         .register::<Light>()
         .register::<Environment>()
         .register::<Camera>()
