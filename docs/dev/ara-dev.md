@@ -189,6 +189,16 @@ Local evidence is `target/ara-dev/perf-rebuild-results.json`, with build and pla
 logs beside it. A 60-frame run with a capture completed in 20.54 seconds once
 the frozen pack was available.
 
+On the final binary, editing `post.slang` in an isolated fidelity cohort produced
+a new 60-frame window in 6.25 seconds: three offline pipelines cooked in 3.29
+seconds and native replacement used 3.72 ms on the warm driver cache. The player
+PID and executable hash stayed identical. An incompatible binding-layout probe
+was rejected while retaining the last-good report/cohort; restoring the manifest
+then reloading recovered successfully. A live High-to-Medium swap and the stdio
+MCP status query passed on that same process. Evidence is
+`target/ara-dev/perf-final-probe-results.json` and its before/after/rejection/
+recovery reports. The final capture was visually inspected.
+
 ## Gate usage
 
 ```
