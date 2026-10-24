@@ -3,7 +3,9 @@
 Production export orchestration; `ara-export` is temporary CLI wiring.
 `export(ExportRequest, EventSink)` is the integration entry; `doctor` shares
 tool discovery. `ExportPreset` is schema registered and uses ara-json canonical
-writing. Template files must match the hash and (platform, arch, config) pin.
+writing. Template files must match the hash and (platform, arch, config) pin;
+`{from,to}_unpinned_text` keep runtime profiles pin-free for builders that pin at
+build time (the editor's Build Current Profile); exports still validate pins.
 Conformance pins remain executable smoke workloads. Runtime pins are ZIPs of the
 real ara-player plus cooked resources: `ara-export runtime-template --player EXE
 --engine ENGINE --output ZIP`, then the existing `pin` command with matching symbols.

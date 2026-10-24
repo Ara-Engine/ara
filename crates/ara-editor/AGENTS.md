@@ -19,8 +19,8 @@ Every content change uses cmd.apply, including gizmo commits and diagnostic fixe
 Gizmo and typed-draft previews are transient renderer patches, never document writes.
 Escape drops the preview; release commits one transform.set batch with its base.
 `app/scene_sync.rs` patches the Scene in place (`world/patch.rs`: moved meshes alone via
-`update_mesh`, the light list) for value edits, drafts and drags; anything `patch_to`
-cannot classify (structure, `MeshRenderer`, mesh names) uploads the whole scene.
+`update_mesh`, lights, `update_materials`, `rename`) for value edits, drafts and drags;
+structure and mesh geometry changes, and new model publications, upload the whole scene.
 View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 
@@ -29,8 +29,7 @@ in `Editor::open`): Play opens the scene in a pooled `ara-player` window. Multi-
 Play (D19) is the palette's `editor.play` (`clients`, `dedicated`, per-client simulated
 `latencyMs`/`jitterMs`/`loss`): one replicated window per player; `Editor::action` turns
 its resolved params into `play.start`. Keep "f…r" out of editor method names and
-summaries (the palette golden searches "fr"). The in-editor Game viewport through a
-shared GPU texture (D19) is still to wire.
+summaries (the palette golden searches "fr").
 One schema world: `Editor::open` uses `ara_play_host::open_project`, so the editor
 validates and inspects exactly the engine components the player runs. The viewport
 decodes `MeshRenderer` as `ara_runtime::components::MeshRenderer` (same defaults,
@@ -41,22 +40,17 @@ by asset ID/digest. `Editor::models` survives document edits; extraction selects
 the source node/primitive and pivot without reopening sidecars or decoding per
 entity. Unpublished models use placeholders; failed reloads retain last good.
 
-Set CARGO_BUILD_JOBS=2. Use `run.ps1 -Mode Check` for the local gates or targeted
-cargo check/test/clippy commands. The GPU gate uses process-local Vulkan loader
-isolation and requires validation layers, SDL3 and this machine's GPU.
-`run.ps1 -Mode Verify` runs the actual window, protocol interaction scenario,
-GPU/CPU comparison, captures both themes and records raw timing samples.
-Intentional goldens live in `tests/goldens`; evidence lives in `evidence`.
-Never update goldens implicitly during ordinary tests.
+Set CARGO_BUILD_JOBS=2; gate with targeted cargo check/test/clippy. The GPU gate
+(`run.ps1 -Mode Verify`, `tests/native.rs --ignored`) needs validation layers, SDL3
+and this machine's GPU. Goldens live in `tests/goldens` (update only with
+`ARA_EDITOR_UPDATE_GOLDENS=1`); evidence lives in `evidence`.
 
-Polish assets: bundled Lucide SVGs (ISC), Inter and JetBrains Mono (OFL); see
-THIRD_PARTY_NOTICES.md. Icons rasterize only on theme/DPI changes. The fidelity
-view and its bounded settling live in app/viewport.rs; destroy it before its GPU.
-Raster IDs drive picking, silhouette outlines and GPU-only hover. Physical Scene
-extents and UI glyph raster scale change together. Keep the separate SDL window,
-editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
-bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
-1440x900 at 1x and 2560x1440 at 2x, including palettes and the Agents feed.
+Polish assets: Lucide SVGs (ISC), Inter and JetBrains Mono (OFL; THIRD_PARTY_NOTICES).
+The fidelity view and its bounded settling live in app/viewport.rs; destroy it before
+its GPU. Raster IDs drive picking, outlines and GPU-only hover. Physical Scene extents
+and UI glyph scale change together; keep the SDL window, editor logical, IME and UIA
+coordinate conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
+verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
 thumbnails. authoring registers graph/material/VFX/animation commands; graph is
@@ -79,7 +73,6 @@ captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 drag and graph create/connect/undo, then captures every panel in both themes and
 measures 1,000 warm input-to-present samples with 500 nodes open.
 
-
 UX v2 (D23). `shell/commands` is the one command registry: `table.rs` specs (id,
 title, icon, keys, availability, label, run), `menus.rs` the nine menus and every
 context menu, `keys.rs` chords and the Ara/Unreal/Unity/Blender presets. Menus,
@@ -95,12 +88,14 @@ Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-ru
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
 from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
-Scene quality: `EditorState.render_quality: Option<QualityChoice>` mirrors the user
-preference `viewport.quality` (None = the project's `rendering.quality`, the
-Project Settings > Rendering page); `state.quality` is derived in `apply_settings`
-(false only for Low) and the window keeps `detected_quality` (GPU's Auto preset).
-Commands `view.quality.{project,auto,low,medium,high,epic}` feed the Lit menu,
-palette and `editor.commands`; agents may also use `editor.preferences.renderQuality`.
+Scene quality: `EditorState.render_quality` mirrors the preference `viewport.quality`
+(None = the project's `rendering.quality`); `state.quality` derives in `apply_settings`
+(false only for Low); the window keeps `detected_quality` (Auto). Commands
+`view.quality.{project,auto,low,medium,high,epic}`; agents: `editor.preferences`.
+Scene camera: `state::Camera` (orbit pose, `fov_y_degrees` 10–120, default 50) feeds
+`spec()`. `editor.camera` reads it (no fields) or sets any subset (`fovYDegrees`;
+`entity` looks through a scene `Camera`). UI: toolbar FOV field, Camera menu presets,
+`view.camera.align` (Align View to Selected Camera).
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
@@ -123,8 +118,9 @@ The host holds only overlapping fields for at most two seconds; other edits appl
 
 Phase 2 (alpha journey). `activity.rs`: agent turns glow 5 s, "agent is viewing"
 and overwrite (ARA2503) notices with View/Follow; never move the human camera.
-`editor.scene.open {scene}` (path or ID; agents move only their presence); scenes
-keep cameras, first opens frame. Console/Problems (`shell/log_panels.rs`) read the
+`editor.scene.open {scene}` (path or ID; agents move only their presence). Scenes open
+with their last camera (`view_camera.rs`, a user preference), else their gameplay
+camera, else framed content; F/Frame All skip terrain and ground unless selected. Console/Problems (`shell/log_panels.rs`) read the
 bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
 `Editor::report_failure` re-logs an engine error's own diagnostics. Prefabs:
 `shell/prefab_ops.rs` (from selection, apply/revert overrides; root placement is
@@ -133,8 +129,12 @@ Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc
 releases); a faulted world (`play.status`) shows its fault with Restart/Stop
-instead of "Starting Play…". Play embeds unless `play.inGameView` is off. Build: `shell/build.rs`
-runs ara-export with `presets/*.export.json` on a thread.
+instead of "Starting Play…". Play embeds unless `play.inGameView` is off.
+Build (`shell/build.rs`): `build.current` exports the main scene with the first
+`presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
+Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
+this engine's runtime template (player + PDB, cooked shaders) under `.ara/export/`;
+C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`).
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
 never add a capture route that shows a window. `--verify-journey` captures the
 journey (`app/journey.rs`) and writes `journey.json` after every step.

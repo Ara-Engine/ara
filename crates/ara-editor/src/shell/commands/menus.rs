@@ -62,10 +62,13 @@ pub(crate) const MENUS: &[Menu] = &[
             Sub(
                 "Build & Export",
                 &[
-                    C("build.profiles"),
                     C("build.current"),
-                    C("build.package"),
+                    C("build.run"),
                     C("build.open_folder"),
+                    S,
+                    C("build.profile.create"),
+                    C("build.profiles"),
+                    C("build.package"),
                 ],
             ),
             S,
@@ -674,7 +677,9 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Camera => &[
             C("view.camera.perspective"),
+            C("view.camera.fov"),
             C("view.camera.default"),
+            C("view.camera.align"),
             S,
             C("view.camera.top"),
             C("view.camera.bottom"),

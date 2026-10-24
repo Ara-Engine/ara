@@ -1,13 +1,23 @@
 //! Keeps the Scene renderer in step with the document. Value edits, typed Inspector
 //! drafts and gizmo drags patch it in place ([`Patch`]: moved meshes alone, the
-//! light list); anything else extracts and uploads the whole scene.
+//! light list, materials, labels); anything else extracts and uploads the whole
+//! scene, as does a new model publication (placeholders become models).
 use super::*;
 use crate::world::{DocumentView, Patch};
 use std::collections::BTreeMap;
 
-/// The renderer's state relative to the committed view: which previews it shows.
-#[derive(Default)]
+/// How long a newer model publication must hold still before a whole re-upload
+/// adopts it: imports publish in bursts, and each upload of a large scene costs
+/// most of a second on this thread.
+const PUBLICATION_SETTLE: Duration = Duration::from_secs(1);
+
+/// The renderer's state relative to the committed view: which previews it shows,
+/// and which model publication its geometry came from.
 pub(super) struct SceneSync {
+    /// `ModelCache::revision` behind the last whole upload.
+    models: u64,
+    /// A newer publication, and since when it has held still.
+    publication: Option<(u64, Instant)>,
     /// Meshes and lights a preview (typed draft or gizmo drag) moved away from the
     /// committed view; the next patch also restores them.
     shown: Patch,
@@ -29,6 +39,48 @@ pub(super) struct Stages {
 }
 
 impl SceneSync {
+    /// The renderer holds a scene extracted at model publication `models` (read before
+    /// that extraction).
+    pub fn new(models: u64) -> Self {
+        SceneSync {
+            models,
+            publication: None,
+            shown: Patch::default(),
+            drafts: None,
+            pose: None,
+        }
+    }
+
+    /// Upload `view` whole once a newer model publication than the last whole
+    /// upload's has held still for `PUBLICATION_SETTLE` while the user is `idle`
+    /// (placeholders become models); returns whether it did.
+    pub fn refresh(
+        &mut self,
+        view: &DocumentView,
+        editor: &mut Editor,
+        renderer: &mut Renderer,
+        idle: bool,
+    ) -> ara_ui::Result<bool> {
+        let revision = editor.models.revision();
+        if revision == self.models {
+            self.publication = None;
+            return Ok(false);
+        }
+        match self.publication {
+            Some((seen, since))
+                if seen == revision && idle && since.elapsed() >= PUBLICATION_SETTLE =>
+            {
+                self.rebuild(view, editor, renderer)?;
+                Ok(true)
+            }
+            Some((seen, _)) if seen == revision => Ok(false),
+            _ => {
+                self.publication = Some((revision, Instant::now()));
+                Ok(false)
+            }
+        }
+    }
+
     /// The document changed from `old` to `new`: patch the renderer when the change
     /// allows it, else upload `new` whole. Previews are rebuilt on top afterwards.
     pub fn commit(
@@ -70,6 +122,9 @@ impl SceneSync {
         editor: &mut Editor,
         renderer: &mut Renderer,
     ) -> ara_ui::Result<Stages> {
+        // Read first: a publication adopted during extraction triggers another.
+        self.models = editor.models.revision();
+        self.publication = None;
         let at = Instant::now();
         let scene = view.scene(
             editor.host.root(),
@@ -116,8 +171,8 @@ impl SceneSync {
                 return Ok(false);
             }
             self.drafts = Some(shell.drafts().clone());
-            // A draft only previews when a patch can show it (a recolour waits for
-            // its commit until the renderer updates materials in place).
+            // A draft only previews when a patch can show it (a reshaped mesh waits
+            // for its commit).
             let target = shell
                 .draft_records(editor, view)
                 .map(|records| view.with_records(records))

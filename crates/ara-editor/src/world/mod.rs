@@ -252,14 +252,7 @@ impl DocumentView {
                 let renderer: MeshRenderer =
                     serde_json::from_value(record.clone()).unwrap_or_default();
                 let material = scene.materials.len();
-                let [r, g, b] = renderer.emissive;
-                scene.materials.push(Material {
-                    base_color: renderer.color.0,
-                    emissive_roughness: [r, g, b, renderer.roughness],
-                    surface: [renderer.metallic, 1.0, 1.0, 0.5],
-                    textures: [0, 1, 0, 0],
-                    flags: [u32::from(renderer.color.0[3] < 1.0) * 2, 0, 0, 0],
-                });
+                scene.materials.push(raster_material(&renderer));
                 let mut mesh = if let Some(reference) = &renderer.model {
                     let reference =
                         ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
@@ -371,6 +364,18 @@ impl DocumentView {
             scene.meshes.push(mesh);
         }
         Ok(scene)
+    }
+}
+/// The raster material a `MeshRenderer` draws with (`MATERIAL_FIELDS` in `patch.rs`
+/// lists what it reads).
+fn raster_material(renderer: &MeshRenderer) -> Material {
+    let [r, g, b] = renderer.emissive;
+    Material {
+        base_color: renderer.color.0,
+        emissive_roughness: [r, g, b, renderer.roughness],
+        surface: [renderer.metallic, 1.0, 1.0, 0.5],
+        textures: [0, 1, 0, 0],
+        flags: [u32::from(renderer.color.0[3] < 1.0) * 2, 0, 0, 0],
     }
 }
 /// The engine's procedural shape for a `MeshRenderer` without a model (model space).

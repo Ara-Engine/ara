@@ -34,6 +34,10 @@ const STEPS: &[(&str, Setup)] = &[
         "menu-lighting",
         Setup::Dropdown("view-mode", Context::ViewModes),
     ),
+    (
+        "menu-camera",
+        Setup::Dropdown("view-camera", Context::Camera),
+    ),
     ("palette", Setup::Palette("fra")),
     ("palette-entities", Setup::Palette("@")),
     ("settings", Setup::Settings("")),

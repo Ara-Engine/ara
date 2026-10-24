@@ -1,8 +1,10 @@
 //! `--verify-journey`: the 0.0.1-alpha's essential journey through the editor's own
 //! UI paths (registry commands, the asset drag, menus, the Game view), captured at
-//! each step: open a scene, import, place, make a prefab and override it, create a
-//! C# behaviour and hot-reload it while playing in the Game view, break it and see
-//! the compile failure explained in Problems, undo, save, reopen and export.
+//! each step: open a scene, import, place, make a prefab and override it, build the
+//! hangar as a real game and run it headless for one frame, create a C# behaviour and
+//! hot-reload it while playing in the Game view, break it and see the compile failure
+//! explained in Problems, undo, save, reopen, then build again with the C# module
+//! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
 use std::path::{Path, PathBuf};
@@ -23,6 +25,8 @@ const IMPORT: &str = concat!(
 );
 /// Frames a step may wait for its effect (jobs, Play, reloads) before giving up.
 const PATIENCE: u32 = 144 * 90;
+/// The build step cooks and packs the whole hangar: it may take much longer.
+const BUILD_PATIENCE: u32 = 144 * 900;
 /// SDL scancodes the Play step types into the Game view: W walks, Esc releases.
 const KEY_W: i32 = 26;
 const KEY_ESCAPE: i32 = 41;
@@ -98,7 +102,12 @@ impl Journey {
                 true
             }
         };
-        let timed_out = self.age > PATIENCE;
+        let patience = if matches!(name, "export" | "export-csharp") {
+            BUILD_PATIENCE
+        } else {
+            PATIENCE
+        };
+        let timed_out = self.age > patience;
         if !(ready || timed_out) {
             return Ok(self.age <= 2);
         }
@@ -150,7 +159,8 @@ impl Journey {
     fn run(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<bool> {
         let first = self.age == 1;
         let settled = self.age > 12;
-        match STEPS[self.step].0 {
+        let name = STEPS[self.step].0;
+        match name {
             "open-scene-picker" => {
                 if first {
                     shell.run_command(editor, "file.open", &Target::None)?;
@@ -424,34 +434,68 @@ impl Journey {
                 }
                 Ok(settled)
             }
-            "export" => {
+            "export" | "export-csharp" => {
                 if first {
-                    match shell.run_command(editor, "build.current", &Target::None) {
-                        Ok(()) => self.note = "Build > Build Current Profile".into(),
-                        Err(reason) => {
-                            // Show where it lives and what to do next.
-                            shell.open_bar(0, false);
-                            shell.rebuild(editor)?;
-                            if let Some(sub) = shell.ui.nodes.iter().find_map(|n| {
-                                (n.text
-                                    .as_ref()
-                                    .is_some_and(|t| t.value.starts_with("Build")))
-                                .then(|| n.element.id.clone())
-                            }) && let Some(index) = sub
-                                .strip_prefix("m0-")
-                                .and_then(|s| s.split('-').next())
-                                .and_then(|s| s.parse().ok())
-                                && let Some(menu) = shell.menu.as_mut()
-                            {
-                                menu.open.push(index);
-                            }
-                            self.hover = Some("Build Current Profile");
-                            self.note = format!("disabled: {reason}");
-                            return Ok(settled);
-                        }
+                    if name == "export" {
+                        // The hangar is the game: Project Settings > Project > Main Scene.
+                        editor.action(
+                            "editor.settings.set",
+                            json!({"key": "project.mainScene", "value": "levels/hangar.scene"}),
+                        )?;
+                        self.note = "Project Settings > Main Scene = hangar.scene, then Build > Build Current Profile (no profile yet: it creates presets/windows.export.json)".into();
+                    } else {
+                        self.note = "Build > Build Current Profile again: the project now has a C# module, which the export publishes NativeAOT".into();
                     }
+                    shell.run_command(editor, "build.current", &Target::None)?;
+                    editor.action("editor.focus", json!({"panel": "console"}))?;
+                    return Ok(false);
                 }
-                Ok(shell.build.is_none() && settled)
+                if shell.build.is_some() {
+                    return Ok(false);
+                }
+                let game = shell
+                    .last_build
+                    .clone()
+                    .ok_or("the build failed; see Problems")?;
+                if name == "export-csharp" && !game.join("game/scripts.json").is_file() {
+                    return Err(
+                        "the build did not ship the C# module (no game/scripts.json)".into(),
+                    );
+                }
+                if !self.note.contains("builds/") {
+                    let shown = game
+                        .strip_prefix(editor.host.root())
+                        .unwrap_or(&game)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    self.note.push_str(&format!("; the game is in {shown}"));
+                }
+                Ok(self.age > 30)
+            }
+            "run-build" | "run-build-csharp" => {
+                if first {
+                    shell.run_command(editor, "build.run", &Target::None)?;
+                    self.note = "Build > Run Build (offscreen: the game runs headless for one frame and captures it)".into();
+                    return Ok(false);
+                }
+                if shell.run.is_some() {
+                    return Ok(false);
+                }
+                let capture = shell
+                    .last_run
+                    .clone()
+                    .ok_or("the build did not run; see Problems")?;
+                let copy = self
+                    .output
+                    .join(format!("{:02}-{name}-game.png", self.step + 1));
+                if !copy.exists() {
+                    std::fs::copy(&capture, &copy)?;
+                    self.note.push_str(&format!(
+                        "; its frame is {}",
+                        copy.file_name().unwrap_or_default().to_string_lossy()
+                    ));
+                }
+                Ok(self.age > 30)
             }
             _ => Ok(true),
         }
@@ -459,7 +503,7 @@ impl Journey {
 
     /// Clean up after a capture.
     fn after(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<()> {
-        if matches!(STEPS[self.step].0, "export" | "undo") {
+        if STEPS[self.step].0 == "undo" {
             shell.menu = None;
             shell.rebuild(editor)?;
         }
@@ -514,6 +558,14 @@ const STEPS: &[(&str, &str)] = &[
         "apply-override",
         "Apply all writes the override into the prefab",
     ),
+    (
+        "export",
+        "Build Current Profile exports the hangar as a real game",
+    ),
+    (
+        "run-build",
+        "Run Build: the exported game runs headless for one frame",
+    ),
     ("script", "a C# behaviour created in the project's module"),
     ("play", "Play inside the Game view, walking with W"),
     ("hot-reload", "the edited script hot-reloads while playing"),
@@ -528,7 +580,11 @@ const STEPS: &[(&str, &str)] = &[
         "saved, another scene opened, the hangar reopened",
     ),
     (
-        "export",
-        "Build > Build Current Profile (or what to do first)",
+        "export-csharp",
+        "Build Current Profile again ships the C# module (NativeAOT)",
+    ),
+    (
+        "run-build-csharp",
+        "Run Build: the game with its C# runs headless for one frame",
     ),
 ];

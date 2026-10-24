@@ -87,6 +87,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
+    shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
@@ -95,6 +96,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         w: 800.,
         h: 600.,
     });
+    // The publication the first extraction sees; SceneSync re-extracts on newer ones.
+    let models_at_open = editor.models.revision();
     let mut renderer = Renderer::new(
         view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
         extent_scaled(viewport, dpi),
@@ -182,7 +185,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
         // Value edits, typed drafts and gizmo drags patch the Scene in place.
-        let mut scene_sync = scene_sync::SceneSync::default();
+        let mut scene_sync = scene_sync::SceneSync::new(models_at_open);
         let mut last_physical = physical;
         let mut last_dpi = dpi;
         let mut dirty = true;
@@ -453,6 +456,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let geometry_at = Instant::now();
             let mut view_ms = 0.;
             let mut stages = scene_sync::Stages::default();
+            let idle = last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE);
+            if scene_sync.refresh(&view, &mut editor, &mut renderer, idle)? {
+                dirty = true;
+                scene_dirty = true;
+            }
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
                 let at = Instant::now();

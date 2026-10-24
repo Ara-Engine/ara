@@ -111,14 +111,19 @@ impl Shell {
             .flatten()
             .filter_map(|row| match row {
                 Row::Command {
-                    id, target, label, ..
+                    id,
+                    target,
+                    label,
+                    checked,
+                    ..
                 } => {
                     let spec = commands::get(id)?;
                     let cx = self.ctx(editor, target);
-                    let checked = match spec.avail(&cx) {
+                    // As rendered: the row's own check (value menus), else the command's.
+                    let checked = checked.or(match spec.avail(&cx) {
                         Avail::Checked(v) => Some(v),
                         _ => None,
-                    };
+                    });
                     let title = label.clone().unwrap_or_else(|| spec.title(&cx));
                     Some(((*id).to_owned(), title, checked))
                 }
