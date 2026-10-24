@@ -2,6 +2,7 @@
 #define MATERIAL_LAYERS 1
 #define reservoirInit reservoirInitAtmosphere
 #define reservoirSpatial reservoirSpatialAtmosphere
+#define reservoirShade reservoirShadeAtmosphere
 #define specularTrace specularTraceAtmosphere
 #define reservoirTrace reservoirTraceAtmosphere
 #include "resampling.slang"

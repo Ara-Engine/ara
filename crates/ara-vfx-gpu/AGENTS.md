@@ -8,6 +8,8 @@ events. Shader compilers are never runtime dependencies.
 
 - `GpuSystem`: allocate from a matching cooked effect, step fixed ticks, render,
   capture through ara-render's channel/provenance API, return agent stats.
+  `advance` simulates a tick without the backdrop copy, draw or tonemap: live
+  composition advances by elapsed ticks, then renders once per presented frame.
 - `View`: camera/frame inputs; optional scene HDR and depth for world composition.
   `placement` (world origin + uniform scale) maps the world camera, scene depth and
   probe lattice into effect space; `intensity` scales particle radiance.
