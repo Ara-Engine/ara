@@ -27,6 +27,7 @@ impl FidelityView {
                 "reservoir_init_atmosphere",
                 "reservoir_trace_atmosphere",
                 "reservoir_spatial_atmosphere",
+                "reservoir_shade_atmosphere",
                 "reservoir_specular_atmosphere",
             ]
         } else if self.scene.has_layers {
@@ -34,6 +35,7 @@ impl FidelityView {
                 "reservoir_init_layers",
                 "reservoir_trace_layers",
                 "reservoir_spatial_layers",
+                "reservoir_shade_layers",
                 "reservoir_specular_layers",
             ]
         } else {
@@ -41,6 +43,7 @@ impl FidelityView {
                 "reservoir_init",
                 "reservoir_trace",
                 "reservoir_spatial",
+                "reservoir_shade",
                 "reservoir_specular",
             ]
         };

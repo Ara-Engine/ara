@@ -79,7 +79,8 @@ impl FidelityView {
                 u32::from(
                     self.scene.motion_pending && self.scene.acceleration_update().tlas_rebuilt,
                 ) | (self.gather_events << 1)
-                    | (u32::from(self.transport_stride == 4 || self.gather_events == 1) << 5),
+                    | (u32::from(self.transport_stride == 4 || self.gather_events == 1) << 5)
+                    | (u32::from(self.bounded_reservoirs) << 6),
             ),
             Mode::Reference { samples, bounces } => (
                 1,

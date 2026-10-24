@@ -7,6 +7,45 @@ use ara_gpu::{
 };
 
 #[test]
+fn raster_only_device_omits_ray_tracing_and_keeps_normal_gpu_work_valid() -> Result<()> {
+    let cache =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/raster-device");
+    let mut gpu = VulkanDevice::new_raster(&[], cache)?;
+    assert!(!gpu.context().info.ray_tracing);
+    assert!(
+        gpu.create_acceleration_structure(&AccelerationDesc::Instances(Vec::new()))
+            .is_err()
+    );
+    let source = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+    let destination = gpu.create_buffer(16, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+    let expected = [1u32, 7, 42, 100];
+    gpu.upload(source, bytemuck::cast_slice(&expected))?;
+    let mut commands = gpu.begin(Queue::Graphics);
+    commands.push(Command::CopyBuffer {
+        source,
+        destination,
+        size: 16,
+    });
+    commands.barriers([Barrier {
+        resource: Resource::Buffer(destination),
+        before: Access::CopyDestination,
+        after: Access::HostRead,
+        handoff: None,
+    }]);
+    let point = gpu.submit(commands.finish(), &[])?;
+    gpu.resolve(point)?;
+    assert_eq!(
+        gpu.read(destination)?,
+        bytemuck::cast_slice::<_, u8>(&expected)
+    );
+    gpu.retire(Resource::Buffer(source))?;
+    gpu.retire(Resource::Buffer(destination))?;
+    gpu.collect()?;
+    gpu.assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn retired_buffer_memory_can_back_fresh_buffers_on_either_queue() -> Result<()> {
     let cache =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/buffer-reuse");

@@ -5,6 +5,13 @@ use ash::vk::TaggedStructure;
 impl Gpu {
     /// Enables synchronization validation explicitly; failure to find it is fatal.
     pub fn new(window_extensions: &[std::ffi::CString]) -> Result<Self> {
+        Self::with_ray_tracing(window_extensions, true)
+    }
+
+    pub(crate) fn with_ray_tracing(
+        window_extensions: &[std::ffi::CString],
+        enable_ray_tracing: bool,
+    ) -> Result<Self> {
         crate::cpu_scope!("GPU.device_create");
         let mut validation = Box::<Validation>::default();
         // SAFETY: All create-info slices live through their calls; the entry,
@@ -161,7 +168,8 @@ impl Gpu {
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
-            let ray_tracing = rt_extensions
+            let ray_tracing = enable_ray_tracing
+                && rt_extensions
                 && acceleration_features.acceleration_structure != 0
                 && ray.ray_query != 0
                 && acceleration_features

@@ -461,6 +461,48 @@
       "vertex_stride": 0
     }
   },
+  "reservoir_shade": {
+    "entries": {
+      "reservoirShade": "compute"
+    },
+    "source": "resampling.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_shade_atmosphere": {
+    "entries": {
+      "reservoirShadeAtmosphere": "compute"
+    },
+    "source": "resampling-atmosphere.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "reservoir_shade_layers": {
+    "entries": {
+      "reservoirShadeLayers": "compute"
+    },
+    "source": "resampling-layers.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "reservoir_spatial": {
     "entries": {
       "reservoirSpatial": "compute"

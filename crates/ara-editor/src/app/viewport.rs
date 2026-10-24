@@ -338,7 +338,7 @@ mod tests {
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             assert!(scene.active);
             let fidelity = scene.fidelity.as_ref().expect("native Scene view");
-            assert_eq!(fidelity.settings().render_size, [128, 72]);
+            assert_eq!(fidelity.settings().render_size, [96, 54]);
             assert_eq!(fidelity.settings().post.ev100, Some(12.));
             assert!(!scene.effects.as_ref().expect("Scene effects").is_empty());
             let request = CaptureRequest {

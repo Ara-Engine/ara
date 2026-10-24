@@ -69,8 +69,23 @@ impl VulkanDevice {
     }
     /// Create a debug/sync-validated device. Empty extensions create a headless device.
     pub fn new(window_extensions: &[CString], cache_dir: impl Into<PathBuf>) -> Result<Self> {
-        let context = Context::new(window_extensions)?;
-        let cache_dir = cache_dir.into();
+        Self::from_context(Context::new(window_extensions)?, cache_dir.into())
+    }
+
+    /// Create a raster-only logical device, even on hardware that supports RT.
+    /// Ray-query/AS extensions, features and heap capacity are omitted; acceleration
+    /// structure allocation is rejected before creating any native RT resources.
+    pub fn new_raster(
+        window_extensions: &[CString],
+        cache_dir: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        Self::from_context(
+            Context::with_ray_tracing(window_extensions, false)?,
+            cache_dir.into(),
+        )
+    }
+
+    fn from_context(context: Context, cache_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&cache_dir).map_err(anyhow::Error::from)?;
         let uuid = context
             .info

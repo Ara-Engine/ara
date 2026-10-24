@@ -19,7 +19,32 @@ fn dynamic_updates_and_scene_replacement_are_visible_and_validation_clean() -> R
         root.join("../../.sn/test-render"),
     )?;
     let request = common::request(size);
+    ensure!(renderer.entity_at([0, 0])?.is_none());
     let original = renderer.capture(&request)?;
+    ensure!(
+        renderer
+            .timings()
+            .iter()
+            .filter(|p| p.pass == "CaptureReadback")
+            .count()
+            == 1,
+        "Capture copies its final frame once, after settling"
+    );
+    let pick = (0..size[1])
+        .find_map(|y| {
+            (0..size[0]).find_map(|x| original.entity_at(x, y).map(|entity| ([x, y], entity)))
+        })
+        .expect("visible test geometry");
+    ensure!(renderer.entity_at(pick.0)? == Some(pick.1));
+    renderer.render(&request.camera, request.exposure)?;
+    ensure!(
+        !renderer
+            .timings()
+            .iter()
+            .any(|p| p.pass == "CaptureReadback"),
+        "Live frames must not copy output or IDs to host memory"
+    );
+    let live_timings = serde_json::to_vec_pretty(renderer.timings())?;
     let sphere = 200;
     let before = original.legend.iter().find(|m| m.entity == sphere).unwrap();
     let mut moved = common::scene()?
@@ -126,6 +151,7 @@ fn dynamic_updates_and_scene_replacement_are_visible_and_validation_clean() -> R
     );
     let evidence = root.join("../../target/ara-render/dynamic");
     std::fs::create_dir_all(&evidence)?;
+    std::fs::write(evidence.join("live-timings.json"), live_timings)?;
     original.write(&evidence.join("original.png"))?;
     parameters.write(&evidence.join("materials-edited.png"))?;
     renderer.gpu().assert_clean()?;

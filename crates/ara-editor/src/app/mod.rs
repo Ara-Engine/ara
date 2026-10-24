@@ -258,7 +258,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut controller,
                     &mut editor,
                     &mut shell,
-                    &renderer,
+                    &mut renderer,
                     &view,
                     &mut clipboard,
                 );
@@ -1071,7 +1071,7 @@ fn route_event(
     controller: &mut controller::Controller,
     editor: &mut Editor,
     shell: &mut Shell,
-    renderer: &Renderer,
+    renderer: &mut Renderer,
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {

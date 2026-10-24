@@ -218,8 +218,9 @@ impl Effects {
             };
             let steps = if *warmed { ticks } else { WARM_TICKS };
             *warmed = true;
+            // Simulate the elapsed ticks; only the presented frame is drawn.
             for _ in 0..steps {
-                system.step(gpu, &frame)?;
+                system.advance(gpu, &frame)?;
                 self.gpu_ms += system
                     .timings()
                     .iter()
