@@ -3,33 +3,73 @@
   "ticks": 90,
   "terrain": {
     "texture": "dry_ground_rocks",
-    "tint": [0.86, 0.8, 0.74],
+    "tint": [
+      0.86,
+      0.8,
+      0.74
+    ],
     "rock": "rocky_terrain_02",
-    "rockTint": [0.9, 0.86, 0.82]
+    "rockTint": [
+      0.9,
+      0.86,
+      0.82
+    ]
   },
   "shots": [
     {
       "name": "gate",
-      "position": [92, 1.6, 57],
-      "target": [98, 2.8, 100],
+      "position": [
+        92,
+        1.6,
+        57
+      ],
+      "target": [
+        98,
+        2.8,
+        100
+      ],
       "fov": 54
     },
     {
       "name": "campfire",
-      "position": [79.6, 1.5, 88.6],
-      "target": [85, 1, 92.5],
+      "position": [
+        79.6,
+        1.5,
+        88.6
+      ],
+      "target": [
+        85,
+        1,
+        92.5
+      ],
       "fov": 55
     },
     {
       "name": "yard",
-      "position": [104, 1.6, 76.5],
-      "target": [118, 6, 96],
+      "position": [
+        104,
+        1.6,
+        76.5
+      ],
+      "target": [
+        118,
+        6,
+        96
+      ],
       "fov": 55
     },
     {
       "name": "vista",
-      "position": [40, 9, 52],
-      "target": [100, 0, 104],
+      "position": [
+        40,
+        9,
+        52
+      ],
+      "target": [
+        100,
+        0,
+        104
+      ],
       "fov": 45
     }
   ],
@@ -39,37 +79,5 @@
     "frames": 6,
     "step": 10
   },
-  "groundRelative": true,
-  "components": {
-    "SkyAtmosphere": {
-      "aerosols": 1.5,
-      "cloudCoverage": 0.12
-    },
-    "HeightFog": {
-      "density": 0.0012,
-      "falloff": 30,
-      "albedo": [
-        0.92,
-        0.86,
-        0.78,
-        1
-      ],
-      "anisotropy": 0.5
-    },
-    "PostProcess": {
-      "toneMapping": "filmic",
-      "bloom": 0.05,
-      "compensation": -0.5
-    }
-  },
-  "sunDirection": [
-    -0.9302,
-    0.0698,
-    0.3601
-  ],
-  "sunLux": [
-    24000,
-    23000,
-    21500
-  ]
+  "groundRelative": true
 }
