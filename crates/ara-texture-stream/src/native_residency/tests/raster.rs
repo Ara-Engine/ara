@@ -25,7 +25,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
         }
         bits.to_le_bytes()
     }
-    let source = NativeSource::from_cooked(
+    let source = Arc::new(NativeSource::from_cooked(
         write_ktx2(
             8,
             4,
@@ -33,12 +33,12 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
             &[[block(128), block(224)].concat()],
         )?
         .into(),
-    )?;
+    )?);
     let mut textures = NativeResidency::new(NativeConfig {
         resident_bytes: 1024,
         upload_bytes: 1024,
     })?;
-    textures.register_view([1; 32], Arc::new(source), NativeView::Raw)?;
+    textures.register_view([1; 32], Arc::clone(&source), NativeView::Raw)?;
     let mut left = instanced::Material::default();
     left.pbr.textures[0] = 0;
     left.pbr.flags[1] = ara_render::scene::BASE_COLOR_DECODE_SRGB;
@@ -104,7 +104,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
         &[],
         root.join("cache"),
     )?;
-    let capture = renderer.capture(&CaptureRequest {
+    let request = CaptureRequest {
         camera: CameraSpec::LookAt {
             position: Vec3::new(0., 0., 3.),
             target: Vec3::ZERO,
@@ -118,7 +118,8 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
         tick: 0,
         seed: 7,
         marks: None,
-    })?;
+    };
+    let capture = renderer.capture(&request)?;
     capture.write(&root.join("independent-uv-raw-bc7.png"))?;
     let left = capture.image.get_pixel(70, 54).0;
     let right = capture.image.get_pixel(122, 54).0;
@@ -130,6 +131,28 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
         stats.resident_bytes, 32,
         "two native BC7 blocks, with no RGBA/mip atlas allocation"
     );
+    let baseline = renderer.gpu().descriptor_usage();
+    for _ in 0..4 {
+        let mut rejected = bank(1024, 1024);
+        rejected.register_view([1; 32], Arc::clone(&source), NativeView::Raw)?;
+        rejected.register([2; 32], super::source([4, 4], 1, 64))?;
+        assert!(
+            renderer
+                .replace_native_scene(&scene, Box::new(rejected))
+                .is_err()
+        );
+        assert_eq!(renderer.gpu().descriptor_usage(), baseline);
+    }
+    let mut replacement = bank(1024, 1024);
+    replacement.register_view([1; 32], source, NativeView::Raw)?;
+    renderer.replace_native_scene(&scene, Box::new(replacement))?;
+    assert_eq!(renderer.native_texture_stats().unwrap().uploaded_bytes, 0);
+    let after = renderer.capture(&request)?;
+    assert_eq!(
+        capture.image, after.image,
+        "resident reuse preserves independent UV/decode sampling"
+    );
+    after.write(&root.join("independent-uv-reused.png"))?;
     renderer.gpu().assert_clean()?;
     Ok(())
 }

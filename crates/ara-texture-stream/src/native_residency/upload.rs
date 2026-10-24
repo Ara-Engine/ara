@@ -54,7 +54,7 @@ impl NativeResidency {
                 uploaded += bytes;
             }
         }
-        if selected.is_empty() {
+        if selected.is_empty() && (self.table.is_some() || self.entries.is_empty()) {
             self.stats.requested_bytes = requested;
             self.stats.uploaded_bytes = 0;
             self.stats.upload_gpu_ms = 0.0;
@@ -85,6 +85,7 @@ impl NativeResidency {
             if let Some(old) = self.entries[pending.index]
                 .resident
                 .replace(pending.resident)
+                && !old.borrowed
             {
                 gpu.retire(Resource::Image(old.image))?;
             }
@@ -201,6 +202,7 @@ impl NativeResidency {
                     image,
                     row,
                     bytes: bytes.len() as u64,
+                    borrowed: false,
                 },
             });
         }
