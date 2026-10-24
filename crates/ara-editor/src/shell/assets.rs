@@ -24,6 +24,8 @@ impl Asset {
 }
 pub(super) struct Browser {
     pub items: Vec<Asset>,
+    /// Bumped whenever `items` changes (memoized panels list them).
+    pub revision: u64,
     pending: Receiver<Vec<Asset>>,
 }
 impl Browser {
@@ -46,6 +48,7 @@ impl Browser {
         });
         Self {
             items: Vec::new(),
+            revision: 0,
             pending,
         }
     }
@@ -53,6 +56,7 @@ impl Browser {
         if let Ok(items) = self.pending.try_recv() {
             let changed = self.items != items;
             self.items = items;
+            self.revision += u64::from(changed);
             changed
         } else {
             false

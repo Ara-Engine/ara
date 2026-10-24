@@ -1,6 +1,29 @@
 //! Folder projection, bounded thumbnail cards and import/dependency inspection.
 use super::*;
 impl Shell {
+    /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
+    /// the folder, search, view mode and selection, density, thumbnails, the content's
+    /// size and scroll, Show All and the keymap (the Import shortcut).
+    pub(super) fn assets_key(&self, editor: &Editor) -> u64 {
+        let content = self.ui.find("assets-content").map(|i| {
+            let rect = self.ui.nodes[i].rect;
+            [rect.w.to_bits(), rect.h.to_bits()]
+        });
+        memo::digest((
+            self.browser.revision,
+            &editor.state.asset_folder,
+            editor.state.searches.get("assets"),
+            editor.state.asset_grid,
+            &editor.state.asset_path,
+            editor.state.comfortable(),
+            self.thumbnail_revision,
+            content,
+            self.ui.size.map(f32::to_bits),
+            self.asset_offset.to_bits(),
+            self.assets_show_all,
+            self.keymap_revision,
+        ))
+    }
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
         // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");

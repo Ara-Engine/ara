@@ -320,6 +320,7 @@ impl Shell {
                         {
                             self.thumbnails.invalidate(path);
                             self.thumbnail_slots.remove(path);
+                            self.thumbnail_revision += 1;
                         }
                         editor.action(method, params.clone())?;
                         rebuild = true;

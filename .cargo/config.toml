@@ -10,3 +10,7 @@ linker = "rust-lld.exe"
 [env]
 ARA_CONFIG_DIR = { value = "target/ara-config", relative = true }
 ARA_CRASH_DIR = { value = "target/ara-crashes", relative = true }
+# The editor regenerates every reused memoized panel and fails on a difference, so
+# tests catch a panel digest that misses an input (`shell/memo.rs`). The
+# responsiveness probe turns it off to measure what a release build does.
+ARA_EDITOR_MEMO_CHECK = "1"

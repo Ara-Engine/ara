@@ -162,6 +162,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         .verify_responsiveness
         .then(|| responsiveness::Probe::new(&options.output));
     if probe.is_some() {
+        // Measure what a release build does: memoized panels are not double-checked.
+        shell.memo_check = false;
         // Measure from the default layout and theme, whatever an earlier run left.
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
