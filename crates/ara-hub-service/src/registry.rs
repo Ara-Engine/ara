@@ -53,6 +53,7 @@ pub struct Registry {
 impl Registry {
     /// Load without silently replacing an unreadable or corrupt registry.
     pub fn load(dir: &Path) -> Result<Self, RpcError> {
+        crate::validate_development_config(dir).map_err(io_error)?;
         match fs::read(dir.join("registry.json")) {
             Ok(bytes) => serde_json::from_slice(&bytes).map_err(io_error),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
@@ -61,6 +62,12 @@ impl Registry {
     }
     /// Write canonical JSON by replacement; the Hub holds the user-level lock.
     pub fn save(&self, dir: &Path) -> Result<(), RpcError> {
+        crate::validate_development_config(dir).map_err(io_error)?;
+        for engine in &self.engines {
+            for executable in std::iter::once(&engine.executable).chain(engine.editor.iter()) {
+                crate::isolation::validate_engine(dir, executable).map_err(io_error)?;
+            }
+        }
         write_json(
             &dir.join("registry.json"),
             &serde_json::to_value(self).map_err(io_error)?,

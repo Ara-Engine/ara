@@ -239,6 +239,7 @@ fn apply_inner(plan: &Plan, keys: &[String]) -> Result<(), Error> {
 fn hub_command(current: &Path, plan: &Plan) -> Command {
     let mut command = Command::new(current.join("ara-hub.exe"));
     command
+        .env("ARA_CONFIG_DIR", &plan.config)
         .arg("--config-dir")
         .arg(&plan.config)
         .arg("--ara")

@@ -73,6 +73,7 @@ pub(super) fn launch(
     ara_update::write_json(&request, &plan)?;
     let mut command = Command::new(runner);
     command
+        .env("ARA_CONFIG_DIR", config)
         .arg(&request)
         .arg(std::process::id().to_string())
         .stdin(Stdio::null())

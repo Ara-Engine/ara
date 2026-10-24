@@ -298,6 +298,7 @@ fn bundle_dotnet(root: &Path, stage: &Path, symbols: &Path, dist: &Path) -> Resu
 fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
     run(
         Command::new(stage.join("ara.exe"))
+            .env("ARA_CONFIG_DIR", dist.join("package-config"))
             .env("GIT_CEILING_DIRECTORIES", stage)
             .args(["init"])
             .arg(stage.join("templates/starter"))

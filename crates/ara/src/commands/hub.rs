@@ -97,20 +97,12 @@ pub fn hub(command: HubCommand) -> Result<bool, String> {
     }
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     if let HubCommand::Serve { port, config_dir } = command {
-        let mut config = ara_hub_service::HubConfig::user(executable).map_err(|e| e.to_string())?;
-        if let Some(directory) = config_dir {
-            if !config
-                .engine
-                .executable
-                .parent()
-                .is_some_and(|dir| dir.join("templates").is_dir())
-            {
-                config.templates = Box::new(ara_hub_service::DirectoryTemplates(
-                    directory.join("templates"),
-                ));
-            }
-            config.directory = directory;
-        }
+        let directory = match config_dir {
+            Some(directory) => directory,
+            None => ara_hub_service::config_dir().map_err(|e| e.to_string())?,
+        };
+        let config = ara_hub_service::HubConfig::for_directory(executable, directory)
+            .map_err(|e| e.to_string())?;
         let log = config.directory.join("hub-start.log");
         if let Err(error) = ara_hub_service::serve(config, port) {
             let _ = std::fs::write(log, error.to_string());

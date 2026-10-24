@@ -284,13 +284,33 @@ fn atomic_hub_swap_and_startup_rollback_with_dummy_executables() {
 #[cfg(windows)]
 fn updater_verifies_and_health_checks_dummy_processes_without_a_window() {
     let root = testing::scratch("process-update");
+    // Keep successful dummy Hubs from surviving this test, including assertion failures.
+    struct Processes(std::path::PathBuf);
+    impl Drop for Processes {
+        fn drop(&mut self) {
+            for state in ["healthy", "failed"] {
+                if let Ok(pids) = fs::read_to_string(self.0.join(state).join("Ara Hub/pids.txt")) {
+                    for pid in pids.lines().filter_map(|pid| pid.parse().ok()) {
+                        if let Err(error) = updater::wait_for_parent(pid) {
+                            eprintln!("dummy cleanup: {error}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let _processes = Processes(root.clone());
     let source = root.join("dummy.rs");
     fs::write(
         &source,
         r#"fn main() {
+        use std::io::Write;
+        let exe = std::env::current_exe().expect("exe");
+        let mut pids = std::fs::OpenOptions::new().create(true).append(true)
+            .open(exe.parent().expect("parent").join("pids.txt")).expect("pid file");
+        writeln!(pids, "{}", std::process::id()).expect("pid");
         let args: Vec<_> = std::env::args().collect();
         let Some(index) = args.iter().position(|s| s == "--update-health") else { return; };
-        let exe = std::env::current_exe().expect("exe");
         if exe.parent().expect("parent").join("fail.txt").exists() { std::process::exit(9); }
         std::fs::write(&args[index+1], b"ready").expect("health");
         std::thread::sleep(std::time::Duration::from_secs(2));

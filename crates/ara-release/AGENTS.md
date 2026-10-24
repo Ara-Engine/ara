@@ -12,6 +12,9 @@ hash-checked SFX extraction and calls the per-user installer script.
 Always CARGO_BUILD_JOBS=4. Package is an explicit opt-in release build; no dev
 server or full workspace build. Outputs, logs, smoke projects and symbols belong
 under target/release-dist. Never tag, push, publish, or upload crashes unless explicitly requested.
+Every test/capture/manual check sets ARA_CONFIG_DIR to an existing scratch dir
+under target/. The harness fails without it. Smoke children override it with
+their own scratch profile; failure cleanup also stops that profile's Hub.
 
 `package --kind hub|engine` builds independent distributions. Hub installs into
 LOCALAPPDATA/Programs/Ara Hub; its bootstrap service runs from Ara/Services/version.

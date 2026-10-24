@@ -72,7 +72,11 @@ editor's panel rebuild lands.
 
 ## Tests
 
-Set `CARGO_BUILD_JOBS=4` and `VULKAN_SDK`.
+Set `CARGO_BUILD_JOBS=4`, `VULKAN_SDK` and an explicit scratch profile for every
+test, capture and manual check (PowerShell, from the workspace root):
+`$env:ARA_CONFIG_DIR = (New-Item -ItemType Directory -Force "target/hub-checks/$([guid]::NewGuid())/config").FullName`.
+The config-isolation test fails without this. Checkout binaries reject the real
+user profile, even via --config-dir. Never register worktree builds there.
 
 - `cargo test -p ara-hub`: `tests/views.rs` lays out every page in both themes at
   1440x900 and 1280x720 (no GPU); `tests/service.rs` drives the model against a
@@ -83,8 +87,9 @@ Set `CARGO_BUILD_JOBS=4` and `VULKAN_SDK`.
   `VK_IMPLICIT_LAYER_PATH=<empty dir> VK_LAYER_PATH=$VULKAN_SDK/Bin`, then
   `target/debug/ara-hub --capture target/hub-captures --size 1440x900 --dpi 1`
   and `--size 2560x1440 --dpi 2`. Look at every PNG.
-- Try it without touching your real registry:
-  `ara-hub --config-dir target/hub-dev-config` (this one opens a window).
+- Verification uses offscreen captures only. Stop/join the connection worker
+  before shutting down a test service; await removal of its discovery file.
+  Never leave a service/updater you started running after a check.
 - `cargo clippy -p ara-hub --all-targets -- -D warnings`.
 
 ## Gotchas

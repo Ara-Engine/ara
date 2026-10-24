@@ -199,6 +199,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         None => ara_hub_service::config_dir().context("find the Ara config directory")?,
     };
     let config = std::path::absolute(config)?;
+    ara_hub_service::validate_development_config(&config)?;
     let prefs = if options.capture.is_some() {
         Prefs::default()
     } else {

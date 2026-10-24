@@ -12,6 +12,9 @@ directory, enforced by an OS file lock; projects run in separate processes.
 - `config_dir()`: `ARA_CONFIG_DIR`, else `%APPDATA%/Ara` on Windows,
   `~/Library/Application Support/Ara` on macOS, `$XDG_CONFIG_HOME/ara` or
   `~/.config/ara` elsewhere.
+- Checkout/test binaries reject the real profile before discovery or writes;
+  installed services also reject worktree engine/editor registrations there.
+  Explicit overrides use `HubConfig::for_directory` and the same validation.
 - `TemplateSource { list, instantiate }`; default `DirectoryTemplates` lists
   built-in `blank` plus child directories containing `ara.project.json`. Names and
   `description` come from that marker; the preview is `thumbnail.png`, else
@@ -116,6 +119,11 @@ Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`
 (`args:["mcp","--root","."]`) retain the standalone project daemon behavior.
 
 ## Tests and gates
+
+Every test/capture/manual check must set ARA_CONFIG_DIR to an existing scratch
+directory under target/. Config-isolation tests fail otherwise. Test cleanup
+closes projects, shuts down the owned service and waits for discovery removal.
+Do not stop or alter another user's/service's profile.
 
 `CARGO_BUILD_JOBS=4 cargo test -p ara-hub-service` covers durable registry/templates and release jobs.
 `cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project

@@ -15,6 +15,9 @@ Trust roots come from embedded public-keys.txt and build-time ARA_RELEASE_PUBLIC
 An empty trust store fails closed. Key rotation: ship both keys before changing signer.
 
 Every test uses loopback HTTP via the opt-in test-support feature or cfg(test).
+Set ARA_CONFIG_DIR to an existing scratch dir under target/ for tests, captures
+and manual checks. tests/config_isolation.rs is also included by Hub/CLI/MCP/
+release tests and fails if isolation is missing. Dummy updater children are awaited.
 Production accepts HTTPS GitHub API/assets only; no runtime insecure switch.
 Cache is scoped to repo/API and verified again on every read. Rate limits/offline
 fall back only for transport errors, never for invalid signatures or manifests.

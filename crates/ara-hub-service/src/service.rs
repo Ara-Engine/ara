@@ -37,7 +37,11 @@ pub struct HubConfig {
 impl HubConfig {
     /// Standard user configuration for the current `ara` executable.
     pub fn user(executable: PathBuf) -> io::Result<Self> {
-        let directory = crate::config_dir()?;
+        Self::for_directory(executable, crate::config_dir()?)
+    }
+    /// Explicit portable/test profile, validated before any registry access.
+    pub fn for_directory(executable: PathBuf, directory: PathBuf) -> io::Result<Self> {
+        crate::validate_development_config(&directory)?;
         let editor = executable.with_file_name(if cfg!(windows) {
             "ara-editor.exe"
         } else {
@@ -116,6 +120,9 @@ impl Hub {
         mut config: HubConfig,
         mut updates: UpdateConfig,
     ) -> Result<Self, RpcError> {
+        crate::validate_development_config(&config.directory).map_err(io_error)?;
+        crate::isolation::validate_engine(&config.directory, &config.engine.executable)
+            .map_err(io_error)?;
         fs::create_dir_all(&config.directory).map_err(io_error)?;
         config.directory = fs::canonicalize(&config.directory).map_err(io_error)?;
         updates.engines = std::path::absolute(&updates.engines).map_err(io_error)?;
@@ -255,6 +262,10 @@ impl Hub {
                     return Err(invalid(
                         "engine needs a version and existing absolute executable paths",
                     ));
+                }
+                for executable in std::iter::once(&engine.executable).chain(engine.editor.iter()) {
+                    crate::isolation::validate_engine(&self.config.directory, executable)
+                        .map_err(io_error)?;
                 }
                 if let Some(old) = self
                     .registry

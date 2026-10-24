@@ -2,12 +2,12 @@
 //! directory: create from a template (with inline validation), open headless,
 //! the status badge, close, remove from the list. Same model and connection the
 //! window uses; only the window is absent.
+#[path = "../../ara-hub-service/tests/support/mod.rs"]
+mod support;
 use ara_hub::{
     connection::Connection,
     model::{Hub, Intent, Prefs, State, View},
 };
-use ara_proto::Endpoint;
-use serde_json::json;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -76,8 +76,13 @@ impl Driver {
 }
 impl Drop for Driver {
     fn drop(&mut self) {
-        if let Some(mut hub) = ara_rpc::Client::for_project(&self.config.join("hub")) {
-            let _ = hub.call("hub.shutdown", json!({}));
+        self.connection.stop();
+        if let Err(error) = support::shutdown(&self.config) {
+            if std::thread::panicking() {
+                eprintln!("{error}");
+            } else {
+                panic!("{error}");
+            }
         }
     }
 }
