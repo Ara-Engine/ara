@@ -1,0 +1,25 @@
+{
+  "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "8117117f6a2a1b49273685ee11d718ef5b5d5c95fc5ca5877be0fed65b0e6ba1",
+  "stages": [
+    {
+      "dxil": "8117117f6a2a1b49273685ee11d718ef5b5d5c95fc5ca5877be0fed65b0e6ba1/giRelightMain.dxil",
+      "dxil_hash": "56d7f2002735f9eead07be71d5714740e49c3c0dcf9526161e226f16e74891c5",
+      "source_entry": "giRelightMain",
+      "spirv": "8117117f6a2a1b49273685ee11d718ef5b5d5c95fc5ca5877be0fed65b0e6ba1/giRelightMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "30b1c21c688a17669c7487d66b04fc20a4d7cf03329411d8ffd1b21fac33ebd1",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}
