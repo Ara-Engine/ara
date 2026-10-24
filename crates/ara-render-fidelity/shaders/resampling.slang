@@ -137,7 +137,7 @@ void reservoirInit(uint3 tid:SV_DispatchThreadID){
     float3 v;Surface s=primarySurface(f,p,v);
     // Emissive triangles are many lights too: one candidate left emitter-lit
     // interiors with a near-random light per reservoir (visible DI mottling).
-    uint candidates=buffers[f.scene.x].Load(12)>64 || emitterCount(f)>0?8:1;
+    uint candidates=buffers[f.scene.x].Load(12)>64 || emitterCount(f)>0?((f.transport.z&64)!=0?4:8):1;
     for(uint i=0;i<candidates;i++){
         DIReservoir c=(DIReservoir)0;c.light=chooseLight(f,rng);c.seed=hash(rng^0xa511e9b3u);random(rng);c.owner=float(index);c.visibility=-1;
         LightCandidate light=lightAt(f,s,v,c.light,c.seed);updateDI(dr,c,lightTarget(light.value)/max(light.pdf,1e-20),1,rng);
@@ -276,18 +276,19 @@ void reservoirShade(uint3 tid:SV_DispatchThreadID){
     if(pixel(f,WORLD+f.control.x,p).w==0){extraStore(f,SPEC_RAW,p,float4(0,0,0,1));return;}
     float3 v;Surface s=primarySurface(f,p,v);uint rng=hash(p.y*f.sizes.x+p.x+f.control.w*9973);bool layered=layeredMaterial(s);
     int2 phase=int2(gridPhase(f));float2 g=float2(int2(p)-phase)*0.5;int2 b=int2(floor(g));float2 t=g-float2(b);
-    float3 direct=0,indirect=0;float directWeight=0,indirectWeight=0;
+    float3 direct=0,indirect=0;float directWeight=0,indirectWeight=0;DIReservoir pick=(DIReservoir)0;
     for(int k=0;k<4;k++){
         int2 o=int2(k&1,k>>1);int2 q=gridPointOf(f,(b+o)*2+phase,uint2(phase));
         if(!compatible(f,p,q,false))continue;
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)+1e-3;uint owner=uint(q.y)*f.sizes.x+uint(q.x);
         DIReservoir d=readDI(reservoir.di.z,owner);
-        if(d.M>0){directWeight+=w;if(d.W>0 && d.visibility>0)direct+=w*lightAt(f,s,v,d.light,d.seed).value*d.W;}
+        if(d.M>0){directWeight+=w;if(random(rng)*directWeight<w)pick=d;}
         if(layered)continue;
         GIReservoir r=readGI(reservoir.gi.z,owner);
         if(r.stats.y>0){indirectWeight+=w;float3 direction;float distance;if(r.stats.x>0)indirect+=w*giValue(s,v,r,direction,distance)*r.stats.x;}
     }
-    direct=directWeight>0?direct/directWeight:risDirect(f,s,v,rng,true);
+    if(directWeight>0 && pick.W>0 && pick.visibility>0)direct=lightAt(f,s,v,pick.light,pick.seed).value*pick.W;
+    if(directWeight==0)direct=risDirect(f,s,v,rng,true);
     if(indirectWeight>0)indirect/=indirectWeight;
     else if(!layered && s.metal<1)indirect=irradiance(f,s.position,s.normal,f.probes.y)*diffuseValue(s,v,s.normal);
     store(f,DIRECT,p,float4(pixel(f,DIRECT,p).rgb+direct,1));store(f,RAW,p,float4(indirect/demodulation(f,p),1));

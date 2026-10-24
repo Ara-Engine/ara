@@ -145,12 +145,14 @@ groupshared float3 filterSpecular[FILTER_CAPACITY];
 void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint2 p=tid.xy;uint slot=f.control.x;
     if(f.transport.x==1){if(all(p<f.sizes.xy))store(f,FILTER0,p,float4(pixel(f,HISTORY+slot,p).rgb+(f.transport.x==0?pixel(f,DIRECT_HISTORY+slot,p).rgb:float3(0)),1));return;}
-    uint source=root.pass==0?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
+    // Bounded budgets (frame bit 6) skip the finest wavelet: pass 1 reads history.
+    bool first=root.pass==0 || (splitSignals && root.pass==1 && (f.transport.z&64)!=0);
+    uint source=first?HISTORY+slot:root.pass==1?FILTER0:FILTER1;uint target=root.pass==1?FILTER1:FILTER0;
     int baseStep=splitSignals?(root.pass==0?1:root.pass==1?3:8):1<<root.pass;
     // Preserve the validated angular footprint at native/upscaled resolutions.
     // A fixed pixel radius hides noise in the 270p metric but leaves native walls mottled.
     int step=splitSignals?max(baseStep,int(float(baseStep)*f.sizes.y/270.+0.5)):baseStep;uint width=8+2*step;
-    uint specSource=root.pass==0?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
+    uint specSource=first?SPEC_HISTORY+slot:root.pass==1?SPEC_FILTER0:SPEC_FILTER1;
     // Wide footprints provide little group reuse and exceed the compact tile.
     // Coalesced texture gathers preserve occupancy without a large shared halo.
     bool wide=step>4;

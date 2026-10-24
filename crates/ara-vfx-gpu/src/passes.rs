@@ -14,6 +14,7 @@ impl GpuSystem {
         view: &View,
         readback: bool,
         advance: bool,
+        draw: bool,
     ) -> Result<()> {
         ensure!(self.tick < u32::MAX, "VFX tick exhausted");
         ensure!(
@@ -294,7 +295,10 @@ impl GpuSystem {
             }
             recorder.barriers(pass.before.iter().copied());
             recorder.push(Command::BeginPass(pass.name.to_owned()));
-            if !advance && (2..=10).contains(&pass.id.0) {
+            // Simulation-only ticks skip the backdrop copy, draw and tonemap.
+            if (!advance && (2..=10).contains(&pass.id.0))
+                || (!draw && matches!(pass.id.0, 1 | 11 | 12))
+            {
                 recorder.push(Command::EndPass);
                 recorder.barriers(pass.after.iter().copied());
                 continue;

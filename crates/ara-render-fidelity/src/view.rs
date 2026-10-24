@@ -46,6 +46,7 @@ pub struct FidelityView {
     pub(crate) samples: u32,
     pub(crate) gather_events: u32,
     pub(crate) bounded_reservoirs: bool,
+    pub(crate) deferred_post: bool,
     pub(crate) atmosphere: Option<crate::atmosphere::Atmosphere>,
     pub(crate) atmosphere_dirty: bool,
     pub(crate) texture_bias: f32,
@@ -236,6 +237,7 @@ impl FidelityView {
             samples: 0,
             gather_events: 2,
             bounded_reservoirs: false,
+            deferred_post: false,
             atmosphere: None,
             atmosphere_dirty: true,
             texture_bias: 0.,
@@ -259,6 +261,13 @@ impl FidelityView {
             self.history = false;
         }
         Ok(())
+    }
+    /// Leave bloom, lens/tone mapping, temporal upscale and display output to
+    /// `post_process`, which the caller then runs every frame over feature-composited
+    /// radiance (live views with particles). Without it those passes ran twice per
+    /// frame. Exposure is still metered in `render`. Off by default.
+    pub fn set_deferred_post(&mut self, deferred: bool) {
+        self.deferred_post = deferred;
     }
     /// Bounded reservoir budgets: secondary paths (GI candidates, glossy and layered
     /// samples) end in the DDGI terminal after the gather events instead of
