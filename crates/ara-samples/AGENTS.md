@@ -55,7 +55,7 @@ captures leave tracked sample evidence unchanged.
   by world-space error and atlases. Dropped maps fold into factors.
 - Looks hold what scenes cannot (sky/atmosphere, fog, exposure, shots). Keep them
   small; anything a scene can express belongs in the scene.
-- Outpost uses world coordinates throughout, with terrain origin `[-96, -96]`.
+- Outpost's exterior uses one world space in metres: terrain and resident chunks span `[-96, 288]` on X/Z around the compound at `(96, 96)`, and props, roads, foliage exclusions, world-space nav bounds and look poses use those same coordinates with parent/prefab transforms applied once.
   Terrain graph UVs are world XZ metres, scaled by `1 / texture.meters`.
 - Rebuild cleanup uses attributed `doc.delete` transactions and retains `.ara/journal`.
   Only generated non-document assets and scratch directories are removed directly.
@@ -67,4 +67,6 @@ captures leave tracked sample evidence unchanged.
 ## Testing
 
 `cargo test -p ara-samples` (lock validation, kit geometry, source-pivot bounds, fold-in maths).
+`ARA_AUDIT_GEOMETRY=1` also audits fetched source-model bounds in the Outpost layout test;
+resolved world positions, ground-relative shots and bounds go under `target/ara-samples/`.
 `cargo clippy -p ara-samples --all-targets -- -D warnings`.
