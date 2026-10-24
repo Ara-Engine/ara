@@ -62,6 +62,35 @@ pub(super) fn run(
     click(app, &mut hub, "menu-rename")?;
     anyhow::ensure!(hub.rename.is_some(), "first menu-item click starts rename");
     save(host, app, folder, &format!("{theme}-click-rename"))?;
+    // SDL TEXT_INPUT commits use this same windowless delivery path.
+    let mut composing = false;
+    let mut clipboard = crate::native::OsClipboard;
+    anyhow::ensure!(
+        crate::native::deliver_edit(
+            &mut composing,
+            &mut app.ui,
+            &mut app.input,
+            ara_ui_text::EditEvent::ImeCommit("Preview 3 typing".into()),
+            &mut clipboard,
+        ),
+        "ordinary typing must reach the field without an active composition"
+    );
+    for intent in app.actions() {
+        hub.intent(intent);
+    }
+    app.rebuild(&mut hub, NOW)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    anyhow::ensure!(
+        app.frame().map_err(|e| anyhow::anyhow!("{e}"))?,
+        "typed text presents"
+    );
+    let field = ara_ui::source::stable_id("rename-field");
+    anyhow::ensure!(
+        matches!(app.ui.widgets.get(&field),
+        Some(ara_ui::widgets::Widget::Input(input)) if input.value() == "Preview 3 typing"),
+        "typed value survives the model echo"
+    );
+    save(host, app, folder, &format!("{theme}-typed-rename"))?;
     hub.intent(Intent::RenameCancel);
     hub.event(Event::Reply {
         call: Call::Remove {

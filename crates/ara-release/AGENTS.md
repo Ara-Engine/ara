@@ -2,8 +2,9 @@
 
 Windows engine distribution tooling, separate from exported games. `ara-release`
 packages release binaries and runtime resources, generates notes, and tests an
-installed distribution. `ara-setup` reuses ara-export-installer's validated,
-hash-checked SFX extraction and calls the per-user installer script.
+installed distribution. The setup stub both installers start with is the
+`ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
+packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 
 `cargo run -p ara-release -- package --version 0.0.1-alpha`
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`
@@ -42,6 +43,12 @@ registers its build, installs/reuses the standalone Hub and points its Hub short
 there. No-system-integration smoke leaves shared installations alone; smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
+Sample kits (`assets/kit/*`, git-ignored) are generated into the staged copy by
+`ara-samples --samples <stage>/templates kits <name>`, so the checkout never drifts.
+Then `references::check` gates every template: each `@path#id`, glTF URI, sidecar
+source, look `scene` and project `main` must resolve inside it, or packaging fails
+naming `document -> missing path` (`ara-release references <dir>` runs it alone).
+Smoke opens every installed template in the installed editor (`--frames 20`).
 
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.

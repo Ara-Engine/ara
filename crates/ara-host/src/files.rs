@@ -1,22 +1,23 @@
-//! "Always saved" persistence and external edits (R03 §6.9–6.10).
+//! "Always saved" persistence and external edits (R03 §6.9–6.10). The file I/O
+//! runs on the host's file thread (`file_io`); this applies its findings.
 //!
 //! - **Flush:** a document edited by a transaction is written canonically once it
 //!   has been quiet for the debounce time (temp file, then rename), and a `flush`
-//!   entry with its revision and hash goes to the journal.
-//! - **Watch:** loaded files are polled (modified time and size). A changed file is
-//!   read and validated, then three-way merged (base: the last synced text, ours:
-//!   memory, theirs: disk) and applied as a human transaction (`external edit`).
-//!   Invalid files and conflicts with unsaved changes are reported and the document
-//!   is marked diverged: nothing is overwritten until `doc.sync` or a clean edit.
+//!   entry with its revision and hash goes to the journal once the write lands.
+//! - **Watch:** OS notifications (or polling) report changed files. A changed file
+//!   is validated, then three-way merged (base: the last synced text, ours: memory,
+//!   theirs: disk) and applied as a human transaction (`external edit`). Invalid
+//!   files and conflicts with unsaved changes are reported and the document is
+//!   marked diverged: nothing is overwritten until `doc.sync` or a clean edit.
 //! - New document files are loaded; deleted ones are unloaded (or, with unsaved
 //!   changes, kept and reported).
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 
-use crate::project_settings::{read, write};
+use crate::file_io::{FileThread, Reply, Save, Stamp};
+use crate::project_settings::read;
 use ara_diag::{Diagnostic, codes};
 use ara_doc::{AssetId, Document, Edit, OrderKey, field};
 use ara_ops::{Author, TxnMeta};
@@ -27,21 +28,6 @@ use crate::host::State;
 use crate::journal::{self, Entry};
 use crate::params::Keep;
 
-/// What a file looked like when last seen.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Stamp {
-    modified: Option<SystemTime>,
-    len: u64,
-}
-
-fn stamp(path: &Path) -> Option<Stamp> {
-    let m = fs::metadata(path).ok()?;
-    Some(Stamp {
-        modified: m.modified().ok(),
-        len: m.len(),
-    })
-}
-
 /// The last state a document and its file agreed on.
 #[derive(Debug, Clone)]
 pub(crate) struct Synced {
@@ -51,17 +37,11 @@ pub(crate) struct Synced {
     pub text: String,
     /// The document that text reads as: the merge base for external edits.
     pub doc: Document,
-    stamp: Option<Stamp>,
 }
 
 impl Synced {
-    pub(crate) fn new(path: String, text: String, doc: Document, abs: &Path) -> Self {
-        Synced {
-            path,
-            text,
-            doc,
-            stamp: stamp(abs),
-        }
+    pub(crate) fn new(path: String, text: String, doc: Document) -> Self {
+        Synced { path, text, doc }
     }
 }
 
@@ -85,28 +65,20 @@ pub(crate) struct Files {
     /// Documents changed by a transaction, with the time of the latest change.
     pub changed: BTreeMap<AssetId, Instant>,
     pub diverged: BTreeMap<AssetId, Diverged>,
-    last_watch: Instant,
-    last_scan: Instant,
+    /// The thread that writes and watches the files.
+    pub io: FileThread,
 }
 
-impl Default for Files {
-    fn default() -> Self {
+impl Files {
+    pub(crate) fn new(io: FileThread) -> Self {
         Files {
             deleted: BTreeMap::new(),
             synced: BTreeMap::new(),
             changed: BTreeMap::new(),
             diverged: BTreeMap::new(),
-            last_watch: Instant::now(),
-            last_scan: Instant::now(),
+            io,
         }
     }
-}
-
-/// Writes `text` to `path` through a temp file and a rename.
-fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = path.with_extension("ara-tmp");
-    fs::write(&tmp, text)?;
-    fs::rename(&tmp, path)
 }
 
 /// The edits that turn `from` into `to`, per record and top-level key.
@@ -169,8 +141,9 @@ pub(crate) fn diff(from: &Document, to: &Document) -> Vec<Edit> {
 }
 
 impl State {
-    /// Writes documents whose last change is older than the debounce time (all of
-    /// them with `force`). Diverged documents are skipped.
+    /// Queues writes of documents whose last change is older than the debounce time
+    /// (all of them with `force`, which also waits until every write has landed).
+    /// Diverged documents are skipped.
     pub(crate) fn flush(&mut self, force: bool) {
         let now = Instant::now();
         let due: Vec<AssetId> = self
@@ -186,12 +159,17 @@ impl State {
                 self.write_doc(&id, false);
             }
         }
+        if force {
+            self.wait_writes();
+        }
         self.maybe_compact();
     }
 
-    /// Writes one document if it differs from its file (always with `always`), and
-    /// journals that the file now holds the current revision.
+    /// Queues a write of one document if it differs from its file (always with
+    /// `always`); the file thread writes it, and `saved` journals that the file
+    /// holds this revision. An unchanged document is journaled at once.
     pub(crate) fn write_doc(&mut self, id: &AssetId, always: bool) {
+        let rev = self.store.revision();
         let Some(doc) = self.store.workspace().doc(id.as_str()) else {
             if let Some(path) = self.files.deleted.get(id).cloned() {
                 if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
@@ -199,28 +177,7 @@ impl State {
                     self.log(d);
                     return;
                 }
-                let result = fs::remove_file(self.root.join(&path));
-                if let Err(e) = result
-                    && e.kind() != std::io::ErrorKind::NotFound
-                {
-                    self.files.changed.insert(id.clone(), Instant::now());
-                    self.log(
-                        Diagnostic::error(
-                            codes::FLUSH_FAILED,
-                            format!("cannot remove `{path}`: {e}"),
-                        )
-                        .file(path),
-                    );
-                    return;
-                }
-                self.files.deleted.remove(id);
-                self.files.synced.remove(id);
-                self.files.diverged.remove(id);
-                self.journal(&Entry::Flush {
-                    doc: id.to_string(),
-                    rev: self.store.revision(),
-                    hash: journal::hash("deleted"),
-                });
+                self.files.io.remove(id.clone(), path, rev);
             }
             return;
         };
@@ -230,99 +187,140 @@ impl State {
             .path_of(id.as_str())
             .unwrap_or_default()
             .to_owned();
-        let abs = self.root.join(&path);
         if let Err(d) = crate::project_settings::check_parent(&self.root, &path) {
             self.files.changed.insert(id.clone(), Instant::now());
             self.log(d);
             return;
         }
-        if let Some(parent) = abs.parent()
-            && let Err(e) = fs::create_dir_all(parent)
-        {
-            self.files.changed.insert(id.clone(), Instant::now());
-            self.log(
-                Diagnostic::error(
-                    codes::FLUSH_FAILED,
-                    format!("cannot create `{path}` parent: {e}"),
-                )
-                .file(path),
-            );
+        let synced = self.files.synced.get(id).filter(|s| s.doc == *doc);
+        if let Some(synced) = synced.filter(|_| !always) {
+            let hash = journal::hash(&synced.text);
+            self.journal(&Entry::Flush {
+                doc: id.to_string(),
+                rev,
+                hash,
+            });
             return;
         }
-        let unchanged = self.files.synced.get(id).is_some_and(|s| s.doc == *doc);
-        let text = if unchanged && !always {
-            self.files
-                .synced
-                .get(id)
-                .map(|s| s.text.clone())
-                .unwrap_or_default()
-        } else {
-            let text = match crate::ui_document::validate(doc, &path)
-                .and_then(|()| write(doc, self.store.schema()))
-            {
-                Ok(text) => text,
-                Err(diagnostic) => {
-                    self.files.changed.insert(id.clone(), Instant::now());
-                    self.log(diagnostic.file(path));
-                    return;
-                }
-            };
-            if let Err(e) = write_atomic(&abs, &text) {
-                self.files.changed.insert(id.clone(), Instant::now());
-                self.log(
-                    Diagnostic::error(codes::FLUSH_FAILED, format!("cannot write `{path}`: {e}"))
-                        .file(path),
-                );
-                return;
-            }
-            let doc = doc.clone();
-            self.files
-                .synced
-                .insert(id.clone(), Synced::new(path, text.clone(), doc, &abs));
-            text
-        };
-        let rev = self.store.revision();
-        self.journal(&Entry::Flush {
-            doc: id.to_string(),
+        let doc = doc.clone();
+        self.files.io.save(Save {
+            id: id.clone(),
+            path,
+            doc,
             rev,
-            hash: journal::hash(&text),
         });
     }
 
-    /// Polls loaded files for external edits, and the project for new documents.
-    pub(crate) fn watch(&mut self) {
-        let now = Instant::now();
-        if now.duration_since(self.files.last_watch) < self.watch_every {
-            return;
-        }
-        self.files.last_watch = now;
-        let ids: Vec<AssetId> = self.files.synced.keys().cloned().collect();
-        for id in ids {
-            let Some(synced) = self.files.synced.get(&id) else {
-                continue;
+    /// Waits until every queued write and removal has landed, applying whatever else
+    /// the file thread reports meanwhile.
+    pub(crate) fn wait_writes(&mut self) {
+        while self.files.io.pending() > 0 {
+            let Some(reply) = self.files.io.reply() else {
+                return;
             };
-            let abs = self.root.join(&synced.path);
-            match stamp(&abs) {
-                None => self.deleted(&id),
-                Some(s) if Some(&s) != synced.stamp.as_ref() => {
-                    let Ok(text) = fs::read_to_string(&abs) else {
-                        continue;
-                    };
-                    if text == synced.text {
-                        if let Some(syn) = self.files.synced.get_mut(&id) {
-                            syn.stamp = Some(s);
-                        }
-                    } else {
-                        self.reconcile(&id, text, Some(s));
-                    }
+            self.file_reply(reply);
+        }
+    }
+
+    /// Applies what the file thread found: external edits, deletions, new documents,
+    /// changed type files and finished writes. With `watch_every` zero (tests) it
+    /// first has the thread check everything and waits for the answer.
+    pub(crate) fn watch(&mut self) {
+        if self.watch_every.is_zero() {
+            self.files.io.sync();
+            while let Some(reply) = self.files.io.reply() {
+                let done = matches!(reply, Reply::Done);
+                self.file_reply(reply);
+                if done {
+                    break;
                 }
-                Some(_) => {}
             }
         }
-        if now.duration_since(self.files.last_scan) >= self.scan_every {
-            self.files.last_scan = now;
-            self.scan();
+        while let Some(reply) = self.files.io.try_reply() {
+            self.file_reply(reply);
         }
+    }
+
+    fn file_reply(&mut self, reply: Reply) {
+        match reply {
+            Reply::Changed { path, text } => {
+                if let Some((id, synced)) = self.synced_at(&path)
+                    && synced.text != text
+                {
+                    self.reconcile(&id, text);
+                }
+            }
+            Reply::Deleted { path } => {
+                if let Some((id, _)) = self.synced_at(&path) {
+                    self.deleted(&id);
+                }
+            }
+            Reply::Found { path, text, stamp } => self.found(path, text, stamp),
+            Reply::TypesChanged { path } => {
+                let rel = crate::project::rel_to(&self.root, &path);
+                self.log(
+                    Diagnostic::warning(
+                        codes::TYPES_CHANGED,
+                        format!("`{rel}` changed; restart the daemon to load the new types"),
+                    )
+                    .file(rel),
+                );
+            }
+            Reply::Saved { save, result } => self.saved(save, result),
+            Reply::Removed {
+                id,
+                path,
+                rev,
+                result,
+            } => match result {
+                Ok(()) => {
+                    self.files.deleted.remove(&id);
+                    self.files.synced.remove(&id);
+                    self.files.diverged.remove(&id);
+                    self.journal(&Entry::Flush {
+                        doc: id.to_string(),
+                        rev,
+                        hash: journal::hash("deleted"),
+                    });
+                }
+                Err(d) => {
+                    self.files.changed.insert(id, Instant::now());
+                    self.log(d.file(path));
+                }
+            },
+            Reply::Done => {}
+        }
+    }
+
+    /// A write landed: the file now agrees with the saved snapshot.
+    fn saved(&mut self, save: Save, result: Result<String, Diagnostic>) {
+        let Save { id, path, doc, rev } = save;
+        match result {
+            Ok(text) => {
+                let hash = journal::hash(&text);
+                self.files
+                    .synced
+                    .insert(id.clone(), Synced::new(path, text, doc));
+                self.journal(&Entry::Flush {
+                    doc: id.to_string(),
+                    rev,
+                    hash,
+                });
+            }
+            Err(d) => {
+                self.files.changed.insert(id, Instant::now());
+                self.log(d);
+            }
+        }
+    }
+
+    /// The loaded document whose file is `path`, with its synced state.
+    fn synced_at(&self, path: &str) -> Option<(AssetId, &Synced)> {
+        self.files
+            .synced
+            .iter()
+            .find(|(_, s)| s.path == path)
+            .map(|(id, s)| (id.clone(), s))
     }
 
     fn deleted(&mut self, id: &AssetId) {
@@ -361,85 +359,56 @@ impl State {
 
     fn unload(&mut self, id: &AssetId) {
         self.store.unload_doc(id.as_str());
-        self.files.synced.remove(id);
+        if let Some(synced) = self.files.synced.remove(id) {
+            self.files.io.untrack(synced.path);
+        }
         self.files.changed.remove(id);
         self.files.diverged.remove(id);
     }
 
-    /// Loads document files that appeared since the last scan, and reports changed
-    /// type files.
-    fn scan(&mut self) {
-        let known: Vec<String> = self.files.synced.values().map(|s| s.path.clone()).collect();
-        let mut found = Vec::new();
-        crate::project::walk_documents(&self.root, self.store.schema(), &mut found);
-        for abs in found {
-            let rel = crate::project::rel_to(&self.root, &abs);
-            if known.contains(&rel) {
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(&abs) else {
-                continue;
-            };
-            let result = read(
-                &text,
-                &rel,
-                self.store.schema(),
-                Some(self.store.workspace().index()),
-            );
-            let Some(doc) = result.doc.filter(|_| !ara_diag::has_errors(&result.diags)) else {
-                self.log(
-                    Diagnostic::warning(
-                        codes::EXTERNAL_INVALID,
-                        format!("new document `{rel}` has errors; not loaded (see `ara check`)"),
-                    )
-                    .file(rel),
-                );
-                continue;
-            };
-            if self.store.workspace().doc(doc.id.as_str()).is_some() {
-                self.log(Diagnostic::warning(
-                    codes::EXTERNAL_INVALID,
-                    format!("new document `{rel}` reuses the asset ID `{}` of a loaded document; not loaded", doc.id),
-                ).file(rel));
-                continue;
-            }
-            self.files.synced.insert(
-                doc.id.clone(),
-                Synced::new(rel.clone(), text, doc.clone(), &abs),
-            );
-            let source = crate::project::asset_path(&rel, &doc.kind);
-            self.store
-                .load_doc_with_asset_path(rel.clone(), doc, source);
-            self.log(
-                Diagnostic::info(codes::EXTERNAL_EDIT, format!("loaded new document `{rel}`"))
-                    .file(rel),
-            );
-        }
-        let mut changed = Vec::new();
-        for (path, seen) in &mut self.type_files {
-            let now = fs::metadata(&*path).and_then(|m| m.modified()).ok();
-            if now != *seen {
-                *seen = now;
-                changed.push(crate::project::rel_to(&self.root, path));
-            }
-        }
-        for rel in changed {
+    /// Loads a document file that appeared on disk (the file thread found it).
+    fn found(&mut self, rel: String, text: String, stamp: Option<Stamp>) {
+        let result = read(
+            &text,
+            &rel,
+            self.store.schema(),
+            Some(self.store.workspace().index()),
+        );
+        let Some(doc) = result.doc.filter(|_| !ara_diag::has_errors(&result.diags)) else {
             self.log(
                 Diagnostic::warning(
-                    codes::TYPES_CHANGED,
-                    format!("`{rel}` changed; restart the daemon to load the new types"),
+                    codes::EXTERNAL_INVALID,
+                    format!("new document `{rel}` has errors; not loaded (see `ara check`)"),
                 )
                 .file(rel),
             );
+            return;
+        };
+        if self.store.workspace().doc(doc.id.as_str()).is_some() {
+            self.log(Diagnostic::warning(
+                codes::EXTERNAL_INVALID,
+                format!("new document `{rel}` reuses the asset ID `{}` of a loaded document; not loaded", doc.id),
+            ).file(rel));
+            return;
         }
+        self.files.io.track(rel.clone(), stamp);
+        self.files
+            .synced
+            .insert(doc.id.clone(), Synced::new(rel.clone(), text, doc.clone()));
+        let source = crate::project::asset_path(&rel, &doc.kind);
+        self.store
+            .load_doc_with_asset_path(rel.clone(), doc, source);
+        self.log(
+            Diagnostic::info(codes::EXTERNAL_EDIT, format!("loaded new document `{rel}`"))
+                .file(rel),
+        );
     }
 
     /// Brings an external edit of a loaded document into memory (see module docs).
-    fn reconcile(&mut self, id: &AssetId, text: String, seen: Option<Stamp>) {
-        let Some(synced) = self.files.synced.get_mut(id) else {
+    fn reconcile(&mut self, id: &AssetId, text: String) {
+        let Some(synced) = self.files.synced.get(id) else {
             return;
         };
-        synced.stamp = seen;
         let path = synced.path.clone();
         let base = synced.doc.clone();
         let db = self.store.schema();
@@ -491,10 +460,9 @@ impl State {
             }
             return;
         }
-        let abs = self.root.join(&path);
-        let mut fresh = Synced::new(path.clone(), text, theirs, &abs);
-        fresh.stamp = self.files.synced.get(id).and_then(|s| s.stamp.clone());
-        self.files.synced.insert(id.clone(), fresh);
+        self.files
+            .synced
+            .insert(id.clone(), Synced::new(path.clone(), text, theirs));
         self.files.diverged.remove(id);
         self.log(
             Diagnostic::info(
@@ -544,6 +512,7 @@ impl State {
             Keep::Memory => {
                 self.files.diverged.remove(id);
                 self.write_doc(id, true);
+                self.wait_writes();
             }
             Keep::Disk => {
                 let Ok(text) = fs::read_to_string(&abs) else {
@@ -578,10 +547,9 @@ impl State {
                         )]
                     })?;
                 self.apply_external(&ours, &theirs, &synced.path, "doc.sync: keep disk")?;
-                self.files.synced.insert(
-                    id.clone(),
-                    Synced::new(synced.path.clone(), text, theirs, &abs),
-                );
+                self.files
+                    .synced
+                    .insert(id.clone(), Synced::new(synced.path.clone(), text, theirs));
                 self.files.diverged.remove(id);
                 self.files.changed.remove(id);
             }

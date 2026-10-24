@@ -1,6 +1,6 @@
 //! The registry table. Commands that are not built yet stay registered with the
 //! reason, so menus explain what is missing instead of hiding it.
-use super::{Avail, Ctx, Run, RunFn, Spec, Target};
+use super::{Avail, BuildState, Ctx, Run, RunFn, Spec, Target};
 use crate::{Editor, shell::Shell};
 use ara_render_fidelity::presets::QualityPreset;
 use serde_json::{Value, json};
@@ -211,6 +211,23 @@ fn mode(c: &Ctx, mode: &str) -> Avail {
 }
 fn flag(c: &Ctx, key: &str) -> Avail {
     Avail::Checked(setting(c, key).as_bool().unwrap_or(false))
+}
+/// The selection is a `Camera` entity (prefab-resolved entities are checked when run).
+fn selected_camera(c: &Ctx) -> Avail {
+    let Some(id) = c.target.entity(c.state) else {
+        return Avail::Blocked("Select a Camera entity first".into());
+    };
+    match c
+        .store
+        .workspace()
+        .doc(&c.state.doc)
+        .and_then(|d| d.record(id))
+    {
+        Some(record) if !record.contains_key("Camera") => {
+            Avail::Blocked("The selection has no Camera component".into())
+        }
+        _ => Avail::Ready,
+    }
 }
 fn with_components(c: &Ctx, names: &[&str]) -> Avail {
     match names.iter().find(|n| c.store.schema().get(n).is_none()) {
@@ -469,16 +486,22 @@ fn build() -> Vec<Spec> {
         }),
         later("file.export_selection", "Export Selection…", "file", "", "Selection export lands with ara-export presets in the editor."),
         later("build.profiles", "Build Profiles…", "package", "", "Export presets run from `ara export`; the in-editor Build window is not built yet."),
-        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the project with its preset (presets/<name>.export.json); progress shows in the status bar, problems in Problems, and the build opens when done.", |s, e, _| s.build_current(e)).when(|c| match c.build {
-            (_, true) => Avail::Blocked("An export is running; see the status bar".into()),
-            (false, _) => Avail::Blocked("Add an export preset first: presets/windows-portable.export.json (`ara-export preset --kind windows-portable`)".into()),
+        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Write the default Windows profile (presets/windows.export.json): the real game runtime in a plain folder.", |s, e, _| s.create_build_profile(e).map(drop))
+            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in presets/".into()) } else { Avail::Ready }),
+        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the game with the project's first profile (creating presets/windows.export.json when there is none) into builds/; progress shows in the status bar, problems in Problems.", |s, e, _| s.build_current(e)).when(|c| match &c.build {
+            BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
+            _ => Avail::Ready,
+        }),
+        cmd("build.run", "Run Build", "play", "", "Launch the last build: the exported game, outside the editor.", |s, e, _| s.run_build(e)).when(|c| match &c.build {
+            BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
+            BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
             _ => Avail::Ready,
         }),
         later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
-        cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the project's build output folder.", |_, e, _| {
-            let root = e.host.root().join("build");
-            std::fs::create_dir_all(&root)?;
-            super::super::open_external(&root)
+        cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
+            let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
+            std::fs::create_dir_all(&folder)?;
+            super::super::open_external(&folder)
         }),
         cmd("file.close_document", "Close Document", "x", "Ctrl+W", "Close the active tool document tab.", |s, e, t| {
             let panel = panel_target(s, e, t);
@@ -665,6 +688,17 @@ fn build() -> Vec<Spec> {
     c.extend([
         later("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "The renderer's camera is perspective-only; orthographic projection needs ara-render support."),
         cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
+        cmd("view.camera.fov", "Field of View…", "scan-eye", "", "Choose the Scene view's vertical field of view.", |s, _, _| { s.open_value_menu("fov"); Ok(()) })
+            .labelled(|c| format!("Field of View ({})…", c.state.camera.fov_label())),
+        cmd("view.camera.fov.set", "Set Field of View", "scan-eye", "", "Set the Scene view's vertical field of view: target `46` (degrees, 10–120).", |_, e, t| {
+            let Target::Text(text) = t else { return Err("choose a field of view".into()) };
+            let degrees: f32 = text.trim().trim_end_matches('°').trim().parse().map_err(|_| "the field of view needs a number of degrees")?;
+            act(e, "editor.camera", json!({"fovYDegrees": degrees}))
+        }),
+        cmd("view.camera.align", "Align View to Selected Camera", "camera", "", "Look through the selected Camera entity: its position, direction and field of view.", |_, e, t| {
+            let entity = t.entity(&e.state).ok_or("select a Camera entity")?.to_owned();
+            act(e, "editor.camera", json!({"entity": entity}))
+        }).when(selected_camera),
         cmd("view.camera.top", "Top", "", "Num7", "Look straight down.", |_, e, _| camera(e, 0., 1.54)),
         cmd("view.camera.bottom", "Bottom", "", "Ctrl+Num7", "Look straight up.", |_, e, _| camera(e, 0., -1.54)),
         cmd("view.camera.front", "Front", "", "Num1", "Look along −Z.", |_, e, _| camera(e, 0., 0.)),
@@ -689,7 +723,7 @@ fn build() -> Vec<Spec> {
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
         later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
-        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting a scene camera needs the Game view through the shared texture (D19)."),
+        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
     c.extend([
         cmd(

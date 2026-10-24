@@ -13,7 +13,7 @@ pub(crate) enum Source {
     Bar(usize),
     /// A right-click (or ⋯) menu for a target.
     Context(Context, Target),
-    /// Snap increments: `move`, `rotate` or `scale`.
+    /// Snap increments (`move`, `rotate`, `scale`) or Scene view fields of view (`fov`).
     Values(&'static str),
     /// An inspector enum field's options.
     Enum(String, Vec<String>),
@@ -208,6 +208,18 @@ impl Shell {
             Source::Bar(i) => self.expand(editor, MENUS[*i].items, &mut root),
             Source::Context(kind, _) => self.expand(editor, menus::context(*kind), &mut root),
             Source::Enum(..) => {}
+            Source::Values("fov") => {
+                let current = editor.state.camera.fov_y_degrees;
+                for v in [30., 35., 40., 46., 50., 54., 60., 70., 90.] {
+                    root.push(Row::Command {
+                        id: "view.camera.fov.set",
+                        target: Target::Text(format!("{v}")),
+                        label: Some(format!("{v}°")),
+                        path: String::new(),
+                        checked: Some((current - v).abs() < 0.05),
+                    });
+                }
+            }
             Source::Values(kind) => {
                 let (values, unit, current): (&[f32], &str, f32) = match *kind {
                     "move" => (

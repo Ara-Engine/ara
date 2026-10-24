@@ -1,14 +1,73 @@
 {
   "device": {
     "api_version": "1.4.351",
+    "buffer_int64_atomics": true,
     "compute_family": 2,
     "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
     "descriptor_heap_available": true,
     "device_id": 10115,
     "driver_version": 2588114944,
+    "external_memory": true,
+    "geometry_shader": true,
     "graphics_family": 0,
     "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "hdr_metadata": false,
+    "identity": {
+      "deviceUuid": [
+        98,
+        26,
+        143,
+        108,
+        205,
+        107,
+        209,
+        236,
+        163,
+        185,
+        120,
+        26,
+        52,
+        61,
+        47,
+        21
+      ],
+      "driverUuid": [
+        123,
+        174,
+        94,
+        179,
+        146,
+        161,
+        82,
+        146,
+        144,
+        242,
+        90,
+        194,
+        139,
+        107,
+        225,
+        129
+      ],
+      "luid": [
+        2,
+        13,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
     "max_image_dimension": 32768,
+    "mesh_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "mesh_shading": true,
     "name": "NVIDIA GeForce RTX 4070 SUPER",
     "pipeline_cache_uuid": [
       100,
@@ -29,6 +88,14 @@
       126
     ],
     "ray_tracing": true,
+    "sampled_image_capacity": 65536,
+    "task_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "texture_compression_bc": true,
     "timestamp_period_ns": 1.0,
     "timestamp_valid_bits": [
       64,
@@ -119,12 +186,12 @@
       "target": [
         0.0,
         1.0,
-        0.20000000298023224
+        0.2
       ],
-      "vertical_fov": 0.8726646304130554
+      "vertical_fov": 0.87266463
     },
     "deterministic": true,
-    "exposure": 0.001500000013038516,
+    "exposure": 0.0015,
     "marks": 40,
     "mode": "lit",
     "seed": 7,
@@ -137,53 +204,58 @@
   },
   "scene_hash": "8986a2d23f1704e264c7cb5bf27c00cbc5f6aede564d14d49c9071bd7f6eebac",
   "shaders": {
-    "binding_layout_hash": "1bb570eb9803435af351c803ea8ba5187b90052fdb0fc03c9f2140544242710f",
+    "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
     "compiler": "2026.17-25-gc7954ebd1",
-    "content_key": "5bb4d75e09b326b888f95b00d47651123d19c33d0c0e2ff51c8406b919cb303f"
+    "content_key": "a475e9f6b497c1f76edfa49227fae7a5eef8fddf727e1a28dd327a0d30bc8238"
   },
   "timings": [
     {
-      "milliseconds": 0.01536,
-      "pass": "ShadowAtlas.4Cascades",
+      "milliseconds": 0.015488,
+      "pass": "ShadowAtlas.Cascades",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.025152,
+      "milliseconds": 0.023296,
       "pass": "GBuffer",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.00496,
+      "milliseconds": 0.006176,
       "pass": "TiledLightCull",
       "queue": "Compute"
     },
     {
-      "milliseconds": 0.03328,
+      "milliseconds": 0.045088,
       "pass": "DeferredLighting",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.010752,
+      "milliseconds": 0.015872,
       "pass": "ForwardTransparency",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.007872,
+      "milliseconds": 0.008288,
       "pass": "TemporalResolve",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.013024,
-      "pass": "Exposure.ACESFitted.SDR",
+      "milliseconds": 0.006304,
+      "pass": "Exposure.Histogram",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.068896,
+      "milliseconds": 0.015936,
+      "pass": "Post.Grade.ToneMap",
+      "queue": "Graphics"
+    },
+    {
+      "milliseconds": 0.068128,
       "pass": "CaptureReadback",
       "queue": "Graphics"
     },
     {
-      "milliseconds": 0.002784,
+      "milliseconds": 0.002656,
       "pass": "HostReadback",
       "queue": "Graphics"
     },

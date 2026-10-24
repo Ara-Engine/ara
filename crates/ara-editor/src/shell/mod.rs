@@ -6,7 +6,7 @@
 //! know which OS window hosts them.
 mod assets;
 mod axis;
-mod build;
+pub(crate) mod build;
 mod chrome;
 pub mod commands;
 mod dialog;
@@ -119,6 +119,15 @@ pub struct Shell {
     pub(crate) open_ide: bool,
     /// The running export (Build > Build Current Profile).
     pub(crate) build: Option<build::BuildJob>,
+    /// The last finished build's game folder (Build > Run Build, Open Build Folder).
+    pub(crate) last_build: Option<std::path::PathBuf>,
+    /// A running headless Run Build (offscreen runs).
+    pub(crate) run: Option<std::sync::mpsc::Receiver<build::RunResult>>,
+    /// The capture the last headless Run Build wrote.
+    pub(crate) last_run: Option<std::path::PathBuf>,
+    /// The window is hidden (captures, verification): Run Build stays headless and
+    /// nothing opens on the desktop.
+    pub(crate) offscreen: bool,
     /// Assets lists every file, including glTF buffers and project files.
     pub(crate) assets_show_all: bool,
     /// Console and Problems filters.
@@ -241,6 +250,10 @@ pub struct UiStats {
     pub mount_ms: f64,
     /// Of `mount_ms`: `Ui::reconcile` alone.
     pub reconcile_ms: f64,
+    /// Of `mount_ms`: the mount's layout frame (restyle, layout, paint).
+    pub frame_ms: f64,
+    /// Of `mount_ms`: mounting and filling the virtual row pools (Hierarchy, Assets).
+    pub rows_ms: f64,
     /// Runtime work summed over every `Ui::frame` (rebuild mounts and the frame's own).
     pub work: ara_ui::Work,
 }
@@ -249,6 +262,8 @@ pub(crate) enum Binding {
     Command(&'static str, commands::Target),
     Content(Vec<Value>, String),
     Field(String, Option<usize>),
+    /// The Scene toolbar's field-of-view field (drafted, applied on commit).
+    CameraFov,
     Search(String),
     Palette(String),
     PaletteParam(String),
@@ -320,6 +335,10 @@ impl Shell {
             log_view: LogView::default(),
             assets_show_all: false,
             build: None,
+            last_build: None,
+            run: None,
+            last_run: None,
+            offscreen: false,
             open_ide: true,
             game_players: Vec::new(),
             game_client: 0,
@@ -489,6 +508,10 @@ impl Shell {
     pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
         self.resolved_cache.as_ref().map(|(key, _)| key.clone())
     }
+    /// Uncommitted field text, keyed by field (`path#axis`, or `@…` for other panels).
+    pub(crate) fn drafts(&self) -> &BTreeMap<String, String> {
+        &self.drafts
+    }
     /// The UI work done since the last call: rebuilds and every runtime frame's counters.
     pub fn take_stats(&mut self) -> UiStats {
         std::mem::take(&mut self.stats)
@@ -575,7 +598,10 @@ impl Shell {
             }
         }
         self.tooltip_text = None;
+        let framing = std::time::Instant::now();
         self.stats.work += ui.frame(&mut self.text)?;
+        self.stats.frame_ms += framing.elapsed().as_secs_f64() * 1000.;
+        let rows = std::time::Instant::now();
         let row = if editor.state.comfortable() { 26. } else { 22. };
         if let Some(index) = ui.find("hierarchy-rows") {
             let height = ui.nodes[index].rect.h.max(row);
@@ -628,6 +654,7 @@ impl Shell {
                 }
             }
         }
+        self.stats.rows_ms += rows.elapsed().as_secs_f64() * 1000.;
         Ok(())
     }
     fn rebuild_float(

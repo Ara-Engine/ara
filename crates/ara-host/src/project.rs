@@ -2,7 +2,7 @@
 //! (built-in plus `*.types.json`), the command registry, the asset index and the
 //! document files.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -286,13 +286,44 @@ pub fn rel_to(root: &Path, path: &Path) -> String {
 /// Document files under `root` (registered extensions only), with the same skip
 /// rules as opening a project.
 pub fn walk_documents(root: &Path, db: &SchemaDb, out: &mut Vec<PathBuf>) {
+    out.extend(document_files(root, &document_extensions(db)));
+}
+
+/// The file extensions of the registered document kinds.
+pub(crate) fn document_extensions(db: &SchemaDb) -> HashSet<String> {
+    db.kinds().map(|k| k.extension.clone()).collect()
+}
+
+/// Files under `root` with one of `extensions`, in path order (see `walk`).
+pub(crate) fn document_files(root: &Path, extensions: &HashSet<String>) -> Vec<PathBuf> {
     let mut files = Vec::new();
     walk(root, root, &mut files);
-    out.extend(files.into_iter().filter(|f| {
-        f.extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| db.kinds().any(|k| k.extension == e))
-    }));
+    files.retain(|f| is_document(f, extensions));
+    files
+}
+
+/// Whether `path` has one of the document `extensions`.
+pub(crate) fn is_document(path: &Path, extensions: &HashSet<String>) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| extensions.contains(e))
+}
+
+/// Whether `walk` visits the file at `rel` (relative to `root`): no hidden or
+/// skipped directory on the way, and no nested project.
+pub(crate) fn walked(root: &Path, rel: &Path) -> bool {
+    let Some(parent) = rel.parent() else {
+        return false;
+    };
+    let mut dir = root.to_path_buf();
+    for part in parent.components() {
+        let name = part.as_os_str().to_string_lossy();
+        dir.push(part);
+        if name.starts_with('.') || SKIPPED.contains(&name.as_ref()) || dir.join(MARKER).is_file() {
+            return false;
+        }
+    }
+    true
 }
 
 /// Collects files under `dir`. Skips hidden directories (`.git`, `.ara`, `.refs`),
@@ -301,14 +332,25 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
-    let mut entries: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
+    // The directory entry knows its type: no metadata call per file (a symlink is
+    // followed to tell whether it is a directory).
+    let mut entries: Vec<(PathBuf, bool)> = entries
+        .filter_map(Result::ok)
+        .map(|e| {
+            let path = e.path();
+            let is_dir = e
+                .file_type()
+                .is_ok_and(|t| t.is_dir() || (t.is_symlink() && path.is_dir()));
+            (path, is_dir)
+        })
+        .collect();
     entries.sort();
-    for path in entries {
+    for (path, is_dir) in entries {
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default();
-        if path.is_dir() {
+        if is_dir {
             let skip = name.starts_with('.')
                 || SKIPPED.contains(&name)
                 || (path != root && path.join(MARKER).is_file());

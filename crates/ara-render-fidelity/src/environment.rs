@@ -1,10 +1,10 @@
 //! The scene's authored look (`ara_components::render`: `SkyAtmosphere`, `HeightFog`,
 //! `PostProcess`) mapped onto fidelity view inputs, and the matching approximation
-//! for the baseline raster renderer: a CPU-integrated sky from the same atmosphere
-//! model and sun, the same exposure and the same tone mapper.
+//! for the raster renderer (`ara_render::look::Look`): the same GPU sky, fog,
+//! exposure, grading and tone mapper.
 //!
 //! Hosts call [`FrameEnvironment::resolve`] when the extraction's look changes, then
-//! [`FidelityView::set_environment`] (fidelity) or [`FrameEnvironment::baseline`]
+//! [`FidelityView::set_environment`] (fidelity) or [`FrameEnvironment::raster`]
 //! (raster) at the frame boundary.
 use crate::{
     FidelityView,
@@ -148,50 +148,60 @@ impl FrameEnvironment {
         lux * (-optical).exp()
     }
 
-    /// The raster approximation for the same sun (`direction` towards the sun,
-    /// top-of-atmosphere illuminance in lux): a physical sky map when the look has
-    /// a `SkyAtmosphere`, the sun reaching the ground, a linear exposure and the
-    /// tone mapper.
-    pub fn baseline(&self, sun_direction: Vec3, sun_lux: Vec3) -> BaselineEnvironment {
-        let sky = self
-            .atmosphere
-            .filter(|a| a.physical_sky)
-            .map(|a| sky_map(&a, sun_direction.normalize_or(Vec3::Y), sun_lux));
-        let ground = self.ground_sun(sun_direction, sun_lux);
-        let ev100 = self.ev100.unwrap_or_else(|| {
-            // Grey-world metering of an 18% surface under the sun and sky, the
-            // same target the GPU histogram converges to in an open scene.
-            let sky_lux = sky.as_ref().map_or(0., |(_, _, lux)| *lux);
-            let sun =
-                crate::colour::luminance(ground) * sun_direction.normalize_or(Vec3::Y).y.max(0.);
-            let luminance = 0.18 * (sun + sky_lux) / std::f32::consts::PI;
-            (luminance.max(1e-6) / (0.18 * 1.2)).log2().clamp(
-                self.auto_exposure.minimum_ev100,
-                self.auto_exposure.maximum_ev100,
-            )
-        });
-        BaselineEnvironment {
-            sky: sky.map(|(size, pixels, _)| (size, pixels)),
-            sun_lux: ground,
-            exposure: crate::settings::exposure_from_ev100(ev100, self.compensation),
-            tone_mapper: self.tone_mapper,
+    /// The same look for the raster renderer (`ara_render::Renderer::set_look`):
+    /// the physical sky and height fog run on the GPU there too; clouds do not yet.
+    pub fn raster(&self) -> ara_render::look::Look {
+        use ara_render::look::{
+            AutoExposure as Metering, Fog, Grading as RasterGrading, Look, Sky, ToneCurve,
+        };
+        let a = self.auto_exposure;
+        Look {
+            curve: match self.tone_mapper {
+                ToneMapper::AcesFit => ToneCurve::AcesFit,
+                ToneMapper::PbrNeutral => ToneCurve::Neutral,
+                ToneMapper::Filmic => ToneCurve::Filmic,
+            },
+            auto_exposure: self.ev100.is_none().then_some(Metering {
+                minimum_ev100: a.minimum_ev100,
+                maximum_ev100: a.maximum_ev100,
+                low_percentile: a.low_percentile,
+                high_percentile: a.high_percentile,
+                compensation: self.compensation,
+                adaptation: self.adaptation,
+            }),
+            bloom: self.bloom,
+            grading: RasterGrading {
+                white_balance_gain: self.grading.white_balance_gain().to_array(),
+                contrast: self.grading.contrast,
+                saturation: self.grading.saturation,
+                vignette: self.grading.vignette,
+            },
+            sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
+                sea_level: a.sea_level,
+                aerosols: a.aerosols,
+                ..Sky::default()
+            }),
+            fog: self
+                .atmosphere
+                .filter(|a| a.fog_extinction > 0.)
+                .map(|a| Fog {
+                    extinction: a.fog_extinction,
+                    height: a.fog_height,
+                    base: a.fog_base,
+                    tint: a.fog_tint,
+                    albedo: a.fog_albedo,
+                    anisotropy: a.fog_anisotropy,
+                }),
         }
     }
-}
 
-/// What the baseline renderer needs from the look.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BaselineEnvironment {
-    /// Equirectangular sky radiance in cd/m² (`size`, row-major RGBA), replacing the
-    /// `Environment` gradient; `None` keeps the gradient.
-    pub sky: Option<([u32; 2], Vec<[f32; 4]>)>,
-    /// Sun illuminance reaching the ground (the physical sky's transmittance
-    /// applied); use it as the raster scene's directional light.
-    pub sun_lux: Vec3,
-    /// Linear exposure multiplier for the baseline tone map pass.
-    pub exposure: f32,
-    /// Display curve.
-    pub tone_mapper: ToneMapper,
+    /// Linear exposure for a manual look (`fallback` under automatic metering,
+    /// where the raster renderer meters itself and only captures use it).
+    pub fn manual_exposure(&self, fallback: f32) -> f32 {
+        self.ev100.map_or(fallback, |ev| {
+            crate::settings::exposure_from_ev100(ev, self.compensation)
+        })
+    }
 }
 
 impl FidelityView {
@@ -210,7 +220,6 @@ pub fn ev100_from_exposure(exposure: f32) -> f32 {
 
 const PLANET: f32 = 6_360_000.;
 const TOP: f32 = 6_460_000.;
-const SKY_SIZE: [u32; 2] = [128, 64];
 
 /// Matches `extinction` in atmosphere.slangh.
 fn extinction(height: f32, aerosols: f32) -> (Vec3, f32, Vec3) {
@@ -241,188 +250,6 @@ fn atmosphere_length(p: Vec3, d: Vec3) -> (f32, bool) {
     } else {
         (top, false)
     }
-}
-
-/// CPU twin of the GPU transmittance and multiple-scattering LUTs.
-struct Luts {
-    aerosols: f32,
-    transmittance: Vec<Vec3>,
-    multiple: Vec<Vec3>,
-}
-const T_SIZE: [usize; 2] = [64, 32];
-const M_SIZE: usize = 16;
-
-impl Luts {
-    fn new(aerosols: f32) -> Self {
-        let mut luts = Self {
-            aerosols,
-            transmittance: Vec::with_capacity(T_SIZE[0] * T_SIZE[1]),
-            multiple: Vec::new(),
-        };
-        for y in 0..T_SIZE[1] {
-            for x in 0..T_SIZE[0] {
-                let (h, mu) = lut_coordinates(x, y, T_SIZE[0], T_SIZE[1]);
-                let p = Vec3::new(0., PLANET + h, 0.);
-                let d = Vec3::new((1. - mu * mu).max(0.).sqrt(), mu, 0.);
-                let (extent, ground) = atmosphere_length(p, d);
-                let mut optical = Vec3::ZERO;
-                for i in 0..40 {
-                    let at = p + d * (extent * (i as f32 + 0.5) / 40.);
-                    optical += extinction(at.length() - PLANET, aerosols).2 * (extent / 40.);
-                }
-                luts.transmittance
-                    .push(if ground { Vec3::ZERO } else { (-optical).exp() });
-            }
-        }
-        let mut multiple = Vec::with_capacity(M_SIZE * M_SIZE);
-        for y in 0..M_SIZE {
-            for x in 0..M_SIZE {
-                let (h, mu) = lut_coordinates(x, y, M_SIZE, M_SIZE);
-                let sun = Vec3::new((1. - mu * mu).max(0.).sqrt(), mu, 0.);
-                let p = Vec3::new(0., PLANET + h + 1., 0.);
-                let (mut incoming, mut feedback) = (Vec3::ZERO, Vec3::ZERO);
-                for j in 0..16 {
-                    let yy = 1. - 2. * (j as f32 + 0.5) / 16.;
-                    let phi = j as f32 * 2.399963;
-                    let r = (1. - yy * yy).sqrt();
-                    let d = Vec3::new(r * phi.cos(), yy, r * phi.sin());
-                    let (extent, _) = atmosphere_length(p, d);
-                    incoming += luts.integrate(p, d, extent, sun, 12, false).0;
-                    let (mut path, mut scatter) = (Vec3::ONE, Vec3::ZERO);
-                    let ds = extent / 12.;
-                    for i in 0..12 {
-                        let (sr, sm, e) = extinction(
-                            (p + d * (ds * (i as f32 + 0.5))).length() - PLANET,
-                            aerosols,
-                        );
-                        let segment = (-e * ds).exp();
-                        scatter += path * (sr + Vec3::splat(sm)) * (Vec3::ONE - segment)
-                            / e.max(Vec3::splat(1e-9));
-                        path *= segment;
-                    }
-                    feedback += scatter;
-                }
-                multiple
-                    .push((incoming / 16.) / (Vec3::ONE - feedback / 16.).max(Vec3::splat(0.05)));
-            }
-        }
-        luts.multiple = multiple;
-        luts
-    }
-
-    fn sample(table: &[Vec3], size: [usize; 2], height: f32, cosine: f32) -> Vec3 {
-        let u = (cosine * 0.5 + 0.5).clamp(0., 1.) * size[0] as f32 - 0.5;
-        let v = (height / 100_000.).clamp(0., 1.).sqrt() * size[1] as f32 - 0.5;
-        let (x0, y0) = (u.floor(), v.floor());
-        let (ax, ay) = (u - x0, v - y0);
-        let at = |x: f32, y: f32| {
-            let x = (x as i32).clamp(0, size[0] as i32 - 1) as usize;
-            let y = (y as i32).clamp(0, size[1] as i32 - 1) as usize;
-            table[y * size[0] + x]
-        };
-        at(x0, y0)
-            .lerp(at(x0 + 1., y0), ax)
-            .lerp(at(x0, y0 + 1.).lerp(at(x0 + 1., y0 + 1.), ax), ay)
-    }
-
-    fn transmittance(&self, height: f32, cosine: f32) -> Vec3 {
-        Self::sample(&self.transmittance, T_SIZE, height, cosine)
-    }
-
-    fn multiple_scattering(&self, height: f32, cosine: f32) -> Vec3 {
-        Self::sample(&self.multiple, [M_SIZE, M_SIZE], height, cosine)
-    }
-
-    /// Matches `integrateSky` for unit sun illuminance; returns radiance and throughput.
-    fn integrate(
-        &self,
-        p: Vec3,
-        d: Vec3,
-        distance: f32,
-        sun: Vec3,
-        steps: u32,
-        multiple: bool,
-    ) -> (Vec3, Vec3) {
-        let (mut sum, mut throughput, mut previous) = (Vec3::ZERO, Vec3::ONE, 0.);
-        let cosine = d.dot(sun);
-        for i in 0..steps {
-            let end = distance * ((i + 1) as f32 / steps as f32).powi(2);
-            let ds = end - previous;
-            let at = p + d * (previous + ds * 0.5);
-            previous = end;
-            let height = (at.length() - PLANET).max(0.);
-            let mu = at.normalize().dot(sun);
-            let (sr, sm, e) = extinction(height, self.aerosols);
-            let segment = (-e * ds).exp();
-            let mut source = self.transmittance(height, mu)
-                * (sr * phase_rayleigh(cosine) + Vec3::splat(sm * phase_mie(cosine, 0.8)));
-            if multiple {
-                source += (sr + Vec3::splat(sm)) * self.multiple_scattering(height, mu);
-            }
-            sum += throughput * source * (Vec3::ONE - segment) / e.max(Vec3::splat(1e-9));
-            throughput *= segment;
-        }
-        (sum, throughput)
-    }
-}
-
-fn lut_coordinates(x: usize, y: usize, w: usize, h: usize) -> (f32, f32) {
-    let u = (x as f32 + 0.5) / w as f32;
-    let v = (y as f32 + 0.5) / h as f32;
-    (v * v * 100_000., u * 2. - 1.)
-}
-
-fn phase_rayleigh(c: f32) -> f32 {
-    3. * (1. + c * c) / (16. * std::f32::consts::PI)
-}
-
-fn phase_mie(c: f32, g: f32) -> f32 {
-    (1. - g * g) / (4. * std::f32::consts::PI * (1. + g * g - 2. * g * c).max(0.001).powf(1.5))
-}
-
-/// Equirectangular sky radiance (cd/m²) seen from 2 m above sea level, with the
-/// GPU sky-view's ground bounce, plus the horizontal sky illuminance (lux).
-fn sky_map(atmosphere: &Atmosphere, sun: Vec3, lux: Vec3) -> ([u32; 2], Vec<[f32; 4]>, f32) {
-    let luts = Luts::new(atmosphere.aerosols);
-    let p = Vec3::new(0., PLANET + 2., 0.);
-    let [w, h] = SKY_SIZE;
-    let mut pixels = Vec::with_capacity((w * h) as usize);
-    let mut illuminance = 0.;
-    for y in 0..h {
-        let theta = (y as f32 + 0.5) / h as f32 * std::f32::consts::PI;
-        for x in 0..w {
-            let phi = ((x as f32 + 0.5) / w as f32 - 0.5) * std::f32::consts::TAU;
-            let d = Vec3::new(
-                phi.cos() * theta.sin(),
-                theta.cos(),
-                phi.sin() * theta.sin(),
-            );
-            let (extent, ground) = atmosphere_length(p, d);
-            let (mut light, t) = luts.integrate(p, d, extent, sun, 24, true);
-            if ground {
-                let n = (p + d * extent).normalize();
-                let mu = n.dot(sun);
-                light += t
-                    * 0.15
-                    * (luts.transmittance(0., mu) * mu.max(0.)
-                        + luts.multiple_scattering(0., mu) * std::f32::consts::PI)
-                    / std::f32::consts::PI;
-            }
-            let radiance = light * lux;
-            // Solid angle of an equirect texel times the cosine to +Y.
-            let solid = (std::f32::consts::TAU / w as f32)
-                * (std::f32::consts::PI / h as f32)
-                * theta.sin();
-            illuminance += crate::colour::luminance(radiance) * d.y.max(0.) * solid;
-            pixels.push([
-                radiance.x.max(0.),
-                radiance.y.max(0.),
-                radiance.z.max(0.),
-                1.,
-            ]);
-        }
-    }
-    (SKY_SIZE, pixels, illuminance)
 }
 
 #[cfg(test)]
@@ -477,28 +304,27 @@ mod tests {
     }
 
     #[test]
-    fn baseline_sky_is_blue_at_noon_and_warm_at_sunset() {
-        let env = FrameEnvironment::resolve(
-            &SceneLook {
-                sky: Some(SkyAtmosphere::default()),
-                post: Some(PostProcess::default()),
+    fn raster_look_matches_the_fidelity_mapping() {
+        let look = SceneLook {
+            sky: Some(SkyAtmosphere {
+                aerosols: 3.,
                 ..Default::default()
-            },
-            1.,
-        );
-        let lux = Vec3::splat(110_000.);
-        let noon = env.baseline(Vec3::Y, lux);
-        let ([w, h], pixels) = noon.sky.clone().unwrap();
-        let zenith = pixels[(w / 2) as usize];
-        assert!(zenith[2] > zenith[0] * 1.5, "{zenith:?}");
-        let sunset = env.baseline(Vec3::new(1., 0.03, 0.).normalize(), lux);
-        let (_, pixels) = sunset.sky.unwrap();
-        // Horizon texel facing the sun (+X is u = 0.5).
-        let horizon = pixels[((h / 2 - 1) * w + w / 2) as usize];
-        assert!(horizon[0] > horizon[2], "{horizon:?}");
-        // Auto exposure: a sunny day meters brighter (higher EV) than sunset.
-        assert!(noon.exposure < sunset.exposure);
-        let ev = ev100_from_exposure(noon.exposure);
-        assert!((13.0..17.0).contains(&ev), "{ev}");
+            }),
+            fog: Some(HeightFog {
+                density: 0.01,
+                ..Default::default()
+            }),
+            post: Some(PostProcess::default()),
+        };
+        let env = FrameEnvironment::resolve(&look, 1.);
+        let raster = env.raster();
+        raster.validate().unwrap();
+        assert_eq!(raster.sky.map(|s| s.aerosols), Some(3.));
+        assert_eq!(raster.fog.map(|f| f.extinction), Some(0.01));
+        assert_eq!(raster.auto_exposure.is_some(), env.ev100.is_none());
+        let legacy = FrameEnvironment::resolve(&SceneLook::default(), 0.0015);
+        let raster = legacy.raster();
+        assert!(raster.sky.is_none() && raster.fog.is_none() && raster.auto_exposure.is_none());
+        assert!((legacy.manual_exposure(1.) - 0.0015).abs() < 1e-7);
     }
 }

@@ -43,7 +43,8 @@ pub enum EditEvent {
         /// Selection within the preedit.
         selection: Range<usize>,
     },
-    /// Commit composition, replacing the saved selection in one undo step.
+    /// Commit composition, or insert ordinary OS text at the selection when no
+    /// composition is active. Either path produces one undo step.
     ImeCommit(String),
     /// Cancel without altering committed text.
     ImeCancel,
@@ -183,10 +184,7 @@ impl TextInput {
                 self.preedit_selection = selection;
             }
             EditEvent::ImeCommit(text) => {
-                let r = self
-                    .composition
-                    .clone()
-                    .ok_or("ARA4031: commit without active composition")?;
+                let r = self.composition.clone().unwrap_or_else(|| self.selection());
                 self.replace(r, &text);
             }
             EditEvent::ImeCancel => self.cancel(),

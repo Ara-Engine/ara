@@ -77,6 +77,11 @@ impl GeometryGpu {
         self.ranges.get(geometry).copied()
     }
 
+    /// Triangle-list draw size for a geometry-table LOD entry.
+    pub fn index_count(&self, entry: u32) -> Option<u32> {
+        self.lod_data.get(entry as usize).map(|lod| lod.index_count)
+    }
+
     /// BLAS for a geometry-table entry; absent on the raster path.
     pub fn blas(&self, entry: u32) -> Option<AccelerationStructure> {
         self.structures.get(entry as usize).copied()

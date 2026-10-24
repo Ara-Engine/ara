@@ -309,23 +309,43 @@ impl FidelityView {
                 dispatch,
                 specular,
             )?;
-            guides.extend([
+            // Spatial reuse and visibility resolve one reservoir per 2x2 grid block;
+            // the shade pass lights every pixel from the four nearest blocks.
+            let mut spatial = guides.to_vec();
+            spatial.extend([
                 (r[2], Access::ShaderRead),
                 (r[5], Access::ShaderRead),
                 (r[slot], Access::Storage),
                 (r[3 + slot], Access::Storage),
-                (ids[RAW], Access::Storage),
-                (ids[DIRECT], Access::Storage),
-                (ids[SPEC_RAW], Access::Storage),
             ]);
             add(
-                "ReSTIR.Spatial.Visibility.Shade",
+                "ReSTIR.Spatial.Visibility",
                 if self.atmosphere.is_some() {
                     "reservoir_spatial_atmosphere"
                 } else if self.scene.has_layers {
                     "reservoir_spatial_layers"
                 } else {
                     "reservoir_spatial"
+                },
+                0,
+                [render[0].div_ceil(16), render[1].div_ceil(16), 1],
+                spatial,
+            )?;
+            guides.extend([
+                (r[slot], Access::ShaderRead),
+                (r[3 + slot], Access::ShaderRead),
+                (ids[RAW], Access::Storage),
+                (ids[DIRECT], Access::Storage),
+                (ids[SPEC_RAW], Access::Storage),
+            ]);
+            add(
+                "ReSTIR.Shade",
+                if self.atmosphere.is_some() {
+                    "reservoir_shade_atmosphere"
+                } else if self.scene.has_layers {
+                    "reservoir_shade_layers"
+                } else {
+                    "reservoir_shade"
                 },
                 0,
                 dispatch,
@@ -457,8 +477,10 @@ impl FidelityView {
             dispatch,
             temporal,
         )?;
-        for i in 0..if reference { 1 } else { 3 } {
-            let source = if i == 0 {
+        // Bounded reservoir budgets skip the finest wavelet; pass 1 reads history.
+        let first = usize::from(resampling && self.bounded_reservoirs);
+        for i in first..if reference { 1 } else { 3 } {
+            let source = if i == first {
                 HISTORY0 + slot
             } else if i == 1 {
                 FILTER0
@@ -482,7 +504,7 @@ impl FidelityView {
                 .map(|j| (ids[j], Access::ShaderRead)),
             );
             if resampling {
-                let source = if i == 0 {
+                let source = if i == first {
                     SPEC_HISTORY0 + slot
                 } else if i == 1 {
                     SPEC_FILTER0
@@ -512,15 +534,6 @@ impl FidelityView {
                 uses,
             )?;
         }
-        for (name, pass, groups, uses) in bloom_passes(
-            &BLOOM_NAMES,
-            render,
-            ids[FILTER0],
-            [ids[BLOOM0], ids[BLOOM1]],
-            exposure,
-        ) {
-            add(name, "bloom", pass, groups, uses)?;
-        }
         add(
             "Exposure.EV100.Meter.Adapt",
             "exposure",
@@ -531,79 +544,96 @@ impl FidelityView {
                 (exposure, Access::Storage),
             ],
         )?;
-        add(
-            "Post.Atmosphere.Lens.ToneMap.LUT",
-            "post",
-            0,
-            dispatch,
-            vec![
-                (ids[FILTER0], Access::ShaderRead),
-                (ids[BLOOM1], Access::ShaderRead),
-                (ids[DEPTH], Access::ShaderRead),
-                (ids[MOTION], Access::ShaderRead),
-                (ids[POST], Access::Storage),
-                (exposure, Access::ShaderRead),
-                (lut, Access::ShaderRead),
-            ]
-            .into_iter()
-            .chain(if self.atmosphere.is_some() {
+        // With deferred post, the feature composite's `post_process` produces the
+        // only output of this frame (see `set_deferred_post`).
+        if !self.deferred_post {
+            for (name, pass, groups, uses) in bloom_passes(
+                &BLOOM_NAMES,
+                render,
+                ids[FILTER0],
+                [ids[BLOOM0], ids[BLOOM1]],
+                exposure,
+            ) {
+                add(name, "bloom", pass, groups, uses)?;
+            }
+            add(
+                "Post.Atmosphere.Lens.ToneMap.LUT",
+                "post",
+                0,
+                dispatch,
                 vec![
-                    (ids[SKYVIEW], Access::ShaderRead),
-                    (ids[TRANSMITTANCE], Access::ShaderRead),
-                    (ids[FROXELS], Access::ShaderRead),
-                    (ids[WORLD0 + slot], Access::ShaderRead),
+                    (ids[FILTER0], Access::ShaderRead),
+                    (ids[BLOOM1], Access::ShaderRead),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (ids[MOTION], Access::ShaderRead),
+                    (ids[POST], Access::Storage),
+                    (exposure, Access::ShaderRead),
+                    (lut, Access::ShaderRead),
                 ]
-            } else {
-                vec![]
-            })
-            .collect(),
-        )?;
-        let fsr = u32::from(self.settings.upscaler == Upscaler::Fsr1 && render != display);
-        let display_groups = [display[0].div_ceil(8), display[1].div_ceil(8), 1];
-        let mut upscale = vec![
-            (ids[POST], Access::ShaderRead),
-            (ids[UPSCALED], Access::Storage),
-            (ids[DISPLAY_HISTORY0 + slot], Access::Storage),
-            (ids[MOTION], Access::ShaderRead),
-            (ids[WORLD0 + slot], Access::ShaderRead),
-            (ids[DEPTH], Access::ShaderRead),
-            (exposure, Access::ShaderRead),
-        ];
-        if !reset && fsr == 0 {
-            upscale.extend(
-                [DISPLAY_HISTORY0 + previous, WORLD0 + previous]
-                    .map(|i| (ids[i], Access::ShaderRead)),
-            );
+                .into_iter()
+                .chain(if self.atmosphere.is_some() {
+                    vec![
+                        (ids[SKYVIEW], Access::ShaderRead),
+                        (ids[TRANSMITTANCE], Access::ShaderRead),
+                        (ids[FROXELS], Access::ShaderRead),
+                        (ids[WORLD0 + slot], Access::ShaderRead),
+                    ]
+                } else {
+                    vec![]
+                })
+                .collect(),
+            )?;
+            let fsr = u32::from(self.settings.upscaler == Upscaler::Fsr1 && render != display);
+            let display_groups = [display[0].div_ceil(8), display[1].div_ceil(8), 1];
+            let mut upscale = vec![
+                (ids[POST], Access::ShaderRead),
+                (ids[UPSCALED], Access::Storage),
+                (ids[DISPLAY_HISTORY0 + slot], Access::Storage),
+                (ids[MOTION], Access::ShaderRead),
+                (ids[WORLD0 + slot], Access::ShaderRead),
+                (ids[DEPTH], Access::ShaderRead),
+                (exposure, Access::ShaderRead),
+            ];
+            if !reset && fsr == 0 {
+                upscale.extend(
+                    [DISPLAY_HISTORY0 + previous, WORLD0 + previous]
+                        .map(|i| (ids[i], Access::ShaderRead)),
+                );
+            }
+            add(
+                if fsr == 1 {
+                    "Upscale.FSR1.EASU"
+                } else {
+                    "Upscale.TAAU.Resolve"
+                },
+                "upscale",
+                fsr,
+                display_groups,
+                upscale,
+            )?;
+            add(
+                if fsr == 1 {
+                    "Upscale.FSR1.RCAS"
+                } else {
+                    "Output.SDR"
+                },
+                "sharpen",
+                fsr,
+                display_groups,
+                vec![
+                    (ids[UPSCALED], Access::ShaderRead),
+                    (ids[OUTPUT], Access::Storage),
+                ],
+            )?;
         }
-        add(
-            if fsr == 1 {
-                "Upscale.FSR1.EASU"
-            } else {
-                "Upscale.TAAU.Resolve"
-            },
-            "upscale",
-            fsr,
-            display_groups,
-            upscale,
-        )?;
-        add(
-            if fsr == 1 {
-                "Upscale.FSR1.RCAS"
-            } else {
-                "Output.SDR"
-            },
-            "sharpen",
-            fsr,
-            display_groups,
-            vec![
-                (ids[UPSCALED], Access::ShaderRead),
-                (ids[OUTPUT], Access::Storage),
-            ],
-        )?;
         let ready = graph.pass(
             "Viewport.Ready",
             Queue::Graphics,
-            [(ids[OUTPUT], Access::CopySource)],
+            [if self.deferred_post {
+                (ids[FILTER0], Access::ShaderRead)
+            } else {
+                (ids[OUTPUT], Access::CopySource)
+            }],
         );
         let compiled = graph.compile()?;
         let mut points = Vec::new();

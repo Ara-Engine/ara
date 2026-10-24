@@ -869,3 +869,187 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
             .is_err()
     );
 }
+
+/// The Camera menu offers the field of view (presets, the current one checked) and
+/// Align View to Selected Camera; the toolbar field takes a typed value.
+#[test]
+fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
+    use ara_editor::shell::commands::Target;
+    use ara_ui::input::InputEvent;
+    use ara_ui_text::EditEvent;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    shell.click("view-camera", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let rows = shell.open_menu_rows(&editor);
+    let ids: Vec<_> = rows.iter().map(|r| r.0.as_str()).take(4).collect();
+    assert_eq!(
+        ids,
+        [
+            "view.camera.perspective",
+            "view.camera.fov",
+            "view.camera.default",
+            "view.camera.align"
+        ]
+    );
+    assert_eq!(rows[1].1, "Field of View (50°)…");
+
+    shell
+        .run_command(&mut editor, "view.camera.fov", &Target::None)
+        .unwrap();
+    let presets: Vec<_> = shell
+        .open_menu_rows(&editor)
+        .into_iter()
+        .filter(|r| r.0 == "view.camera.fov.set")
+        .collect();
+    assert_eq!(presets.len(), 9);
+    let checked: Vec<_> = presets
+        .iter()
+        .filter(|r| r.2 == Some(true))
+        .map(|r| r.1.as_str())
+        .collect();
+    assert_eq!(checked, ["50°"]);
+    shell
+        .run_command(
+            &mut editor,
+            "view.camera.fov.set",
+            &Target::Text("46".into()),
+        )
+        .unwrap();
+    assert_eq!(editor.state.camera.fov_y_degrees, 46.);
+
+    // A custom value typed into the toolbar field.
+    shell.click("view-fov", &mut clipboard).unwrap();
+    shell
+        .event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)
+        .unwrap();
+    shell
+        .event(
+            InputEvent::Edit(EditEvent::Insert("47.5".into())),
+            &mut clipboard,
+        )
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.commit_fields(&mut editor).unwrap();
+    assert_eq!(editor.state.camera.fov_y_degrees, 47.5);
+    let field = shell.ui.find("view-fov").unwrap();
+    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5°");
+
+    // Align needs a Camera entity.
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let blocked = shell
+        .run_command(&mut editor, "view.camera.align", &Target::None)
+        .unwrap_err();
+    assert!(
+        blocked.to_string().contains("no Camera component"),
+        "{blocked}"
+    );
+}
+
+/// Build Current Profile: the default Windows profile is made by a command (the
+/// canonical export preset, runtime player, no machine paths, script modules found
+/// by the export), and a project with a C# module can build.
+#[test]
+fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let run = shell
+        .run_command(&mut editor, "build.run", &Target::None)
+        .unwrap_err();
+    assert!(run.to_string().contains("Build the project first"), "{run}");
+
+    shell
+        .run_command(&mut editor, "build.profile.create", &Target::None)
+        .unwrap();
+    let text = std::fs::read_to_string(project.0.join("presets/windows.export.json")).unwrap();
+    let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();
+    assert_eq!(preset.platform, ara_export::Platform::Windows);
+    assert_eq!(
+        preset.player_template,
+        ara_export::preset::PlayerTemplate::Runtime
+    );
+    assert!(
+        preset.templates.is_empty(),
+        "pinned at build time, not here"
+    );
+    assert!(preset.script_project.is_empty());
+    assert!(
+        shell
+            .run_command(&mut editor, "build.profile.create", &Target::None)
+            .is_err(),
+        "an existing profile is never overwritten"
+    );
+
+    std::fs::create_dir_all(project.0.join("scripts/Game")).unwrap();
+    std::fs::write(
+        project.0.join("scripts/Game/ara.module.toml"),
+        "name = \"Game\"\n",
+    )
+    .unwrap();
+    let commands = editor.action("editor.commands", json!({})).unwrap();
+    let current = commands["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "build.current")
+        .unwrap();
+    assert_eq!(current["enabled"], true, "{current}");
+}
+
+/// Rebuild cost by stage for UI-only changes (a toolbar toggle, a dock tab), the
+/// click-frame work `--verify-responsiveness` measures on Outpost. Prints averages;
+/// run with `--ignored --nocapture`.
+#[test]
+#[ignore = "timing measurement; run explicitly"]
+fn rebuild_cost_by_stage() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut measure = |label: &str, act: &mut dyn FnMut(&mut Shell, &mut Editor, usize)| {
+        for i in 0..10 {
+            act(&mut shell, &mut editor, i);
+        }
+        shell.take_stats();
+        let runs = 60;
+        let started = std::time::Instant::now();
+        for i in 0..runs {
+            act(&mut shell, &mut editor, i);
+        }
+        let total = started.elapsed().as_secs_f64() * 1000. / runs as f64;
+        let s = shell.take_stats();
+        let per = |v: f64| v / f64::from(s.rebuilds.max(1));
+        println!(
+            "{label}: {total:.2} ms/act, {} rebuilds; rebuild {:.2} = markup {:.2} + mount {:.2} (reconcile {:.2}, frame {:.2}, rows {:.2}); restyled {} paint {}",
+            s.rebuilds,
+            per(s.rebuild_ms),
+            per(s.rebuild_ms - s.mount_ms),
+            per(s.mount_ms),
+            per(s.reconcile_ms),
+            per(s.frame_ms),
+            per(s.rows_ms),
+            s.work.restyled / s.rebuilds.max(1) as usize,
+            s.work.paint_nodes / s.rebuilds.max(1) as usize,
+        );
+    };
+    measure("toolbar toggle", &mut |shell, editor, _| {
+        shell
+            .run_command(editor, "view.space", &Target::None)
+            .unwrap();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+    measure("dock tab", &mut |shell, editor, i| {
+        let panel = if i % 2 == 0 { "console" } else { "assets" };
+        editor
+            .action("editor.focus", json!({ "panel": panel }))
+            .unwrap();
+        editor.sync();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+}

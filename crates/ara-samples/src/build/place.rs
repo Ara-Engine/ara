@@ -4,7 +4,7 @@ use super::Ctx;
 use anyhow::{Context, Result};
 use glam::{Quat, Vec3};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 /// A model registered in the project: its `@path#id` reference and rest bounds.
 #[derive(Debug, Clone)]
@@ -271,9 +271,9 @@ pub struct Ground {
 
 impl Ground {
     /// Evaluates every tile of the project's terrain document at `path`.
-    pub fn load(ctx: &Ctx, path: &str) -> Result<Self> {
+    pub fn load(root: &Path, path: &str) -> Result<Self> {
         let schema = ara_runtime::schema(&[]).map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        let text = std::fs::read_to_string(ctx.root.join(path))?;
+        let text = std::fs::read_to_string(root.join(path))?;
         let read = ara_doc::read(&text, path, &schema, None);
         let doc = read.doc.context("terrain document did not parse")?;
         let terrain =

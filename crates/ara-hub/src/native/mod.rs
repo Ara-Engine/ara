@@ -23,7 +23,8 @@ use ara_platform::{Event, Present, Window};
 use ara_ui::input::InputEvent;
 use ara_ui_render::{atlas::TextMode, gpu::Renderer};
 use ara_ui_text::Clipboard;
-use input::{NativeInput, OsClipboard};
+use input::NativeInput;
+pub(crate) use input::{OsClipboard, deliver_edit};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -306,15 +307,16 @@ fn interactive(
                 Event::Key {
                     scancode, pressed, ..
                 } => {
-                    intents.extend(app.key(hub, scancode, pressed).map_err(err)?);
+                    if let Some(actions) = input::recover(app.key(hub, scancode, pressed)) {
+                        intents.extend(actions);
+                    }
                 }
                 Event::MouseMotion { position, .. } => {
-                    app.dispatch_pointer(
+                    let _ = input::recover(app.dispatch_pointer(
                         hub,
                         InputEvent::PointerMove(position.map(|v| v * scale)),
                         now_ms(),
-                    )
-                    .map_err(err)?;
+                    ));
                 }
                 Event::MouseButton { button: 1, pressed } => {
                     let at = app.pointer;
@@ -323,7 +325,7 @@ fn interactive(
                     } else {
                         InputEvent::PointerUp(at)
                     };
-                    app.dispatch_pointer(hub, event, now_ms()).map_err(err)?;
+                    let _ = input::recover(app.dispatch_pointer(hub, event, now_ms()));
                     // Clicking away from an inline rename saves it, as in Explorer.
                     if pressed
                         && hub.rename.is_some()
@@ -342,7 +344,7 @@ fn interactive(
                         position: app.pointer,
                         delta: [-delta[0] * 48., -delta[1] * 48.],
                     };
-                    app.dispatch_pointer(hub, event, now_ms()).map_err(err)?;
+                    let _ = input::recover(app.dispatch_pointer(hub, event, now_ms()));
                 }
             }
             intents.extend(app.actions());
@@ -353,7 +355,7 @@ fn interactive(
                 app.rebuild(hub, now_ms()).map_err(err)?;
             }
         }
-        host.input.pump(&mut app.ui, &mut app.input).map_err(err)?;
+        let _ = input::recover(host.input.pump(&mut app.ui, &mut app.input));
         intents.extend(
             host.input
                 .take_drops()
@@ -402,7 +404,7 @@ fn interactive(
                 Effect::Reveal(path) => os::reveal(&path),
                 Effect::Open(path) => os::open(&path),
                 Effect::Copy(text) => {
-                    let _ = OsClipboard.write(&text);
+                    let _ = input::recover(OsClipboard.write(&text));
                 }
             }
         }

@@ -5,6 +5,7 @@
 //!   `assets/third_party/`; `verify` checks without downloading;
 //! - `credits` regenerates `samples/THIRD_PARTY_ASSETS.md` from the lock;
 //! - `build` authors a project's levels through the `ara` CLI (see `build`).
+//! - `kits` writes only the generated, git-ignored kit files (release packaging).
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -94,6 +95,12 @@ enum Command {
         /// Project folder name.
         project: String,
     },
+    /// Write a project's generated, git-ignored kit files (`assets/kit/`) without
+    /// authoring any document. Needs fetched assets; projects without kits are a no-op.
+    Kits {
+        /// Project folder name.
+        project: String,
+    },
     /// Fidelity captures and GPU timings of one look (`<project>/look/<look>.look.json`).
     Capture {
         /// Project folder name.
@@ -112,6 +119,10 @@ enum Command {
         /// Path-traced reference samples per pixel for RMSE/FLIP scoring (0 skips).
         #[arg(long, default_value_t = 0)]
         reference: u32,
+        /// Capture Medium and above with the opt-in ray-traced renderer (D27:
+        /// every preset is raster by default).
+        #[arg(long)]
+        ray_tracing: bool,
     },
     /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
     Play {
@@ -256,6 +267,19 @@ fn main() -> Result<()> {
             }
             println!("built {project}");
         }
+        Command::Kits { project } => {
+            let lock = read_lock()?;
+            let root = samples.join(&project);
+            match project.as_str() {
+                "outpost" => build::outpost::generate(&root, &lock)?,
+                "showcase" => build::showcase::generate(&root, &lock)?,
+                _ => {
+                    println!("{project} has no generated kits");
+                    return Ok(());
+                }
+            }
+            println!("generated {project} kits");
+        }
         Command::Capture {
             project,
             look,
@@ -263,6 +287,7 @@ fn main() -> Result<()> {
             timing_frames,
             quality,
             reference,
+            ray_tracing,
         } => {
             use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
             let presets = if quality == "all" {
@@ -286,6 +311,7 @@ fn main() -> Result<()> {
                     timing_frames,
                     presets: &presets,
                     reference_samples: reference,
+                    ray_tracing,
                 },
             )?
         }

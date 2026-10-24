@@ -192,6 +192,32 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
                 Ok(())
             }),
         )?;
+        // Every shipped template opens in the installed editor (offscreen frames).
+        let mut templates = fs::read_dir(env.installed.join("templates"))?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        templates.sort();
+        for template in templates
+            .iter()
+            .filter(|path| path.join("ara.project.json").is_file())
+        {
+            let name = template
+                .file_name()
+                .context("template directory")?
+                .to_string_lossy();
+            let copy = env.directory.join("templates").join(name.as_ref());
+            step(
+                &format!("ara-editor opens template {name}"),
+                support::copy_tree(template, &copy).and_then(|()| {
+                    run(
+                        env.command(env.installed.join("ara-editor.exe"))
+                            .arg(&copy)
+                            .args(["--frames", "20"]),
+                        &env.directory.join(format!("template-{name}.log")),
+                    )
+                }),
+            )?;
+        }
         let hub = env.installed.join("ara-hub.exe");
         if hub.is_file() {
             step(
@@ -308,7 +334,7 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
     fs::write(
         dist.join("SMOKE_RESULTS.txt"),
         format!(
-            "Ara {version}: PASS\nEvidence: {}\nSilent SFX install; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled to keep the real user's PATH and Start menu unchanged.\n",
+            "Ara {version}: PASS\nEvidence: {}\nSilent SFX install; version; doctor without VULKAN_SDK; init; headless scene capture; native editor screenshot; every installed template opens in the editor (20 offscreen frames); global MCP project list; installed player 120 ticks; engine registration; uninstall.\nShell integration was disabled to keep the real user's PATH and Start menu unchanged.\n",
             env.directory.display()
         ),
     )?;

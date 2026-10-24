@@ -8,14 +8,16 @@
 //!   methods and MCP tools; the core methods are the `core` service.
 //! - Agent transactions apply as accepted; attribution, history and automatic
 //!   turn checkpoints remain available for undo.
-//! - Documents are always saved: debounced canonical flushes. External edits are
-//!   merged in and reported, never silently overwritten.
+//! - Documents are always saved: debounced canonical flushes, written (and watched
+//!   for external edits) on the host's file thread. External edits are merged in and
+//!   reported, never silently overwritten.
 //! - [`docs`] generates `llms.txt` and per-type pages from the registries.
 
 pub mod collab;
 mod core;
 pub mod diag;
 pub mod docs;
+mod file_io;
 mod files;
 pub mod gesture;
 mod host;

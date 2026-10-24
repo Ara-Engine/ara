@@ -15,6 +15,8 @@ impl Live {
         let textures = self.view.refine_native_textures(gpu)?;
         let camera = camera(frame)?;
         self.temporal = self.temporal.wrapping_add(1);
+        // Particle frames get their bloom/post/upscale from the composite below.
+        self.view.set_deferred_post(!frame.effects.is_empty());
         self.view.render(
             gpu,
             &FrameInput {
