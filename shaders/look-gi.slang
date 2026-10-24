@@ -56,3 +56,19 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     }
     GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
 }
+// Two probe lobes per half-resolution pixel (the full-resolution pixel 2p): rgb
+// irradiance facing the normal (w: camera distance) and facing the mirror direction
+// (w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost
+// of the eight-probe visibility search drops fourfold.
+[shader("compute")][numthreads(8,8,1)]
+void giGatherMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
+    int2 p=int2(tid.xy)*2;float4 world=pixel(f.gbuffer.w,p);float4 diffuse=float4(0,0,0,1e9),specular=0;
+    if(world.w>0){
+        float3 n=normalize(pixel(f.gbuffer.y,p).xyz),v=normalize(f.camera.xyz-world.xyz);float coverage=giCoverage(l,world.xyz);
+        if(coverage>0){float3 a,b;giLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),giBias(l,n,v),a,b);diffuse.rgb=a;specular=float4(b,coverage);}
+        diffuse.w=length(world.xyz-f.camera.xyz);
+    }
+    images[NonUniformResourceIndex(l.giGather.z)][tid.xy]=diffuse;
+    images[NonUniformResourceIndex(l.giGather.w)][tid.xy]=specular;
+}

@@ -107,6 +107,10 @@ pub struct Presenter {
     probe_gi: Option<gi::Acquisition>,
     /// Renderer selection (`set_render_options`).
     options: ara_render_fidelity::presets::RenderOptions,
+    /// The content's authored environment map (HDRI), replacing the sky gradient.
+    environment: Option<fidelity::EnvironmentMap>,
+    /// Host look override (`set_look_override`), replacing the frame's authored look.
+    look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -190,6 +194,8 @@ impl Presenter {
             // Hosts keep the ray-traced tiers until the D27 cut-over lands with
             // native raster geometry (raster everywhere by default).
             options: ara_render_fidelity::presets::RenderOptions { ray_tracing: true },
+            environment: None,
+            look_override: None,
         }
     }
 
@@ -219,8 +225,28 @@ impl Presenter {
         Ok(())
     }
 
-    /// Uploads `frame`'s content (rebuilding only on structural change).
-    fn prepare_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
+    /// The look this frame renders with: the host override, or the frame's authored
+    /// sky, fog, exposure and display (shared with fidelity).
+    fn frame_look(
+        &self,
+        frame: &RenderFrame,
+    ) -> ara_render_fidelity::environment::FrameEnvironment {
+        self.look_override.unwrap_or_else(|| {
+            ara_render_fidelity::environment::FrameEnvironment::resolve(
+                &frame.look,
+                frame.environment.exposure,
+            )
+        })
+    }
+
+    /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
+    /// resolves `content` once (its environment map lights and backs the scene)
+    /// and returns it for probe GI acquisition.
+    fn prepare_baseline(
+        &mut self,
+        frame: &RenderFrame,
+        content: impl FnOnce() -> Result<fidelity::native::Content>,
+    ) -> Result<Option<fidelity::native::Content>> {
         let started = Instant::now();
         ensure!(!frame.draws.is_empty(), "nothing to draw");
         self.next_layout.clear();
@@ -240,7 +266,17 @@ impl Presenter {
             rebuilt: rebuild,
             ..Default::default()
         };
+        let mut resolved = None;
         if rebuild {
+            let content = content()?;
+            self.environment = content
+                .environment
+                .as_ref()
+                .map(|map| fidelity::EnvironmentMap {
+                    size: map.size,
+                    pixels: map.pixels.clone(),
+                });
+            resolved = Some(content);
             let scene = self.scene(frame, &tiles)?;
             match &mut self.renderer {
                 Some(renderer) => renderer.replace_scene(scene)?,
@@ -257,7 +293,7 @@ impl Presenter {
         } else {
             self.update(frame)?;
         }
-        let look = look(frame).raster();
+        let look = self.frame_look(frame).raster();
         let renderer = self
             .renderer
             .as_mut()
@@ -266,14 +302,16 @@ impl Presenter {
             renderer.set_look(look)?;
         }
         self.stats.prepare = started.elapsed();
-        Ok(())
+        Ok(resolved)
     }
 
     /// Renders the scene, landscape/foliage and particles to one GPU window image.
     fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
         self.draw_terrain = frame.terrain.is_none();
         let camera = camera(frame)?;
-        let exposure = look(frame).manual_exposure(frame.environment.exposure);
+        let exposure = self
+            .frame_look(frame)
+            .manual_exposure(frame.environment.exposure);
         let started = Instant::now();
         let renderer = self
             .renderer
@@ -335,7 +373,7 @@ impl Presenter {
     ) -> Result<Capture> {
         // Terrain comes from the landscape composite below.
         self.draw_terrain = false;
-        self.prepare_baseline(frame)?;
+        self.prepare_baseline(frame, || Ok(fidelity::native::Content::default()))?;
         self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
@@ -344,7 +382,9 @@ impl Presenter {
             // Renderer::capture resets the jitter sequence and history itself;
             // live TAA can remain enabled in a reproducible Low capture.
             deterministic: false,
-            exposure: look(frame).manual_exposure(frame.environment.exposure),
+            exposure: self
+                .frame_look(frame)
+                .manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -385,7 +425,9 @@ impl Presenter {
             size,
             mode: ViewMode::Lit,
             deterministic: true,
-            exposure: look(frame).manual_exposure(frame.environment.exposure),
+            exposure: self
+                .frame_look(frame)
+                .manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -489,7 +531,10 @@ impl Presenter {
             environment: Vec::new(),
             environment_size: [0; 2],
         };
-        let (size, sky) = sky(&frame.environment);
+        let (size, sky) = match &self.environment {
+            Some(map) => (map.size, map.pixels.clone()),
+            None => sky(&frame.environment),
+        };
         scene.environment_size = size;
         scene.environment = sky;
         // Model textures share the device's 128-entry sampled-image heap with the
@@ -747,14 +792,6 @@ fn bytes(light: &scene::Light) -> [u32; 16] {
         out[i] = v.to_bits();
     }
     out
-}
-
-/// The frame's authored look (sky, fog, exposure and display), shared with fidelity.
-fn look(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
-    ara_render_fidelity::environment::FrameEnvironment::resolve(
-        &frame.look,
-        frame.environment.exposure,
-    )
 }
 
 /// The frame's sun, or a dim default so the renderer always has a directional light.

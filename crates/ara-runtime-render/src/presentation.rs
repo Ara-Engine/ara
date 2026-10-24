@@ -71,6 +71,12 @@ impl Presenter {
         self.choice = quality;
     }
 
+    /// Replaces the frame's authored look on the raster path (look development and
+    /// scoring at a fixed exposure); `None` returns to the authored look.
+    pub fn set_look_override(&mut self, look: Option<FrameEnvironment>) {
+        self.look_override = look;
+    }
+
     /// Renderer selection: raster everywhere, or the opt-in ray-traced tiers.
     pub fn set_render_options(&mut self, options: RenderOptions) {
         self.options = options;
@@ -185,11 +191,11 @@ impl Presenter {
                 if *renderer.quality() != raster.quality {
                     renderer.set_quality(raster.quality)?;
                 }
-                self.prepare_baseline(frame)?;
+                let content = self.prepare_baseline(frame, resolve)?;
                 let renderer = self.renderer.as_mut().context("baseline renderer")?;
                 if let Some(gi) = &mut self.probe_gi {
                     // New content: drop stale probes and acquire in the background.
-                    if self.stats.rebuilt {
+                    if let Some(content) = content {
                         let key = self.layout.iter().fold(FNV, |h, (a, b, c)| {
                             [a, b, c].iter().fold(h, |h, v| fnv(h, &v.to_le_bytes()))
                         });
@@ -201,7 +207,7 @@ impl Presenter {
                                 fnv(h, bytemuck::bytes_of(&d.world.to_cols_array()))
                             });
                         renderer.set_probe_surfaces(None)?;
-                        gi.request(key, frame, resolve)?;
+                        gi.request(key, frame, || Ok(content))?;
                     }
                     if let Some(surfaces) = gi.poll(false) {
                         renderer.set_probe_surfaces(Some(&surfaces))?;

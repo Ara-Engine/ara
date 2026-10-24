@@ -18,7 +18,9 @@ pub(crate) const BLOOM_DOWN: usize = 6;
 pub(crate) const BLOOM_UP: usize = 7;
 pub(crate) const AO_TRACE: usize = 8;
 pub(crate) const AO_DENOISED: usize = 9;
-const IMAGES: usize = 10;
+pub(crate) const GI_DIFFUSE: usize = 10;
+pub(crate) const GI_SPECULAR: usize = 11;
+const IMAGES: usize = 12;
 
 /// Fixed LUT extents; bloom atlases follow the render size.
 fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
@@ -29,7 +31,7 @@ fn extent(image: usize, size: [u32; 2]) -> [u32; 2] {
         FROXELS => [4096, 36],
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
-        AO_TRACE | AO_DENOISED => size.map(|v| v.div_ceil(2)),
+        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR => size.map(|v| v.div_ceil(2)),
         _ => [size[0], (size[1] / 2).max(1)],
     }
 }
@@ -47,6 +49,7 @@ pub(crate) struct Pipelines {
     pub gi_relight: Pipeline,
     pub ao_trace: Pipeline,
     pub ao_denoise: Pipeline,
+    pub gi_gather: Pipeline,
 }
 
 /// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
@@ -74,6 +77,8 @@ pub(crate) struct LookGpu {
     pub sky: Option<SkyKey>,
     /// Lit frames stop before temporal resolve and post (`Renderer::finish`).
     pub deferred: bool,
+    /// The renderer history slot a deferred frame left for `finish` to resolve into.
+    pub deferred_history: Option<usize>,
     /// Probe-volume GI, when the scene has acquired probe surfaces.
     pub gi: Option<GiGpu>,
 }
@@ -124,6 +129,7 @@ impl LookGpu {
             gi_relight: load("look_gi_relight")?,
             ao_trace: load("look_ao_trace")?,
             ao_denoise: load("look_ao_denoise")?,
+            gi_gather: load("look_gi_gather")?,
         };
         let frame = gpu.create_buffer(
             std::mem::size_of::<LookFrame>() as u64,
@@ -152,6 +158,7 @@ impl LookGpu {
             size,
             sky: None,
             deferred: false,
+            deferred_history: None,
             gi: None,
         })
     }
@@ -173,7 +180,14 @@ impl LookGpu {
         if size == self.size {
             return Ok(());
         }
-        for i in [BLOOM_DOWN, BLOOM_UP, AO_TRACE, AO_DENOISED] {
+        for i in [
+            BLOOM_DOWN,
+            BLOOM_UP,
+            AO_TRACE,
+            AO_DENOISED,
+            GI_DIFFUSE,
+            GI_SPECULAR,
+        ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
             }
@@ -199,6 +213,8 @@ impl LookGpu {
             look.bloom > 0.,
             self.quality.ambient_occlusion.is_some(),
             self.quality.ambient_occlusion.is_some(),
+            self.gi.is_some(),
+            self.gi.is_some(),
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
@@ -234,6 +250,16 @@ impl LookGpu {
             self.sampled[AO_DENOISED],
             self.storage[AO_TRACE],
             self.storage[AO_DENOISED],
+        ]
+    }
+
+    /// Probe gather rows: diffuse and specular (sampled), then (storage).
+    pub(crate) fn gather_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[GI_DIFFUSE],
+            self.sampled[GI_SPECULAR],
+            self.storage[GI_DIFFUSE],
+            self.storage[GI_SPECULAR],
         ]
     }
 
