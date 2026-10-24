@@ -80,18 +80,29 @@ impl Shell {
             && self.unsaved(editor);
         // The counts are the log's totals (each query returns one entry), not a scan of
         // fetched entries: a long session's log holds hundreds.
-        let mut total = |severity: &str| {
+        let mut total = |severity: &str, codes: Option<&[&str]>| {
+            let mut query = json!({"severity": severity, "group": false, "limit": 1});
+            if let Some(codes) = codes {
+                query["codes"] = json!(codes);
+            }
             editor
-                .action(
-                    "logs",
-                    json!({"severity": severity, "group": false, "limit": 1}),
-                )
+                .action("logs", query)
                 .ok()
                 .and_then(|logs| logs["total"].as_u64())
                 .unwrap_or(0)
         };
-        let errors = total("error");
-        let warnings = total("warning").saturating_sub(errors);
+        // Bounded runs leave out this machine's Vulkan loader and overlay layers.
+        let host: &[&str] = &["ARA_GPU_ENVIRONMENT"];
+        let mut count = |severity: &str| {
+            let all = total(severity, None);
+            if self.host_problems {
+                all
+            } else {
+                all.saturating_sub(total(severity, Some(host)))
+            }
+        };
+        let errors = count("error");
+        let warnings = count("warning").saturating_sub(errors);
         MenubarState {
             open: self.menu.as_ref().and_then(|m| m.bar()),
             mnemonics: self.mnemonics,

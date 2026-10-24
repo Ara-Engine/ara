@@ -87,6 +87,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
+    shell.host_problems = !options.offscreen();
     shell.offscreen = offscreen;
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);

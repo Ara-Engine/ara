@@ -1043,6 +1043,13 @@ fn inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The first asset scan arrives on its own thread; were it to land while Assets is
+    // hidden, Assets would rightly render the new files when it comes back.
+    let start = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let focus = |shell: &mut Shell, editor: &mut Editor, panel: &str| {
         editor
             .action("editor.focus", json!({ "panel": panel }))
