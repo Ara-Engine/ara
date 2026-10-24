@@ -68,7 +68,9 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
         {"cmd":"transform.lookAt","args":{"entity":"e_camera","point":[0.5,0,0.5]}},
         {"cmd":"entity.create","args":{"id":"e_lamp","name":"Selected lamp","components":{"Transform":{},
             "MeshRenderer":{"model":"@models/kit.gltf#as_kit","node":"LampA","emissiveFactor":[5000,0,0],
-                "emissiveMaterials":["Layered"]}}}}
+                "emissiveMaterials":["Layered"]}}}},
+        {"cmd":"physics.collider.fromModel","args":{"entity":"e_lamp","mode":"mesh"}},
+        {"cmd":"entity.create","args":{"id":"e_proxy","components":{"Transform":{"position":[4,0,0]},"RigidBody":{},"Collider":{}}}}
     ]}));
     agent.pool_ready();
     let world = agent.play(
@@ -78,6 +80,14 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
         .clone();
     let output = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests/model-authoring");
+    let ids = agent.play(
+        "read",
+        json!({"world":world,"paths":["e_lamp.PhysicsId.value","e_proxy.PhysicsId.value"]}),
+    )["values"]
+        .clone();
+    let lamp = ids["e_lamp.PhysicsId.value"].as_u64().unwrap();
+    let proxy = ids["e_proxy.PhysicsId.value"].as_u64().unwrap();
+    assert!(lamp > 0 && proxy > 0 && lamp != proxy, "{ids}");
     std::fs::create_dir_all(&output).unwrap();
     let red = capture(&mut agent, &world, &output, "red");
     patch(

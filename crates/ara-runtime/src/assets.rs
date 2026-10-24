@@ -129,3 +129,35 @@ pub fn asset_id(reference: &ara_schema::AssetRef) -> Result<&str> {
         .id
         .ok_or_else(|| RuntimeError(format!("reference {} has no asset ID", reference.0)))
 }
+
+pub(crate) fn model_references(
+    key: &str,
+    value: &serde_json::Value,
+    models: &mut BTreeSet<String>,
+) -> Result<()> {
+    let reference = if key.contains("MeshRenderer.model") || key.contains("Collider.asset") {
+        value.as_str()
+    } else if key.contains("MeshRenderer") {
+        value.get("model").and_then(serde_json::Value::as_str)
+    } else if key.contains("Collider")
+        && value
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|kind| matches!(kind, "modelConvex" | "modelMesh"))
+    {
+        value.get("asset").and_then(serde_json::Value::as_str)
+    } else {
+        None
+    };
+    if let Some(reference) = reference {
+        models.insert(asset_id(&ara_schema::AssetRef(reference.to_owned()))?.to_owned());
+    }
+    if key == "overrides"
+        && let Some(values) = value.as_object()
+    {
+        for (key, value) in values {
+            model_references(key, value, models)?;
+        }
+    }
+    Ok(())
+}
