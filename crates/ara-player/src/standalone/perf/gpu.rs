@@ -14,10 +14,10 @@ impl Samples {
         let mut push = |name, value| self.values.entry(name).or_default().push(value);
         push("total_ms", stats.gpu_ms);
         push("view_passes_ms", view_pass_ms);
-        push("outside_view_ms", stats.gpu_ms - view_pass_ms);
         let Some(gpu) = stats.gpu else {
             return;
         };
+        push("outside_view_ms", stats.gpu_ms - view_pass_ms);
         for (name, value) in [
             ("scene_update_ms", gpu.scene_update_ms),
             ("texture_upload_ms", gpu.texture_upload_ms),
@@ -41,6 +41,7 @@ impl Samples {
             "effects_ms",
             "fidelity_ms",
             "publication_ms",
+            "outside_view_ms",
             "accounted_ms",
             "unaccounted_ms",
             "texture_uploaded_bytes",
@@ -131,7 +132,7 @@ mod tests {
         let report = samples.report();
         assert!(report["effects_ms"].is_null());
         assert!(report["unaccounted_ms"].is_null());
-        assert_eq!(report["outside_view_ms"]["p50"], 1.);
+        assert!(report["outside_view_ms"].is_null());
         assert_eq!(samples.coverage()["landscape"], "unavailable");
         assert_eq!(samples.coverage()["unavailable_component_frames"], 1);
     }

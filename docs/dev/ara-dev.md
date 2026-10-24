@@ -138,8 +138,9 @@ for each frame before quantiles; do not subtract or sum independently computed
 medians to attribute a budget. Signed residuals remain visible. Native terrain/
 foliage and VFX shared-post replay are included in `fidelity_ms`, as recorded in
 `gpu_coverage`. Low's incomplete component coverage is null, with unavailable
-frame counts; its existing presenter total does not measure all landscape/VFX
-work. These fields also appear in the terminal table and previous-run deltas.
+frame counts; outside-view/residual values are unavailable because its legacy
+presenter total does not cover the view or all landscape/VFX work. These fields
+also appear in the terminal table and previous-run deltas.
 
 `--keep-alive` holds the GPU lock while the player remains open. The control queue
 supports fresh measurement windows, preset swaps, shader reload, and stop. A plain
