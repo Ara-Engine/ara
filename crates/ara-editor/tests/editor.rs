@@ -73,6 +73,52 @@ fn x(editor: &Editor) -> f32 {
 }
 
 #[test]
+fn only_scene_prefab_and_import_edits_reach_the_scene_through_its_views() {
+    let project = Project::new();
+    write(
+        &project.0.join("levels/other.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0009","records":{}}),
+    );
+    let mut editor = project.open();
+    let scene = editor.state.doc.clone();
+    let revision = editor.host.store().revision();
+    editor
+        .apply(
+            vec![json!({"cmd":"transform.set","args":{"entities":["e_crate001"],"position":[4,0.6,0]}})],
+            "Move",
+            None,
+        )
+        .unwrap();
+    assert!(ara_editor::world::scene_only(
+        editor.host.store(),
+        revision,
+        &scene
+    ));
+    // The project's settings (like a material) are not in a scene view.
+    let revision = editor.host.store().revision();
+    let settings = editor
+        .host
+        .store()
+        .workspace()
+        .docs()
+        .find(|(_, d)| d.kind == "project")
+        .map(|(_, d)| d.id.to_string())
+        .unwrap();
+    editor
+        .apply_to(
+            &settings,
+            vec![json!({"cmd":"project.setMain","args":{"scene":"levels/other.scene"}})],
+            "Main scene",
+        )
+        .unwrap();
+    assert!(!ara_editor::world::scene_only(
+        editor.host.store(),
+        revision,
+        &scene
+    ));
+}
+
+#[test]
 fn native_hierarchy_inspector_gesture_and_author_undo_share_the_authority() {
     let project = Project::new();
     let mut editor = project.open();

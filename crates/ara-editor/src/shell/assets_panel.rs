@@ -415,3 +415,23 @@ fn matches_query(asset: &assets::Asset, query: &str) -> bool {
         }
     })
 }
+impl Shell {
+    /// Bind the asset list rows on screen: a folder opens, a file is an asset. Only
+    /// visible rows can be clicked, so rebuilds and scrolls bind just these.
+    pub(super) fn bind_asset_rows(&mut self) {
+        let Some(view) = &self.asset_view else {
+            return;
+        };
+        for key in view.visible_keys() {
+            let Some(asset) = self.asset_entries.get(&key) else {
+                continue;
+            };
+            let binding = if asset.kind == "folder" {
+                Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
+            } else {
+                Binding::Asset(asset.clone())
+            };
+            self.bindings.insert(view.identity(key), binding);
+        }
+    }
+}

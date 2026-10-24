@@ -84,18 +84,21 @@ impl Shell {
         out.push_str(&format!("<panel id='play-sep' class='toolbar-sep' /><button id='play-mode' class='ghost' style='height:22px;padding-left:6px;padding-right:4px' label='Play mode' description='Play mode, clients and start options' action='Dispatch'><text id='play-mode-label' class='caption' text='{}' />{}</button></panel><panel id='menubar-fill-2' class='fill' />",escape(&mode_label),icons::icon("play-mode","chevron-down")));
         self.bind_command("search-box", "edit.palette", Target::None);
         out.push_str(&format!("<button id='search-box' class='search-box' label='Search or run a command' description='Search commands, entities and assets' action='Dispatch'>{}<text id='search-box-text' class='muted' text='Search or run a command…' /><panel id='search-box-fill' class='fill' />{}</button>",icons::icon("search-box","search"),self.keycaps("search-box","edit.palette")));
-        // Status chips: each opens the panel it summarizes.
-        let logs = editor
-            .action("logs", json!({"limit": 300}))
-            .unwrap_or(Value::Null);
-        let (mut errors, mut warnings) = (0, 0);
-        for entry in logs["entries"].as_array().into_iter().flatten() {
-            match entry["diagnostic"]["severity"].as_str() {
-                Some("error") => errors += 1,
-                Some("warning") => warnings += 1,
-                _ => {}
-            }
-        }
+        // Status chips: each opens the panel it summarizes. The counts are the log's
+        // totals (each query returns one entry), not a scan of fetched entries: this
+        // runs on every rebuild, and a long session's log holds hundreds.
+        let mut total = |severity: &str| {
+            editor
+                .action(
+                    "logs",
+                    json!({"severity": severity, "group": false, "limit": 1}),
+                )
+                .ok()
+                .and_then(|logs| logs["total"].as_u64())
+                .unwrap_or(0)
+        };
+        let errors = total("error");
+        let warnings = total("warning").saturating_sub(errors);
         // D24: agents present (and whether one edited just now), not a review count.
         let agents = editor.state.presence.len();
         let active = editor.activity.agent_active(std::time::Instant::now());

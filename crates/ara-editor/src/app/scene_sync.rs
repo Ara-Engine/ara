@@ -63,6 +63,9 @@ pub(super) struct SceneSync {
     pose: Option<BTreeMap<String, glam::Mat4>>,
     /// The native Scene view shows a projected draft (`SceneView::set_preview_view`).
     projected: bool,
+    /// The store revision the Scene reflects: documents changed after it that a
+    /// view does not see (`world::scene_only`) need a full update.
+    revision: u64,
 }
 
 /// How long a Scene update took, by stage (the responsiveness probe reports them).
@@ -80,8 +83,8 @@ pub(super) struct Stages {
 
 impl SceneSync {
     /// The renderer holds a scene extracted at model publication `models` (read before
-    /// that extraction).
-    pub fn new(models: u64) -> Self {
+    /// that extraction) and store `revision`.
+    pub fn new(models: u64, revision: u64) -> Self {
         SceneSync {
             models,
             publication: None,
@@ -90,6 +93,7 @@ impl SceneSync {
             drafts: None,
             pose: None,
             projected: false,
+            revision,
         }
     }
 
@@ -141,9 +145,14 @@ impl SceneSync {
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> Stages {
-        if native(editor, renderer) {
+        // A material, the render settings or another asset document is not in the
+        // views: when one changed, only a full update shows it.
+        let scene_only =
+            crate::world::scene_only(editor.host.store(), self.revision, &editor.state.doc);
+        if native(editor, renderer) || !scene_only {
             return self.rebuild(new, editor, renderer, scene_view);
         }
+        self.revision = editor.host.store().revision();
         if self.stale.is_none()
             && let Some(patch) = old.patch_to(new, &editor.state.hidden)
         {
@@ -181,6 +190,7 @@ impl SceneSync {
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> Stages {
+        self.revision = editor.host.store().revision();
         if native(editor, renderer) {
             self.models = editor.models.revision();
             self.publication = None;
@@ -301,8 +311,9 @@ impl SceneSync {
         true
     }
 
-    /// The native preview: typed drafts (any field) as a projected view; gizmo drags
-    /// reach the native Scene through `editor.gesture` on their own.
+    /// The native preview: typed drafts (any field) as a projected view. A gizmo drag
+    /// reaches the native Scene through `editor.gesture`; each new pose (and the end
+    /// of the drag) only needs the Scene rendered again.
     fn project(
         &mut self,
         view: &DocumentView,
@@ -310,16 +321,23 @@ impl SceneSync {
         shell: &Shell,
         scene_view: &mut SceneView,
     ) -> bool {
-        self.pose = None;
+        if let Some(gesture) = &editor.gesture {
+            if self.pose.as_ref() == Some(&gesture.current) {
+                return false;
+            }
+            self.pose = Some(gesture.current.clone());
+            return true;
+        }
+        let dragged = self.pose.take().is_some();
         if self.drafts.as_ref() == Some(shell.drafts()) {
-            return false;
+            return dragged;
         }
         self.drafts = Some(shell.drafts().clone());
         let target = shell
             .draft_records(editor, view)
             .map(|records| view.with_records(records));
         if target.is_none() && !self.projected {
-            return false;
+            return dragged;
         }
         self.projected = target.is_some();
         scene_view.set_preview_view(target);

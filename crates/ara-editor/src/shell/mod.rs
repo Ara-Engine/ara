@@ -652,6 +652,7 @@ impl Shell {
         // A kept part keeps its row pool: the rows follow their nodes and fit the
         // panel again; a recompiled part mounts a new pool. A hidden tab's pool waits,
         // as it is, for the tab to show again.
+        let (mut bind_hierarchy, mut bind_assets) = (false, false);
         if let Some(index) = ui.find("hierarchy-rows") {
             let kept = self.hierarchy_surface == surface
                 && self.hierarchy_view.as_mut().is_some_and(|v| v.remap(ui));
@@ -676,16 +677,7 @@ impl Shell {
                     )?),
                 };
                 view.scroll(ui, &self.hierarchy, self.hierarchy_offset, height)?;
-                for (id, entity) in &self.hierarchy_entities {
-                    self.bindings.insert(
-                        view.identity(*id),
-                        if self.hierarchy_ghosts.contains(id) {
-                            Binding::Protocol("editor.focus", json!({"panel":"agents"}))
-                        } else {
-                            Binding::Select(entity.clone())
-                        },
-                    );
-                }
+                bind_hierarchy = true;
                 self.hierarchy_surface = surface.clone();
             }
         } else if self.hierarchy_surface == surface {
@@ -715,20 +707,17 @@ impl Shell {
                     )?),
                 };
                 view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
-                for (key, asset) in &self.asset_entries {
-                    self.bindings.insert(
-                        view.identity(*key),
-                        if asset.kind == "folder" {
-                            Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
-                        } else {
-                            Binding::Asset(asset.clone())
-                        },
-                    );
-                }
+                bind_assets = true;
                 self.asset_surface = surface;
             }
         } else if self.asset_surface == surface {
             self.asset_view = None;
+        }
+        if bind_hierarchy {
+            self.bind_hierarchy_rows();
+        }
+        if bind_assets {
+            self.bind_asset_rows();
         }
         // Row decorations set attributes only; the caller's frame lays out and paints
         // once (no geometry is read until then, apart from pre-existing nodes).
@@ -781,7 +770,12 @@ impl Shell {
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");
-        self.menubar(editor, &mut markup);
+        // The menubar and status bar are parts too: their frequent changes (the play
+        // state, the focused panel's hint) update in place instead of the skeleton.
+        let mut menubar = String::new();
+        self.menubar(editor, &mut menubar);
+        markup.push_str("<panel id='menubar' />");
+        self.parts.push(("menubar".into(), menubar));
         if editor.state.playing.is_some() {
             markup.push_str("<panel id='play-line' class='play-line' />");
         }
@@ -805,7 +799,10 @@ impl Shell {
         {
             self.node_palette(editor, &mut markup, &doc)?;
         }
-        self.statusbar(editor, &mut markup);
+        let mut statusbar = String::new();
+        self.statusbar(editor, &mut statusbar);
+        markup.push_str("<panel id='statusbar' />");
+        self.parts.push(("statusbar".into(), statusbar));
         self.overlays(editor, &mut markup)?;
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
