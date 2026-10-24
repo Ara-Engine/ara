@@ -60,3 +60,16 @@ Causes:
 
 Fixes:
 - Switch the Scene view to Lit · Raster (View > View Mode) and check `ara doctor` for GPU driver problems.
+
+## ARA4506 editor::MISSING_SOURCE: Scene asset file missing
+owner: ara-editor
+
+A scene references a model file that is not in the project. The editor opens anyway and the entity draws a placeholder box; Play shows the same placeholder (`ARA7310`).
+
+Causes:
+- The file was deleted, moved or renamed outside the editor.
+- The project was copied or installed without its asset folders.
+
+Fixes:
+- Restore the file at the named path (or reimport it), then the model appears.
+- Point the entity's MeshRenderer.model at an existing asset, or remove the entity.

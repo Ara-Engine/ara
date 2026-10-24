@@ -678,7 +678,9 @@ impl Navigation {
             let mut layout =
                 DockLayout::new(default_layout()).map_err(|e| anyhow::anyhow!(e.to_string()))?;
             // A layout from an older editor that fails validation falls back to the default.
-            if layout.restore(&std::fs::read_to_string(path)?).is_ok() {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+            if layout.restore(&text).is_ok() {
                 state.set_dock(&layout);
             }
         }

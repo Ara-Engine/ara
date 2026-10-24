@@ -71,6 +71,8 @@ pub struct Editor {
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
     pub(crate) game_size: [u32; 2],
+    /// Missing asset sources already reported (`report_missing_sources`).
+    missing_reported: BTreeSet<String>,
 }
 impl Editor {
     /// Open the project with in-memory preferences (nothing is written outside it).
@@ -210,6 +212,7 @@ impl Editor {
             play_surfaces,
             play_world: None,
             game_size: [1280, 720],
+            missing_reported: BTreeSet::new(),
         };
         // A scene seen for the first time is framed, like `editor.scene.open` does.
         if editor.state.camera == crate::state::Camera::default()
@@ -395,6 +398,22 @@ impl Editor {
         if activity {
             self.review_revision += 1;
             self.panels_revision += 1;
+        }
+    }
+    /// Report each model source the open scene references but the disk lacks, once
+    /// per path (Problems names it; the entity draws a placeholder).
+    pub fn report_missing_sources(&mut self, view: &DocumentView) {
+        let root = self.host.root().to_owned();
+        for (path, entity) in view.missing_sources(&root) {
+            if self.missing_reported.insert(path.clone()) {
+                self.report(
+                    "missing",
+                    &format!(
+                        "`{path}` is missing; {entity} draws a placeholder. Restore the file or fix the reference"
+                    ),
+                    Some(&format!("asset:@{path}")),
+                );
+            }
         }
     }
     /// Read-only current edit-world adapter.

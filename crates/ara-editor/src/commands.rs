@@ -277,9 +277,46 @@ impl Command for InstantiateMesh {
     }
 }
 /// Resolve a source path under the project; traversal and symlinks may not escape it.
+/// The project file `relative` names, which must stay inside the project. A missing
+/// file still resolves to where it belongs (callers draw placeholders and report it,
+/// `DocumentView::missing_sources`); every error names the path.
 pub(crate) fn project_path(root: &Path, relative: &str) -> anyhow::Result<PathBuf> {
-    let path = std::fs::canonicalize(root.join(relative))?;
-    let root = std::fs::canonicalize(root)?;
-    anyhow::ensure!(path.starts_with(root), "asset source escapes the project");
-    Ok(path)
+    use anyhow::Context;
+    let joined = root.join(relative);
+    match std::fs::canonicalize(&joined) {
+        Ok(path) => {
+            let root = std::fs::canonicalize(root)
+                .with_context(|| format!("project folder {}", root.display()))?;
+            anyhow::ensure!(
+                path.starts_with(root),
+                "asset source `{relative}` escapes the project"
+            );
+            Ok(path)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::ensure!(
+                Path::new(relative)
+                    .components()
+                    .all(|c| matches!(c, std::path::Component::Normal(_))),
+                "asset source `{relative}` escapes the project"
+            );
+            Ok(joined)
+        }
+        Err(error) => Err(anyhow::Error::new(error)
+            .context(format!("asset source `{relative}` ({})", joined.display()))),
+    }
+}
+
+#[cfg(test)]
+mod project_path_tests {
+    use super::project_path;
+    #[test]
+    fn missing_files_resolve_inside_the_project_and_errors_name_the_path() {
+        let root = std::env::temp_dir();
+        let missing = project_path(&root, "assets/kit/no-such-model.gltf")
+            .expect("a missing file still has its place in the project");
+        assert!(missing.ends_with("assets/kit/no-such-model.gltf"));
+        let escape = project_path(&root, "../outside.gltf").expect_err("escapes");
+        assert!(escape.to_string().contains("`../outside.gltf`"), "{escape}");
+    }
 }

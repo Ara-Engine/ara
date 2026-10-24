@@ -85,6 +85,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     }
     let mut shell = Shell::new(&mut editor, logical)?;
     let mut view = editor.view()?;
+    editor.report_missing_sources(&view);
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
         x: 0.,
         y: 0.,
@@ -432,6 +433,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_revision = editor.host.store().revision();
                 let at = Instant::now();
                 view = editor.view()?;
+                editor.report_missing_sources(&view);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
                 let at = Instant::now();
                 let scene =
