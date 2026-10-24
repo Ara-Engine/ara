@@ -178,6 +178,10 @@ impl Shell {
                             ara_doc::Op::Create { id, .. } => format!("+ {id}"),
                             ara_doc::Op::Delete { id, .. } => format!("− {id}"),
                             ara_doc::Op::Move { id, parent, .. } => format!("{id} -> {parent:?}"),
+                            ara_doc::Op::Document { path, kind, .. } => match kind {
+                                Some(kind) => format!("+ {path} ({kind})"),
+                                None => format!("− {path}"),
+                            },
                         };
                         let class = match op {
                             ara_doc::Op::Create { .. } => "chip-success",

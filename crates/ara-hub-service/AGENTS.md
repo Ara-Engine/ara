@@ -13,7 +13,14 @@ directory, enforced by an OS file lock; projects run in separate processes.
   `~/Library/Application Support/Ara` on macOS, `$XDG_CONFIG_HOME/ara` or
   `~/.config/ara` elsewhere.
 - `TemplateSource { list, instantiate }`; default `DirectoryTemplates` lists
-  built-in `blank` plus child directories containing `ara.project.json`.
+  built-in `blank` plus child directories containing `ara.project.json`. Names and
+  `description` come from that marker; the preview is `thumbnail.png`, else
+  `evidence/<main-scene>-player.png`. An `assets.lock.json` beside the templates
+  (the samples lock) sets `setup {message,command}` while pinned files under
+  `assets/third_party/` are missing; `hub.create` then fails with ARA1913.
+- When the engine runs from `<checkout>/target/<profile>/`, `Hub::open` layers the
+  checkout's `samples/` after the configured templates (installed builds ship them
+  in `<install>/templates`).
 - `Registry`, `ProjectEntry`, `EngineBuild` are durable data, never live handles.
 
 ## Wire contract for the Hub UI
@@ -28,8 +35,8 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.register` | `{path,name?,engineVersion?}` | Project card; register an existing absolute directory without copying it |
 | `hub.update` | `{project,name?,thumbnail?,engineVersion?} (thumbnail:null clears)` | Updated card; rename, preview image, version picker; close before changing engine pin |
 | `hub.remove` | `{project}` | `{removed:id}`; unregister only, preserving files |
-| `hub.templates` | `{}` | `{templates:[{id,name,thumbnail}]}`; template tiles in Create |
-| `hub.create` | `{template,name,path,engineVersion?}` | New registered project card; path must be absolute and not exist |
+| `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?}]}`; template tiles in Create |
+| `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision}` |
@@ -53,7 +60,7 @@ Render: project cards (name, thumbnail fallback, recent time, path, pinned engin
 open/headless/editor badge), Create (template/name/destination/version), Open and
 Open Headless, Close, Rename, Remove from list, installed engines, agent/editor
 activity. Errors are standard RpcError diagnostics: show message and runnable
-fixes. No new Hub UI is implemented here.
+fixes. The native UI is `crates/ara-hub`.
 
 `hub.resolve {project}` returns a card. `hub.catalog {project?}` returns the running project catalog or the core method
 catalog without opening any project. `hub.call {project,method,params}` opens a
@@ -75,7 +82,8 @@ routes; clients reconnect. There is no second editor authority for one project.
 Process startup errors point to `.ara/hub-process.log`; Hub startup to
 `hub-start.log`. Daemons start without a console window on Windows; Hub auto-start uses
 CreateProcessW without handle inheritance to preserve captured CLI/MCP EOF.
-Templates must not contain symlinks; `.ara`, `.git`, and `target` are skipped.
+A project's root `thumbnail.png` becomes its card preview on register; `hub.create`
+copies the template's preview there. Templates must not contain symlinks; `.ara`, `.git`, `target` and `evidence` are skipped.
 A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation

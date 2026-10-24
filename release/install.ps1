@@ -44,8 +44,14 @@ if (-not $NoSystemIntegration) {
     $shell = New-Object -ComObject WScript.Shell
     foreach ($app in @('Hub','Editor')) {
         $link = $shell.CreateShortcut((Join-Path $shortcutDirectory ("Ara $app.lnk")))
-        $link.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $source ('launch-' + $app.ToLowerInvariant() + '.ps1')) + '"'
+        $nativeHub = Join-Path $source 'ara-hub.exe'
+        if ($app -eq 'Hub' -and (Test-Path -LiteralPath $nativeHub)) {
+            # The native Hub is a GUI app: start it directly, without a console window.
+            $link.TargetPath = $nativeHub
+        } else {
+            $link.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $source ('launch-' + $app.ToLowerInvariant() + '.ps1')) + '"'
+        }
         $link.WorkingDirectory = $source
         $link.IconLocation = (Join-Path $source 'assets\brand\ara.ico') + ',0'
         $link.Save()
@@ -61,4 +67,4 @@ $uninstall = '@echo off' + "`r`n" + 'powershell.exe -NoProfile -ExecutionPolicy 
 [IO.File]::WriteAllText((Join-Path $source 'uninstall.cmd'), $uninstall, [Text.Encoding]::ASCII)
 Write-Host "Ara $($engine.version) installed at $source"
 Write-Host 'Connect agents once: ara hub install-mcp --client claude|codex'
-if (-not $Silent) { Write-Host 'Restart your terminal for PATH changes. Start Ara Editor from the Start menu.' }
+if (-not $Silent) { Write-Host 'Restart your terminal for PATH changes. Start Ara Hub from the Start menu.' }

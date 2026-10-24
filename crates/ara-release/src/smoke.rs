@@ -171,6 +171,28 @@ pub fn smoke(root: &Path, version: &str) -> Result<()> {
                 Ok(())
             }),
         )?;
+        let hub = env.installed.join("ara-hub.exe");
+        if hub.is_file() {
+            step(
+                "ara-hub native capture (every page, both themes)",
+                run(
+                    env.command(&hub)
+                        .arg("--capture")
+                        .arg(env.directory.join("hub"))
+                        .args(["--size", "1440x900", "--dpi", "1"]),
+                    &env.directory.join("hub-capture.log"),
+                )
+                .and_then(|()| {
+                    ensure!(
+                        env.directory
+                            .join("hub/1440x900/dark-projects.png")
+                            .is_file(),
+                        "installed Hub capture missing"
+                    );
+                    Ok(())
+                }),
+            )?;
+        }
         step(
             "Hub register project",
             run(
