@@ -57,7 +57,7 @@ fn non_blittable_components_are_reported() {
     assert!(csgen::blittable_components(&db).is_empty());
 }
 
-/// `Ara.Runtime/Generated` must match the generator for the built-in engine components.
+/// `Ara.Runtime/Generated` must match the columns the runtime actually binds.
 /// Run with `ARA_UPDATE_GENERATED=1` to rewrite it after an ABI or schema change.
 #[test]
 fn checked_in_bindings_are_fresh() {

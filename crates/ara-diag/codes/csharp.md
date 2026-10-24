@@ -389,11 +389,13 @@ A module image could not be loaded or prepared, or its registration failed. The 
 
 Causes:
 - Missing or incompatible assembly artifacts or a failure in module preparation.
+- A shipping manifest/image is missing, its image path escapes the export, or its linked module inventory differs from the image.
 - The generated registration entry point throws, or a module descriptor cannot be registered.
 
 Fixes:
 - Fix the load or registration error named in the message and regenerate or rebuild the affected module artifacts.
 - Ensure the module and its dependencies match the running engine and inspect accompanying schema or layout diagnostics.
+- Restore the export's complete `game/` directory or export again; shipping images do not load source folders or the development compiler.
 
 ## ARA0921 script::STALE_BINDINGS: Generated bindings are stale
 owner: ara-script, Ara.Runtime
@@ -403,10 +405,12 @@ The C# runtime's ABI version, layout hash or generated structure sizes do not ma
 Causes:
 - Generated C# bindings were not updated after an ABI or schema change.
 - The host and C# runtime were built from different engine revisions or stale artifacts.
+- Exported `scripts.json` has a different ABI version or engine layout hash than the player.
 
 Fixes:
 - Regenerate with `ARA_UPDATE_GENERATED=1 cargo test -p ara-script --test generated`, then rebuild the .NET artifacts and matching Rust host.
 - Restart the host with artifacts from the same revision; a default-context runtime assembly cannot be replaced by a module reload.
+- For a shipping export, rebuild gameplay scripts and the player with the same Ara SDK, then export again.
 
 ## ARA0922 script::RUNTIME_START: Script runtime could not start
 owner: ara-script, Ara.Runtime

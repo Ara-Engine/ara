@@ -15,6 +15,9 @@ reads the authored PlayScene/cooked generations from game.arapack, and opens a g
 window. `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
 files. The same World, input mapper, animation/physics and presenters run both modes.
+`--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
+repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
+NativeAOT metadata against the export folder; development host paths are rejected.
 Only pooled Play requires the owner token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 

@@ -212,18 +212,40 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             })
             .collect::<Result<BTreeMap<_, _>>>()
     })?;
-    let script_project = if p.script_project.is_empty() {
+    let runtime_scripts = p.player_template == crate::preset::PlayerTemplate::Runtime;
+    let shipping = if runtime_scripts {
+        d.stage("script-prepare", |d| {
+            crate::scripts::prepare(&project, &p.assembly, &d.work, &toolchain)
+        })?
+    } else {
+        None
+    };
+    if runtime_scripts && shipping.is_some() {
+        ensure!(
+            p.lane == ScriptLane::NativeAot,
+            "ARA0920: the runtime gameplay host requires NativeAOT; select nativeAot for this export"
+        );
+    }
+    let script_project = if let Some(shipping) = &shipping {
+        Some(shipping.project.clone())
+    } else if runtime_scripts {
         None
     } else {
         Some(tools::project_path(&project, &p.script_project)?)
     };
-    let crash_source = d.work.join("AraCrash.cs");
+    let crash_source = d.work.join("AraCrash.g.cs");
     std::fs::write(&crash_source, include_str!("managed-crash.cs"))?;
     let crash_targets = d.work.join("AraCrash.targets");
+    // Attach once in the linked entry image, rather than once per module.
+    let crash_condition = if runtime_scripts {
+        " Condition=\"'$(AraNativeEntry)' == 'true'\""
+    } else {
+        ""
+    };
     std::fs::write(
         &crash_targets,
         format!(
-            "<Project><ItemGroup><Compile Include=\"{}\" /></ItemGroup></Project>",
+            "<Project><ItemGroup{crash_condition}><Compile Include=\"{}\" /></ItemGroup></Project>",
             quick_xml::escape::escape(
                 crash_source
                     .to_str()
@@ -278,15 +300,17 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                     "-p:CustomBeforeMicrosoftCommonTargets={}",
                     crash_targets.display()
                 ))
-                .arg(format!(
+                .env("PATH", toolchain.path()?);
+            if !runtime_scripts {
+                cmd.arg(format!(
                     "-p:BaseIntermediateOutputPath={}/",
                     d.work.join("obj").join(arch).display()
                 ))
                 .arg(format!(
                     "-p:BaseOutputPath={}/",
                     d.work.join("bin").join(arch).display()
-                ))
-                .env("PATH", toolchain.path()?);
+                ));
+            }
             if p.lane == ScriptLane::NativeAot {
                 cmd.args(["-p:PublishAot=true", "-p:NativeLib=Shared"]);
             } else {
@@ -326,6 +350,18 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                 &d.log(&format!("script-{arch}")),
                 Duration::from_secs(300),
             )?;
+            if let Some(shipping) = &shipping {
+                let library = format!(
+                    "{}.{}",
+                    p.assembly,
+                    if p.platform == Platform::Windows {
+                        "dll"
+                    } else {
+                        "so"
+                    }
+                );
+                crate::scripts::write_manifest(&out, &library, &shipping.modules)?;
+            }
             scripts.insert(arch.to_owned(), out);
         }
         Ok(())
@@ -359,15 +395,22 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         let built = if p.player_template == PlayerTemplate::Runtime {
             let worker = ara_play_host::PlayConfig::for_project(&project).import_worker;
             ara_pack::build(
-                crate::runtime::inputs(&project, &worker, |progress| {
-                    d.emit(EventKind::Cooking {
-                        completed: progress.completed,
-                        total: progress.total,
-                        elapsed_ms: millis(progress.elapsed),
-                        stalled_ms: millis(progress.stalled),
-                    })
-                    .map_err(|error| error.to_string())
-                })?,
+                crate::runtime::inputs(
+                    &project,
+                    &worker,
+                    shipping
+                        .as_ref()
+                        .map(|_| ara_play::ScriptScene::shipping("game/scripts.json")),
+                    |progress| {
+                        d.emit(EventKind::Cooking {
+                            completed: progress.completed,
+                            total: progress.total,
+                            elapsed_ms: millis(progress.elapsed),
+                            stalled_ms: millis(progress.stalled),
+                        })
+                        .map_err(|error| error.to_string())
+                    },
+                )?,
                 cook,
                 p.chunk_size as usize,
                 encryption.as_ref(),
@@ -393,14 +436,18 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         if p.platform==Platform::Android {
             for (abi,_,_) in android::ABIS {
                 tools::copy(&templates[abi],&dist.join("lib").join(abi).join("libara_export_player.so"))?;
-                tools::copy(&scripts[abi].join(format!("{}.so",p.assembly)),&dist.join("lib").join(abi).join("libgame.so"))?;
+                if let Some(script) = scripts.get(abi) {
+                    tools::copy(&script.join(format!("{}.so",p.assembly)),&dist.join("lib").join(abi).join("libgame.so"))?;
+                    if let Some(shipping) = &shipping { crate::scripts::write_manifest(&dist.join("lib").join(abi), "libgame.so", &shipping.modules)?; }
+                }
             }
         } else {
             tools::copy(&templates["x64"],&dist.join(if p.platform==Platform::Windows {"ara-player.exe"} else {"ara-player"}))?;
-            if let Some(script_dir) = scripts.get("x64") { if p.lane==ScriptLane::NativeAot {
+            if !scripts.is_empty() && p.lane==ScriptLane::NativeAot {
                 let name=format!("{}.{}",p.assembly,if p.platform==Platform::Windows {"dll"} else {"so"});
-                tools::copy(&script_dir.join(&name),&dist.join("game").join(name))?;
-            } else { copy_scripts(script_dir,&dist.join("dotnet"),&p.assembly)?; } }
+                tools::copy(&scripts["x64"].join(&name),&dist.join("game").join(name))?;
+                if shipping.is_some() { tools::copy(&scripts["x64"].join("scripts.json"), &dist.join("game/scripts.json"))?; }
+            } else if !scripts.is_empty() { copy_scripts(&scripts["x64"],&dist.join("dotnet"),&p.assembly)?; }
         }
         for (arch,path) in &plugins {let name=path.file_name().context("plugin has no filename")?; tools::copy(path,&if p.platform==Platform::Android {dist.join("lib").join(arch).join(name)} else {dist.join("plugins").join(name)})?;}
         Ok(())
