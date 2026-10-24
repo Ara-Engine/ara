@@ -47,7 +47,7 @@ fn crackle() -> Vec<u8> {
 
 /// Writes the sound and its sidecar (typed `SidecarCommand`, canonical writer).
 fn add_sound(dir: &Path) {
-    let worker = support::import_worker(Path::new(env!("CARGO_BIN_EXE_ara-player")));
+    let worker = support::import_worker();
     let versions = ara_asset::ProcessWorker::new(worker).versions().unwrap();
     std::fs::create_dir_all(dir.join("sounds")).unwrap();
     std::fs::write(dir.join("sounds/fire.wav"), crackle()).unwrap();
