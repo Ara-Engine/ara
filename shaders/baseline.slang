@@ -78,15 +78,31 @@ void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent
     }
     buffers[NonUniformResourceIndex(f.lighting.z)].Store(offset*4,count);
 }
+float3 toYCoCg(float3 c){return float3(dot(c,float3(0.25,0.5,0.25)),dot(c,float3(0.5,0,-0.5)),dot(c,float3(-0.25,0.5,-0.25)));}
+float3 fromYCoCg(float3 c){return float3(c.x+c.y-c.z,c.x+c.z,c.x-c.y-c.z);}
+// History through a Catmull-Rom filter (five bilinear taps): reprojection keeps
+// detail that plain bilinear fetches would blur a little more every frame.
+float3 historyCatmullRom(Frame f,float2 uv){
+    float2 size=float2(f.extent.xy),position=uv*size,centre=floor(position-0.5)+0.5,t=position-centre;
+    float2 w0=t*(-0.5+t*(1-0.5*t)),w1=1+t*t*(-2.5+1.5*t),w2=t*(0.5+t*(2-1.5*t)),w3=t*t*(-0.5+0.5*t);
+    float2 w12=w1+w2,p0=(centre-1)/size,p3=(centre+2)/size,p12=(centre+w2/w12)/size;
+    float3 sum=historyTex(f.post.y,float2(p12.x,p0.y)).rgb*(w12.x*w0.y)+historyTex(f.post.y,float2(p0.x,p12.y)).rgb*(w0.x*w12.y)
+        +historyTex(f.post.y,p12).rgb*(w12.x*w12.y)+historyTex(f.post.y,float2(p3.x,p12.y)).rgb*(w3.x*w12.y)
+        +historyTex(f.post.y,float2(p12.x,p3.y)).rgb*(w12.x*w3.y);
+    return max(sum/(w12.x*w0.y+w0.x*w12.y+w12.x*w12.y+w3.x*w12.y+w12.x*w3.y),0);
+}
 // Temporal antialiasing of the lit HDR in `root.materials` (the renderer's HDR, or
 // a composite handed to `Renderer::finish`) into the history image `f.post.z`.
 // History reprojects with the native motion texture (Frame.look.w: unjittered
-// current-minus-previous UV) when present, otherwise with the static world position,
-// and is clamped to the current 3x3 neighbourhood.
+// current-minus-previous UV) when present, otherwise with the static world position;
+// it is clipped to the current 3x3 neighbourhood's YCoCg mean and variance and
+// blended with exposed-luminance weights (no flicker from bright subpixel detail).
+// History is RGBA16F, pre-exposed (look.slangh exposureState); w keeps the depth.
 [shader("compute")]
 [numthreads(8,8,1)]
 void taaMain(uint3 t:SV_DispatchThreadID){
     Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);uint input=root.materials;
+    float4 state=exposureState(look(f));float exposure=exposureScale(f,state.x),previous=exposureScale(f,state.y);
     float3 current=pixel(input,p).rgb;float depth=pixel(f.extra.x,p).x;float3 result=current;
     if(f.temporal.x!=0 && f.temporal.y==0){
         float2 uv;bool valid;
@@ -98,12 +114,18 @@ void taaMain(uint3 t:SV_DispatchThreadID){
             valid=world.w>0 && previous.w>0 && all(uv>0)&&all(uv<1)&&abs(history.w-previous.z/previous.w)<0.002;
         }
         if(valid){
-            float3 low=current,high=current;
-            for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){float3 c=pixel(input,clamp(p+int2(x,y),int2(0),int2(f.extent.xy)-1)).rgb;low=min(low,c);high=max(high,c);}
-            result=lerp(current,clamp(historyTex(f.post.y,uv).rgb,low,high),0.9);
+            float3 mean=0,square=0;
+            for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){float3 c=toYCoCg(pixel(input,clamp(p+int2(x,y),int2(0),int2(f.extent.xy)-1)).rgb);mean+=c;square+=c*c;}
+            mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));
+            float3 history=toYCoCg(historyCatmullRom(f,uv)/previous),low=mean-1.25*sigma,high=mean+1.25*sigma;
+            // Clip towards the neighbourhood mean (not a per-channel clamp).
+            float3 delta=history-mean,extent=max(high-mean,1e-5);float3 scale=abs(delta)/extent;float m=max(scale.x,max(scale.y,scale.z));
+            history=fromYCoCg(m>1?mean+delta/m:history);
+            float wc=0.1/(1+luminance(current)*exposure),wh=0.9/(1+luminance(history)*exposure);
+            result=(current*wc+history*wh)/(wc+wh);
         }
     }
-    images[NonUniformResourceIndex(f.post.z)][p]=float4(result,depth);
+    images[NonUniformResourceIndex(f.post.z)][p]=float4(min(result*exposure,65000),depth);
 }
 float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
 [shader("compute")]

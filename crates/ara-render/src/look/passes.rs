@@ -181,6 +181,7 @@ impl LookGpu {
                     (history, Access::ShaderRead),
                     (ids.image(SSR_PYRAMID), Access::Storage),
                     (ids.frame, Access::ShaderRead),
+                    (ids.state, Access::ShaderRead),
                 ]
                 .into_iter()
                 .chain(reads.iter().copied()),
@@ -357,13 +358,15 @@ impl LookGpu {
     }
 
     /// Records one look dispatch. `input` is the sampled index of the scene HDR
-    /// (post passes); `size` is the render extent.
+    /// (post passes; the history for the reflection pyramid), `exposed` whether it is
+    /// the pre-exposed TAA history rather than linear HDR; `size` is the render extent.
     pub(crate) fn record(
         &self,
         recorder: &mut Recorder,
         pass: LookPass,
         frame_index: u32,
         input: u32,
+        exposed: bool,
         size: [u32; 2],
     ) {
         let p = &self.pipelines;
@@ -399,7 +402,7 @@ impl LookGpu {
         };
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
-            words: [frame_index, input, argument, 0, 0, 0, 0, 0],
+            words: [frame_index, input, argument, 0, 0, 0, 0, u32::from(exposed)],
         }));
         recorder.push(Command::Dispatch(dispatch));
     }

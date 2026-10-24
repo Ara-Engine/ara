@@ -243,23 +243,23 @@ mod tests {
     #[test]
     fn diffs_match_names_and_keep_absent_and_zero_baselines_honest() {
         let before = BTreeMap::from([
-            ("gpu.pass.p50".into(), 4.),
+            ("gpu_other.raster_ms.p50".into(), 4.),
             ("cpu".into(), 0.),
             ("removed".into(), 1.),
         ]);
         let after = BTreeMap::from([
-            ("gpu.pass.p50".into(), 3.),
+            ("gpu_other.raster_ms.p50".into(), 3.),
             ("cpu".into(), 1.),
             ("new".into(), 2.),
         ]);
         let diff = differences(&before, &after);
         assert_eq!(diff.len(), 2);
-        assert_eq!(diff["gpu.pass.p50"].change, -1.);
-        assert_eq!(diff["gpu.pass.p50"].percent, Some(-25.));
+        assert_eq!(diff["gpu_other.raster_ms.p50"].change, -1.);
+        assert_eq!(diff["gpu_other.raster_ms.p50"].percent, Some(-25.));
         assert_eq!(diff["cpu"].percent, None);
         let mut metrics = BTreeMap::new();
         numbers(
-            &serde_json::json!({"passes":{"ReSTIR.Trace":{"p50":3.}},"gpu_other":{"texture_upload_ms":{"p50":2.5},"landscape_ms":null},"samples":[1,2],"missing":null}),
+            &serde_json::json!({"passes":{"ReSTIR.Trace":{"p50":3.}},"gpu_other":{"raster_ms":{"p50":4.},"texture_upload_ms":{"p50":2.5},"landscape_ms":null},"samples":[1,2],"missing":null}),
             "",
             &mut metrics,
         );
@@ -267,6 +267,7 @@ mod tests {
             metrics,
             BTreeMap::from([
                 ("passes.ReSTIR.Trace.p50".into(), 3.),
+                ("gpu_other.raster_ms.p50".into(), 4.),
                 ("gpu_other.texture_upload_ms.p50".into(), 2.5),
             ])
         );

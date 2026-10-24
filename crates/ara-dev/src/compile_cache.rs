@@ -71,6 +71,9 @@ pub(crate) fn configure(command: &mut Command) {
 }
 
 pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<bool> {
+    if let Some(result) = crate::editor::cargo(root, args)? {
+        return Ok(result);
+    }
     let directories = crate::build_paths::Directories::from_env(root)?;
     let _lease = acquire(Some(Instant::now() + Duration::from_secs(2400)))?;
     let mut command = Command::new("cargo");

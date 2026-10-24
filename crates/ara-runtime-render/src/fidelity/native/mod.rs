@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 mod document;
 mod geometry;
-pub use document::document_frame;
+pub use document::{document_frame, document_frame_selected};
 mod material;
 mod pending;
 pub use pending::when_published;

@@ -146,7 +146,9 @@ impl LookGpu {
             true,
         )?;
         let frame_index = gpu.storage_buffer(frame)?.index;
-        let state = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, false)?;
+        // Zeroed on the host so the first frame's history readers have a producer.
+        let state = gpu.create_buffer(16, vk::BufferUsageFlags::STORAGE_BUFFER, true)?;
+        gpu.upload(state, &[0; 16])?;
         let state_index = gpu.storage_buffer(state)?.index;
         Ok(Self {
             look: Look::default(),
@@ -156,7 +158,7 @@ impl LookGpu {
             frame_index,
             state,
             state_index,
-            state_access: Access::Undefined,
+            state_access: Access::HostWrite,
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],
@@ -290,6 +292,15 @@ impl LookGpu {
         let rows = |v: &[u32; IMAGES]| [[v[0], v[1], v[2], v[3]], [v[4], v[5], v[6], v[7]]];
         // AO images use their own row (`ao_indices`).
         (rows(&self.sampled), rows(&self.storage))
+    }
+
+    /// Zeroes the exposure state so a capture converges exactly as from a fresh
+    /// view (history then pre-exposes by the frame's exposure argument). Call
+    /// only between completed frames.
+    pub(crate) fn reset_exposure(&mut self, gpu: &VulkanDevice) -> Result<()> {
+        gpu.upload(self.state, &[0; 16])?;
+        self.state_access = Access::HostWrite;
+        Ok(())
     }
 
     /// Imports the persistent resources at their recorded states.

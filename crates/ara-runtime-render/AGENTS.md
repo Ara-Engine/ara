@@ -35,6 +35,13 @@ device and per-view upload state; no simulation, window or process code.
   native captures read the same view as windows and embedded Game. Raster puts
   terrain/foliage in the G-buffer, then particles before shared temporal/post.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
+- Raster look: `set_render_options(RenderOptions)` (D27: raster by default; RT opt-in),
+  `set_look_override` (look development/scoring), `set_probe_gi(true)` +
+  `probe_gi_pending()` / `wait_probe_gi()`: probe GI acquired per content key on a
+  worker (one bake at a time, newest request queued, disk cache under the pipeline
+  cache). RT adapters bake with a temporary `VulkanDevice::new` + fidelity view
+  (`gi.rs`); others bake on the CPU (`gi_cpu.rs`: SAH BVH over coarsest LODs, map
+  means via `NativeResidency::mean_texel`). `ARA_PROBE_GI_CPU=1` forces the CPU bake.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy

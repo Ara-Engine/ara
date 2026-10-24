@@ -5,6 +5,7 @@ use ara_runtime::assets::AssetSource;
 use glam::Vec3;
 use std::collections::BTreeMap;
 use std::path::Path;
+mod patch;
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -199,6 +200,8 @@ pub(crate) struct FidelityContent {
     library: ara_runtime::animation::Library,
     materials: Option<(u64, u64)>,
     terrain: Option<(u64, ara_runtime::terrain::TerrainState)>,
+    /// Last drawn component values; a material patch deserializes changed rows only.
+    mesh_records: BTreeMap<String, serde_json::Value>,
 }
 impl FidelityContent {
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
@@ -209,6 +212,7 @@ impl FidelityContent {
             library: Default::default(),
             materials: None,
             terrain: None,
+            mesh_records: BTreeMap::new(),
         })
     }
     pub(crate) fn revision(&self) -> u64 {
@@ -321,6 +325,15 @@ impl FidelityContent {
                 ara_runtime::terrain::TerrainState(std::sync::Arc::clone(&terrain.data)),
             )
         });
+        self.mesh_records = view
+            .entities()
+            .iter()
+            .filter_map(|(id, row)| {
+                row.record
+                    .get("MeshRenderer")
+                    .map(|value| (id.to_owned(), value.to_owned()))
+            })
+            .collect();
         Ok(frame)
     }
     pub(crate) fn content(
