@@ -144,7 +144,6 @@ panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest 
 test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
 `shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
 Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
-Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a breadcrumb
-toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
-Swatches paint after layout, never raw colours. VFX: preview-only Hide/Isolate; timeline drives
-`asset_tools/vfx_stream.rs` in place. Imports use the shared `import.initialize`/`import.configure`.
+Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side column and
+status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
+are preview-only; its timeline drives `vfx_stream`. Imports use `import.initialize`/`import.configure`.

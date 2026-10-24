@@ -15,13 +15,10 @@ reads the authored PlayScene/cooked generations from game.arapack, and opens a g
 window. `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
 files. The same World, input mapper, animation/physics and presenters run both modes.
-`--offscreen --frames N` keeps that continuous render/present path hidden from
-creation. Perf mode (`--perf-output`) always implies it; `ara-dev perf` never opens
-a desktop window. GPU pass timestamps remain valid; reports label `hiddenWindow`
-and do not measure desktop compositor latency. `--headless` is a separate still
-capture path and cannot produce perf frame windows.
-Owner-mode window probes also honour `--offscreen`; `ARA_PLAY_OFFSCREEN=1` adds
-it to pooled windowed players, so entry-latency measurements stay hidden too.
+`--offscreen --frames N` keeps the continuous render/present path hidden (perf mode,
+`--perf-output`, implies it; reports label `hiddenWindow`, no compositor latency).
+`--headless` is the separate still-capture path. Owner-mode probes honour `--offscreen`;
+`ARA_PLAY_OFFSCREEN=1` adds it to pooled windowed players (hidden entry-latency runs).
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
@@ -31,21 +28,16 @@ exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 Build with `--features tracy` to record literal CPU zones across Play world build,
 extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
-`tests/entry_latency.rs` is an ignored real-project probe: set
-`ARA_PLAY_ENTRY_PROJECT`, `ARA_BENCH_PLAYER` to an optimized player and
-`CARGO_BIN_EXE_ara-import-worker` to its worker. It copies input under target,
-settles publication and reports three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1`
-selects windowed Play; default measures the shared-frame notice before editor display.
-`ARA_PLAY_ENTRY_BACKGROUND=1` measures the nonblocking start API;
-`ARA_PLAY_ENTRY_COLD=1` also skips copied caches and asset warm-up. Surface-attached
-pools prewarm a 64x64 Low presenter without probe GI before hello and reuse its
-logical device at embed creation; headless services without surfaces allocate no GPU.
+`tests/entry_latency.rs` (ignored real-project probe): set `ARA_PLAY_ENTRY_PROJECT`,
+`ARA_BENCH_PLAYER` (optimized player) and `CARGO_BIN_EXE_ara-import-worker`; it reports
+three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1` = windowed, `_BACKGROUND=1` = nonblocking
+start API, `_COLD=1` skips copied caches. Surface-attached pools prewarm a 64x64 Low
+presenter before hello and reuse its device at embed; surface-less services allocate no GPU.
 
 ## Modules
 
 - `packed.rs` and `standalone.rs`: immutable pack AssetSource and the exported entry;
   `ara.player.runtime/1` launches the authored world, never the conformance fixture.
-
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
   catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
   method dispatch.
