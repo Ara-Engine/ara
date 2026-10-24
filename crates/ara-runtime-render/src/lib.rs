@@ -315,7 +315,9 @@ impl Presenter {
             camera: camera(frame)?,
             size,
             mode,
-            deterministic: true,
+            // Renderer::capture resets the jitter sequence and history itself;
+            // live TAA can remain enabled in a reproducible Low capture.
+            deterministic: false,
             exposure: frame.environment.exposure,
             settle_frames: 4,
             tick: frame.tick,
