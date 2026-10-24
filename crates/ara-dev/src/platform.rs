@@ -48,6 +48,10 @@ pub(crate) fn release_executable_path(_target: &std::path::Path) -> Result<()> {
 pub(crate) fn gpu_command(command: &[std::ffi::OsString]) -> Result<bool> {
     let mut process = std::process::Command::new(&command[0]);
     process.args(&command[1..]);
+    let root = crate::git::text(std::path::Path::new("."), ["rev-parse", "--show-toplevel"])
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    crate::build_paths::Directories::from_env(&root)?.apply(&mut process);
     Ok(crate::process::run(&mut process, None)?.success())
 }
 #[cfg(windows)]

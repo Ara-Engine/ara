@@ -7,9 +7,11 @@ the checkout; no Python, CMake, service or extra build tool is required.
 On Windows, use `.\crates\ara-dev\run.ps1 check --no-compiler-cache --json` for the fast entry. It
 builds the small tool through `%LOCALAPPDATA%\ara\dev-build`, keeping bootstrap
 compilation out of engine Cargo locks. Final tool and engine executable names
-stay under the worktree's `target/`; hashed engine intermediates retain the
-configured `CARGO_BUILD_BUILD_DIR`, or the original Cargo target directory. The
-script restores the caller's environment afterwards. The ordinary `cargo run`
+default to the worktree's `target/`; explicit independent output directories remain
+supported. Both target and build directories inside another checkout's target are
+rejected, including nested caches and junctions. An unset build directory defaults
+to this worktree's target, overriding global Cargo configuration. The script
+restores the caller's environment afterwards. The ordinary `cargo run`
 entry remains supported.
 
 `check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
@@ -39,6 +41,13 @@ file matched no failures. The working tree stayed unchanged and no pending
 snapshots remained. The all-target workspace check also passed in 281.96 seconds.
 Jobs were 2 and tests ran serially throughout.
 
+After main integrated that implementation as `24a0ea8d`, this branch merged the
+current tip as `5979db15`. The default gate passed again in 14.60 seconds, selecting
+zero crates because only documentation remained different from main. The tracked
+Cargo configuration retains rust-lld together with both relative scratch-profile
+and crash-directory environment settings. This check did not rerun the 182
+harnesses reported above.
+
 A fresh renderer example build then captured every view mode through the real
 machine GPU queue on the RTX 4070 SUPER, with validation clean. The 640x360 lit
 image was visually inspected (material rows, glass, model, floor and shadows).
@@ -60,6 +69,8 @@ to sharing `CARGO_TARGET_DIR`: final executable names collide across branches.
 Shared intermediate caches still serialize compilation and can rebuild when
 branches use different linkers or feature sets. Cleanup inspects local target
 directories; an external shared cache needs its own explicit cleanup policy.
+Keep independent build directories outside every checkout's target directory:
+cleaning a parent target can remove a nested cache while its Cargo build is active.
 Keep source changes and rebuilds out of an in-progress test/doctest run using that
 cache: replacing its dependencies can invalidate already-built Rust metadata.
 
@@ -184,7 +195,13 @@ cargo run -p ara-dev -- clean-worktrees --yes
 ```
 
 Disk reports every mounted drive and returns failure below the warning threshold
-(default 20 GiB). Cleanup lists registered worktrees and recursively measures each
+(default 20 GiB). In a Rust checkout it also inspects effective Cargo target/build
+directories, including global configuration, and flags another checkout's target.
+Inspection uses read-only Cargo metadata with a ten-second deadline. `check` and
+`merge` reject explicit foreign outputs before building or changing merge state;
+wrapped GPU commands use the same output guard. Use the Windows entry script to
+keep the tool's bootstrap itself independent of global Cargo target settings.
+Cleanup lists registered worktrees and recursively measures each
 local target directory. Inspection is the default. Deletion requires `--yes`, a
 branch already merged into local main (`--base` selects another ref), no tracked
 or untracked changes, and no file/directory writes within six hours (`--hours`).

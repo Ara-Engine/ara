@@ -42,10 +42,12 @@ pub(crate) struct Logs {
     deadline: Option<Instant>,
     no_compiler_cache: bool,
     test_binaries: crate::binaries::Binaries,
+    cargo_directories: crate::build_paths::Directories,
 }
 
 impl Logs {
     pub(crate) fn new(root: &Path, no_compiler_cache: bool) -> Result<Self> {
+        let cargo_directories = crate::build_paths::Directories::from_env(root)?;
         let directory = root.join("target/ara-dev").join(format!(
             "run-{}-{}",
             std::process::id(),
@@ -60,6 +62,7 @@ impl Logs {
             deadline: None,
             no_compiler_cache,
             test_binaries: Default::default(),
+            cargo_directories,
         })
     }
 
@@ -119,6 +122,7 @@ impl Logs {
         eprintln!("{name}: cargo {} (log: {})", args.join(" "), log.display());
         let start = Instant::now();
         let mut command = Command::new("cargo");
+        self.cargo_directories.apply(&mut command);
         command
             .current_dir(root)
             .args(args)

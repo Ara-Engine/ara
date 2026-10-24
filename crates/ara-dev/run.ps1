@@ -14,13 +14,13 @@ if ($args.Count -gt 0 -and $args[0] -in @('check', 'merge') -and $args -contains
 }
 $env:CARGO_BUILD_JOBS = '2'
 try {
-    $metadataText = & cargo @bootstrapConfig metadata --manifest-path (Join-Path $workspaceRoot 'Cargo.toml') --format-version 1 --no-deps --locked --offline
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $metadata = $metadataText | ConvertFrom-Json
-    # Hashed intermediates stay shared; final executable names are worktree-local.
-    if (!$env:CARGO_BUILD_BUILD_DIR) { $env:CARGO_BUILD_BUILD_DIR = $metadata.target_directory }
-    $env:CARGO_TARGET_DIR = Join-Path $workspaceRoot 'target'
-    & cargo @bootstrapConfig run -p ara-dev --manifest-path (Join-Path $workspaceRoot 'Cargo.toml') --target-dir $bootstrapTarget --config "build.build-dir='$bootstrapBuild'" --config "target.x86_64-pc-windows-msvc.linker='rust-lld.exe'" -- @args
+    # Defaults never inherit another checkout's global target directory.
+    # Disk inspects the caller's original configuration instead.
+    if ($args.Count -eq 0 -or $args[0] -ne 'disk') {
+        if (!$env:CARGO_BUILD_BUILD_DIR) { $env:CARGO_BUILD_BUILD_DIR = Join-Path $workspaceRoot 'target' }
+        if (!$env:CARGO_TARGET_DIR -and !$env:CARGO_BUILD_TARGET_DIR) { $env:CARGO_TARGET_DIR = Join-Path $workspaceRoot 'target' }
+    }
+    & cargo @bootstrapConfig run -p ara-dev --locked --manifest-path (Join-Path $workspaceRoot 'Cargo.toml') --target-dir $bootstrapTarget --config "build.build-dir='$bootstrapBuild'" --config "target.x86_64-pc-windows-msvc.linker='rust-lld.exe'" -- @args
     exit $LASTEXITCODE
 } finally {
     $env:CARGO_TARGET_DIR = $oldTarget

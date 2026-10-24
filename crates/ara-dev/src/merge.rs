@@ -15,6 +15,8 @@ pub(crate) fn run(
     timeout_seconds: Option<u64>,
     no_compiler_cache: bool,
 ) -> Result<bool> {
+    // Reject foreign Cargo outputs before changing any Git merge state.
+    crate::build_paths::Directories::from_env(root)?;
     // Reject a malformed exception file before starting a merge.
     crate::known::read(root, known_path)?;
     ensure!(
