@@ -25,6 +25,9 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   `synchronize` follows in-memory import document revisions, including imports made
   after the pipeline started. New Play pins wait for pending configured generations;
   failed cooks retain the last good generation and report their existing diagnostic.
+- `package_scene_with_progress`: export snapshots wait on completed-cook progress,
+  not a total deadline. `ARA_EXPORT_COOK_STALL_SECONDS` defaults to 600; completion
+  counts and five-second heartbeats flow to the export job, pending IDs name stalls.
 - `PlayService::published` / `PublishedAssets::for_project`: acquire a read-only
   project attachment once. Frame loops read its atomic revision; `snapshot` never
   waits and retains immutable generation IDs, kinds and FileCache provenance.

@@ -20,6 +20,17 @@ pub struct Event {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum EventKind {
+    /// Runtime content cooking, including queued cold imports.
+    Cooking {
+        /// Requested cooks with published final generations.
+        completed: usize,
+        /// Requested imported assets.
+        total: usize,
+        /// Total time spent waiting for cooking.
+        elapsed_ms: u64,
+        /// Time since another requested cook completed.
+        stalled_ms: u64,
+    },
     /// Stage started or completed.
     Progress {
         /// `started` or `completed`.

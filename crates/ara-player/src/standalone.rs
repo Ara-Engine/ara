@@ -36,6 +36,7 @@ struct Launch {
 
 pub(super) fn run(args: Args) -> Result<()> {
     let began = Instant::now();
+    let mut phases = std::collections::BTreeMap::new();
     let root = args.standalone.root.as_ref().map_or_else(
         || {
             std::env::current_exe()?
@@ -67,6 +68,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         key.as_ref(),
     )?)
     .map_err(anyhow::Error::msg)?;
+    phases.insert("pack_ms", began.elapsed().as_millis());
     // Runtime paths come from this installation, never the exporting workspace.
     scene.nav_cache = None;
     let source = Arc::new(crate::packed::PackedAssets::new(
@@ -80,6 +82,7 @@ pub(super) fn run(args: Args) -> Result<()> {
     let size = parse_size(&args.size)?;
     let (mut world, build_ms) = World::build_packed(&scene, source, !args.standalone.headless)?;
     let started = world.start(args.standalone.headless, build_ms)?;
+    phases.insert("world_ready_ms", began.elapsed().as_millis());
     let mut frame = RenderFrame::default();
     let mut presenter2d = Presenter2d::new(&args.gpu_cache);
     let (mut window, mut presenter) = if args.standalone.headless {
@@ -90,8 +93,15 @@ pub(super) fn run(args: Args) -> Result<()> {
         (Some(window), presenter)
     };
     presenter.set_quality(quality);
+    phases.insert("device_ready_ms", began.elapsed().as_millis());
+    let mut frame_count = 0_u32;
+    let mut frame_sum_ms = 0_f64;
+    let mut frame_max_ms = 0_f64;
+    let mut frame_phase_ms = [0_f64; 4];
+    let mut frame_gpu_ms = 0_f64;
     if args.standalone.headless {
         world.runtime.step(args.standalone.ticks, &[])?;
+        phases.insert("simulation_ready_ms", began.elapsed().as_millis());
     } else if let Some(window) = &mut window {
         let source = world.asset_source()?;
         let simulation = world.runtime.play_mut().session_mut().world_mut();
@@ -112,6 +122,7 @@ pub(super) fn run(args: Args) -> Result<()> {
         let mut previous = Instant::now();
         let mut frames = 0;
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            let frame_start = Instant::now();
             let (quit, inputs) = window.events(world.runtime.player())?;
             if quit {
                 break;
@@ -124,6 +135,7 @@ pub(super) fn run(args: Args) -> Result<()> {
             previous = now;
             world.mark();
             world.runtime.extract(&mut frame);
+            let simulation_done = Instant::now();
             if is_2d {
                 let tick = world.runtime.tick();
                 window.prepare_2d(
@@ -135,6 +147,7 @@ pub(super) fn run(args: Args) -> Result<()> {
             } else {
                 window.present(&mut presenter, &frame, || world.fidelity_content(&frame))?;
             }
+            let presentation_done = Instant::now();
             if let Some((audio, device)) = &mut audio {
                 let inputs = world.audio_inputs()?;
                 world::update_audio(
@@ -144,6 +157,24 @@ pub(super) fn run(args: Args) -> Result<()> {
                     &inputs,
                 )?;
                 audio.pump(device, super::AUDIO_WATERMARK)?;
+            }
+            if frames == 0 {
+                phases.insert("first_frame_ms", began.elapsed().as_millis());
+            } else {
+                let elapsed = frame_start.elapsed().as_secs_f64() * 1000.;
+                frame_count += 1;
+                frame_sum_ms += elapsed;
+                frame_max_ms = frame_max_ms.max(elapsed);
+                frame_phase_ms[0] +=
+                    simulation_done.duration_since(frame_start).as_secs_f64() * 1000.;
+                frame_phase_ms[1] += presenter.stats().prepare.as_secs_f64() * 1000.;
+                frame_phase_ms[2] += presentation_done
+                    .duration_since(simulation_done)
+                    .as_secs_f64()
+                    * 1000.;
+                frame_phase_ms[3] += frame_start.elapsed().as_secs_f64() * 1000.
+                    - presentation_done.duration_since(frame_start).as_secs_f64() * 1000.;
+                frame_gpu_ms += presenter.stats().gpu_ms;
             }
             frames += 1;
         }
@@ -179,7 +210,17 @@ pub(super) fn run(args: Args) -> Result<()> {
         json!({"verified":true,"template_contract":launch.contract,
         "scene":scene.scene,"entities":started.entities,"tick":world.runtime.tick(),
         "capture":result,"quality":presenter.quality().map(|value| value.name()),
-        "gpu_ms":presenter.stats().gpu_ms,"elapsed_ms":began.elapsed().as_millis()})
+        "gpu_ms":presenter.stats().gpu_ms,"elapsed_ms":began.elapsed().as_millis(),
+        "startup":phases,"frames_after_first":frame_count,
+        "fps_after_first":if frame_sum_ms > 0. { Some(f64::from(frame_count)*1000./frame_sum_ms) } else { None },
+        "mean_frame_ms_after_first":if frame_count>0 {Some(json!({
+            "simulation_and_extraction":frame_phase_ms[0]/f64::from(frame_count),
+            "presentation_prepare":frame_phase_ms[1]/f64::from(frame_count),
+            "presentation_including_display":frame_phase_ms[2]/f64::from(frame_count),
+            "audio":frame_phase_ms[3]/f64::from(frame_count),
+            "gpu":frame_gpu_ms/f64::from(frame_count)
+        }))} else {None},
+        "max_frame_ms_after_first":if frame_count>0 {Some(frame_max_ms)} else {None}})
     );
     Ok(())
 }
