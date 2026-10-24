@@ -441,51 +441,63 @@ fn peer_keeps_dev_features() {
 }
 
 #[test]
-fn managed_changes_select_the_script_host_and_consumers_with_a_conservative_fallback() {
+fn external_inputs_select_their_consumers_with_a_conservative_fallback() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-    let root = fixture();
-    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
-    fs::write(
-        root.join("Cargo.toml"),
-        manifest.replace("\"diag\"]", "\"diag\", \"script\"]"),
-    )
-    .unwrap();
-    fs::create_dir_all(root.join("script/src")).unwrap();
-    fs::write(
-        root.join("script/Cargo.toml"),
-        "[package]\nname = \"ara-script\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-    )
-    .unwrap();
-    fs::write(
-        root.join("script/src/lib.rs"),
-        "pub fn value() -> u32 {\n    1\n}\n",
-    )
-    .unwrap();
-    let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
-    fs::write(root.join("tool/Cargo.toml"), format!("{tool}\n[dev-dependencies]\nscript = {{ package = \"ara-script\", path = \"../script\" }}\n")).unwrap();
-    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
-    git(&root, &["add", "."]);
-    git(&root, &["commit", "-m", "script host"]);
-    for (root, expected) in [
-        (root, serde_json::json!(["ara-script", "mini-tool"])),
+    for (name, input, expected) in [
         (
-            fixture(),
-            serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
+            "ara-script",
+            "dotnet/src/Managed.cs",
+            serde_json::json!(["ara-script", "mini-tool"]),
+        ),
+        (
+            "ara-release",
+            "release/licenses/spdx/License.txt",
+            serde_json::json!(["ara-release"]),
         ),
     ] {
-        fs::create_dir_all(root.join("dotnet/src")).unwrap();
+        let root = fixture();
+        let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
         fs::write(
-            root.join("dotnet/src/Managed.cs"),
-            "// Managed ABI change\n",
+            root.join("Cargo.toml"),
+            manifest.replace("\"diag\"]", "\"diag\", \"script\"]"),
         )
         .unwrap();
-        let output = ok(
-            &root,
-            env!("CARGO_BIN_EXE_ara-dev"),
-            &["check", "--plan", "--json"],
-        );
-        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(report["affected"], expected);
+        fs::create_dir_all(root.join("script/src")).unwrap();
+        fs::write(
+            root.join("script/Cargo.toml"),
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("script/src/lib.rs"),
+            "pub fn value() -> u32 {\n    1\n}\n",
+        )
+        .unwrap();
+        if name == "ara-script" {
+            let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
+            fs::write(root.join("tool/Cargo.toml"), format!("{tool}\n[dev-dependencies]\nscript = {{ package = \"ara-script\", path = \"../script\" }}\n")).unwrap();
+        }
+        ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-m", "script host"]);
+        for (root, expected) in [
+            (root, expected),
+            (
+                fixture(),
+                serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
+            ),
+        ] {
+            let path = root.join(input);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "external input changed\n").unwrap();
+            let output = ok(
+                &root,
+                env!("CARGO_BIN_EXE_ara-dev"),
+                &["check", "--plan", "--json"],
+            );
+            let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(report["affected"], expected);
+        }
     }
 }
 

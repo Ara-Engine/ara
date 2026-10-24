@@ -21,7 +21,8 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
 Run `cargo test -p ara-dev`, `cargo clippy -p ara-dev --all-targets -- -D warnings`
 and `cargo fmt --all -- --check`. Set CARGO_BUILD_JOBS=2 on the shared PC.
 Integration fixtures and logs belong under `target/`, never in tracked paths.
-JSON mode writes exactly one report to stdout; command output goes to log files.
+Gate JSON mode writes one report to stdout; command output goes to log files.
+`perf --keep-alive --json` streams one NDJSON report per completed window.
 Known failures require an explicit JSON file and exact test/output matches; fail closed.
 Keep safety predicates pure and test them. Never silently restore test mutations.
 See `docs/dev/ara-dev.md` for usage and recovery details.

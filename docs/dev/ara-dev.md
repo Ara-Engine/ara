@@ -202,7 +202,9 @@ includes committed, staged, unstaged and untracked changes. Cargo metadata suppl
 workspace paths and all dependency edges (including optional, build and test
 dependencies). Library/build changes and real dependency updates propagate through
 reverse dependencies. Integration tests, examples and benches select their own
-package; root documentation and AGENTS.md need hygiene and formatting. Crate
+package; root documentation and AGENTS.md need hygiene and formatting.
+Changes to `release/licenses/` select the `ara-release` inventory/packaging tests;
+an absent packager retains the conservative workspace fallback. Crate
 Markdown remains a build input because catalogs can use include_str!. Manifest comparisons resolve
 workspace inheritance, features, defaults and locked versions. Moving an unchanged
 dependency into workspace.dependencies, including a verified Rust import alias,

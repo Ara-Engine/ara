@@ -123,6 +123,16 @@ pub(crate) fn compute(
                 .push("managed input changed: ara-script and its consumers".into());
             continue;
         }
+        // License inventory is consumed by the distribution packager at runtime.
+        if path.starts_with("release/licenses")
+            && metadata.packages.iter().any(|p| p.name == "ara-release")
+        {
+            result.test_only.insert("ara-release".into());
+            result
+                .reasons
+                .push("release license inventory changed: validate ara-release".into());
+            continue;
+        }
         if path == Path::new(".cargo/config.toml") {
             let old =
                 manifest::parse(old_files.get(path).and_then(Option::as_deref).unwrap_or(""))?;
