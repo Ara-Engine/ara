@@ -640,7 +640,7 @@ impl Player {
                     ara_play::EVENT,
                     &ara_play::Event::Diagnostic {
                         diagnostic: serde_json::to_value(ara_diag::Diagnostic::warning(
-                            ara_diag::Code(7310),
+                            ara_runtime::ASSET_PLACEHOLDER,
                             message,
                         ))?,
                     },
