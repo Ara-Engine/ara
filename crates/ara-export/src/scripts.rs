@@ -224,12 +224,14 @@ pub fn prepare(
 /// checks the compiled binding identity, so stale SDK binaries cannot bypass it.
 pub fn write_manifest(output: &Path, library: &str, modules: &[String]) -> Result<()> {
     let mut db = ara_schema::SchemaDb::new();
-    db.register::<ara_components::Transform>();
-    let layout = db.struct_layout("Transform").map_err(anyhow::Error::msg)?;
+    ara_components::register(&mut db);
+    let bindings = ara_script::engine_bindings();
+    let layouts = ara_script::csgen::engine_layouts(&db, &bindings.names())
+        .map_err(|d| anyhow::anyhow!("{d}"))?;
     let manifest = ScriptManifest::new(
         library.into(),
         modules.to_vec(),
-        ara_script::abi::layout_hash(&[layout]),
+        ara_script::abi::layout_hash(&layouts),
     );
     tools::write_json(
         &output.join("scripts.json"),

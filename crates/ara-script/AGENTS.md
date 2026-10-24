@@ -7,6 +7,10 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
 
 ## Public API
 
+- `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
+  `Transform`), shared by the runtime, export hash and checked-in binding generation.
+  A new schema does not expose Rust storage until it has an explicit checked binding.
+
 - `abi` (ABI v2): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and

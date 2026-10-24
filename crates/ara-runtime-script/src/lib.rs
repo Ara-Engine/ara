@@ -25,9 +25,8 @@ use ara_runtime::{
 use ara_schema::Schema;
 use ara_schema::SchemaDb;
 use ara_script::{
-    EditOrigin, EngineBindings, ModuleSpec, ScriptConfig, ScriptHost,
+    EditOrigin, ModuleSpec, ScriptConfig, ScriptHost,
     abi::{ReloadReport, Tick},
-    bind_component,
 };
 use ara_sim::{
     BoundaryCommand, ExternalWrites, Identity, Session, SimContext, SimError, SimRegistry,
@@ -75,8 +74,10 @@ impl From<ScriptSettings> for ScriptHostConfig {
 
 /// ABI/layout identity for the engine components exposed by this runtime plugin.
 pub fn shipping_layout(schema: &SchemaDb) -> Result<u64> {
-    let layout = schema.struct_layout("Transform").map_err(RuntimeError)?;
-    Ok(ara_script::abi::layout_hash(&[layout]))
+    let bindings = ara_script::engine_bindings();
+    let layouts = ara_script::csgen::engine_layouts(schema, &bindings.names())
+        .map_err(|d| failed(vec![d]))?;
+    Ok(ara_script::abi::layout_hash(&layouts))
 }
 
 /// What the C# host reported, drained by the play process between ticks.
@@ -193,10 +194,7 @@ impl RuntimePlugin for ScriptPlugin {
             }
             return Ok(());
         }
-        let engine = bind_component!(
-            EngineBindings::new(),
-            ara_components::Transform as "Transform" { position, rotation, scale }
-        );
+        let engine = ara_script::engine_bindings();
         let (config, specs, manifest) = match &self.config {
             ScriptHostConfig::Development(settings) => {
                 let mut config = ScriptConfig::jit(&settings.host_dir);

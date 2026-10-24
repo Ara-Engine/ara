@@ -30,3 +30,13 @@ pub use host::{
     ModuleStatus, ResourceWrite, ScriptConfig, ScriptHost,
 };
 pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
+
+/// Engine columns exposed by the standard C# runtime, in ABI binding order.
+/// Schemas alone do not expose Rust storage: additions need an explicit binding
+/// whose size, alignment and field offsets are checked by the host.
+pub fn engine_bindings() -> EngineBindings {
+    bind_component!(
+        EngineBindings::new(),
+        ara_components::Transform as "Transform" { position, rotation, scale }
+    )
+}

@@ -19,6 +19,8 @@ standalone entry resolves this path against the player folder. The runtime check
 metadata before loading and the native initializer independently checks compiled
 bindings. `ARA0921` means rebuild scripts and player with the same Ara SDK and
 export again; `ARA0920` reports missing images or an inconsistent module inventory.
+Generation, runtime binding and export hashes use the same `engine_bindings()` set;
+adding an authoring schema alone does not change the C# storage ABI.
 Shipping loads no author paths, CoreCLR installation, Roslyn, watcher or hot reload.
 Gameplay state remains ECS-owned and uses the usual snapshots and restore path.
 

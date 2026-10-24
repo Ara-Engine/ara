@@ -57,13 +57,14 @@ fn non_blittable_components_are_reported() {
     assert!(csgen::blittable_components(&db).is_empty());
 }
 
-/// `Ara.Runtime/Generated` must match the generator for the built-in engine components.
+/// `Ara.Runtime/Generated` must match the columns the runtime actually binds.
 /// Run with `ARA_UPDATE_GENERATED=1` to rewrite it after an ABI or schema change.
 #[test]
 fn checked_in_bindings_are_fresh() {
     let mut db = SchemaDb::new();
     ara_components::register(&mut db);
-    let engine = csgen::blittable_components(&db);
+    let bindings = ara_script::engine_bindings();
+    let engine = bindings.names();
     let files = csgen::csharp(&db, &engine).expect("generates");
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dotnet/src/Ara.Runtime/Generated");
     if std::env::var_os("ARA_UPDATE_GENERATED").is_some() {
