@@ -1035,7 +1035,10 @@ fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
     );
     let mut editor = project.open();
     let read = editor.action("editor.camera", json!({})).unwrap();
-    assert_eq!(read["camera"]["fovYDegrees"], 50.);
+    assert_eq!(
+        read["camera"]["fovYDegrees"], 46.,
+        "a scene opens through its gameplay camera"
+    );
     editor
         .action("editor.camera", json!({"fovYDegrees": 200}))
         .unwrap();
@@ -1078,4 +1081,92 @@ fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
     let saved: ara_editor::state::Camera =
         serde_json::from_value(json!({"target":[0,0,0],"yaw":0,"pitch":0.2,"distance":5})).unwrap();
     assert_eq!(saved.fov_y_degrees, 50.);
+}
+
+/// A scene opens with its last camera (a user preference beside
+/// editor-settings.json, FOV included), else its gameplay camera's view (a follow
+/// rig pivots on what it aims at), else its content without terrain or ground; F
+/// and Frame All skip terrain and ground planes unless they are selected.
+#[test]
+fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
+    let project = Project::new();
+    write(
+        &project.0.join("ara.project.json"),
+        json!({"name":"Editor test","main":"levels/main.scene"}),
+    );
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
+            "e_crate001":{"name":"Salvage crate","Transform":{"position":[2,0.5,-3]},"MeshRenderer":{}},
+            "e_ground01":{"name":"Ground","Transform":{},"MeshRenderer":{"shape":"plane","size":[400,1,400]}},
+            "e_chunk001":{"name":"Terrain chunk","Transform":{"position":[300,0,300],"scale":[96,10,96]},"TerrainChunk":{"x":3,"z":3}}}}),
+    );
+    write(
+        &project.0.join("levels/rig.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0002","records":{
+            "e_player01":{"name":"Player","Transform":{"position":[10,0,4]},"MeshRenderer":{}},
+            "e_camera01":{"name":"Follow camera","Transform":{"position":[0,9,0]},"Camera":{"fov":46},
+                "FollowCamera":{"target":"e_player01","distance":4,"height":1.5,"yaw":30,"pitch":15}}}}),
+    );
+    let crate_centre = Vec3::new(2., 0.5, -3.);
+    {
+        let mut editor = project.open();
+        // No gameplay camera: the crate, not the 400 m ground or the far terrain.
+        let camera = editor.state.camera;
+        assert!(camera.target.distance(crate_centre) < 1e-4, "{camera:?}");
+        assert!(camera.distance < 5., "{camera:?}");
+        assert_eq!((camera.yaw, camera.pitch), (0.6, 0.45));
+        editor
+            .action("editor.camera", json!({"target":[50,0,50]}))
+            .unwrap();
+        editor.action("editor.frame", json!({})).unwrap();
+        assert!(editor.state.camera.target.distance(crate_centre) < 1e-4);
+        // Selected terrain or ground is framed.
+        editor
+            .action("editor.select", json!({"entities":["e_ground01"]}))
+            .unwrap();
+        editor.action("editor.frame", json!({})).unwrap();
+        assert!(editor.state.camera.target.length() < 1e-4);
+        assert!(editor.state.camera.distance > 200.);
+
+        // The follow rig's view, as Play places it, pivoting on the aim point.
+        editor
+            .action("editor.scene.open", json!({"scene":"levels/rig.scene"}))
+            .unwrap();
+        let camera = editor.state.camera;
+        let aim = Vec3::new(10., 1.5, 4.);
+        let (yaw, pitch) = (30f32.to_radians(), 15f32.to_radians());
+        let forward = Vec3::new(
+            yaw.sin() * pitch.cos(),
+            -pitch.sin(),
+            yaw.cos() * pitch.cos(),
+        );
+        assert!(camera.target.distance(aim) < 1e-4, "{camera:?}");
+        assert!(camera.position().distance(aim - forward * 4.) < 1e-4);
+        assert_eq!(camera.fov_y_degrees, 46.);
+    }
+
+    // The last camera per scene is a user preference (isolated under target/).
+    let profile = ara_editor::settings::config_dir()
+        .unwrap()
+        .join(format!("scene-cameras-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&profile);
+    let preferences = profile.join("editor-settings.json");
+    let saved = {
+        let mut editor =
+            ara_editor::Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
+        editor
+            .action(
+                "editor.camera",
+                json!({"target":[1,2,3],"yaw":1.2,"pitch":0.3,"distance":7,"fovYDegrees":54}),
+            )
+            .unwrap();
+        editor.state.camera
+    };
+    assert!(profile.join("scene-cameras.json").is_file());
+    let editor = ara_editor::Editor::open_with(&project.0, Some(preferences)).unwrap();
+    assert_eq!(editor.state.camera, saved);
+    assert_eq!(editor.state.camera.fov_y_degrees, 54.);
+    drop(editor);
+    std::fs::remove_dir_all(&profile).unwrap();
 }

@@ -1,6 +1,6 @@
 //! The registry table. Commands that are not built yet stay registered with the
 //! reason, so menus explain what is missing instead of hiding it.
-use super::{Avail, Ctx, Run, RunFn, Spec, Target};
+use super::{Avail, BuildState, Ctx, Run, RunFn, Spec, Target};
 use crate::{Editor, shell::Shell};
 use ara_render_fidelity::presets::QualityPreset;
 use serde_json::{Value, json};
@@ -486,16 +486,22 @@ fn build() -> Vec<Spec> {
         }),
         later("file.export_selection", "Export Selection…", "file", "", "Selection export lands with ara-export presets in the editor."),
         later("build.profiles", "Build Profiles…", "package", "", "Export presets run from `ara export`; the in-editor Build window is not built yet."),
-        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the project with its preset (presets/<name>.export.json); progress shows in the status bar, problems in Problems, and the build opens when done.", |s, e, _| s.build_current(e)).when(|c| match c.build {
-            (_, true) => Avail::Blocked("An export is running; see the status bar".into()),
-            (false, _) => Avail::Blocked("Add an export preset first: presets/windows-portable.export.json (`ara-export preset --kind windows-portable`)".into()),
+        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Write the default Windows profile (presets/windows.export.json): the real game runtime in a plain folder.", |s, e, _| s.create_build_profile(e).map(drop))
+            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in presets/".into()) } else { Avail::Ready }),
+        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the game with the project's first profile (creating presets/windows.export.json when there is none) into builds/; progress shows in the status bar, problems in Problems.", |s, e, _| s.build_current(e)).when(|c| match &c.build {
+            BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
+            _ => Avail::Ready,
+        }),
+        cmd("build.run", "Run Build", "play", "", "Launch the last build: the exported game, outside the editor.", |s, e, _| s.run_build(e)).when(|c| match &c.build {
+            BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
+            BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
             _ => Avail::Ready,
         }),
         later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
-        cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the project's build output folder.", |_, e, _| {
-            let root = e.host.root().join("build");
-            std::fs::create_dir_all(&root)?;
-            super::super::open_external(&root)
+        cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
+            let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
+            std::fs::create_dir_all(&folder)?;
+            super::super::open_external(&folder)
         }),
         cmd("file.close_document", "Close Document", "x", "Ctrl+W", "Close the active tool document tab.", |s, e, t| {
             let panel = panel_target(s, e, t);

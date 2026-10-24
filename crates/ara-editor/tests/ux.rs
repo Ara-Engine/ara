@@ -949,3 +949,55 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
         "{blocked}"
     );
 }
+
+/// Build Current Profile: the default Windows profile is made by a command (the
+/// canonical export preset, runtime player, no machine paths, script modules found
+/// by the export), and a project with a C# module can build.
+#[test]
+fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let run = shell
+        .run_command(&mut editor, "build.run", &Target::None)
+        .unwrap_err();
+    assert!(run.to_string().contains("Build the project first"), "{run}");
+
+    shell
+        .run_command(&mut editor, "build.profile.create", &Target::None)
+        .unwrap();
+    let text = std::fs::read_to_string(project.0.join("presets/windows.export.json")).unwrap();
+    let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();
+    assert_eq!(preset.platform, ara_export::Platform::Windows);
+    assert_eq!(
+        preset.player_template,
+        ara_export::preset::PlayerTemplate::Runtime
+    );
+    assert!(
+        preset.templates.is_empty(),
+        "pinned at build time, not here"
+    );
+    assert!(preset.script_project.is_empty());
+    assert!(
+        shell
+            .run_command(&mut editor, "build.profile.create", &Target::None)
+            .is_err(),
+        "an existing profile is never overwritten"
+    );
+
+    std::fs::create_dir_all(project.0.join("scripts/Game")).unwrap();
+    std::fs::write(
+        project.0.join("scripts/Game/ara.module.toml"),
+        "name = \"Game\"\n",
+    )
+    .unwrap();
+    let commands = editor.action("editor.commands", json!({})).unwrap();
+    let current = commands["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "build.current")
+        .unwrap();
+    assert_eq!(current["enabled"], true, "{current}");
+}

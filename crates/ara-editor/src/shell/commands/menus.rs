@@ -62,10 +62,13 @@ pub(crate) const MENUS: &[Menu] = &[
             Sub(
                 "Build & Export",
                 &[
-                    C("build.profiles"),
                     C("build.current"),
-                    C("build.package"),
+                    C("build.run"),
                     C("build.open_folder"),
+                    S,
+                    C("build.profile.create"),
+                    C("build.profiles"),
+                    C("build.package"),
                 ],
             ),
             S,

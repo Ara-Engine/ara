@@ -644,7 +644,7 @@ impl Settings {
         }
     }
 }
-fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
+pub(crate) fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     let temp = path.with_extension("json.tmp");
     std::fs::write(&temp, ara_json::to_canonical_string(value))?;
     std::fs::rename(temp, path)

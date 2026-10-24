@@ -84,10 +84,10 @@ impl Service for EditorService {
                 "Read editor selection, camera and layout.",
             )
             .read_only(),
-            Method::new::<SessionParams>(
+            Method::new::<EditorFrame>(
                 db,
                 "editor.frame",
-                "Frame the current selection, or the scene when empty.",
+                "Frame the selection, or the scene's content (not terrain or ground) when empty; `opening` shows the scene's opening view.",
             ),
             Method::new::<SessionParams>(
                 db,
@@ -286,7 +286,12 @@ impl EditorService {
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),
-                build: (false, false),
+                // The window's build job is not visible here; the project's state is.
+                build: crate::shell::commands::BuildState {
+                    running: false,
+                    built: false,
+                    profile: !crate::shell::build::presets(cx.root()).is_empty(),
+                },
             };
             return Ok(json!({"commands": export(&cx, &keymap(state))}));
         }
@@ -751,7 +756,14 @@ impl EditorService {
                 }
             }
             "editor.frame" => {
-                frame(&mut state, cx)?;
+                let p: EditorFrame = parse(params)?;
+                if p.opening == Some(true) {
+                    let resolved = crate::world::resolve(cx.store(), &state.doc)?;
+                    let transforms = crate::world::world_transforms(&resolved);
+                    state.camera = crate::view_camera::opening(&resolved, &transforms);
+                } else {
+                    frame(&mut state, cx)?;
+                }
             }
             "editor.scene.open" => {
                 let p: EditorSceneOpen = parse(params)?;
@@ -945,28 +957,15 @@ fn safe_name(name: &str) -> Result<&str, Vec<Diagnostic>> {
 fn ui_error(error: Box<dyn std::error::Error>) -> Vec<Diagnostic> {
     vec![crate::invalid(error.to_string())]
 }
-/// Frame the selection (or the whole scene when nothing is selected).
+/// Frame the selection, or the scene's content when nothing is selected (terrain,
+/// ground planes and unbounded entities only when selected), keeping the view angle.
 fn frame(state: &mut EditorState, cx: &mut Cx) -> Result<(), Vec<Diagnostic>> {
     let resolved = crate::world::resolve(cx.store(), &state.doc)?;
     let transforms = crate::world::world_transforms(&resolved);
-    let mut min = Vec3::splat(f32::INFINITY);
-    let mut max = Vec3::splat(f32::NEG_INFINITY);
-    for (id, matrix) in transforms {
-        if state.selection.is_empty() || state.selection.contains(&id) {
-            for x in [-0.5, 0.5] {
-                for y in [-0.5, 0.5] {
-                    for z in [-0.5, 0.5] {
-                        let p = matrix.transform_point3(Vec3::new(x, y, z));
-                        min = min.min(p);
-                        max = max.max(p);
-                    }
-                }
-            }
-        }
-    }
-    if min.is_finite() {
-        state.camera.target = (min + max) * 0.5;
-        state.camera.distance = (max - min).length().max(1.) * 1.8;
+    if let Some(bounds) =
+        crate::view_camera::framing_bounds(&resolved, &transforms, &state.selection)
+    {
+        crate::view_camera::fit(&mut state.camera, bounds);
     }
     Ok(())
 }
@@ -997,7 +996,7 @@ fn scene_camera(
     Ok((position, rotation * Vec3::NEG_Z, lens.fov))
 }
 /// Switch to scene `doc`: the outgoing scene keeps its camera, a reopened scene gets
-/// its own back and a first open frames the whole scene. Humans (`human`) also update
+/// its own back and a first open gets its opening view (`view_camera::opening`). Humans (`human`) also update
 /// the recent-scenes list; agents only move their presence.
 fn open_scene(
     state: &mut EditorState,
@@ -1011,7 +1010,11 @@ fn open_scene(
         state.selection.clear();
         match state.scene_cameras.get(&doc) {
             Some(camera) => state.camera = *camera,
-            None => frame(state, cx)?,
+            None => {
+                let resolved = crate::world::resolve(cx.store(), &doc)?;
+                let transforms = crate::world::world_transforms(&resolved);
+                state.camera = crate::view_camera::opening(&resolved, &transforms);
+            }
         }
     }
     if human {

@@ -61,6 +61,19 @@ Causes:
 Fixes:
 - Switch the Scene view to Lit · Raster (View > View Mode) and check `ara doctor` for GPU driver problems.
 
+## ARA4505 editor::BUILD: Build or Run Build failed
+owner: ara-editor
+
+Build Current Profile could not export the game, or Run Build could not launch it. Export problems with their own `ARA-EXP-*` code are reported under that code; this one covers the editor's part (the runtime template, the build folder, the launch). Info entries with this code record finished builds and runs.
+
+Causes:
+- `ara-player.exe` or `ara_player.pdb` is not next to the editor, or the engine's cooked shader resources are missing, so the runtime template cannot be made.
+- The build folder is gone or the game exited with an error.
+
+Fixes:
+- Reinstall the engine (or rebuild `ara-player` in a checkout), then Build Current Profile again.
+- Read the message's tail of the game's log; rebuild if the folder was deleted.
+
 ## ARA4506 editor::MISSING_SOURCE: Scene asset file missing
 owner: ara-editor
 

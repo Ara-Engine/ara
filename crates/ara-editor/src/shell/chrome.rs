@@ -174,11 +174,27 @@ impl Shell {
         let description = format!("Scene quality {quality}: {source}. Change it in the Lit menu");
         out.push_str(&format!("<button id='status-quality' class='chip' label='Scene quality' description='{}' action='Dispatch'>{}<text id='status-quality-text' text='{}' /></button>",escape(&description),icons::icon("status-quality","sun-medium"),escape(&quality)));
         self.bind_command("status-jobs", "window.assets", Target::None);
-        match active.first() {
-            Some(job) => {
-                let progress = job["progress"].as_f64().unwrap_or(0.).clamp(0., 1.);
-                let more = if active.len() > 1 { format!(" · {} more", active.len() - 1) } else { String::new() };
-                out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='{} running or queued' action='Dispatch'>{}<text id='status-jobs-text' text='{} {:0.0}%{more}' /><panel id='status-jobs-bar' class='progress'><panel id='status-jobs-fill' class='progress-fill' style='width:{:0.0}%' /></panel></button>",active.len(),icons::icon_in("status-jobs","activity","accent"),escape(job["name"].as_str().unwrap_or("Working")),progress*100.,progress*100.));
+        // A running build leads (its stage, or cooking counts), then other jobs.
+        let build = self.build.as_ref().map(|job| match job.cooking {
+            Some((done, total)) if total > 0 => (
+                format!("Build {} · cooking {done}/{total}", job.preset),
+                done as f64 / total as f64,
+            ),
+            _ => (format!("Build {} · {}", job.preset, job.stage), 0.),
+        });
+        let count = active.len() + usize::from(build.is_some());
+        let first = build.or_else(|| {
+            active.first().map(|job| {
+                (
+                    job["name"].as_str().unwrap_or("Working").to_owned(),
+                    job["progress"].as_f64().unwrap_or(0.).clamp(0., 1.),
+                )
+            })
+        });
+        match first {
+            Some((name, progress)) => {
+                let more = if count > 1 { format!(" · {} more", count - 1) } else { String::new() };
+                out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='{count} running or queued' action='Dispatch'>{}<text id='status-jobs-text' text='{} {:0.0}%{more}' /><panel id='status-jobs-bar' class='progress'><panel id='status-jobs-fill' class='progress-fill' style='width:{:0.0}%' /></panel></button>",icons::icon_in("status-jobs","activity","accent"),escape(&name),progress*100.,progress*100.));
             }
             None => out.push_str(&format!("<button id='status-jobs' class='chip' label='Jobs' description='No imports, cooks or builds running' action='Dispatch'>{}<text id='status-jobs-text' text='Jobs idle' /></button>",icons::icon("status-jobs","circle-check"))),
         }
