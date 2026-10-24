@@ -1,30 +1,42 @@
-//! CPU probe-surface acquisition for devices without hardware ray queries: a
-//! binned-SAH BVH over the native scene (the finest LOD level within a triangle
-//! budget), traced in
-//! parallel with the rays, relocation and packing of the GPU bake
-//! (`probe-surfaces.slang`), so every GPU gets the same probe GI. Materials use
-//! their factors times each map's mean texel; alpha-tested surfaces count as opaque.
-use anyhow::{Result, ensure};
+//! CPU probe-surface acquisition: the bake for devices without hardware ray
+//! queries, and every incremental update after an edit. [`Tracer`] is a two-level
+//! BVH: one binned-SAH BVH per unique geometry in model space (the finest LOD
+//! level within a triangle budget) under a top level over the static instances'
+//! world bounds; rays enter an instance through its inverse transform. Probes are
+//! traced in parallel with the rays, relocation and packing of the GPU bake
+//! (`probe-surfaces.slang`), so every GPU gets the same probe GI.
+//!
+//! An edit only moves, adds or drops instances ([`Tracer::adopt`],
+//! [`Tracer::edit`]) and re-traces the probes it can change ([`affected`],
+//! [`rebake`]). Deforming (skinned) geometry and dynamic entities never enter the
+//! surfaces. Materials use their factors times each map's mean texel;
+//! alpha-tested surfaces count as opaque.
+use anyhow::{Context, Result, ensure};
 use ara_render::{
-    instanced::Scene,
+    instanced::{Geometry, Scene},
     look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
 };
 use ara_render_fidelity::probes::ProbeVolume;
-use glam30::{Vec2, Vec3};
+use glam30::{Mat3, Mat4, Vec2, Vec3};
+use std::collections::{BTreeSet, HashMap};
 
 /// Longest probe ray, matching the GPU bake.
 const RANGE: f32 = 200.;
-/// Triangles per leaf.
+/// Triangles per mesh leaf.
 const LEAF: usize = 4;
+/// Instances per top-level leaf.
+const TOP_LEAF: usize = 2;
 const BINS: usize = 16;
+const EMPTY: (Vec3, Vec3) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
 
 /// Diffuse albedo (metal removed), emissive radiance.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub(crate) struct Shading {
     pub albedo: Vec3,
     pub emissive: Vec3,
 }
 
+/// A model-space triangle.
 #[derive(Clone, Copy)]
 struct Triangle {
     a: Vec3,
@@ -32,42 +44,27 @@ struct Triangle {
     e2: Vec3,
     /// Geometric normal oriented with the vertex normals.
     normal: Vec3,
-    material: u32,
+}
+
+impl Triangle {
+    fn bounds(&self) -> (Vec3, Vec3) {
+        let (b, c) = (self.a + self.e1, self.a + self.e2);
+        (self.a.min(b).min(c), self.a.max(b).max(c))
+    }
 }
 
 #[derive(Clone, Copy)]
 struct Node {
     min: Vec3,
     max: Vec3,
-    /// Leaf: first triangle; interior: left child (right is `first + 1`).
+    /// Leaf: first item; interior: left child (right is `first + 1`).
     first: u32,
-    /// Leaf triangle count; zero for interior nodes.
+    /// Leaf item count; zero for interior nodes.
     count: u32,
 }
 
-/// A bounding volume hierarchy over world-space triangles.
-struct Bvh {
-    nodes: Vec<Node>,
-    triangles: Vec<Triangle>,
-}
-
-struct Hit {
-    distance: f32,
-    triangle: u32,
-}
-
-fn bounds(triangles: &[Triangle]) -> (Vec3, Vec3) {
-    triangles.iter().fold(
-        (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
-        |(lo, hi), t| {
-            let (b, c) = (t.a + t.e1, t.a + t.e2);
-            (lo.min(t.a).min(b).min(c), hi.max(t.a).max(b).max(c))
-        },
-    )
-}
-
-fn centroid(t: &Triangle) -> Vec3 {
-    t.a + (t.e1 + t.e2) / 3.
+fn union((a, b): (Vec3, Vec3), (c, d): (Vec3, Vec3)) -> (Vec3, Vec3) {
+    (a.min(c), b.max(d))
 }
 
 fn area(lo: Vec3, hi: Vec3) -> f32 {
@@ -75,138 +72,258 @@ fn area(lo: Vec3, hi: Vec3) -> f32 {
     d.x * d.y + d.y * d.z + d.z * d.x
 }
 
-impl Bvh {
-    /// Binned surface-area-heuristic build over centroids.
-    fn build(mut triangles: Vec<Triangle>) -> Self {
-        let mut nodes = Vec::with_capacity(triangles.len() / LEAF * 2 + 1);
-        let (lo, hi) = bounds(&triangles);
-        nodes.push(Node {
-            min: lo,
-            max: hi,
-            first: 0,
-            count: triangles.len() as u32,
-        });
-        let mut stack = vec![0usize];
-        while let Some(index) = stack.pop() {
-            let node = nodes[index];
-            let (start, count) = (node.first as usize, node.count as usize);
-            if count <= LEAF {
-                continue;
-            }
-            let span = &mut triangles[start..start + count];
-            let (clo, chi) = span.iter().fold(
-                (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
-                |(lo, hi), t| (lo.min(centroid(t)), hi.max(centroid(t))),
-            );
-            let extent = chi - clo;
-            let axis = if extent.x >= extent.y && extent.x >= extent.z {
-                0
-            } else if extent.y >= extent.z {
-                1
+/// World bounds of model bounds `local` under `world` (all eight corners).
+fn world_bounds(world: Mat4, (lo, hi): (Vec3, Vec3)) -> (Vec3, Vec3) {
+    (0..8).fold(EMPTY, |acc, corner| {
+        let pick = |bit: usize, axis: usize| {
+            if corner >> bit & 1 == 0 {
+                lo[axis]
             } else {
-                2
-            };
-            if extent[axis] <= 1e-6 {
-                continue;
+                hi[axis]
             }
-            let bin = |t: &Triangle| {
-                (((centroid(t)[axis] - clo[axis]) / extent[axis] * BINS as f32) as usize)
-                    .min(BINS - 1)
-            };
-            let mut bins = [(
-                0usize,
-                Vec3::splat(f32::INFINITY),
-                Vec3::splat(f32::NEG_INFINITY),
-            ); BINS];
-            for t in span.iter() {
-                let b = &mut bins[bin(t)];
-                let (tlo, thi) = bounds(std::slice::from_ref(t));
-                *b = (b.0 + 1, b.1.min(tlo), b.2.max(thi));
-            }
-            // Sweep the split planes for the cheapest SAH cost.
-            let mut best = (f32::INFINITY, 0usize);
-            for split in 1..BINS {
-                let side = |range: std::ops::Range<usize>| {
-                    bins[range].iter().fold(
-                        (
-                            0usize,
-                            Vec3::splat(f32::INFINITY),
-                            Vec3::splat(f32::NEG_INFINITY),
-                        ),
-                        |(n, lo, hi), b| (n + b.0, lo.min(b.1), hi.max(b.2)),
-                    )
-                };
-                let (ln, llo, lhi) = side(0..split);
-                let (rn, rlo, rhi) = side(split..BINS);
-                if ln == 0 || rn == 0 {
-                    continue;
-                }
-                let cost = ln as f32 * area(llo, lhi) + rn as f32 * area(rlo, rhi);
-                if cost < best.0 {
-                    best = (cost, split);
-                }
-            }
-            if best.0 >= count as f32 * area(node.min, node.max) {
-                continue;
-            }
-            // Partition the span by bin.
-            let (mut i, mut j) = (0usize, count);
-            while i < j {
-                if bin(&span[i]) < best.1 {
-                    i += 1;
-                } else {
-                    j -= 1;
-                    span.swap(i, j);
-                }
-            }
-            if i == 0 || i == count {
-                continue;
-            }
-            let left = nodes.len();
-            for (first, n) in [(start, i), (start + i, count - i)] {
-                let (lo, hi) = bounds(&triangles[first..first + n]);
-                nodes.push(Node {
-                    min: lo,
-                    max: hi,
-                    first: first as u32,
-                    count: n as u32,
-                });
-            }
-            nodes[index].first = left as u32;
-            nodes[index].count = 0;
-            stack.extend([left, left + 1]);
+        };
+        let p = world.transform_point3(Vec3::new(pick(0, 0), pick(1, 1), pick(2, 2)));
+        union(acc, (p, p))
+    })
+}
+
+/// Binned surface-area-heuristic build over item bounds: reorders `items` so
+/// every leaf is a contiguous run (of at most `leaf` items unless they cannot
+/// be split).
+fn build<T>(items: &mut [T], bound: impl Fn(&T) -> (Vec3, Vec3), leaf: usize) -> Vec<Node> {
+    let span = |items: &[T]| items.iter().fold(EMPTY, |acc, t| union(acc, bound(t)));
+    let centre = |t: &T| {
+        let (lo, hi) = bound(t);
+        (lo + hi) * 0.5
+    };
+    let mut nodes = Vec::with_capacity(items.len() / leaf.max(1) * 2 + 1);
+    if items.is_empty() {
+        return nodes;
+    }
+    let (lo, hi) = span(items);
+    nodes.push(Node {
+        min: lo,
+        max: hi,
+        first: 0,
+        count: items.len() as u32,
+    });
+    let mut stack = vec![0usize];
+    while let Some(index) = stack.pop() {
+        let node = nodes[index];
+        let (start, count) = (node.first as usize, node.count as usize);
+        if count <= leaf {
+            continue;
         }
+        let run = &mut items[start..start + count];
+        let (clo, chi) = run
+            .iter()
+            .fold(EMPTY, |(lo, hi), t| (lo.min(centre(t)), hi.max(centre(t))));
+        let extent = chi - clo;
+        let axis = if extent.x >= extent.y && extent.x >= extent.z {
+            0
+        } else if extent.y >= extent.z {
+            1
+        } else {
+            2
+        };
+        if extent[axis] <= 1e-6 {
+            continue;
+        }
+        let bin = |t: &T| {
+            (((centre(t)[axis] - clo[axis]) / extent[axis] * BINS as f32) as usize).min(BINS - 1)
+        };
+        let mut bins = [(0usize, EMPTY); BINS];
+        for t in run.iter() {
+            let b = &mut bins[bin(t)];
+            *b = (b.0 + 1, union(b.1, bound(t)));
+        }
+        // Sweep the split planes for the cheapest SAH cost.
+        let mut best = (f32::INFINITY, 0usize);
+        for split in 1..BINS {
+            let side = |range: std::ops::Range<usize>| {
+                bins[range]
+                    .iter()
+                    .fold((0usize, EMPTY), |(n, b), c| (n + c.0, union(b, c.1)))
+            };
+            let (ln, (llo, lhi)) = side(0..split);
+            let (rn, (rlo, rhi)) = side(split..BINS);
+            if ln == 0 || rn == 0 {
+                continue;
+            }
+            let cost = ln as f32 * area(llo, lhi) + rn as f32 * area(rlo, rhi);
+            if cost < best.0 {
+                best = (cost, split);
+            }
+        }
+        if best.0 >= count as f32 * area(node.min, node.max) {
+            continue;
+        }
+        // Partition the run by bin.
+        let (mut i, mut j) = (0usize, count);
+        while i < j {
+            if bin(&run[i]) < best.1 {
+                i += 1;
+            } else {
+                j -= 1;
+                run.swap(i, j);
+            }
+        }
+        if i == 0 || i == count {
+            continue;
+        }
+        let left = nodes.len();
+        for (first, n) in [(start, i), (start + i, count - i)] {
+            let (lo, hi) = span(&items[first..first + n]);
+            nodes.push(Node {
+                min: lo,
+                max: hi,
+                first: first as u32,
+                count: n as u32,
+            });
+        }
+        nodes[index].first = left as u32;
+        nodes[index].count = 0;
+        stack.extend([left, left + 1]);
+    }
+    nodes
+}
+
+/// Closest-first traversal of `nodes` for `origin + t * direction`, t below
+/// `maximum`: `leaf(first, count, limit)` intersects a leaf's items and returns
+/// a hit distance under `limit`, which then bounds the search. Returns the
+/// closest distance found, or `maximum`.
+fn traverse(
+    nodes: &[Node],
+    origin: Vec3,
+    direction: Vec3,
+    maximum: f32,
+    mut leaf: impl FnMut(u32, u32, f32) -> Option<f32>,
+) -> f32 {
+    let inverse = direction.recip();
+    let slab = |node: &Node, limit: f32| {
+        let t0 = (node.min - origin) * inverse;
+        let t1 = (node.max - origin) * inverse;
+        let near = t0.min(t1).max_element().max(0.);
+        let far = t0.max(t1).min_element().min(limit);
+        (near <= far).then_some(near)
+    };
+    let mut best = maximum;
+    if nodes.is_empty() || slab(&nodes[0], best).is_none() {
+        return best;
+    }
+    let mut stack = [0u32; 64];
+    let mut depth = 1usize;
+    while depth > 0 {
+        depth -= 1;
+        let node = &nodes[stack[depth] as usize];
+        if slab(node, best).is_none() {
+            continue;
+        }
+        if node.count > 0 {
+            if let Some(t) = leaf(node.first, node.count, best) {
+                best = t;
+            }
+            continue;
+        }
+        // Visit the nearer child first.
+        let (l, r) = (node.first, node.first + 1);
+        let (dl, dr) = (
+            slab(&nodes[l as usize], best),
+            slab(&nodes[r as usize], best),
+        );
+        let mut push = |child: u32| {
+            if depth < stack.len() {
+                stack[depth] = child;
+                depth += 1;
+            }
+        };
+        match (dl, dr) {
+            (Some(a), Some(b)) if a <= b => {
+                push(r);
+                push(l);
+            }
+            (Some(_), Some(_)) => {
+                push(l);
+                push(r);
+            }
+            (Some(_), None) => push(l),
+            (None, Some(_)) => push(r),
+            (None, None) => {}
+        }
+    }
+    best
+}
+
+/// One geometry's model-space triangles and their BVH.
+struct Mesh {
+    nodes: Vec<Node>,
+    triangles: Vec<Triangle>,
+}
+
+impl Mesh {
+    fn new(mut triangles: Vec<Triangle>) -> Self {
+        let nodes = build(&mut triangles, Triangle::bounds, LEAF);
         Self { nodes, triangles }
     }
 
-    /// Closest hit along `origin + t * direction`, 0.001 < t < `maximum`.
-    fn trace(&self, origin: Vec3, direction: Vec3, maximum: f32) -> Option<Hit> {
-        let inverse = direction.recip();
-        let mut best = Hit {
-            distance: maximum,
-            triangle: u32::MAX,
+    /// The geometry's triangles at LOD `level` (or its coarsest).
+    fn of(geometry: &Geometry, level: usize) -> Self {
+        let Some(lod) = geometry
+            .lods
+            .get(level.min(geometry.lods.len().saturating_sub(1)))
+        else {
+            return Self::new(Vec::new());
         };
-        let slab = |node: &Node, limit: f32| {
-            let t0 = (node.min - origin) * inverse;
-            let t1 = (node.max - origin) * inverse;
-            let near = t0.min(t1).max_element().max(0.);
-            let far = t0.max(t1).min_element().min(limit);
-            (near <= far).then_some(near)
-        };
-        let mut stack = [0u32; 64];
-        let mut depth = 1usize;
-        if self.nodes.is_empty() || slab(&self.nodes[0], maximum).is_none() {
-            return None;
-        }
-        while depth > 0 {
-            depth -= 1;
-            let node = &self.nodes[stack[depth] as usize];
-            if slab(node, best.distance).is_none() {
+        let mut triangles = Vec::with_capacity(lod.indices.len() / 3);
+        for tri in lod.indices.as_chunks::<3>().0 {
+            let Some([a, b, c]) = tri
+                .iter()
+                .map(|&i| geometry.vertices.get(i as usize))
+                .collect::<Option<Vec<_>>>()
+                .and_then(|v| <[_; 3]>::try_from(v).ok())
+            else {
+                continue;
+            };
+            let [pa, pb, pc] = [a, b, c].map(|v| Vec3::from_array(v.position));
+            let (e1, e2) = (pb - pa, pc - pa);
+            let mut normal = e1.cross(e2).normalize_or_zero();
+            if normal == Vec3::ZERO {
                 continue;
             }
-            if node.count > 0 {
-                for index in node.first..node.first + node.count {
-                    let t = &self.triangles[index as usize];
+            let shading = Vec3::from_array(a.normal)
+                + Vec3::from_array(b.normal)
+                + Vec3::from_array(c.normal);
+            if normal.dot(shading) < 0. {
+                normal = -normal;
+            }
+            triangles.push(Triangle {
+                a: pa,
+                e1,
+                e2,
+                normal,
+            });
+        }
+        Self::new(triangles)
+    }
+
+    /// Model bounds (empty when the mesh has no triangles).
+    fn bounds(&self) -> (Vec3, Vec3) {
+        self.nodes.first().map_or(EMPTY, |n| (n.min, n.max))
+    }
+
+    /// Closest hit with 0.001 < t < `limit`: distance and model-space normal.
+    /// `direction` need not be unit length; t is in its units.
+    fn trace(&self, origin: Vec3, direction: Vec3, limit: f32) -> Option<(f32, Vec3)> {
+        let mut normal = None;
+        let distance = traverse(
+            &self.nodes,
+            origin,
+            direction,
+            limit,
+            |first, count, limit| {
+                let mut closest = None;
+                let mut limit = limit;
+                for t in &self.triangles[first as usize..(first + count) as usize] {
                     // Moller-Trumbore.
                     let p = direction.cross(t.e2);
                     let det = t.e1.dot(p);
@@ -224,44 +341,458 @@ impl Bvh {
                     if v < 0. || u + v > 1. {
                         continue;
                     }
-                    let distance = t.e2.dot(q) * inv;
-                    if distance > 0.001 && distance < best.distance {
-                        best = Hit {
-                            distance,
-                            triangle: index,
-                        };
+                    let d = t.e2.dot(q) * inv;
+                    if d > 0.001 && d < limit {
+                        limit = d;
+                        closest = Some(d);
+                        normal = Some(t.normal);
                     }
                 }
+                closest
+            },
+        );
+        normal.map(|n| (distance, n))
+    }
+}
+
+/// One scene instance as the tracer sees it.
+struct Placed {
+    entity: u64,
+    /// Geometry identity (`Geometry::key`).
+    key: [u8; 32],
+    /// Index into `Tracer::meshes`; meaningless for deforming geometry.
+    mesh: usize,
+    world: Mat4,
+    inverse: Mat4,
+    /// Inverse transpose of `world`'s linear part.
+    normal: Mat3,
+    shading: Shading,
+    /// Model bounds of the mesh.
+    local: (Vec3, Vec3),
+    /// World bounds.
+    bounds: (Vec3, Vec3),
+    deforming: bool,
+    /// Traced into the probe surfaces: static, rigid and invertible.
+    included: bool,
+}
+
+impl Placed {
+    fn place(&mut self, world: Mat4) {
+        self.world = world;
+        self.inverse = world.inverse();
+        self.normal = Mat3::from_mat4(world).inverse().transpose();
+        self.bounds = world_bounds(world, self.local);
+    }
+
+    fn eligible(&self, dynamic: &BTreeSet<u64>) -> bool {
+        !self.deforming
+            && !dynamic.contains(&self.entity)
+            && self.world.determinant().abs() > 1e-12
+            && self.local.0.cmple(self.local.1).all()
+    }
+}
+
+/// A closest hit in world space.
+struct Hit {
+    distance: f32,
+    /// Unit world normal, oriented with the vertex normals.
+    normal: Vec3,
+    shading: Shading,
+}
+
+/// Two-level BVH over a scene's static instances; it persists across edits so
+/// moves rebuild only the top level and new content only its new geometry.
+pub(crate) struct Tracer {
+    /// LOD level fixed by the first scene (meshes are reused across edits).
+    level: Option<usize>,
+    meshes: Vec<Mesh>,
+    keys: HashMap<[u8; 32], usize>,
+    placed: Vec<Placed>,
+    top: Vec<Node>,
+    /// `placed` indices of included instances, in top-level leaf order.
+    order: Vec<u32>,
+}
+
+impl Tracer {
+    /// A tracer over `scene`; `shading` is indexed by material, `dynamic`
+    /// entities stay out.
+    pub(crate) fn new(scene: &Scene, shading: &[Shading], dynamic: &BTreeSet<u64>) -> Self {
+        let mut tracer = Self {
+            level: None,
+            meshes: Vec::new(),
+            keys: HashMap::new(),
+            placed: Vec::new(),
+            top: Vec::new(),
+            order: Vec::new(),
+        };
+        tracer.adopt(scene, shading, dynamic);
+        tracer
+    }
+
+    /// Adopts a new content generation: meshes are reused by geometry key (new
+    /// ones built in parallel) and instances matched by entity. Returns the world
+    /// bounds whose traced contents changed (old and new places).
+    pub(crate) fn adopt(
+        &mut self,
+        scene: &Scene,
+        shading: &[Shading],
+        dynamic: &BTreeSet<u64>,
+    ) -> Vec<(Vec3, Vec3)> {
+        let level = *self.level.get_or_insert_with(|| lod_level(scene));
+        let mut old: Vec<Option<Mesh>> = std::mem::take(&mut self.meshes)
+            .into_iter()
+            .map(Some)
+            .collect();
+        let mut keys = HashMap::new();
+        let mut meshes = Vec::new();
+        let mut missing = Vec::new();
+        for geometry in &scene.geometry {
+            if geometry.deforming || keys.contains_key(&geometry.key) {
                 continue;
             }
-            // Visit the nearer child first.
-            let (l, r) = (node.first, node.first + 1);
-            let (dl, dr) = (
-                slab(&self.nodes[l as usize], best.distance),
-                slab(&self.nodes[r as usize], best.distance),
-            );
-            let mut push = |child: u32| {
-                if depth < stack.len() {
-                    stack[depth] = child;
-                    depth += 1;
-                }
-            };
-            match (dl, dr) {
-                (Some(a), Some(b)) if a <= b => {
-                    push(r);
-                    push(l);
-                }
-                (Some(_), Some(_)) => {
-                    push(l);
-                    push(r);
-                }
-                (Some(_), None) => push(l),
-                (None, Some(_)) => push(r),
-                (None, None) => {}
+            keys.insert(geometry.key, meshes.len());
+            let reused = self
+                .keys
+                .get(&geometry.key)
+                .and_then(|&i| old.get_mut(i))
+                .and_then(Option::take);
+            if reused.is_none() {
+                missing.push((meshes.len(), geometry));
             }
+            meshes.push(reused);
         }
-        (best.triangle != u32::MAX).then_some(best)
+        let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+        let chunk = missing.len().div_ceil(threads).max(1);
+        std::thread::scope(|scope| {
+            let jobs: Vec<_> = missing
+                .chunks(chunk)
+                .map(|jobs| {
+                    scope.spawn(move || {
+                        jobs.iter()
+                            .map(|&(i, geometry)| (i, Mesh::of(geometry, level)))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            for job in jobs {
+                // A panicked build leaves its meshes empty (traced as missing).
+                for (i, mesh) in job.join().unwrap_or_default() {
+                    meshes[i] = Some(mesh);
+                }
+            }
+        });
+        self.meshes = meshes
+            .into_iter()
+            .map(|m| m.unwrap_or_else(|| Mesh::new(Vec::new())))
+            .collect();
+        self.keys = keys;
+
+        let mut previous: HashMap<u64, Placed> = std::mem::take(&mut self.placed)
+            .into_iter()
+            .map(|p| (p.entity, p))
+            .collect();
+        let mut changed = Vec::new();
+        for instance in &scene.instances {
+            let Some(geometry) = scene.geometry.get(instance.geometry) else {
+                continue;
+            };
+            let mesh = self.keys.get(&geometry.key).copied();
+            let local = mesh.map_or((geometry.bounds[0], geometry.bounds[1]), |m| {
+                self.meshes[m].bounds()
+            });
+            let mut placed = Placed {
+                entity: instance.entity,
+                key: geometry.key,
+                mesh: mesh.unwrap_or(0),
+                world: Mat4::IDENTITY,
+                inverse: Mat4::IDENTITY,
+                normal: Mat3::IDENTITY,
+                shading: shading.get(instance.material).copied().unwrap_or_default(),
+                local,
+                bounds: EMPTY,
+                deforming: geometry.deforming || mesh.is_none(),
+                included: false,
+            };
+            placed.place(instance.world);
+            placed.included = placed.eligible(dynamic);
+            let unchanged = previous.remove(&instance.entity).is_some_and(|old| {
+                let same = old.included == placed.included
+                    && (!placed.included
+                        || (old.world == placed.world
+                            && old.key == placed.key
+                            && old.shading == placed.shading));
+                if !same && old.included {
+                    changed.push(old.bounds);
+                }
+                same
+            });
+            if !unchanged && placed.included {
+                changed.push(placed.bounds);
+            }
+            self.placed.push(placed);
+        }
+        changed.extend(previous.values().filter(|p| p.included).map(|p| p.bounds));
+        self.rebuild_top();
+        changed
     }
+
+    /// Moves instances (`worlds`, by entity) and replaces the dynamic set within
+    /// one content generation. Returns the world bounds whose traced contents
+    /// changed.
+    pub(crate) fn edit(
+        &mut self,
+        worlds: &[(u64, Mat4)],
+        dynamic: &BTreeSet<u64>,
+    ) -> Vec<(Vec3, Vec3)> {
+        let index: HashMap<u64, usize> = self
+            .placed
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.entity, i))
+            .collect();
+        let mut changed = Vec::new();
+        let mut moved = vec![false; self.placed.len()];
+        for &(entity, world) in worlds {
+            let Some(&i) = index.get(&entity) else {
+                continue;
+            };
+            let placed = &mut self.placed[i];
+            if placed.world == world {
+                continue;
+            }
+            // The old place loses what was traced there.
+            if placed.included {
+                changed.push(placed.bounds);
+            }
+            placed.place(world);
+            moved[i] = true;
+        }
+        for (placed, moved) in self.placed.iter_mut().zip(moved) {
+            let included = placed.eligible(dynamic);
+            // The current place gains (or loses) the instance.
+            if (included && (moved || !placed.included)) || (!included && placed.included && !moved)
+            {
+                changed.push(placed.bounds);
+            }
+            placed.included = included;
+        }
+        self.rebuild_top();
+        changed
+    }
+
+    fn rebuild_top(&mut self) {
+        let mut order: Vec<u32> = (0..self.placed.len() as u32)
+            .filter(|&i| self.placed[i as usize].included)
+            .collect();
+        let placed = &self.placed;
+        self.top = build(&mut order, |&i| placed[i as usize].bounds, TOP_LEAF);
+        self.order = order;
+    }
+
+    /// World bounds of the traced instances.
+    pub(crate) fn bounds(&self) -> Option<(Vec3, Vec3)> {
+        self.top.first().map(|n| (n.min, n.max))
+    }
+
+    /// Closest hit along `origin + t * direction` (unit `direction`), 0.001 < t < `maximum`.
+    fn trace(&self, origin: Vec3, direction: Vec3, maximum: f32) -> Option<Hit> {
+        let mut hit = None;
+        let distance = traverse(
+            &self.top,
+            origin,
+            direction,
+            maximum,
+            |first, count, limit| {
+                let mut closest = None;
+                let mut limit = limit;
+                for &i in &self.order[first as usize..(first + count) as usize] {
+                    let placed = &self.placed[i as usize];
+                    let (o, d) = (
+                        placed.inverse.transform_point3(origin),
+                        placed.inverse.transform_vector3(direction),
+                    );
+                    if let Some((t, n)) = self.meshes[placed.mesh].trace(o, d, limit) {
+                        limit = t;
+                        closest = Some(t);
+                        hit = Some((placed, n));
+                    }
+                }
+                closest
+            },
+        );
+        hit.map(|(placed, n)| Hit {
+            distance,
+            normal: (placed.normal * n).normalize_or_zero(),
+            shading: placed.shading,
+        })
+    }
+}
+
+/// Triangles the CPU bake traces at most: the finest LOD level whose scene total
+/// fits is used for every instance (coarser levels where geometry has fewer).
+const TRIANGLE_BUDGET: usize = 4_000_000;
+
+/// The finest LOD level index whose total triangle count fits the budget.
+fn lod_level(scene: &Scene) -> usize {
+    let levels = scene
+        .geometry
+        .iter()
+        .map(|g| g.lods.len())
+        .max()
+        .unwrap_or(1);
+    (0..levels)
+        .find(|&level| {
+            scene
+                .instances
+                .iter()
+                .filter_map(|i| scene.geometry.get(i.geometry))
+                .filter_map(|g| g.lods.get(level.min(g.lods.len().saturating_sub(1))))
+                .map(|lod| lod.indices.len() / 3)
+                .sum::<usize>()
+                <= TRIANGLE_BUDGET
+        })
+        .unwrap_or(levels.saturating_sub(1))
+}
+
+fn volume_of(surfaces: &ProbeSurfaces) -> ProbeVolume {
+    ProbeVolume {
+        origin: Vec3::from_array(surfaces.origin),
+        spacing: Vec3::from_array(surfaces.spacing),
+        counts: surfaces.counts,
+    }
+}
+
+/// Lattice position of probe `id` (before relocation).
+fn centre(volume: &ProbeVolume, id: usize) -> Vec3 {
+    let [cx, cy] = [volume.counts[0] as usize, volume.counts[1] as usize];
+    let index = Vec3::new(
+        (id % cx) as f32,
+        ((id / cx) % cy) as f32,
+        (id / (cx * cy)) as f32,
+    );
+    volume.origin + index * volume.spacing
+}
+
+/// Bakes every probe of an automatic lattice around the tracer's instances.
+pub(crate) fn bake(tracer: &Tracer) -> Result<ProbeSurfaces> {
+    let started = std::time::Instant::now();
+    let (lo, hi) = tracer
+        .bounds()
+        .context("the scene has no static triangles to bake")?;
+    let volume = ProbeVolume::automatic(lo, hi)?;
+    let probes = volume.len();
+    let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
+    let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let chunk = probes.div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        for ((texels, statics), first) in texels
+            .chunks_mut(chunk * SURFACE_TEXELS)
+            .zip(statics.chunks_mut(chunk * STATIC_VECTORS))
+            .zip((0..).step_by(chunk))
+        {
+            let volume = &volume;
+            scope.spawn(move || {
+                for local in 0..texels.len() / SURFACE_TEXELS {
+                    probe(
+                        tracer,
+                        volume,
+                        first + local,
+                        &mut texels[local * SURFACE_TEXELS..(local + 1) * SURFACE_TEXELS],
+                        &mut statics[local * STATIC_VECTORS..(local + 1) * STATIC_VECTORS],
+                    );
+                }
+            });
+        }
+    });
+    eprintln!(
+        "ara-runtime-render: CPU-baked {probes} GI probes ({:?}) in {:.1} s",
+        volume.counts,
+        started.elapsed().as_secs_f64()
+    );
+    let surfaces = ProbeSurfaces {
+        origin: volume.origin.to_array(),
+        spacing: volume.spacing.to_array(),
+        counts: volume.counts,
+        texels,
+        statics,
+    };
+    surfaces.validate()?;
+    Ok(surfaces)
+}
+
+/// Re-traces `probes` of `surfaces` against `tracer`, keeping the lattice.
+pub(crate) fn rebake(
+    tracer: &Tracer,
+    surfaces: &mut ProbeSurfaces,
+    probes: &[usize],
+) -> Result<()> {
+    let volume = volume_of(surfaces);
+    ensure!(
+        probes.iter().all(|&id| id < volume.len()),
+        "probe outside the lattice"
+    );
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let chunk = probes.len().div_ceil(threads).max(1);
+    let traced = std::thread::scope(|scope| {
+        let jobs: Vec<_> = probes
+            .chunks(chunk)
+            .map(|ids| {
+                let volume = &volume;
+                scope.spawn(move || {
+                    ids.iter()
+                        .map(|&id| {
+                            let mut texels = [[0u32; 4]; SURFACE_TEXELS];
+                            let mut statics = [[0f32; 4]; STATIC_VECTORS];
+                            probe(tracer, volume, id, &mut texels, &mut statics);
+                            (id, texels, statics)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        jobs.into_iter()
+            .map(|job| {
+                job.join()
+                    .map_err(|_| anyhow::anyhow!("a probe trace panicked"))
+            })
+            .collect::<Result<Vec<_>>>()
+    })?;
+    for (id, texels, statics) in traced.into_iter().flatten() {
+        surfaces.texels[id * SURFACE_TEXELS..(id + 1) * SURFACE_TEXELS].copy_from_slice(&texels);
+        surfaces.statics[id * STATIC_VECTORS..(id + 1) * STATIC_VECTORS].copy_from_slice(&statics);
+    }
+    Ok(())
+}
+
+/// Whether the lattice of `surfaces` still encloses `bounds` to within a cell.
+pub(crate) fn covers(surfaces: &ProbeSurfaces, (lo, hi): (Vec3, Vec3)) -> bool {
+    let volume = volume_of(surfaces);
+    let last = Vec3::from_array(volume.counts.map(|c| c.saturating_sub(1) as f32));
+    let end = volume.origin + last * volume.spacing;
+    lo.cmpge(volume.origin - volume.spacing).all() && hi.cmple(end + volume.spacing).all()
+}
+
+/// Probes an edit inside `boxes` can change: those within one and a half lattice
+/// spacings of a box (every cell it touches), or within one and a quarter box
+/// diagonals (where the box still covers about 4% of a probe's sphere; beyond,
+/// its share of the irradiance is negligible).
+pub(crate) fn affected(surfaces: &ProbeSurfaces, boxes: &[(Vec3, Vec3)]) -> Vec<usize> {
+    let volume = volume_of(surfaces);
+    let cell = volume.spacing.max_element() * 1.5;
+    let reach: Vec<_> = boxes
+        .iter()
+        .filter(|(lo, hi)| lo.cmple(*hi).all())
+        .map(|&(lo, hi)| (lo, hi, cell.max((hi - lo).length() * 1.25)))
+        .collect();
+    (0..volume.len())
+        .filter(|&id| {
+            let c = centre(&volume, id);
+            reach
+                .iter()
+                .any(|&(lo, hi, r)| (lo - c).max(c - hi).max(Vec3::ZERO).length() < r)
+        })
+        .collect()
 }
 
 fn oct_encode(n: Vec3) -> Vec2 {
@@ -304,146 +835,16 @@ fn half_bits(v: f32) -> u32 {
     }
 }
 
-/// Triangles the CPU bake traces at most: the finest LOD level whose scene total
-/// fits is used for every instance (coarser levels where geometry has fewer).
-const TRIANGLE_BUDGET: usize = 4_000_000;
-
-/// The finest LOD level index whose total triangle count fits the budget.
-fn lod_level(scene: &Scene) -> usize {
-    let levels = scene
-        .geometry
-        .iter()
-        .map(|g| g.lods.len())
-        .max()
-        .unwrap_or(1);
-    (0..levels)
-        .find(|&level| {
-            scene
-                .instances
-                .iter()
-                .filter_map(|i| scene.geometry.get(i.geometry))
-                .filter_map(|g| g.lods.get(level.min(g.lods.len().saturating_sub(1))))
-                .map(|lod| lod.indices.len() / 3)
-                .sum::<usize>()
-                <= TRIANGLE_BUDGET
-        })
-        .unwrap_or(levels.saturating_sub(1))
-}
-
-/// The world-space triangles at the budgeted LOD level of every instance.
-fn triangles(scene: &Scene) -> Vec<Triangle> {
-    let level = lod_level(scene);
-    let mut out = Vec::new();
-    for instance in &scene.instances {
-        let Some(geometry) = scene.geometry.get(instance.geometry) else {
-            continue;
-        };
-        let Some(lod) = geometry
-            .lods
-            .get(level.min(geometry.lods.len().saturating_sub(1)))
-        else {
-            continue;
-        };
-        let world = instance.world;
-        let normal_matrix = world.inverse().transpose();
-        for tri in lod.indices.as_chunks::<3>().0 {
-            let [a, b, c] = tri.map(|i| &geometry.vertices[i as usize]);
-            let [pa, pb, pc] =
-                [a, b, c].map(|v| world.transform_point3(Vec3::from_array(v.position)));
-            let (e1, e2) = (pb - pa, pc - pa);
-            let mut normal = e1.cross(e2).normalize_or_zero();
-            if normal == Vec3::ZERO {
-                continue;
-            }
-            let shading = normal_matrix.transform_vector3(
-                Vec3::from_array(a.normal)
-                    + Vec3::from_array(b.normal)
-                    + Vec3::from_array(c.normal),
-            );
-            if normal.dot(shading) < 0. {
-                normal = -normal;
-            }
-            out.push(Triangle {
-                a: pa,
-                e1,
-                e2,
-                normal,
-                material: instance.material as u32,
-            });
-        }
-    }
-    out
-}
-
-/// Bakes probe surfaces for `scene` on the CPU. `shading` gives each material's
-/// diffuse albedo and emissive radiance.
-pub(crate) fn bake(scene: &Scene, shading: &[Shading]) -> Result<ProbeSurfaces> {
-    let started = std::time::Instant::now();
-    let triangles = triangles(scene);
-    ensure!(!triangles.is_empty(), "the scene has no triangles to bake");
-    let (lo, hi) = bounds(&triangles);
-    let volume = ProbeVolume::automatic(lo, hi)?;
-    let bvh = Bvh::build(triangles);
-    let probes = volume.len();
-    let mut texels = vec![[0u32; 4]; probes * SURFACE_TEXELS];
-    let mut statics = vec![[0f32; 4]; probes * STATIC_VECTORS];
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    let chunk = probes.div_ceil(threads).max(1);
-    std::thread::scope(|scope| {
-        for ((texels, statics), first) in texels
-            .chunks_mut(chunk * SURFACE_TEXELS)
-            .zip(statics.chunks_mut(chunk * STATIC_VECTORS))
-            .zip((0..).step_by(chunk))
-        {
-            let (bvh, shading, volume) = (&bvh, shading, &volume);
-            scope.spawn(move || {
-                for local in 0..texels.len() / SURFACE_TEXELS {
-                    probe(
-                        bvh,
-                        shading,
-                        volume,
-                        first + local,
-                        &mut texels[local * SURFACE_TEXELS..(local + 1) * SURFACE_TEXELS],
-                        &mut statics[local * STATIC_VECTORS..(local + 1) * STATIC_VECTORS],
-                    );
-                }
-            });
-        }
-    });
-    eprintln!(
-        "ara-runtime-render: CPU-baked {probes} GI probes ({:?}, {} triangles) in {:.1} s",
-        volume.counts,
-        bvh.triangles.len(),
-        started.elapsed().as_secs_f64()
-    );
-    let surfaces = ProbeSurfaces {
-        origin: volume.origin.to_array(),
-        spacing: volume.spacing.to_array(),
-        counts: volume.counts,
-        texels,
-        statics,
-    };
-    surfaces.validate()?;
-    Ok(surfaces)
-}
-
 /// One probe: relocation and classification, then the 8x8 cache texels (sixteen
 /// stratified rays each) and distance moments, exactly as `probeSurfacesMain`.
 fn probe(
-    bvh: &Bvh,
-    shading: &[Shading],
+    tracer: &Tracer,
     volume: &ProbeVolume,
     id: usize,
     texels: &mut [[u32; 4]],
     statics: &mut [[f32; 4]],
 ) {
-    let [cx, cy] = [volume.counts[0] as usize, volume.counts[1] as usize];
-    let index = Vec3::new(
-        (id % cx) as f32,
-        ((id / cx) % cy) as f32,
-        (id / (cx * cy)) as f32,
-    );
-    let centre = volume.origin + index * volume.spacing;
+    let centre = centre(volume, id);
     let fibonacci = |lane: usize| {
         let y = 1. - 2. * (lane as f32 + 0.5) / 64.;
         let phi = lane as f32 * 2.399_963_2;
@@ -451,12 +852,9 @@ fn probe(
         Vec3::new(phi.cos() * r, y, phi.sin() * r)
     };
     let back = |origin: Vec3, d: Vec3| {
-        bvh.trace(origin, d, RANGE).map(|h| {
-            (
-                h.distance,
-                bvh.triangles[h.triangle as usize].normal.dot(d) > 0.,
-            )
-        })
+        tracer
+            .trace(origin, d, RANGE)
+            .map(|h| (h.distance, h.normal.dot(d) > 0.))
     };
     let (mut count, mut nearest, mut nearest_back) =
         (0usize, (RANGE, Vec3::ZERO), (RANGE, Vec3::ZERO));
@@ -494,19 +892,14 @@ fn probe(
                 / 8.;
             let dir = oct_decode(uv);
             let mut t = RANGE;
-            if let Some(hit) = bvh.trace(origin, dir, RANGE) {
+            if let Some(hit) = tracer.trace(origin, dir, RANGE) {
                 t = hit.distance;
                 geometry += 1;
                 mean += t;
-                let triangle = &bvh.triangles[hit.triangle as usize];
-                if triangle.normal.dot(dir) < 0. {
-                    let s = shading
-                        .get(triangle.material as usize)
-                        .copied()
-                        .unwrap_or_default();
-                    albedo += s.albedo;
-                    emissive += s.emissive;
-                    normal += triangle.normal;
+                if hit.normal.dot(dir) < 0. {
+                    albedo += hit.shading.albedo;
+                    emissive += hit.shading.emissive;
+                    normal += hit.normal;
                 } else {
                     normal -= dir;
                 }
@@ -543,24 +936,67 @@ fn probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ara_render::instanced::{Instance, Lod, Vertex};
 
-    fn quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3, material: u32) -> [Triangle; 2] {
-        // Faces point towards the origin (the inside of the test room).
-        let tri = |p: Vec3, q: Vec3, r: Vec3| {
-            let n = (q - p).cross(r - p).normalize();
-            Triangle {
-                a: p,
-                e1: q - p,
-                e2: r - p,
-                normal: if n.dot(p + (q - p + r - p) / 3.) > 0. {
-                    -n
-                } else {
-                    n
-                },
-                material,
-            }
-        };
-        [tri(a, b, c), tri(a, c, d)]
+    /// The quad `q` (two triangles) with normals facing `inside`.
+    fn facing(q: [Vec3; 4], inside: Vec3) -> Vec3 {
+        let n = (q[1] - q[0]).cross(q[2] - q[0]).normalize();
+        let centre = (q[0] + q[1] + q[2] + q[3]) / 4.;
+        if n.dot(inside - centre) < 0. { -n } else { n }
+    }
+
+    fn geometry(key: u8, quads: &[[Vec3; 4]], inside: Vec3) -> Geometry {
+        let (mut vertices, mut indices) = (Vec::new(), Vec::new());
+        for &q in quads {
+            let base = vertices.len() as u32;
+            let n = facing(q, inside);
+            vertices.extend(q.map(|p| Vertex {
+                position: p.to_array(),
+                normal: n.to_array(),
+                uv: [0.; 2],
+                tangent: [1., 0., 0., 1.],
+                uv1: [0.; 2],
+                terrain_weights: 0,
+                reserved: 0,
+            }));
+            indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+        let (lo, hi) = quads
+            .iter()
+            .flatten()
+            .fold(EMPTY, |acc, &p| union(acc, (p, p)));
+        Geometry {
+            key: [key; 32],
+            vertices,
+            lods: vec![Lod { indices, error: 0. }],
+            bounds: [lo, hi],
+            deforming: false,
+            revision: 0,
+        }
+    }
+
+    fn scene(geometry: Vec<Geometry>) -> Scene {
+        let instances = (0..geometry.len())
+            .map(|i| Instance {
+                entity: i as u64 + 1,
+                name: String::new(),
+                geometry: i,
+                material: i,
+                world: Mat4::IDENTITY,
+                previous_world: Mat4::IDENTITY,
+            })
+            .collect();
+        Scene {
+            geometry,
+            instances,
+            materials: Vec::new(),
+            textures: 0,
+            lights: Vec::new(),
+            sun_direction: Vec3::Y,
+            sun_lux: Vec3::ZERO,
+            environment: Vec::new(),
+            environment_size: [0, 0],
+        }
     }
 
     #[test]
@@ -569,23 +1005,67 @@ mod tests {
         let mut triangles = Vec::new();
         for i in 0..64 {
             let y = i as f32 * 0.5;
-            triangles.extend(quad(
+            let q = [
                 Vec3::new(-1., y, -1.),
                 Vec3::new(-1., y, 1.),
                 Vec3::new(1., y, 1.),
                 Vec3::new(1., y, -1.),
-                i,
-            ));
+            ];
+            let normal = facing(q, Vec3::new(0., 1000., 0.));
+            for (b, c) in [(q[1], q[2]), (q[2], q[3])] {
+                triangles.push(Triangle {
+                    a: q[0],
+                    e1: b - q[0],
+                    e2: c - q[0],
+                    normal,
+                });
+            }
         }
-        let bvh = Bvh::build(triangles);
-        assert!(bvh.nodes.len() > 1, "the BVH split");
-        let hit = bvh
+        let mesh = Mesh::new(triangles);
+        assert!(mesh.nodes.len() > 1, "the BVH split");
+        let (distance, normal) = mesh
             .trace(Vec3::new(0.2, 100., 0.1), Vec3::NEG_Y, RANGE)
-            .ok_or_else(|| anyhow::anyhow!("the ray hits the top floor"))?;
-        assert!((hit.distance - (100. - 31.5)).abs() < 1e-3);
-        assert_eq!(bvh.triangles[hit.triangle as usize].material, 63);
+            .context("the ray hits the top floor")?;
+        assert!((distance - (100. - 31.5)).abs() < 1e-3);
+        assert!(normal.y > 0.99);
         assert!(
-            bvh.trace(Vec3::new(5., 100., 5.), Vec3::NEG_Y, RANGE)
+            mesh.trace(Vec3::new(5., 100., 5.), Vec3::NEG_Y, RANGE)
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn instances_trace_through_their_transforms() -> Result<()> {
+        // One unit floor quad, placed twice: raised 2 m and scaled 3x.
+        let floor = [
+            Vec3::new(-0.5, 0., -0.5),
+            Vec3::new(-0.5, 0., 0.5),
+            Vec3::new(0.5, 0., 0.5),
+            Vec3::new(0.5, 0., -0.5),
+        ];
+        let mut scene = scene(vec![geometry(1, &[floor], Vec3::Y)]);
+        scene.instances[0].world = Mat4::from_translation(Vec3::new(0., 2., 0.));
+        let shading = [Shading {
+            albedo: Vec3::splat(0.5),
+            emissive: Vec3::ZERO,
+        }];
+        let mut tracer = Tracer::new(&scene, &shading, &BTreeSet::new());
+        let hit = tracer
+            .trace(Vec3::new(0.2, 10., 0.), Vec3::NEG_Y, RANGE)
+            .context("the raised floor")?;
+        assert!((hit.distance - 8.).abs() < 1e-4 && hit.normal.y > 0.99);
+        let scaled = Mat4::from_scale(Vec3::splat(3.));
+        let changed = tracer.edit(&[(1, scaled)], &BTreeSet::new());
+        assert_eq!(changed.len(), 2, "old and new places");
+        let hit = tracer
+            .trace(Vec3::new(1.4, 10., 0.), Vec3::NEG_Y, RANGE)
+            .context("the scaled floor")?;
+        assert!((hit.distance - 10.).abs() < 1e-4);
+        assert_eq!(tracer.edit(&[], &BTreeSet::from([1])).len(), 1);
+        assert!(
+            tracer
+                .trace(Vec3::new(1.4, 10., 0.), Vec3::NEG_Y, RANGE)
                 .is_none()
         );
         Ok(())
@@ -603,52 +1083,20 @@ mod tests {
     #[test]
     fn a_probe_inside_a_closed_emissive_room_sees_its_walls() {
         // A 4 m cube, faces pointing inward; the ceiling emits.
-        let corner = |x: f32, y: f32, z: f32| Vec3::new(x, y, z) * 2.;
-        let mut triangles = Vec::new();
+        let c = |x: f32, y: f32, z: f32| Vec3::new(x, y, z) * 2.;
         let (l, h) = (-1., 1.);
-        triangles.extend(quad(
-            corner(l, l, l),
-            corner(h, l, l),
-            corner(h, l, h),
-            corner(l, l, h),
-            0,
-        ));
-        triangles.extend(quad(
-            corner(l, h, l),
-            corner(l, h, h),
-            corner(h, h, h),
-            corner(h, h, l),
-            1,
-        ));
-        triangles.extend(quad(
-            corner(l, l, l),
-            corner(l, l, h),
-            corner(l, h, h),
-            corner(l, h, l),
-            0,
-        ));
-        triangles.extend(quad(
-            corner(h, l, l),
-            corner(h, h, l),
-            corner(h, h, h),
-            corner(h, l, h),
-            0,
-        ));
-        triangles.extend(quad(
-            corner(l, l, l),
-            corner(l, h, l),
-            corner(h, h, l),
-            corner(h, l, l),
-            0,
-        ));
-        triangles.extend(quad(
-            corner(l, l, h),
-            corner(h, l, h),
-            corner(h, h, h),
-            corner(l, h, h),
-            0,
-        ));
-        let bvh = Bvh::build(triangles);
+        let walls = [
+            [c(l, l, l), c(h, l, l), c(h, l, h), c(l, l, h)],
+            [c(l, l, l), c(l, l, h), c(l, h, h), c(l, h, l)],
+            [c(h, l, l), c(h, h, l), c(h, h, h), c(h, l, h)],
+            [c(l, l, l), c(l, h, l), c(h, h, l), c(h, l, l)],
+            [c(l, l, h), c(h, l, h), c(h, h, h), c(l, h, h)],
+        ];
+        let ceiling = [[c(l, h, l), c(l, h, h), c(h, h, h), c(h, h, l)]];
+        let scene = scene(vec![
+            geometry(1, &walls, Vec3::ZERO),
+            geometry(2, &ceiling, Vec3::ZERO),
+        ]);
         let shading = [
             Shading {
                 albedo: Vec3::splat(0.5),
@@ -659,6 +1107,7 @@ mod tests {
                 emissive: Vec3::splat(4.),
             },
         ];
+        let tracer = Tracer::new(&scene, &shading, &BTreeSet::new());
         let volume = ProbeVolume {
             origin: Vec3::new(-0.5, -0.5, -0.5),
             spacing: Vec3::ONE,
@@ -666,7 +1115,7 @@ mod tests {
         };
         let mut texels = vec![[0u32; 4]; SURFACE_TEXELS];
         let mut statics = vec![[0f32; 4]; STATIC_VECTORS];
-        probe(&bvh, &shading, &volume, 0, &mut texels, &mut statics);
+        probe(&tracer, &volume, 0, &mut texels, &mut statics);
         assert_eq!(statics[64][3], 1., "an open probe is active");
         // Every texel hits a wall (no sky); some see the emissive ceiling.
         assert!(texels.iter().all(|t| t[0] >> 24 == 0));
