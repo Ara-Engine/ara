@@ -90,7 +90,12 @@ impl World {
             .world()
             .get_resource::<ara_runtime::animation::Library>()
             .context("runtime animation/material library missing")?;
-        ara_runtime_render::fidelity::native::Content::resolve(
+        let resolve = if self.packed.is_some() {
+            ara_runtime_render::fidelity::native::Content::resolve
+        } else {
+            ara_runtime_render::fidelity::native::Content::resolve_available
+        };
+        resolve(
             frame,
             self.runtime.documents(),
             self.runtime.schema(),
@@ -728,6 +733,7 @@ impl World {
         let results = self
             .runtime
             .reload_assets(Box::new(assets(&self.cache, &self.pins)?))?;
+        self.mark();
         Ok(json!(
             results
                 .into_iter()

@@ -1,6 +1,8 @@
 //! Importer settings and bidirectional dependency links for the selected source.
 //! Settings edits apply the shared `import.configure` command (the same one the CLI
 //! and agents use), so importer selection and versions stay engine-owned.
+//! Layout: a header (preview beside name, path and importer), then 24 px property
+//! rows (label left, typed control right), the actions, and Uses / Used by.
 use super::*;
 impl Shell {
     pub(super) fn import_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
@@ -23,7 +25,15 @@ impl Shell {
                 stamp: 0,
                 domain: None,
             });
-        out.push_str("<scroll id='import-inspector' class='body'>");
+        let width = self
+            .ui
+            .find("import-inspector")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(300.);
+        // Importer labels are longer than component fields ("Virtual geometry").
+        let label = (width * 0.42).clamp(110., 170.);
+        out.push_str("<scroll id='import-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding-bottom:12px'>");
+        // The preview renders at 2× its 96 px logical size, separately from grid tiles.
         let mut preview_asset = asset.clone();
         if let Some(doc) = editor
             .host
@@ -34,12 +44,23 @@ impl Shell {
             && doc.kind == "graph"
         {
             let source = ara_doc::write(doc, editor.host.store().schema());
-            preview_asset.path = self
-                .thumbnails
-                .request_live(path, source.into_bytes(), false);
+            preview_asset.path =
+                self.thumbnails
+                    .request_live(path, source.into_bytes(), false, 192);
+        } else if matches!(
+            asset.kind.as_str(),
+            "png" | "jpg" | "jpeg" | "glb" | "gltf" | "fbx"
+        ) {
+            preview_asset.path = self.thumbnails.request_sized(path, 192);
         }
-        self.asset_thumbnail(&preview_asset, out, "import-preview", 128.);
-        out.push_str(&format!("<text id='import-title' class='heading' text='{}' /><text id='import-path' class='muted' text='{}' style='white-space:normal' /><panel id='import-divider' class='divider' />",escape(path.rsplit('/').next().unwrap_or(path)),escape(path)));
+        // Until the larger render lands, the grid tile's image stands in.
+        if !self.thumbnail_slots.contains_key(&preview_asset.path)
+            && self.thumbnail_slots.contains_key(&asset.path)
+        {
+            preview_asset.path = asset.path.clone();
+        }
+        out.push_str("<panel id='import-header' class='row' style='flex-shrink:0;align-items:start;gap:10px;padding:8px'>");
+        self.asset_thumbnail(&preview_asset, out, "import-preview", 96.);
         let sidecar = format!("{path}.import.json");
         let doc = editor
             .host
@@ -49,12 +70,24 @@ impl Shell {
             .find_map(|(path, doc)| (path == sidecar).then_some(doc));
         // Undoing an import leaves the sidecar without its settings record: that reads
         // as "not imported", like a missing sidecar.
-        if let Some((doc, record)) =
-            doc.and_then(|doc| doc.record("i_settings").map(|record| (doc, record)))
-        {
+        let imported = doc.and_then(|doc| doc.record("i_settings").map(|record| (doc, record)));
+        let importer = imported
+            .as_ref()
+            .and_then(|(_, record)| record.get("importer"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        out.push_str(&format!("<panel id='import-copy' style='flex-grow:1;flex-basis:0px;min-width:0px;gap:4px'><text id='import-title' class='heading' style='font-size:13px;overflow:hidden' text='{}' /><text id='import-path' class='caption' text='{}' style='white-space:normal' />",escape(path.rsplit('/').next().unwrap_or(path)),escape(path)));
+        if !importer.is_empty() {
+            out.push_str(&format!(
+                "<text id='import-engine' class='chip-accent' text='{}' />",
+                escape(importer)
+            ));
+        }
+        out.push_str("</panel></panel>");
+        if let Some((doc, record)) = imported {
             let settings: ara_asset::ImportSettings =
                 serde_json::from_value(Value::Object(record.clone()))?;
-            out.push_str(&format!("<text id='import-engine' class='badge' text='{}' /><text id='import-settings-title' class='heading' text='Import settings' />",escape(&settings.importer)));
+            out.push_str("<panel id='import-settings-header' class='component-header'><text id='import-settings-title' class='component-title' style='padding-left:8px' text='Import settings' /></panel>");
             let (defaults, schema) = match settings.importer.as_str() {
                 "ara.texture" => (
                     ara_json::to_value(&ara_importers::TextureSettings::default())?,
@@ -83,26 +116,28 @@ impl Shell {
                     let id = format!("import-setting-{key}");
                     let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
                     let help = desc.map(|f| f.doc.as_str()).unwrap_or("");
-                    let label = match key.as_str() {
+                    let name = match key.as_str() {
                         "lodCount" => "LOD count".to_owned(),
                         "lodError" => "LOD error".to_owned(),
                         "flipNormalY" => "Flip normal Y".to_owned(),
-                        "maxDimension" => "Maximum dimension".to_owned(),
+                        "maxDimension" => "Max dimension".to_owned(),
                         _ => super::inspector_panel::sentence(key),
                     };
-                    out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' description='{}' />",escape(&label),escape(help)));
+                    out.push_str(&format!("<panel id='{id}-row' class='prop-row'><panel id='{id}-label-cell' class='prop-label' style='width:{label}px'><text id='{id}-label' text='{}' description='{}' /></panel><panel id='{id}-value' class='prop-value'>",escape(&name),escape(help)));
                     self.bindings.insert(
                         ara_ui::source::stable_id(&id),
                         Binding::ImportField(doc.id.to_string(), key.clone()),
                     );
                     if let Some(v) = value.as_bool() {
                         out.push_str(&format!(
-                            "<toggle id='{id}' checked='{v}' action='Dispatch' />"
+                            "<toggle id='{id}' checked='{v}' label='{}' description='{}' action='Dispatch' />",
+                            escape(&name),
+                            escape(help)
                         ));
                     } else if let Some(crate::inspector::Widget::Enum { options }) =
                         desc.map(|d| crate::inspector::widget(db, d))
                     {
-                        out.push_str(&format!("<panel id='{id}-options' style='gap:4px'>"));
+                        out.push_str(&format!("<panel id='{id}-options' class='segment'>"));
                         for (n, option) in options.iter().enumerate() {
                             out.push_str(&self.bind_button(
                                 &format!("{id}-option-{n}"),
@@ -113,9 +148,9 @@ impl Shell {
                                     json!(option),
                                 ),
                                 if value == option {
-                                    "small selected"
+                                    "segment-button selected"
                                 } else {
-                                    "small quiet"
+                                    "segment-button"
                                 },
                             ));
                         }
@@ -125,45 +160,56 @@ impl Shell {
                             .drafts
                             .get(&format!("@import|{}|{key}", doc.id))
                             .cloned()
-                            .unwrap_or_else(|| panels::display(value));
-                        out.push_str(&format!("<field id='{id}' class='{}' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&label),escape(help)));
+                            .unwrap_or_else(|| {
+                                // Empty maps and lists read as blank, not raw JSON.
+                                match value {
+                                    Value::Object(o) if o.is_empty() => String::new(),
+                                    Value::Array(a) if a.is_empty() => String::new(),
+                                    _ => panels::display(value),
+                                }
+                            });
+                        out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&name),escape(help)));
                     }
-                    out.push_str("</panel>");
+                    out.push_str("</panel></panel>");
                 }
             }
-            out.push_str("<text id='import-quality-label' class='field-label' text='Final quality' /><panel id='import-quality' class='row'>");
-            for preset in [
-                ara_asset::CookPreset::Fast,
-                ara_asset::CookPreset::Balanced,
-                ara_asset::CookPreset::HighQuality,
+            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Final cook quality: Fast iterates, High quality ships' /></panel><panel id='import-quality-value' class='prop-value'><panel id='import-quality' class='segment'>"));
+            for (preset, name) in [
+                (ara_asset::CookPreset::Fast, "Fast"),
+                (ara_asset::CookPreset::Balanced, "Balanced"),
+                (ara_asset::CookPreset::HighQuality, "High"),
             ] {
-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),&format!("{preset:?}"),Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if preset==settings.preset{"small selected"}else{"small quiet"}));
+                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":path,"preset":preset}})],"Change import quality".into()),if preset==settings.preset{"segment-button selected"}else{"segment-button"}));
             }
-            out.push_str("</panel>");
+            out.push_str("</panel></panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
                 "asset-reimport",
                 "Reimport",
                 Binding::Protocol("editor.asset.reimport", json!({"path":path})),
                 "",
             ));
+            out.push_str("</panel>");
         } else if ara_importers::commands::importer_for_source(path).is_ok() {
-            out.push_str("<text id='import-new-help' class='muted' text='Create settings and cook this source in an isolated worker.' style='white-space:normal' />");
+            out.push_str("<panel id='import-new' style='flex-shrink:0;gap:8px;padding:8px;padding-left:12px'><text id='import-new-help' class='muted' text='Create settings and cook this source in an isolated worker.' style='white-space:normal' />");
             out.push_str(&self.bind_button(
                 "asset-import",
                 "Import source",
                 Binding::Protocol("editor.asset.import", json!({"path":path})),
-                "",
+                "primary",
             ));
+            out.push_str("</panel>");
         }
         if matches!(asset.kind.as_str(), "graph" | "animation")
             && let Some(id) = editor.host.store().workspace().find(path)
         {
+            out.push_str("<panel id='import-open-row' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
                 "asset-open",
                 "Open editor",
                 Binding::Protocol("editor.workspace", json!({"resource":id})),
-                "",
+                "primary",
             ));
+            out.push_str("</panel>");
         }
         let mut graph = ara_asset::DependencyGraph::default();
         for item in &self.browser.items {
@@ -199,10 +245,10 @@ impl Shell {
                 graph.users(path).map(str::to_owned).collect::<Vec<_>>(),
             ),
         ] {
-            out.push_str(&format!("<panel id='dep-{label}-divider' class='divider' /><text id='dep-{label}-title' class='heading' text='{label}' />"));
+            out.push_str(&format!("<panel id='dep-{label}-header' class='side-header'><text id='dep-{label}-title' class='caption' text='{label}' /><text id='dep-{label}-count' class='caption' text='{}' /></panel>",links.len()));
             if links.is_empty() {
                 out.push_str(&format!(
-                    "<text id='dep-{label}-empty' class='badge' text='No dependencies' />"
+                    "<panel id='dep-{label}-empty-row' style='flex-shrink:0;padding-left:12px;padding-bottom:4px'><text id='dep-{label}-empty' class='caption' text='None' /></panel>"
                 ));
             }
             for (n, link) in links.iter().enumerate() {
@@ -210,7 +256,7 @@ impl Shell {
                     &format!("dependency-{label}-{n}"),
                     link,
                     Binding::Protocol("editor.workspace", json!({"asset":link})),
-                    "small quiet folder-row",
+                    "small quiet folder-row dep-row",
                 ));
             }
         }

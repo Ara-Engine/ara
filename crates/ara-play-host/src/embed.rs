@@ -402,6 +402,7 @@ impl PlayService {
     /// previous handle; embedded players then restart their rings (a same-size
     /// resize), so slots an old handle held come back.
     pub fn surfaces(&mut self) -> Surfaces {
+        self.graphics_prewarm = true;
         let (updates, updates_rx) = channel();
         let (requests_tx, requests) = channel();
         self.channel = Some(Channel { updates, requests });
