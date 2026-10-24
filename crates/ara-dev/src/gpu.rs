@@ -123,6 +123,14 @@ fn position(directory: &Path, ticket: &Ticket) -> Result<usize> {
 }
 
 pub(crate) fn run(timeout: u64, command: &[OsString]) -> Result<bool> {
+    locked(timeout, || {
+        eprintln!("GPU lock acquired; running {command:?}");
+        crate::platform::gpu_command(command)
+    })
+}
+
+/// Keep admission and crash recovery identical for direct commands and perf sessions.
+pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> Result<T> {
     let local = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from))
@@ -162,9 +170,8 @@ pub(crate) fn run(timeout: u64, command: &[OsString]) -> Result<bool> {
         }
         std::thread::sleep(Duration::from_millis(200));
     }
-    eprintln!("GPU lock acquired; running {:?}", command);
-    let passed = crate::platform::gpu_command(command)?;
+    let result = operation();
     drop(gpu);
     drop(ticket);
-    Ok(passed)
+    result
 }

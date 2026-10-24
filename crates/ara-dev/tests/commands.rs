@@ -12,18 +12,80 @@ use std::sync::{
 static SERIAL: Mutex<()> = Mutex::new(());
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+#[test]
+fn perf_controls_and_stdio_mcp_use_the_existing_session_without_builds() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let session = root.join("target/perf/control");
+    fs::create_dir_all(&session).unwrap();
+    fs::write(
+        session.parent().unwrap().join("status.json"),
+        br#"{"quality":"high","shaders":{"epoch":2}}"#,
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    let output = ok(
+        &root,
+        binary,
+        &[
+            "perf",
+            "control",
+            "--session",
+            session.to_str().unwrap(),
+            "--preset",
+            "medium",
+        ],
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Queued"));
+    let requests: Vec<_> = fs::read_dir(&session)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(requests.len(), 1);
+    let request: serde_json::Value =
+        serde_json::from_slice(&fs::read(&requests[0]).unwrap()).unwrap();
+    assert_eq!(request["quality"], "medium");
+    assert_eq!(request["measure"], true);
+    let mut child = configured_command(
+        &root,
+        binary,
+        &["perf", "mcp", "--session", session.to_str().unwrap()],
+    )
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    child.stdin.take().unwrap().write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"perf_status\"}}\n").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        response["result"]["structuredContent"]["live"]["shaders"]["epoch"],
+        2
+    );
+    assert!(response["result"]["structuredContent"]["latest_measurement"].is_null());
+}
+
 fn scratch(label: &str) -> PathBuf {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/ara-dev/tests")
-        .join(format!(
-            "{label}-{}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+    let path = target.join("ara-dev/tests").join(format!(
+        "{label}-{}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
     fs::create_dir_all(&path).unwrap();
     let path = path.canonicalize().unwrap();
     #[cfg(windows)]
@@ -281,51 +343,161 @@ fn invokes_fresh_peer() {
 }
 
 #[test]
-fn managed_changes_select_the_script_host_and_consumers_with_a_conservative_fallback() {
+fn peer_binaries_share_the_test_feature_union_without_a_second_build() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();
     let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
     fs::write(
         root.join("Cargo.toml"),
-        manifest.replace("\"diag\"]", "\"diag\", \"script\"]"),
+        format!(
+            "{}\n[profile.test]\ndebug-assertions = false\n",
+            manifest.replace("\"diag\"]", "\"diag\", \"owner\"]")
+        ),
     )
     .unwrap();
-    fs::create_dir_all(root.join("script/src")).unwrap();
+    let core = fs::read_to_string(root.join("core/Cargo.toml")).unwrap();
     fs::write(
-        root.join("script/Cargo.toml"),
-        "[package]\nname = \"ara-script\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-    )
-    .unwrap();
-    fs::write(
-        root.join("script/src/lib.rs"),
-        "pub fn value() -> u32 {\n    1\n}\n",
+        root.join("core/Cargo.toml"),
+        format!("{core}\n[features]\nextra = []\n"),
     )
     .unwrap();
     let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
-    fs::write(root.join("tool/Cargo.toml"), format!("{tool}\n[dev-dependencies]\nscript = {{ package = \"ara-script\", path = \"../script\" }}\n")).unwrap();
+    fs::write(
+        root.join("tool/Cargo.toml"),
+        tool.replace(", optional = true", ""),
+    )
+    .unwrap();
+    fs::write(
+        root.join("tool/src/main.rs"),
+        "fn main() {\n    println!(\"{} {}\", renamed::extra(), cfg!(debug_assertions));\n}\n",
+    )
+    .unwrap();
+    // A selected library-only package enables a feature exclusively through dev-dependencies.
+    fs::create_dir_all(root.join("owner/src")).unwrap();
+    fs::write(root.join("owner/Cargo.toml"), "[package]\nname = \"feature-owner\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dev-dependencies]\nmini-core = { path = \"../core\", features = [\"extra\"] }\n").unwrap();
+    fs::write(
+        root.join("owner/src/lib.rs"),
+        r#"#[test]
+fn peer_keeps_dev_features() {
+    assert!(mini_core::extra());
+    let peer = std::env::var_os("CARGO_BIN_EXE_mini-tool").expect("peer binary");
+    let output = std::process::Command::new(peer).output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true false\n");
+}
+"#,
+    )
+    .unwrap();
+    fs::write(root.join("core/src/lib.rs"), "pub fn value() -> u32 {\n    1\n}\npub fn extra() -> bool {\n    cfg!(feature = \"extra\")\n}\n").unwrap();
     ok(&root, "cargo", &["generate-lockfile", "--offline"]);
     git(&root, &["add", "."]);
-    git(&root, &["commit", "-m", "script host"]);
-    for (root, expected) in [
-        (root, serde_json::json!(["ara-script", "mini-tool"])),
+    git(&root, &["commit", "-m", "dev feature fixture"]);
+    let core = fs::read_to_string(root.join("core/src/lib.rs")).unwrap();
+    fs::write(root.join("core/src/lib.rs"), core.replace('1', "2")).unwrap();
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--no-compiler-cache"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["passed"], true);
+    assert_eq!(
+        report["affected"],
+        serde_json::json!(["feature-owner", "mini-core", "mini-tool"])
+    );
+    let rows = report["checks"].as_array().unwrap();
+    assert!(!rows.iter().any(|row| row["check"] == "test-binaries"));
+    let run = fs::read_dir(root.join("target/ara-dev"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.join("test-build.json").is_file())
+        .unwrap();
+    let messages: Vec<serde_json::Value> = fs::read_to_string(run.join("test-build.json"))
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    assert!(messages.iter().any(|message| {
+        message["target"]["name"] == "mini-tool"
+            && message["profile"]["test"] == false
+            && message["executable"].is_string()
+    }));
+    let regular_core: Vec<_> = messages
+        .iter()
+        .filter(|message| {
+            message["reason"] == "compiler-artifact"
+                && message["target"]["name"] == "mini_core"
+                && message["profile"]["test"] == false
+        })
+        .collect();
+    assert_eq!(regular_core.len(), 1);
+    assert_eq!(regular_core[0]["features"], serde_json::json!(["extra"]));
+    assert!(
+        !fs::read_to_string(run.join("tests.log"))
+            .unwrap()
+            .contains("Compiling "),
+        "executing prepared tests must reuse the compiled feature union"
+    );
+}
+
+#[test]
+fn external_inputs_select_their_consumers_with_a_conservative_fallback() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    for (name, input, expected) in [
         (
-            fixture(),
-            serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
+            "ara-script",
+            "dotnet/src/Managed.cs",
+            serde_json::json!(["ara-script", "mini-tool"]),
+        ),
+        (
+            "ara-release",
+            "release/licenses/spdx/License.txt",
+            serde_json::json!(["ara-release"]),
         ),
     ] {
-        fs::create_dir_all(root.join("dotnet/src")).unwrap();
+        let root = fixture();
+        let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
         fs::write(
-            root.join("dotnet/src/Managed.cs"),
-            "// Managed ABI change\n",
+            root.join("Cargo.toml"),
+            manifest.replace("\"diag\"]", "\"diag\", \"script\"]"),
         )
         .unwrap();
-        let output = ok(
-            &root,
-            env!("CARGO_BIN_EXE_ara-dev"),
-            &["check", "--plan", "--json"],
-        );
-        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(report["affected"], expected);
+        fs::create_dir_all(root.join("script/src")).unwrap();
+        fs::write(
+            root.join("script/Cargo.toml"),
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("script/src/lib.rs"),
+            "pub fn value() -> u32 {\n    1\n}\n",
+        )
+        .unwrap();
+        if name == "ara-script" {
+            let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
+            fs::write(root.join("tool/Cargo.toml"), format!("{tool}\n[dev-dependencies]\nscript = {{ package = \"ara-script\", path = \"../script\" }}\n")).unwrap();
+        }
+        ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-m", "script host"]);
+        for (root, expected) in [
+            (root, expected),
+            (
+                fixture(),
+                serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
+            ),
+        ] {
+            let path = root.join(input);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "external input changed\n").unwrap();
+            let output = ok(
+                &root,
+                env!("CARGO_BIN_EXE_ara-dev"),
+                &["check", "--plan", "--json"],
+            );
+            let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(report["affected"], expected);
+        }
     }
 }
 
