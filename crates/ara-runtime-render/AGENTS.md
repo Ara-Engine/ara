@@ -1,16 +1,23 @@
 # ara-runtime-render
 
-Presents `ara_runtime::extract::RenderFrame`s through fidelity on RT GPUs, with
-`ara-render` as Low/non-RT fallback. Owns the device and per-view upload state;
-no simulation, window or process code.
+Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
+and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
+device and per-view upload state; no simulation, window or process code.
 
 ## Public API
 
 - `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the renderer is
   created on the first frame (headless when `window_extensions` is empty).
 - `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
-  the project default or user override. Unsupported RT requests resolve explicitly
-  to Low; rendering failures retain the completed image and expose `presentation_error`.
+  the project default or user override. `set_render_options` selects experimental
+  RT before device creation; otherwise no RT presentation resources are enabled.
+  Rendering failures retain the completed image and expose `presentation_error`.
+- `RasterView`: caller-owned renderer/device view shared by editor Scene and
+  Presenter. `prepare` adopts published native generations, `render` draws native
+  terrain/foliage and particles through the shared look. `capture` settles residency,
+  probe acquisition and temporal history. It never discovers, cooks or imports.
+- Probe GI is enabled by default, acquired asynchronously and disk-cached; live
+  frames poll without waiting. `wait_probe_gi` is an explicit capture boundary.
 - `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
   textures, instance poses and changed skin palettes. The resolver reads published
   terrain/material/prefab assets only on structural changes. Model-only callers can
@@ -21,17 +28,17 @@ no simulation, window or process code.
   owns the shared device; its own output and size are not the selected presentation.
 - `capture(&frame, size, mode, marks,
   seed)`: deterministic capture with numbered marks and a legend whose names are
-  `Name (e_address)`; terrain and foliage come from the landscape composite.
+  `Name (e_address)`; terrain and foliage use the same native G-buffer.
   `capture_presented(&frame, size, marks, seed)`: reads the GPU-composited window
   path, including landscape/foliage and persistent VFX (`presented: true`).
 - Fidelity composes terrain, foliage and particles before shared HDR post/TAAU;
-  native captures read the same view as windows and embedded Game. Low merges
-  ara-landscape depth and particles through the existing raster compositor.
+  native captures read the same view as windows and embedded Game. Raster puts
+  terrain/foliage in the G-buffer, then particles before shared temporal/post.
 - `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
-  texture uploads, VFX simulation/draw, fidelity/post replays and publication.
-  Residency counters accompany that same frame. Low returns `None` because its
-  landscape/VFX coverage is incomplete. Native terrain/foliage are in fidelity.
+  texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
+  Residency counters accompany that same frame, including native Low. The legacy
+  diagnostic path alone has incomplete coverage. Terrain/foliage are in view passes.
   Sum components per frame before quantiles; marginal pass medians do not add.
 - `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
   `Content` holds already-resolved terrain layers, foliage rule models, material
@@ -73,8 +80,8 @@ no simulation, window or process code.
 - Skinning is CPU-side: GPU skinning needs a skinned vertex ABI in the cooked
   shaders (M3). Fox (1728 vertices) costs well under a millisecond.
 - Native material/draw-set generations replace scene resources while retaining
-  pipelines and targets. Light/transform/skin edits stream; native textures never
-  decode to RGBA8. Low retains its legacy decode/cache path.
+  pipelines and targets. Light/transform/skin edits stream; native texture uploads
+  never decode to RGBA8 or build an atlas, on any raster tier.
 - At most 64 local lights; one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
 - `Presenter2d::set_atlases` publishes textures once; `prepare` moves the atlas map

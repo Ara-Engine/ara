@@ -9,6 +9,8 @@ use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prep
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 #[derive(Default)]
 pub(super) struct SceneView {
+    raster: Option<ara_runtime_render::RasterView>,
+    raster_frame: Option<ara_runtime::extract::RenderFrame>,
     fidelity: Option<FidelityView>,
     content: Option<crate::world::gltf::FidelityContent>,
     prepared: Option<Prepared>,
@@ -61,6 +63,13 @@ impl SceneView {
         if self.failed.is_some() {
             return Err("Scene capture could not prepare the requested content generation".into());
         }
+        if self.raster.is_some() && self.fidelity.is_none() {
+            self.raster
+                .as_mut()
+                .ok_or("raster Scene view")?
+                .reset_capture(renderer)?;
+            return self.render_raster(renderer, editor, view, settle);
+        }
         self.fidelity
             .as_mut()
             .ok_or("Scene capture has no fidelity view")?
@@ -76,11 +85,41 @@ impl SceneView {
         view: &crate::world::DocumentView,
         settle: u32,
     ) -> ara_ui::Result<()> {
-        if !renderer.is_native() && self.preview_view.is_some() {
-            self.set_preview_view(None);
-        }
         let mode = view_mode(&editor.state.view_mode);
         self.lit = matches!(mode, ViewMode::Lit);
+        let settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
+        let options = ara_runtime_render::RenderOptions {
+            ray_tracing: settings.ray_tracing,
+        };
+        let choice = editor
+            .state
+            .render_quality
+            .unwrap_or(settings.quality.into());
+        let plan = Plan::resolve(
+            choice,
+            &Capabilities::of(renderer.gpu()),
+            renderer.size(),
+            options,
+        )?;
+        if matches!(plan.path, RenderPath::Raster(_)) {
+            if let Err(error) = self.render_raster(renderer, editor, view, settle) {
+                eprintln!("Scene raster keeps its last good presentation: {error}");
+                self.remaining = 0;
+                if self.published.is_none() {
+                    return Err(error);
+                }
+            }
+            return Ok(());
+        }
+        if self.preview_view.is_some() {
+            self.set_preview_view(None);
+        }
+        if let Some(raster) = self.raster.take() {
+            raster.destroy(renderer)?;
+            renderer.clear_native()?;
+            self.raster_frame = None;
+            self.invalidate();
+        }
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
         self.active = false;
         if !lit_fidelity(editor) {
@@ -100,6 +139,112 @@ impl SceneView {
         }
         Ok(())
     }
+    fn render_raster(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        settle: u32,
+    ) -> ara_ui::Result<()> {
+        let store = editor.host.store();
+        let settings = crate::world::gltf::render_settings(store.workspace())?;
+        let choice = editor
+            .state
+            .render_quality
+            .unwrap_or(settings.quality.into());
+        let plan = Plan::resolve(
+            choice,
+            &Capabilities::of(renderer.gpu()),
+            renderer.size(),
+            ara_runtime_render::RenderOptions {
+                ray_tracing: settings.ray_tracing,
+            },
+        )?;
+        let RenderPath::Raster(plan) = plan.path else {
+            return Ok(());
+        };
+        if let Some(fidelity) = self.fidelity.take() {
+            fidelity.destroy(renderer.gpu_mut())?;
+            self.prepared = None;
+            self.plan = None;
+            self.revision = None;
+        }
+        if let Some(effects) = self.effects.take() {
+            effects.destroy(renderer.gpu_mut())?;
+        }
+        let content = match &mut self.content {
+            Some(content) => content,
+            slot @ None => slot.insert(crate::world::gltf::FidelityContent::new(
+                editor.host.root(),
+            )?),
+        };
+        let revision = (
+            store.revision(),
+            editor.extraction_revision,
+            editor.review_revision,
+            content.revision(),
+        );
+        if self.revision != Some(revision)
+            || editor.gesture.is_some()
+            || self.raster_frame.is_none()
+        {
+            self.failed = Some(revision);
+            let frame = content.frame(
+                self.preview_view.as_ref().unwrap_or(view),
+                store.workspace(),
+                store.schema(),
+                editor.gesture.as_ref(),
+                &editor.state.hidden,
+            )?;
+            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+            let raster = self.raster.get_or_insert_with(|| {
+                ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
+            });
+            raster.prepare(renderer, &frame, plan, look, || {
+                content.content(&frame, store.workspace(), store.schema())
+            })?;
+            self.raster_frame = Some(frame);
+            self.revision = Some(revision);
+            self.failed = None;
+            self.remaining = 64;
+        } else {
+            let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
+            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+            self.raster.as_mut().ok_or("raster view")?.prepare(
+                renderer,
+                frame,
+                plan,
+                look,
+                || content.content(frame, store.workspace(), store.schema()),
+            )?;
+        }
+        if self.camera != Some(editor.state.camera) {
+            self.remaining = self.remaining.max(8);
+            self.camera = Some(editor.state.camera);
+        }
+        let raster = self.raster.as_mut().ok_or("raster view")?;
+        let frame = self.raster_frame.as_ref().ok_or("raster frame")?;
+        for _ in 0..settle.max(1) {
+            raster.render(
+                renderer,
+                frame,
+                &editor.state.camera.spec(),
+                view_mode(&editor.state.view_mode),
+            )?;
+            self.remaining = self.remaining.saturating_sub(1);
+            if renderer
+                .native_texture_stats()
+                .is_some_and(|stats| stats.pending_textures > 0)
+            {
+                self.remaining = self.remaining.max(1);
+            }
+        }
+        let output = renderer.output();
+        let size = renderer.size();
+        PresentationImage::publish(&mut self.published, renderer.gpu_mut(), output, size)?;
+        self.active = true;
+        Ok(())
+    }
     fn render_fidelity(
         &mut self,
         renderer: &mut Renderer,
@@ -108,7 +253,12 @@ impl SceneView {
         settle: u32,
     ) -> ara_ui::Result<()> {
         let size = renderer.size();
-        let choice = crate::world::gltf::render_quality(editor.host.store().workspace())?;
+        let choice = editor
+            .state
+            .render_quality
+            .unwrap_or(crate::world::gltf::render_quality(
+                editor.host.store().workspace(),
+            )?);
         // The ray-traced tiers until the D27 cut-over (native raster geometry).
         let options = ara_render_fidelity::presets::RenderOptions { ray_tracing: true };
         let plan = Plan::resolve(choice, &Capabilities::of(renderer.gpu()), size, options)?;
@@ -252,10 +402,14 @@ impl SceneView {
         Ok(())
     }
     pub fn needs_frame(&self, quality: bool) -> bool {
-        quality
+        (quality || self.raster.is_some())
             && self.active
             && self.lit
-            && (self.fidelity.is_some() && self.remaining > 0
+            && ((self.fidelity.is_some() || self.raster.is_some()) && self.remaining > 0
+                || self
+                    .raster
+                    .as_ref()
+                    .is_some_and(ara_runtime_render::RasterView::needs_frame)
                 || self.content.as_ref().is_some_and(|content| {
                     content.revision() != self.revision.map_or(0, |revision| revision.3)
                 }))
@@ -267,8 +421,8 @@ impl SceneView {
         quality: bool,
     ) -> ara_ui::Result<()> {
         super::attach(gpu, renderer)?;
-        if quality
-            && self.lit
+        if (quality || self.raster.is_some())
+            && (self.lit || self.raster.is_some())
             && self.active
             && let Some(image) = &self.published
         {
@@ -290,7 +444,11 @@ impl SceneView {
         renderer: &mut Renderer,
         request: &CaptureRequest,
     ) -> anyhow::Result<ara_render::capture::Capture> {
-        let mut capture = renderer.capture(request)?;
+        let mut capture = if renderer.is_native() {
+            renderer.capture_completed(request)?
+        } else {
+            renderer.capture(request)?
+        };
         if self.active && matches!(request.mode, ViewMode::Lit) {
             self.published
                 .as_ref()
@@ -300,6 +458,9 @@ impl SceneView {
         Ok(capture)
     }
     pub fn destroy(self, renderer: &mut Renderer) -> ara_ui::Result<()> {
+        if let Some(raster) = self.raster {
+            raster.destroy(renderer)?;
+        }
         if let Some(image) = self.published {
             image.destroy(renderer.gpu_mut())?;
         }
@@ -342,14 +503,21 @@ mod tests {
 
     #[test]
     fn scene_captures_native_quality_environment_and_effects_after_resize() -> anyhow::Result<()> {
+        for ray_tracing in [false, true] {
+            exercise_scene_view(ray_tracing)?;
+        }
+        Ok(())
+    }
+
+    fn exercise_scene_view(ray_tracing: bool) -> anyhow::Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/renderer-unification/scene-view")
-            .join(std::process::id().to_string());
+            .join(format!("{}-{ray_tracing}", std::process::id()));
         std::fs::create_dir_all(root.join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Scene presentation test","main":"levels/main.scene"}),
+                &json!({"name":"Scene presentation test","main":"levels/main.scene","rendering":{"quality":"high","rayTracing":ray_tracing}}),
             ),
         )?;
         std::fs::write(
@@ -368,7 +536,12 @@ mod tests {
             .map_err(anyhow::Error::msg)?;
         let mut editor = Editor::open(&root)?;
         let view = editor.view()?;
-        let mut renderer = Renderer::new(
+        let create = if ray_tracing {
+            Renderer::new
+        } else {
+            Renderer::new_raster
+        };
+        let mut renderer = create(
             view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,
             [192, 108],
             &[],
@@ -380,10 +553,21 @@ mod tests {
                 .render(&mut renderer, &editor, &view, 2)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             assert!(scene.active);
-            let fidelity = scene.fidelity.as_ref().expect("native Scene view");
-            assert_eq!(fidelity.settings().render_size, [96, 54]);
-            assert_eq!(fidelity.settings().post.ev100, Some(12.));
-            assert!(!scene.effects.as_ref().expect("Scene effects").is_empty());
+            if ray_tracing {
+                let fidelity = scene.fidelity.as_ref().expect("opt-in RT Scene view");
+                assert_eq!(fidelity.settings().render_size, [96, 54]);
+                assert_eq!(fidelity.settings().post.ev100, Some(12.));
+                assert!(!scene.effects.as_ref().expect("Scene effects").is_empty());
+            } else {
+                assert!(renderer.is_native());
+                assert!(scene.raster.is_some());
+                assert!(scene.fidelity.is_none());
+                assert!(!renderer.gpu().context().info.ray_tracing);
+                assert_eq!(
+                    renderer.native_geometry_stats().expect("native pool").blas,
+                    0
+                );
+            }
             let request = CaptureRequest {
                 camera: editor.state.camera.spec(),
                 size: renderer.size(),
@@ -409,9 +593,19 @@ mod tests {
                 .render_capture(&mut renderer, &editor, &view, 8)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let repeated = scene.capture(&mut renderer, &request)?;
-            assert_eq!(
-                first.image, repeated.image,
-                "capture must reset history on the live view without another descriptor set"
+            first.write(&root.join("first-capture.png"))?;
+            repeated.write(&root.join("repeated-capture.png"))?;
+            let difference = first
+                .image
+                .as_raw()
+                .iter()
+                .zip(repeated.image.as_raw())
+                .map(|(a, b)| a.abs_diff(*b))
+                .max()
+                .unwrap_or(0);
+            assert!(
+                first.image == repeated.image,
+                "capture must reset history on the live view without another descriptor set (RT={ray_tracing}, maximum channel difference {difference})"
             );
             renderer.resize([240, 136])?;
             scene
@@ -432,15 +626,17 @@ mod tests {
                     scene.published.as_ref().expect("resized frame").size(),
                     size
                 );
-                assert_eq!(
-                    scene
-                        .fidelity
-                        .as_ref()
-                        .expect("live view")
-                        .settings()
-                        .display_size,
-                    size
-                );
+                if ray_tracing {
+                    assert_eq!(
+                        scene
+                            .fidelity
+                            .as_ref()
+                            .expect("live view")
+                            .settings()
+                            .display_size,
+                        size
+                    );
+                }
             }
             // Opening another document reuses this same view; it must not acquire
             // a second set of storage-image descriptors beside the old one.

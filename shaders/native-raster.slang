@@ -70,7 +70,7 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
-    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);return s;
+    s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r);return s;
 }
 Surface surface(Varying v){
     NativeMaterial m=material(v.material);Surface s=surfaceMaterial(m,v);
@@ -79,7 +79,7 @@ Surface surface(Varying v){
         float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);s=(Surface)0;
         for(uint i=0;i<m.slots.z;i++){
             Surface a=surfaceMaterial(material(m.layers[i]),v);float w=weights[i];
-            s.albedo+=a.albedo*w;s.normal+=a.normal*w;s.roughness+=a.roughness*w;s.metal+=a.metal*w;s.emissive+=a.emissive*w;s.alpha+=a.alpha*w;s.ao+=a.ao*w;
+            s.albedo+=a.albedo*w;s.normal+=a.normal*w;s.roughness+=a.roughness*w;s.metal+=a.metal*w;s.emissive+=a.emissive*w;s.alpha+=a.alpha*w;s.ao+=a.ao*w;s.transmission+=a.transmission*w;
         }
         s.normal=normalize(s.normal);
     }
@@ -95,4 +95,4 @@ GBuffer nativeGeometryFragment(Varying v){Surface s=surface(v);GBuffer g;g.albed
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 world:SV_Target5;float4 velocity:SV_Target6;};
 [shader("fragment")]
-Forward nativeForwardFragment(Varying v){Surface s=surface(v);Frame f=frame();Look l=look(f);float2 uv=v.clip.xy/float2(f.extent.xy);Forward o;o.color=float4(applyFog(f,l,shade(f,l,s,v.world,int2(v.clip.xy)),v.world,uv)*s.alpha,s.alpha);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForwardFragment(Varying v){Surface s=surface(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy));o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=float4(s.normal,s.roughness);o.material=float4(s.emissive,s.metal);o.world=float4(v.world,1);o.velocity=float4(motion(v),0,1);return o;}

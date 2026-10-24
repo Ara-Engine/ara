@@ -3,7 +3,7 @@
 Schemas and ECS types of the built-in engine components: `Transform` (position in m,
 rotation as XYZ Euler degrees, scale), with replication policy, and `render`: the
 authorable look (`SkyAtmosphere`, `HeightFog`, `PostProcess`, gathered as `SceneLook`)
-and the project's `RenderSettings { quality }` (`ara.project.json` → `rendering`).
+and the project's `RenderSettings { quality, ray_tracing }` (`ara.project.json` → `rendering`).
 
 ## Public API
 

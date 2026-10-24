@@ -34,7 +34,10 @@ struct Frame {
     uint4 look;
 };
 // Shaded surface. `ao` is material ambient occlusion (opaque G-buffer albedo.a).
-struct Surface {float3 albedo;float alpha;float3 normal;float roughness;float metal;float3 emissive;float ao;};
+// `transmission` (0..1, resolved factor times map) is the share of diffuse light
+// passing through a forward (transparent) surface instead of scattering; opaque
+// G-buffer surfaces have none.
+struct Surface {float3 albedo;float alpha;float3 normal;float roughness;float metal;float3 emissive;float ao;float transmission;};
 struct Material { float4 color; float4 emissiveRoughness; float4 surface; uint4 textures; uint4 flags; };
 struct Light {float4 positionRange;float4 colorLumens;float4 directionOuter;float4 parameters;};
 Frame frame() {return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}

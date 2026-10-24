@@ -21,6 +21,9 @@ pub struct Quality {
     /// Screen-space ambient occlusion (GTAO at half resolution); `None` keeps
     /// only material occlusion.
     pub ambient_occlusion: Option<AmbientOcclusion>,
+    /// Screen-space reflections (half resolution) over probe and environment
+    /// reflections; `None` keeps only those.
+    pub reflections: Option<Reflections>,
     /// Probe GI caches relit per frame; the rest carry their irradiance forward.
     pub gi_budget: u32,
     /// Run the bloom pyramid when the look asks for bloom.
@@ -31,6 +34,7 @@ impl Default for Quality {
         Self {
             shadows: Shadows::default(),
             ambient_occlusion: None,
+            reflections: None,
             gi_budget: 2048,
             bloom: true,
         }
@@ -53,6 +57,27 @@ impl Default for AmbientOcclusion {
             radius: 1.,
             slices: 2,
             steps: 6,
+        }
+    }
+}
+
+/// Screen-space reflections: one deterministic mirror ray per half-resolution
+/// pixel; roughness widens them through a colour pyramid instead of noise.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Reflections {
+    /// Surfaces rougher than this keep probe and environment reflections only.
+    pub max_roughness: f32,
+    /// Longest reflection ray in metres.
+    pub distance: f32,
+    /// March steps per ray (each followed by a five-step refinement on a hit).
+    pub steps: u32,
+}
+impl Default for Reflections {
+    fn default() -> Self {
+        Self {
+            max_roughness: 0.5,
+            distance: 30.,
+            steps: 24,
         }
     }
 }
@@ -89,6 +114,12 @@ impl Quality {
                 && s.distance.is_finite()
                 && s.distance > 1.
                 && self.gi_budget > 0
+                && self.reflections.is_none_or(|r| {
+                    (0.0..=1.0).contains(&r.max_roughness)
+                        && r.distance.is_finite()
+                        && r.distance > 0.
+                        && (4..=128).contains(&r.steps)
+                })
                 && self.ambient_occlusion.is_none_or(|a| {
                     a.radius.is_finite()
                         && a.radius > 0.
@@ -106,8 +137,9 @@ impl Quality {
 pub struct Look {
     /// Display curve applied after exposure and grading.
     pub curve: ToneCurve,
-    /// Histogram metering; `None` uses the manual exposure passed to `render`.
-    /// Captures always use their request's manual exposure.
+    /// Histogram metering; `None` uses the manual exposure passed to `render` (and
+    /// the capture request's). Captures meter too: their first settle frame snaps
+    /// to the metered target, so results stay deterministic.
     pub auto_exposure: Option<AutoExposure>,
     /// Energy fraction redistributed to the bloom kernel, from zero to 0.25.
     pub bloom: f32,
@@ -192,6 +224,10 @@ pub struct Sky {
     pub aerosols: f32,
     /// Angular radius of the sun disk in radians.
     pub sun_radius: f32,
+    /// Planar cloud cover from zero (clear) to one; clouds also shade the sun.
+    pub cloud_coverage: f32,
+    /// World altitude of the cloud layer in metres.
+    pub cloud_height: f32,
 }
 impl Default for Sky {
     fn default() -> Self {
@@ -199,6 +235,8 @@ impl Default for Sky {
             sea_level: 0.,
             aerosols: 1.,
             sun_radius: 0.00465,
+            cloud_coverage: 0.,
+            cloud_height: 2200.,
         }
     }
 }
@@ -262,7 +300,9 @@ impl Look {
             anyhow::ensure!(
                 s.sea_level.is_finite()
                     && (0.0..=20.0).contains(&s.aerosols)
-                    && (0.0..=0.2).contains(&s.sun_radius),
+                    && (0.0..=0.2).contains(&s.sun_radius)
+                    && (0.0..=1.0).contains(&s.cloud_coverage)
+                    && s.cloud_height.is_finite(),
                 "Invalid sky"
             );
         }

@@ -143,6 +143,20 @@
       "vertex_stride": 0
     }
   },
+  "look_gi_gather": {
+    "entries": {
+      "giGatherMain": "compute"
+    },
+    "source": "look-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_gi_relight": {
     "entries": {
       "giRelightMain": "compute"
@@ -227,6 +241,34 @@
       "vertex_stride": 0
     }
   },
+  "look_ssr_pyramid": {
+    "entries": {
+      "ssrPyramidMain": "compute"
+    },
+    "source": "look-ssr.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_ssr_trace": {
+    "entries": {
+      "ssrTraceMain": "compute"
+    },
+    "source": "look-ssr.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_transmittance": {
     "entries": {
       "transmittanceMain": "compute"
@@ -249,7 +291,15 @@
     "source": "native-raster.slang",
     "state": {
       "blend": true,
-      "color_formats": [109, 100, 109, 109, 109, 109, 83],
+      "color_formats": [
+        109,
+        100,
+        109,
+        109,
+        109,
+        109,
+        83
+      ],
       "depth_format": 126,
       "depth_test": true,
       "depth_write": false,
@@ -264,7 +314,14 @@
     "source": "native-raster.slang",
     "state": {
       "blend": false,
-      "color_formats": [109, 109, 109, 109, 100, 83],
+      "color_formats": [
+        109,
+        109,
+        109,
+        109,
+        100,
+        83
+      ],
       "depth_format": 126,
       "depth_test": true,
       "depth_write": true,
