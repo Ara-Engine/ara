@@ -118,10 +118,13 @@ impl Ui {
             self.tree.set_children(nodes[*i].layout_id, &wanted[*i])?;
             nodes[*i].dirty.layout = true;
         }
-        if (!report.unchanged() || !moved.is_empty())
-            && let Some(root) = nodes.first_mut()
-        {
-            root.dirty.paint = true;
+        // Any structural change lays out again: Taffy dropped removed nodes from their
+        // parents' child lists itself (so those parents are not in `moved`) and
+        // recomputes only the subtrees it marked dirty.
+        let structural = report.added > 0 || report.removed > 0 || !moved.is_empty();
+        if let Some(root) = nodes.first_mut() {
+            root.dirty.layout |= structural;
+            root.dirty.paint |= structural || report.changed > 0;
         }
         self.nodes = nodes;
         self.widgets = widgets;
