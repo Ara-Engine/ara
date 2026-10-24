@@ -3,7 +3,7 @@
     "parameters": [
         {
             "name": "root",
-            "binding": {"kind": "constantBuffer", "index": 0},
+            "binding": {"kind": "pushConstantBuffer", "index": 0},
             "type": {
                 "kind": "constantBuffer",
                 "elementType": {
@@ -100,11 +100,11 @@
                         }
                     ],
                     "sizes": [
-                        {"kind": "uniform", "value": 32, "alignment": 16}
+                        {"kind": "uniform", "value": 32, "alignment": 4}
                     ]
                 },
                 "containerVarLayout": {
-                    "binding": {"kind": "constantBuffer", "index": 0}
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
                 },
                 "elementVarLayout": {
                     "type": {
@@ -201,19 +201,19 @@
                             }
                         ],
                         "sizes": [
-                            {"kind": "uniform", "value": 32, "alignment": 16}
+                            {"kind": "uniform", "value": 32, "alignment": 4}
                         ]
                     },
                     "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
                 },
                 "sizes": [
-                    {"kind": "constantBuffer", "value": 1}
+                    {"kind": "pushConstantBuffer", "value": 1}
                 ]
             }
         },
         {
             "name": "textures",
-            "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded"},
+            "binding": {"kind": "descriptorTableSlot", "index": 5},
             "type": {
                 "kind": "array",
                 "elementCount": 0,
@@ -229,17 +229,17 @@
                         }
                     },
                     "sizes": [
-                        {"kind": "shaderResource", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "shaderResource", "value": "unbounded"}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "buffers",
-            "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64},
+            "binding": {"kind": "descriptorTableSlot", "index": 1},
             "type": {
                 "kind": "array",
                 "elementCount": 64,
@@ -248,34 +248,34 @@
                     "baseShape": "byteAddressBuffer",
                     "access": "readWrite",
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "unorderedAccess", "value": 64}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "samplers",
-            "binding": {"kind": "samplerState", "index": 0, "count": 3},
+            "binding": {"kind": "descriptorTableSlot", "index": 2},
             "type": {
                 "kind": "array",
                 "elementCount": 3,
                 "elementType": {
                     "kind": "samplerState",
                     "sizes": [
-                        {"kind": "samplerState", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "samplerState", "value": 3}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         },
         {
             "name": "images",
-            "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64},
+            "binding": {"kind": "descriptorTableSlot", "index": 3},
             "type": {
                 "kind": "array",
                 "elementCount": 64,
@@ -292,11 +292,11 @@
                         }
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 1}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 },
                 "sizes": [
-                    {"kind": "unorderedAccess", "value": 64}
+                    {"kind": "descriptorTableSlot", "value": 1}
                 ]
             }
         }
@@ -306,7 +306,7 @@
         "parameters": [
             {
                 "name": "root",
-                "binding": {"kind": "constantBuffer", "index": 0},
+                "binding": {"kind": "pushConstantBuffer", "index": 0},
                 "type": {
                     "kind": "constantBuffer",
                     "elementType": {
@@ -403,11 +403,11 @@
                             }
                         ],
                         "sizes": [
-                            {"kind": "uniform", "value": 32, "alignment": 16}
+                            {"kind": "uniform", "value": 32, "alignment": 4}
                         ]
                     },
                     "containerVarLayout": {
-                        "binding": {"kind": "constantBuffer", "index": 0}
+                        "binding": {"kind": "pushConstantBuffer", "index": 0}
                     },
                     "elementVarLayout": {
                         "type": {
@@ -504,19 +504,19 @@
                                 }
                             ],
                             "sizes": [
-                                {"kind": "uniform", "value": 32, "alignment": 16}
+                                {"kind": "uniform", "value": 32, "alignment": 4}
                             ]
                         },
                         "binding": {"kind": "uniform", "offset": 0, "size": 32, "elementStride": 0}
                     },
                     "sizes": [
-                        {"kind": "constantBuffer", "value": 1}
+                        {"kind": "pushConstantBuffer", "value": 1}
                     ]
                 }
             },
             {
                 "name": "textures",
-                "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded"},
+                "binding": {"kind": "descriptorTableSlot", "index": 5},
                 "type": {
                     "kind": "array",
                     "elementCount": 0,
@@ -532,17 +532,17 @@
                             }
                         },
                         "sizes": [
-                            {"kind": "shaderResource", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "shaderResource", "value": "unbounded"}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "buffers",
-                "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64},
+                "binding": {"kind": "descriptorTableSlot", "index": 1},
                 "type": {
                     "kind": "array",
                     "elementCount": 64,
@@ -551,34 +551,34 @@
                         "baseShape": "byteAddressBuffer",
                         "access": "readWrite",
                         "sizes": [
-                            {"kind": "unorderedAccess", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 64}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "samplers",
-                "binding": {"kind": "samplerState", "index": 0, "count": 3},
+                "binding": {"kind": "descriptorTableSlot", "index": 2},
                 "type": {
                     "kind": "array",
                     "elementCount": 3,
                     "elementType": {
                         "kind": "samplerState",
                         "sizes": [
-                            {"kind": "samplerState", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "samplerState", "value": 3}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             },
             {
                 "name": "images",
-                "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64},
+                "binding": {"kind": "descriptorTableSlot", "index": 3},
                 "type": {
                     "kind": "array",
                     "elementCount": 64,
@@ -595,11 +595,11 @@
                             }
                         },
                         "sizes": [
-                            {"kind": "unorderedAccess", "value": 1}
+                            {"kind": "descriptorTableSlot", "value": 1}
                         ]
                     },
                     "sizes": [
-                        {"kind": "unorderedAccess", "value": 64}
+                        {"kind": "descriptorTableSlot", "value": 1}
                     ]
                 }
             }
@@ -607,14 +607,14 @@
     },
     "entryPoints": [
         {
-            "name": "giRelightMain",
+            "name": "aoDenoiseMain",
             "stage": "compute",
             "scope": {
                 "kind": "none",
                 "parameters": [
                     {
-                        "name": "group",
-                        "semanticName": "SV_GROUPID",
+                        "name": "tid",
+                        "semanticName": "SV_DISPATCHTHREADID",
                         "type": {
                             "kind": "vector",
                             "elementCount": 3,
@@ -626,24 +626,13 @@
 
                             ]
                         }
-                    },
-                    {
-                        "name": "lane",
-                        "semanticName": "SV_GROUPINDEX",
-                        "type": {
-                            "kind": "scalar",
-                            "scalarType": "uint32",
-                            "sizes": [
-
-                            ]
-                        }
                     }
                 ]
             },
             "parameters": [
                 {
-                    "name": "group",
-                    "semanticName": "SV_GROUPID",
+                    "name": "tid",
+                    "semanticName": "SV_DISPATCHTHREADID",
                     "type": {
                         "kind": "vector",
                         "elementCount": 3,
@@ -655,43 +644,32 @@
 
                         ]
                     }
-                },
-                {
-                    "name": "lane",
-                    "semanticName": "SV_GROUPINDEX",
-                    "type": {
-                        "kind": "scalar",
-                        "scalarType": "uint32",
-                        "sizes": [
-
-                        ]
-                    }
                 }
             ],
-            "threadGroupSize": [64, 1, 1],
+            "threadGroupSize": [8, 8, 1],
             "bindings": [
                 {
                     "name": "root",
-                    "binding": {"kind": "constantBuffer", "index": 0, "used": 1}
+                    "binding": {"kind": "pushConstantBuffer", "index": 0}
                 },
                 {
                     "name": "textures",
-                    "binding": {"kind": "shaderResource", "space": 1, "index": 0, "count": "unbounded", "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 5, "used": 1}
                 },
                 {
                     "name": "buffers",
-                    "binding": {"kind": "unorderedAccess", "space": 2, "index": 0, "count": 64, "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 1, "used": 1}
                 },
                 {
                     "name": "samplers",
-                    "binding": {"kind": "samplerState", "index": 0, "count": 3, "used": 1}
+                    "binding": {"kind": "descriptorTableSlot", "index": 2, "used": 0}
                 },
                 {
                     "name": "images",
-                    "binding": {"kind": "unorderedAccess", "space": 3, "index": 0, "count": 64, "used": 0}
+                    "binding": {"kind": "descriptorTableSlot", "index": 3, "used": 1}
                 }
             ]
         }
     ],
-    "bindlessSpaceIndex": 4
+    "bindlessSpaceIndex": 1
 }

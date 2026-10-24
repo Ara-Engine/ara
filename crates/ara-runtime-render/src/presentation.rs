@@ -4,7 +4,7 @@ use ara_gpu::{
     Access, Barrier, Device, Image, Queue, Resource, commands::Command, vk, vulkan::VulkanDevice,
 };
 use ara_render::capture::{FeatureCapture, ShaderMetadata};
-use ara_render_fidelity::presets::{Capabilities, FidelityPlan, Plan, RenderPath};
+use ara_render_fidelity::presets::{Capabilities, FidelityPlan, Plan, RenderOptions, RenderPath};
 pub use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
 use ara_render_fidelity::{FidelityView, FrameInput, PostSettings, environment::FrameEnvironment};
 use fidelity::native::{self, Content, FrameChange, NativeConfig, Prepared};
@@ -71,11 +71,26 @@ impl Presenter {
         self.choice = quality;
     }
 
-    /// Opt in to probe GI on the raster path: each content change is ray-traced
-    /// once (blocking, on RT-capable devices) and relit every frame. Off by
-    /// default until acquisition is cached and runs off the frame thread.
+    /// Renderer selection: raster everywhere, or the opt-in ray-traced tiers.
+    pub fn set_render_options(&mut self, options: RenderOptions) {
+        self.options = options;
+    }
+
+    /// Opt in to probe GI on the raster path: each content change is acquired once
+    /// in the background (ray-traced on a separate device, cached on disk by
+    /// content) and relit every frame; frames show sky-only ambient until then.
     pub fn set_probe_gi(&mut self, enabled: bool) {
-        self.probe_gi = enabled;
+        self.probe_gi = enabled.then(|| crate::gi::Acquisition::new(self.cache.clone()));
+    }
+
+    /// Blocks until a pending probe GI acquisition is installed (captures and
+    /// measurements that must not change lighting midway).
+    pub fn wait_probe_gi(&mut self) -> Result<()> {
+        let surfaces = self.probe_gi.as_mut().and_then(|gi| gi.poll(true));
+        if let (Some(surfaces), Some(renderer)) = (surfaces, self.renderer.as_mut()) {
+            renderer.set_probe_surfaces(Some(&surfaces))?;
+        }
+        Ok(())
     }
 
     /// Preset of the last successfully published frame, or the selected warm-up plan.
@@ -146,7 +161,12 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("presentation device initialized")?;
-        let plan = Plan::resolve(self.choice, &Capabilities::of(renderer.gpu()), self.size)?;
+        let plan = Plan::resolve(
+            self.choice,
+            &Capabilities::of(renderer.gpu()),
+            self.size,
+            self.options,
+        )?;
         if self.plan != Some(plan) {
             eprintln!(
                 "Ara presentation: {} (requested {}, {:?})",
@@ -155,24 +175,37 @@ impl Presenter {
         }
         self.stats = PresentStats::default();
         match plan.path {
-            RenderPath::Baseline { .. } => {
+            RenderPath::Raster(raster) => {
                 if let Some(old) = self.live.take() {
                     old.destroy(renderer.gpu_mut())?;
                 }
                 if renderer.size() != self.size {
                     renderer.resize(self.size)?;
                 }
-                let ray_tracing = Capabilities::of(renderer.gpu()).ray_tracing;
+                if *renderer.quality() != raster.quality {
+                    renderer.set_quality(raster.quality)?;
+                }
                 self.prepare_baseline(frame)?;
-                // New content: acquire probe GI once (ray-traced where supported).
-                if self.stats.rebuilt && ray_tracing && self.probe_gi {
-                    let renderer = self.renderer.as_mut().context("baseline renderer")?;
-                    let surfaces = crate::gi::bake(renderer.gpu_mut(), frame, resolve()?)
-                        .inspect_err(|e| {
-                            eprintln!("ara-runtime-render: probe GI bake failed: {e:#}")
-                        })
-                        .ok();
-                    renderer.set_probe_surfaces(surfaces.as_ref())?;
+                let renderer = self.renderer.as_mut().context("baseline renderer")?;
+                if let Some(gi) = &mut self.probe_gi {
+                    // New content: drop stale probes and acquire in the background.
+                    if self.stats.rebuilt {
+                        let key = self.layout.iter().fold(FNV, |h, (a, b, c)| {
+                            [a, b, c].iter().fold(h, |h, v| fnv(h, &v.to_le_bytes()))
+                        });
+                        let key = frame
+                            .draws
+                            .iter()
+                            .filter(|d| d.skin.is_none())
+                            .fold(key, |h, d| {
+                                fnv(h, bytemuck::bytes_of(&d.world.to_cols_array()))
+                            });
+                        renderer.set_probe_surfaces(None)?;
+                        gi.request(key, frame, resolve)?;
+                    }
+                    if let Some(surfaces) = gi.poll(false) {
+                        renderer.set_probe_surfaces(Some(&surfaces))?;
+                    }
                 }
             }
             RenderPath::Fidelity(settings) => {

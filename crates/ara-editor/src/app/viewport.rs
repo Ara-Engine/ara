@@ -68,7 +68,9 @@ impl SceneView {
     ) -> ara_ui::Result<()> {
         let size = renderer.size();
         let choice = crate::world::gltf::render_quality(editor.host.store().workspace())?;
-        let plan = Plan::resolve(choice, &Capabilities::of(renderer.gpu()), size)?;
+        // The ray-traced tiers until the D27 cut-over (native raster geometry).
+        let options = ara_render_fidelity::presets::RenderOptions { ray_tracing: true };
+        let plan = Plan::resolve(choice, &Capabilities::of(renderer.gpu()), size, options)?;
         let RenderPath::Fidelity(settings) = plan.path else {
             return Ok(());
         };

@@ -12,6 +12,95 @@ pub(crate) mod passes;
 
 pub use crate::renderer::post::ToneCurve;
 
+/// Per-preset raster budgets (`Renderer::set_quality`); independent of the
+/// authored look. The default is the M1 configuration.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Quality {
+    /// Sun shadow cascades.
+    pub shadows: Shadows,
+    /// Screen-space ambient occlusion (GTAO at half resolution); `None` keeps
+    /// only material occlusion.
+    pub ambient_occlusion: Option<AmbientOcclusion>,
+    /// Probe GI caches relit per frame; the rest carry their irradiance forward.
+    pub gi_budget: u32,
+    /// Run the bloom pyramid when the look asks for bloom.
+    pub bloom: bool,
+}
+impl Default for Quality {
+    fn default() -> Self {
+        Self {
+            shadows: Shadows::default(),
+            ambient_occlusion: None,
+            gi_budget: 2048,
+            bloom: true,
+        }
+    }
+}
+
+/// Ground-truth-based ambient occlusion (horizon search per screen slice).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AmbientOcclusion {
+    /// World-space search radius in metres.
+    pub radius: f32,
+    /// Screen slices per pixel, one to four.
+    pub slices: u32,
+    /// Horizon steps per slice side, two to sixteen.
+    pub steps: u32,
+}
+impl Default for AmbientOcclusion {
+    fn default() -> Self {
+        Self {
+            radius: 1.,
+            slices: 2,
+            steps: 6,
+        }
+    }
+}
+
+/// Cascaded sun shadows: up to four square cascades in a 2x2 D32 atlas, split
+/// with a practical (log/linear) scheme and stabilised to whole texels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Shadows {
+    /// Cascades, one to four.
+    pub cascades: u32,
+    /// Texels per cascade side (power of two, 256 to 4096).
+    pub resolution: u32,
+    /// Shadowed view distance in metres; shadows fade out over its last tenth.
+    pub distance: f32,
+}
+impl Default for Shadows {
+    fn default() -> Self {
+        Self {
+            cascades: 4,
+            resolution: 512,
+            distance: 100.,
+        }
+    }
+}
+
+impl Quality {
+    /// Rejects budgets the renderer cannot allocate.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        let s = &self.shadows;
+        anyhow::ensure!(
+            (1..=4).contains(&s.cascades)
+                && s.resolution.is_power_of_two()
+                && (256..=4096).contains(&s.resolution)
+                && s.distance.is_finite()
+                && s.distance > 1.
+                && self.gi_budget > 0
+                && self.ambient_occlusion.is_none_or(|a| {
+                    a.radius.is_finite()
+                        && a.radius > 0.
+                        && (1..=4).contains(&a.slices)
+                        && (2..=16).contains(&a.steps)
+                }),
+            "Invalid raster quality"
+        );
+        Ok(())
+    }
+}
+
 /// Scene look applied by the raster renderer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Look {

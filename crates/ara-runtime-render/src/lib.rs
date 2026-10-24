@@ -103,8 +103,10 @@ pub struct Presenter {
     output: Option<ara_gpu::Image>,
     /// Whether the over-budget texture note was printed.
     warned_budget: bool,
-    /// Bake probe GI synchronously when raster content changes (`set_probe_gi`).
-    probe_gi: bool,
+    /// Background probe GI acquisition for raster content (`set_probe_gi`).
+    probe_gi: Option<gi::Acquisition>,
+    /// Renderer selection (`set_render_options`).
+    options: ara_render_fidelity::presets::RenderOptions,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -184,7 +186,10 @@ impl Presenter {
             composite: None,
             output: None,
             warned_budget: false,
-            probe_gi: false,
+            probe_gi: None,
+            // Hosts keep the ray-traced tiers until the D27 cut-over lands with
+            // native raster geometry (raster everywhere by default).
+            options: ara_render_fidelity::presets::RenderOptions { ray_tracing: true },
         }
     }
 
@@ -331,6 +336,7 @@ impl Presenter {
         // Terrain comes from the landscape composite below.
         self.draw_terrain = false;
         self.prepare_baseline(frame)?;
+        self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
             size,
@@ -373,6 +379,7 @@ impl Presenter {
     ) -> Result<Capture> {
         self.draw_terrain = true;
         self.prepare(frame)?;
+        self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
             size,

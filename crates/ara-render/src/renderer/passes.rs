@@ -53,9 +53,10 @@ impl Renderer {
         compute_frame.lighting[3] = self.content.compute_light_index;
         self.gpu
             .upload(self.compute_frame, bytemuck::bytes_of(&compute_frame))?;
+        self.look.ensure(&mut self.gpu)?;
         let (sampled, storage) = self.look.indices();
         let look_frame = LookFrame::new(
-            &self.look.look,
+            &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
@@ -69,7 +70,12 @@ impl Renderer {
         );
         let mut look_frame = look_frame;
         if let Some(gi) = &self.look.gi {
-            gi.write(&mut look_frame);
+            gi.write(&mut look_frame, self.look.quality.gi_budget);
+        }
+        if let Some(ao) = self.look.quality.ambient_occlusion {
+            look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
+            look_frame.ao = [ao.radius, ao.slices as f32, ao.steps as f32, 0.];
+            look_frame.ao_images = self.look.ao_indices();
         }
         self.gpu
             .upload(self.look.frame, bytemuck::bytes_of(&look_frame))?;
@@ -145,7 +151,7 @@ impl Renderer {
             recipes.push(recipe);
         };
         let shadow = graph.pass(
-            "ShadowAtlas.4Cascades",
+            "ShadowAtlas.Cascades",
             Queue::Graphics,
             [(ids[SHADOW], Access::Depth)],
         );
@@ -163,6 +169,14 @@ impl Renderer {
             ],
         );
         declare(gbuffer, Recipe::GBuffer);
+        let mut ao_reads = graphics.clone();
+        ao_reads.extend([
+            (ids[DEPTH], Access::ShaderRead),
+            (ids[NORMAL], Access::ShaderRead),
+        ]);
+        for (id, pass) in self.look.ao_passes(&mut graph, &look, &ao_reads) {
+            declare(id, Recipe::Look(pass));
+        }
         let mut sky_shared = graphics.clone();
         sky_shared.push((ids[SHADOW], Access::ShaderRead));
         let sun = {
@@ -332,13 +346,13 @@ impl Renderer {
                             image: self.targets.images[SHADOW],
                             clear: Some([0.; 4]),
                         }),
-                        size: [1024, 1024],
+                        size: [self.look.quality.shadows.resolution * 2; 2],
                     });
-                    for cascade in 0..4 {
-                        recorder.push(Command::Viewport {
-                            origin: [cascade % 2 * 512, cascade / 2 * 512],
-                            size: [512, 512],
-                        });
+                    for (cascade, (origin, size)) in
+                        self.cascade_viewports().into_iter().enumerate()
+                    {
+                        let cascade = cascade as u32;
+                        recorder.push(Command::Viewport { origin, size });
                         for (index, mesh) in self
                             .content
                             .meshes
@@ -519,7 +533,7 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         if let Some(gi) = &mut self.look.gi {
-            gi.advance();
+            gi.advance(self.look.quality.gi_budget);
         }
         self.targets.history = (!deferred).then_some(output_history);
         self.previous_vp = frame.vp;
@@ -540,6 +554,7 @@ impl Renderer {
     /// Call after a deferred-post `render` (or a capture, whose exposure stays
     /// locked); reuses that frame's constants and returns the SDR output in CopySource.
     pub fn finish(&mut self, color: Image, sampled: u32, state: State) -> Result<Image> {
+        self.look.ensure(&mut self.gpu)?;
         let mut graph = Graph::default();
         let input = graph.import(Resource::Image(color), state);
         let output = graph.import(

@@ -662,7 +662,7 @@
                 },
                 {
                     "name": "samplers",
-                    "binding": {"kind": "descriptorTableSlot", "index": 2, "used": 0}
+                    "binding": {"kind": "descriptorTableSlot", "index": 2, "used": 1}
                 },
                 {
                     "name": "images",

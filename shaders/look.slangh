@@ -19,10 +19,13 @@ struct Look {
     float4 giOrigin;   // xyz first probe centre, w irradiance hysteresis
     float4 giSpacing;  // xyz probe separation, w surface bias (m)
     uint4 giCounts;    // xyz lattice, w probe count (0: no probe GI)
-    uint4 giBuffers;   // surface caches, statics, irradiance read, irradiance write
-    uint4 giUpdate;    // x first relit probe, y relit probes this frame
+    uint4 giBuffers;   // x surface caches, y probe relocation/state (buffers)
+    uint4 giUpdate;    // x first relit probe, y relit probes this frame, z atlas probes per row
+    uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)
+    float4 ao;         // x radius (m), y slices, z steps per side
+    uint4 aoImages;    // trace, denoised (sampled), trace, denoised (storage); half resolution
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
 bool physicalSky(Look l){return (l.flags.y&LOOK_PHYSICAL_SKY)!=0;}
 float4 lut(uint index,float2 uv){return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}

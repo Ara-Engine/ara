@@ -112,6 +112,10 @@ enum Command {
         /// Path-traced reference samples per pixel for RMSE/FLIP scoring (0 skips).
         #[arg(long, default_value_t = 0)]
         reference: u32,
+        /// Capture Medium and above with the opt-in ray-traced renderer (D27:
+        /// every preset is raster by default).
+        #[arg(long)]
+        ray_tracing: bool,
     },
     /// Play a scene in a windowed `ara-player` through `ara mcp` and capture it.
     Play {
@@ -263,6 +267,7 @@ fn main() -> Result<()> {
             timing_frames,
             quality,
             reference,
+            ray_tracing,
         } => {
             use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
             let presets = if quality == "all" {
@@ -286,6 +291,7 @@ fn main() -> Result<()> {
                     timing_frames,
                     presets: &presets,
                     reference_samples: reference,
+                    ray_tracing,
                 },
             )?
         }
