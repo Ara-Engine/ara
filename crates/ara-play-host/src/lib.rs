@@ -146,7 +146,17 @@ pub struct PlayService {
     config: PlayConfig,
     token: String,
     pool: Option<Pool>,
+    /// The pool being built on a background thread (C# module discovery walks the
+    /// project; the first launches start there).
+    pool_init: Option<std::sync::mpsc::Receiver<Result<Pool, Vec<Diagnostic>>>>,
+    /// When the frame tick may retry a failed pool build.
+    pool_retry: Option<std::time::Instant>,
     assets: Option<assets::Assets>,
+    /// The asset pipeline being built on a background thread: the sidecar scan, the
+    /// importer version query and the source watcher take 150-300 ms.
+    assets_init: Option<std::sync::mpsc::Receiver<Result<assets::Assets, String>>>,
+    /// When the frame tick may retry a failed build.
+    assets_retry: Option<std::time::Instant>,
     worlds: BTreeMap<String, World>,
     retiring: Vec<lifecycle::Retiring>,
     next: u32,
@@ -171,7 +181,11 @@ impl PlayService {
             config,
             token,
             pool: None,
+            pool_init: None,
+            pool_retry: None,
             assets: None,
+            assets_init: None,
+            assets_retry: None,
             worlds: BTreeMap::new(),
             retiring: Vec::new(),
             next: 0,
@@ -179,51 +193,178 @@ impl PlayService {
         }
     }
 
-    fn pool(&mut self) -> Result<&mut Pool, Vec<Diagnostic>> {
-        if self.pool.is_none() {
-            if !self.config.pool.executable.exists() {
-                return Err(vec![
-                    Diagnostic::error(
-                        codes::PLAY,
-                        format!(
-                            "player executable `{}` not found",
-                            self.config.pool.executable.display()
-                        ),
-                    )
-                    .with_fix(
-                        "Build it, or set ARA_PLAYER",
-                        FixAction::Cli {
-                            args: vec!["(cargo build -p ara-player)".into()],
-                        },
+    /// Starts building the player pool on a background thread, unless it exists, is
+    /// being built, or failed less than ten seconds ago. A missing player is an error.
+    fn start_pool(&mut self) -> Result<(), Vec<Diagnostic>> {
+        if self.pool.is_some()
+            || self.pool_init.is_some()
+            || self
+                .pool_retry
+                .is_some_and(|at| std::time::Instant::now() < at)
+        {
+            return Ok(());
+        }
+        if !self.config.pool.executable.exists() {
+            return Err(vec![
+                Diagnostic::error(
+                    codes::PLAY,
+                    format!(
+                        "player executable `{}` not found",
+                        self.config.pool.executable.display()
                     ),
-                ]);
-            }
-            let scripts = self.script_scene().ok().flatten();
-            let rendering =
-                rendering::project(&self.root).map_err(|error| fail(codes::REQUEST, error))?;
-            let pool = Pool::with_rendering(
-                self.config.pool.clone(),
-                self.token.clone(),
-                scripts,
-                rendering,
-            )
+                )
+                .with_fix(
+                    "Build it, or set ARA_PLAYER",
+                    FixAction::Cli {
+                        args: vec!["(cargo build -p ara-player)".into()],
+                    },
+                ),
+            ]);
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let root = self.root.clone();
+        let (scripts, config, token) = (
+            self.config.scripts.clone(),
+            self.config.pool.clone(),
+            self.token.clone(),
+        );
+        let build = move || {
+            let scene = scripts::script_scene(&root, scripts.as_ref())
+                .ok()
+                .flatten();
+            let pool = rendering::project(&root)
+                .map_err(|error| fail(codes::REQUEST, error))
+                .and_then(|rendering| {
+                    Pool::with_rendering(config, token, scene, rendering).map_err(|e| {
+                        fail(codes::PLAY, format!("cannot start the player pool: {e}"))
+                    })
+                });
+            let _ = tx.send(pool);
+        };
+        std::thread::Builder::new()
+            .name("ara-play-pool".into())
+            .spawn(build)
             .map_err(|e| fail(codes::PLAY, format!("cannot start the player pool: {e}")))?;
-            self.pool = Some(pool);
+        self.pool_init = Some(rx);
+        Ok(())
+    }
+
+    /// The player pool, waiting for its build (Play needs it now).
+    fn pool(&mut self) -> Result<&mut Pool, Vec<Diagnostic>> {
+        self.pool_retry = None;
+        self.start_pool()?;
+        if let Some(init) = self.pool_init.take() {
+            let built = init
+                .recv()
+                .unwrap_or_else(|_| Err(fail(codes::PLAY, "the player pool build panicked")));
+            self.pool = Some(built?);
         }
         self.pool
             .as_mut()
             .ok_or_else(|| fail(codes::PLAY, "pool unavailable"))
     }
 
+    /// The player pool once built, never waiting: the frame tick's view. A failed
+    /// build (Play reports it) is retried after ten seconds.
+    fn pool_now(&mut self) -> Option<&mut Pool> {
+        use std::sync::mpsc::TryRecvError;
+        let retry = || Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+        if self.start_pool().is_err() {
+            self.pool_retry = retry();
+            return None;
+        }
+        if let Some(init) = &self.pool_init {
+            match init.try_recv() {
+                Err(TryRecvError::Empty) => return None,
+                Ok(Ok(pool)) => self.pool = Some(pool),
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => self.pool_retry = retry(),
+            }
+            self.pool_init = None;
+        }
+        self.pool.as_mut()
+    }
+
+    /// Starts building the asset pipeline on a background thread, unless it exists,
+    /// is being built, or failed less than ten seconds ago. With `imports` (the host's
+    /// import documents at a revision) the thread applies the first synchronization.
+    fn start_assets(&mut self, imports: Option<(&ara_doc::Workspace, u64)>) {
+        if self.assets.is_some()
+            || self.assets_init.is_some()
+            || self
+                .assets_retry
+                .is_some_and(|at| std::time::Instant::now() < at)
+        {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (root, worker) = (self.root.clone(), self.config.import_worker.clone());
+        let imports = imports.and_then(|(workspace, revision)| {
+            Some((assets::import_docs(workspace).ok()?, revision))
+        });
+        let build = move || {
+            let built = assets::Assets::new(&root, &worker).map(|mut assets| {
+                // On failure the host tick synchronizes again and reports it.
+                if let Some((imports, revision)) = imports {
+                    let _ = assets.synchronize_imports(imports, revision);
+                }
+                assets
+            });
+            let _ = tx.send(built);
+        };
+        match std::thread::Builder::new()
+            .name("ara-assets-init".into())
+            .spawn(build)
+        {
+            Ok(_) => self.assets_init = Some(rx),
+            Err(error) => {
+                self.assets_retry =
+                    Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+                eprintln!("ara-play-host: cannot start the asset pipeline: {error}");
+            }
+        }
+    }
+
+    /// The asset pipeline, waiting for its build (Play and export need it now).
     fn assets(&mut self) -> Result<&mut assets::Assets, Vec<Diagnostic>> {
-        if self.assets.is_none() {
-            let assets = assets::Assets::new(&self.root, &self.config.import_worker)
-                .map_err(|e| fail(codes::ASSETS, e))?;
-            self.assets = Some(assets);
+        self.assets_retry = None;
+        self.start_assets(None);
+        if let Some(init) = self.assets_init.take() {
+            let built = init
+                .recv()
+                .unwrap_or_else(|_| Err("the asset pipeline build panicked".into()));
+            self.assets = Some(built.map_err(|e| fail(codes::ASSETS, e))?);
         }
         self.assets
             .as_mut()
             .ok_or_else(|| fail(codes::ASSETS, "asset pipeline unavailable"))
+    }
+
+    /// The asset pipeline once built, never waiting: the frame tick's view, starting
+    /// the build with the host's `imports`. A failed build is returned once (to log)
+    /// and retried after ten seconds.
+    fn assets_now(
+        &mut self,
+        imports: (&ara_doc::Workspace, u64),
+    ) -> Result<Option<&mut assets::Assets>, String> {
+        use std::sync::mpsc::TryRecvError;
+        self.start_assets(Some(imports));
+        if let Some(init) = &self.assets_init {
+            let built = match init.try_recv() {
+                Err(TryRecvError::Empty) => return Ok(None),
+                Ok(built) => built,
+                Err(TryRecvError::Disconnected) => Err("the asset pipeline build panicked".into()),
+            };
+            self.assets_init = None;
+            match built {
+                Ok(assets) => self.assets = Some(assets),
+                Err(error) => {
+                    self.assets_retry =
+                        Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+                    return Err(error);
+                }
+            }
+        }
+        Ok(self.assets.as_mut())
     }
 
     /// Logs pending asset notes (upgrades or placeholders) and adds them to a successful
@@ -1040,7 +1181,7 @@ impl Service for PlayService {
         for problem in self.collect_stopped() {
             cx.log(problem);
         }
-        if let Ok(pool) = self.pool() {
+        if let Some(pool) = self.pool_now() {
             for problem in pool.poll() {
                 cx.log(Diagnostic::warning(codes::PLAY, problem));
             }
@@ -1106,7 +1247,12 @@ impl Service for PlayService {
         }
         let playing = !self.worlds.is_empty();
         let allow = self.worlds.values().any(|w| w.hot_reload);
-        if let Ok(assets) = self.assets() {
+        let imports = (cx.store().workspace(), cx.store().revision());
+        let assets = self.assets_now(imports).unwrap_or_else(|error| {
+            cx.log(Diagnostic::warning(codes::ASSETS, error));
+            None
+        });
+        if let Some(assets) = assets {
             if let Err(error) = assets.synchronize(cx.store().workspace(), cx.store().revision()) {
                 cx.log(Diagnostic::warning(codes::ASSETS, error));
             }

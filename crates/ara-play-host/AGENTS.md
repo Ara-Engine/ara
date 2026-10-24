@@ -18,7 +18,10 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
   `Pool::with_scripts` passes module settings for pre-warm before the ready hello.
   Local crash artifacts go beside player logs in `crashes/`; a clean window close
-  stops and reaps the whole Play world without reporting a crash.
+  stops and reaps the whole Play world without reporting a crash. Launches run on
+  threads (CreateProcess costs 10-200 ms) and early exits back refills off (0.5 s
+  doubling to 30 s); `tests/pool.rs`. The host tick never builds the pool or the asset
+  pipeline inline: both build on threads (`pool_now`/`assets_now`); Play waits.
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
   (imports in worker processes, non-progressive); `pins` waits for published
   generations, which are always persisted final-preset cooks players can load.
