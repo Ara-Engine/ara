@@ -241,6 +241,8 @@ pub struct Shell {
     key_search: bool,
     label_width: f32,
     keymap: commands::keys::Keymap,
+    /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
+    keymap_settings: (Option<Value>, Option<Value>),
     /// Live tab drag target, painted as a lit region with an action label.
     pub(crate) drop_preview: Option<drag::DropPreview>,
 
@@ -441,6 +443,7 @@ impl Shell {
             key_search: false,
             label_width: 0.4,
             keymap: commands::keymap(&editor.state),
+            keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
             main_rect: [0, 0, size[0] as i32, size[1] as i32],
         };
@@ -538,7 +541,12 @@ impl Shell {
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.built = (editor.panels_revision, editor.host.store().revision());
-        self.keymap = commands::keymap(&editor.state);
+        // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.
+        let settings = keymap_settings(&editor.state);
+        if settings != self.keymap_settings {
+            self.keymap = commands::keymap(&editor.state);
+            self.keymap_settings = settings;
+        }
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
         self.bindings.clear();
@@ -1399,4 +1407,11 @@ impl Shell {
     pub fn surface(&self, id: &str) -> Option<&Surface> {
         self.floats.iter().find(|s| s.id == id)
     }
+}
+/// The settings a keymap is built from (`commands::keymap`).
+fn keymap_settings(state: &crate::state::EditorState) -> (Option<Value>, Option<Value>) {
+    (
+        state.settings.get("input.keymap").cloned(),
+        state.settings.get("input.shortcuts").cloned(),
+    )
 }

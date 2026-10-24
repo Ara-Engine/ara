@@ -652,8 +652,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let scene_at = Instant::now();
                 if let Some(rect) = shell.viewport() {
                     renderer.resize(extent_scaled(rect, dpi))?;
-                    if scene_dirty {
-                        scene_view.render(&mut renderer, &editor, &view, 1)?;
+                    // A Scene that cannot render yet (models still publishing, a missing
+                    // source) keeps its last frame and is reported; the next change or
+                    // publication retries. It never closes the editor.
+                    if scene_dirty
+                        && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
+                    {
+                        editor.report_failure(&*error);
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     let mut changed = editor.agent_tints();
