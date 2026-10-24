@@ -313,7 +313,8 @@ impl VirtualView {
             .map(|(i, _)| i)
             .rev()
             .collect();
-        self.order.clear();
+        let previous = std::mem::take(&mut self.order);
+        let mut entered = false;
         for row in rows {
             let slot = if let Some(i) = existing.get(&row.key) {
                 *i
@@ -322,6 +323,7 @@ impl VirtualView {
             };
             let s = &mut self.slots[slot];
             let entering = s.key != Some(row.key);
+            entered |= entering;
             if entering {
                 ui.invalidate_index();
                 s.key = Some(row.key);
@@ -352,6 +354,16 @@ impl VirtualView {
             if s.key.is_some_and(|k| !wanted.contains(&k)) {
                 s.key = None;
             }
+        }
+        // The same rows at the same offset (a host re-scrolling after each rebuild):
+        // texts and styles were refreshed above; layout and paint stay as they are.
+        if !entered
+            && self.order == previous
+            && offset == self.offset
+            && ui.nodes[self.parent].element.children == self.order
+        {
+            self.first = first;
+            return Ok(());
         }
         ui.nodes[self.parent].element.children.clear();
         ui.nodes[self.parent]

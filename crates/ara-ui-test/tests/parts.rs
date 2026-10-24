@@ -315,6 +315,25 @@ fn live_widget_state_survives_in_kept_parts() -> Result<()> {
 }
 
 #[test]
+fn re_scrolling_the_same_window_does_no_work() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let (mut ui, mut view) = mounted(&mut text)?;
+    // A host re-scrolls after each rebuild; the same rows at the same offset change
+    // nothing.
+    view.scroll(&mut ui, &rows(), 220., 110.)?;
+    let work = ui.frame(&mut text)?;
+    assert_eq!((work.layout_passes, work.paint_nodes), (0, 0), "{work:?}");
+    view.scroll(&mut ui, &rows(), 264., 110.)?;
+    let work = ui.frame(&mut text)?;
+    assert!(work.layout_passes > 0, "{work:?}");
+    assert_eq!(
+        row_texts(&ui, &view).first().map(String::as_str),
+        Some("Row 12")
+    );
+    Ok(())
+}
+
+#[test]
 fn kept_views_fit_a_taller_or_narrower_host() -> Result<()> {
     let mut text = TextSystem::bundled()?;
     let (mut ui, mut view) = mounted(&mut text)?;
