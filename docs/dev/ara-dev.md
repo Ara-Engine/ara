@@ -245,8 +245,11 @@ are unchanged. A cross-crate CLI fixture verifies freshness after a peer edit
 with separate build/intermediate directories; test harnesses are never exported
 as regular binaries.
 
-Main's rendering-component additions left Abi.g.cs and Components.g.cs stale.
-The explicit ARA_UPDATE_GENERATED opt-in regenerated both; the .NET solution
-then built with zero warnings/errors. Changes under dotnet/ select ara-script and
+The generated-binding check treated every schema-blittable component as a native
+Rust view, while the runtime binds only explicitly validated engine components.
+Generation and runtime startup now share EngineBindings::builtin; a regression
+checks actual Rust offsets and ABI hash agreement. Schema-only render components
+do not enter the native ABI merely because their canonical layout is blittable.
+Changes under dotnet/ select ara-script and
 its reverse dependency closure, with conservative workspace fallback if that host
 is absent. A real metadata/Git fixture verifies both paths.

@@ -636,7 +636,7 @@ namespace Ara.Hosting
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
         public const uint Version = 2;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0x7062F92C3D31FF8DUL;
+        public const ulong LayoutHash = 0x7A85E63E68A33AF0UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -648,9 +648,6 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
             if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 112) return "global::Ara.Hosting.HostInit: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
-            if (Unsafe.SizeOf<global::Ara.HeightFog>() != 32) return "global::Ara.HeightFog: expected 32 bytes, got " + Unsafe.SizeOf<global::Ara.HeightFog>();
-            if (Unsafe.SizeOf<global::Ara.PostProcess>() != 48) return "global::Ara.PostProcess: expected 48 bytes, got " + Unsafe.SizeOf<global::Ara.PostProcess>();
-            if (Unsafe.SizeOf<global::Ara.SkyAtmosphere>() != 16) return "global::Ara.SkyAtmosphere: expected 16 bytes, got " + Unsafe.SizeOf<global::Ara.SkyAtmosphere>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

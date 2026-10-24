@@ -19,8 +19,8 @@ struct Binding {
 }
 
 /// The engine components exposed to C#, in binding order. The order is part of the
-/// ABI: it must match the order the C# bindings were generated with
-/// (`csgen::blittable_components`, sorted by name), or the layout hash differs.
+/// ABI: it must match the order the C# bindings were generated with, or the layout
+/// hash differs. Use `builtin` for Ara.Runtime's checked-in native views.
 #[derive(Default)]
 pub struct EngineBindings {
     items: Vec<Binding>,
@@ -44,6 +44,14 @@ fn camel(snake: &str) -> String {
 }
 
 impl EngineBindings {
+    /// Built-in native views shared by host startup and checked-in C# generation.
+    /// A blittable schema alone does not guarantee a Rust component's C layout.
+    pub fn builtin() -> Self {
+        crate::bind_component!(Self::new(), ara_components::Transform as "Transform" {
+            position, rotation, scale
+        })
+    }
+
     /// No bindings.
     pub fn new() -> Self {
         Self::default()
@@ -127,4 +135,27 @@ macro_rules! bind_component {
     ($bindings:expr, $ty:ty as $name:literal { $($field:ident),* $(,)? }) => {
         $bindings.component::<$ty>($name, &[$((stringify!($field), ::core::mem::offset_of!($ty, $field))),*])
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_views_validate_rust_offsets_and_match_the_generated_abi() {
+        let mut schema = SchemaDb::new();
+        ara_components::register(&mut schema);
+        let bindings = EngineBindings::builtin();
+        let native = bindings.resolve(&schema, &mut World::new()).unwrap();
+        let layouts: Vec<_> = native.into_iter().map(|(_, _, layout)| layout).collect();
+        let generated = crate::csgen::engine_layouts(&schema, &bindings.names()).unwrap();
+        assert_eq!(
+            crate::abi::layout_hash(&layouts),
+            crate::abi::layout_hash(&generated)
+        );
+        assert!(
+            crate::csgen::blittable_components(&schema).len() > bindings.names().len(),
+            "schema-only render components must not become unbound native views"
+        );
+    }
 }
