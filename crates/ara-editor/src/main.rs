@@ -57,14 +57,10 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
-    let _capture = match ara_crash::desktop::start(
-        "ara-editor",
-        !options.headless
-            && options.frames.is_none()
-            && !options.verify
-            && !options.verify_panels
-            && !options.verify_ux,
-    ) {
+    // SAFETY: still single-threaded: nothing above starts a thread.
+    unsafe { options.isolate_profile() };
+    // Bounded runs never offer the crash folder or consume its "seen" marker.
+    let _capture = match ara_crash::desktop::start("ara-editor", !options.offscreen()) {
         Ok(capture) => Some(capture),
         Err(error) => {
             eprintln!("ARA-EXP-CRASH-004: {error:#}");

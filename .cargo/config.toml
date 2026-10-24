@@ -1,7 +1,10 @@
 # Workspace-local Cargo settings (tracked).
 
 # Builds and tests run from a checkout never touch the real user profile
-# (%APPDATA%\Ara on Windows): `cargo run`/`cargo test` point Ara at a scratch
-# config under target/. An explicitly set ARA_CONFIG_DIR still wins.
+# (%APPDATA%\Ara, %LOCALAPPDATA%\Ara on Windows): `cargo run`/`cargo test`, and the
+# editors, players and workers they start, point Ara at scratch config and crash
+# directories under target/. An explicitly set value still wins. ara-editor refuses
+# the OS profile when ARA_CONFIG_DIR is missing under cargo.
 [env]
 ARA_CONFIG_DIR = { value = "target/ara-config", relative = true }
+ARA_CRASH_DIR = { value = "target/ara-crashes", relative = true }
