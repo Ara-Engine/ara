@@ -125,23 +125,23 @@ service registers them.
 - Journal: `txn`, `flush` (doc, rev, FNV hash), `session`, `ended`, `checkpoint`,
   `review`, `base` lines. On open, each file's revision is its newest flush entry
   with a matching hash; newer transactions are re-applied. Compaction (past 4096
-  entries, only when nothing is unsaved) keeps the newest 1024 transactions.
-- Flush writes changed documents canonically after `debounce` (temp + rename) and
-  always journals a `flush` entry, even when the text is unchanged.
-- Watcher (polling): changed file → read → three-way merge (base = last synced)
-  → human `external edit` transaction. Invalid files and conflicts mark the doc
+  entries, nothing unsaved or being written) keeps the newest 1024 transactions.
+- File I/O runs on the file thread (`file_io.rs`), never in `tick`: writes after
+  `debounce` (temp + rename; `flush` journaled when it lands, even if unchanged),
+  removals, `notify` events (30 s rescan; polling without them). `watch_every` zero
+  checks synchronously per tick (tests). An external edit three-way merges (base =
+  last synced) as a human `external edit`; invalid files and conflicts mark the doc
   diverged (no flushes) until `doc.sync {keep: memory|disk}` or a clean edit.
 
 ## Gotchas
 - Host/store IDs use `HostConfig::seed`; reopening with the same test seed re-mints them.
-- `*.types.json` changes are only reported (ARA1912); restart to load them.
-- No fsync per journal line: safe against process crashes, not power loss.
-- Sessions survive restarts (journaled); subscriptions don't.
+- `*.types.json` changes are only reported (ARA1912); restart to load them. No fsync
+  per journal line (process crashes only). Sessions survive restarts; subscriptions don't.
 
 ## Testing
 `cargo test -p ara-host`: query parsing, logs, journal compaction and review roll-up.
-`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols,
-review, rollback/recovery, external edits/conflicts, services/jobs/subscriptions,
+`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review,
+rollback/recovery, external edits/conflicts, the file thread, services/jobs/subscriptions,
 document inference, apply text and agent `why`. `tests/collab.rs`: advisory claims,
 presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
 `tests/diag.rs` serializes the global bus: grouped/attributed logs, cross-thread

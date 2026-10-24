@@ -991,6 +991,7 @@ dependencies = [
  "ara-ui-document",
  "ara-why",
  "insta",
+ "notify",
  "serde",
  "serde_json",
 ]

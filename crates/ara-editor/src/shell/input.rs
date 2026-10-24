@@ -636,68 +636,11 @@ impl Shell {
                 ));
                 continue;
             }
-            let (path, axis) = key.rsplit_once('#').ok_or("invalid inspector edit key")?;
-            let field = self
-                .fields
-                .get(path)
-                .ok_or("inspector schema field disappeared")?;
-            let value = if axis.is_empty()
-                && matches!(
-                    field.widget,
-                    crate::inspector::Widget::Vector { color: true, .. }
-                ) {
-                // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
-                let hex = text.trim().trim_start_matches('#');
-                if hex.len() != 6 {
-                    return Err("Enter a colour as #RRGGBB".into());
-                }
-                let channel = |n: usize| -> ara_ui::Result<f64> {
-                    Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
-                };
-                let alpha = field.value.get(3).and_then(Value::as_f64).unwrap_or(1.);
-                let round = |v: f64| (v * 10000.).round() / 10000.;
-                json!([
-                    round(channel(0)?),
-                    round(channel(1)?),
-                    round(channel(2)?),
-                    alpha
-                ])
-            } else if matches!(
-                field.widget,
-                crate::inspector::Widget::Number { .. } | crate::inspector::Widget::Vector { .. }
-            ) {
-                let number = crate::inspector::parse_number(text, field.unit.as_deref())?;
-                serde_json::from_str::<Value>(text)
-                    .ok()
-                    .filter(Value::is_number)
-                    .unwrap_or_else(|| json!(number))
-            } else if matches!(field.widget, crate::inspector::Widget::Text)
-                && !field.value.is_string()
-            {
-                serde_json::from_str(text)?
-            } else {
-                json!(text)
-            };
-            let path = if axis.is_empty() {
-                path.to_owned()
-            } else {
-                let axis: usize = axis.parse()?;
-                format!(
-                    "{path}.{}",
-                    if matches!(
-                        field.widget,
-                        crate::inspector::Widget::Vector { color: true, .. }
-                    ) {
-                        ["r", "g", "b", "a"][axis]
-                    } else {
-                        ["x", "y", "z", "w"][axis]
-                    }
-                )
-            };
+            let edit = self.draft_edit(key, text)?;
             commands.extend(crate::inspector::edit_commands(
                 &editor.state.selection,
-                &path,
-                &value,
+                &edit.path(),
+                &edit.value,
             ));
         }
         let result = editor.apply(commands, "Edit inspector values", None);
@@ -707,6 +650,143 @@ impl Shell {
         self.rename = false;
         self.rebuild(editor)?;
         Ok(true)
+    }
+
+    /// Parse one Inspector field draft (`key` is `path#axis`) into what it commits.
+    fn draft_edit(&self, key: &str, text: &str) -> ara_ui::Result<DraftEdit<'_>> {
+        let (path, axis) = key.rsplit_once('#').ok_or("invalid inspector edit key")?;
+        let field = self
+            .fields
+            .get(path)
+            .ok_or("inspector schema field disappeared")?;
+        let value = if axis.is_empty()
+            && matches!(
+                field.widget,
+                crate::inspector::Widget::Vector { color: true, .. }
+            ) {
+            // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
+            let hex = text.trim().trim_start_matches('#');
+            if hex.len() != 6 {
+                return Err("Enter a colour as #RRGGBB".into());
+            }
+            let channel = |n: usize| -> ara_ui::Result<f64> {
+                Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
+            };
+            let alpha = field.value.get(3).and_then(Value::as_f64).unwrap_or(1.);
+            let round = |v: f64| (v * 10000.).round() / 10000.;
+            json!([
+                round(channel(0)?),
+                round(channel(1)?),
+                round(channel(2)?),
+                alpha
+            ])
+        } else if matches!(
+            field.widget,
+            crate::inspector::Widget::Number { .. } | crate::inspector::Widget::Vector { .. }
+        ) {
+            let number = crate::inspector::parse_number(text, field.unit.as_deref())?;
+            serde_json::from_str::<Value>(text)
+                .ok()
+                .filter(Value::is_number)
+                .unwrap_or_else(|| json!(number))
+        } else if matches!(field.widget, crate::inspector::Widget::Text) && !field.value.is_string()
+        {
+            serde_json::from_str(text)?
+        } else {
+            json!(text)
+        };
+        let axis = if axis.is_empty() {
+            None
+        } else {
+            Some(axis.parse()?)
+        };
+        Ok(DraftEdit { field, axis, value })
+    }
+
+    /// The selected entities' records with the typed Inspector drafts applied, for a
+    /// live Scene preview before the commit; None when nothing previews. Drafts that
+    /// do not parse yet (half a colour) and names are left out.
+    pub(crate) fn draft_records(
+        &self,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+    ) -> Option<BTreeMap<String, ara_doc::Record>> {
+        use crate::world::EditWorldView;
+        let mut records = BTreeMap::new();
+        for (key, text) in &self.drafts {
+            if key.starts_with('@') {
+                continue;
+            }
+            let Ok(edit) = self.draft_edit(key, text) else {
+                continue;
+            };
+            for entity in &editor.state.selection {
+                let base = records
+                    .get(entity)
+                    .cloned()
+                    .or_else(|| view.entities().get(entity).map(|e| e.record.clone()));
+                if let Some(record) = base.and_then(|base| edit.applied(base)) {
+                    records.insert(entity.clone(), record);
+                }
+            }
+        }
+        (!records.is_empty()).then_some(records)
+    }
+}
+
+/// One parsed Inspector draft: the field, an optional vector channel and the value.
+struct DraftEdit<'a> {
+    field: &'a crate::inspector::Field,
+    axis: Option<usize>,
+    value: Value,
+}
+impl DraftEdit<'_> {
+    /// The `property.set` path: `Transform.position.x`, `MeshRenderer.color.r`.
+    fn path(&self) -> String {
+        let Some(axis) = self.axis else {
+            return self.field.path.clone();
+        };
+        let color = matches!(
+            self.field.widget,
+            crate::inspector::Widget::Vector { color: true, .. }
+        );
+        let names = if color {
+            ["r", "g", "b", "a"]
+        } else {
+            ["x", "y", "z", "w"]
+        };
+        format!("{}.{}", self.field.path, names[axis])
+    }
+    /// `record` with this edit applied as `property.set` would; a channel of a field
+    /// the record leaves at its default starts from the field's effective value.
+    /// None when the record's shape does not fit (a mixed selection's missing vector).
+    fn applied(&self, record: ara_doc::Record) -> Option<ara_doc::Record> {
+        let mut out = Value::Object(record);
+        let mut at = &mut out;
+        let mut keys: Vec<&str> = self.field.path.split('.').collect();
+        let field = keys.pop()?.to_owned();
+        for key in keys {
+            at = at
+                .as_object_mut()?
+                .entry(key.to_owned())
+                .or_insert_with(|| json!({}));
+        }
+        let object = at.as_object_mut()?;
+        match self.axis {
+            None => {
+                object.insert(field, self.value.clone());
+            }
+            Some(axis) => {
+                let vector = object
+                    .entry(field)
+                    .or_insert_with(|| self.field.value.clone());
+                *vector.as_array_mut()?.get_mut(axis)? = self.value.clone();
+            }
+        }
+        match out {
+            Value::Object(record) => Some(record),
+            _ => None,
+        }
     }
 }
 fn apply_fix(
