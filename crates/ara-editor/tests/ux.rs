@@ -869,3 +869,83 @@ fn scene_quality_menu_offers_project_auto_and_presets_from_the_registry() {
             .is_err()
     );
 }
+
+/// The Camera menu offers the field of view (presets, the current one checked) and
+/// Align View to Selected Camera; the toolbar field takes a typed value.
+#[test]
+fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
+    use ara_editor::shell::commands::Target;
+    use ara_ui::input::InputEvent;
+    use ara_ui_text::EditEvent;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut clipboard = MemoryClipboard::default();
+    shell.click("view-camera", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let rows = shell.open_menu_rows(&editor);
+    let ids: Vec<_> = rows.iter().map(|r| r.0.as_str()).take(4).collect();
+    assert_eq!(
+        ids,
+        [
+            "view.camera.perspective",
+            "view.camera.fov",
+            "view.camera.default",
+            "view.camera.align"
+        ]
+    );
+    assert_eq!(rows[1].1, "Field of View (50°)…");
+
+    shell
+        .run_command(&mut editor, "view.camera.fov", &Target::None)
+        .unwrap();
+    let presets: Vec<_> = shell
+        .open_menu_rows(&editor)
+        .into_iter()
+        .filter(|r| r.0 == "view.camera.fov.set")
+        .collect();
+    assert_eq!(presets.len(), 9);
+    let checked: Vec<_> = presets
+        .iter()
+        .filter(|r| r.2 == Some(true))
+        .map(|r| r.1.as_str())
+        .collect();
+    assert_eq!(checked, ["50°"]);
+    shell
+        .run_command(
+            &mut editor,
+            "view.camera.fov.set",
+            &Target::Text("46".into()),
+        )
+        .unwrap();
+    assert_eq!(editor.state.camera.fov_y_degrees, 46.);
+
+    // A custom value typed into the toolbar field.
+    shell.click("view-fov", &mut clipboard).unwrap();
+    shell
+        .event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)
+        .unwrap();
+    shell
+        .event(
+            InputEvent::Edit(EditEvent::Insert("47.5".into())),
+            &mut clipboard,
+        )
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    shell.commit_fields(&mut editor).unwrap();
+    assert_eq!(editor.state.camera.fov_y_degrees, 47.5);
+    let field = shell.ui.find("view-fov").unwrap();
+    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5°");
+
+    // Align needs a Camera entity.
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let blocked = shell
+        .run_command(&mut editor, "view.camera.align", &Target::None)
+        .unwrap_err();
+    assert!(
+        blocked.to_string().contains("no Camera component"),
+        "{blocked}"
+    );
+}

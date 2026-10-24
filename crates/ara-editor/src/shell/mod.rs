@@ -249,6 +249,8 @@ pub(crate) enum Binding {
     Command(&'static str, commands::Target),
     Content(Vec<Value>, String),
     Field(String, Option<usize>),
+    /// The Scene toolbar's field-of-view field (drafted, applied on commit).
+    CameraFov,
     Search(String),
     Palette(String),
     PaletteParam(String),

@@ -104,7 +104,11 @@ impl Service for EditorService {
                 "editor.focus",
                 "Activate a panel and optionally reveal a schema field.",
             ),
-            Method::new::<EditorCamera>(db, "editor.camera", "Set the Scene view's orbit camera."),
+            Method::new::<EditorCamera>(
+                db,
+                "editor.camera",
+                "Read or set the Scene view camera: orbit pose and vertical field of view, or look through a scene Camera entity (`entity`). Returns `camera`.",
+            ),
             Method::new::<EditorSceneOpen>(
                 db,
                 "editor.scene.open",
@@ -711,22 +715,40 @@ impl EditorService {
             }
             "editor.camera" => {
                 let p: EditorCamera = parse(params)?;
-                if !p.distance.is_finite()
-                    || p.distance <= 0.
-                    || !p.yaw.is_finite()
-                    || !p.pitch.is_finite()
-                    || p.target.iter().any(|x| !x.is_finite())
-                {
+                let numbers = p.target.into_iter().flatten().chain(
+                    [p.yaw, p.pitch, p.distance, p.fov_y_degrees]
+                        .into_iter()
+                        .flatten(),
+                );
+                if numbers.clone().any(|x| !x.is_finite()) || p.distance.is_some_and(|d| d <= 0.) {
                     return Err(vec![crate::invalid(
                         "camera values must be finite; distance must be positive",
                     )]);
                 }
-                state.camera = crate::state::Camera {
-                    target: p.target.into(),
-                    yaw: p.yaw,
-                    pitch: p.pitch.clamp(-1.54, 1.54),
-                    distance: p.distance.clamp(0.05, 100_000.),
-                };
+                if p.entity.is_none() && numbers.count() == 0 {
+                    return Ok(json!({"camera": state.camera}));
+                }
+                let camera = &mut state.camera;
+                if let Some(distance) = p.distance {
+                    camera.distance = distance.clamp(0.05, 100_000.);
+                }
+                if let Some(entity) = &p.entity {
+                    let (position, forward, fov) = scene_camera(cx, &state.doc, entity)?;
+                    camera.look_from(position, forward);
+                    camera.set_fov(fov);
+                }
+                if let Some(target) = p.target {
+                    camera.target = target.into();
+                }
+                if let Some(yaw) = p.yaw {
+                    camera.yaw = yaw;
+                }
+                if let Some(pitch) = p.pitch {
+                    camera.pitch = pitch.clamp(-1.54, 1.54);
+                }
+                if let Some(fov) = p.fov_y_degrees {
+                    camera.set_fov(fov);
+                }
             }
             "editor.frame" => {
                 frame(&mut state, cx)?;
@@ -848,6 +870,8 @@ impl EditorService {
             }
             _ => return Err(vec![crate::invalid("unknown editor action")]),
         }
+        // The camera this caller now looks through (an agent's own, while separate).
+        let viewed = state.camera;
         if let Some((doc, selection, camera)) = human
             && let Some((id, author)) = agent
         {
@@ -870,7 +894,10 @@ impl EditorService {
             .session()
             .map(|s| s.author.clone())
             .unwrap_or(ara_ops::Author::Human);
-        let result = self.navigation.commit(state, author, method, cx.root())?;
+        let mut result = self.navigation.commit(state, author, method, cx.root())?;
+        if method == "editor.camera" {
+            result["camera"] = json!(viewed);
+        }
         self.changes
             .send(self.navigation.state.clone())
             .map_err(|_| vec![crate::invalid("editor window has closed")])?;
@@ -942,6 +969,32 @@ fn frame(state: &mut EditorState, cx: &mut Cx) -> Result<(), Vec<Diagnostic>> {
         state.camera.distance = (max - min).length().max(1.) * 1.8;
     }
     Ok(())
+}
+/// The world pose (eye, view direction along local −Z) and vertical field of view
+/// in degrees of `entity`'s `Camera` in scene `doc`.
+fn scene_camera(
+    cx: &mut Cx,
+    doc: &str,
+    entity: &str,
+) -> Result<(Vec3, Vec3, f32), Vec<Diagnostic>> {
+    let resolved = crate::world::resolve(cx.store(), doc)?;
+    let lens = resolved
+        .get(entity)
+        .ok_or_else(|| vec![crate::invalid(format!("no entity `{entity}` in `{doc}`"))])?
+        .record
+        .get("Camera")
+        .ok_or_else(|| {
+            vec![crate::invalid(format!(
+                "`{entity}` has no Camera component; select a camera entity"
+            ))]
+        })?;
+    let lens: ara_runtime::components::Camera = serde_json::from_value(lens.clone())
+        .map_err(|e| vec![crate::invalid(format!("`{entity}`'s Camera: {e}"))])?;
+    let pose = crate::world::world_transforms(&resolved)
+        .remove(entity)
+        .unwrap_or_default();
+    let (_, rotation, position) = pose.to_scale_rotation_translation();
+    Ok((position, rotation * Vec3::NEG_Z, lens.fov))
 }
 /// Switch to scene `doc`: the outgoing scene keeps its camera, a reopened scene gets
 /// its own back and a first open frames the whole scene. Humans (`human`) also update

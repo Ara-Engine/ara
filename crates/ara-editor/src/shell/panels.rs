@@ -371,6 +371,10 @@ impl Shell {
                 "Perspective",
                 "Camera views and speed",
             );
+            // Typed in place; Enter or leaving the field applies it via `editor.camera`.
+            self.bindings
+                .insert(ara_ui::source::stable_id("view-fov"), Binding::CameraFov);
+            out.push_str(&format!("<field id='view-fov' class='number' style='width:42px' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
             let state = &editor.state;
             let mode = match state.view_mode.as_str() {
                 "baseColor" => "Base color".into(),
