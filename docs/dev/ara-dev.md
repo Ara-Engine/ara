@@ -244,3 +244,9 @@ path from Cargo's messages. The fixture assertions and importer-version checks
 are unchanged. A cross-crate CLI fixture verifies freshness after a peer edit
 with separate build/intermediate directories; test harnesses are never exported
 as regular binaries.
+
+Main's rendering-component additions left Abi.g.cs and Components.g.cs stale.
+The explicit ARA_UPDATE_GENERATED opt-in regenerated both; the .NET solution
+then built with zero warnings/errors. Changes under dotnet/ select ara-script and
+its reverse dependency closure, with conservative workspace fallback if that host
+is absent. A real metadata/Git fixture verifies both paths.

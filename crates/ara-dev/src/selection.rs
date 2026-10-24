@@ -115,6 +115,14 @@ pub(crate) fn compute(
         {
             continue;
         }
+        // Managed assemblies/generators are build inputs of the Rust script host.
+        if path.starts_with("dotnet") && metadata.packages.iter().any(|p| p.name == "ara-script") {
+            result.changed_libraries.insert("ara-script".into());
+            result
+                .reasons
+                .push("managed input changed: ara-script and its consumers".into());
+            continue;
+        }
         if path == Path::new(".cargo/config.toml") {
             let old =
                 manifest::parse(old_files.get(path).and_then(Option::as_deref).unwrap_or(""))?;

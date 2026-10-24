@@ -192,6 +192,55 @@ fn invokes_fresh_peer() {
 }
 
 #[test]
+fn managed_changes_select_the_script_host_and_consumers_with_a_conservative_fallback() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        manifest.replace("\"diag\"]", "\"diag\", \"script\"]"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("script/src")).unwrap();
+    fs::write(
+        root.join("script/Cargo.toml"),
+        "[package]\nname = \"ara-script\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("script/src/lib.rs"),
+        "pub fn value() -> u32 {\n    1\n}\n",
+    )
+    .unwrap();
+    let tool = fs::read_to_string(root.join("tool/Cargo.toml")).unwrap();
+    fs::write(root.join("tool/Cargo.toml"), format!("{tool}\n[dev-dependencies]\nscript = {{ package = \"ara-script\", path = \"../script\" }}\n")).unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "script host"]);
+    for (root, expected) in [
+        (root, serde_json::json!(["ara-script", "mini-tool"])),
+        (
+            fixture(),
+            serde_json::json!(["ara-diag", "mini-core", "mini-tool"]),
+        ),
+    ] {
+        fs::create_dir_all(root.join("dotnet/src")).unwrap();
+        fs::write(
+            root.join("dotnet/src/Managed.cs"),
+            "// Managed ABI change\n",
+        )
+        .unwrap();
+        let output = ok(
+            &root,
+            env!("CARGO_BIN_EXE_ara-dev"),
+            &["check", "--plan", "--json"],
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["affected"], expected);
+    }
+}
+
+#[test]
 fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();
