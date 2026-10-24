@@ -74,10 +74,15 @@ impl Shell {
                         );
                     }
                     Binding::MaterialValue(doc, node) => {
-                        self.drafts.insert(
-                            format!("@material|{doc}|{node}"),
-                            action.value.as_str().unwrap_or("").into(),
-                        );
+                        let key = format!("@material|{doc}|{node}");
+                        if let Some(on) = action.value.as_bool() {
+                            self.drafts.insert(key, on.to_string());
+                            self.commit_fields(editor)?;
+                            rebuild = true;
+                        } else {
+                            self.drafts
+                                .insert(key, action.value.as_str().unwrap_or("").into());
+                        }
                     }
                     Binding::AnimationEdit(kind) => {
                         self.edit_animation(editor, kind)?;
@@ -524,7 +529,9 @@ impl Shell {
             let parts = key.split('|').collect::<Vec<_>>();
             if let [_, doc, node] = parts.as_slice() {
                 let text = self.drafts.get(key).ok_or("material draft missing")?;
-                let mut value: Value = serde_json::from_str(text)?;
+                // JSON, or lanes typed as `0.18, 0.42, 0.9`.
+                let mut value: Value = serde_json::from_str(text)
+                    .or_else(|_| serde_json::from_str(&format!("[{}]", text.trim())))?;
                 if value.is_number() {
                     value = json!([value]);
                 }

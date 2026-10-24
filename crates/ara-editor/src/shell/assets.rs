@@ -31,9 +31,13 @@ impl Browser {
         let root = root.to_owned();
         let (tx, pending) = mpsc::channel();
         std::thread::spawn(move || {
+            // Parsed documents are reused while a file's stamp is unchanged, so a rescan
+            // only stats binary media instead of reading it.
+            let mut cache = std::collections::HashMap::new();
             loop {
                 let mut files = Vec::new();
-                walk(&root, &root, &mut files);
+                walk(&root, &root, &mut files, &mut cache);
+                cache.retain(|path: &String, _| files.iter().any(|a| a.path == *path));
                 if tx.send(files).is_err() {
                     break;
                 }
@@ -55,7 +59,25 @@ impl Browser {
         }
     }
 }
-fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
+/// JSON documents whose ID, domain and references the browser reads.
+const DOCUMENTS: &[&str] = &[
+    "scene",
+    "prefab",
+    "graph",
+    "animation",
+    "materialinstance",
+    "material",
+    "terrain",
+    "foliage",
+    "world",
+    "music",
+];
+fn walk(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<Asset>,
+    cache: &mut std::collections::HashMap<String, Asset>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -78,7 +100,7 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             if path != root && path.join("ara.project.json").exists() {
                 continue;
             }
-            walk(root, &path, out);
+            walk(root, &path, out, cache);
         } else {
             let relative = path
                 .strip_prefix(root)
@@ -93,20 +115,23 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
             if relative.ends_with(".import.json") {
                 continue;
             }
-            let document = std::fs::read_to_string(&path)
-                .ok()
+            let stamp = stamp(&path);
+            if let Some(known) = cache.get(&relative).filter(|a| a.stamp == stamp) {
+                out.push(known.clone());
+                continue;
+            }
+            let document = DOCUMENTS
+                .contains(&kind.as_str())
+                .then(|| std::fs::read_to_string(&path).ok())
+                .flatten()
                 .and_then(|text| ara_json::parse(&text).ok());
             let domain = document
                 .as_ref()
                 .and_then(|v| v["records"]["g_meta"]["domain"].as_str())
                 .map(str::to_owned);
-            let id = if matches!(
-                kind.as_str(),
-                "scene" | "prefab" | "graph" | "animation" | "materialinstance"
-            ) {
-                std::fs::read_to_string(&path)
-                    .ok()
-                    .and_then(|s| ara_json::parse(&s).ok())
+            let id = if DOCUMENTS.contains(&kind.as_str()) {
+                document
+                    .as_ref()
                     .and_then(|v| v["id"].as_str().map(str::to_owned))
             } else {
                 let sidecar = PathBuf::from(format!("{}.import.json", path.display()));
@@ -115,10 +140,10 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                     .and_then(|s| serde_json::from_str::<Value>(&s).ok())
                     .and_then(|v| v["id"].as_str().map(str::to_owned))
             };
-            out.push(Asset {
+            let asset = Asset {
                 reference: id.map(|id| format!("@{relative}#{id}")),
-                stamp: stamp(&path),
-                path: relative,
+                stamp,
+                path: relative.clone(),
                 kind,
                 domain,
                 uses: document
@@ -128,7 +153,9 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<Asset>) {
                         refs
                     })
                     .unwrap_or_default(),
-            });
+            };
+            cache.insert(relative, asset.clone());
+            out.push(asset);
         }
     }
 }

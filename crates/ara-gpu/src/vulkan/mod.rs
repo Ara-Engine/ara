@@ -4,6 +4,7 @@ mod cache;
 mod context;
 use ash::vk::TaggedStructure;
 mod encode;
+pub mod external;
 mod guard;
 mod heap;
 mod image_copy;

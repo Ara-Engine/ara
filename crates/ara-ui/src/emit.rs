@@ -114,7 +114,11 @@ impl Ui {
                     rect.x + l.padding.left + l.border.left,
                     rect.y + l.padding.top + l.border.top,
                 ];
-                if let Some(crate::widgets::Widget::Input(input)) = self.widgets.get(&id) {
+                // Only an input being edited scrolls to its caret; unfocused inputs
+                // show their text from the start (`-6.455`, not `455`).
+                if node.state.focus
+                    && let Some(crate::widgets::Widget::Input(input)) = self.widgets.get(&id)
+                {
                     origin[0] -= crate::widgets::input_scroll(
                         input,
                         text,

@@ -311,6 +311,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(0.),
     ),
     def(
+        "play.inGameView",
+        User,
+        "Viewport",
+        "Play in the Game view",
+        "Play shows inside the editor's Game view (input goes to it while focused). Off opens a separate player window.",
+        Kind::Toggle,
+        Lit::B(true),
+    ),
+    def(
         "play.hotReload",
         Project,
         "Networking & Play",
@@ -352,6 +361,7 @@ pub struct Settings {
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
+    failures: Vec<String>,
 }
 const USER: &str = "e_userpref";
 const PROJECT: &str = "e_projpref";
@@ -404,6 +414,7 @@ impl Settings {
             project_path,
             user,
             project,
+            failures: Vec::new(),
         })
     }
     /// Effective value: stored or default.
@@ -525,7 +536,11 @@ impl Settings {
             self.persist_project();
         }
     }
-    fn persist_user(&self) {
+    /// Write failures since the last call (the editor service logs them).
+    pub fn take_failures(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.failures)
+    }
+    fn persist_user(&mut self) {
         let Some(path) = &self.user_path else {
             return;
         };
@@ -533,10 +548,13 @@ impl Settings {
             let _ = std::fs::create_dir_all(parent);
         }
         if let Err(e) = write_atomic(path, &Value::Object(self.user.clone())) {
-            eprintln!("settings: {e}");
+            self.failures.push(format!(
+                "Preferences were not saved to {}: {e}",
+                path.display()
+            ));
         }
     }
-    fn persist_project(&self) {
+    fn persist_project(&mut self) {
         let mut manifest = std::fs::read_to_string(&self.project_path)
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -561,7 +579,10 @@ impl Settings {
             }
         }
         if let Err(e) = write_atomic(&self.project_path, &manifest) {
-            eprintln!("settings: {e}");
+            self.failures.push(format!(
+                "Project settings were not saved to {}: {e}",
+                self.project_path.display()
+            ));
         }
     }
 }

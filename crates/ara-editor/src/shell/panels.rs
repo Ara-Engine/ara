@@ -58,6 +58,7 @@ pub(super) fn title(panel: &str) -> &str {
         "inspector" => "Inspector",
         "assets" => "Assets",
         "console" => "Console",
+        "problems" => "Problems",
         "agents" => "Agents",
         "settings" => "Settings",
         _ => panel,
@@ -76,6 +77,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "inspector" => "sliders-horizontal",
         "assets" => "folder",
         "console" => "terminal",
+        "problems" => "triangle-alert",
         "agents" => "bot",
         "settings" => "settings-2",
         _ => "square",
@@ -167,7 +169,7 @@ impl Shell {
         match panel {
             "hierarchy" => self.hierarchy_panel(editor, out)?,
             "scene" => self.scene_panel(editor, out),
-            "game" => self.empty(out, "game-empty", "gamepad-2", "Game view", "Play opens the game in a player window. The in-editor Game view through a shared GPU texture (D19) comes next.", &[("game-play", "Play", "play.start")]),
+            "game" => self.game_panel(editor, out),
             "material" => self.material_panel(editor, out)?,
             "vfx" => self.vfx_panel(editor, out)?,
             "profiler" => self.profiler_panel(editor, out)?,
@@ -175,9 +177,17 @@ impl Shell {
             "inspector" => self.inspector_panel(editor, out)?,
             "assets" => self.assets_panel(editor, out),
             "console" => self.console_panel(editor, out),
+            "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),
             "settings" => self.settings_panel(editor, out),
-            other => self.empty(out, &format!("unknown-{other}"), "square", "Unknown panel", "This layout names a panel this editor does not have.", &[("unknown-reset", "Reset layout", "layout.reset")]),
+            other => self.empty(
+                out,
+                &format!("unknown-{other}"),
+                "square",
+                "Unknown panel",
+                "This layout names a panel this editor does not have.",
+                &[("unknown-reset", "Reset layout", "layout.reset")],
+            ),
         }
         Ok(())
     }
@@ -400,6 +410,7 @@ impl Shell {
         {
             self.axis_markup(editor, out);
         }
+        self.notices_markup(editor, out);
         out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 }

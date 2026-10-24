@@ -1,5 +1,6 @@
-//! Import settings are commands; native importers run only in disposable workers.
-mod commands;
+//! Import settings are the shared `import.initialize`/`import.configure` commands
+//! (registered by `ara_play_host::open_project`); native importers run only in
+//! disposable workers.
 pub(crate) mod cooked_mesh;
 mod material_preview;
 pub(crate) mod thumbnails;
@@ -20,13 +21,8 @@ use std::{
     time::Duration,
 };
 
-use commands::register;
-
 /// Install schemas before the host loads project documents.
 pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
-    ara_asset::register_schema(&mut project.db);
-    ara_importers::registry()?.register_schemas(&mut project.db);
-    register(&mut project.registry, &mut project.db);
     // The shared play-host schema world already owns graph/material/animation kinds
     // and material/VFX commands. Only generic canvas commands are editor additions.
     ara_graph::commands::register(&mut project.registry, &mut project.db);
@@ -159,8 +155,7 @@ impl Service for AssetService {
                 .docs()
                 .any(|(path, _)| path == sidecar)
         {
-            // The shared workspace command picks the importer and its current version,
-            // exactly as `ara do import.initialize` and MCP do.
+            // The shared command picks the importer and its installed version.
             let batch = parse(
                 json!({"session":p.session,"why":"Import source media","commands":[{"cmd":"import.initialize","args":{"source":p.path,"preset":"fast"}}]}),
             )?;

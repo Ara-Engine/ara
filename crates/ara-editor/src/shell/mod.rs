@@ -6,6 +6,7 @@
 //! know which OS window hosts them.
 mod assets;
 mod axis;
+mod build;
 mod chrome;
 pub mod commands;
 mod dialog;
@@ -15,27 +16,34 @@ mod input;
 mod keyboard;
 mod menu;
 mod motion;
+mod notices;
 mod ops;
 mod polish;
+pub(crate) mod scripts;
 mod scrub;
 mod settings_panel;
 mod testing;
 use drag::Drag;
 pub use testing::MenuRow;
+mod agents_panel;
 mod animation_panel;
 mod assets_panel;
+mod game_panel;
 mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
 mod import_panel;
 mod inspector_panel;
+mod log_panels;
+mod material_panel;
+pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
 mod palette;
 mod panels;
+pub mod prefab_ops;
 mod profiler_panel;
-mod review_panel;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
@@ -86,6 +94,41 @@ pub struct Shell {
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
+    /// Game view: players of the shown world, the selected one, whether a frame is
+    /// showing, frames per second, the surface size, the wanted size (physical px),
+    /// input capture, aspect preset and the stats overlay.
+    pub(crate) game_players: Vec<usize>,
+    pub(crate) game_client: usize,
+    pub(crate) game_live: bool,
+    pub(crate) game_fps: u32,
+    pub(crate) game_size: [u32; 2],
+    pub(crate) game_target: [u32; 2],
+    pub(crate) game_captured: bool,
+    pub(crate) game_aspect: &'static str,
+    pub(crate) game_stats: bool,
+    /// The shown Play world's fault (`play.status`), shown instead of the game.
+    pub(crate) game_fault: Option<String>,
+    /// The Material tool shows its DSL source instead of the node graph.
+    pub(crate) material_source_view: bool,
+    /// Colour swatches outside the Inspector (material parameters): node id and
+    /// colour, painted after layout like the Inspector's.
+    value_swatches: Vec<(String, ara_ui::style::Color)>,
+    /// Create > C# Behaviour opens the IDE (verification routes turn it off).
+    pub(crate) open_ide: bool,
+    /// The running export (Build > Build Current Profile).
+    pub(crate) build: Option<build::BuildJob>,
+    /// Assets lists every file, including glTF buffers and project files.
+    pub(crate) assets_show_all: bool,
+    /// Console and Problems filters.
+    pub(crate) log_view: LogView,
+    /// Console row whose details are expanded (bus sequence number).
+    pub(crate) console_open: Option<u64>,
+    /// Problems whose "Why" explanation is expanded.
+    pub(crate) explained_problems: std::collections::BTreeSet<u64>,
+    /// Failures found while polling (thumbnails), logged by the window owner.
+    pub(crate) pending_reports: Vec<(&'static str, String)>,
+    /// Agent turns whose changes the activity feed shows expanded.
+    pub(crate) expanded_turns: std::collections::BTreeSet<String>,
     hierarchy_view: Option<VirtualView>,
     /// Surface hosting the hierarchy's virtual rows (`None` is the main window).
     hierarchy_surface: Option<String>,
@@ -137,6 +180,15 @@ pub struct Shell {
     vfx_visible: bool,
     vfx_ready: bool,
     vfx_error: Option<String>,
+    /// VFX timeline: preview rate (percent), the effect's tick rate and the latest
+    /// GPU counters.
+    pub(crate) vfx_rate: u32,
+    vfx_hz: u32,
+    vfx_live: Option<vfx_panel::VfxLive>,
+    /// Preview-only emitter state: hidden, isolated (solo) and collapsed in the stack.
+    pub(crate) vfx_hidden: std::collections::BTreeSet<String>,
+    pub(crate) vfx_solo: Option<String>,
+    pub(crate) vfx_collapsed: std::collections::BTreeSet<String>,
     axis_camera: crate::state::Camera,
     /// Open menu bar menu, context menu or value menu.
     pub(crate) menu: Option<menu::MenuState>,
@@ -153,7 +205,6 @@ pub struct Shell {
     pub(crate) entity_clipboard: Option<Vec<Value>>,
     pub(crate) field_clipboard: Option<Value>,
     pending_clipboard: Option<String>,
-    recent_docs: Vec<String>,
     recent_commands: Vec<&'static str>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
     pub(crate) recording: Option<&'static str>,
@@ -236,6 +287,26 @@ impl Shell {
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
             hierarchy_ghosts: std::collections::BTreeSet::new(),
+            expanded_turns: std::collections::BTreeSet::new(),
+            pending_reports: Vec::new(),
+            log_view: LogView::default(),
+            assets_show_all: false,
+            build: None,
+            open_ide: true,
+            game_players: Vec::new(),
+            game_client: 0,
+            game_live: false,
+            game_fps: 0,
+            game_size: [0, 0],
+            game_target: [0, 0],
+            game_captured: false,
+            game_aspect: "free",
+            game_stats: true,
+            game_fault: None,
+            material_source_view: false,
+            value_swatches: Vec::new(),
+            console_open: None,
+            explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
             browser: assets::Browser::new(editor.host.root()),
@@ -286,6 +357,12 @@ impl Shell {
             vfx_visible: false,
             vfx_ready: false,
             vfx_error: None,
+            vfx_rate: 100,
+            vfx_hz: 60,
+            vfx_live: None,
+            vfx_hidden: std::collections::BTreeSet::new(),
+            vfx_solo: None,
+            vfx_collapsed: std::collections::BTreeSet::new(),
             axis_camera: Default::default(),
             menu: None,
             menu_anchors: Vec::new(),
@@ -298,7 +375,6 @@ impl Shell {
             entity_clipboard: None,
             field_clipboard: None,
             pending_clipboard: None,
-            recent_docs: Vec::new(),
             recent_commands: Vec::new(),
             recording: None,
             key_search: false,
@@ -434,8 +510,14 @@ impl Shell {
             let mut view = VirtualView::mount(&mut ui, index, row, height, vec![width])?;
             view.scroll(&mut ui, &self.asset_rows, self.asset_offset, height)?;
             for (key, asset) in &self.asset_entries {
-                self.bindings
-                    .insert(view.identity(*key), Binding::Asset(asset.clone()));
+                self.bindings.insert(
+                    view.identity(*key),
+                    if asset.kind == "folder" {
+                        Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
+                    } else {
+                        Binding::Asset(asset.clone())
+                    },
+                );
             }
             self.asset_view = Some(view);
             self.asset_surface = self.current.clone();
@@ -851,32 +933,43 @@ impl Shell {
                     changed = true;
                 }
                 Err((key, error)) => {
-                    eprintln!("thumbnail: {error}");
+                    self.pending_reports.push(("thumbnail", error.clone()));
                     self.thumbnail_errors.insert(key, error);
                     changed = true;
                 }
             }
         }
+        let mut live = false;
         for result in self.vfx_stream.poll() {
             match result {
-                Ok(image) => {
-                    changed |= !self.vfx_ready;
+                Ok(frame) => {
+                    changed |= !self.vfx_ready || self.vfx_error.is_some();
                     self.vfx_ready = true;
                     self.vfx_error = None;
                     self.thumbnail_uploads.push((
                         ara_ui::source::stable_id("vfx-live-preview") as u32 & 0x7fff_ffff,
                         ara_ui_render::gpu::Image {
-                            width: image.width(),
-                            height: image.height(),
-                            rgba: image.into_raw(),
+                            width: frame.image.width(),
+                            height: frame.image.height(),
+                            rgba: frame.image.into_raw(),
                         },
                     ));
+                    self.vfx_live = Some(vfx_panel::VfxLive {
+                        tick: frame.tick,
+                        alive: frame.alive,
+                        emitters: frame.emitters,
+                    });
+                    live = true;
                 }
                 Err(error) => {
                     self.vfx_error = Some(error);
                     changed = true;
                 }
             }
+        }
+        // Counters change every preview frame: update their text, not the panel.
+        if live && !changed {
+            let _ = self.vfx_live_text();
         }
         changed
     }

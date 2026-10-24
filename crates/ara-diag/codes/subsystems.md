@@ -675,6 +675,21 @@ Fixes:
 - Restore or re-import the asset, then Play again (or let hot reload swap it in).
 - Point the referencing field at an asset that exists (`property.set`).
 
+## ARA7307 play::SURFACE: Embedded play surface failed
+owner: ara-play-host
+
+Play with `embed` shows each client in the editor through a shared GPU surface. A player could not create its surface (`play.embed`), the owner could not take over its handles, or a resize failed. The world is not started (or keeps its previous surface size).
+
+Causes:
+- The player's GPU cannot share images with this process (see `ARA_GPU_EXTERNAL` in the message).
+- The player exited or was killed while its handles were being duplicated.
+- The requested size is zero or larger than 8192 pixels per edge.
+
+Fixes:
+- Read the message for the underlying GPU error and fix the driver or adapter setup it names.
+- Start Play again; use `play.status` to see whether the player faulted.
+- Play in a window (`window: true`) when shared surfaces are unavailable on this machine.
+
 ## ARA7401 l10n::MISSING_KEY: Missing localization key
 owner: ara-l10n
 

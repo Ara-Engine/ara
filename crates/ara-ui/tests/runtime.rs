@@ -53,7 +53,7 @@ fn incremental_lanes_and_runtime_theme_switch() -> Result<()> {
     )
     .err()
     .expect("fixture declares this value");
-    assert!(error.to_string().contains("ARA7018"));
+    assert!(error.to_string().contains("ARA4018"));
     Ok(())
 }
 #[test]
@@ -325,5 +325,54 @@ fn inherited_label_color_follows_its_button_state() -> Result<()> {
         ui.nodes[label].computed.color, muted,
         "the label restyles with its parent"
     );
+    Ok(())
+}
+#[test]
+fn absolute_right_and_bottom_insets_resolve_against_the_parent() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='r'><panel id='pad' style='height:100px' /><panel id='box' style='width:300px;height:200px'><panel id='corner' style='position:absolute;right:10px;bottom:20px;width:50px;height:30px' /></panel></ui>",
+        EDITOR_CSS,
+        [800.0, 600.0],
+    )?;
+    ui.frame(&mut text)?;
+    let parent = ui.nodes[ui.find("box").expect("box")].rect;
+    let corner = ui.nodes[ui.find("corner").expect("corner")].rect;
+    assert_eq!(
+        corner.x,
+        parent.x + parent.w - 10. - 50.,
+        "{parent:?} {corner:?}"
+    );
+    assert_eq!(
+        corner.y,
+        parent.y + parent.h - 20. - 30.,
+        "{parent:?} {corner:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn unfocused_inputs_show_their_text_from_the_start() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='r'><field id='f' style='width:40px' text='-6.455123456789' /></ui>",
+        EDITOR_CSS,
+        [400.0, 200.0],
+    )?;
+    ui.frame(&mut text)?;
+    let rect = ui.nodes[ui.find("f").expect("field")].rect;
+    let origin = ui
+        .display
+        .commands
+        .iter()
+        .find_map(|d| match d {
+            ara_ui::paint::Draw::GlyphRun { node, origin, .. } if *node == stable_id("f") => {
+                Some(*origin)
+            }
+            _ => None,
+        })
+        .expect("field text");
+    // Only the field being edited scrolls to its caret.
+    assert!(origin[0] >= rect.x, "{origin:?} {rect:?}");
     Ok(())
 }

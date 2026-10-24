@@ -47,7 +47,7 @@ impl GlyphAtlas {
     /// Create an atlas; dimensions must fit nonempty glyphs and bounded allocations.
     pub fn new(size: u32) -> Result<Self> {
         if !(64..=4096).contains(&size) {
-            return Err("ARA7050: atlas size must be 64–4096".into());
+            return Err("ARA4050: atlas size must be 64–4096".into());
         }
         Ok(Self {
             size,
@@ -69,7 +69,7 @@ impl GlyphAtlas {
         mode: TextMode,
     ) -> Result<Option<Entry>> {
         if !size.is_finite() || size <= 0.0 || size > 1024.0 || id > u16::MAX as u32 {
-            return Err("ARA7050: invalid glyph request".into());
+            return Err("ARA4050: invalid glyph request".into());
         }
         let ratio = if mode == TextMode::Msdf {
             size / 48.
@@ -87,7 +87,7 @@ impl GlyphAtlas {
             return Ok(entry.map(scale_entry));
         }
         let font = swash::FontRef::from_index(&font.bytes, font.index as usize)
-            .ok_or("ARA7050: invalid font")?;
+            .ok_or("ARA4050: invalid font")?;
         let mut scaler = self
             .scale
             .builder(font)
@@ -110,7 +110,7 @@ impl GlyphAtlas {
             if mode == TextMode::Msdf && !color {
                 let outline = scaler
                     .scale_outline(id as u16)
-                    .ok_or("ARA7050: scalable glyph has no outline")?;
+                    .ok_or("ARA4050: scalable glyph has no outline")?;
                 let image = msdf::generate(&outline, 4.0)?;
                 (
                     image.pixels,
@@ -170,7 +170,7 @@ impl GlyphAtlas {
     }
     fn insert(&mut self, w: u32, h: u32, pixels: &[u8]) -> Result<(usize, u32, u32)> {
         if w + 2 > self.size || h + 2 > self.size {
-            return Err("ARA7050: glyph exceeds atlas page; select a larger atlas".into());
+            return Err("ARA4050: glyph exceeds atlas page; select a larger atlas".into());
         }
         let size = self.size;
         for page in &mut self.pages {

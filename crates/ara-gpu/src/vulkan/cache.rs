@@ -70,6 +70,8 @@ mod tests {
             timestamp_period_ns: 1.,
             timestamp_valid_bits: [64; 2],
             pipeline_cache_uuid: vec![7; 16],
+            external_memory: false,
+            identity: Default::default(),
         };
         let mut bytes = Vec::new();
         for word in [32u32, 1, 1, 2] {

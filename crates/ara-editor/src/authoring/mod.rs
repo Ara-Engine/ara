@@ -96,9 +96,11 @@ impl Service for AuthoringService {
             return cx.apply(parse(json!({"session":p.session,"doc":doc,"commands":commands,"why":p.why.unwrap_or_else(||"Edit animation canvas".into())}))?);
         }
         let p: CreateParams = parse(params)?;
-        if p.domain == "scene" {
-            // An empty scene document; File › New Scene opens it.
-            let doc = cx.create_document(&p.path, "scene").map_err(|d| vec![d])?;
+        if matches!(p.domain.as_str(), "scene" | "prefab") {
+            // An empty scene (File > New Scene) or prefab (Prefab from Selection).
+            let doc = cx
+                .create_document(&p.path, &p.domain)
+                .map_err(|d| vec![d])?;
             return Ok(json!({"doc":doc,"path":p.path}));
         }
         if !matches!(

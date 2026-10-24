@@ -25,7 +25,7 @@ pub(crate) fn generate(outline: &swash::scale::outline::Outline, range: f32) -> 
     let width = (bounds.max.x + range).ceil() as i32 - left;
     let height = top - (bounds.min.y - range).floor() as i32;
     if width <= 0 || height <= 0 || width > 4096 || height > 4096 {
-        return Err("ARA7050: invalid scalable glyph bounds".into());
+        return Err("ARA4050: invalid scalable glyph bounds".into());
     }
     let mut edges = Vec::new();
     let mut current = [0.0; 2];

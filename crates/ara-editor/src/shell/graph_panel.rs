@@ -1,147 +1,9 @@
-//! One graph widget hosts domain projections; the DSL is another view of the same ops.
+//! Shared authoring-tool plumbing: the graph canvas (loaded per document), the
+//! resource toolbar, the node palette and canvas painting. The Material, VFX and
+//! Animation tools build on it.
+use super::commands::Target;
 use super::*;
 impl Shell {
-    pub(super) fn material_panel(
-        &mut self,
-        editor: &mut Editor,
-        out: &mut String,
-    ) -> ara_ui::Result<()> {
-        let resource = self.resource_for(editor, "material");
-        self.resource_toolbar(editor, out, "material", resource.as_deref());
-        let Some(doc) = resource else {
-            self.resource_empty(out, "material");
-            return Ok(());
-        };
-        self.load_canvas(editor, &doc)?;
-        self.apply_canvas_view(editor);
-        let graph = self
-            .canvas
-            .as_ref()
-            .ok_or("material canvas missing")?
-            .graph();
-        let (source, mut diagnostics) = match ara_material::Material::from_graph(graph) {
-            Ok(material) => {
-                let source = ara_material::dsl::print(&material).map_err(|d| d.to_string())?;
-                self.material_sources.insert(doc.clone(), source.clone());
-                (
-                    source,
-                    ara_material::check(&material).err().unwrap_or_default(),
-                )
-            }
-            Err(diagnostics) => (
-                self.material_sources.get(&doc).cloned().unwrap_or_else(|| {
-                    "// Invalid material nodes: undo or repair their inputs.".into()
-                }),
-                diagnostics,
-            ),
-        };
-        for diagnostic in &mut diagnostics {
-            if diagnostic.location.record.is_none() {
-                let invalid = graph.nodes.iter().find(|(_, node)| {
-                    let value = node.params.get("value").cloned().unwrap_or(Value::Null);
-                    match node.kind.as_str() {
-                        "material.parameter" => {
-                            serde_json::from_value::<ara_material::ParameterValue>(value).is_err()
-                                || node.params.get("isStatic").is_some_and(|v| !v.is_boolean())
-                        }
-                        "material.literal" => serde_json::from_value::<Vec<f64>>(value).is_err(),
-                        _ => false,
-                    }
-                });
-                if let Some((id, _)) = invalid {
-                    diagnostic.location.record = Some(id.clone());
-                }
-            }
-        }
-        if let Some(canvas) = &mut self.canvas {
-            canvas.diagnostics(&diagnostics, &mut self.text);
-        }
-        out.push_str("<panel id='material-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'><panel id='material-graph-area' style='flex-grow:0.62;flex-basis:0px;overflow:hidden'><panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Material node canvas' />");
-        if let Some(diagnostic) = self.canvas.as_ref().and_then(|c| c.diagnostic.as_deref()) {
-            out.push_str(&format!("<text id='graph-diagnostic' class='destructive' text='{}' style='height:28px;padding:4px' />",escape(diagnostic)));
-        }
-        out.push_str("</panel><panel id='material-source-pane' style='flex-grow:0.38;flex-basis:0px;min-height:0px;background:var(--panel-header)'><panel id='material-source-header' class='toolbar'><text id='material-source-title' class='caption' text='Material DSL' style='padding-left:4px' /><panel id='material-source-fill' class='fill' />");
-        out.push_str(&self.bind_button(
-            "material-source-apply",
-            "Apply  Ctrl+Enter",
-            Binding::ResourceApply,
-            "primary",
-        ));
-        let draft = self
-            .resource_text
-            .as_ref()
-            .filter(|(d, _)| d == &doc)
-            .map(|(_, s)| s.as_str())
-            .unwrap_or(&source);
-        self.bindings.insert(
-            ara_ui::source::stable_id("material-source"),
-            Binding::ResourceText(doc.clone(), "material".into()),
-        );
-        out.push_str(&format!("</panel><field id='material-source' style='flex-grow:1;flex-basis:0px;height:100%;font-family:JetBrains Mono;font-size:11px;padding:12px;border-radius:0px;border-width:0px;white-space:normal' text='{}' label='Material DSL source. Ctrl Enter applies changes.' action='Dispatch' />",escape(draft)));
-        out.push_str("<panel id='material-preview-footer' class='section' style='height:164px;flex-shrink:0;padding:8px;flex-direction:row;gap:8px'>");
-        if let Some(path) = editor.host.store().workspace().path_of(&doc) {
-            let source = self
-                .canvas
-                .as_ref()
-                .ok_or("preview graph missing")?
-                .graph()
-                .write(editor.host.store().schema())
-                .map_err(|d| d.to_string())?;
-            let key =
-                self.thumbnails
-                    .request_live(path, source.into_bytes(), editor.state.preview_plane);
-            self.material_preview_key = Some(key.clone());
-            let preview_identity = format!("{doc}:{}", editor.state.preview_plane);
-            if self.thumbnail_slots.contains_key(&key) {
-                self.material_previews
-                    .insert(preview_identity.clone(), key.clone());
-            }
-            if let Some(error) = self.thumbnail_errors.get(&key) {
-                out.push_str(&format!("<text id='material-preview-error' class='destructive' style='white-space:normal;font-size:11px;width:140px' text='{}' />",escape(error)));
-            }
-            let image_key = if self.thumbnail_slots.contains_key(&key) {
-                key
-            } else {
-                self.material_previews
-                    .get(&preview_identity)
-                    .cloned()
-                    .unwrap_or(key)
-            };
-            let asset = assets::Asset {
-                path: image_key,
-                reference: Some(format!("@{path}#{doc}")),
-                kind: "graph".into(),
-                uses: Vec::new(),
-                stamp: 0,
-                domain: None,
-            };
-            self.asset_thumbnail(&asset, out, "material-live-preview", 140.);
-        }
-        let preview_status = if self.preview_ready("material") {
-            "Checked surface preview"
-        } else {
-            "Updating preview…"
-        };
-        out.push_str(&format!("<panel id='material-preview-controls' style='gap:8px;flex-grow:1;flex-basis:0px;min-width:0px'><text id='material-preview-heading' class='heading' text='Live preview' /><text id='material-preview-state' class='badge' style='white-space:normal' text='{preview_status}' />"));
-        out.push_str(&self.bind_button(
-            "preview-sphere",
-            "Sphere",
-            Binding::PreviewShape(false),
-            "small quiet",
-        ));
-        out.push_str(&self.bind_button(
-            "preview-plane",
-            "Plane",
-            Binding::PreviewShape(true),
-            "small quiet",
-        ));
-        out.push_str("</panel></panel>");
-        for (n, d) in diagnostics.iter().take(3).enumerate() {
-            out.push_str(&format!("<text id='material-error-{n}' class='destructive' text='{}' style='white-space:normal;font-size:11px;padding:4px' />",escape(&d.message)));
-        }
-        out.push_str("</panel></panel>");
-        Ok(())
-    }
     pub(super) fn resource_for(&self, editor: &Editor, domain: &str) -> Option<String> {
         let matches = |doc: &ara_doc::Document| {
             if domain == "animation" {
@@ -209,6 +71,27 @@ impl Shell {
                 false,
             );
         }
+        if domain == "material" {
+            out.push_str("<panel id='material-view-sep' class='toolbar-sep' /><panel id='material-view' class='segment'>");
+            for (id, command, label, on) in [
+                (
+                    "material-view-graph",
+                    "material.view_graph",
+                    "Graph",
+                    !self.material_source_view,
+                ),
+                (
+                    "material-view-source",
+                    "material.view_source",
+                    "Source",
+                    self.material_source_view,
+                ),
+            ] {
+                self.bind_command(id, command, Target::None);
+                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='Show the material as {}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""},if command.ends_with("graph"){"a node graph"}else{"DSL source text"}));
+            }
+            out.push_str("</panel>");
+        }
         out.push_str(&format!("<panel id='{domain}-toolbar-fill' class='fill' /><text id='{domain}-document' class='caption' text='{}' />",escape(doc.and_then(|d|editor.host.store().workspace().path_of(d)).unwrap_or("No asset open"))));
         let command = match domain {
             "material" => "assets.create.material",
@@ -225,7 +108,7 @@ impl Shell {
         );
         out.push_str("</panel>");
     }
-    fn resource_empty(&mut self, out: &mut String, domain: &str) {
+    pub(super) fn resource_empty(&mut self, out: &mut String, domain: &str) {
         let (icon, title, command) = match domain {
             "material" => ("contrast", "No material open", "assets.create.material"),
             _ => (
@@ -236,7 +119,7 @@ impl Shell {
         };
         self.empty(out, &format!("{domain}-empty"), icon, title, "Open one from Assets, or create a new one. Graph and text views edit the same document.", &[(&format!("{domain}-empty-new"), "Create", command)]);
     }
-    fn load_canvas(&mut self, editor: &Editor, doc: &str) -> ara_ui::Result<()> {
+    pub(super) fn load_canvas(&mut self, editor: &Editor, doc: &str) -> ara_ui::Result<()> {
         if self.canvas_doc.as_deref() != Some(doc)
             || self.canvas_revision != editor.host.store().revision()
         {

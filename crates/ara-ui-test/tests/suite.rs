@@ -25,7 +25,7 @@ fn complete_story_suite_goldens_and_semantics() -> Result<()> {
                         .report
                         .diagnostics
                         .iter()
-                        .all(|diagnostic| diagnostic.code != "ARA7102"),
+                        .all(|diagnostic| diagnostic.code != "ARA4102"),
                     "missing glyph coverage in {name}"
                 );
                 assert!(

@@ -88,10 +88,14 @@ impl Computed {
             tag,
             "button" | "field" | "input" | "toggle" | "slider" | "dropdown" | "tab"
         );
+        // Every node is a containing block: an absolute child's insets (including
+        // `right`/`bottom`) resolve against its parent, which is where paint places it.
+        // Taffy's own default is `Static` (CSS), which resolves them against the root.
         let mut layout = Style {
             display: Display::Flex,
             flex_direction: FlexDirection::Column,
             flex_shrink: 0.0,
+            position: Position::Relative,
             ..Style::default()
         };
         if control {
@@ -145,7 +149,7 @@ impl Selector {
             .into());
         }
         if kind == 't' && !ara_ui_document::stylesheet::TYPES.contains(&name) {
-            return Err(format!("ARA7010: unknown element selector {name}").into());
+            return Err(format!("ARA4010: unknown element selector {name}").into());
         }
         Ok(Self {
             kind,
@@ -208,7 +212,7 @@ impl Sheet {
             };
             validate().map_err(|e| {
                 ara_ui_document::Diagnostic::new(
-                    7014,
+                    ara_ui_document::codes::INLINE_STYLE,
                     markup,
                     block.bytes,
                     format!("Node {} inline style: {e}", block.id),
@@ -248,7 +252,7 @@ impl Sheet {
                     .and_then(|v| apply(&mut Computed::defaults("panel"), &d.name, &v))
                     .map_err(|error| {
                         ara_ui_document::Diagnostic::new(
-                            7011,
+                            ara_ui_document::codes::PROPERTY,
                             source,
                             d.bytes.clone(),
                             format!(
@@ -290,12 +294,12 @@ impl Sheet {
                 value = self
                     .tokens
                     .get(token)
-                    .ok_or_else(|| format!("ARA7012: unknown token {token}"))?;
+                    .ok_or_else(|| format!("ARA4012: unknown token {token}"))?;
             } else {
                 return Ok(value.into());
             }
         }
-        Err("ARA7013: cyclic or excessive token nesting".into())
+        Err("ARA4013: cyclic or excessive token nesting".into())
     }
     /// Apply matching rules in specificity/source order, followed by local overrides.
     pub fn compute(&self, e: &Element, state: State) -> Result<Computed> {
@@ -328,7 +332,7 @@ impl Sheet {
                 self.resolve(&v)
                     .and_then(|v| apply(&mut c, &k, &v))
                     .map_err(|error| {
-                        format!("ARA7014 node #{} local property {k}: {error}", e.id)
+                        format!("ARA4014 node #{} local property {k}: {error}", e.id)
                     })?;
             }
         }

@@ -74,7 +74,7 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
             c.layout.position = match v {
                 "relative" => Position::Relative,
                 "absolute" => Position::Absolute,
-                _ => return Err("ARA7011: position must be relative or absolute".into()),
+                _ => return Err("ARA4011: position must be relative or absolute".into()),
             }
         }
         "left" => c.layout.inset.left = LengthPercentageAuto::length(scalar(v)?),
@@ -87,7 +87,7 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
                 "end" => AlignItems::END,
                 "center" => AlignItems::CENTER,
                 "stretch" => AlignItems::STRETCH,
-                _ => return Err("ARA7011: unsupported alignment".into()),
+                _ => return Err("ARA4011: unsupported alignment".into()),
             }
         }
         "justify-content" => {
@@ -96,7 +96,7 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
                 "end" => JustifyContent::END,
                 "center" => JustifyContent::CENTER,
                 "space-between" => JustifyContent::SPACE_BETWEEN,
-                _ => return Err("ARA7011: unsupported justification".into()),
+                _ => return Err("ARA4011: unsupported justification".into()),
             }
         }
         "width" => c.layout.size.width = dimension(v)?,
