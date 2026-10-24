@@ -18,6 +18,11 @@ use crate::state::{Camera, EditorState};
 /// A world-space axis-aligned box: (min, max).
 type Bounds = (Vec3, Vec3);
 
+/// How far in front of a collider a follow rig's shortened boom stops, in metres.
+const BOOM_MARGIN: f32 = 0.25;
+/// The shortest boom a collider leaves a follow rig, in metres.
+const MIN_BOOM: f32 = 0.3;
+
 /// Components that make an entity terrain (framed only when selected).
 const TERRAIN: &[&str] = &["Terrain", "TerrainChunk", "Landscape"];
 
@@ -68,13 +73,70 @@ pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>)
             yaw.cos() * pitch.cos(),
         );
         let aim = target.w_axis.truncate() + Vec3::Y * rig.height;
-        camera.distance = rig.distance.max(0.05);
+        let distance = rig.distance.max(0.05);
+        // The boom stops short of solid colliders, like a camera arm: a target by a
+        // wall is seen from inside the room, not through the wall.
+        let reach = boom(resolved, transforms, aim, -forward, distance);
+        camera.distance = if reach < distance {
+            (reach - BOOM_MARGIN).max(MIN_BOOM)
+        } else {
+            distance
+        };
         camera.look_from(aim - forward * camera.distance, forward);
     } else {
         let (_, rotation, position) = transforms.get(address)?.to_scale_rotation_translation();
         camera.look_from(position, rotation * Vec3::NEG_Z);
     }
     Some(camera)
+}
+
+/// How far from `origin` along unit `direction` the first solid box `Collider`
+/// starts, within `max` (`max` when none does). Boxes containing `origin` and
+/// sensors are ignored.
+fn boom(
+    resolved: &Resolved,
+    transforms: &BTreeMap<String, Mat4>,
+    origin: Vec3,
+    direction: Vec3,
+    max: f32,
+) -> f32 {
+    let mut reach = max;
+    for (id, entity) in resolved {
+        let Some(collider) = entity.record.get("Collider") else {
+            continue;
+        };
+        let solid_box = collider
+            .get("kind")
+            .and_then(Value::as_str)
+            .is_none_or(|k| k == "box")
+            && collider.get("sensor").and_then(Value::as_bool) != Some(true);
+        let Some(world) = transforms.get(id).filter(|_| solid_box) else {
+            continue;
+        };
+        let half = crate::world::vector(collider.get("halfExtents"), Vec3::splat(0.5));
+        let centre = crate::world::vector(collider.get("center"), Vec3::ZERO);
+        // In the box's own space the ray parameter is unchanged (an affine map).
+        let local = world.inverse();
+        let from = local.transform_point3(origin) - centre;
+        let along = local.transform_vector3(direction);
+        let (mut near, mut far) = (f32::NEG_INFINITY, f32::INFINITY);
+        for axis in 0..3 {
+            if along[axis].abs() < 1e-8 {
+                if from[axis].abs() > half[axis] {
+                    far = f32::NEG_INFINITY;
+                }
+                continue;
+            }
+            let a = (-half[axis] - from[axis]) / along[axis];
+            let b = (half[axis] - from[axis]) / along[axis];
+            near = near.max(a.min(b));
+            far = far.min(a.max(b));
+        }
+        if near > 0. && near <= far && near < reach {
+            reach = near;
+        }
+    }
+    reach
 }
 
 /// World bounds framing shows: the `selection` when there is one (anything selected
