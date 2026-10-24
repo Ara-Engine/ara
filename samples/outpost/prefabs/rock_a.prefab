@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_rocka",
+  "records": {
+    "e_part0": {
+      "name": "namaqualand_rocks_02_a",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/namaqualand_rocks_01/namaqualand_rocks_01_1k.gltf#as_namaqualandrocks01",
+        "node": "namaqualand_rocks_02_a"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "rock_a",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}
