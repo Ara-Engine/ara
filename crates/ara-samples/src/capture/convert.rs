@@ -1,46 +1,66 @@
-//! Sample-specific asset resolution; scene conversion belongs to the engine.
+//! Sample-only look inputs; project geometry/materials use the shipping native adapter.
 use super::{
     look::{Look, Sky},
     world::World,
 };
 use crate::lock::Lock;
 use anyhow::{Context, Result};
-use ara_render::scene::{Material, Scene, Texture};
-use ara_runtime::extract::RenderFrame;
-use ara_runtime_render::fidelity::{self, Content, EnvironmentMap, Foliage, TerrainLayer};
-pub use fidelity::Stats;
-use std::path::Path;
+use ara_gpu::vulkan::VulkanDevice;
+use ara_render_fidelity::{FidelityView, Settings};
+use ara_runtime::extract::{Geometry, RenderFrame};
+use ara_runtime_render::fidelity::{
+    EnvironmentMap,
+    native::{self, NativeConfig, Prepared},
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
-/// Resolves the sample look's temporary asset overrides, then uses the engine adapter.
+/// Native content counts before camera-dependent GPU LOD selection.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stats {
+    /// Draw instances sharing local geometry.
+    pub instances: usize,
+    /// Unique geometry allocations.
+    pub geometries: usize,
+    /// Finest-LOD triangles summed over all instances.
+    pub finest_instanced_triangles: usize,
+    /// Runtime-scattered foliage placements.
+    pub foliage_instances: usize,
+    /// Compressed texture identities referenced by the native scene.
+    pub textures: usize,
+    /// Local lights.
+    pub lights: usize,
+    /// Materials with nonzero emission.
+    pub emissive_materials: usize,
+}
+
+/// Shared native residency budget, identical to player presentation.
+pub fn config() -> NativeConfig {
+    NativeConfig {
+        resident_bytes: 1 << 30,
+        upload_bytes: 16 << 20,
+    }
+}
+
+/// Resolves the same native terrain splats and prefab foliage as Play. The old
+/// look terrain textures are superseded by authoritative Header.materials assets.
 pub fn scene(
-    world: &mut World,
+    world: &World,
     frame: &RenderFrame,
     look: &Look,
     lock: &Lock,
     root: &Path,
-) -> Result<(Scene, Stats)> {
-    let mut content = Content::default();
-    for d in &look.details {
-        content.details.insert(
-            d.asset.clone(),
-            ara_render_fidelity::material::MaterialDetail {
-                clearcoat: d.clearcoat,
-                sheen: d.sheen,
-                transmission: d.transmission,
-                ..Default::default()
-            },
+) -> Result<(Prepared, Stats)> {
+    if let Some(ground) = &look.terrain {
+        eprintln!(
+            "legacy look terrain {} {:?}, rock {:?} {:?} is superseded by scene Header.materials",
+            ground.texture, ground.tint, ground.rock, ground.rock_tint
         );
     }
-    if let Some(ground) = &look.terrain {
-        content
-            .terrain
-            .push(texture_set(lock, root, &ground.texture, ground.tint)?);
-        if let Some(rock) = &ground.rock {
-            content
-                .terrain
-                .push(texture_set(lock, root, rock, ground.rock_tint)?);
-        }
-    }
+    let mut content = world.content(frame)?;
     if let Some(Sky::Hdri {
         asset,
         intensity,
@@ -54,62 +74,107 @@ pub fn scene(
         let (size, pixels) = hdri(&entry.dir(root).join(&file.path), *intensity, *rotation)?;
         content.environment = Some(EnvironmentMap { size, pixels });
     }
-    let mut rules = Vec::new();
-    if let Some((_, doc)) = world.workspace.docs().find(|(_, d)| d.kind == "foliage") {
-        for (id, record) in doc.records() {
-            let value = serde_json::Value::Object(record.clone());
-            if id.as_str().starts_with("x_") {
-                content.exclusions.push(serde_json::from_value(value)?);
-            } else if id.as_str().starts_with("r_") {
-                let rule: ara_foliage::Rule = serde_json::from_value(value)?;
-                if rule.enabled {
-                    rules.push(rule);
-                }
+    let mut prepared = native::prepare(frame, content, config())?;
+    // Optional look-development layers remain snapshot inputs, never source edits.
+    for detail in &look.details {
+        let entities: BTreeSet<_> = frame
+            .draws
+            .iter()
+            .filter_map(|draw| match &draw.geometry {
+                Geometry::Model { model, .. } if model.asset == detail.asset => Some(draw.entity),
+                _ => None,
+            })
+            .collect();
+        let mut replacements = BTreeMap::new();
+        for instance in &mut prepared.scene.instances {
+            if entities.contains(&instance.entity) {
+                let index = if let Some(&index) = replacements.get(&instance.material) {
+                    index
+                } else {
+                    let mut material = prepared.scene.materials[instance.material];
+                    ara_render_fidelity::material::MaterialDetail {
+                        clearcoat: detail.clearcoat,
+                        sheen: detail.sheen,
+                        transmission: detail.transmission,
+                        ..Default::default()
+                    }
+                    .apply(&mut material.pbr)?;
+                    let index = prepared.scene.materials.len();
+                    prepared.scene.materials.push(material);
+                    replacements.insert(instance.material, index);
+                    index
+                };
+                instance.material = index;
             }
         }
     }
-    for rule in rules {
-        let asset = ara_runtime::assets::asset_id(&rule.asset)?;
-        let model = world.model(asset)?;
-        content.foliage.push(Foliage { rule, model });
-    }
-    fidelity::scene(frame, content)
+    let triangles = prepared
+        .scene
+        .instances
+        .iter()
+        .map(|instance| {
+            prepared.scene.geometry[instance.geometry].lods[0]
+                .indices
+                .len()
+                / 3
+        })
+        .sum();
+    let stats = Stats {
+        instances: prepared.scene.instances.len(),
+        geometries: prepared.scene.geometry.len(),
+        finest_instanced_triangles: triangles,
+        foliage_instances: frame
+            .terrain
+            .as_ref()
+            .map_or(0, |terrain| terrain.data.foliage.len()),
+        textures: prepared.scene.textures as usize,
+        lights: prepared.scene.lights.len(),
+        emissive_materials: prepared
+            .scene
+            .materials
+            .iter()
+            .filter(|m| {
+                m.pbr.emissive_roughness[..3]
+                    .iter()
+                    .any(|value| *value > 0.)
+            })
+            .count(),
+    };
+    Ok((prepared, stats))
 }
 
-/// Resolves a pinned CC0 texture set. This stays sample-specific until its look is
-/// represented by authored terrain material assets.
-fn texture_set(lock: &Lock, root: &Path, id: &str, tint: [f32; 3]) -> Result<TerrainLayer> {
-    let set = lock
-        .get(id)
-        .with_context(|| format!("no texture set {id}"))?;
-    let mut textures = [None, None, None, None];
-    for (slot, key, srgb) in [
-        (0, "_diff_", true),
-        (1, "_nor_gl_", false),
-        (2, "_arm_", false),
-    ] {
-        let f = set
-            .files
-            .iter()
-            .find(|f| f.path.contains(key))
-            .with_context(|| format!("{id} has no {key}"))?;
-        let image = image::open(set.dir(root).join(&f.path))?.to_rgba8();
-        textures[slot] = Some(Texture {
-            size: [image.width(), image.height()],
-            rgba: image.into_raw(),
-            srgb,
-        });
+/// Creates one view and finishes its compressed residency before AA/reference
+/// accumulation. Reference and preset views run serially on the shared GPU heap.
+pub fn view(
+    gpu: &mut VulkanDevice,
+    prepared: &Prepared,
+    settings: Settings,
+) -> Result<FidelityView> {
+    let mut view = FidelityView::new_native(
+        gpu,
+        &prepared.scene,
+        prepared.textures.fork_sources(config())?,
+        settings,
+        None,
+    )?;
+    let settled = (|| -> Result<()> {
+        for _ in 0..256 {
+            let stats = view.refine_native_textures(gpu)?;
+            if stats.pending_textures == 0 {
+                return Ok(());
+            }
+            anyhow::ensure!(
+                stats.uploaded_bytes > 0,
+                "native capture residency made no progress"
+            );
+        }
+        anyhow::bail!("native capture residency did not settle")
+    })();
+    if let Err(error) = settled {
+        view.destroy(gpu)?;
+        return Err(error);
     }
-    Ok(TerrainLayer {
-        material: Material {
-            base_color: [tint[0], tint[1], tint[2], 1.0],
-            emissive_roughness: [0.0, 0.0, 0.0, 1.0],
-            surface: [1.0, 1.0, 1.0, 0.5],
-            ..Default::default()
-        },
-        textures,
-        meters: set.meters.unwrap_or([2.0, 2.0]),
-    })
+    Ok(view)
 }
 
 /// An equirectangular HDRI scaled to cd/m², rotated about +Y and box-filtered to at

@@ -12,14 +12,15 @@ use anyhow::{Context, Result};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::{
     capture::{CaptureRequest, ViewMode},
-    renderer::post::ToneCurve,
-    scene::{CameraSpec, Scene},
+    scene::CameraSpec,
 };
 use ara_render_fidelity::{
-    FidelityView, FrameInput, PostSettings, ToneMapper,
+    FidelityView, FrameInput, PostSettings,
     environment::FrameEnvironment,
     presets::{Capabilities, FidelityPlan, Plan, QualityChoice, QualityPreset, RenderPath},
 };
+use ara_runtime::extract::{CameraView, RenderFrame};
+use ara_runtime_render::{PresentationImage, Presenter, fidelity::native::Prepared as Scene};
 use image::{RgbaImage, imageops};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
@@ -128,14 +129,31 @@ struct Window {
     passes: BTreeMap<String, Vec<f64>>,
 }
 impl Window {
+    fn push_with_composites(
+        &mut self,
+        timings: &[ara_gpu::vulkan::PassTiming],
+        effects: f64,
+        publish: f64,
+    ) {
+        self.push(timings);
+        if let Some(total) = self.totals.last_mut() {
+            *total += effects + publish;
+        }
+        self.sample("VFX.SimulationAndDraw", effects);
+        self.sample("Presentation.Publish", publish);
+    }
+    fn sample(&mut self, name: &str, milliseconds: f64) {
+        if let Some(samples) = self.passes.get_mut(name) {
+            samples.push(milliseconds);
+        } else {
+            self.passes.insert(name.to_owned(), vec![milliseconds]);
+        }
+    }
     fn push(&mut self, timings: &[ara_gpu::vulkan::PassTiming]) {
         self.totals
             .push(timings.iter().map(|p| p.milliseconds).sum::<f64>());
         for p in timings {
-            self.passes
-                .entry(p.pass.to_owned())
-                .or_default()
-                .push(p.milliseconds);
+            self.sample(&p.pass, p.milliseconds);
         }
     }
     fn report(mut self, label: &str, size: [u32; 2], shot: &str, before: String) -> Value {
@@ -180,6 +198,7 @@ impl Window {
 pub fn run(
     gpu: &mut VulkanDevice,
     scene: Scene,
+    frame: &mut RenderFrame,
     stats: &Stats,
     look: &Look,
     options: &Options<'_>,
@@ -216,13 +235,19 @@ pub fn run(
         }
     }
     if let Some(size) = low {
-        modes.push(baseline(scene, look, options, size, &truths)?);
+        drop(scene);
+        modes.push(baseline(frame, look, options, size, &truths)?);
     }
     let report = json!({
         "scene": look.scene,
         "name": options.name,
-        "budgetMs": {"high": {"outdoor": 8.0, "interior": 10.0}, "epic": 16.0},
+        "budgets": {"decision": "D26", "gpuMs": {"low": 2.0, "medium": 3.5, "high": 6.0, "epic": 10.0},
+            "highCpuMs": 4.0, "postFirstFrameHitchMs": 16.0,
+            "loadingPresentedMs": 2000, "fullSceneWarmMs": 3000},
         "content": stats,
+        "referenceSettings": {"samples": options.reference_samples, "size": super::reference::SIZE,
+            "renderer": "ara-pathtrace native reference transport", "vfx": false},
+        "authoredSettingsOnly": std::env::var_os("ARA_CAPTURE_AUTHORED_ONLY").is_some(),
         "modes": modes,
         "sharedGpu": "other agents share this RTX 4070 SUPER; gpuBefore/gpuAfter record nvidia-smi load around each window",
     });
@@ -279,11 +304,10 @@ fn fidelity(
 ) -> Result<Value> {
     let memory_before = gpu_memory();
     let created = std::time::Instant::now();
-    let mut view = FidelityView::new(
+    let mut view = super::convert::view(
         gpu,
         scene,
         plan.settings(options.environment.post(PostSettings::default())),
-        None,
     )?;
     plan.configure(gpu, &mut view)?;
     // Experiment switch: force ReSTIR on or off regardless of the preset's policy.
@@ -297,29 +321,43 @@ fn fidelity(
         options.effects,
         render,
         (
-            scene.sun_direction,
+            scene.scene.sun_direction,
             options
                 .environment
-                .ground_sun(scene.sun_direction, scene.sun_lux),
+                .ground_sun(scene.scene.sun_direction, scene.scene.sun_lux),
         ),
     )?;
     let create_ms = created.elapsed().as_secs_f64() * 1000.0;
     let mut tick = 0;
     let mut timing = Value::Null;
     let mut scores = Vec::new();
+    let mut published = None;
     for (i, shot) in shots(look, options).into_iter().enumerate() {
         let cam = camera(shot);
         for n in 0..options.settle {
             view.render(gpu, &frame(&cam, tick, n == 0))?;
+            if !effects.is_empty() {
+                effects.composite(gpu, &mut view, &cam, tick)?;
+            }
             tick += 1;
         }
         if i == 0 {
+            PresentationImage::publish(&mut published, gpu, view.output(), plan.display_size)?;
             let before = gpu_load();
             let mut window = Window::default();
             for _ in 0..options.timing_frames {
                 view.render(gpu, &frame(&cam, tick, false))?;
+                if !effects.is_empty() {
+                    effects.composite(gpu, &mut view, &cam, tick)?;
+                }
                 tick += 1;
-                window.push(view.timings());
+                let publish = PresentationImage::publish(
+                    &mut published,
+                    gpu,
+                    view.output(),
+                    plan.display_size,
+                )?;
+                window.push_with_composites(view.timings(), effects.gpu_ms(), publish);
             }
             timing = window.report(
                 &format!("{} {label}", options.name),
@@ -349,7 +387,10 @@ fn fidelity(
                 compensation: 0.,
                 ..post
             })?;
-            for _ in 0..SCORE_FRAMES {
+            // VFX are absent from path-traced truth. Clear their accumulated
+            // contribution, then reconverge DDGI and AA at the fixed exposure.
+            view.reset_accumulation(gpu)?;
+            for _ in 0..options.settle.saturating_add(SCORE_FRAMES) {
                 view.render(gpu, &frame(&cam, tick, false))?;
                 tick += 1;
             }
@@ -387,11 +428,15 @@ fn fidelity(
         "viewCreateMs": create_ms,
         "gpuMemoryUsedMiB": {"beforeView": memory_before, "afterCaptures": gpu_memory(), "note": "whole GPU (shared); the delta approximates this view"},
         "timing": timing,
+        "timingScope": "transport, post, VFX and publication; static poses and settled texture residency",
         "exposure": exposure,
         "reference": scores,
         "sceneHash": view.scene_hash(),
         "shaderRevision": view.shader_revision(),
     });
+    if let Some(published) = published {
+        published.destroy(gpu)?;
+    }
     effects.destroy(gpu)?;
     view.destroy(gpu)?;
     Ok(report)
@@ -445,92 +490,81 @@ fn signals(
     Ok(())
 }
 
-/// The Low preset: the baseline raster renderer on its own device, with the
-/// environment's raster approximation (physical sky map, exposure, tone curve).
-/// VFX are not composited into baseline captures.
+/// Low uses the actual shipping raster presenter, including terrain and VFX.
+/// Its timing scope names the base raster passes until all composites expose timestamps.
 fn baseline(
-    mut scene: Scene,
+    frame: &mut RenderFrame,
     look: &Look,
     options: &Options<'_>,
     size: [u32; 2],
     truths: &[Truth],
 ) -> Result<Value> {
-    let environment = options
-        .environment
-        .baseline(scene.sun_direction, scene.sun_lux);
-    if let Some((sky_size, pixels)) = environment.sky {
-        scene.environment_size = sky_size;
-        scene.environment = pixels;
-    }
-    scene.sun_lux = environment.sun_lux;
     let created = std::time::Instant::now();
-    let mut renderer = ara_render::Renderer::new(scene, size, &[], options.pipeline_cache)?;
-    renderer.set_tone_curve(match environment.tone_mapper {
-        ToneMapper::AcesFit => ToneCurve::AcesFit,
-        ToneMapper::PbrNeutral => ToneCurve::Neutral,
-        ToneMapper::Filmic => ToneCurve::Filmic,
-    });
-    let create_ms = created.elapsed().as_secs_f64() * 1000.0;
+    let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
+    presenter.set_quality(QualityChoice::Preset(QualityPreset::Low));
+    presenter.prepare(frame)?;
+    let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;
     let mut scores = Vec::new();
     for (i, shot) in shots(look, options).into_iter().enumerate() {
-        let cam = camera(shot);
+        frame.camera = Some(CameraView {
+            position: shot.position,
+            forward: (glam::Vec3::from_array(shot.target) - glam::Vec3::from_array(shot.position))
+                .normalize()
+                .to_array(),
+            fov: shot.fov,
+        });
+        for _ in 0..options.settle {
+            presenter.present(frame)?;
+        }
         if i == 0 {
-            for _ in 0..options.settle {
-                renderer.render(&cam, environment.exposure)?;
-            }
             let before = gpu_load();
             let mut window = Window::default();
             for _ in 0..options.timing_frames {
-                renderer.render(&cam, environment.exposure)?;
-                window.push(renderer.timings());
+                presenter.present(frame)?;
+                window.push(presenter.renderer().context("Low presenter")?.timings());
             }
-            timing = window.report(&format!("{} low", options.name), size, &shot.name, before);
+            timing = window.report(
+                &format!("{} low base raster", options.name),
+                size,
+                &shot.name,
+                before,
+            );
         }
-        let capture = renderer.capture(&CaptureRequest {
-            camera: cam,
+        let request = CaptureRequest {
+            camera: camera(shot),
             size,
             mode: ViewMode::Lit,
             deterministic: false,
-            exposure: environment.exposure,
+            exposure: frame.environment.exposure,
             settle_frames: options.settle.min(1024),
-            tick: 0,
+            tick: frame.tick,
             seed: 0,
             marks: None,
-        })?;
+        };
+        let capture = presenter.capture_with(frame, &request, || Ok(Default::default()))?;
         save(&capture.image, options, "low", &shot.name)?;
         if let Some(truth) = truths.iter().find(|t| t.shot == shot.name) {
-            let scored = renderer.capture(&CaptureRequest {
-                camera: camera(shot),
-                size,
-                mode: ViewMode::Lit,
-                deterministic: false,
-                exposure: ara_render_fidelity::settings::exposure_from_ev100(truth.ev100, 0.),
-                settle_frames: options.settle.min(1024),
-                tick: 0,
-                seed: 0,
-                marks: None,
-            })?;
+            let exposure = frame.environment.exposure;
+            frame.environment.exposure =
+                ara_render_fidelity::settings::exposure_from_ev100(truth.ev100, 0.);
+            let effects = std::mem::take(&mut frame.effects);
+            let scored = presenter.capture_with(frame, &request, || Ok(Default::default()));
+            frame.effects = effects;
+            frame.environment.exposure = exposure;
+            let scored = scored?;
             let heatmap = options
                 .scratch
                 .join(format!("{}-low-{}-flip.png", options.name, shot.name));
             scores.push(score(&scored.image, truth, &heatmap)?);
         }
     }
-    Ok(json!({
-        "preset": "low",
-        "renderer": "baseline",
-        "renderSize": size,
-        "displaySize": size,
-        "exposure": environment.exposure,
-        "toneMapper": format!("{:?}", environment.tone_mapper),
-        "physicalSkyMap": options.environment.atmosphere.is_some_and(|a| a.physical_sky),
-        "viewCreateMs": create_ms,
-        "timing": timing,
-        "reference": scores,
-    }))
+    Ok(
+        json!({"preset":"low","renderer":"baseline shipping presenter", "renderSize":size,"displaySize":size,
+        "viewCreateMs":create_ms,"timing":timing,"timingScope":"base raster passes; terrain/VFX/composite timestamps pending",
+        "reference":scores}),
+    )
 }
-
 /// A camera move from one shot to another, captured into a horizontal strip.
 #[allow(clippy::too_many_arguments)]
 fn strip(

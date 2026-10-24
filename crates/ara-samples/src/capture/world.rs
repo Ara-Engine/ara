@@ -3,22 +3,13 @@
 //! pinned, and an `ara_runtime::Runtime` is built over the project's documents.
 use anyhow::{Context, Result, anyhow, bail};
 use ara_asset::{Digest, FileCache};
-use ara_doc::Workspace;
-use ara_runtime::{
-    Runtime, RuntimeConfig,
-    assets::{CachedAssets, Models},
-    extract::RenderFrame,
-};
-use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
+use ara_runtime::{Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame};
+use std::{collections::BTreeMap, path::Path, time::Duration};
 
 /// A built world plus what presentation needs besides the frame.
 pub struct World {
     /// The simulation, stepped to the capture tick.
     pub runtime: Runtime,
-    /// The project documents (foliage rules, terrain).
-    pub workspace: Workspace,
-    /// Decoded models by asset ID, for foliage rule assets.
-    pub models: Models,
     /// The pinned cooked generations.
     pub assets: CachedAssets,
 }
@@ -66,7 +57,7 @@ pub fn load(root: &Path, scene: &str, worker: &Path, ticks: u32) -> Result<World
     let cache = cooker.cache.clone();
     let runtime = Runtime::new(
         project.db.clone(),
-        workspace.clone(),
+        workspace,
         id,
         Box::new(CachedAssets::new(FileCache::at(&cache)?, pins.clone())),
         RuntimeConfig {
@@ -77,8 +68,6 @@ pub fn load(root: &Path, scene: &str, worker: &Path, ticks: u32) -> Result<World
     )?;
     let mut world = World {
         runtime,
-        workspace,
-        models: Models::default(),
         assets: CachedAssets::new(FileCache::at(&cache)?, pins),
     };
     world.runtime.step(ticks, &[])?;
@@ -86,19 +75,27 @@ pub fn load(root: &Path, scene: &str, worker: &Path, ticks: u32) -> Result<World
 }
 
 impl World {
+    /// Resolves the shipping adapter's terrain materials and prefab foliage from
+    /// this runtime's immutable cooked generations and material/model library.
+    pub fn content(
+        &self,
+        frame: &RenderFrame,
+    ) -> Result<ara_runtime_render::fidelity::native::Content> {
+        ara_runtime_render::fidelity::native::Content::resolve(
+            frame,
+            self.runtime.documents(),
+            self.runtime.schema(),
+            self.runtime
+                .world()
+                .get_resource::<ara_runtime::animation::Library>()
+                .context("runtime material/model library")?,
+            &self.assets,
+        )
+    }
     /// The current presentation frame.
     pub fn frame(&mut self) -> RenderFrame {
         let mut frame = RenderFrame::default();
         self.runtime.extract(&mut frame);
         frame
-    }
-
-    /// The decoded model of an asset ID (foliage rule assets).
-    pub fn model(&mut self, asset: &str) -> Result<Arc<ara_runtime::model::Model>> {
-        self.models.load(&self.assets, asset)?;
-        self.models
-            .get(asset)
-            .cloned()
-            .with_context(|| format!("model {asset} did not load"))
     }
 }

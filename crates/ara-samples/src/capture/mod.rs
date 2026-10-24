@@ -20,7 +20,7 @@ pub struct Request<'a> {
     pub project: &'a str,
     /// Look name (`look/<name>.look.json`).
     pub look: &'a str,
-    /// Only the first shot, native only, no timings worth keeping.
+    /// Only the first shot and no camera-move strip; uses the requested presets.
     pub quick: bool,
     /// Timing frames per mode.
     pub timing_frames: u32,
@@ -40,6 +40,18 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
         &std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?,
     )
     .with_context(|| format!("parsing {}", path.display()))?;
+    // Matched four-path evidence uses only authored environment/material/effect
+    // settings; look files still supply camera poses and the simulation tick.
+    if std::env::var_os("ARA_CAPTURE_AUTHORED_ONLY").is_some() {
+        look.sky = None;
+        look.post = None;
+        look.components = Default::default();
+        look.sun_lux = None;
+        look.sun_direction = None;
+        look.effects.clear();
+        look.details.clear();
+        look.terrain = None;
+    }
     let worker = tool("ara-import-worker", "ARA_IMPORT_WORKER")?;
     let started = std::time::Instant::now();
     let mut world = world::load(&root, &look.scene, &worker, look.ticks)?;
@@ -61,32 +73,25 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
             shot.target[1] += ground(shot.target);
         }
     }
-    let (scene, stats) = convert::scene(&mut world, &frame, &look, lock, &root)?;
+    let (scene, stats) = convert::scene(&world, &frame, &look, lock, &root)?;
     let mut environment = ara_render_fidelity::environment::FrameEnvironment::resolve(
         &look.scene_look(frame.look),
         frame.environment.exposure,
     );
-    let mut effects = frame.effects.clone();
-    look.tune_effects(&mut effects);
+    look.tune_effects(&mut frame.effects);
+    let effects = frame.effects.clone();
     look.override_environment(&mut environment);
     eprintln!(
-        "{}: {} objects -> {} meshes, {} triangles ({} at finest LOD), {} foliage instances, {} textures ({} source maps, {} materials atlased), {} lights, ~{:.0} MiB upload ({:.1} s to load)",
+        "{}: {} native instances, {} shared geometries, {} instanced triangles, {} foliage instances, {} compressed texture identities, {} lights ({:.1} s to load)",
         request.look,
-        stats.objects,
-        stats.meshes,
-        stats.triangles,
-        stats.finest_triangles,
+        stats.instances,
+        stats.geometries,
+        stats.finest_instanced_triangles,
         stats.foliage_instances,
         stats.textures,
-        stats.textures_wanted,
-        stats.atlased_materials,
         stats.lights,
-        stats.upload_mib,
         started.elapsed().as_secs_f64()
     );
-    for (name, triangles) in &stats.breakdown {
-        eprintln!("  {triangles:>9} triangles  {name}");
-    }
     let cache =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/pipeline-cache");
     std::fs::create_dir_all(&cache)?;
@@ -103,6 +108,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     render::run(
         &mut gpu,
         scene,
+        &mut frame,
         &stats,
         &look,
         &render::Options {

@@ -152,7 +152,13 @@ pub(super) fn prepare_renderer(
 ) -> Result<()> {
     if let Some(reference) = &renderer.model {
         let id = asset_id(reference)?;
-        if library.models.get(id).is_none() {
+        // Parts of one prefab share the library's decoded generation. Metadata
+        // changes reload once; unchanged parts never read or decode its payload.
+        if library.models.get(id).is_none_or(|model| {
+            source
+                .digest(id)
+                .is_some_and(|digest| digest != model.digest)
+        }) {
             library.models.load(source, id)?;
         }
         let model = library
