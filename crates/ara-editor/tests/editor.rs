@@ -1234,3 +1234,30 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
     drop(editor);
     std::fs::remove_dir_all(&profile).unwrap();
 }
+
+/// Gizmo handles compose just the selection's transforms; each matches the whole
+/// scene's composition, through nested, rotated and scaled parents.
+#[test]
+fn one_entity_world_transform_matches_the_whole_scene() {
+    let project = Project::new();
+    write(
+        &project.0.join("levels/main.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
+            "e_root0001":{"name":"Root","Transform":{"position":[1,2,3],"rotation":[0,45,0],"scale":[2,2,2]}},
+            "e_mid00001":{"name":"Mid","parent":"e_root0001","Transform":{"position":[0,1,0],"rotation":[30,0,10]}},
+            "e_leaf0001":{"name":"Leaf","parent":"e_mid00001","Transform":{"position":[0.5,0,-1],"scale":[1,3,1]}},
+            "e_orphan01":{"name":"Orphan","parent":"e_missing1","Transform":{"position":[4,0,0]}}}}),
+    );
+    let editor = project.open();
+    let view = editor.view().unwrap();
+    let entities = ara_editor::world::EditWorldView::entities(&view);
+    let all = ara_editor::world::world_transforms(entities);
+    for (id, expected) in &all {
+        let one = ara_editor::world::world_transform(entities, id).unwrap();
+        assert!(
+            one.abs_diff_eq(*expected, 1e-5),
+            "{id}: {one} vs {expected}"
+        );
+    }
+    assert_eq!(all.len(), 4);
+}
