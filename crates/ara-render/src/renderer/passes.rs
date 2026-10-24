@@ -44,20 +44,6 @@ impl Renderer {
                 queue: Queue::Compute,
             },
         );
-        let color_readback = graph.import(
-            Resource::Buffer(self.targets.read_color),
-            State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            },
-        );
-        let id_readback = graph.import(
-            Resource::Buffer(self.targets.read_ids),
-            State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            },
-        );
         graph.pass(
             "ShadowAtlas.4Cascades",
             Queue::Graphics,
@@ -130,21 +116,11 @@ impl Renderer {
             ],
         );
         graph.pass(
-            "CaptureReadback",
+            "PresentationReady",
             Queue::Graphics,
             [
                 (ids[OUTPUT], Access::CopySource),
                 (ids[ID], Access::CopySource),
-                (color_readback, Access::CopyDestination),
-                (id_readback, Access::CopyDestination),
-            ],
-        );
-        graph.pass(
-            "HostReadback",
-            Queue::Graphics,
-            [
-                (color_readback, Access::HostRead),
-                (id_readback, Access::HostRead),
             ],
         );
         graph.pass(
@@ -386,16 +362,6 @@ impl Renderer {
                         self.size[1].div_ceil(8),
                         1,
                     ]));
-                }
-                7 => {
-                    recorder.push(Command::ReadImage {
-                        source: self.targets.images[OUTPUT],
-                        destination: self.targets.read_color,
-                    });
-                    recorder.push(Command::ReadImage {
-                        source: self.targets.images[ID],
-                        destination: self.targets.read_ids,
-                    });
                 }
                 _ => {}
             }

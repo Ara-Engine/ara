@@ -62,8 +62,34 @@ impl Windowed {
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
     ) -> Result<(Self, Presenter)> {
+        Self::open_with_visibility(name, size, cache, quality, false)
+    }
+
+    /// Runs the same render/present loop on an SDL window hidden at creation.
+    /// Timing probes never flash a window or steal focus from the owner's desktop.
+    pub fn open_offscreen(
+        name: &str,
+        size: [u32; 2],
+        cache: &Path,
+        quality: ara_runtime_render::QualityChoice,
+    ) -> Result<(Self, Presenter)> {
+        Self::open_with_visibility(name, size, cache, quality, true)
+    }
+
+    fn open_with_visibility(
+        name: &str,
+        size: [u32; 2],
+        cache: &Path,
+        quality: ara_runtime_render::QualityChoice,
+        offscreen: bool,
+    ) -> Result<(Self, Presenter)> {
         ara_gpu::cpu_scope!("Player.device_and_warm_pipelines");
-        let window = Window::new(&format!("Ara | {name}"), size)?;
+        let title = format!("Ara | {name}");
+        let window = if offscreen {
+            Window::hidden(&title, size)?
+        } else {
+            Window::new(&title, size)?
+        };
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
         presenter.set_quality(quality);
         presenter.prepare(&warm_frame())?;

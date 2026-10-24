@@ -19,6 +19,9 @@ pub(super) struct Options {
     /// Run the authored world and capture it without opening a window.
     #[arg(long)]
     headless: bool,
+    /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
+    #[arg(long, conflicts_with = "headless")]
+    offscreen: bool,
     /// Write a capture after --ticks (headless defaults to verify.png).
     #[arg(long)]
     capture: Option<PathBuf>,
@@ -41,6 +44,11 @@ struct Launch {
 }
 
 pub(super) fn run(args: Args, began: Instant) -> Result<()> {
+    let mut perf = perf::Window::new(args.standalone.perf, args.standalone.offscreen);
+    ensure!(
+        !args.standalone.headless || !perf.enabled(),
+        "perf frame windows need continuous presentation; use --offscreen instead of --headless"
+    );
     let mut phases = std::collections::BTreeMap::new();
     // Include crash-monitor setup and executable hashing in launch latency.
     phases.insert("bootstrap_ms", began.elapsed().as_millis());
@@ -102,8 +110,12 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let (mut window, mut presenter) = if args.standalone.headless {
         (None, Presenter::new(size, Vec::new(), &args.gpu_cache))
     } else {
-        let (window, presenter) =
-            device::Windowed::open(&args.name, size, &args.gpu_cache, quality)?;
+        let open = if perf.offscreen() {
+            device::Windowed::open_offscreen
+        } else {
+            device::Windowed::open
+        };
+        let (window, presenter) = open(&args.name, size, &args.gpu_cache, quality)?;
         (Some(window), presenter)
     };
     presenter.set_quality(quality);
@@ -113,7 +125,6 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let mut frame_max_ms = 0_f64;
     let mut frame_phase_ms = [0_f64; 4];
     let mut frame_gpu_ms = 0_f64;
-    let mut perf = perf::Window::new(args.standalone.perf);
     if args.standalone.headless {
         world.runtime.step(args.standalone.ticks, &[])?;
         phases.insert("simulation_ready_ms", began.elapsed().as_millis());

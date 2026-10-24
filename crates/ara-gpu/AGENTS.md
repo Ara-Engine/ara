@@ -5,6 +5,10 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 ## Public API
 
+- `VulkanDevice::new_raster` creates a raster-only logical device: no ray-query/AS
+  extensions, features or acceleration descriptor capacity, even on an RT GPU.
+  `new` retains the optional RT tier for explicit fidelity/reference consumers.
+
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.

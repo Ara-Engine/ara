@@ -4,6 +4,7 @@ mod frame;
 mod hash;
 mod passes;
 pub mod post;
+mod readback;
 mod transfer;
 mod upload;
 use crate::{
@@ -243,6 +244,7 @@ impl Renderer {
                 request.mode,
             )?;
         }
+        self.readback(true)?;
         let rgba = self.gpu.read(self.targets.read_color)?;
         let ids = self
             .gpu

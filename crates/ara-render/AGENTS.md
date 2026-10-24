@@ -28,6 +28,11 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
 - `update_geometry`: atomically replace meshes/materials/lights, retaining the
   device, targets and last good scene on failure. Textures/environment belong to
   asset integration. `entity_channel`, `entities`, `entity_at` expose picking.
+- `update_materials` replaces parameters in their existing order and remaps scene
+  texture slots without uploading geometry. `rename` updates an entity's capture
+  label. Invalid edits retain the previous content.
+- Live frames keep output/IDs on the GPU. Captures copy the final settled frame
+  once; `entity_at(&mut self, pixel)` reads IDs only when explicitly picking.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.

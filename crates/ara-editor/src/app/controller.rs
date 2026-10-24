@@ -195,7 +195,7 @@ impl Controller {
         event: Event,
         editor: &mut Editor,
         shell: &mut Shell,
-        renderer: &Renderer,
+        renderer: &mut Renderer,
         view: &crate::world::DocumentView,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<(bool, bool, bool)> {
