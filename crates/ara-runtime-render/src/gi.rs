@@ -338,13 +338,30 @@ struct FollowUp {
 /// a tracer of their scene (for the next edit) before handing the state back.
 fn run(cache: &Path, cpu: bool, job: Job, worker: Option<Worker>, send: &Sender<Message>) {
     let mut worker = worker;
+    let started = std::time::Instant::now();
+    // One line per job (kind, thread, outcome) so hosts can audit where GI work runs.
+    let note = |outcome: &str| {
+        eprintln!(
+            "ara-runtime-render: probe GI job {} ({}) on thread {}: {outcome} in {:.2} s",
+            job.serial,
+            if job.edit.is_some() {
+                "edit"
+            } else {
+                "generation"
+            },
+            std::thread::current().name().unwrap_or("unnamed"),
+            started.elapsed().as_secs_f64()
+        )
+    };
     let follow = match acquire(cache, cpu, &job, &mut worker) {
         Ok((surfaces, follow)) => {
             let _ = send.send(Message::Surfaces(Ok(surfaces)));
+            note("delivered");
             follow
         }
         Err(error) => {
             let _ = send.send(Message::Surfaces(Err(error)));
+            note("failed");
             None
         }
     };
