@@ -311,3 +311,34 @@ fn echoed_field_values_keep_caret_and_undo() -> Result<()> {
     assert_eq!(shown.as_deref(), Some("Hangar"));
     Ok(())
 }
+
+/// Removing a node moves its later siblings up (Taffy drops removed children from
+/// their parents itself, so a removal alone must still lay out again).
+#[test]
+fn removals_release_their_layout_space() -> Result<()> {
+    let markup = |first: bool| {
+        format!(
+            "<ui id='app' style='flex-direction:column;padding:0px;gap:0px'>{}<panel id='second' style='height:40px' /></ui>",
+            if first {
+                "<panel id='first' style='height:100px' />"
+            } else {
+                ""
+            }
+        )
+    };
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(&markup(true), EDITOR_CSS, [400., 300.])?;
+    ui.frame(&mut text)?;
+    let y = |ui: &Ui| ui.nodes[ui.find("second").expect("second")].rect.y;
+    assert_eq!(y(&ui), 100.);
+    let report = ui.reconcile(&markup(false))?;
+    assert_eq!(report.removed, 1, "{report:?}");
+    let work = ui.frame(&mut text)?;
+    assert_eq!(work.layout_passes, 1, "{work:?}");
+    assert_eq!(y(&ui), 0., "the second panel moves up");
+    // And back: an insertion pushes it down again.
+    ui.reconcile(&markup(true))?;
+    ui.frame(&mut text)?;
+    assert_eq!(y(&ui), 100.);
+    Ok(())
+}
