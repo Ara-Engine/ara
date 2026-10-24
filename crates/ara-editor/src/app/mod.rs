@@ -35,6 +35,8 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+/// How long after the last input progressive Scene frames resume.
+const INTERACTION_PAUSE: Duration = Duration::from_millis(250);
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
@@ -193,8 +195,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         let mut wall_samples = Vec::new();
         let mut last_ui = 0;
         let frame_budget = Duration::from_secs_f64(1. / 144.);
-        // The last progressive Scene frame (see below), so hovering never starves it.
-        let mut last_progressive = Instant::now();
+        // The last pointer, key or wheel input: progressive Scene frames wait while the
+        // user is working (see below).
+        let mut last_input: Option<Instant> = None;
         let mut previous = Instant::now();
         loop {
             if let Some(probe) = &mut probe {
@@ -226,6 +229,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 inject_ms = at.elapsed().as_secs_f64() * 1000.;
             }
             let interaction_start = (!events.is_empty()).then(Instant::now);
+            if events.iter().any(|(_, event)| {
+                matches!(
+                    event,
+                    Event::MouseMotion { .. }
+                        | Event::MouseButton { .. }
+                        | Event::Wheel(_)
+                        | Event::Key { .. }
+                )
+            }) {
+                last_input = Some(Instant::now());
+            }
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
@@ -601,18 +615,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             drop(ui_scope);
             dirty |= work.paint_nodes > 0 || work.layout_passes > 0 || work.restyled > 0;
             // Progressive Scene frames (fidelity accumulation, newly published assets)
-            // yield to frames carrying input, so a click or hover presents without
-            // waiting for one; they resume on the next quiet frame, and at least every
-            // 100 ms. Scene changes made by input (camera, gizmos, edits) render now.
-            if shell.viewport().is_some() && scene_view.needs_frame(editor.state.quality) {
-                let yield_to_input = interaction_start.is_some()
-                    && !scene_dirty
-                    && last_progressive.elapsed() < Duration::from_millis(100);
-                if !yield_to_input {
-                    dirty = true;
-                    scene_dirty = true;
-                    last_progressive = Instant::now();
-                }
+            // block this thread for their GPU time (27-50 ms on large scenes), so they
+            // wait while the user is working: no pointer, key or wheel input for
+            // INTERACTION_PAUSE. A click or hover then never queues behind one. Scene
+            // changes made by input (camera, gizmo drags, edits) still render at once.
+            if shell.viewport().is_some()
+                && scene_view.needs_frame(editor.state.quality)
+                && (scene_dirty || last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE))
+            {
+                dirty = true;
+                scene_dirty = true;
             }
             if dirty {
                 let _render_scope = profile_frame.map(|_| ara_profile::scope("editor.render"));

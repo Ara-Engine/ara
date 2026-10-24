@@ -333,9 +333,9 @@ impl Controller {
                     } else {
                         None
                     };
+                    // Handle highlights are UI overlays: a redraw, not a Scene frame.
                     if hover != self.hover {
                         self.hover = hover;
-                        scene_dirty = true;
                     }
                     shell.event(InputEvent::PointerMove(position), clipboard)?;
                     shell.hover_tooltip()?;
