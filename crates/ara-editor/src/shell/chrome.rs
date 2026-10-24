@@ -221,7 +221,20 @@ impl Shell {
                 1 => format!("Connected · 1 agent{}", if active_agent { " editing" } else { "" }),
                 n => format!("Connected · {n} agents{}", if active_agent { " editing" } else { "" }),
             }));
-        if let Some(playing) = editor.state.playing {
+        let stopping = self
+            .game_start
+            .as_ref()
+            .filter(|_| editor.state.playing.is_some())
+            .map(|start| start.stopping);
+        if let Some(stopping) = stopping {
+            self.bind_command("status-play", "window.game", Target::None);
+            let text = if stopping {
+                "Stopping Play…"
+            } else {
+                "Starting Play…"
+            };
+            out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='fg' text='{text}' /></button>",icons::icon_in("status-play","loader-circle","accent")));
+        } else if let Some(playing) = editor.state.playing {
             self.bind_command("status-play", "window.game", Target::None);
             out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='{}' text='{}' /></button>",icons::icon_in("status-play",if playing{"play"}else{"pause"},if playing{"tint-play"}else{"warning"}),if playing{"fg"}else{"warning"},if playing{"Playing"}else{"Paused"}));
         }
