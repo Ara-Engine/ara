@@ -5,6 +5,11 @@ Native scene count bit31 selects 64B header / 16B mesh / 192B instance records;
 material stride is 320B and geometry rows are 32B. Never add world-space copies.
 The native helper include must exactly match ara-texture-stream's sampling source.
 Raw graph views decode colors after filtering; glTF retains hardware sRGB views.
+`update_native_scene` streams rigid matrices/materials/lights and changed skin
+revisions; unchanged frames perform no GPU upload. Layout/generation changes need
+a replacement view. Rejected poses retain published resources. Native Frame.scene.w
+is a motion-pending boolean (legacy uses a previous-table index); successful render
+commits presented world/skin history. Repeated renders must not repeat stale motion.
 
 M3 lighting and post extension over ara-render's Graph and ara-gpu's device.
 Scene snapshots and physical units are exactly ara-render::scene's contract.
@@ -28,6 +33,9 @@ Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,
 Cook offline with `cargo run -p ara-shader-cook --
 crates/ara-render-fidelity/shaders/pipelines.json crates/ara-render-fidelity/cooked`.
 GPU sequence/golden/performance gates live in ara-pathtrace.
+`cargo run --release -p ara-render-fidelity --example native_motion -- native`
+measures shared rigid motion; `native-skin` measures one changed skin, and no
+argument measures the legacy world-vertex update. JSON goes under target/.
 Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 
 ## Contracts

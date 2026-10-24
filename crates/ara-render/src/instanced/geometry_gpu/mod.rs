@@ -4,6 +4,8 @@ use anyhow::{Result, ensure};
 use ara_gpu::{AccelerationStructure, Access, Buffer, Device, Resource, vulkan::VulkanDevice};
 
 mod pack;
+mod pose;
+pub use pose::PreparedPose;
 #[cfg(test)]
 mod tests;
 mod upload;
@@ -22,7 +24,7 @@ pub struct LodRange {
 pub struct GeometryUpload {
     /// Unique source geometries, independent of instance count.
     pub geometries: usize,
-    /// Shared vertex/index and geometry-table payload, including both skin-pose slots.
+    /// Shared vertex/index and geometry-table payload, including three skin-pose slots.
     pub bytes: u64,
     /// Native BLAS objects, one per unique geometry LOD when RT is requested.
     pub blas: usize,
@@ -39,15 +41,29 @@ pub struct GeometryUpload {
 struct Row([u32; 8]);
 
 /// Immutable model-space vertex/index allocation and one BLAS per cooked LOD.
-/// Skin vertices have a separate pair of buffers; moving instances never copy the
+/// Skin vertices have separate presented, published and candidate buffers; moving instances never copy the
 /// static pool. The owner retires dependent TLAS objects before destroying this set.
 pub struct GeometryGpu {
     static_pool: Option<Buffer>,
-    dynamic: Option<[Buffer; 2]>,
+    dynamic: Option<[Buffer; 3]>,
     table: Option<(Buffer, u32)>,
     ranges: Vec<LodRange>,
     structures: Vec<AccelerationStructure>,
+    layout: Vec<GeometryLayout>,
+    lod_data: Vec<pack::PackedLod>,
+    staging: Vec<Vertex>,
+    current_slot: usize,
+    presented_slot: usize,
+    pending_pose: bool,
     stats: GeometryUpload,
+}
+
+struct GeometryLayout {
+    key: [u8; 32],
+    revision: u64,
+    deforming: bool,
+    first: usize,
+    vertices: usize,
 }
 
 impl GeometryGpu {

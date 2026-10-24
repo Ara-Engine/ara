@@ -71,11 +71,22 @@ impl Builder {
             indices: indices.to_vec(),
             error: 0.0,
         }];
+        let mut previous_error = 0.0f32;
         for lod in lods {
             if lod.indices != indices && !lod.indices.is_empty() {
+                let error = lod.error * extent;
+                anyhow::ensure!(
+                    lod.error.is_finite() && lod.error >= 0.0 && error.is_finite() && error >= 0.0,
+                    "{} has invalid cooked LOD error {}",
+                    draw.label,
+                    lod.error
+                );
+                // Each meshopt target is simplified independently. Its reported
+                // error can fall slightly; retain a conservative monotonic bound.
+                previous_error = previous_error.max(error);
                 native_lods.push(render::Lod {
                     indices: lod.indices.to_vec(),
-                    error: lod.error * extent,
+                    error: previous_error,
                 });
             }
         }

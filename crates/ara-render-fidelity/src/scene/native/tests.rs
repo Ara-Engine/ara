@@ -1,4 +1,6 @@
 use super::*;
+mod motion;
+mod skin;
 
 #[test]
 fn native_instance_rows_preserve_affine_matrix_and_normal_offsets() {
@@ -50,7 +52,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
     let mut right = left;
     right.pbr.emissive_roughness = [0.0, 3.0, 0.0, 1.0];
     right.extras.uv[3].tex_coord = 0;
-    let scene = NativeScene {
+    let mut scene = NativeScene {
         geometry: vec![Geometry {
             key: [1; 32],
             vertices,
@@ -59,7 +61,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
                 error: 0.0,
             }],
             bounds: [Vec3::new(-0.4, -0.4, 0.0), Vec3::new(0.4, 0.4, 0.0)],
-            deforming: false,
+            deforming: true,
             revision: 0,
         }],
         instances: [-0.6, 0.6]
@@ -157,6 +159,8 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
     std::fs::create_dir_all(&output)?;
     view.capture(&mut gpu)?
         .save(output.join("native-emissive-uv1.png"))?;
+    motion::check(&mut gpu, &mut view, &mut scene, &camera, size, &output)?;
+    skin::check(&mut gpu, &mut view, &mut scene, &camera, size, &output)?;
     view.destroy(&mut gpu)?;
     gpu.collect()?;
     gpu.assert_clean()?;

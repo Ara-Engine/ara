@@ -29,7 +29,7 @@ impl Scene {
             "invalid native sun"
         );
         let mut keys = BTreeSet::new();
-        for geometry in &self.geometry {
+        for (geometry_index, geometry) in self.geometry.iter().enumerate() {
             ensure!(
                 keys.insert(geometry.key)
                     && !geometry.vertices.is_empty()
@@ -69,7 +69,12 @@ impl Scene {
                         && lod.error.is_finite()
                         && lod.error >= previous_error
                         && (index != 0 || lod.error == 0.0),
-                    "invalid native LOD topology or geometric error"
+                    "invalid native LOD topology or geometric error: {} (geometry {geometry_index}, LOD {index}, error {}, previous {previous_error})",
+                    self.instances
+                        .iter()
+                        .find(|instance| instance.geometry == geometry_index)
+                        .map_or("uninstanced", |instance| instance.name.as_str()),
+                    lod.error
                 );
                 previous_error = lod.error;
             }
@@ -93,6 +98,19 @@ impl Scene {
                 );
             }
         }
+        self.validate_parameters()
+    }
+
+    /// Checks mutable surface/light parameters without rewalking immutable vertex,
+    /// index, environment or identity data. Views validate their cached pose layout.
+    pub fn validate_parameters(&self) -> Result<()> {
+        ensure!(
+            self.sun_direction.is_finite()
+                && self.sun_direction.length_squared() > 1e-8
+                && self.sun_lux.is_finite()
+                && self.sun_lux.cmpge(Vec3::ZERO).all(),
+            "invalid native sun"
+        );
         for material in &self.materials {
             let pbr = &material.pbr;
             let extra = &material.extras;

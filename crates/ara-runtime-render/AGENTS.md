@@ -31,6 +31,11 @@ renderer and per-draw upload state; no simulation, window or process code.
   six independent UV slots and native BC residency. It consumes existing runtime
   scatter/selector/material semantics; it does not scatter again, decode pixels or atlas.
   Prepared owns the CPU scene and its resident set for FidelityView::new_native.
+  `Prepared::enable_motion` reserves independent root surface slots before upload;
+  `update_frame` streams poses, factors and changed joint palettes without copying
+  static vertices or asset handles. `FrameChange::Rebuild` requests fresh content
+  for new identities/generations or terrain residency; keep presenting the last good
+  view until replacement GPU publication succeeds.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2

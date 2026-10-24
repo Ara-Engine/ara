@@ -98,7 +98,7 @@ float2 hitUv(Frame f,uint id,uint primitive,float2 bary){uint4 m=mesh(f,id);uint
 bool accept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){[branch]if(nativeScene(f))return nativeAccept(f,id,primitive,bary,rng);Material m=material(f,mesh(f,id).w);if(m.flags.x==0)return true;float a=m.colour.a*tex(m.textures.x,hitUv(f,id,primitive,bary)).a;return m.flags.x==1?a>=m.surface.w:random(rng)<a;}
 // Only primary motion-vector extraction needs the preceding vertex table.
 float3 previousPosition(Frame f,uint id,uint primitive,float2 bary,float3 current){
-    [branch]if(nativeScene(f)){uint4 m=mesh(f,id);uint3 ix=indices(f,m,primitive);float3 w=float3(1-bary.x-bary.y,bary);return nativeVertex(f,m.x,ix.x,true).position*w.x+nativeVertex(f,m.x,ix.y,true).position*w.y+nativeVertex(f,m.x,ix.z,true).position*w.z;}
+    [branch]if(nativeScene(f)){if(f.scene.w==0)return current;uint4 m=mesh(f,id);uint3 ix=indices(f,m,primitive);float3 w=float3(1-bary.x-bary.y,bary);return nativeVertex(f,m.x,ix.x,true).position*w.x+nativeVertex(f,m.x,ix.y,true).position*w.y+nativeVertex(f,m.x,ix.z,true).position*w.z;}
     if(f.scene.x==f.scene.w)return current;float3 w=float3(1-bary.x-bary.y,bary);
     uint previousCount=buffers[f.scene.w].Load(0);
     if(id<previousCount){uint4 previousMesh=buffers[f.scene.w].Load<uint4>(32+id*16);
