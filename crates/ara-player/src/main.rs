@@ -9,6 +9,8 @@ mod device;
 mod embed;
 mod input;
 mod net;
+mod packed;
+mod standalone;
 mod world;
 
 use anyhow::{Context, Result, anyhow};
@@ -30,14 +32,11 @@ use world::{PendingPatch, World};
 
 /// Command line. The session token comes from `ARA_PLAY_TOKEN`, never an argument.
 #[derive(Parser)]
-#[command(
-    name = "ara-player",
-    about = "Ara play process (spawned by the edit-world owner)"
-)]
+#[command(name = "ara-player", about = "Ara game player and editor Play process")]
 struct Args {
     /// Owner's live-link port on 127.0.0.1.
     #[arg(long)]
-    owner: u16,
+    owner: Option<u16>,
     /// Pool slot name, for logs and window titles.
     #[arg(long, default_value = "player")]
     name: String,
@@ -53,6 +52,8 @@ struct Args {
     /// Override project quality: auto, low, medium, high or epic.
     #[arg(long)]
     quality: Option<QualityChoice>,
+    #[command(flatten)]
+    standalone: standalone::Options,
 }
 
 fn main() {
@@ -137,6 +138,9 @@ struct Player {
 }
 
 fn run(args: Args) -> Result<()> {
+    if args.owner.is_none() {
+        return standalone::run(args);
+    }
     let init = Instant::now();
     let size = parse_size(&args.size)?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
@@ -159,7 +163,7 @@ fn run(args: Args) -> Result<()> {
     } else {
         (None, None)
     };
-    let mut link = Link::connect(args.owner)?;
+    let mut link = Link::connect(args.owner.context("Play requires an owner port")?)?;
     let hello = Hello {
         token,
         protocol: PROTOCOL.into(),
