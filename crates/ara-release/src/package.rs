@@ -18,7 +18,7 @@ const BINARIES: &[(&str, &str)] = &[
     ("ara-nav", "ara-nav-worker"),
     ("ara-terrain", "ara-terrain-worker"),
     ("ara-shader-cook", "ara-shader-cook"),
-    ("ara-release", "ara-setup"),
+    ("ara-setup", "ara-setup"),
 ];
 const RESOURCES: &[&str] = &[
     "ara-render",

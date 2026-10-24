@@ -2,8 +2,9 @@
 
 Windows engine distribution tooling, separate from exported games. `ara-release`
 packages release binaries and runtime resources, generates notes, and tests an
-installed distribution. `ara-setup` reuses ara-export-installer's validated,
-hash-checked SFX extraction and calls the per-user installer script.
+installed distribution. The setup stub both installers start with is the
+`ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
+packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 
 `cargo run -p ara-release -- package --version 0.0.1-alpha`
 `cargo run -p ara-release -- notes --version 0.0.1-alpha`

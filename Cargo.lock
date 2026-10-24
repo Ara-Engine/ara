@@ -1887,6 +1887,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-setup"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-export-installer",
+ "embed-resource",
+ "image",
+ "serde_json",
+ "tempfile",
+ "windows-sys 0.61.2",
+ "zip 2.6.1",
+]
+
+[[package]]
 name = "ara-shader-cook"
 version = "0.0.1-alpha"
 dependencies = [
