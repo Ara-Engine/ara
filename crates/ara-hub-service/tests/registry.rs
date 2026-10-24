@@ -97,7 +97,15 @@ fn canonical_registry_survives_restart_and_pins_the_project() {
     assert_eq!(marker["engineVersion"], "alpha");
     let project = ara_host::Project::open(&root.join("Example")).expect("valid project");
     let host = ara_host::Host::open(project, Default::default()).expect("valid template scene");
-    assert_eq!(host.store().workspace().docs().count(), 1);
+    // The project marker is an internal `project` document; the template adds one scene.
+    let scenes: Vec<&str> = host
+        .store()
+        .workspace()
+        .docs()
+        .filter(|(_, doc)| doc.kind == "scene")
+        .map(|(path, _)| path)
+        .collect();
+    assert_eq!(scenes, ["levels/main.scene"]);
     drop(host);
     hub.call(
         "hub.update",

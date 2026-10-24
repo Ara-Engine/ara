@@ -159,28 +159,10 @@ impl Service for AssetService {
                 .docs()
                 .any(|(path, _)| path == sidecar)
         {
-            let registry =
-                ara_importers::registry().map_err(|e| vec![crate::invalid(e.to_string())])?;
-            let extension = relative.extension().and_then(|s| s.to_str()).unwrap_or("");
-            let importer = registry
-                .get(match extension {
-                    "glb" | "gltf" => "ara.gltf",
-                    "fbx" => "ara.fbx",
-                    _ => "ara.texture",
-                })
-                .map_err(|e| vec![crate::invalid(e.to_string())])?;
-            let settings = ImportSettings {
-                importer: importer.id().into(),
-                version: importer.version().into(),
-                preset: ara_asset::CookPreset::Fast,
-                settings: json!({}),
-                dependencies: Vec::new(),
-            };
-            let doc = cx
-                .create_document(&sidecar, "import")
-                .map_err(|d| vec![d])?;
+            // The shared workspace command picks the importer and its current version,
+            // exactly as `ara do import.initialize` and MCP do.
             let batch = parse(
-                json!({"session":p.session,"doc":doc,"why":"Import source media","commands":[{"cmd":"editor.import.initialize","args":{"settings":settings}}]}),
+                json!({"session":p.session,"why":"Import source media","commands":[{"cmd":"import.initialize","args":{"source":p.path,"preset":"fast"}}]}),
             )?;
             cx.apply(batch)?;
         }
