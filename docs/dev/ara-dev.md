@@ -224,3 +224,8 @@ rebuilt another feature set, and guessed the CLI path from the intermediate test
 directory. The CLI dev-dependency on ara-hub expresses the integration edge for
 affected selection. All lifecycle assertions remain; the focused test passed in
 5.41 seconds after building. Cargo.lock gains one existing workspace edge for it.
+
+After merging main's quality shaders, the required cook regenerated nine baseline
+renderer pipelines from the merged baseline.slang. Fidelity and VFX cohorts passed
+the same cooker with matching artifacts reused. No cooked conflict was resolved
+by selecting one side.
