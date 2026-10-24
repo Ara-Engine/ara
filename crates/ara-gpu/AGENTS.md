@@ -11,6 +11,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access.
+- `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
+  with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
   `UploadImage`/`ReadImage` copy every resident level, finest first, without padding
   between levels. Barriers span the chain; copy validation checks block footprints.
