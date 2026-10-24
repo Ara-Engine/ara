@@ -125,10 +125,7 @@ impl Destination<'_> {
         );
         let launch: Value = serde_json::from_slice(&fs::read(scene.join("ara-launch.json"))?)?;
         let pack = scene.join(launch["pack"].as_str().context("launch pack path")?);
-        let pack_hash = crate::git::text(
-            root,
-            [std::ffi::OsStr::new("hash-object"), pack.as_os_str()],
-        )?;
+        let pack_hash = crate::git::hash_file(root, &pack)?;
         let preset = player
             .get("quality")
             .and_then(Value::as_str)
@@ -163,7 +160,7 @@ impl Destination<'_> {
             format: "ara.perf/1".into(),
             provenance: serde_json::json!({
                 "executable":executable,
-                "binary_hash":crate::git::text(root, [std::ffi::OsStr::new("hash-object"), executable.as_os_str()])?,
+                "binary_hash":crate::git::hash_file(root, executable)?,
                 "source_head":crate::git::text(root, ["rev-parse", "HEAD"])?,
                 "source_dirty":!crate::git::text(root, ["status", "--porcelain"])?.is_empty()
             }),

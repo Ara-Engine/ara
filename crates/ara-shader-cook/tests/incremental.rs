@@ -62,9 +62,17 @@ fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
     assert_eq!(other_before.stages[0].spirv, other_after.stages[0].spirv);
     assert_eq!(other_after.key, test_after.key);
     let good = std::fs::read(output.join("test.json"))?;
-    std::fs::write(&source, valid.replace("=1.", "=3."))?;
-    std::fs::write(root.join("other.slang"), "invalid shader")?;
+    let other_good = std::fs::read(output.join("other.json"))?;
+    // "other" cooks first, then "test" fails: no earlier successful cook may publish.
+    std::fs::write(&source, "invalid shader")?;
+    std::fs::write(
+        root.join("other.slang"),
+        valid
+            .replace("computeMain", "otherMain")
+            .replace("=1.", "=3."),
+    )?;
     assert!(cook(&manifest, &output, &tools).is_err());
     assert_eq!(good, std::fs::read(output.join("test.json"))?);
+    assert_eq!(other_good, std::fs::read(output.join("other.json"))?);
     Ok(())
 }

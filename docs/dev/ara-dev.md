@@ -167,6 +167,28 @@ across new cohort keys. A shader-only iteration needs neither Cargo nor a new
 player process. Cook into an ignored scratch directory for experiments; tracked
 cooked files are refreshed only deliberately.
 
+### Measured iteration loop
+
+On 2026-10-24, both profiles were warmed with the same four package roots, four
+build jobs and an independent D: target directory. Changing High's
+`reflection_cutoff` from 0.60 to 0.61 in `ara-render-fidelity/src/presets.rs`, then
+running the frozen 144-tile Outpost at 2560x1440, High, 30 warm-up and 240 measured
+frames gave:
+
+| Profile | Renderer rebuild | Rebuild plus native player run |
+| --- | ---: | ---: |
+| release | 28.03 s | 62.08 s |
+| perf | 30.22 s | 61.94 s |
+
+This sample shows no incremental compile advantage over release; both complete
+the inner loop in about a minute. Cold compilation and the first asset import/
+export are separate setup costs. The probe edit was restored afterwards.
+GPU medians were 15.64 and 15.61 ms respectively, and first-frame times were
+8.62 and 7.18 seconds: these measurements do not meet D26's release budget.
+Local evidence is `target/ara-dev/perf-rebuild-results.json`, with build and player
+logs beside it. A 60-frame run with a capture completed in 20.54 seconds once
+the frozen pack was available.
+
 ## Gate usage
 
 ```
