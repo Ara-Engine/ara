@@ -50,6 +50,19 @@ fn effective_view_policy_participates_in_residency_identity() {
         set.register_view([2; 32], data, NativeView::Raw).unwrap()
     );
     assert_eq!(set.entries.len(), 3);
+    let fork = set
+        .fork_sources(NativeConfig {
+            resident_bytes: 1000,
+            upload_bytes: 1000,
+        })
+        .unwrap();
+    assert!(fork.binding().is_none());
+    assert_eq!(
+        fork.content_keys().collect::<Vec<_>>(),
+        set.content_keys().collect::<Vec<_>>()
+    );
+    assert!(Arc::ptr_eq(&fork.entries[0].source, &set.entries[0].source));
+    assert_eq!(fork.stats().resident_bytes, 0);
 }
 
 #[test]

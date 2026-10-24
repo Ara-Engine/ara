@@ -3,6 +3,8 @@ use super::*;
 use ara_render::instanced::{GeometryGpu, Scene as NativeScene};
 use ara_texture_stream::{NativeResidency, NativeStats};
 
+mod motion;
+pub use motion::NativeUpdate;
 mod packing;
 #[cfg(test)]
 mod tests;
@@ -11,9 +13,17 @@ pub(super) struct Native {
     pool: Option<GeometryGpu>,
     materials: Option<Buffer>,
     textures: NativeResidency,
+    motion: motion::Motion,
 }
 
 impl Native {
+    pub(super) fn presented(&mut self) {
+        self.motion.presented.copy_from_slice(&self.motion.current);
+        self.motion.present_geometry();
+        if let Some(pool) = &mut self.pool {
+            pool.presented();
+        }
+    }
     pub(super) fn resources(&self) -> impl Iterator<Item = (Resource, Access)> + '_ {
         self.pool
             .iter()
@@ -45,10 +55,12 @@ impl GpuScene {
         rt: bool,
     ) -> Result<Self> {
         scene.validate()?;
+        let motion = motion::Motion::new(scene, &textures);
         let mut native = Native {
             pool: None,
             materials: None,
             textures,
+            motion,
         };
         let mut allocated = Vec::new();
         let result = (|| {
@@ -81,7 +93,7 @@ impl GpuScene {
             allocated.push(Resource::Image(env));
             let environment = gpu.sampled_image(env, false)?.index;
             let tlas = if rt && !scene.instances.is_empty() {
-                let instances = packing::instances(scene, pool)?;
+                let instances = packing::instances(scene, pool, None)?;
                 let tlas =
                     gpu.create_acceleration_structure(&AccelerationDesc::Instances(instances))?;
                 allocated.push(Resource::AccelerationStructure(tlas));
@@ -111,26 +123,6 @@ impl GpuScene {
                 .map(|tlas| gpu.bind_acceleration_structure(tlas).map(|b| b.index))
                 .transpose()?
                 .unwrap_or(0);
-            let mut hash = Sha256::new();
-            // Address-independent content provenance; GPU heap indices are excluded.
-            for geometry in &scene.geometry {
-                hash.update(geometry.key);
-            }
-            for instance in &scene.instances {
-                hash.update(instance.entity.to_le_bytes());
-                hash.update(instance.geometry.to_le_bytes());
-                hash.update(instance.material.to_le_bytes());
-                hash.update(bytemuck::bytes_of(&instance.world));
-            }
-            hash.update(bytemuck::cast_slice(&scene.materials));
-            hash.update(bytemuck::cast_slice(&scene.lights));
-            hash.update(bytemuck::cast_slice(&scene.environment));
-            hash.update(bytemuck::bytes_of(&scene.sun_direction));
-            hash.update(bytemuck::bytes_of(&scene.sun_lux));
-            for (key, srgb) in native.textures.content_keys() {
-                hash.update(key);
-                hash.update([u8::from(srgb)]);
-            }
             let ids = scene
                 .instances
                 .iter()
@@ -164,7 +156,7 @@ impl GpuScene {
                         .materials
                         .iter()
                         .any(|m| crate::material::has_layers(std::slice::from_ref(&m.pbr))),
-                    hash: format!("{:x}", hash.finalize()),
+                    hash: native.motion.fingerprint(scene),
                     geometry: Vec::new(),
                     acceleration_update: AccelerationUpdate {
                         rebuilt_blas: pool.stats().blas,

@@ -18,6 +18,18 @@ pub(super) fn pack(
     textures: u32,
     bounds: &mut [Vec3; 2],
 ) -> Result<Vec<u8>> {
+    pack_motion(scene, pool, materials, textures, bounds, None, None)
+}
+
+pub(super) fn pack_motion(
+    scene: &NativeScene,
+    pool: &GeometryGpu,
+    materials: u32,
+    textures: u32,
+    bounds: &mut [Vec3; 2],
+    previous: Option<&[glam::Mat4]>,
+    pose: Option<&ara_render::instanced::PreparedPose>,
+) -> Result<Vec<u8>> {
     let records = 64usize
         .checked_add(
             scene
@@ -57,7 +69,7 @@ pub(super) fn pack(
                 lod,
             ],
             world: instance.world,
-            previous: instance.previous_world,
+            previous: previous.map_or(instance.previous_world, |worlds| worlds[id]),
             normal,
         };
         out.extend_from_slice(bytemuck::bytes_of(&row));
@@ -91,7 +103,7 @@ pub(super) fn pack(
         emitters,
         count,
         power.to_bits(),
-        pool.table_index().unwrap_or(0),
+        pose.map_or_else(|| pool.table_index().unwrap_or(0), |p| p.table_index()),
         textures,
         scene.textures,
         records as u32,
@@ -108,6 +120,7 @@ pub(super) fn pack(
 pub(super) fn instances(
     scene: &NativeScene,
     pool: &GeometryGpu,
+    pose: Option<&ara_render::instanced::PreparedPose>,
 ) -> Result<Vec<AccelerationInstance>> {
     scene
         .instances
@@ -118,8 +131,8 @@ pub(super) fn instances(
                 .lods(instance.geometry)
                 .ok_or_else(|| anyhow::anyhow!("native LOD range missing"))?
                 .first;
-            let geometry = pool
-                .blas(row)
+            let geometry = pose
+                .map_or_else(|| pool.blas(row), |p| p.blas(pool, row))
                 .ok_or_else(|| anyhow::anyhow!("native BLAS missing"))?;
             let w = instance.world.to_cols_array_2d();
             Ok(AccelerationInstance {

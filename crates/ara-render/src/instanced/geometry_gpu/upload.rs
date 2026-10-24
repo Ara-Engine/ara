@@ -23,6 +23,21 @@ impl GeometryGpu {
         }
         .limits;
         let packed = pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?;
+        let layout = scene
+            .geometry
+            .iter()
+            .zip(&packed.ranges)
+            .map(|(geometry, range)| {
+                let lod = &packed.lods[range.first as usize];
+                GeometryLayout {
+                    key: geometry.key,
+                    revision: geometry.revision,
+                    deforming: geometry.deforming,
+                    first: lod.vertex_offset as usize / std::mem::size_of::<Vertex>(),
+                    vertices: geometry.vertices.len(),
+                }
+            })
+            .collect();
         let mut allocated = Vec::new();
         match Self::upload(gpu, packed, rt, &mut allocated) {
             Ok((pool, stage)) => {
@@ -30,7 +45,7 @@ impl GeometryGpu {
                     gpu.retire(Resource::Buffer(stage))?;
                 }
                 gpu.collect()?;
-                Ok(pool)
+                Ok(Self { layout, ..pool })
             }
             Err(error) => {
                 for resource in allocated.into_iter().rev() {
@@ -54,6 +69,12 @@ impl GeometryGpu {
             table: None,
             ranges: packed.ranges,
             structures: Vec::new(),
+            layout: Vec::new(),
+            lod_data: Vec::new(),
+            staging: Vec::new(),
+            current_slot: 0,
+            presented_slot: 0,
+            pending_pose: false,
             stats: GeometryUpload::default(),
         };
         result.stats.geometries = result.ranges.len();
@@ -90,13 +111,15 @@ impl GeometryGpu {
         } else {
             let a = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
             let b = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
+            let c = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
             gpu.upload(a, dynamic_bytes)?;
             gpu.upload(b, dynamic_bytes)?;
-            Some([a, b])
+            gpu.upload(c, dynamic_bytes)?;
+            Some([a, b, c])
         };
         result.dynamic = dynamic;
-        let dynamic_indices = if let Some([a, b]) = dynamic {
-            [gpu.storage_buffer(a)?.index, gpu.storage_buffer(b)?.index]
+        let dynamic_indices = if let Some([a, _, _]) = dynamic {
+            [gpu.storage_buffer(a)?.index; 2]
         } else {
             [0; 2]
         };
@@ -221,7 +244,7 @@ impl GeometryGpu {
         let point = gpu.submit(commands.finish(), &[])?;
         let timings = gpu.resolve(point)?;
         result.stats.bytes = packed.static_bytes.len() as u64
-            + dynamic_bytes.len() as u64 * 2
+            + dynamic_bytes.len() as u64 * 3
             + row_bytes.len() as u64;
         result.stats.blas = result.structures.len();
         for timing in timings {
@@ -231,11 +254,13 @@ impl GeometryGpu {
                 result.stats.build_ms = timing.milliseconds;
             }
         }
+        result.lod_data = packed.lods;
+        result.staging = packed.dynamic;
         Ok((result, Some(stage)))
     }
 }
 
-fn allocate(
+pub(super) fn allocate(
     gpu: &mut VulkanDevice,
     bytes: u64,
     usage: vk::BufferUsageFlags,
@@ -247,7 +272,7 @@ fn allocate(
     Ok(buffer)
 }
 
-fn edge(resource: Resource, before: Access, after: Access) -> Barrier {
+pub(super) fn edge(resource: Resource, before: Access, after: Access) -> Barrier {
     Barrier {
         resource,
         before,

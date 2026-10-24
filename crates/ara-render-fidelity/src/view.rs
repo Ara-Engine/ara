@@ -299,6 +299,24 @@ impl FidelityView {
     ) -> Result<()> {
         self.scene.update(gpu, scene)
     }
+    /// Updates native poses/materials/lights at a completed frame boundary,
+    /// retaining shared geometry and previous successfully presented transforms.
+    /// New geometry or texture generations require a prepared replacement view.
+    pub fn update_native_scene(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        scene: &ara_render::instanced::Scene,
+    ) -> Result<crate::scene::NativeUpdate> {
+        let update = self.scene.update_native(gpu, scene)?;
+        if update.lighting {
+            self.responsive_frames = 7;
+        }
+        if update.changed && matches!(self.settings.mode, Mode::Reference { .. }) {
+            self.history = false;
+            self.samples = 0;
+        }
+        Ok(update)
+    }
     /// Change ray-query visibility while retaining cached mesh acceleration.
     pub fn set_instance_masks(
         &mut self,

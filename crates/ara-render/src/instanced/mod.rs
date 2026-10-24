@@ -7,7 +7,7 @@ mod material;
 #[cfg(test)]
 mod tests;
 mod validate;
-pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange};
+pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange, PreparedPose};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform};
 
 /// Absent native texture or unused material index. Sampling supplies neutral

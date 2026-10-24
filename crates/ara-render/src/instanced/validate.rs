@@ -93,6 +93,19 @@ impl Scene {
                 );
             }
         }
+        self.validate_parameters()
+    }
+
+    /// Checks mutable surface/light parameters without rewalking immutable vertex,
+    /// index, environment or identity data. Views validate their cached pose layout.
+    pub fn validate_parameters(&self) -> Result<()> {
+        ensure!(
+            self.sun_direction.is_finite()
+                && self.sun_direction.length_squared() > 1e-8
+                && self.sun_lux.is_finite()
+                && self.sun_lux.cmpge(Vec3::ZERO).all(),
+            "invalid native sun"
+        );
         for material in &self.materials {
             let pbr = &material.pbr;
             let extra = &material.extras;
