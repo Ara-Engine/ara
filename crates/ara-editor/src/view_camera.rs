@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ara_doc::prefab::{Resolved, ResolvedEntity};
+use ara_physics::{Collider, RigidBody};
+use ara_runtime::follow::{FollowView, Wall};
 use glam::{Mat4, Vec3};
 use serde_json::{Value, json};
 
@@ -38,8 +40,9 @@ pub(crate) fn opening(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>) 
 }
 
 /// The view of the scene's gameplay camera (the lowest `Camera.priority`, first by
-/// address on ties) with its field of view. A follow rig looks from behind its target
-/// and pivots on the aim point, where Play places it (`ara_runtime` `place_cameras`).
+/// address on ties) with its field of view. A follow rig looks from behind its target,
+/// its boom stopped by walls, and pivots on the aim point: where Play places it
+/// (`ara_runtime::follow::FollowView`).
 pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>) -> Option<Camera> {
     use ara_runtime::components::{Camera as Lens, FollowCamera};
     let (address, lens, entity) = resolved
@@ -61,20 +64,43 @@ pub(crate) fn gameplay(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>)
             .as_ref()
             .and_then(|t| transforms.get(t.0.as_str()))
     {
-        let (yaw, pitch) = (rig.yaw.to_radians(), rig.pitch.to_radians());
-        let forward = Vec3::new(
-            yaw.sin() * pitch.cos(),
-            -pitch.sin(),
-            yaw.cos() * pitch.cos(),
+        // The runtime is on a newer glam: values cross as arrays.
+        let target = target.w_axis.truncate().to_array().into();
+        let view = FollowView::new(&rig, target, walls(resolved, transforms));
+        let (aim, forward) = (
+            Vec3::from(view.aim.to_array()),
+            Vec3::from(view.forward.to_array()),
         );
-        let aim = target.w_axis.truncate() + Vec3::Y * rig.height;
-        camera.distance = rig.distance.max(0.05);
+        camera.distance = view.distance.max(0.05);
         camera.look_from(aim - forward * camera.distance, forward);
     } else {
         let (_, rotation, position) = transforms.get(address)?.to_scale_rotation_translation();
         camera.look_from(position, rotation * Vec3::NEG_Z);
     }
     Some(camera)
+}
+
+/// The walls a follow rig's boom stops in front of, as Play finds them: static, solid
+/// box colliders at their world pose ([`Wall::solid`]).
+fn walls<'a>(
+    resolved: &'a Resolved,
+    transforms: &'a BTreeMap<String, Mat4>,
+) -> impl Iterator<Item = Wall> + 'a {
+    resolved.iter().filter_map(|(id, entity)| {
+        let collider: Collider =
+            serde_json::from_value(entity.record.get("Collider")?.clone()).ok()?;
+        let body: RigidBody =
+            serde_json::from_value(entity.record.get("RigidBody")?.clone()).ok()?;
+        if !Wall::solid(&collider, &body) {
+            return None;
+        }
+        let (_, rotation, translation) = transforms.get(id)?.to_scale_rotation_translation();
+        Some(Wall::new(
+            &collider,
+            translation.to_array().into(),
+            glam34::Quat::from_array(rotation.to_array()),
+        ))
+    })
 }
 
 /// World bounds framing shows: the `selection` when there is one (anything selected

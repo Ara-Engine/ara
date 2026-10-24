@@ -2,15 +2,16 @@
 //! actions from `SimContext` only, so agent injection, devices and replay are equal.
 use crate::{
     components::{FollowCamera, PlayerControl},
+    follow::{FollowView, Wall},
     math::{Pose, approach_angle},
 };
 use ara_components::Transform;
 use ara_input::{Action, ActionKind, ActionMap, ActionValue, Binding, PlayerId};
-use ara_physics::{CharacterInput, CharacterMotion};
+use ara_physics::{CharacterInput, CharacterMotion, Collider, PhysicsPose, RigidBody};
 use ara_physics2d::{CharacterInput2d, CharacterMotion2d};
 use ara_sim::{Identity, SimContext};
 use bevy_ecs::prelude::*;
-use glam::{Mat3, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3};
 use std::collections::BTreeMap;
 
 /// Planar movement intent `[right, forward]`.
@@ -155,10 +156,31 @@ pub fn drive_players_2d(
     }
 }
 
-/// Places follow cameras behind their targets after physics (orbit yaw/pitch, distance).
+/// Transforms and parents of everything but camera rigs, for world matrices.
+type Hierarchy<'w, 's> =
+    Query<'w, 's, (&'static Transform, Option<&'static ChildOf>), Without<FollowCamera>>;
+/// Collider bodies and, once physics has adopted them, their world poses.
+type Bodies<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Collider,
+        &'static RigidBody,
+        Option<&'static PhysicsPose>,
+    ),
+    Without<FollowCamera>,
+>;
+
+/// Places follow cameras behind their targets after physics (orbit yaw/pitch,
+/// distance); a boom stops in front of static box colliders ([`FollowView`]). Walls
+/// are where physics has them, or (before physics adopts them: the first placement, a
+/// mirror client) where their transforms put them.
 pub fn place_cameras(
     mut rigs: Query<(&FollowCamera, &mut Transform)>,
     targets: Query<(&Identity, &Transform), Without<FollowCamera>>,
+    bodies: Bodies,
+    hierarchy: Hierarchy,
 ) {
     let positions: BTreeMap<&str, Vec3> = targets
         .iter()
@@ -172,22 +194,172 @@ pub fn place_cameras(
         else {
             continue;
         };
-        let (yaw, pitch) = (rig.yaw.to_radians(), rig.pitch.to_radians());
-        let forward = Vec3::new(
-            yaw.sin() * pitch.cos(),
-            -pitch.sin(),
-            yaw.cos() * pitch.cos(),
-        );
-        let aim = target + Vec3::Y * rig.height;
-        let eye = aim - forward * rig.distance;
+        let walls = bodies
+            .iter()
+            .filter(|(_, collider, body, _)| Wall::solid(collider, body))
+            .filter_map(|(entity, collider, _, physics)| {
+                let (translation, rotation) = match physics {
+                    Some(pose) => (
+                        Vec3::from_array(pose.position),
+                        Quat::from_array(pose.rotation.0),
+                    ),
+                    None => {
+                        let (_, rotation, translation) =
+                            world_matrix(entity, &hierarchy)?.to_scale_rotation_translation();
+                        (translation, rotation)
+                    }
+                };
+                Some(Wall::new(collider, translation, rotation))
+            });
+        let view = FollowView::new(rig, target, walls);
+        let forward = view.forward;
         // Cameras look along local -Z with +Y up.
         let right = forward.cross(Vec3::Y).normalize_or(Vec3::X);
         let up = right.cross(forward);
         *transform = Pose {
-            translation: eye,
+            translation: view.eye(),
             rotation: Quat::from_mat3(&Mat3::from_cols(right, up, -forward)).normalize(),
             scale: Vec3::from_array(transform.scale),
         }
         .to_transform();
+    }
+}
+
+/// An entity's world matrix from its `Transform` and its parents', as
+/// [`crate::sync::world_matrices`] resolves it: a parent without one ends the chain.
+fn world_matrix(entity: Entity, hierarchy: &Hierarchy) -> Option<Mat4> {
+    let (transform, mut parent) = hierarchy.get(entity).ok()?;
+    let mut matrix = Pose::from_transform(transform).matrix();
+    while let Some(Ok((transform, next))) = parent.map(|p| hierarchy.get(p.parent())) {
+        matrix = Pose::from_transform(transform).matrix() * matrix;
+        parent = next;
+    }
+    Some(matrix)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::FollowCamera;
+    use ara_physics::{Collider, RigidBody};
+    use ara_schema::EntityRef;
+
+    /// A player at the origin and a rig behind it (yaw 0 looks along +Z).
+    fn rig(world: &mut World) -> Entity {
+        world.spawn((Identity("e_player".into()), Transform::default()));
+        world
+            .spawn((
+                FollowCamera {
+                    target: Some(EntityRef("e_player".into())),
+                    distance: 3.6,
+                    height: 1.5,
+                    pitch: 0.,
+                    ..Default::default()
+                },
+                Transform::default(),
+            ))
+            .id()
+    }
+
+    #[test]
+    fn a_follow_camera_stops_in_front_of_a_wall_not_a_crate() {
+        use ara_physics::MotionType;
+        use bevy_ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        let camera = rig(&mut world);
+        // The wall's near face is 1.9 m behind the aim point, through its parent.
+        let level = world
+            .spawn(Transform {
+                position: [0., 0., -1.],
+                ..Default::default()
+            })
+            .id();
+        let wall = world
+            .spawn((
+                Collider {
+                    half_extents: [5., 3., 0.1],
+                    ..Default::default()
+                },
+                RigidBody::default(),
+                Transform {
+                    position: [0., 1.5, -1.],
+                    ..Default::default()
+                },
+                ChildOf(level),
+            ))
+            .id();
+        world.spawn((
+            Collider::default(),
+            RigidBody {
+                motion: MotionType::Dynamic,
+                ..Default::default()
+            },
+            Transform {
+                position: [0., 1.5, -1.],
+                ..Default::default()
+            },
+        ));
+        let eye = |world: &mut World| {
+            world
+                .run_system_once(place_cameras)
+                .expect("place_cameras runs");
+            Vec3::from_array(world.get::<Transform>(camera).expect("rig").position)
+        };
+        let at = eye(&mut world);
+        assert!((at - Vec3::new(0., 1.5, -1.65)).length() < 1e-4, "{at}");
+        // Once physics has the wall, its pose is the one that counts.
+        world.entity_mut(wall).insert(PhysicsPose {
+            position: [0., 1.5, -1.],
+            ..Default::default()
+        });
+        let at = eye(&mut world);
+        assert!((at - Vec3::new(0., 1.5, -0.65)).length() < 1e-4, "{at}");
+    }
+
+    /// Per-tick cost of `place_cameras` with one rig and many static walls on a 3 m
+    /// grid around it, placed by physics (every tick) or by transforms only (the first
+    /// placement, mirror clients).
+    #[test]
+    #[ignore = "benchmark: cargo test -p ara-runtime --lib place_cameras_cost -- --ignored --nocapture"]
+    fn place_cameras_cost() {
+        for (walls, physics) in [0, 100, 1000, 10_000]
+            .into_iter()
+            .flat_map(|walls| [(walls, true), (walls, false)])
+        {
+            let mut world = World::new();
+            rig(&mut world);
+            for i in 0..walls {
+                let position = [
+                    (i % 100) as f32 * 3. - 150.,
+                    0.,
+                    (i / 100) as f32 * 3. - 150.,
+                ];
+                let mut wall = world.spawn((
+                    Collider::default(),
+                    RigidBody::default(),
+                    Transform {
+                        position,
+                        ..Default::default()
+                    },
+                ));
+                if physics {
+                    wall.insert(PhysicsPose {
+                        position,
+                        ..Default::default()
+                    });
+                }
+            }
+            let mut schedule = Schedule::default();
+            schedule.add_systems(place_cameras);
+            schedule.run(&mut world);
+            let at = std::time::Instant::now();
+            let runs = 2000;
+            for _ in 0..runs {
+                schedule.run(&mut world);
+            }
+            let us = at.elapsed().as_secs_f64() * 1e6 / runs as f64;
+            let by = if physics { "physics" } else { "transforms" };
+            println!("{walls:>6} walls ({by:>10}): {us:8.2} us per tick");
+        }
     }
 }

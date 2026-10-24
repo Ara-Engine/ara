@@ -161,6 +161,14 @@ pub struct Shell {
     asset_grid_size: [f32; 2],
     asset_grid_dirty: bool,
     drafts: BTreeMap<String, String>,
+    /// The dock areas' headers and tab bodies from the markup being built (host ID,
+    /// part), mounted with `Ui::reconcile_parts`.
+    parts: Vec<(String, String)>,
+    /// Tab bodies in `parts` that are mounted but hidden (inactive tabs).
+    hidden_bodies: Vec<String>,
+    /// Each `panels::keep_alive` panel's last body markup, mounted again unchanged
+    /// while its tab is inactive so its retained subtree stays as it is.
+    bodies: BTreeMap<String, String>,
     pub(crate) palette_command: Option<String>,
     pub(crate) palette_params: BTreeMap<String, Value>,
     palette_active: usize,
@@ -374,6 +382,9 @@ impl Shell {
             asset_grid_size: [0.; 2],
             asset_grid_dirty: false,
             drafts: BTreeMap::new(),
+            parts: Vec::new(),
+            hidden_bodies: Vec::new(),
+            bodies: BTreeMap::new(),
             palette_command: None,
             palette_params: BTreeMap::new(),
             palette_active: 0,
@@ -532,8 +543,6 @@ impl Shell {
         self.version += 1;
         self.bindings.clear();
         self.fields.clear();
-        self.hierarchy_view = None;
-        self.asset_view = None;
         self.browser.poll();
         self.vfx_visible = false;
         self.rebuild_main(editor, true)?;
@@ -562,7 +571,15 @@ impl Shell {
         if !self.vfx_visible {
             self.vfx_stream.pause();
         }
+        // A closed panel's body is not kept.
+        self.bodies
+            .retain(|panel, _| crate::state::panel_visible(&editor.state, panel));
         Ok(())
+    }
+    /// The node with `id` if it is shown: inactive tabs keep their nodes with stale
+    /// geometry, so pointer and geometry code finds nodes through this.
+    pub(crate) fn shown_node(&self, id: &str) -> Option<usize> {
+        self.ui.find(id).filter(|i| self.ui.shown(*i))
     }
     fn stylesheet(editor: &Editor) -> String {
         let mut css = include_str!("editor.css").to_owned();
@@ -589,7 +606,27 @@ impl Shell {
             ara_ui::theme::EditorTheme::Dark
         })?;
         let reconciling = std::time::Instant::now();
-        self.ui.reconcile(markup)?;
+        // Area headers and tab bodies are parts: an unchanged one keeps its retained
+        // subtree, virtual rows included.
+        let parts = std::mem::take(&mut self.parts);
+        let borrowed: Vec<(&str, &str)> = parts
+            .iter()
+            .map(|(host, part)| (host.as_str(), part.as_str()))
+            .collect();
+        self.ui.reconcile_parts(markup, &borrowed)?;
+        // Inactive tabs stay mounted but hidden, their markup kept for the next build.
+        for (host, part) in parts {
+            let Some(panel) = host.strip_prefix("body-") else {
+                continue;
+            };
+            if let Some(i) = self.ui.find(&host) {
+                self.ui
+                    .set_visible(i, !self.hidden_bodies.contains(&host))?;
+            }
+            if panels::keep_alive(panel) {
+                self.bodies.insert(panel.to_owned(), part);
+            }
+        }
         self.stats.reconcile_ms += reconciling.elapsed().as_secs_f64() * 1000.;
         let ui = &mut self.ui;
         for hidden in ["tooltip", "drop-label", "gizmo-readout"] {
@@ -603,41 +640,87 @@ impl Shell {
         self.stats.frame_ms += framing.elapsed().as_secs_f64() * 1000.;
         let rows = std::time::Instant::now();
         let row = if editor.state.comfortable() { 26. } else { 22. };
+        let surface = self.current.clone();
+        // A kept part keeps its row pool: the rows follow their nodes and fit the
+        // panel again; a recompiled part mounts a new pool. A hidden tab's pool waits,
+        // as it is, for the tab to show again.
         if let Some(index) = ui.find("hierarchy-rows") {
-            let height = ui.nodes[index].rect.h.max(row);
-            let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
-            view.scroll(ui, &self.hierarchy, self.hierarchy_offset, height)?;
-            for (id, entity) in &self.hierarchy_entities {
-                self.bindings.insert(
-                    view.identity(*id),
-                    if self.hierarchy_ghosts.contains(id) {
-                        Binding::Protocol("editor.focus", json!({"panel":"agents"}))
-                    } else {
-                        Binding::Select(entity.clone())
-                    },
-                );
+            let kept = self.hierarchy_surface == surface
+                && self.hierarchy_view.as_mut().is_some_and(|v| v.remap(ui));
+            if !ui.shown(index) {
+                if !kept && self.hierarchy_surface == surface {
+                    self.hierarchy_view = None;
+                }
+            } else {
+                let height = ui.nodes[index].rect.h.max(row);
+                let width = ui.nodes[index].rect.w.max(80.);
+                let view = match self.hierarchy_view.as_mut() {
+                    Some(view) if kept => {
+                        view.fit(ui, height, vec![width])?;
+                        view
+                    }
+                    _ => self.hierarchy_view.insert(VirtualView::mount(
+                        ui,
+                        index,
+                        row,
+                        height,
+                        vec![width],
+                    )?),
+                };
+                view.scroll(ui, &self.hierarchy, self.hierarchy_offset, height)?;
+                for (id, entity) in &self.hierarchy_entities {
+                    self.bindings.insert(
+                        view.identity(*id),
+                        if self.hierarchy_ghosts.contains(id) {
+                            Binding::Protocol("editor.focus", json!({"panel":"agents"}))
+                        } else {
+                            Binding::Select(entity.clone())
+                        },
+                    );
+                }
+                self.hierarchy_surface = surface.clone();
             }
-            self.hierarchy_view = Some(view);
-            self.hierarchy_surface = self.current.clone();
+        } else if self.hierarchy_surface == surface {
+            self.hierarchy_view = None;
         }
         if let Some(index) = ui.find("asset-rows") {
-            let height = ui.nodes[index].rect.h.max(row);
-            let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
-            view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
-            for (key, asset) in &self.asset_entries {
-                self.bindings.insert(
-                    view.identity(*key),
-                    if asset.kind == "folder" {
-                        Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
-                    } else {
-                        Binding::Asset(asset.clone())
-                    },
-                );
+            let kept = self.asset_surface == surface
+                && self.asset_view.as_mut().is_some_and(|v| v.remap(ui));
+            if !ui.shown(index) {
+                if !kept && self.asset_surface == surface {
+                    self.asset_view = None;
+                }
+            } else {
+                let height = ui.nodes[index].rect.h.max(row);
+                let width = ui.nodes[index].rect.w.max(80.);
+                let view = match self.asset_view.as_mut() {
+                    Some(view) if kept => {
+                        view.fit(ui, height, vec![width])?;
+                        view
+                    }
+                    _ => self.asset_view.insert(VirtualView::mount(
+                        ui,
+                        index,
+                        row,
+                        height,
+                        vec![width],
+                    )?),
+                };
+                view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
+                for (key, asset) in &self.asset_entries {
+                    self.bindings.insert(
+                        view.identity(*key),
+                        if asset.kind == "folder" {
+                            Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
+                        } else {
+                            Binding::Asset(asset.clone())
+                        },
+                    );
+                }
+                self.asset_surface = surface;
             }
-            self.asset_view = Some(view);
-            self.asset_surface = self.current.clone();
+        } else if self.asset_surface == surface {
+            self.asset_view = None;
         }
         // Row decorations set attributes only; the caller's frame lays out and paints
         // once (no geometry is read until then, apart from pre-existing nodes).
@@ -662,6 +745,8 @@ impl Shell {
         editor: &mut Editor,
         window: &ara_ui::docking::Floating,
     ) -> ara_ui::Result<()> {
+        self.parts.clear();
+        self.hidden_bodies.clear();
         let mut markup = String::from(
             "<ui id='float'><panel id='float-root' class='dock-root' style='padding-top:4px'>",
         );
@@ -685,6 +770,8 @@ impl Shell {
         allow_asset_reflow: bool,
     ) -> ara_ui::Result<()> {
         let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
+        self.parts.clear();
+        self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");
         self.menubar(editor, &mut markup);
         if editor.state.playing.is_some() {
@@ -780,7 +867,7 @@ impl Shell {
         }
         if allow_asset_reflow
             && self.asset_surface.is_none()
-            && self.ui.find("asset-grid").is_some_and(|i| {
+            && self.shown_node("asset-grid").is_some_and(|i| {
                 let rect = self.ui.nodes[i].rect;
                 (rect.w - self.asset_grid_size[0]).abs() > 0.5
                     || (rect.h - self.asset_grid_size[1]).abs() > 0.5
@@ -896,7 +983,7 @@ impl Shell {
     fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
-            && self.ui.find("inspector-scroll").is_some()
+            && self.shown_node("inspector-scroll").is_some()
         {
             if let Some(path) = editor.state.focus_field.as_deref() {
                 self.reveal_field(path)?;

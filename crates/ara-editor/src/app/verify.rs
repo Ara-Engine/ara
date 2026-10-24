@@ -268,6 +268,12 @@ impl Verification {
         renderer: &mut Renderer,
         scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<()> {
+        // Pending saves land first, so captures show a settled save state (the
+        // status bar, the unsaved-scene dot) rather than racing the file thread.
+        if editor.host.unsaved() {
+            editor.host.flush();
+            shell.rebuild(editor)?;
+        }
         shell.settle_transitions();
         shell.frame()?;
         let view = editor.view()?;

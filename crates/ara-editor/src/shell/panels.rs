@@ -64,6 +64,16 @@ pub(super) fn title(panel: &str) -> &str {
         _ => panel,
     }
 }
+/// Panels whose body stays mounted, hidden, while another tab of its area is active:
+/// list and text panels, so switching back keeps their rows, scroll and shaped text.
+/// Scene, Game and the preview, canvas and timeline panels hold GPU surfaces or live
+/// geometry and render only while active.
+pub(super) fn keep_alive(panel: &str) -> bool {
+    matches!(
+        panel,
+        "hierarchy" | "inspector" | "assets" | "console" | "problems" | "agents" | "settings"
+    )
+}
 /// One icon per concept (Appendix B).
 pub(super) fn panel_icon(panel: &str) -> &'static str {
     match panel {
@@ -106,59 +116,111 @@ impl Shell {
                 out.push_str("</panel></panel>");
             }
             DockNode::Area { id, tabs, active } => {
-                out.push_str(&format!("<panel id='area-{}' class='dock'>", escape(id)));
-                let current = tabs.get(*active).cloned();
-                if tabs.len() <= 1 {
-                    let panel = current.clone().unwrap_or_default();
-                    out.push_str(&format!("<panel id='header-{panel}' class='panel-header'>{}<text id='header-title-{panel}' class='panel-title' text='{}' /><panel id='header-fill-{panel}' class='fill' />",icons::icon(&format!("header-{panel}"),panel_icon(&panel)),escape(title(&panel))));
-                } else {
-                    out.push_str(&format!("<panel id='tabs-{}' class='tabbar'>", escape(id)));
-                    // Narrow areas show inactive tabs as icons; the tooltip names them.
-                    let width = self
-                        .ui
-                        .find(&format!("area-{id}"))
-                        .map(|i| self.ui.nodes[i].rect.w)
-                        .unwrap_or(f32::MAX);
-                    let compact = width < tabs.len() as f32 * 96. + 40.;
-                    for (index, tab) in tabs.iter().enumerate() {
-                        let tab_id = format!("tab-{tab}");
-                        self.bind_command(&tab_id, "window.show_panel", Target::Panel(tab.clone()));
-                        let active = index == *active;
-                        let label = if active || !compact {
-                            format!("<text id='{tab_id}-label' text='{}' />", escape(title(tab)))
-                        } else {
-                            String::new()
-                        };
-                        out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
-                    }
-                    out.push_str(&format!(
-                        "<panel id='tabs-fill-{}' class='fill' />",
-                        escape(id)
-                    ));
-                }
-                if let Some(panel) = &current {
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&format!("panel-menu-{panel}")),
-                        Binding::ContextMenu(Context::Tab, Target::Panel(panel.clone())),
-                    );
-                    out.push_str(&format!("<button id='panel-menu-{panel}' class='ghost icon-button' label='{} options' description='Move, float, maximize or close' action='Dispatch'>{}</button>",escape(title(panel)),icons::icon(&format!("panel-menu-{panel}"),"ellipsis")));
-                }
-                out.push_str("</panel>");
-                match current.as_deref() {
+                // The area's header and each mounted tab body are parts
+                // (`Ui::reconcile_parts`): an unchanged part keeps its retained subtree,
+                // virtual rows included. Inactive `keep_alive` tabs stay mounted, hidden,
+                // so switching to one is a visibility change; other panels render only
+                // while active.
+                let area = escape(id);
+                let mut head = String::new();
+                let head_id = self.area_head(&area, tabs, *active, &mut head);
+                out.push_str(&format!(
+                    "<panel id='area-{area}' class='dock'><panel id='{head_id}' />"
+                ));
+                self.parts.push((head_id, head));
+                match tabs.get(*active) {
                     None => self.empty(
                         out,
-                        &format!("area-empty-{id}"),
+                        &format!("area-empty-{area}"),
                         "layout-grid",
                         "Empty area",
                         "Drag a tab here, or open a panel from the Window menu.",
                         &[],
                     ),
-                    Some(panel) => self.panel_body(panel, editor, out)?,
+                    Some(current) => {
+                        for tab in tabs {
+                            let host = format!("body-{tab}");
+                            let body = if tab == current {
+                                let mut body = format!("<panel id='{host}' class='tab-body'>");
+                                self.panel_body(tab, editor, &mut body)?;
+                                body.push_str("</panel>");
+                                body
+                            } else if let Some(body) = self.bodies.remove(tab) {
+                                self.hidden_bodies.push(host.clone());
+                                body
+                            } else {
+                                continue;
+                            };
+                            out.push_str(&format!("<panel id='{host}' />"));
+                            self.parts.push((host, body));
+                        }
+                    }
                 }
                 out.push_str("</panel>");
             }
         }
         Ok(())
+    }
+    /// One dock area's header part: its tab bar (or a lone panel's title) and the
+    /// active panel's options button. Returns the part's host ID.
+    fn area_head(
+        &mut self,
+        area: &str,
+        tabs: &[String],
+        active: usize,
+        out: &mut String,
+    ) -> String {
+        let current = tabs.get(active).cloned();
+        let host = if tabs.len() <= 1 {
+            let panel = current.clone().unwrap_or_default();
+            // `header-{panel}` names a panel (drag, tab menu): an empty area's header
+            // has IDs of its own.
+            let (host, title_id, fill_id) = match &current {
+                Some(_) => (
+                    format!("header-{panel}"),
+                    format!("header-title-{panel}"),
+                    format!("header-fill-{panel}"),
+                ),
+                None => (
+                    format!("empty-header-{area}"),
+                    format!("empty-header-title-{area}"),
+                    format!("empty-header-fill-{area}"),
+                ),
+            };
+            out.push_str(&format!("<panel id='{host}' class='panel-header'>{}<text id='{title_id}' class='panel-title' text='{}' /><panel id='{fill_id}' class='fill' />",icons::icon(&host,panel_icon(&panel)),escape(title(&panel))));
+            host
+        } else {
+            out.push_str(&format!("<panel id='tabs-{area}' class='tabbar'>"));
+            // Narrow areas show inactive tabs as icons; the tooltip names them.
+            let width = self
+                .ui
+                .find(&format!("area-{area}"))
+                .map(|i| self.ui.nodes[i].rect.w)
+                .unwrap_or(f32::MAX);
+            let compact = width < tabs.len() as f32 * 96. + 40.;
+            for (index, tab) in tabs.iter().enumerate() {
+                let tab_id = format!("tab-{tab}");
+                self.bind_command(&tab_id, "window.show_panel", Target::Panel(tab.clone()));
+                let active = index == active;
+                let label = if active || !compact {
+                    format!("<text id='{tab_id}-label' text='{}' />", escape(title(tab)))
+                } else {
+                    String::new()
+                };
+                out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
+            }
+            out.push_str(&format!("<panel id='tabs-fill-{area}' class='fill' />"));
+            format!("tabs-{area}")
+        };
+        if let Some(panel) = &current {
+            self.bindings.insert(
+                ara_ui::source::stable_id(&format!("panel-menu-{panel}")),
+                Binding::ContextMenu(Context::Tab, Target::Panel(panel.clone())),
+            );
+            out.push_str(&format!("<button id='panel-menu-{panel}' class='ghost icon-button' label='{} options' description='Move, float, maximize or close' action='Dispatch'>{}</button>",escape(title(panel)),icons::icon(&format!("panel-menu-{panel}"),"ellipsis")));
+        }
+        out.push_str("</panel>");
+        host
     }
     fn panel_body(
         &mut self,

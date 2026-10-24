@@ -112,7 +112,9 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
             c.layout.display = match v {
                 "flex" => Display::Flex,
                 "grid" => Display::Grid,
-                _ => return Err("display must be flex or grid".into()),
+                // Takes the subtree out of layout, paint and input; it stays mounted.
+                "none" => Display::None,
+                _ => return Err("display must be flex, grid or none".into()),
             }
         }
         "flex-direction" => {

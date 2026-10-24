@@ -227,7 +227,11 @@ impl Shell {
             return;
         }
         if !editor.state.asset_grid {
-            out.push_str("<scroll id='asset-rows' class='body asset-list' /></panel>");
+            // The row height is in the markup: a density change remounts the row pool.
+            let row = if editor.state.comfortable() { 26 } else { 22 };
+            out.push_str(&format!(
+                "<scroll id='asset-rows' class='body asset-list rows-{row}' /></panel>"
+            ));
             self.asset_footer(out, items.len(), editor);
             return;
         }

@@ -136,13 +136,13 @@ Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinni
 this engine's runtime template (player + PDB, cooked shaders) under `.ara/export/`;
 C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`).
 Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
-never add a capture route that shows a window. `--verify-journey` captures the
-journey (`app/journey.rs`) and writes `journey.json` after every step.
-`--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
+never add a capture route that shows a window. `--verify-journey` (`app/journey.rs`)
+writes `journey.json` after every step. `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
-frame. Shell rebuilds reconcile into the retained `Ui` (`Shell::mount`), once per revision
-(`rebuild_if_stale`); `Shell::resolved` caches the open scene. Only `scene_changed` state
-(camera, view mode, hidden, quality) re-renders the Scene; icons re-rasterize on DPI only.
+frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
+area headers and tab bodies as parts (`Ui::reconcile_parts`: unchanged ones keep their rows);
+inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`).
+Only `scene_changed` state re-renders the Scene; icons re-rasterize on DPI only.
 Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
 status; swatches are painted after layout, never raw colours in markup) and
 `shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving

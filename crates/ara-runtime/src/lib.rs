@@ -46,6 +46,7 @@ pub mod control;
 pub mod controller;
 pub mod engine;
 pub mod extract;
+pub mod follow;
 pub mod live;
 pub mod material;
 pub mod math;

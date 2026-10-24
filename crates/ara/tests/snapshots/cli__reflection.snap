@@ -2854,7 +2854,7 @@ expression: out
         },
         "distance": {
           "type": "f32",
-          "doc": "Orbit distance from the aim point.",
+          "doc": "Orbit distance from the aim point; the boom stops in front of static box colliders.",
           "default": 5,
           "unit": "m",
           "range": [0.1, null]

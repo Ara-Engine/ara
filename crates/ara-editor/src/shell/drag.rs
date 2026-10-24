@@ -45,7 +45,7 @@ pub(crate) struct DropPreview {
 impl Shell {
     /// Scroll a finite row pool over the full hierarchy model.
     pub fn scroll_hierarchy(&mut self, delta: f32) -> ara_ui::Result<bool> {
-        if let Some(i) = self.ui.find("asset-grid") {
+        if let Some(i) = self.shown_node("asset-grid") {
             let rect = self.ui.nodes[i].rect;
             if rect.contains(self.pointer[0], self.pointer[1]) {
                 self.asset_offset = (self.asset_offset + delta)
@@ -54,8 +54,8 @@ impl Shell {
                 return Ok(true);
             }
         }
-        if let Some(view) = &mut self.asset_view
-            && let Some(index) = self.ui.find("asset-rows")
+        if let Some(index) = self.shown_node("asset-rows")
+            && let Some(view) = &mut self.asset_view
         {
             let r = self.ui.nodes[index].rect;
             if r.contains(self.pointer[0], self.pointer[1]) {
@@ -65,10 +65,10 @@ impl Shell {
                 return Ok(true);
             }
         }
-        let Some(view) = &mut self.hierarchy_view else {
+        let Some(index) = self.shown_node("hierarchy-rows") else {
             return Ok(false);
         };
-        let Some(index) = self.ui.find("hierarchy-rows") else {
+        let Some(view) = &mut self.hierarchy_view else {
             return Ok(false);
         };
         let r = self.ui.nodes[index].rect;
@@ -169,7 +169,7 @@ impl Shell {
                             .into(),
                     );
                 };
-                if let Some(i) = self.ui.find("animation-clip-field")
+                if let Some(i) = self.shown_node("animation-clip-field")
                     && self.ui.nodes[i]
                         .rect
                         .contains(self.pointer[0], self.pointer[1])
@@ -187,8 +187,10 @@ impl Shell {
                     .find(|field| {
                         matches!(field.widget, crate::inspector::Widget::Asset { .. })
                             && self
-                                .ui
-                                .find(&format!("asset-field-{}", field.path.replace('.', "-")))
+                                .shown_node(&format!(
+                                    "asset-field-{}",
+                                    field.path.replace('.', "-")
+                                ))
                                 .is_some_and(|i| {
                                     self.ui.nodes[i]
                                         .rect

@@ -2,7 +2,10 @@
 //! drafts and gizmo drags patch it in place ([`Patch`]: moved meshes alone, the
 //! light list, materials, labels); anything else extracts and uploads the whole
 //! scene, as does a new model publication (placeholders become models). A failed
-//! upload is reported and retried; it never closes the editor.
+//! upload is reported and retried; it never closes the editor. A native renderer
+//! (`Renderer::is_native`) extracts its own instanced content: changes only
+//! invalidate the Scene view, and typed drafts reach it as a projected view.
+use super::viewport::SceneView;
 use super::*;
 use crate::world::{DocumentView, Patch};
 use std::collections::BTreeMap;
@@ -31,6 +34,8 @@ pub(super) struct SceneSync {
     drafts: Option<BTreeMap<String, String>>,
     /// The gizmo pose the drag preview reflects.
     pose: Option<BTreeMap<String, glam::Mat4>>,
+    /// The native Scene view shows a projected draft (`SceneView::set_preview_view`).
+    projected: bool,
 }
 
 /// How long a Scene update took, by stage (the responsiveness probe reports them).
@@ -42,6 +47,8 @@ pub(super) struct Stages {
     pub upload_ms: f64,
     /// Whether the change patched the renderer instead of replacing its geometry.
     pub patched: bool,
+    /// Whether a native renderer took the change (invalidated, nothing uploaded here).
+    pub native: bool,
 }
 
 impl SceneSync {
@@ -55,6 +62,7 @@ impl SceneSync {
             shown: Patch::default(),
             drafts: None,
             pose: None,
+            projected: false,
         }
     }
 
@@ -66,11 +74,12 @@ impl SceneSync {
         view: &DocumentView,
         editor: &mut Editor,
         renderer: &mut Renderer,
+        scene_view: &mut SceneView,
         idle: bool,
     ) -> bool {
         if let Some(failed) = self.stale {
             if idle && failed.elapsed() >= STALE_RETRY {
-                self.rebuild(view, editor, renderer);
+                self.rebuild(view, editor, renderer, scene_view);
                 return true;
             }
             return false;
@@ -84,7 +93,7 @@ impl SceneSync {
             Some((seen, since))
                 if seen == revision && idle && since.elapsed() >= PUBLICATION_SETTLE =>
             {
-                self.rebuild(view, editor, renderer);
+                self.rebuild(view, editor, renderer, scene_view);
                 true
             }
             Some((seen, _)) if seen == revision => false,
@@ -103,7 +112,11 @@ impl SceneSync {
         new: &DocumentView,
         editor: &mut Editor,
         renderer: &mut Renderer,
+        scene_view: &mut SceneView,
     ) -> Stages {
+        if renderer.is_native() {
+            return self.rebuild(new, editor, renderer, scene_view);
+        }
         if self.stale.is_none()
             && let Some(patch) = old.patch_to(new, &editor.state.hidden)
         {
@@ -128,17 +141,30 @@ impl SceneSync {
                 Err(error) => eprintln!("Scene patch failed, uploading the scene: {error}"),
             }
         }
-        self.rebuild(new, editor, renderer)
+        self.rebuild(new, editor, renderer, scene_view)
     }
 
     /// Upload `view` whole, the gizmo drag included; typed previews are rebuilt next.
-    /// A failure is reported (Problems) and leaves the last good scene on screen.
+    /// A failure is reported (Problems) and leaves the last good scene on screen. A
+    /// native renderer is only invalidated: it extracts its own content.
     pub fn rebuild(
         &mut self,
         view: &DocumentView,
         editor: &mut Editor,
         renderer: &mut Renderer,
+        scene_view: &mut SceneView,
     ) -> Stages {
+        if renderer.is_native() {
+            self.models = editor.models.revision();
+            self.publication = None;
+            self.stale = None;
+            self.forget();
+            scene_view.invalidate();
+            return Stages {
+                native: true,
+                ..Default::default()
+            };
+        }
         match self.upload(view, editor, renderer) {
             Ok(stages) => stages,
             Err(error) => {
@@ -177,7 +203,7 @@ impl SceneSync {
         Ok(Stages {
             extract_ms,
             upload_ms: at.elapsed().as_secs_f64() * 1000.,
-            patched: false,
+            ..Default::default()
         })
     }
 
@@ -190,7 +216,11 @@ impl SceneSync {
         editor: &mut Editor,
         shell: &Shell,
         renderer: &mut Renderer,
+        scene_view: &mut SceneView,
     ) -> bool {
+        if renderer.is_native() {
+            return self.project(view, editor, shell, scene_view);
+        }
         if self.stale.is_some() {
             return false;
         }
@@ -236,7 +266,7 @@ impl SceneSync {
             Err(error) => {
                 eprintln!("Scene preview failed, uploading the scene: {error}");
                 let drafts = self.drafts.take();
-                self.rebuild(view, editor, renderer);
+                self.rebuild(view, editor, renderer, scene_view);
                 // Retry when the drafts change, not every frame.
                 self.drafts = drafts;
             }
@@ -244,9 +274,35 @@ impl SceneSync {
         true
     }
 
+    /// The native preview: typed drafts (any field) as a projected view; gizmo drags
+    /// reach the native Scene through `editor.gesture` on their own.
+    fn project(
+        &mut self,
+        view: &DocumentView,
+        editor: &Editor,
+        shell: &Shell,
+        scene_view: &mut SceneView,
+    ) -> bool {
+        self.pose = None;
+        if self.drafts.as_ref() == Some(shell.drafts()) {
+            return false;
+        }
+        self.drafts = Some(shell.drafts().clone());
+        let target = shell
+            .draft_records(editor, view)
+            .map(|records| view.with_records(records));
+        if target.is_none() && !self.projected {
+            return false;
+        }
+        self.projected = target.is_some();
+        scene_view.set_preview_view(target);
+        true
+    }
+
     fn forget(&mut self) {
         self.shown = Patch::default();
         self.drafts = None;
         self.pose = None;
+        self.projected = false;
     }
 }
