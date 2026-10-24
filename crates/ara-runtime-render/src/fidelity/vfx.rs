@@ -9,10 +9,12 @@ use ara_gpu::vulkan::VulkanDevice;
 use ara_render::scene::CameraSpec;
 use ara_render_fidelity::{FidelityView, FrameInput, ImageInput};
 use ara_runtime::extract::EffectView;
-use ara_vfx_gpu::{GpuSystem, Lighting, ProbeLighting, SceneColor, SceneDepth, View};
+use ara_vfx_gpu::{GpuSystem, Lighting, Placement, ProbeLighting, SceneColor, SceneDepth, View};
 use std::{collections::BTreeMap, path::PathBuf};
 
-/// Ticks an effect runs before a still (fires reach steady state well before).
+/// Ticks an effect runs before its first composite (fires reach steady state well
+/// before); later composites advance by the elapsed ticks they are given, so a run of
+/// composited frames is a coherent animation the temporal antialiasing converges on.
 const WARM_TICKS: u32 = 150;
 
 fn cooked_root() -> PathBuf {
@@ -22,46 +24,76 @@ fn cooked_root() -> PathBuf {
     )
 }
 
-/// Effect systems for one view size.
+/// Effect systems for one view size, one per effect entity.
 pub struct Effects {
     effects: Vec<EffectView>,
-    systems: BTreeMap<String, GpuSystem>,
+    /// Entity → (effect name, system, warmed).
+    systems: BTreeMap<u64, (String, GpuSystem, bool)>,
     size: [u32; 2],
     sun: (glam30::Vec3, glam30::Vec3),
 }
 
 impl Effects {
-    /// Systems for `effects` at the view's transport size.
+    /// Systems for `effects` at the view's transport size. `sun` is the direction
+    /// toward the sun and the illuminance reaching the effects (after atmosphere).
     pub fn new(
         gpu: &mut VulkanDevice,
         effects: &[EffectView],
         size: [u32; 2],
         sun: (glam30::Vec3, glam30::Vec3),
     ) -> Result<Self> {
-        let mut systems = BTreeMap::new();
+        let mut result = Self {
+            effects: Vec::new(),
+            systems: BTreeMap::new(),
+            size,
+            sun,
+        };
+        result.update(gpu, effects, sun)?;
+        Ok(result)
+    }
+
+    /// Frame-boundary update for live views: the extracted effect list (poses,
+    /// scale, intensity) and sun. New entities get systems (warmed on their first
+    /// composite); removed entities retire theirs, as does an entity whose effect changed.
+    pub fn update(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        effects: &[EffectView],
+        sun: (glam30::Vec3, glam30::Vec3),
+    ) -> Result<()> {
+        let stale: Vec<u64> = self
+            .systems
+            .iter()
+            .filter(|(entity, (name, _, _))| {
+                !effects
+                    .iter()
+                    .any(|e| e.entity == **entity && e.effect == *name)
+            })
+            .map(|(entity, _)| *entity)
+            .collect();
+        for entity in stale {
+            if let Some((_, system, _)) = self.systems.remove(&entity) {
+                system.retire(gpu)?;
+            }
+        }
         for effect in effects {
-            if systems.contains_key(&effect.effect) {
+            if self.systems.contains_key(&effect.entity) {
                 continue;
             }
-            let definition = ara_vfx::samples::all()
-                .into_iter()
-                .map(|(e, _)| e)
-                .find(|e| e.name == effect.effect)
+            let definition = ara_vfx::samples::find(&effect.effect)
                 .with_context(|| format!("no cooked VFX effect `{}`", effect.effect))?;
             let system = GpuSystem::new(
                 gpu,
                 &definition,
                 &cooked_root().join(&definition.name),
-                size,
+                self.size,
             )?;
-            systems.insert(effect.effect.clone(), system);
+            self.systems
+                .insert(effect.entity, (effect.effect.clone(), system, false));
         }
-        Ok(Self {
-            effects: effects.to_vec(),
-            systems,
-            size,
-            sun,
-        })
+        self.effects = effects.to_vec();
+        self.sun = sun;
+        Ok(())
     }
 
     /// Whether there is anything to composite.
@@ -69,13 +101,29 @@ impl Effects {
         self.effects.is_empty()
     }
 
-    /// Composites every effect over the view's last frame and runs post on it.
+    /// Composites every effect over the view's last frame, advancing each by one
+    /// simulation tick (captures), and runs post on it.
     pub fn composite(
         &mut self,
         gpu: &mut VulkanDevice,
         view: &mut FidelityView,
         camera: &CameraSpec,
         tick: u32,
+    ) -> Result<()> {
+        self.composite_ticks(gpu, view, camera, tick, 1)
+    }
+
+    /// Composites every effect over the view's last frame after advancing each by
+    /// `ticks` completed simulation ticks (0 redraws the current particles; a new
+    /// system first warms to steady state), then runs the view's post on the result.
+    /// Call once per presented frame for live views.
+    pub fn composite_ticks(
+        &mut self,
+        gpu: &mut VulkanDevice,
+        view: &mut FidelityView,
+        camera: &CameraSpec,
+        tick: u32,
+        ticks: u32,
     ) -> Result<()> {
         let inputs = view.feature_inputs()?;
         let mut background = SceneColor {
@@ -102,25 +150,17 @@ impl Effects {
             }),
         };
         for effect in &self.effects {
-            let system = self
+            let (_, system, warmed) = self
                 .systems
-                .get_mut(&effect.effect)
+                .get_mut(&effect.entity)
                 .context("effect system")?;
-            let offset = glam30::Vec3::from_array(effect.position);
-            let local = match camera {
-                CameraSpec::LookAt {
-                    position,
-                    target,
-                    vertical_fov,
-                } => CameraSpec::LookAt {
-                    position: *position - offset,
-                    target: *target - offset,
-                    vertical_fov: *vertical_fov,
-                },
-                other => other.clone(),
-            };
             let frame = View {
-                camera: local,
+                camera: camera.clone(),
+                placement: Placement {
+                    origin: glam30::Vec3::from_array(effect.position),
+                    scale: effect.scale,
+                },
+                intensity: effect.intensity,
                 scene_background: Some(background),
                 scene_depth: Some(depth()),
                 linear_depth: true,
@@ -128,13 +168,14 @@ impl Effects {
                 exposure: 1.0,
                 ..View::default()
             };
-            for _ in 0..WARM_TICKS {
+            let steps = if *warmed { ticks } else { WARM_TICKS };
+            *warmed = true;
+            for _ in 0..steps {
                 system.step(gpu, &frame)?;
             }
             system.render(gpu, &frame)?;
             background = system.hdr_output();
         }
-        let _ = self.size;
         view.post_process(
             gpu,
             &FrameInput {
@@ -155,7 +196,7 @@ impl Effects {
 
     /// Releases the systems before the device.
     pub fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
-        for (_, system) in self.systems {
+        for (_, (_, system, _)) in self.systems {
             system.retire(gpu)?;
         }
         Ok(())

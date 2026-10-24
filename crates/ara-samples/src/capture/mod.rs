@@ -1,9 +1,12 @@
-//! `capture`: a project scene through the fidelity renderer (ara-render-fidelity:
-//! RT hybrid transport, DDGI, ReSTIR, atmosphere, auto exposure, TAA/FSR1). The
-//! engine adapter consumes Play's extraction; samples resolve pinned overrides,
-//! frame shots and measure the resulting views. Scenes cook and simulate like Play.
+//! `capture`: a project scene through each quality preset (Low: the baseline
+//! raster; Medium/High/Epic: ara-render-fidelity's RT hybrid transport, DDGI,
+//! ReSTIR, atmosphere, auto exposure and TAAU). The engine adapter consumes Play's
+//! extraction and the scene's authored environment; samples resolve pinned
+//! overrides, frame shots and measure the resulting views. Scenes cook and
+//! simulate like Play.
 pub mod convert;
 pub mod look;
+pub mod reference;
 pub mod render;
 pub mod world;
 
@@ -21,6 +24,10 @@ pub struct Request<'a> {
     pub quick: bool,
     /// Timing frames per mode.
     pub timing_frames: u32,
+    /// Quality presets to capture.
+    pub presets: &'a [ara_render_fidelity::presets::QualityPreset],
+    /// Reference samples per pixel for RMSE/FLIP scoring; zero skips it.
+    pub reference_samples: u32,
 }
 
 /// Runs the captures for one look of one project.
@@ -36,7 +43,15 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     let worker = tool("ara-import-worker", "ARA_IMPORT_WORKER")?;
     let started = std::time::Instant::now();
     let mut world = world::load(&root, &look.scene, &worker, look.ticks)?;
-    let frame = world.frame();
+    let mut frame = world.frame();
+    if let Some(sun) = frame.sun.as_mut() {
+        if let Some(lux) = look.sun_lux {
+            sun.1 = lux;
+        }
+        if let Some(direction) = look.sun_direction {
+            sun.0 = glam::Vec3::from_array(direction).normalize().to_array();
+        }
+    }
     if look.ground_relative
         && let Some(view) = &frame.terrain
     {
@@ -47,6 +62,13 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
         }
     }
     let (scene, stats) = convert::scene(&mut world, &frame, &look, lock, &root)?;
+    let mut environment = ara_render_fidelity::environment::FrameEnvironment::resolve(
+        &look.scene_look(frame.look),
+        frame.environment.exposure,
+    );
+    let mut effects = frame.effects.clone();
+    look.tune_effects(&mut effects);
+    look.override_environment(&mut environment);
     eprintln!(
         "{}: {} objects -> {} meshes, {} triangles ({} at finest LOD), {} foliage instances, {} textures ({} source maps, {} materials atlased), {} lights, ~{:.0} MiB upload ({:.1} s to load)",
         request.look,
@@ -68,7 +90,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     let cache =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/pipeline-cache");
     std::fs::create_dir_all(&cache)?;
-    let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], cache)?;
+    let mut gpu = ara_gpu::vulkan::VulkanDevice::new(&[], cache.clone())?;
     let output = std::env::var_os("ARA_CAPTURE_OUTPUT_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
@@ -80,7 +102,7 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     let scratch = output.join("full");
     render::run(
         &mut gpu,
-        &scene,
+        scene,
         &stats,
         &look,
         &render::Options {
@@ -91,7 +113,11 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
             settle: 120,
             timing_frames: request.timing_frames,
             quick: request.quick,
-            effects: &frame.effects,
+            effects: &effects,
+            presets: request.presets,
+            environment: &environment,
+            pipeline_cache: &cache,
+            reference_samples: request.reference_samples,
         },
     )?;
     gpu.assert_clean()?;

@@ -462,7 +462,8 @@ pub struct AudioGraphSource {
 
 /// A GPU particle effect drawn at this entity. Presentation only: gameplay reads
 /// ara-vfx CPU events, never GPU particles. `effect` names a cooked library effect
-/// (`campfire`, `sparks`, `magic_swirl`, `smoke`, `muzzle_flash`, `rain`).
+/// (`campfire`, `sparks`, `depth_sparks`, `magic_swirl`, `smoke`, `muzzle_flash`,
+/// `rain`, `dust`).
 #[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "vfx")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -470,11 +471,21 @@ pub struct VisualEffect {
     /// Cooked library effect name.
     #[ara(default = "campfire")]
     pub effect: String,
+    /// Uniform size: the effect's shape, sprite sizes and speeds grow together
+    /// (2 doubles a campfire's height and spread).
+    #[ara(default = 1, range(min = 0.05, max = 50))]
+    pub scale: f32,
+    /// Brightness multiplier on the effect's emitted and lit colour; its opacity is
+    /// unchanged. Lower it for effects that glow too hot under a scene's exposure.
+    #[ara(default = 1, range(min = 0, max = 50))]
+    pub intensity: f32,
 }
 impl Default for VisualEffect {
     fn default() -> Self {
         Self {
             effect: "campfire".into(),
+            scale: 1.0,
+            intensity: 1.0,
         }
     }
 }

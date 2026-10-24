@@ -11,6 +11,7 @@ ara-json = { path = "../ara-json" }
 anyhow.workspace = true
 ara-anim = { path = "../ara-anim" }
 ara-asset = { path = "../ara-asset" }
+ara-components.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
 ara-foliage = { path = "../ara-foliage" }
@@ -20,6 +21,7 @@ ara-proto.workspace = true
 ara-rpc.workspace = true
 ara-play = { path = "../ara-play" }
 ara-play-host = { path = "../ara-play-host" }
+ara-pathtrace = { path = "../ara-pathtrace" }
 ara-render = { path = "../ara-render" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-runtime = { path = "../ara-runtime" }

@@ -36,6 +36,8 @@ renderer and per-draw upload state; no simulation, window or process code.
   static vertices or asset handles. `FrameChange::Rebuild` requests fresh content
   for new identities/generations or terrain residency; keep presenting the last good
   view until replacement GPU publication succeeds.
+- `fidelity::vfx::Effects::{update, composite_ticks}` maintains per-entity systems,
+  world placement, scale and intensity, and preserves fidelity temporal AA after composition.
 - `geometry::{shape, transform}`: procedural shapes (box, sphere, capsule, plane;
   centred, planes at y = 0) and world-space transform with 8-influence linear-blend
   CPU skinning. `sky(env)`: 64×32 gradient environment. `decode_texture`: BC7 KTX2

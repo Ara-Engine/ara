@@ -105,7 +105,7 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
             a.metadata
                 .timings
                 .iter()
-                .any(|stage| stage.pass == "Feature.Bloom.Horizontal")
+                .any(|stage| stage.pass == "Feature.Bloom.Down.1")
         );
         let golden = root.join("goldens").join(format!("{}.png", effect.name));
         let strip_golden = root

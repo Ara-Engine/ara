@@ -63,6 +63,13 @@ fn landscape_and_emissive_only_room_match_fixed_exposure_goldens() -> Result<()>
         let image = view.capture(&mut gpu)?;
         let golden = image::open(root.join(format!("tests/goldens/{name}.png")))?.to_rgba8();
         let comparison = compare(&image, &golden, 0.005)?;
+        if !comparison.passed {
+            // Keep the mismatching render for inspection; goldens never update here.
+            image.save(ara_pathtrace::artifacts::temporary_path(
+                root,
+                format!("goldens/{name}-actual.png"),
+            )?)?;
+        }
         ensure!(
             comparison.passed,
             "{name}: golden 1-SSIM {}",

@@ -1,5 +1,5 @@
 //! Physical and temporal contracts shared by every reconstruction backend.
-use crate::colour::{AutoExposure, ToneMapper};
+use crate::colour::{AutoExposure, Grading, ToneMapper};
 use anyhow::{Result, ensure};
 use ara_gpu::Image;
 use ara_render::scene::CameraSpec;
@@ -58,6 +58,8 @@ pub struct PostSettings {
     pub tone_mapper: ToneMapper,
     /// Energy fraction redistributed to the bloom kernel, from zero to 0.25.
     pub bloom: f32,
+    /// Scene-linear white balance, contrast, saturation and vignette.
+    pub grading: Grading,
     /// Sea-level homogeneous extinction in inverse metres.
     pub fog_density: f32,
     /// Lens focus distance in metres.
@@ -78,6 +80,7 @@ impl Default for PostSettings {
             auto_exposure: AutoExposure::default(),
             tone_mapper: ToneMapper::AcesFit,
             bloom: 0.04,
+            grading: Grading::default(),
             fog_density: 0.002,
             focus_distance: 5.,
             aperture: 2.,
@@ -176,6 +179,7 @@ impl Settings {
                 && (0.0..=1.0).contains(&p.fog_density),
             "Invalid bloom/fog"
         );
+        ensure!(p.grading.is_valid(), "Invalid colour grading");
         ensure!(
             p.focus_distance.is_finite()
                 && p.focus_distance > 0.
