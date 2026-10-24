@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 ara-schema = { path = "../ara-schema" }
-serde.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true

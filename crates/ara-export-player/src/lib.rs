@@ -1,6 +1,7 @@
 //! Headless S7 export conformance template using production pack and bridge APIs.
 //! Full engine templates replace this fixture through the same pinned artifact seam.
 #![warn(missing_docs)]
+extern crate libloading08 as libloading;
 pub mod abi;
 #[cfg(target_os = "android")]
 pub mod android;

@@ -28,6 +28,8 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
     `modules` (heat), `set_heat`, `compiling()`, `diag(DIAG_*)`, `shutdown() -> leaked generations`.
 - `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from `ara.module.toml`
   (`references = ["Core"]`, `profile = "gameplay" | "editor"`: the API allowlist, ARA05xx).
+- `EngineBindings::builtin()` shares Ara.Runtime's native view list with codegen;
+  schema blittability alone does not establish a Rust component's native layout.
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
   (`ARA0900`–`ARA0999`), `register_tick_thread()`.
 

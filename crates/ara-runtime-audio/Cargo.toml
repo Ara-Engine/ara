@@ -20,8 +20,8 @@ ara-physics-jolt = { path = "../ara-physics-jolt" }
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
 ara-sim = { path = "../ara-sim" }
-bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
-serde_json.workspace = true
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

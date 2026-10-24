@@ -27,7 +27,6 @@ use ara_schema::SchemaDb;
 use ara_script::{
     EditOrigin, EngineBindings, ModuleSpec, ScriptConfig, ScriptHost,
     abi::{ReloadReport, Tick},
-    bind_component,
 };
 use ara_sim::{
     BoundaryCommand, ExternalWrites, Identity, Session, SimContext, SimError, SimRegistry,
@@ -161,10 +160,7 @@ impl RuntimePlugin for ScriptPlugin {
             }
             return Ok(());
         }
-        let engine = bind_component!(
-            EngineBindings::new(),
-            ara_components::Transform as "Transform" { position, rotation, scale }
-        );
+        let engine = EngineBindings::builtin();
         let mut config = ScriptConfig::jit(&self.settings.host_dir);
         config.compile_server = self.settings.compile_server.clone();
         let mut host = ScriptHost::start(config, schema.clone(), &engine, world).map_err(failed)?;

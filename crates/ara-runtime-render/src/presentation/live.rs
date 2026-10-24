@@ -2,13 +2,13 @@
 use super::*;
 
 impl Live {
-    pub(super) fn render(&mut self, gpu: &mut VulkanDevice, frame: &RenderFrame) -> Result<()> {
+    pub(super) fn render(&mut self, gpu: &mut VulkanDevice, frame: &RenderFrame) -> Result<f64> {
         let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
         if self.look != look || self.tick.is_none() {
             self.view.set_environment(&look)?;
             self.look = look;
         }
-        self.view.refine_native_textures(gpu)?;
+        let uploaded = self.view.refine_native_textures(gpu)?.upload_gpu_ms;
         let camera = camera(frame)?;
         self.temporal = self.temporal.wrapping_add(1);
         self.view.render(
@@ -41,7 +41,12 @@ impl Live {
                 .composite_ticks(gpu, &mut self.view, &camera, self.temporal, ticks)?;
         }
         self.tick = Some(frame.tick);
-        Ok(())
+        Ok(uploaded
+            + if self.effects.is_empty() {
+                0.
+            } else {
+                self.effects.gpu_ms()
+            })
     }
     pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
         self.effects.destroy(gpu)?;

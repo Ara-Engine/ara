@@ -11,22 +11,8 @@ use ara_hub::{
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-/// `target/<profile>/ara`, rebuilt so the service matches this checkout.
-fn ara() -> PathBuf {
-    let exe = std::env::current_exe().expect("test exe");
-    let profile = exe.parent().and_then(Path::parent).expect("target profile");
-    let status = Command::new(env!("CARGO"))
-        .args(["build", "-p", "ara", "--bin", "ara"])
-        .env("CARGO_BUILD_JOBS", "4")
-        .status()
-        .expect("cargo");
-    assert!(status.success(), "building ara failed");
-    profile.join(format!("ara{}", std::env::consts::EXE_SUFFIX))
-}
 
 fn scratch() -> PathBuf {
     let stamp = SystemTime::now()
@@ -93,7 +79,7 @@ fn create_open_headless_close_and_remove_through_the_view_model() {
     let config = root.join("config");
     let mut driver = Driver {
         hub: Hub::new(Prefs::default(), root.clone(), None),
-        connection: Connection::start(config.clone(), ara()),
+        connection: Connection::start(config.clone(), PathBuf::from(env!("CARGO_BIN_EXE_ara"))),
         config,
     };
     driver.run("initial load", Vec::new(), Hub::ready);

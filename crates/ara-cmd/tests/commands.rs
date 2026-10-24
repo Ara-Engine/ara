@@ -1,6 +1,8 @@
 //! The registry and starter commands: examples, dry run vs apply, symbols, prefab
 //! routing, located errors, scopes and jobs.
 
+extern crate glam34 as glam;
+
 use ara_cmd::{Batch, Call, Command, EditCtx, Job, JobCtx, Registry, Session};
 use ara_diag::{Diagnostic, codes};
 use ara_doc::{AssetIndex, IdGen, Workspace, read, write};

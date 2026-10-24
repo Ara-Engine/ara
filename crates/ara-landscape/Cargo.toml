@@ -19,14 +19,14 @@ ara-doc = { path = "../ara-doc" }
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
 ara-asset-format = { path = "../ara-asset-format" }
-half = "2"
-anyhow = "1"
-bytemuck = { version = "1", features = ["derive"] }
-glam = { version = "0.30", features = ["bytemuck", "serde"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-image = { version = "0.25", default-features = false, features = ["png"] }
-blake3 = "1"
+half = { workspace = true }
+anyhow = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
+glam = { workspace = true, features = ["bytemuck", "serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+image = { workspace = true, features = ["png"] }
+blake3 = { workspace = true, default-features = true }
 
 [dev-dependencies]
 ara-shader-cook = { path = "../ara-shader-cook" }

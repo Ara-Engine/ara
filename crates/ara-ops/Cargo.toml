@@ -10,13 +10,13 @@ publish.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
 ara-schema.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-components.workspace = true
 ara-json.workspace = true
-proptest.workspace = true
+proptest = { workspace = true }
 
 [lints]
 workspace = true

@@ -2,6 +2,7 @@
 //! Publish owned telemetry batches without blocking the frame or tick thread.
 
 #![warn(missing_docs)]
+extern crate tungstenite28 as tungstenite;
 mod device;
 mod protocol;
 mod server;

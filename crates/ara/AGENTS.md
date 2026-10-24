@@ -89,6 +89,13 @@ client → session, batch with `why`, query, revert, file checked on disk (the C
 sees the same daemon); agent shells (attribution, required `why`, quote-stripped
 `--args`, no `--doc`).
 
+`cargo test -p ara --test hub_ui`: Hub view-model lifecycle using Cargo's CLI binary;
+the dev-dependency makes Hub changes select this integration test in ara-dev.
+
+`tests/hub.rs` retains MCP requests, raw responses and call timing in
+`target/hub-tests/<run>/mcp-{A,B,projects}.jsonl`. Failures name the agent,
+method and call ID; preserve the complete JSON when reporting a startup flake.
+
 `ara hub serve/add/remove/rename/projects/templates/create/open/close/status/engines/
 activity/install-mcp` manage the user service. Install output is one-time global
 `ara hub register-engine/unregister-engine` register this exact installed build;
