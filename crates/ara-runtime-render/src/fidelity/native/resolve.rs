@@ -25,7 +25,7 @@ impl Content {
         library: &Library,
         source: &dyn AssetSource,
     ) -> Result<Self> {
-        Self::resolve_inner(frame, workspace, schema, library, source, false)
+        Self::resolve_inner(frame, workspace, schema, library, source, false, &|_| false)
     }
 
     /// Editor-only incremental resolution: pending terrain maps use neutral
@@ -38,7 +38,21 @@ impl Content {
         library: &Library,
         source: &dyn AssetSource,
     ) -> Result<Self> {
-        Self::resolve_inner(frame, workspace, schema, library, source, true)
+        Self::resolve_inner(frame, workspace, schema, library, source, true, &|_| false)
+    }
+
+    /// Incremental editor resolution with quiet loading bounds for registered,
+    /// still-unpublished models, including every part of foliage prefabs. The
+    /// read-only callback excludes failed/missing IDs and reimports with last-good.
+    pub fn resolve_available_with_pending(
+        frame: &RenderFrame,
+        workspace: &Workspace,
+        schema: &SchemaDb,
+        library: &Library,
+        source: &dyn AssetSource,
+        pending: &dyn Fn(&str) -> bool,
+    ) -> Result<Self> {
+        Self::resolve_inner(frame, workspace, schema, library, source, true, pending)
     }
 
     fn resolve_inner(
@@ -48,6 +62,7 @@ impl Content {
         library: &Library,
         source: &dyn AssetSource,
         available: bool,
+        pending: &dyn Fn(&str) -> bool,
     ) -> Result<Self> {
         ara_gpu::cpu_scope!("Native.resolve_content");
         let mut content = Self::default();
@@ -92,16 +107,25 @@ impl Content {
                 .context("invalid foliage rule index")?;
             let reference = &rule.rule.asset;
             if !content.foliage_parts.contains_key(&reference.0) {
-                content.foliage_parts.insert(
-                    reference.0.to_owned(),
-                    parts(reference, workspace, schema, library, source, available)?,
-                );
+                let parts = parts(
+                    reference, workspace, schema, library, source, available, pending,
+                )?;
+                content
+                    .unpublished_foliage
+                    .insert(reference.0.to_owned(), parts.missing);
+                content
+                    .foliage_parts
+                    .insert(reference.0.to_owned(), parts.draws);
             }
         }
         Ok(content)
     }
 }
 
+struct Parts {
+    draws: Vec<Draw>,
+    missing: BTreeMap<u64, String>,
+}
 fn parts(
     reference: &AssetRef,
     workspace: &Workspace,
@@ -109,13 +133,15 @@ fn parts(
     library: &Library,
     source: &dyn AssetSource,
     available: bool,
-) -> Result<Vec<Draw>> {
+    pending: &dyn Fn(&str) -> bool,
+) -> Result<Parts> {
     let id = asset_id(reference)?;
     let mut scratch = Library::default();
     scratch.models = library.models.clone();
     scratch.materials = library.materials.clone();
     let mut world = World::new();
     let mut matrices = BTreeMap::new();
+    let mut models = BTreeMap::new();
     if let Some(document) = workspace
         .doc(id)
         .filter(|document| document.kind == "prefab")
@@ -135,6 +161,9 @@ fn parts(
             let matrix = matrix(address, &entities, &mut matrices, &mut BTreeSet::new())?;
             if let Some(value) = entity.record.get("MeshRenderer") {
                 let renderer: MeshRenderer = serde_json::from_value(value.clone())?;
+                if let Some(model) = &renderer.model {
+                    models.insert(address.to_owned(), asset_id(model)?.to_owned());
+                }
                 prepare_part(&mut scratch, &renderer, workspace, source, available)?;
                 let name = entity
                     .record
@@ -159,6 +188,7 @@ fn parts(
         };
         prepare_part(&mut scratch, &renderer, workspace, source, available)?;
         matrices.insert("e_source".into(), Mat4::IDENTITY);
+        models.insert("e_source".into(), id.to_owned());
         world.spawn((
             ara_sim::Identity("e_source".into()),
             renderer,
@@ -168,6 +198,9 @@ fn parts(
     world.insert_resource(scratch);
     let mut frame = RenderFrame::default();
     frame.extract(&world, 0, 1.0);
+    if available {
+        crate::ModelPlaceholders::default().style(&mut frame, &models, pending, true);
+    }
     // Extract owns selector/pivot/emission/override semantics. Restore the full
     // prefab affine matrix around its selected pivot, preserving parent shear.
     for draw in &mut frame.draws {
@@ -181,7 +214,20 @@ fn parts(
         !frame.draws.is_empty(),
         "foliage asset {id} contains no MeshRenderer geometry"
     );
-    Ok(frame.draws)
+    let missing = frame
+        .draws
+        .iter()
+        .filter(|draw| matches!(draw.geometry, ara_runtime::extract::Geometry::Shape { .. }))
+        .filter_map(|draw| {
+            models
+                .get(&draw.address)
+                .map(|asset| (draw.entity, asset.to_owned()))
+        })
+        .collect();
+    Ok(Parts {
+        draws: frame.draws,
+        missing,
+    })
 }
 
 fn prepare_part(

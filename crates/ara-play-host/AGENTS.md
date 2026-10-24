@@ -34,8 +34,10 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   project attachment once. Frame loops read its atomic revision; `snapshot` never
   waits and retains immutable generation IDs, kinds and FileCache provenance.
   Readers cannot initialize/cook/import; only completed owner boundaries publish.
+  `progress_revision`/`progress` is the same pattern for `ImportProgress` (done/total,
+  pending and failed IDs): published at pipeline start and when a source changes state.
   `cargo test -p ara-play-host --test published` holds a real import pending while
-  checking completed generations and retained-snapshot immutability.
+  checking completed generations, retained-snapshot immutability and progress.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`

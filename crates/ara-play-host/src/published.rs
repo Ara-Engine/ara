@@ -2,7 +2,7 @@
 use ara_asset::{ArtifactKind, CacheBackend, Digest, FileCache, HotReload};
 use ara_runtime::assets::AssetSource;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock, RwLock, Weak,
@@ -70,10 +70,28 @@ impl AssetSource for PublishedSnapshot {
     }
 }
 
+/// Where the owner's imports stand, for views that show loading (the editor's status
+/// chip, Assets spinners, the Scene overlay). Every registered source is exactly one of
+/// done, pending or failed. The owner republishes it only when it changes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImportProgress {
+    /// Sources with a current generation and nothing newer in flight.
+    pub done: usize,
+    /// Registered sources.
+    pub total: usize,
+    /// Sources with no generation yet, or a newer one cooking.
+    pub pending: BTreeSet<String>,
+    /// Sources whose latest import failed, with the error. They keep their last good
+    /// generation, else a placeholder.
+    pub failed: BTreeMap<String, String>,
+}
+
 #[derive(Default)]
 struct Shared {
     revision: AtomicU64,
     snapshot: RwLock<Option<Arc<PublishedSnapshot>>>,
+    progress_revision: AtomicU64,
+    progress: RwLock<Option<Arc<ImportProgress>>>,
 }
 // Only project attachment takes this registry lock. Frame loops read an atomic
 // revision and retain their immutable snapshot; no registry or import lock is used.
@@ -112,6 +130,17 @@ impl PublishedAssets {
         let value = self.shared.snapshot.try_read().ok()?;
         value.as_ref().map(Arc::clone)
     }
+    /// Cheap lock-free import-progress counter; zero until the owner's pipeline starts.
+    /// Poll it each frame and call [`Self::progress`] only when it changes.
+    pub fn progress_revision(&self) -> u64 {
+        self.shared.progress_revision.load(Ordering::Acquire)
+    }
+    /// The latest import progress, without waiting for the owner. `None` before the
+    /// pipeline starts or while the owner is publishing; keep the last one you read.
+    pub fn progress(&self) -> Option<Arc<ImportProgress>> {
+        let value = self.shared.progress.try_read().ok()?;
+        value.as_ref().map(Arc::clone)
+    }
 }
 
 impl crate::PlayService {
@@ -126,6 +155,8 @@ pub(crate) struct Publisher {
     reader: PublishedAssets,
     current: Arc<PublishedSnapshot>,
     dirty: bool,
+    progress: Option<Arc<ImportProgress>>,
+    progress_dirty: bool,
 }
 impl Publisher {
     pub(crate) fn new(root: &Path, cache: FileCache) -> Result<Self, String> {
@@ -141,6 +172,8 @@ impl Publisher {
             reader,
             current,
             dirty: true,
+            progress: None,
+            progress_dirty: false,
         };
         publisher.flush();
         Ok(publisher)
@@ -200,7 +233,27 @@ impl Publisher {
         }
         self.flush();
     }
+    /// Publishes `next` if it differs from the last progress (an O(sources) compare,
+    /// made only when the owner saw import activity).
+    pub(crate) fn progress(&mut self, next: ImportProgress) {
+        if self.progress.as_deref() != Some(&next) {
+            self.progress = Some(Arc::new(next));
+            self.progress_dirty = true;
+        }
+        self.flush();
+    }
     fn flush(&mut self) {
+        if self.progress_dirty
+            && let Ok(mut value) = self.reader.shared.progress.try_write()
+        {
+            *value = self.progress.clone();
+            drop(value);
+            self.reader
+                .shared
+                .progress_revision
+                .fetch_add(1, Ordering::Release);
+            self.progress_dirty = false;
+        }
         if self.dirty
             && let Ok(mut value) = self.reader.shared.snapshot.try_write()
         {

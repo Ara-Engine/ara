@@ -47,6 +47,8 @@ pub(crate) struct LookFrame {
     pub far_shadow: [[f32; 4]; 4],
     /// x far map (sampled), y texels per side, z drawn (0: cascades fade to lit).
     pub far_info: [u32; 4],
+    /// Sampled cascade maps, in cascade order.
+    pub cascade_maps: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -128,6 +130,7 @@ impl LookFrame {
             weather: [sky.cloud_coverage, sky.cloud_height, 0., 0.],
             far_shadow: [[0.; 4]; 4],
             far_info: [0; 4],
+            cascade_maps: [0; 4],
         }
     }
 }

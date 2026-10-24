@@ -235,6 +235,12 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         ..request
     };
     let opaque = renderer.capture(&lit)?;
+    for name in ["GBuffer", "TiledLightCull", "DeferredLighting"] {
+        assert!(
+            renderer.timings().iter().any(|pass| pass.pass == name),
+            "batched submissions retain the {name} timestamp"
+        );
+    }
     scene.materials[0].extras.transmission_factor = 1.;
     renderer.update_native_changed(
         &scene,

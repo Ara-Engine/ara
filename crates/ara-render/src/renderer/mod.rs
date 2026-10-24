@@ -7,6 +7,7 @@ mod native;
 mod passes;
 pub mod post;
 mod readback;
+mod submission;
 mod transfer;
 mod upload;
 use crate::{
@@ -28,13 +29,12 @@ const MATERIAL: usize = 2;
 const WORLD: usize = 3;
 const ID: usize = 4;
 const DEPTH: usize = 5;
-const SHADOW: usize = 6;
-const HDR: usize = 7;
-const HISTORY0: usize = 8;
-const HISTORY1: usize = 9;
-const OUTPUT: usize = 10;
-const MOTION: usize = 11;
-const TARGET_COUNT: usize = 12;
+const HDR: usize = 6;
+const HISTORY0: usize = 7;
+const HISTORY1: usize = 8;
+const OUTPUT: usize = 9;
+const MOTION: usize = 10;
+const TARGET_COUNT: usize = 11;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -186,7 +186,7 @@ impl Renderer {
             taa: load("taa")?,
             tonemap: load("tonemap")?,
         };
-        let targets = Self::targets(&mut gpu, size, crate::look::Shadows::default().resolution)?;
+        let targets = Self::targets(&mut gpu, size)?;
         Self::upload_scene(
             gpu,
             pipelines,
@@ -232,7 +232,7 @@ impl Renderer {
         if size == self.size {
             return Ok(());
         }
-        let replacement = Self::targets(&mut self.gpu, size, self.look.quality.shadows.resolution)?;
+        let replacement = Self::targets(&mut self.gpu, size)?;
         if let Err(error) = self.look.resize(&mut self.gpu, size) {
             for image in replacement.images {
                 self.gpu.retire(Resource::Image(image))?;
@@ -274,34 +274,13 @@ impl Renderer {
         &self.look.look
     }
     /// Apply per-preset raster budgets (shadow cascades, probe GI, bloom) from the
-    /// next frame. A new shadow resolution reallocates the atlas.
+    /// next frame. A new cascade count or resolution reallocates the cascade maps.
     pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
         quality.validate()?;
-        let resolution = quality.shadows.resolution;
-        if resolution != self.look.quality.shadows.resolution {
-            let image = self.gpu.create_image(
-                resolution * 2,
-                resolution * 2,
-                vk::Format::D32_SFLOAT,
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::TRANSFER_SRC
-                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            )?;
-            let sampled = match self.gpu.sampled_image(image, true) {
-                Ok(sampled) => sampled.index,
-                Err(error) => {
-                    self.gpu.retire(Resource::Image(image))?;
-                    self.gpu.collect()?;
-                    return Err(error.into());
-                }
-            };
-            let old = std::mem::replace(&mut self.targets.images[SHADOW], image);
-            self.gpu.retire(Resource::Image(old))?;
-            self.targets.sampled[SHADOW] = sampled;
-            self.targets.states[SHADOW] = State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            };
+        let previous = std::mem::replace(&mut self.look.quality, quality);
+        if let Err(error) = self.ensure_cascades() {
+            self.look.quality = previous;
+            return Err(error);
         }
         let far = quality.shadows.far;
         if far != self.look.far.as_ref().map(|f| f.settings) {
@@ -319,18 +298,29 @@ impl Renderer {
         self.look.quality = quality;
         Ok(())
     }
+    /// One cached map per cascade (look::cascades) at the quality's budget.
+    fn ensure_cascades(&mut self) -> Result<()> {
+        let shadows = self.look.quality.shadows;
+        let current = self
+            .look
+            .cascades
+            .as_ref()
+            .map(|c| (c.images.len(), c.resolution));
+        if current != Some((shadows.cascades as usize, shadows.resolution)) {
+            if let Some(old) = self.look.cascades.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            self.look.cascades = Some(crate::look::cascades::Cascades::new(
+                &mut self.gpu,
+                shadows.cascades,
+                shadows.resolution,
+            )?);
+        }
+        Ok(())
+    }
     /// The per-preset raster budgets in effect.
     pub fn quality(&self) -> &crate::look::Quality {
         &self.look.quality
-    }
-    /// Shadow-atlas viewports (origin, size) of the active cascades, in cascade
-    /// order: the shadow pass renders cascade `i` into viewport `i`.
-    pub fn cascade_viewports(&self) -> Vec<([u32; 2], [u32; 2])> {
-        let shadows = self.look.quality.shadows;
-        let r = shadows.resolution;
-        (0..shadows.cascades)
-            .map(|c| ([c % 2 * r, c / 2 * r], [r, r]))
-            .collect()
     }
     /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
     /// multiplier of a manual look; automatic looks meter instead.
@@ -450,7 +440,7 @@ impl Renderer {
         )
     }
     /// View targets; the shadow atlas holds 2x2 cascades of `shadow` texels.
-    fn targets(gpu: &mut VulkanDevice, size: [u32; 2], shadow: u32) -> Result<Targets> {
+    fn targets(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Targets> {
         let mut allocated = Vec::new();
         let result = (|| {
             let mut graph = Graph::default();
@@ -459,14 +449,14 @@ impl Renderer {
             for target in 0..TARGET_COUNT {
                 let format = match target {
                     ID => vk::Format::R32_SFLOAT,
-                    DEPTH | SHADOW => vk::Format::D32_SFLOAT,
+                    DEPTH => vk::Format::D32_SFLOAT,
                     OUTPUT => vk::Format::R8G8B8A8_UNORM,
                     MOTION => vk::Format::R16G16_SFLOAT,
                     // Pre-exposed (look.slangh exposureState), so half floats suffice.
                     HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
                     _ => vk::Format::R32G32B32A32_SFLOAT,
                 };
-                let depth = target == DEPTH || target == SHADOW;
+                let depth = target == DEPTH;
                 let usage = vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::TRANSFER_SRC
                     | if depth {
@@ -476,15 +466,10 @@ impl Renderer {
                     } else {
                         vk::ImageUsageFlags::COLOR_ATTACHMENT
                     };
-                let extent = if target == SHADOW {
-                    [shadow * 2; 2]
-                } else {
-                    size
-                };
                 let (_, image) = graph.transient(
                     gpu,
                     TransientImage {
-                        size: extent,
+                        size,
                         format,
                         usage,
                     },

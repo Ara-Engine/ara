@@ -85,6 +85,14 @@ impl Bindings {
 }
 
 impl Prepared {
+    /// Model asset of an instance, absent for procedural terrain/shapes. Different
+    /// asset IDs may share one cooked geometry without sharing their arrival state.
+    pub fn model_source(&self, instance: usize) -> Option<&str> {
+        self.model_sources.get(&instance).map(AsRef::as_ref)
+    }
+    pub(crate) fn root_instances(&self) -> usize {
+        self.bindings.links.len()
+    }
     /// Publication-local rows changed by the last `update_frame`. Raster consumes
     /// these without rescanning static foliage, geometry or material blocks.
     pub fn changes(&self) -> &render::Changes {
@@ -109,6 +117,28 @@ impl Prepared {
             let geometry = &self.scene.geometry[instance.geometry];
             if geometry.deforming {
                 largest = largest.max(geometry.vertices.len());
+            }
+        }
+        // Foliage keeps instancing/material sharing within a model, while model
+        // arrivals can fade without changing an unrelated model with equal PBR bytes.
+        let materials = &mut self.scene.materials;
+        let mut foliage = BTreeMap::new();
+        for (index, instance) in self
+            .scene
+            .instances
+            .iter_mut()
+            .enumerate()
+            .skip(self.bindings.links.len())
+        {
+            if let Some(asset) = self.model_sources.get(&index) {
+                let slot = *foliage
+                    .entry((asset.as_ref(), instance.material))
+                    .or_insert_with(|| {
+                        let index = materials.len();
+                        materials.push(materials[instance.material]);
+                        index
+                    });
+                instance.material = slot;
             }
         }
         self.bindings.scratch.reserve(largest);

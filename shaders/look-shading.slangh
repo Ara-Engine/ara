@@ -6,18 +6,18 @@
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
 // A 3x3 box of bilinear compares (16 texels from four gathers) inside cascade `c`,
 // with normal offset and depth bias both scaled to the cascade's texel size.
-float cascadeVisibility(Frame f,uint c,float3 world,float3 normal){
+float cascadeVisibility(Frame f,Look l,uint c,float3 world,float3 normal){
     float res=float(f.look.y);float4x4 m=f.shadows[c];float texel=2/(length(m[0].xyz)*res);
     float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
     if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
     float depth=q.z+texel*length(m[2].xyz);
-    float2 origin=float2(c%2,c/2)*res,position=origin+uv*res-0.5,base=floor(position),t=position-base;
+    float2 position=uv*res-0.5,base=floor(position),t=position-base;
     float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
     for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
         // Gather the 2x2 texels (base-1+2i.., base-1+2j..); w is top-left, z top-right,
-        // x bottom-left, y bottom-right. Centres stay inside the cascade's tile.
-        float2 g=clamp(base+float2(2*i,2*j),origin+1,origin+res-1)/(res*2);
-        float4 d=textures[NonUniformResourceIndex(f.extra.z)].GatherRed(samplers[2],g);float4 lit=step(d,depth);
+        // x bottom-left, y bottom-right. Centres stay inside the cascade's map.
+        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
+        float4 d=textures[NonUniformResourceIndex(l.cascadeMaps[c])].GatherRed(samplers[2],g);float4 lit=step(d,depth);
         sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
     }
     return sum;
@@ -46,8 +46,8 @@ float visibility(Frame f,Look l,float3 world,float3 normal) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
     if(c>=count)return farVisibility(l,world,normal);
     float far=splits[c],near=c==0?0:splits[c-1],band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
-    float v=cascadeVisibility(f,c,world,normal);
-    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,c+1,world,normal):farVisibility(l,world,normal),blend);
+    float v=cascadeVisibility(f,l,c,world,normal);
+    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal),blend);
     return v;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
