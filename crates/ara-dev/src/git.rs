@@ -241,11 +241,11 @@ mod tests {
         let file = directory.join(format!("artifact-{}.bin", std::process::id()));
         std::fs::write(&file, b"native-path artifact\0\xff\n").unwrap();
         let expected = text(
-            &root,
+            file.parent().unwrap(),
             [
                 OsStr::new("hash-object"),
                 OsStr::new("--no-filters"),
-                file.as_os_str(),
+                file.file_name().unwrap(),
             ],
         )
         .unwrap();
