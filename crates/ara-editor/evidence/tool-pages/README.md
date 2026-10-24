@@ -15,7 +15,7 @@ Open `gallery.html` to compare each page side by side.
   old thumbnail silently rendered a cached placeholder box).
 - `before/1440` and `after/1440` hold the reviewed pages. The full matrix (both sizes,
   every route page, layout reports and timings) is kept out of git to save space, at
-  `D:\AraBuild	ool-pages-evidence\{before,after}\{1440,2560}` on the Windows machine.
+  `D:\AraBuild\tool-pages-evidence\{before,after}\{1440,2560}` on the Windows machine.
 - `thumbnail-studio.png`: studio shots of three sample models, a clay capsule and three
   material spheres, from `cargo test -p ara-editor --lib studio -- --ignored` (writes
   `target/thumbnail-studio`).
