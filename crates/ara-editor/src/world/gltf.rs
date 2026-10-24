@@ -1,6 +1,8 @@
-//! Temporary example-style glTF geometry loader; ara-asset will own cooked assets.
+//! Cooked model access; the viewport never discovers or imports source glTF files.
+use anyhow::Context;
 use ara_render::scene::{Mesh, Vertex};
-use glam::{Mat4, Vec3};
+use ara_runtime::assets::AssetSource;
+use glam::Vec3;
 use std::path::Path;
 
 pub(crate) fn load(
@@ -9,7 +11,29 @@ pub(crate) fn load(
     name: String,
     material: usize,
 ) -> anyhow::Result<Mesh> {
-    let (document, buffers, _) = gltf::import(path)?;
+    let root = path
+        .ancestors()
+        .find(|root| root.join("ara.project.json").is_file())
+        .context("model has no project root")?;
+    let reader = ara_play_host::PublishedAssets::for_project(root).map_err(anyhow::Error::msg)?;
+    let mut sidecar = path.as_os_str().to_os_string();
+    sidecar.push(".import.json");
+    let value = ara_json::parse(&std::fs::read_to_string(sidecar)?)?;
+    let asset = value["id"]
+        .as_str()
+        .context("model sidecar has no asset ID")?;
+    let model = reader
+        .snapshot()
+        .map(|snapshot| -> anyhow::Result<_> {
+            let Some((digest, cached)) = snapshot.load(asset)? else {
+                return Ok(None);
+            };
+            Ok(Some(ara_runtime::model::Model::decode(
+                asset, digest, &cached,
+            )?))
+        })
+        .transpose()?
+        .flatten();
     let mut mesh = Mesh {
         entity,
         name,
@@ -17,61 +41,176 @@ pub(crate) fn load(
         indices: Vec::new(),
         material,
     };
-    let scene = document
-        .default_scene()
-        .or_else(|| document.scenes().next())
-        .ok_or_else(|| anyhow::anyhow!("glTF has no scene"))?;
-    let mut stack: Vec<_> = scene.nodes().map(|n| (n, Mat4::IDENTITY)).collect();
-    while let Some((node, parent)) = stack.pop() {
-        let matrix = parent * Mat4::from_cols_array_2d(&node.transform().matrix());
-        stack.extend(node.children().map(|n| (n, matrix)));
-        let Some(source) = node.mesh() else {
-            continue;
-        };
-        for primitive in source.primitives() {
-            anyhow::ensure!(
-                primitive.mode() == gltf::mesh::Mode::Triangles,
-                "glTF primitive must be triangles"
-            );
-            let read =
-                primitive.reader(|buffer| buffers.get(buffer.index()).map(|b| b.0.as_slice()));
-            let positions: Vec<_> = read
-                .read_positions()
-                .ok_or_else(|| anyhow::anyhow!("mesh has no positions"))?
-                .collect();
-            let normals: Vec<_> = read
-                .read_normals()
-                .map(Iterator::collect)
-                .unwrap_or_default();
-            let texcoords: Vec<_> = read
-                .read_tex_coords(0)
-                .map(|u| u.into_f32().collect())
-                .unwrap_or_default();
+    if let Some(model) = model {
+        for primitive in &model.primitives {
             let base = u32::try_from(mesh.vertices.len())?;
-            let normal_matrix = matrix.inverse().transpose();
-            for (i, position) in positions.into_iter().enumerate() {
-                let normal = normal_matrix
-                    .transform_vector3(normals.get(i).copied().map(Vec3::from).unwrap_or(Vec3::Y))
-                    .normalize_or_zero();
-                mesh.vertices.push(Vertex {
-                    position: matrix.transform_point3(position.into()).into(),
-                    normal: normal.into(),
-                    uv: texcoords.get(i).copied().unwrap_or([0.; 2]),
-                    tangent: tangent(normal),
-                });
-            }
-            if let Some(indices) = read.read_indices() {
-                mesh.indices.extend(indices.into_u32().map(|i| base + i));
-            } else {
-                mesh.indices.extend(base..mesh.vertices.len() as u32);
-            }
+            mesh.vertices
+                .extend(primitive.vertices.iter().map(|v| Vertex {
+                    position: v.position,
+                    normal: v.normal,
+                    uv: v.uv,
+                    tangent: v.tangent,
+                }));
+            mesh.indices
+                .extend(primitive.indices.iter().map(|i| base + i));
         }
+    } else {
+        // The owner publishes asynchronously. Opening a project never waits for it.
+        let placeholder =
+            ara_runtime_render::geometry::shape(ara_runtime::components::MeshShape::Box, [1.0; 3]);
+        mesh.vertices = placeholder
+            .vertices
+            .iter()
+            .map(|v| Vertex {
+                position: v.position,
+                normal: v.normal,
+                uv: v.uv,
+                tangent: v.tangent,
+            })
+            .collect();
+        mesh.indices = placeholder.indices;
     }
     anyhow::ensure!(
         !mesh.indices.is_empty(),
         "glTF contains no triangle geometry"
     );
     Ok(mesh)
+}
+
+/// Source generations and evaluated terrain retained across editor content revisions.
+pub(crate) struct FidelityContent {
+    reader: ara_play_host::PublishedAssets,
+    snapshot: Option<std::sync::Arc<ara_play_host::PublishedSnapshot>>,
+    library: ara_runtime::animation::Library,
+    materials: Option<(u64, u64)>,
+    terrain: Option<(u64, ara_runtime::terrain::TerrainState)>,
+}
+impl FidelityContent {
+    pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
+        Ok(Self {
+            reader: ara_play_host::PublishedAssets::for_project(root)
+                .map_err(anyhow::Error::msg)?,
+            snapshot: None,
+            library: Default::default(),
+            materials: None,
+            terrain: None,
+        })
+    }
+    pub(crate) fn revision(&self) -> u64 {
+        self.reader.revision()
+    }
+    pub(crate) fn frame(
+        &mut self,
+        view: &super::DocumentView,
+        workspace: &ara_doc::Workspace,
+        schema: &ara_schema::SchemaDb,
+        preview: Option<&super::gesture::Gesture>,
+        hidden: &std::collections::BTreeSet<String>,
+    ) -> anyhow::Result<ara_runtime::extract::RenderFrame> {
+        use super::EditWorldView;
+        use std::hash::{Hash, Hasher};
+        if self
+            .snapshot
+            .as_ref()
+            .is_none_or(|old| old.revision() != self.reader.revision())
+        {
+            self.snapshot = Some(
+                self.reader
+                    .snapshot()
+                    .context("asset publication is not available yet")?,
+            );
+        }
+        let snapshot = self.snapshot.as_ref().context("published asset snapshot")?;
+        // Metadata checks avoid FileCache reads/decodes for unchanged models. The
+        // library includes foliage/prefab sources, so extraction reuses them too.
+        for (asset, generation) in snapshot.generations() {
+            if generation.kinds().contains(&ara_asset::ArtifactKind::Mesh)
+                && self
+                    .library
+                    .models
+                    .get(asset)
+                    .is_none_or(|model| model.digest != generation.digest())
+            {
+                self.library.models.load(snapshot.as_ref(), asset)?;
+            }
+        }
+        let mut material_hash = std::hash::DefaultHasher::new();
+        let mut terrain_hash = std::hash::DefaultHasher::new();
+        for (_, document) in workspace.docs() {
+            let target = match document.kind.as_str() {
+                "graph" | "materialinstance" => &mut material_hash,
+                "terrain" | "foliage" => &mut terrain_hash,
+                _ => continue,
+            };
+            document.id.as_str().hash(target);
+            ara_doc::write(document, schema).hash(target);
+        }
+        let materials = (material_hash.finish(), snapshot.revision());
+        if self.materials != Some(materials) {
+            let requested: Vec<_> = self.library.materials.ids().map(str::to_owned).collect();
+            for asset in requested {
+                self.library
+                    .materials
+                    .load(workspace, snapshot.as_ref(), &asset)?;
+            }
+            self.materials = Some(materials);
+        }
+        let mut transforms = super::world_transforms(view.entities());
+        if let Some(preview) = preview {
+            preview.preview_world(view.entities(), &mut transforms);
+        }
+        for (address, row) in view.entities() {
+            if row.record.contains_key("Terrain") {
+                address.hash(&mut terrain_hash);
+                hidden.contains(address).hash(&mut terrain_hash);
+                ara_json::to_canonical_string(&ara_json::sort_keys(&row.record["Terrain"]))
+                    .hash(&mut terrain_hash);
+                if let Some(matrix) = transforms.get(address) {
+                    for value in matrix.to_cols_array() {
+                        value.to_bits().hash(&mut terrain_hash);
+                    }
+                }
+            }
+        }
+        let stamp = terrain_hash.finish();
+        let cached = self
+            .terrain
+            .as_ref()
+            .filter(|(old, _)| *old == stamp)
+            .map(|(_, data)| data);
+        let frame = ara_runtime_render::fidelity::native::document_frame(
+            view.entities(),
+            &transforms,
+            workspace,
+            &mut self.library,
+            snapshot.as_ref(),
+            cached,
+            hidden,
+        )?;
+        self.terrain = frame.terrain.as_ref().map(|terrain| {
+            (
+                stamp,
+                ara_runtime::terrain::TerrainState(std::sync::Arc::clone(&terrain.data)),
+            )
+        });
+        Ok(frame)
+    }
+    pub(crate) fn content(
+        &self,
+        frame: &ara_runtime::extract::RenderFrame,
+        workspace: &ara_doc::Workspace,
+        schema: &ara_schema::SchemaDb,
+    ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
+        ara_runtime_render::fidelity::native::Content::resolve(
+            frame,
+            workspace,
+            schema,
+            &self.library,
+            self.snapshot
+                .as_deref()
+                .context("published asset snapshot")?,
+        )
+    }
 }
 
 /// A unit tangent perpendicular to `normal`, for loaders without UV tangents. A fixed

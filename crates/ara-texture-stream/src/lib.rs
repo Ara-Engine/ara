@@ -3,11 +3,15 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 mod gpu;
 mod native;
+mod native_residency;
 mod pool;
 mod source;
 mod types;
 pub use gpu::Residency;
 pub use native::{NativeMip, NativeSource};
+pub use native_residency::{
+    NativeBinding, NativeConfig, NativeResidency, NativeStats, NativeTextureId, NativeView,
+};
 pub use pool::{Pool, Upload};
 pub use source::{Catalog, Source};
 pub use types::{Binding, Stats};
@@ -22,6 +26,11 @@ pub const PAGE_BYTES: u64 = TILE_SIZE as u64 * TILE_SIZE as u64 * 4;
 /// a copy in their offline source root and verify it equals this string.
 pub fn shader_source() -> &'static str {
     include_str!("../shaders/sample.slang")
+}
+/// Native BC mip-tail sampling for Root32/bindless consumers. Copy into the
+/// consumer's offline source root so cooking hashes the same sampling contract.
+pub fn native_shader_source() -> &'static str {
+    include_str!("../shaders/native_sample.slang")
 }
 /// Checks subgroup operations used to combine feedback without atomic contention.
 /// Called at extraction preparation, before creating consumer pipelines.

@@ -114,6 +114,10 @@ pub fn channel(
     ))
 }
 impl StreamWriter {
+    /// True after EOF or after the voice dropped its consumer; loaders can release the decoder.
+    pub fn is_finished(&self) -> bool {
+        self.queue.is_abandoned() || self.state.eof.load(Ordering::Acquire)
+    }
     /// Decodes only as many frames as can fit, preserving backpressure without dropping audio.
     pub fn fill(&mut self, decoder: &mut dyn AudioDecoder) -> Result<usize> {
         if self.queue.is_abandoned() {
@@ -197,6 +201,12 @@ pub struct StreamWorker {
     join: Option<thread::JoinHandle<Result<()>>>,
 }
 impl StreamWorker {
+    /// Whether the decoder exited. Join finished workers on the control path to surface errors.
+    pub fn is_finished(&self) -> bool {
+        self.join
+            .as_ref()
+            .is_none_or(thread::JoinHandle::is_finished)
+    }
     /// Stops further reads and joins the decoder, surfacing codec/IO errors.
     pub fn finish(mut self) -> Result<()> {
         self.cancel.store(true, Ordering::Release);

@@ -1,0 +1,33 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_fencesection",
+  "records": {
+    "e_part0": {
+      "name": "modular_chainlink_fence_double",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf#as_modularchainlinkfence",
+        "node": "modular_chainlink_fence_double"
+      },
+      "Transform": {
+        "position": [2, 0, 0]
+      }
+    },
+    "e_part1": {
+      "name": "modular_chainlink_fence_post",
+      "parent": "e_root",
+      "order": "a1",
+      "MeshRenderer": {
+        "model": "@assets/third_party/modular_chainlink_fence/modular_chainlink_fence_1k.gltf#as_modularchainlinkfence",
+        "node": "modular_chainlink_fence_post"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "fence_section",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

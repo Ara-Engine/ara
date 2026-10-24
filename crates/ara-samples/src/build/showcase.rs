@@ -4,7 +4,7 @@
 //! (metals, plastics, cloth, skin-like, glass, emissive, scanned surfaces) sits behind.
 use super::{
     Ctx, anim, clean,
-    outpost::{aim, light},
+    outpost::light,
     place::{Models, Prop, Scene, transform},
 };
 use crate::kit::{Kit, Material};
@@ -83,7 +83,17 @@ fn balls() -> Vec<(&'static str, Material, f32)> {
 
 /// Builds the showcase project.
 pub fn build(ctx: &Ctx) -> Result<()> {
-    clean(&ctx.root, &["levels", "anim", "assets/kit", ".scratch"])?;
+    clean(
+        ctx,
+        &[
+            "levels",
+            "anim",
+            "prefabs",
+            "materials",
+            "assets/kit",
+            ".scratch",
+        ],
+    )?;
     let mut models = Models::default();
     for (name, asset) in [
         ("flight_helmet", "khronos_flight_helmet"),
@@ -181,7 +191,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             "PostProcess": {"toneMapping": "neutral", "bloom": 0.04}
         }),
     );
-    s.commands.push(light(
+    s.commands.extend(light(
         "e_key",
         "Key light",
         Vec3::new(0.0, 10.0, 0.0),
@@ -197,7 +207,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
         ),
         ("e_fill", Vec3::new(4.0, 2.5, -3.5), [1.0, 0.9, 0.8], 4000.0),
     ] {
-        s.commands.push(light(
+        s.commands.extend(light(
             id,
             "Studio spot",
             p,
@@ -213,35 +223,31 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     s.entity(
         "e_stagec",
         "Floor collider",
-        json!({"Transform": {"position": [0.0, -0.1, 0.0]}, "RigidBody": {}, "PhysicsId": {"value": 900}, "Collider": {"halfExtents": [15.0, 0.1, 15.0]}}),
+        json!({"Transform": {"position": [0.0, -0.1, 0.0]}, "RigidBody": {}, "Collider": {"halfExtents": [15.0, 0.1, 15.0]}}),
     );
     // The turntable character and a jogger looping around the stage.
-    let physics = s.physics_id();
     s.entity(
         "e_model",
         "Mannequin (turntable)",
         json!({
             "Transform": transform(Vec3::new(0.0, 0.12, 0.0), 200.0, 1.0),
-            "MeshRenderer": {"model": models.get("human").reference},
+            "MeshRenderer": models.get("human").renderer,
             "Animator": {"controller": format!("@{}#an_locomotion", ANIMATION.0)},
             "CharacterController": {},
-            "PhysicsId": {"value": physics},
             "PlayerControl": {"camera": "e_camera", "walkSpeed": 1.5, "runSpeed": 5.0, "yaw": 200},
         }),
     );
-    let physics = s.physics_id();
     s.entity(
         "e_jogger",
         "Mannequin (jogging)",
         json!({
-            "Transform": transform(Vec3::new(-3.5, 0.0, 2.5), 90.0, 1.0),
-            "MeshRenderer": {"model": models.get("human").reference},
-            "Animator": {"controller": format!("@{}#an_locomotion", ANIMATION.0)},
-            "Wanderer": {"min": [-4.5, 0.0, -1.0], "max": [4.5, 0.0, 4.5], "pauseTicks": 20},
-            "NavAgent": {"height": 1.8, "maxSpeed": 3.0},
-            "RigidBody": {"motion": "kinematic"},
-            "Collider": {"kind": "capsule", "radius": 0.3, "halfHeight": 0.6},
-            "PhysicsId": {"value": physics},
+        "Transform": transform(Vec3::new(-3.5, 0.0, 2.5), 90.0, 1.0),
+        "MeshRenderer": models.get("human").renderer,
+        "Animator": {"controller": format!("@{}#an_locomotion", ANIMATION.0)},
+        "Wanderer": {"min": [-4.5, 0.0, -1.0], "max": [4.5, 0.0, 4.5], "pauseTicks": 20},
+        "NavAgent": {"height": 1.8, "maxSpeed": 3.0},
+        "RigidBody": {"motion": "kinematic"},
+        "Collider": {"kind": "capsule", "radius": 0.3, "halfHeight": 0.6},
         }),
     );
     s.entity(
@@ -252,8 +258,12 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     s.entity(
         "e_camera",
         "Camera",
-        json!({"Transform": super::place::transform_euler(Vec3::new(0.0, 2.2, -7.5), aim(Vec3::new(0.0, -0.16, 1.0))), "Camera": {"fov": 45}}),
+        json!({"Transform": {"position":[0,2.2,-7.5]}, "Camera": {"fov": 45}}),
     );
+    s.commands.push((
+        "transform.lookAt",
+        json!({"entity":"e_camera","point":[0,2.04,-6.5]}),
+    ));
     // Hero props on plinths in an arc in front.
     for (i, (name, scale, yaw)) in [
         ("flight_helmet", 1.0, 200.0),

@@ -59,6 +59,45 @@ pub struct Models {
 }
 
 impl Models {
+    /// Checks model selectors of scene, prefab and streamed-cell records against
+    /// loaded content. Missing imports already have their own load diagnostic.
+    pub(crate) fn validate_renderers(&self, workspace: &ara_doc::Workspace) -> Vec<String> {
+        let mut errors = Vec::new();
+        for (path, document) in workspace.docs() {
+            for (id, record) in document.records() {
+                let Some(value) = record.get("MeshRenderer") else {
+                    continue;
+                };
+                let checked = (|| -> Result<()> {
+                    let renderer: crate::components::MeshRenderer =
+                        serde_json::from_value(value.clone())?;
+                    if let Some(reference) = &renderer.model {
+                        if let Some(model) = self.get(asset_id(reference)?) {
+                            model.validate_renderer(&renderer)?;
+                        }
+                    } else if renderer.node.is_some() || renderer.primitive.is_some() {
+                        return Err(RuntimeError(
+                            "node/primitive selectors require a model".into(),
+                        ));
+                    } else if renderer.material_overrides.len() > 1
+                        || renderer
+                            .material_overrides
+                            .iter()
+                            .any(|entry| entry.primitive != 0)
+                    {
+                        return Err(RuntimeError(
+                            "procedural shapes have one material slot, numbered zero".into(),
+                        ));
+                    }
+                    Ok(())
+                })();
+                if let Err(error) = checked {
+                    errors.push(format!("ARA7310: {path}#{id}: {error}"));
+                }
+            }
+        }
+        errors
+    }
     /// The decoded live model for an asset ID.
     pub fn get(&self, asset: &str) -> Option<&Arc<Model>> {
         self.models.get(asset)
@@ -89,4 +128,36 @@ pub fn asset_id(reference: &ara_schema::AssetRef) -> Result<&str> {
         .map_err(RuntimeError)?
         .id
         .ok_or_else(|| RuntimeError(format!("reference {} has no asset ID", reference.0)))
+}
+
+pub(crate) fn model_references(
+    key: &str,
+    value: &serde_json::Value,
+    models: &mut BTreeSet<String>,
+) -> Result<()> {
+    let reference = if key.contains("MeshRenderer.model") || key.contains("Collider.asset") {
+        value.as_str()
+    } else if key.contains("MeshRenderer") {
+        value.get("model").and_then(serde_json::Value::as_str)
+    } else if key.contains("Collider")
+        && value
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|kind| matches!(kind, "modelConvex" | "modelMesh"))
+    {
+        value.get("asset").and_then(serde_json::Value::as_str)
+    } else {
+        None
+    };
+    if let Some(reference) = reference {
+        models.insert(asset_id(&ara_schema::AssetRef(reference.to_owned()))?.to_owned());
+    }
+    if key == "overrides"
+        && let Some(values) = value.as_object()
+    {
+        for (key, value) in values {
+            model_references(key, value, models)?;
+        }
+    }
+    Ok(())
 }

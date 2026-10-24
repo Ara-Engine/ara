@@ -11,6 +11,7 @@ ara-importers = { path = "../ara-importers" }
 ara-asset = { path = "../ara-asset" }
 ara-diag.workspace = true
 ara-doc.workspace = true
+ara-gpu = { path = "../ara-gpu" }
 ara-host.workspace = true
 ara-json.workspace = true
 ara-ops.workspace = true
@@ -23,3 +24,7 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "published"
+harness = false

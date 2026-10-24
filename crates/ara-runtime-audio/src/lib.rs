@@ -19,6 +19,7 @@
 //!   renders offline (deterministic evidence).
 //!
 //! Presentation only: nothing here writes the simulation.
+mod voices;
 use ara_acoustics::bake::{AcousticCell, CellKey};
 use ara_acoustics::{
     AcousticMaterial, AcousticPortal, AcousticSource, AcousticSurface, Acoustics,
@@ -52,6 +53,7 @@ use std::{
         mpsc::{Receiver, Sender, channel},
     },
 };
+pub use voices::{AssetVoices, STREAM_BUDGET, StreamMode, VoiceLoader};
 
 /// Errors of the audio presentation path.
 pub type Result<T> = std::result::Result<T, AudioError>;
@@ -95,33 +97,7 @@ impl SurfaceLookup for Surfaces {
 /// Loads a source's clip from its published `ara.audio` import (`audio.bin` +
 /// `audio.json`): cooked PCM/ADPCM WAV or Ogg Opus, decoded resident.
 pub fn clip(assets: &dyn ara_runtime::assets::AssetSource, reference: &AssetRef) -> Result<Clip> {
-    let asset = ara_runtime::assets::asset_id(reference).map_err(|e| invalid(e.0))?;
-    let (_, cached) = assets
-        .load(asset)
-        .map_err(|e| invalid(e.0))?
-        .ok_or_else(|| invalid(format!("sound {} is not imported", reference.0)))?;
-    let artifact = |name: &str| {
-        cached
-            .output
-            .artifacts
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| a.bytes.clone())
-            .ok_or_else(|| invalid(format!("sound {} has no {name}", reference.0)))
-    };
-    let meta: serde_json::Value = serde_json::from_slice(&artifact("audio.json")?)
-        .map_err(|e| invalid(format!("sound {}: {e}", reference.0)))?;
-    let opus = meta["codec"] == "opus";
-    let bytes = std::io::Cursor::new(artifact("audio.bin")?);
-    let mut decoder: Box<dyn ara_audio::codec::AudioDecoder> = if opus {
-        Box::new(ara_audio::codec::OpusDecoder::open(bytes)?)
-    } else {
-        Box::new(ara_audio::codec::MediaDecoder::open(
-            Box::new(bytes),
-            "wav",
-        )?)
-    };
-    ara_audio::codec::decode_clip(decoder.as_mut(), 64 * 1024 * 1024)
+    voices::resident(assets, reference)
 }
 
 /// One playing score and the gameplay values it last followed.
@@ -138,12 +114,12 @@ struct GraphControl {
     triggers: BTreeMap<String, u32>,
 }
 
-/// Prepares music stems through the presenter's clip loader (resident voices).
-struct Stems<'a>(&'a mut dyn FnMut(&AssetRef) -> Result<Clip>);
+/// Prepares music stems through the same voice loader as ordinary audio sources.
+struct Stems<'a>(&'a mut dyn VoiceLoader);
 
 impl StemLoader for Stems<'_> {
     fn prepare(&mut self, clip: &str, playback: Playback) -> Result<PreparedVoice> {
-        PreparedVoice::resident((self.0)(&AssetRef(clip.to_owned()))?, playback)
+        self.0.prepare(&AssetRef(clip.to_owned()), playback)
     }
 }
 
@@ -272,7 +248,7 @@ impl AudioPresenter {
     fn program(
         &mut self,
         reference: &AssetRef,
-        clips: &mut dyn FnMut(&AssetRef) -> Result<Clip>,
+        clips: &mut dyn VoiceLoader,
     ) -> Result<std::sync::Arc<Program>> {
         let id = ara_runtime::assets::asset_id(reference).map_err(|e| invalid(e.0))?;
         if let Some(program) = self.programs.get(id) {
@@ -291,7 +267,7 @@ impl AudioPresenter {
         };
         let audio = ara_audio_graph::AudioGraph::from_graph(graph).map_err(first)?;
         let checked = ara_audio_graph::check(&audio).map_err(first)?;
-        let mut source = |clip: &str| clips(&AssetRef(clip.to_owned()));
+        let mut source = |clip: &str| clips.clip(&AssetRef(clip.to_owned()));
         let program = ara_audio_graph::compile(&checked, self.engine.sample_rate(), &mut source)
             .map_err(first)?;
         self.programs.insert(id.to_owned(), program.clone());
@@ -302,7 +278,7 @@ impl AudioPresenter {
     fn update_music(
         &mut self,
         sources: &[(String, MusicSource)],
-        clips: &mut dyn FnMut(&AssetRef) -> Result<Clip>,
+        clips: &mut dyn VoiceLoader,
     ) -> Result<()> {
         let gone: Vec<String> = self
             .music
@@ -477,6 +453,19 @@ impl AudioPresenter {
         listener: &AudioListener,
         clips: &mut dyn FnMut(&AssetRef) -> Result<Clip>,
     ) -> Result<Vec<Heard>> {
+        self.update_voices(world, listener, &mut |reference: &AssetRef| {
+            clips(reference)
+        })
+    }
+
+    /// Updates presentation through a prepared-voice loader, so music and ordinary
+    /// audio sources can stream. Graph samplers retain bounded resident loading.
+    pub fn update_voices(
+        &mut self,
+        world: &World,
+        listener: &AudioListener,
+        clips: &mut dyn VoiceLoader,
+    ) -> Result<Vec<Heard>> {
         self.install_cells();
         let mut zones = Vec::new();
         let mut portals = Vec::new();
@@ -597,13 +586,13 @@ impl AudioPresenter {
                     Err(_) => loaded = false,
                 }
             } else if let Some(reference) = &source.clip {
-                match clips(reference) {
-                    Ok(clip) => {
-                        let mut playback =
-                            Playback::from_source(source, listener, at_frame, Default::default())?;
-                        playback.parameters = evaluation.parameters;
+                let mut playback =
+                    Playback::from_source(source, listener, at_frame, Default::default())?;
+                playback.parameters = evaluation.parameters;
+                match clips.prepare(reference, playback) {
+                    Ok(prepared) => {
                         let bus = self.mixer.bus(&source.bus).unwrap_or(BusId::MASTER);
-                        let voice = self.engine.play(bus, clip, playback)?;
+                        let voice = self.engine.install(bus, prepared)?;
                         self.voices.insert(entity.clone(), voice);
                     }
                     Err(_) => loaded = false,
@@ -658,5 +647,17 @@ impl AudioPresenter {
     /// Renders `seconds` offline from the current state (a deterministic capture).
     pub fn capture(&mut self, seconds: f64) -> Result<AudioCapture> {
         ara_audio::capture::capture_audio(&mut self.engine, seconds)
+    }
+
+    /// Captures with deterministic bounded stream refills on this isolated engine.
+    pub fn capture_streamed(
+        &mut self,
+        seconds: f64,
+        voices: &mut AssetVoices,
+    ) -> Result<AudioCapture> {
+        voices.require_offline()?;
+        ara_audio::capture::capture_audio_prepared(&mut self.engine, seconds, &mut || {
+            voices.refill()
+        })
     }
 }

@@ -1,0 +1,93 @@
+#include "native_sample.slangh"
+struct NativeUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;};
+struct NativeMaterial {Material pbr;NativeUv uv[6];uint4 slots;float4 factors;uint4 layers;};
+NativeMaterial nativeMaterial(Frame f,uint id){return buffers[NonUniformResourceIndex(buffers[f.scene.x].Load(4))].Load<NativeMaterial>(id*320);}
+float2 nativeUv(NativeUv transform,Vertex v){
+    float2 p=(transform.set==0?v.uv:v.uv1)*transform.scale;float s,c;sincos(transform.rotation,s,c);
+    return transform.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);
+}
+float4 nativeMap(Frame f,NativeMaterial m,uint slot,Vertex a,Vertex b,Vertex c,float3 bary,bool filtered){
+    uint textureId=slot<4?m.pbr.textures[min(slot,3)]:(slot==4?m.slots.x:m.slots.y);
+    if(textureId==0xffffffff)return float4(1);
+    float2 u= nativeUv(m.uv[slot],a),v=nativeUv(m.uv[slot],b),w=nativeUv(m.uv[slot],c);
+    float2 uv=u*bary.x+v*bary.y+w*bary.z;
+    uint table=buffers[f.scene.x].Load(36);float lod=0;
+    if(filtered){
+        uint4 info=ntInfo(table,textureId);
+        float density=max(length((v-u)*float2(info.zw))/max(length(b.position-a.position),1e-6),length((w-u)*float2(info.zw))/max(length(c.position-a.position),1e-6));
+        float3 position=a.position*bary.x+b.position*bary.y+c.position*bary.z;
+        lod=log2(max(1e-8,density*length(position-f.camera.xyz)*f.texture.x))+f.texture.y;
+    }
+    if(slot==1)return float4(ntNormal(table,textureId,uv,lod,m.pbr.surface.y),1);
+    bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
+    return ntSampleColorLevel(table,textureId,uv,lod,decode);
+}
+float3 nativeNormal(Frame f,NativeMaterial m,Vertex a,Vertex b,Vertex c,float3 w,float3 normal){
+    if(m.pbr.textures.y==0xffffffff)return normal;
+    float4 tangent=a.tangent*w.x+b.tangent*w.y+c.tangent*w.z;
+    float3 t=tangent.xyz-normal*dot(tangent.xyz,normal);float handedness=tangent.w;
+    if(m.slots.w!=0){
+        float2 u=nativeUv(m.uv[1],a),du=nativeUv(m.uv[1],b)-u,dv=nativeUv(m.uv[1],c)-u;
+        float determinant=du.x*dv.y-du.y*dv.x;
+        if(abs(determinant)>1e-10){
+            float3 e1=b.position-a.position,e2=c.position-a.position;
+            t=(e1*dv.y-e2*du.y)/determinant;t-=normal*dot(t,normal);
+            float3 bitangent=(e2*du.x-e1*dv.x)/determinant;
+            handedness=dot(cross(normal,t),bitangent)<0?-1:1;
+        }
+    }
+    if(dot(t,t)<1e-12)return normal;
+    t=normalize(t);float3 sampled=nativeMap(f,m,1,a,b,c,w,true).xyz;
+    return normalize(t*sampled.x+cross(normal,t)*handedness*sampled.y+normal*sampled.z);
+}
+Surface nativeShade(Frame f,uint materialId,Vertex a,Vertex b,Vertex c,float3 w){
+    NativeMaterial m=nativeMaterial(f,materialId);Material p=m.pbr;Surface s=(Surface)0;
+    s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
+    s.normal=normalize(a.normal*w.x+b.normal*w.y+c.normal*w.z);
+    s.geometricNormal=normalize(cross(b.position-a.position,c.position-a.position));
+    if(dot(s.geometricNormal,s.normal)<0)s.geometricNormal=-s.geometricNormal;
+    s.normal=nativeNormal(f,m,a,b,c,w,s.normal);
+    float4 base=nativeMap(f,m,0,a,b,c,w,true)*p.colour;
+    s.albedo=max(base.rgb,0);s.alpha=base.a;
+    float4 mr=nativeMap(f,m,2,a,b,c,w,true);
+    s.metal=saturate(p.surface.x*mr.b);s.roughness=clamp(p.emissiveRoughness.w*mr.g,0.045,1);
+    s.emissive=max(p.emissiveRoughness.rgb*nativeMap(f,m,3,a,b,c,w,true).rgb,0);
+    s.ao=lerp(1,nativeMap(f,m,4,a,b,c,w,true).r,m.factors.x);
+    s.transmission=saturate(m.factors.y*nativeMap(f,m,5,a,b,c,w,true).r);
+    bool detail=p.flags.w==0x41524132;s.specular=detail?p.surface.z*mr.a:1;s.sheenLut=f.display.z;
+    s.coat=detail?float(p.flags.y&255)/255.:0;s.coatRoughness=max(0.045,float((p.flags.y>>8)&255)/255.);
+    s.sheen=detail?float3(p.flags.z&255,(p.flags.z>>8)&255,(p.flags.z>>16)&255)/255.:float3(0);
+    s.sheenRoughness=max(0.1,float(p.flags.z>>24)/255.);s.material=materialId;return s;
+}
+float4 nativeWeights(uint packed){return float4(packed&255,(packed>>8)&255,(packed>>16)&255,packed>>24)/255.;}
+Surface nativeSurface(Frame f,uint id,uint primitive,float2 bary){
+    uint4 meshRecord=mesh(f,id);uint3 ix=indices(f,meshRecord,primitive);
+    Vertex a=vertex(f,meshRecord.x,ix.x),b=vertex(f,meshRecord.x,ix.y),c=vertex(f,meshRecord.x,ix.z);
+    float3 w=float3(1-bary.x-bary.y,bary);NativeMaterial m=nativeMaterial(f,meshRecord.w);
+    Surface s=nativeShade(f,meshRecord.w,a,b,c,w);
+    if(m.slots.z>0){
+        float4 weights=nativeWeights(a.weights)*w.x+nativeWeights(b.weights)*w.y+nativeWeights(c.weights)*w.z;
+        for(uint i=m.slots.z;i<4;i++)weights[i]=0;
+        float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
+        s.normal=0;s.albedo=0;s.emissive=0;s.roughness=0;s.metal=0;s.ao=0;s.transmission=0;s.alpha=0;
+        for(uint i=0;i<m.slots.z;i++){
+            Surface layer=nativeShade(f,m.layers[i],a,b,c,w);float weight=weights[i];
+            s.normal+=layer.normal*weight;s.albedo+=layer.albedo*weight;s.emissive+=layer.emissive*weight;
+            s.roughness+=layer.roughness*weight;s.metal+=layer.metal*weight;s.ao+=layer.ao*weight;s.transmission+=layer.transmission*weight;s.alpha+=layer.alpha*weight;
+        }
+        s.normal=normalize(s.normal);
+    }
+    s.id=id;return s;
+}
+bool nativeAccept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){
+    uint4 record=mesh(f,id);NativeMaterial m=nativeMaterial(f,record.w);
+    if(m.pbr.flags.x==0)return true;
+    uint3 ix=indices(f,record,primitive);Vertex a=vertex(f,record.x,ix.x),b=vertex(f,record.x,ix.y),c=vertex(f,record.x,ix.z);
+    float alpha=m.pbr.colour.a*nativeMap(f,m,0,a,b,c,float3(1-bary.x-bary.y,bary),false).a;
+    return m.pbr.flags.x==1?alpha>=m.pbr.surface.w:random(rng)<alpha;
+}
+float3 nativeEmission(Frame f,uint id,uint primitive,float2 bary){
+    uint4 record=mesh(f,id);NativeMaterial m=nativeMaterial(f,record.w);uint3 ix=indices(f,record,primitive);
+    Vertex a=vertex(f,record.x,ix.x),b=vertex(f,record.x,ix.y),c=vertex(f,record.x,ix.z);
+    return m.pbr.emissiveRoughness.rgb*nativeMap(f,m,3,a,b,c,float3(1-bary.x-bary.y,bary),false).rgb;
+}

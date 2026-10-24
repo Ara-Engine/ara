@@ -54,12 +54,15 @@ LightCandidate lightAt(Frame f,Surface s,float3 v,uint light,uint seed){
         float cosine=abs(dot(normalize(cross(b.xyz-a.xyz,d.xyz-a.xyz)),-c.direction));
         float4 cached=buffers[f.scene.x].Load<float4>(at+64);float3 emission=cached.rgb;
         if(cached.w==0){
+        if(nativeScene(f))emission=nativeEmission(f,record.x,record.y,bary);
+        else {
         Material emitter=material(f,record.z);
         uint width,height;textures[NonUniformResourceIndex(emitter.textures.w)].GetDimensions(width,height);
         float3 colour;
         if(width==1 && height<=2)colour=textures[NonUniformResourceIndex(emitter.textures.w)].Load(int3(0,0,0)).rgb;
         else colour=tex(emitter.textures.w,hitUv(f,record.x,record.y,bary)).rgb;
         emission=emitter.emissiveRoughness.rgb*colour;
+        }
         }
         c.value=evaluate(s,v,c.direction,bsdfPdf)*emission*cosine/max(distance*distance,1e-12);
     }

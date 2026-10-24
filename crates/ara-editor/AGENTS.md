@@ -50,7 +50,7 @@ Raster IDs drive picking, silhouette outlines and GPU-only hover. Physical Scene
 extents and UI glyph raster scale change together. Keep the separate SDL window,
 editor logical, IME and physical UIA coordinate conversions. Motion is paint-only,
 bounded to 140 ms and disabled by editor.preferences. verify-polish.ps1 captures
-1440x900 at 1x and 2560x1440 at 2x, including palettes and review cards.
+1440x900 at 1x and 2560x1440 at 2x, including palettes and the Agents feed.
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
 thumbnails. authoring registers graph/material/VFX/animation commands; graph is
@@ -82,9 +82,13 @@ read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one 
 `Run::Later(reason)`. New buttons bind `Binding::Command`; `tests/ux.rs` rejects
 uncommanded buttons. Context-menu sources are `Shell::context_at`.
 `settings.rs` holds the settings table; edits are ops on a private store (undoable,
-`editor.settings.*`), user scope persists to `%APPDATA%\Ara\editor-settings.json`
-and project scope to `ara.project.json`. `Editor::open` keeps user settings in
-memory; the app passes the real path via `open_with`.
+`editor.settings.*`), user scope persists to `editor-settings.json` in
+`settings::config_dir()` (`ARA_CONFIG_DIR`, else `%APPDATA%\Ara`) and project scope
+to `ara.project.json`. `Editor::open` keeps user settings in memory.
+Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-run
+process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
+profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
+from a fresh `<output>/.ara-profile`. Never write user state anywhere else.
 Floating windows: `DockLayout` floating roots map to owned OS windows
 (`app/windows.rs`); each is a Shell `Surface` swapped into `self.ui` by
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
@@ -104,3 +108,26 @@ D24: agent changes apply immediately. No apply-policy setting, approval tickets
 or pending agent queue. Agents is an activity feed with Undo turn (review.revert).
 Human gizmos, inspector scrubs and typing call host editor.gesture on begin/end.
 The host holds only overlapping fields for at most two seconds; other edits apply.
+
+Phase 2 (alpha journey). `activity.rs`: agent turns glow 5 s, "agent is viewing"
+and overwrite (ARA2503) notices with View/Follow; never move the human camera.
+`editor.scene.open {scene}` (path or ID; agents move only their presence); scenes
+keep cameras, first opens frame. Console/Problems (`shell/log_panels.rs`) read the
+bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
+`Editor::report_failure` re-logs an engine error's own diagnostics. Prefabs:
+`shell/prefab_ops.rs` (from selection, apply/revert overrides; root placement is
+never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
+Game view (D19): `app/game.rs` imports the play host's shared surfaces
+(`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
+`game_input` forwards keys/mouse to the selected client while captured (Esc
+releases); a faulted world (`play.status`) shows its fault with Restart/Stop
+instead of "Starting Play…". Play embeds unless `play.inGameView` is off. Build: `shell/build.rs`
+runs ara-export with `presets/*.export.json` on a thread.
+Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
+never add a capture route that shows a window. `--verify-journey` captures the
+journey (`app/journey.rs`) and writes `journey.json` after every step.
+Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
+status; swatches are painted after layout, never raw colours in markup) and
+`shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving
+`asset_tools/vfx_stream.rs`: rate, restart, step, GPU counters updated in place).
+Imports use the shared `import.initialize`/`import.configure` commands.

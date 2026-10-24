@@ -123,7 +123,7 @@ impl Verification {
                     return Err("Agents panel did not show the MCP turn".into());
                 }
                 self.screenshot("agents-review", editor, shell, gpu, ui_renderer, renderer)?;
-                shell.click(&format!("revert-{txn}"), &mut clipboard)?;
+                shell.click(&format!("turn-{txn}-undo"), &mut clipboard)?;
                 shell.dispatch(editor)?;
                 check_x(editor, self.entity.as_deref(), 1.5)?;
             }
@@ -249,7 +249,7 @@ impl Verification {
             }
             scene_view.render(renderer, editor, &view, 64)?;
             scene_view.attach(gpu, renderer, editor.state.quality)?;
-            let changed = review_tints(editor);
+            let changed = editor.agent_tints();
             gpu.overlays(
                 rect,
                 overlay::ENTITY_IMAGE,

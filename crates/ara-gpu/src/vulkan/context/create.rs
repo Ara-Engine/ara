@@ -121,6 +121,14 @@ impl Gpu {
             if hdr_metadata {
                 device_extensions.push(ash::ext::hdr_metadata::NAME.as_ptr());
             }
+            // Shared surfaces (D19 embedded Play): opaque NT-handle memory export and
+            // import. External memory itself is core 1.1; only the Win32 handle
+            // extension is enabled, and only where the driver offers it.
+            let external_memory =
+                cfg!(windows) && has_extension(ash::khr::external_memory_win32::NAME);
+            if external_memory {
+                device_extensions.push(ash::khr::external_memory_win32::NAME.as_ptr());
+            }
             for &extension in &device_extensions {
                 ensure!(
                     has_extension(CStr::from_ptr(extension)),
@@ -278,12 +286,14 @@ impl Gpu {
             let mut as_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
             let mut mesh_properties = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
             let mut indexing = vk::PhysicalDeviceDescriptorIndexingProperties::default();
+            let mut id_properties = vk::PhysicalDeviceIDProperties::default();
             instance.get_physical_device_properties2(
                 physical,
                 &mut vk::PhysicalDeviceProperties2::default()
                     .push(&mut as_properties)
                     .push(&mut indexing)
-                    .push(&mut mesh_properties),
+                    .push(&mut mesh_properties)
+                    .push(&mut id_properties),
             );
             // Retain bindings 0..4 for existing material-preview cooks. Both the
             // legacy alias and the new runtime array count against native limits.
@@ -356,6 +366,13 @@ impl Gpu {
                     families[compute_family as usize].timestamp_valid_bits,
                 ],
                 pipeline_cache_uuid: properties.pipeline_cache_uuid.to_vec(),
+                external_memory,
+                identity: crate::shared::DeviceIdentity {
+                    device_uuid: id_properties.device_uuid,
+                    driver_uuid: id_properties.driver_uuid,
+                    luid: (id_properties.device_luid_valid != 0)
+                        .then_some(id_properties.device_luid),
+                },
             };
             println!(
                 "{}; graphics family {graphics_family}; compute-only family {compute_family}",

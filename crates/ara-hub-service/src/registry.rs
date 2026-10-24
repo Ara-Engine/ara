@@ -53,6 +53,7 @@ pub struct Registry {
 impl Registry {
     /// Load without silently replacing an unreadable or corrupt registry.
     pub fn load(dir: &Path) -> Result<Self, RpcError> {
+        crate::validate_development_config(dir).map_err(io_error)?;
         match fs::read(dir.join("registry.json")) {
             Ok(bytes) => serde_json::from_slice(&bytes).map_err(io_error),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
@@ -61,6 +62,12 @@ impl Registry {
     }
     /// Write canonical JSON by replacement; the Hub holds the user-level lock.
     pub fn save(&self, dir: &Path) -> Result<(), RpcError> {
+        crate::validate_development_config(dir).map_err(io_error)?;
+        for engine in &self.engines {
+            for executable in std::iter::once(&engine.executable).chain(engine.editor.iter()) {
+                crate::isolation::validate_engine(dir, executable).map_err(io_error)?;
+            }
+        }
         write_json(
             &dir.join("registry.json"),
             &serde_json::to_value(self).map_err(io_error)?,
@@ -105,7 +112,10 @@ impl Registry {
             .or_else(|| marker["engineVersion"].as_str().map(str::to_owned))
             .or_else(|| self.engines.first().map(|e| e.version.clone()))
             .ok_or_else(|| invalid("no installed engine"))?;
-        self.engine(&engine_version)?;
+        // Imported projects may pin a published engine which is not installed yet.
+        if !self.engines.iter().any(|e| e.version == engine_version) {
+            ara_update::version(&engine_version).map_err(|e| invalid(e.to_string()))?;
+        }
         marker["name"] = name.clone().into();
         marker["engineVersion"] = engine_version.clone().into();
         write_json(&marker_path, &marker)?;

@@ -19,9 +19,12 @@ fn main() -> ara_ui::Result<()> {
             "--verify" => options.verify = true,
             "--verify-panels" => options.verify_panels = true,
             "--verify-ux" => options.verify_ux = true,
+            "--verify-journey" => options.verify_journey = true,
             "--sample" => options.sample = true,
             "--screenshot" => options.screenshot = true,
             "--panel" => options.panel = Some(args.next().ok_or("--panel needs a panel name")?),
+            "--play" => options.play = true,
+            "--scene" => options.scene = Some(args.next().ok_or("--scene needs a scene path")?),
             "--size" => {
                 let size = args.next().ok_or("--size needs WxH")?;
                 let (w, h) = size.split_once('x').ok_or("--size needs WxH")?;
@@ -46,7 +49,7 @@ fn main() -> ara_ui::Result<()> {
             }
             "--help" | "-h" => {
                 println!(
-                    "ara-editor <project> [--sample] [--headless] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings."
+                    "ara-editor <project> [--scene levels/x.scene] [--sample] [--headless] [--frames N] [--verify | --verify-panels | --verify-ux] [--size WxH] [--dpi SCALE] [--panel NAME] [--screenshot] [--output DIR]\n\nNative Vulkan editor + project Engine Protocol authority.\n--scene opens that scene instead of the project's main scene.\n--play starts Play in the Game view once the window is up.\n--headless captures editor-scene.png without creating a native window, then exits.\n--sample creates an undoable sample scene if the scene is empty.\n--verify runs native/protocol interactions, screenshots and timings, then exits.\n--verify-panels runs real imports, panel interactions, both themes and a 500-node navigation benchmark.\n--verify-ux captures menus, context menus, the palette, Settings, a floating Inspector and every tool tab in both themes, then records idle and camera timings."
                 );
                 return Ok(());
             }
@@ -54,14 +57,10 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
-    let _capture = match ara_crash::desktop::start(
-        "ara-editor",
-        !options.headless
-            && options.frames.is_none()
-            && !options.verify
-            && !options.verify_panels
-            && !options.verify_ux,
-    ) {
+    // SAFETY: still single-threaded: nothing above starts a thread.
+    unsafe { options.isolate_profile() };
+    // Bounded runs never offer the crash folder or consume its "seen" marker.
+    let _capture = match ara_crash::desktop::start("ara-editor", !options.offscreen()) {
         Ok(capture) => Some(capture),
         Err(error) => {
             eprintln!("ARA-EXP-CRASH-004: {error:#}");

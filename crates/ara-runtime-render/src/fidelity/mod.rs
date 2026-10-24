@@ -14,6 +14,8 @@ mod atlas;
 mod content;
 #[cfg(test)]
 mod foliage_tests;
+/// Compressed, instanced scene preparation shared by runtime presentation paths.
+pub mod native;
 mod packing;
 mod terrain;
 #[cfg(test)]
@@ -67,12 +69,18 @@ pub fn scene(frame: &RenderFrame, mut content: Content) -> Result<(Scene, Stats)
     let mut out = Builder::default();
     for draw in &frame.draws {
         let palette = draw.skin.as_ref().map(|r| &frame.palettes[r.start..r.end]);
+        let default_emissive = if matches!(&draw.geometry, Geometry::Model { .. }) {
+            let factor = draw.emissive_factor.unwrap_or([0.0; 3]);
+            std::array::from_fn(|i| factor[i] * draw.emissive[i])
+        } else {
+            draw.emissive
+        };
         let mut material = Material {
             base_color: draw.color,
             emissive_roughness: [
-                draw.emissive[0],
-                draw.emissive[1],
-                draw.emissive[2],
+                default_emissive[0],
+                default_emissive[1],
+                default_emissive[2],
                 draw.roughness,
             ],
             surface: [draw.metallic, 1.0, 1.0, 0.5],
@@ -90,7 +98,14 @@ pub fn scene(frame: &RenderFrame, mut content: Content) -> Result<(Scene, Stats)
                 let p = &model.primitives[*primitive];
                 crate::geometry::transform(&p.vertices, draw.world, palette, &mut vertices);
                 if let Some(m) = p.material.and_then(|m| model.materials.get(m)) {
-                    out.model_material(&mut material, model, m, draw.color, draw.emissive)?;
+                    out.model_material(
+                        &mut material,
+                        model,
+                        m,
+                        draw.color,
+                        draw.emissive,
+                        draw.emissive_factor,
+                    )?;
                     if let Some(d) = content.details.get(model.asset.as_str()) {
                         d.apply(&mut material)?;
                     }
@@ -268,6 +283,7 @@ impl Builder {
         m: &ara_runtime::model::ModelMaterial,
         color: [f32; 4],
         emissive: [f32; 3],
+        emissive_factor: Option<[f32; 3]>,
     ) -> Result<()> {
         for (out, (a, b)) in material
             .base_color
@@ -276,10 +292,11 @@ impl Builder {
         {
             *out = a * b;
         }
+        let factor = emissive_factor.unwrap_or(m.emissive);
         material.emissive_roughness = [
-            m.emissive[0] * emissive[0],
-            m.emissive[1] * emissive[1],
-            m.emissive[2] * emissive[2],
+            factor[0] * emissive[0],
+            factor[1] * emissive[1],
+            factor[2] * emissive[2],
             m.roughness,
         ];
         material.surface = [m.metallic, m.normal_scale, 1.0, m.alpha_cutoff];

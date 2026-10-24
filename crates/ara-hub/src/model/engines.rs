@@ -19,6 +19,7 @@ pub fn installed(hub_dir: &Path) -> Option<Engine> {
     let executable = hub_dir.join(exe("ara"));
     let editor = hub_dir.join(exe("ara-editor"));
     executable.is_file().then(|| Engine {
+        managed: false,
         version: manifest["version"].as_str().unwrap_or_default().to_owned(),
         executable,
         editor: editor.is_file().then_some(editor),
@@ -51,6 +52,7 @@ pub fn probe(folder: &Path) -> Result<Engine, String> {
         .ok_or_else(|| "`ara --version` did not report a version".to_owned())?;
     let editor = folder.join(exe("ara-editor"));
     Ok(Engine {
+        managed: false,
         version,
         executable,
         editor: editor.is_file().then_some(editor),

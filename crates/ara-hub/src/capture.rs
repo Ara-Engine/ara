@@ -118,7 +118,7 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
     let install = r"C:\Users\tester\AppData\Local\Programs\Ara";
     let engines = json!({"engines":[
         {"version":"0.0.1-alpha","executable":format!(r"{install}\0.0.1-alpha\ara.exe"),"editor":format!(r"{install}\0.0.1-alpha\ara-editor.exe")},
-        {"version":"0.0.2-nightly","executable":format!(r"{install}\0.0.2-nightly\ara.exe"),"editor":null}
+        {"version":"0.0.2-nightly","executable":r"C:\Users\tester\AppData\Local\Ara\Engines\0.0.2-nightly\ara.exe","editor":r"C:\Users\tester\AppData\Local\Ara\Engines\0.0.2-nightly\ara-editor.exe","managed":true}
     ]});
     let activity = json!({"activity":[
         {"project":"project-1","participants":[
@@ -167,12 +167,47 @@ fn seed_with(hub: &mut Hub, with_projects: bool) {
         AgentClient::Codex,
         "[mcp_servers.ara]\ncommand = \"ara\"\nargs = [\"mcp\"]\n".into(),
     );
+    let release = |kind: &str, version: &str, channel: &str| {
+        json!({
+            "format":"ara.release/1","kind":kind,"version":version,"channel":channel,
+            "minHubVersion":"0.0.1-alpha","platform":"windows-x64",
+            "notes":"Improved editor tools, faster project startup and renderer fixes. Installs beside your current engine; existing project pins stay as they are.",
+            "assets":[{"name":format!("ara-{kind}-{version}-windows-x64.zip"),"size":864_000_000_u64,"sha256":"00".repeat(32),"url":"https://github.com/Snowy7/ara/releases"}]
+        })
+    };
+    for (method, value) in [
+        (
+            "hub.engines.available",
+            json!({"releases":[release("engine","0.0.3-alpha","preview")],"status":{"state":"fresh"},"checking":false}),
+        ),
+        (
+            "hub.updates",
+            json!({"releases":[release("hub","0.1.0","stable")],"status":{"state":"fresh"},"checking":false,"channel":"preview","repo":"Snowy7/ara"}),
+        ),
+        (
+            "hub.downloads",
+            json!({"jobs":[
+                {"id":"hub-0.1.0","kind":"hub","version":"0.1.0","state":"complete","progress":{"received":18_000_000,"total":18_000_000},"result":{"archive":"target/hub-fixture.zip","manifest":"fixture","signature":"fixture"}},
+                {"id":"engine-0.0.3-alpha","kind":"engine","version":"0.0.3-alpha","state":"running","progress":{"received":328_320_000,"total":864_000_000}}
+            ]}),
+        ),
+    ] {
+        hub.event(Event::Reply {
+            call: Call::Release {
+                method,
+                params: json!({}),
+            },
+            result: Ok(value),
+        });
+    }
+    hub.take_calls();
 }
 
 /// One captured state: a name and how to reach it from the seeded model.
 type Step = (&'static str, fn(&mut Hub));
 const STEPS: &[Step] = &[
     ("projects", |hub| {
+        hub.projects[2].engine_version = "0.0.1-alpha".into();
         hub.view = View::Projects;
         hub.prefs.layout = Layout::Grid;
         hub.menu = None;
@@ -181,6 +216,10 @@ const STEPS: &[Step] = &[
     ("projects-list", |hub| {
         hub.menu = None;
         hub.prefs.layout = Layout::List;
+    }),
+    ("projects-missing-engine", |hub| {
+        hub.prefs.layout = Layout::Grid;
+        hub.projects[2].engine_version = "0.0.3-alpha".into();
     }),
     ("create", |hub| {
         hub.prefs.layout = Layout::Grid;
@@ -191,6 +230,7 @@ const STEPS: &[Step] = &[
         }
     }),
     ("installs", |hub| hub.view = View::Installs),
+    ("update-banner", |hub| hub.view = View::Settings),
     ("agents", |hub| hub.view = View::Agents),
     ("learn", |hub| hub.view = View::Learn),
 ];

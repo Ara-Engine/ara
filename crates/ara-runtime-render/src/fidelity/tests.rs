@@ -17,6 +17,8 @@ fn draw(geometry: Geometry) -> Draw {
         roughness: 0.5,
         metallic: 0.0,
         emissive: [2.0, 3.0, 4.0],
+        emissive_factor: None,
+        material: None,
         skin: None,
     }
 }
@@ -27,6 +29,8 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
     let model = Model {
         asset: "as_model".into(),
         digest: ara_asset::Digest([7; 32]),
+        nodes: BTreeMap::new(),
+        node_names: BTreeMap::new(),
         primitives: vec![Primitive {
             vertices: source.vertices,
             indices: source.indices,
@@ -38,15 +42,26 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             skin: None,
         }],
         materials: vec![ModelMaterial {
+            name: "Source material".into(),
             base_color: [0.8, 0.4, 0.2, 0.6],
             metallic: 0.7,
             roughness: 0.3,
             emissive: [5.0, 6.0, 7.0],
             base_color_texture: None,
+            base_color_uv: Default::default(),
             normal_texture: None,
+            normal_uv: Default::default(),
             normal_scale: 0.8,
             metallic_roughness_texture: None,
+            metallic_roughness_uv: Default::default(),
+            occlusion_texture: None,
+            occlusion_uv: Default::default(),
+            occlusion_strength: 1.0,
             emissive_texture: None,
+            emissive_uv: Default::default(),
+            transmission_factor: 0.0,
+            transmission_texture: None,
+            transmission_uv: Default::default(),
             alpha_mode: 1,
             alpha_cutoff: 0.4,
         }],
@@ -69,6 +84,15 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
     assert_eq!(stats.triangles, 1);
     assert_eq!(stats.finest_triangles, 12);
     assert_eq!(stats.emissive_materials, 1);
+    frame.draws[0].emissive_factor = Some([0.5, 1.0, 2.0]);
+    let (overridden, _) = super::scene(&frame, Content::default()).expect("emission override");
+    assert_eq!(
+        overridden.materials[0].emissive_roughness[..3],
+        [1.0, 3.0, 8.0]
+    );
+    frame.draws[0].emissive = [0.0; 3];
+    let (disabled, _) = super::scene(&frame, Content::default()).expect("disabled emission");
+    assert_eq!(disabled.materials[0].emissive_roughness[..3], [0.0; 3]);
 }
 
 #[test]
@@ -111,12 +135,51 @@ fn all_local_lights_and_environment_survive_the_adapter() {
 }
 
 #[test]
+fn materialless_models_have_zero_source_emission_and_allow_an_explicit_factor() {
+    let source = crate::geometry::shape(ara_runtime::components::MeshShape::Box, [1.0; 3]);
+    let model = Arc::new(Model {
+        asset: "as_plain".into(),
+        digest: ara_asset::Digest([8; 32]),
+        primitives: vec![Primitive {
+            vertices: source.vertices,
+            indices: source.indices,
+            lods: Vec::new(),
+            material: None,
+            skin: None,
+        }],
+        nodes: BTreeMap::new(),
+        node_names: BTreeMap::new(),
+        materials: Vec::new(),
+        textures: Vec::new(),
+        skins: Vec::new(),
+        bounds: [[-0.5; 3], [0.5; 3]],
+    });
+    let mut frame = RenderFrame::default();
+    let mut item = draw(Geometry::Model {
+        model,
+        primitive: 0,
+    });
+    item.emissive = [1.0; 3];
+    frame.draws.push(item);
+    let (unlit, _) = scene(&frame, Content::default()).expect("materialless model");
+    assert_eq!(unlit.materials[0].emissive_roughness[..3], [0.0; 3]);
+    frame.draws[0].emissive_factor = Some([2.0, 3.0, 4.0]);
+    let (emitter, _) = scene(&frame, Content::default()).expect("explicit shape emission");
+    assert_eq!(
+        emitter.materials[0].emissive_roughness[..3],
+        [2.0, 3.0, 4.0]
+    );
+}
+
+#[test]
 fn every_pbr_map_is_resolved_once_per_model_generation() {
     use ara_asset_format::{TextureFormat, write_ktx2};
     use ara_runtime::model::{ModelTexture, TextureUsage};
     let mut model = Model {
         asset: "as_textured".into(),
         digest: ara_asset::Digest([3; 32]),
+        nodes: BTreeMap::new(),
+        node_names: BTreeMap::new(),
         primitives: Vec::new(),
         materials: Vec::new(),
         textures: Vec::new(),
@@ -138,15 +201,26 @@ fn every_pbr_map_is_resolved_once_per_model_generation() {
         });
     }
     let source = ModelMaterial {
+        name: "Textured source".into(),
         base_color: [1.0; 4],
         metallic: 0.9,
         roughness: 0.2,
         emissive: [1.0; 3],
         base_color_texture: Some(0),
+        base_color_uv: Default::default(),
         normal_texture: Some(1),
+        normal_uv: Default::default(),
         normal_scale: 0.5,
         metallic_roughness_texture: Some(2),
+        metallic_roughness_uv: Default::default(),
+        occlusion_texture: None,
+        occlusion_uv: Default::default(),
+        occlusion_strength: 1.0,
         emissive_texture: Some(3),
+        emissive_uv: Default::default(),
+        transmission_factor: 0.0,
+        transmission_texture: None,
+        transmission_uv: Default::default(),
         alpha_mode: 2,
         alpha_cutoff: 0.5,
     };
@@ -154,7 +228,7 @@ fn every_pbr_map_is_resolved_once_per_model_generation() {
     for _ in 0..2 {
         let mut material = Material::default();
         builder
-            .model_material(&mut material, &model, &source, [1.0; 4], [2.0; 3])
+            .model_material(&mut material, &model, &source, [1.0; 4], [2.0; 3], None)
             .expect("all cooked maps resolve");
         assert_eq!(material.textures, [2, 3, 4, 5]);
         assert_eq!(material.flags[0], 2);

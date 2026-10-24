@@ -10,8 +10,8 @@
 //! importer older than the sidecar's, or a failed import, produces a diagnostic and
 //! keeps the last good generation (a placeholder when none exists).
 use ara_asset::{
-    AssetChanged, AssetPipeline, FileCache, ProcessWorker, ReloadEvent, Sidecar, SidecarCommand,
-    SourceAsset, TargetPlatform, VersionCheck,
+    AssetChanged, AssetPipeline, FileCache, ImportSettings, ProcessWorker, ReloadEvent, Sidecar,
+    SidecarCommand, SourceAsset, TargetPlatform, VersionCheck,
 };
 use ara_diag::Diagnostic;
 use ara_schema::SchemaDb;
@@ -28,6 +28,10 @@ pub struct Assets {
     sources: BTreeSet<String>,
     failures: BTreeMap<String, String>,
     notes: Vec<Diagnostic>,
+    installed: BTreeMap<String, String>,
+    configurations: BTreeMap<String, (String, ara_doc::Record)>,
+    revision: Option<u64>,
+    published: crate::published::Publisher,
     /// Cache directory shared with players.
     pub cache: PathBuf,
 }
@@ -60,6 +64,7 @@ impl Assets {
         ara_asset::register_schema(&mut schema);
         let cache = FileCache::new(root).map_err(|e| e.to_string())?;
         let cache_dir = cache.root().to_path_buf();
+        let published = crate::published::Publisher::new(root, cache.clone())?;
         let mut pipeline = AssetPipeline::new(
             root,
             ProcessWorker::new(worker),
@@ -147,8 +152,99 @@ impl Assets {
             sources,
             failures,
             notes,
+            installed,
+            configurations: BTreeMap::new(),
+            revision: None,
+            published,
             cache: cache_dir,
         })
+    }
+
+    /// Synchronizes command-authored sidecars before Play or hot reload. In-memory
+    /// settings are authoritative even before the host's canonical debounced save.
+    pub fn synchronize(
+        &mut self,
+        workspace: &ara_doc::Workspace,
+        revision: u64,
+    ) -> Result<(), String> {
+        if self.revision == Some(revision) {
+            return Ok(());
+        }
+        let mut current = BTreeMap::new();
+        for (path, doc) in workspace.docs().filter(|(_, doc)| doc.kind == "import") {
+            let record = doc
+                .record("i_settings")
+                .ok_or_else(|| format!("{path}: missing import settings"))?;
+            let source = path
+                .strip_suffix(".import.json")
+                .ok_or_else(|| format!("{path}: import document must name a sidecar"))?;
+            let id = doc.id.to_string();
+            let configuration = (source.to_owned(), record.clone());
+            if self.configurations.get(&id) != Some(&configuration) {
+                let mut settings: ImportSettings =
+                    serde_json::from_value(serde_json::Value::Object(record.clone()))
+                        .map_err(|e| format!("{path}: {e}"))?;
+                self.sources.insert(id.clone());
+                if let Some(installed) = self.installed.get(&settings.importer) {
+                    match settings.check_version(installed) {
+                        VersionCheck::Current => {}
+                        VersionCheck::Upgrade => settings.version = installed.clone(),
+                        VersionCheck::Newer => {
+                            self.pipeline.unregister(&id);
+                            self.failures.insert(
+                                id.clone(),
+                                format!(
+                                    "{path} needs {} {}, newer than this engine's {installed}",
+                                    settings.importer, settings.version
+                                ),
+                            );
+                            current.insert(id, configuration);
+                            continue;
+                        }
+                    }
+                }
+                self.pipeline
+                    .configure(
+                        SourceAsset {
+                            id: id.clone(),
+                            path: source.to_owned(),
+                            preset: settings.preset,
+                            thread_budget: 4,
+                            importer: settings.importer,
+                            version: settings.version,
+                            settings: settings.settings,
+                            target: if cfg!(target_os = "macos") {
+                                TargetPlatform::MacOs
+                            } else if cfg!(target_os = "linux") {
+                                TargetPlatform::Linux
+                            } else {
+                                TargetPlatform::Windows
+                            },
+                            asset_dependencies: BTreeMap::new(),
+                        },
+                        settings.dependencies,
+                    )
+                    .map_err(|e| e.to_string())?;
+                self.failures.remove(&id);
+                if let Err(error) = self.pipeline.request(&id) {
+                    self.failures.insert(id.clone(), error.to_string());
+                }
+            }
+            current.insert(id, configuration);
+        }
+        for id in self
+            .configurations
+            .keys()
+            .filter(|id| !current.contains_key(*id))
+        {
+            self.pipeline.unregister(id);
+            self.sources.remove(id);
+            self.failures.remove(id);
+        }
+        self.configurations = current;
+        self.published.retain(&self.sources);
+        self.revision = Some(revision);
+        Ok(())
     }
 
     /// Importer upgrades and failed-import placeholder diagnostics not yet reported.
@@ -172,9 +268,12 @@ impl Assets {
             }
         }
         self.pipeline.reload.allow_during_play = allow;
-        self.pipeline
+        let changes = self
+            .pipeline
             .apply_boundary(true, playing, &BTreeSet::new())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        self.published.complete(&changes, &self.pipeline.reload);
+        changes
     }
 
     /// Published source generations (hex digests), waiting up to `timeout` for
@@ -192,7 +291,7 @@ impl Assets {
                 .filter(|id| {
                     self.sources.contains(*id)
                         && !self.failures.contains_key(*id)
-                        && self.digest(id).is_none()
+                        && (self.digest(id).is_none() || self.pipeline.is_importing_asset(id))
                 })
                 .collect();
             if missing.is_empty() {

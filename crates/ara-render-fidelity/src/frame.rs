@@ -133,14 +133,7 @@ impl FidelityView {
                 self.scene.table_index,
                 self.scene.tlas_index,
                 self.scene.environment,
-                if self.scene.motion_pending {
-                    self.scene
-                        .previous_table
-                        .map(|(_, index)| index)
-                        .unwrap_or(self.scene.table_index)
-                } else {
-                    self.scene.table_index
-                },
+                self.scene.previous_binding(),
             ],
             origin: self.volume.origin.extend(0.).to_array(),
             spacing: self.volume.spacing.extend(0.).to_array(),

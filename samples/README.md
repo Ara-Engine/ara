@@ -18,6 +18,14 @@ target/release/ara-samples play outpost levels/hangar.scene hangar
 target/release/ara-samples editor showcase levels/showcase.scene showcase
 ```
 
+Builds use the same document, import, animation, music and scene commands as CLI/MCP
+agents. Variant sheets become native prefabs with source-node selectors; lamp
+emission and suit materials are component overrides. The original Poly Haven fence
+uses its texture transforms and companion opacity maps during import. Terrain uses
+its authored signed origin, with native material graphs scaled in world metres.
+Colliders share the prop entity and automatic physics identities. Rebuilds preserve
+the attributed journal and keep stable document, stroke and exclusion IDs.
+
 The projects are ordinary Ara projects: `ara check`, `ara mcp` and the editor work in
 them as in any other. GPU commands need the Vulkan SDK (see `crates/ara-samples/AGENTS.md`).
 

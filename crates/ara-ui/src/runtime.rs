@@ -88,7 +88,7 @@ impl Ui {
         tokens: std::collections::BTreeMap<String, String>,
     ) -> Result<Self> {
         if size.iter().any(|n| !n.is_finite() || *n <= 0.0) {
-            return Err("ARA7040: invalid viewport".into());
+            return Err("ARA4040: invalid viewport".into());
         }
         let elements = source::compile(markup)?;
         let sheet = Sheet::with_tokens(css, tokens)?;
@@ -160,7 +160,7 @@ impl Ui {
         let node = self
             .nodes
             .get_mut(index)
-            .ok_or("ARA7040: invalid node handle")?;
+            .ok_or("ARA4040: invalid node handle")?;
         let text = node.text.as_mut().ok_or("node is not a text control")?;
         if text.set(value) {
             node.dirty.layout = true;

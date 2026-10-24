@@ -314,6 +314,11 @@ impl HotReload {
     pub fn is_importing(&self) -> bool {
         !self.jobs.is_empty()
     }
+
+    /// Whether one asset still has a cook or unpublished result in flight.
+    pub fn is_importing_asset(&self, asset: &str) -> bool {
+        self.jobs.contains_key(asset) || self.ready.contains_key(asset)
+    }
 }
 impl Drop for HotReload {
     fn drop(&mut self) {

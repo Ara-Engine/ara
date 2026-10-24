@@ -526,7 +526,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "description": "Stable code ARA7100..ARA7106.",
+          "description": "Stable code ARA4100..ARA4106.",
           "default": ""
         },
         "node": {

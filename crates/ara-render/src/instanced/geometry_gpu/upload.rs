@@ -1,0 +1,282 @@
+use super::*;
+use ara_gpu::{
+    Barrier, Queue,
+    acceleration::{AccelerationDesc, TriangleRange},
+    commands::Command,
+    vk,
+};
+
+impl GeometryGpu {
+    /// Uploads shared geometry and builds every requested BLAS in one submission.
+    /// No instance duplicates, texture pixels or CPU-generated mip levels are packed.
+    pub fn new(gpu: &mut VulkanDevice, scene: &Scene, rt: bool) -> Result<Self> {
+        scene.validate()?;
+        ensure!(
+            !rt || gpu.context().info.ray_tracing,
+            "native geometry RT tier unavailable"
+        );
+        // SAFETY: Read-only property query on this live device's physical-device handle.
+        let limits = unsafe {
+            gpu.context()
+                .instance
+                .get_physical_device_properties(gpu.context().physical)
+        }
+        .limits;
+        let packed = pack::Packed::new(scene, u64::from(limits.max_storage_buffer_range))?;
+        let layout = scene
+            .geometry
+            .iter()
+            .zip(&packed.ranges)
+            .map(|(geometry, range)| {
+                let lod = &packed.lods[range.first as usize];
+                GeometryLayout {
+                    key: geometry.key,
+                    revision: geometry.revision,
+                    deforming: geometry.deforming,
+                    first: lod.vertex_offset as usize / std::mem::size_of::<Vertex>(),
+                    vertices: geometry.vertices.len(),
+                }
+            })
+            .collect();
+        let mut allocated = Vec::new();
+        match Self::upload(gpu, packed, rt, &mut allocated) {
+            Ok((pool, stage)) => {
+                if let Some(stage) = stage {
+                    gpu.retire(Resource::Buffer(stage))?;
+                }
+                gpu.collect()?;
+                Ok(Self { layout, ..pool })
+            }
+            Err(error) => {
+                for resource in allocated.into_iter().rev() {
+                    gpu.retire(resource)?;
+                }
+                gpu.collect()?;
+                Err(error)
+            }
+        }
+    }
+
+    fn upload(
+        gpu: &mut VulkanDevice,
+        packed: pack::Packed,
+        rt: bool,
+        allocated: &mut Vec<Resource>,
+    ) -> Result<(Self, Option<Buffer>)> {
+        let mut result = Self {
+            static_pool: None,
+            dynamic: None,
+            table: None,
+            ranges: packed.ranges,
+            structures: Vec::new(),
+            layout: Vec::new(),
+            lod_data: Vec::new(),
+            staging: Vec::new(),
+            current_slot: 0,
+            presented_slot: 0,
+            pending_pose: false,
+            stats: GeometryUpload::default(),
+        };
+        result.stats.geometries = result.ranges.len();
+        if packed.lods.is_empty() {
+            return Ok((result, None));
+        }
+        let usage = vk::BufferUsageFlags::STORAGE_BUFFER
+            | if rt {
+                vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                    | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+            } else {
+                vk::BufferUsageFlags::empty()
+            };
+        let pool = allocate(
+            gpu,
+            packed.static_bytes.len() as u64,
+            usage | vk::BufferUsageFlags::TRANSFER_DST,
+            false,
+            allocated,
+        )?;
+        result.static_pool = Some(pool);
+        let stage = allocate(
+            gpu,
+            packed.static_bytes.len() as u64,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            true,
+            allocated,
+        )?;
+        gpu.upload(stage, &packed.static_bytes)?;
+        let pool_index = gpu.storage_buffer(pool)?.index;
+        let dynamic_bytes = bytemuck::cast_slice(&packed.dynamic);
+        let dynamic = if dynamic_bytes.is_empty() {
+            None
+        } else {
+            let a = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
+            let b = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
+            let c = allocate(gpu, dynamic_bytes.len() as u64, usage, true, allocated)?;
+            gpu.upload(a, dynamic_bytes)?;
+            gpu.upload(b, dynamic_bytes)?;
+            gpu.upload(c, dynamic_bytes)?;
+            Some([a, b, c])
+        };
+        result.dynamic = dynamic;
+        let dynamic_indices = if let Some([a, _, _]) = dynamic {
+            [gpu.storage_buffer(a)?.index; 2]
+        } else {
+            [0; 2]
+        };
+        let mut rows = Vec::with_capacity(packed.lods.len());
+        for lod in &packed.lods {
+            let (vertices, current, previous) = if lod.deforming {
+                (
+                    dynamic.ok_or_else(|| anyhow::anyhow!("missing deforming vertex pool"))?[0],
+                    dynamic_indices[0],
+                    dynamic_indices[1],
+                )
+            } else {
+                (pool, pool_index, pool_index)
+            };
+            rows.push(Row([
+                current,
+                u32::try_from(lod.vertex_offset)?,
+                pool_index,
+                u32::try_from(lod.index_offset)?,
+                previous,
+                u32::try_from(lod.vertex_offset)?,
+                lod.vertex_count,
+                lod.index_count,
+            ]));
+            if rt {
+                let blas = gpu.create_acceleration_structure(&AccelerationDesc::TriangleRange(
+                    TriangleRange {
+                        vertices,
+                        vertex_offset: lod.vertex_offset,
+                        vertex_count: lod.vertex_count,
+                        vertex_stride: std::mem::size_of::<Vertex>() as u64,
+                        indices: pool,
+                        index_offset: lod.index_offset,
+                        index_count: lod.index_count,
+                    },
+                ))?;
+                allocated.push(Resource::AccelerationStructure(blas));
+                result.structures.push(blas);
+            }
+        }
+        let row_bytes = bytemuck::cast_slice(&rows);
+        let table = allocate(
+            gpu,
+            row_bytes.len() as u64,
+            vk::BufferUsageFlags::STORAGE_BUFFER,
+            true,
+            allocated,
+        )?;
+        gpu.upload(table, row_bytes)?;
+        result.table = Some((table, gpu.storage_buffer(table)?.index));
+        let mut commands = gpu.begin(Queue::Graphics);
+        commands.push(Command::BeginPass("Scene.Geometry.Upload".into()));
+        commands.barriers([
+            edge(
+                Resource::Buffer(stage),
+                Access::HostWrite,
+                Access::CopySource,
+            ),
+            edge(
+                Resource::Buffer(pool),
+                Access::Undefined,
+                Access::CopyDestination,
+            ),
+        ]);
+        commands.push(Command::CopyBuffer {
+            source: stage,
+            destination: pool,
+            size: packed.static_bytes.len() as u64,
+        });
+        // Both shader reads and AS-build reads consume the original transfer write.
+        commands.barriers([edge(
+            Resource::Buffer(pool),
+            Access::CopyDestination,
+            Access::ShaderRead,
+        )]);
+        if rt {
+            commands.barriers([edge(
+                Resource::Buffer(pool),
+                Access::CopyDestination,
+                Access::AsInput,
+            )]);
+        }
+        for buffer in dynamic.into_iter().flatten() {
+            commands.barriers([edge(
+                Resource::Buffer(buffer),
+                Access::HostWrite,
+                Access::ShaderRead,
+            )]);
+            if rt {
+                commands.barriers([edge(
+                    Resource::Buffer(buffer),
+                    Access::HostWrite,
+                    Access::AsInput,
+                )]);
+            }
+        }
+        commands.barriers([edge(
+            Resource::Buffer(table),
+            Access::HostWrite,
+            Access::ShaderRead,
+        )]);
+        commands.push(Command::EndPass);
+        if rt {
+            commands.push(Command::BeginPass("Scene.Geometry.BLAS.Build".into()));
+            for &blas in &result.structures {
+                commands.push(Command::BuildAccelerationStructure(blas));
+                commands.barriers([
+                    edge(
+                        Resource::AccelerationStructure(blas),
+                        Access::AsBuild,
+                        Access::AsInput,
+                    ),
+                    edge(
+                        Resource::AccelerationStructure(blas),
+                        Access::AsBuild,
+                        Access::AsRead,
+                    ),
+                ]);
+            }
+            commands.push(Command::EndPass);
+        }
+        let point = gpu.submit(commands.finish(), &[])?;
+        let timings = gpu.resolve(point)?;
+        result.stats.bytes = packed.static_bytes.len() as u64
+            + dynamic_bytes.len() as u64 * 3
+            + row_bytes.len() as u64;
+        result.stats.blas = result.structures.len();
+        for timing in timings {
+            if timing.pass == "Scene.Geometry.Upload" {
+                result.stats.upload_ms = timing.milliseconds;
+            } else if timing.pass == "Scene.Geometry.BLAS.Build" {
+                result.stats.build_ms = timing.milliseconds;
+            }
+        }
+        result.lod_data = packed.lods;
+        result.staging = packed.dynamic;
+        Ok((result, Some(stage)))
+    }
+}
+
+pub(super) fn allocate(
+    gpu: &mut VulkanDevice,
+    bytes: u64,
+    usage: vk::BufferUsageFlags,
+    host: bool,
+    allocated: &mut Vec<Resource>,
+) -> Result<Buffer> {
+    let buffer = gpu.create_buffer(bytes, usage, host)?;
+    allocated.push(Resource::Buffer(buffer));
+    Ok(buffer)
+}
+
+pub(super) fn edge(resource: Resource, before: Access, after: Access) -> Barrier {
+    Barrier {
+        resource,
+        before,
+        after,
+        handoff: None,
+    }
+}

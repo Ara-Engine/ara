@@ -5,7 +5,7 @@ use crate::{
     assets::asset_id,
     components::{Camera, Environment, Light, LightKind, MeshRenderer, MeshShape, VisualEffect},
     math::{Pose, stable_id},
-    model::Model,
+    model::{Model, ModelSelection},
     sync::{PreviousPose, WorldPose},
 };
 use ara_sim::{Identity, SceneMetadata};
@@ -51,8 +51,12 @@ pub struct Draw {
     pub roughness: f32,
     /// Metalness.
     pub metallic: f32,
-    /// Emissive radiance (cd/m²).
+    /// Procedural emissive radiance, or a model's RGB emission multiplier.
     pub emissive: [f32; 3],
+    /// Replaces an imported material's emissive factor before multiplying `emissive`.
+    pub emissive_factor: Option<[f32; 3]>,
+    /// Optional immutable native graph/instance material replacing the source slot.
+    pub material: Option<Arc<crate::material::MaterialAsset>>,
     /// Skin-order palette range in [`RenderFrame::palettes`] for skinned primitives.
     pub skin: Option<Range<usize>>,
 }
@@ -250,7 +254,17 @@ impl RenderFrame {
                     .filter(|n| !n.is_empty())
                     .unwrap_or("entity");
                 let label = format!("{name} ({address})");
-                let base = Draw {
+                let strength = if renderer.emissive_enabled {
+                    renderer.emissive_strength
+                } else {
+                    0.
+                };
+                let material = if renderer.model.is_none() {
+                    material_override(renderer, 0, library)
+                } else {
+                    None
+                };
+                let mut base = Draw {
                     entity: stable_id(address),
                     address: address.to_owned(),
                     label,
@@ -262,9 +276,18 @@ impl RenderFrame {
                     color: renderer.color.0,
                     roughness: renderer.roughness,
                     metallic: renderer.metallic,
-                    emissive: renderer.emissive,
+                    emissive: renderer
+                        .emissive_factor
+                        .unwrap_or(renderer.emissive)
+                        .map(|v| v * strength),
+                    emissive_factor: None,
+                    material,
                     skin: None,
                 };
+                if base.material.is_some() {
+                    base.emissive = emission_multiplier(renderer, strength);
+                    base.emissive_factor = renderer.emissive_factor;
+                }
                 let model = renderer
                     .model
                     .as_ref()
@@ -274,12 +297,37 @@ impl RenderFrame {
                     None => self.draws.push(if renderer.model.is_some() {
                         Draw {
                             color: [1.0, 0.0, 1.0, 1.0],
+                            emissive: [0.; 3],
                             ..base
                         }
                     } else {
                         base
                     }),
                     Some(model) => {
+                        let selection = if renderer.node.is_none() && renderer.primitive.is_none() {
+                            ModelSelection {
+                                primitives: 0..model.primitives.len(),
+                                base: 0,
+                                offset: [0.; 3],
+                            }
+                        } else {
+                            let Ok(selection) =
+                                model.select(renderer.node.as_deref(), renderer.primitive)
+                            else {
+                                self.draws.push(Draw {
+                                    color: [1., 0., 1., 1.],
+                                    emissive: [0.; 3],
+                                    ..base
+                                });
+                                continue;
+                            };
+                            selection
+                        };
+                        if selection.offset != [0.; 3] {
+                            base.world *=
+                                Mat4::from_translation(Vec3::from_array(selection.offset));
+                        }
+                        base.emissive = emission_multiplier(renderer, strength);
                         let palette = match entity.get::<AnimatorSlot>() {
                             Some(slot) if slot.program.model.digest == model.digest => slot
                                 .palette(&mut self.scratch, &mut self.palette)
@@ -291,7 +339,9 @@ impl RenderFrame {
                                 }),
                             _ => None,
                         };
-                        for (i, primitive) in model.primitives.iter().enumerate() {
+                        for i in selection.primitives {
+                            let primitive = &model.primitives[i];
+                            let material = material_override(renderer, i - selection.base, library);
                             self.draws.push(Draw {
                                 entity: base.entity.wrapping_add(i as u64),
                                 geometry: Geometry::Model {
@@ -299,6 +349,12 @@ impl RenderFrame {
                                     primitive: i,
                                 },
                                 skin: primitive.skin.and(palette.clone()),
+                                emissive_factor: emission_override(
+                                    renderer,
+                                    &model,
+                                    primitive.material,
+                                ),
+                                material,
                                 ..base.clone()
                             });
                         }
@@ -337,4 +393,46 @@ impl RenderFrame {
             }),
         }
     }
+}
+
+#[inline]
+fn emission_multiplier(renderer: &MeshRenderer, strength: f32) -> [f32; 3] {
+    let multiplier = if renderer.emissive == [0.; 3] {
+        [1.; 3]
+    } else {
+        renderer.emissive
+    };
+    multiplier.map(|v| v * strength)
+}
+
+#[inline]
+fn material_override(
+    renderer: &MeshRenderer,
+    slot: usize,
+    library: Option<&Library>,
+) -> Option<Arc<crate::material::MaterialAsset>> {
+    renderer
+        .material_overrides
+        .iter()
+        .find(|entry| entry.primitive as usize == slot)
+        .and_then(|entry| asset_id(&entry.material).ok())
+        .and_then(|id| library?.materials.get(id))
+        .cloned()
+}
+
+#[inline]
+fn emission_override(
+    renderer: &MeshRenderer,
+    model: &Model,
+    material: Option<usize>,
+) -> Option<[f32; 3]> {
+    renderer.emissive_factor.filter(|_| {
+        renderer.emissive_materials.is_empty()
+            || material.is_some_and(|index| {
+                model
+                    .materials
+                    .get(index)
+                    .is_some_and(|m| renderer.targets_emissive_material(index, &m.name))
+            })
+    })
 }

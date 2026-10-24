@@ -30,6 +30,13 @@ Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
 
+Play surfaces (D19 Game view, `shared.rs`): `import_play_surface(gpu, &SharedSurface)`
+imports an embedded player's ring; `PlaySurface::show(ui, id, frame)` acquires the
+slot, hands the previous one back (returned: release it via ara-play-host
+`Surfaces`) and binds `id` through `external_image`; `close_play_surface` unbinds
+before destroying. Re-import when the generation changes. Ignored GPU test in
+`shared.rs`.
+
 Floating editor windows (D23) share this adapter: `select_target(window)` swaps the
 active render target (0 is the main window); textures, atlases and pipelines are
 shared. Drop a closed window's target with `release_target` after queue idle.

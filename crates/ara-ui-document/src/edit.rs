@@ -130,7 +130,7 @@ impl SourceDocument {
     }
     fn error(&self, message: &str) -> Diagnostic {
         Diagnostic::new(
-            7020,
+            crate::codes::EDIT,
             &self.source,
             0..0,
             message,

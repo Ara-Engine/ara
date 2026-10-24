@@ -112,8 +112,15 @@ impl Runtime {
                 let stored = record
                     .get(name)
                     .map(|v| self.schema.canonical_value(&ty, v));
-                let driven_component =
-                    MIRRORS.contains(&name) || (simulated && name == "Transform");
+                let automatic_identity = name == "PhysicsId"
+                    && record
+                        .get(name)
+                        .and_then(|value| value.get("value"))
+                        .and_then(Value::as_u64)
+                        .is_none_or(|value| value == 0);
+                let driven_component = automatic_identity
+                    || MIRRORS.contains(&name)
+                    || (simulated && name == "Transform");
                 match (&world, &stored) {
                     (None, None) => {}
                     (Some(w), Some(s)) if same(w, s) => {}

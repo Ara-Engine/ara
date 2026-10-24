@@ -12,6 +12,7 @@ workspace = true
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
 ara-components.workspace = true
+ara-texture-stream = { path = "../ara-texture-stream" }
 anyhow = "1"
 bytemuck = { version = "1.24", features = ["derive"] }
 glam = { version = "0.30", features = ["bytemuck", "serde"] }
@@ -19,3 +20,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[dev-dependencies]
+ara-asset-format = { path = "../ara-asset-format" }

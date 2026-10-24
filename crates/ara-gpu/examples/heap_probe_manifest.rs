@@ -6,6 +6,10 @@ fn main() -> anyhow::Result<()> {
             "source": "sampled_heap.slang",
             "entries": {"sampleMain": "compute"},
             "state": ara_gpu::cooked::RenderState::default()
+        }, "triangle_ranges": {
+            "source": "triangle_ranges.slang",
+            "entries": {"rangeProbe": "compute"},
+            "state": ara_gpu::cooked::RenderState::default()
         }}),
     )
 }

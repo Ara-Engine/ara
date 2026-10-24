@@ -1,5 +1,9 @@
 # ara-asset
 
+`AssetPipeline::configure` accepts command-authored in-memory settings; subsequent
+snapshots use them before a debounced sidecar save. `unregister` cancels deleted
+sources while preserving published cache generations for existing players and redo.
+
 Pure importer contracts, BLAKE3 action/object cache, process jobs, reflected import
 sidecars, dependency queries, filesystem events and D20 boundary publication.
 

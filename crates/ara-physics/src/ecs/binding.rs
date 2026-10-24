@@ -32,8 +32,23 @@ pub(super) fn validate(world: &World, e: Entity) -> Result<()> {
     if rigid.is_some() && world.get::<Collider>(e).is_none() {
         return Err(PhysicsError("RigidBody requires Collider".into()));
     }
+    if let Some(c) = world.get::<Collider>(e) {
+        if c.center.iter().any(|v| !v.is_finite()) {
+            return Err(PhysicsError("collider center must be finite".into()));
+        }
+        if c.kind == ColliderKind::ModelMesh
+            && rigid.is_some_and(|b| b.motion != MotionType::Static)
+        {
+            return Err(PhysicsError(
+                "model mesh collision requires a static RigidBody".into(),
+            ));
+        }
+    }
     if let Some(c) = world.get::<Collider>(e)
-        && c.kind == ColliderKind::Cooked
+        && matches!(
+            c.kind,
+            ColliderKind::Cooked | ColliderKind::ModelConvex | ColliderKind::ModelMesh
+        )
         && world.get::<CookedCollider>(e).is_none()
     {
         return Err(PhysicsError(
@@ -106,11 +121,24 @@ impl Binding {
                     radius: c.radius,
                     half_height: c.half_height,
                 })?,
-                ColliderKind::Cooked => {
+                ColliderKind::Cooked | ColliderKind::ModelConvex | ColliderKind::ModelMesh => {
                     cooked
                         .ok_or_else(|| PhysicsError("missing cooked shape".into()))?
                         .0
                 }
+            };
+            let shape = if c.center == [0.; 3] {
+                shape
+            } else {
+                backend.create_shape(Shape::Compound {
+                    parts: &[ShapePart {
+                        shape,
+                        pose: PhysicsPose {
+                            position: c.center,
+                            ..Default::default()
+                        },
+                    }],
+                })?
             };
             pending.push(BodyDesc {
                 shape,

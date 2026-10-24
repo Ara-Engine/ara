@@ -19,9 +19,20 @@ Owns the native GPU boundary. Vulkan uses ash revision
   barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
 - `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
+  `TriangleRange` selects checked aligned byte ranges in shared vertex/index
+  allocations; indices remain local to the range. Multiple BLAS builds and their
+  transformed TLAS instances can share one upload and submission.
 - `cooked`: versioned descriptions, artifact hashes, ABI fingerprint, JSON writer.
   `resource_dir` finds executable-relative installed shaders before checkout data;
   a distribution with engine.json never silently falls back to checkout shaders.
+- `shared` (portable): cross-process shared surfaces (D19 embedded Play). `SLOTS` = 3,
+  `SurfaceDesc`/`SlotDesc`/`DeviceIdentity` (JSON, camelCase), `Frame`, `FrameReady`,
+  producer `Ring`, owner `Mailbox`, `SharedSurface` (owned NT handles:
+  `duplicate_from(&Child, desc)`, `duplicate_local`, `try_clone`).
+- `vulkan::external`: `ExportRing` (`new`, `resize` = new generation, `publish(source,
+  tick)` copies + waits, `release`, `desc`) and `ImportedSurface` (`new` checks device
+  and driver UUIDs, `exchange(acquire, release)`, `image`, `read`). `supported(gpu)`.
+  `DeviceInfo::{external_memory, identity}`; `GpuError::External` = `ARA_GPU_EXTERNAL`.
 
 ## Contracts
 
@@ -51,6 +62,17 @@ Debug creation requires Khronos validation and synchronization validation.
 layer identifiers, severity and message. The diagnostic callback mutex protects
 messages only, never frame resources or gameplay state.
 
+Shared surfaces: `VK_KHR_external_memory_win32` is enabled whenever offered (the
+editor's device must import without knowing about Play). Opaque NT handles,
+unnamed; owners pull them with `DuplicateHandle` from their child. Both sides create
+identical images (RGBA8, TRANSFER_SRC|DST|SAMPLED, dedicated allocation, the
+producer's memory type and size). Between owners slots are owned by
+`QUEUE_FAMILY_EXTERNAL`: producer → owner transfers carry TRANSFER_DST→SRC (the
+validation layer only learns external layouts from a transition), owner → producer
+transfers SRC→SRC; each side waits on a fence before notifying the other. A slot is
+written only after the owner released that exact frame (generation, slot, serial).
+Metal: unsupported (error).
+
 Pipeline caches validate vendor/device/UUID headers and are keyed by UUID,
 vendor/device and driver; saves replace the file atomically. Cooked artifact hashes
 and layout hashes are checked separately before pipeline creation.
@@ -64,10 +86,14 @@ or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
 GPU tests need Vulkan 1.3, validation layers, a dedicated compute family and
 process-local `VK_IMPLICIT_LAYER_PATH` pointing at an empty directory on this PC.
 They verify malformed-copy rejection, stale handles and real BLAS/TLAS lifetime.
+The triangle-range probe checks pooled geometry, overflow/alignment rejection
+and real rays hitting three transformed instances of two shared BLAS identities.
 The sampled-heap probe reads 257 nonuniform slots on GPU, publishes an unused slot
 before completion, and checks native mip interpolation. Explicit offline fixture
 updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
 `ara-shader-cook crates/ara-gpu/tests/shaders/pipelines.json crates/ara-gpu/tests/cooked`.
+`tests/external.rs` (Windows) exports a ring on one device, imports it on a second,
+cycles every slot through a resize and checks pixels and validation on both.
 
 Metal 4's implementation point is `metal.rs`, enabled only on macOS. Implement
 this same portable surface using converter-compatible root buffers, argument

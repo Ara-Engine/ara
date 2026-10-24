@@ -311,6 +311,15 @@ pub const DEFS: &[Def] = &[
         Lit::N(0.),
     ),
     def(
+        "play.inGameView",
+        User,
+        "Viewport",
+        "Play in the Game view",
+        "Play shows inside the editor's Game view (input goes to it while focused). Off opens a separate player window.",
+        Kind::Toggle,
+        Lit::B(true),
+    ),
+    def(
         "play.hotReload",
         Project,
         "Networking & Play",
@@ -352,6 +361,7 @@ pub struct Settings {
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
+    failures: Vec<String>,
 }
 const USER: &str = "e_userpref";
 const PROJECT: &str = "e_projpref";
@@ -404,6 +414,7 @@ impl Settings {
             project_path,
             user,
             project,
+            failures: Vec::new(),
         })
     }
     /// Effective value: stored or default.
@@ -525,7 +536,11 @@ impl Settings {
             self.persist_project();
         }
     }
-    fn persist_user(&self) {
+    /// Write failures since the last call (the editor service logs them).
+    pub fn take_failures(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.failures)
+    }
+    fn persist_user(&mut self) {
         let Some(path) = &self.user_path else {
             return;
         };
@@ -533,10 +548,13 @@ impl Settings {
             let _ = std::fs::create_dir_all(parent);
         }
         if let Err(e) = write_atomic(path, &Value::Object(self.user.clone())) {
-            eprintln!("settings: {e}");
+            self.failures.push(format!(
+                "Preferences were not saved to {}: {e}",
+                path.display()
+            ));
         }
     }
-    fn persist_project(&self) {
+    fn persist_project(&mut self) {
         let mut manifest = std::fs::read_to_string(&self.project_path)
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -561,7 +579,10 @@ impl Settings {
             }
         }
         if let Err(e) = write_atomic(&self.project_path, &manifest) {
-            eprintln!("settings: {e}");
+            self.failures.push(format!(
+                "Project settings were not saved to {}: {e}",
+                self.project_path.display()
+            ));
         }
     }
 }
@@ -605,8 +626,44 @@ pub fn valid(d: &Def, value: &Value) -> Result<(), String> {
         _ => Err(format!("{} has the wrong type", d.label)),
     }
 }
-/// The OS location for user preferences.
-pub fn user_settings_path() -> Option<PathBuf> {
+/// The user preferences file, `editor-settings.json` in [`config_dir`].
+pub fn user_settings_path() -> anyhow::Result<PathBuf> {
+    Ok(config_dir()?.join("editor-settings.json"))
+}
+
+/// The user config directory: `ARA_CONFIG_DIR` when set (tests, captures and
+/// verification routes, portable installs), else the OS profile (`%APPDATA%\Ara`,
+/// `~/Library/Application Support/Ara`, `~/.config/Ara`). Tests and cargo-launched
+/// processes are refused the OS profile and fail instead: they never touch the
+/// owner's preferences (`.cargo/config.toml` points them under `target/`).
+pub fn config_dir() -> anyhow::Result<PathBuf> {
+    resolve_config_dir(
+        std::env::var_os("ARA_CONFIG_DIR"),
+        cfg!(test) || std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+        os_config_dir(),
+    )
+}
+
+/// `ARA_CONFIG_DIR`, else the OS profile unless `guarded` (a test or cargo run).
+fn resolve_config_dir(
+    explicit: Option<std::ffi::OsString>,
+    guarded: bool,
+    os: Option<PathBuf>,
+) -> anyhow::Result<PathBuf> {
+    if let Some(dir) = explicit.filter(|d| !d.to_string_lossy().trim().is_empty()) {
+        return Ok(PathBuf::from(dir));
+    }
+    anyhow::ensure!(
+        !guarded,
+        "tests and cargo-launched runs must set ARA_CONFIG_DIR to an isolated directory \
+         under target/; they never use the owner's profile ({})",
+        os.as_deref()
+            .map_or_else(|| "unknown".into(), |p| p.display().to_string())
+    );
+    os.ok_or_else(|| anyhow::anyhow!("cannot find the user config directory; set ARA_CONFIG_DIR"))
+}
+
+fn os_config_dir() -> Option<PathBuf> {
     let base = if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from)
     } else if cfg!(target_os = "macos") {
@@ -616,12 +673,31 @@ pub fn user_settings_path() -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
     }?;
-    Some(base.join("Ara").join("editor-settings.json"))
+    Some(base.join("Ara"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tests_never_resolve_the_os_profile() {
+        let profile = PathBuf::from("C:/Users/owner/AppData/Roaming/Ara");
+        let isolated = std::ffi::OsString::from("target/ara-config");
+        assert!(resolve_config_dir(None, true, Some(profile.clone())).is_err());
+        assert!(resolve_config_dir(Some(" ".into()), true, Some(profile.clone())).is_err());
+        assert_eq!(
+            resolve_config_dir(Some(isolated), true, Some(profile.clone())).expect("isolated"),
+            PathBuf::from("target/ara-config")
+        );
+        assert_eq!(
+            resolve_config_dir(None, false, Some(profile.clone())).expect("installed editor"),
+            profile
+        );
+        // This process is a test: whatever it resolves is not the OS profile.
+        if let (Ok(dir), Some(os)) = (config_dir(), os_config_dir()) {
+            assert_ne!(dir, os);
+        }
+    }
     #[test]
     fn edits_validate_persist_and_undo_per_author() {
         let root = std::env::temp_dir().join(format!("ara-settings-{}", std::process::id()));

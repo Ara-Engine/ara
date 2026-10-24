@@ -77,7 +77,7 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
             .sum::<usize>();
         let byte = byte + column;
         Diagnostic::new(
-            7001,
+            crate::codes::MARKUP,
             source,
             byte..byte,
             e.to_string(),
@@ -92,14 +92,14 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
         let tag = node.tag_name().name();
         if node.tag_name().namespace().is_some() || !TAGS.contains(&tag) {
             return Err(bad(
-                7002,
+                crate::codes::ELEMENT,
                 format!("Unsupported element {tag}"),
                 "Use a registered native UI primitive",
             ));
         }
         if node.ancestors().count() > 128 {
             return Err(bad(
-                7003,
+                crate::codes::DEPTH,
                 "Markup nesting exceeds 128".into(),
                 "Split the document into components",
             ));
@@ -109,14 +109,14 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
             .filter(|id| !id.is_empty())
             .ok_or_else(|| {
                 bad(
-                    7004,
+                    crate::codes::MISSING_ID,
                     "Missing authored ID".into(),
                     "Add a unique id attribute",
                 )
             })?;
         if !ids.insert(stable_id(id)) {
             return Err(bad(
-                7005,
+                crate::codes::DUPLICATE_ID,
                 format!("Duplicate ID or hash collision: {id}"),
                 "Choose a unique authored ID",
             ));
@@ -126,7 +126,7 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
                 && !matches!(attr.value(), "true" | "false")
             {
                 return Err(Diagnostic::new(
-                    7006,
+                    crate::codes::ATTRIBUTE,
                     source,
                     attr.range(),
                     "Invalid boolean attribute",
@@ -135,7 +135,7 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
             }
             if attr.name() == "tab-index" && attr.value().parse::<i32>().is_err() {
                 return Err(Diagnostic::new(
-                    7006,
+                    crate::codes::ATTRIBUTE,
                     source,
                     attr.range(),
                     "Invalid tab index",
@@ -144,7 +144,7 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
             }
             if attr.namespace().is_some() || !ATTRIBUTES.contains(&attr.name()) {
                 return Err(Diagnostic::new(
-                    7006,
+                    crate::codes::ATTRIBUTE,
                     source,
                     attr.range(),
                     format!("Unsupported attribute {}", attr.name()),
@@ -157,7 +157,7 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
             .any(|n| n.is_text() && !n.text().unwrap_or_default().trim().is_empty())
         {
             return Err(bad(
-                7007,
+                crate::codes::MIXED_TEXT,
                 "Mixed text content is unsupported".into(),
                 "Place text in the text attribute",
             ));
@@ -237,7 +237,7 @@ pub fn compile(source: &str) -> Result<Vec<Element>> {
     ) -> Result<()> {
         let error = || {
             Diagnostic::new(
-                7008,
+                crate::codes::COMPONENT,
                 "",
                 0..0,
                 "Invalid component, recursive template or missing slot",
@@ -323,7 +323,7 @@ pub fn compile(source: &str) -> Result<Vec<Element>> {
     let mut ids = BTreeSet::new();
     if out.is_empty() || out.iter().any(|e| !ids.insert(stable_id(&e.id))) {
         return Err(Diagnostic::new(
-            7005,
+            crate::codes::DUPLICATE_ID,
             source,
             0..source.len(),
             "Expanded identity collision or empty root",

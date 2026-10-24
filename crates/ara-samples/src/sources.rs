@@ -122,7 +122,7 @@ fn polyhaven_files(files: &Value, kind: Kind, resolution: &str) -> Result<Vec<(S
                 out.push((path.clone(), url(include)?));
             }
             // glTF downloads carry JPG colour maps, so cut-out opacity ships as
-            // separate maps; `build` merges them into RGBA colour textures.
+            // separate maps; the importer merges them through opacityMaps settings.
             for (map, resolutions) in files.as_object().context("no files")? {
                 let lower = map.to_ascii_lowercase();
                 if lower.contains("alpha") || lower.contains("opacity") {

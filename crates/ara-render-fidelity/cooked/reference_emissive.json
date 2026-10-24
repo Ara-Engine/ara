@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "350f9afa0fafef76038248479cfa08bc00fa9067541b585268e3f1f6c63d2a9b",
+  "key": "4e4cf8102d4f9b5c4a19cd30956bd53420b7cc3c07ceae25482992cf05b4a16c",
   "stages": [
     {
-      "dxil": "350f9afa0fafef76038248479cfa08bc00fa9067541b585268e3f1f6c63d2a9b/referenceEmissiveMain.dxil",
-      "dxil_hash": "c213416afbd00447a97bf46ddd927a5745d8b0858a50a1c767fff4ba6660362c",
+      "dxil": "4e4cf8102d4f9b5c4a19cd30956bd53420b7cc3c07ceae25482992cf05b4a16c/referenceEmissiveMain.dxil",
+      "dxil_hash": "6e4648c213a11f27fe43714f7666bc65349a49d72818bd2e32a99da050bab102",
       "source_entry": "referenceEmissiveMain",
-      "spirv": "350f9afa0fafef76038248479cfa08bc00fa9067541b585268e3f1f6c63d2a9b/referenceEmissiveMain.spv",
+      "spirv": "4e4cf8102d4f9b5c4a19cd30956bd53420b7cc3c07ceae25482992cf05b4a16c/referenceEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "528a4c77f3852bced72e42e6112d1be921f4049c03ef47a8824d19facde8170b",
+      "spirv_hash": "6ec973733ac7da81e04f90236adad21ff620a9e30394e97faecc116e1337603e",
       "stage": "compute"
     }
   ],

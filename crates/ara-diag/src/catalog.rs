@@ -26,7 +26,7 @@ use std::sync::OnceLock;
 use crate::Code;
 
 /// The catalog sources, in display order.
-const SOURCES: [(&str, &str); 8] = [
+const SOURCES: [(&str, &str); 10] = [
     ("csharp.md", include_str!("../codes/csharp.md")),
     ("kernel.md", include_str!("../codes/kernel.md")),
     ("bus.md", include_str!("../codes/bus.md")),
@@ -35,6 +35,8 @@ const SOURCES: [(&str, &str); 8] = [
     ("gpu.md", include_str!("../codes/gpu.md")),
     ("export.md", include_str!("../codes/export.md")),
     ("collab.md", include_str!("../codes/collab.md")),
+    ("ui.md", include_str!("../codes/ui.md")),
+    ("editor.md", include_str!("../codes/editor.md")),
 ];
 
 /// One code's documentation.

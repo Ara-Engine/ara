@@ -383,7 +383,11 @@ fn static_geometry(world: &mut World) -> Geometry {
             && collider.kind == ColliderKind::Box
             && !collider.sensor
         {
-            boxes.push((id.value, *pose, collider.half_extents));
+            let mut centered = *pose;
+            let offset =
+                glam::Quat::from_array(pose.rotation.0) * Vec3::from_array(collider.center);
+            centered.position = (Vec3::from_array(pose.position) + offset).to_array();
+            boxes.push((id.value, centered, collider.half_extents));
         }
     }
     boxes.sort_by_key(|b| b.0);
@@ -545,12 +549,17 @@ pub fn follow(mut query: Agents) {
             transform.rotation = [0.0, vx.atan2(vz).to_degrees(), 0.0];
         }
         if let Some(mut pose) = pose {
-            let lift = collider.map_or(0.0, |c| match c.kind {
-                ColliderKind::Box => c.half_extents[1],
-                ColliderKind::Sphere => c.radius,
-                ColliderKind::Capsule => c.half_height + c.radius,
-                ColliderKind::Cylinder => c.half_height,
-                ColliderKind::Cooked => 0.0,
+            let lift = collider.map_or(0.0, |c| {
+                let height = match c.kind {
+                    ColliderKind::Box => c.half_extents[1],
+                    ColliderKind::Sphere => c.radius,
+                    ColliderKind::Capsule => c.half_height + c.radius,
+                    ColliderKind::Cylinder => c.half_height,
+                    ColliderKind::Cooked | ColliderKind::ModelConvex | ColliderKind::ModelMesh => {
+                        0.0
+                    }
+                };
+                height - c.center[1]
             });
             let mut body = Pose::from_transform(&transform);
             body.translation.y += lift;

@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_branches",
+  "records": {
+    "e_part0": {
+      "name": "dry_branches_medium_01_a",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/dry_branches_medium_01/dry_branches_medium_01_1k.gltf#as_drybranchesmedium01",
+        "node": "dry_branches_medium_01_a"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "branches",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

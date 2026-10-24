@@ -630,7 +630,6 @@ impl FidelityView {
             self.samples = if reset { 0 } else { self.samples };
             self.samples = (self.samples + 8).min(samples);
         }
-        self.scene.motion_pending = false;
         self.previous_jitter = glam::Vec2::new(frame.jitter[0], frame.jitter[1]);
         self.previous_vp = vp;
         self.previous_camera = camera;
@@ -648,6 +647,7 @@ impl FidelityView {
             % self.volume.len() as u32;
         self.probe_slot = 1 - self.probe_slot;
         gpu.assert_clean()?;
+        self.scene.presented();
         Ok(())
     }
 }

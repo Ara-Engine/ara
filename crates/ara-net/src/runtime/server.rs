@@ -507,6 +507,15 @@ impl<F: SimulationFeature> Server<F> {
         }
         Ok(())
     }
+    /// Advances transport and fixed schedules with caller-supplied elapsed time.
+    /// Drive every peer and its links from one clock; do not mix with [`Self::poll`].
+    pub fn advance(&mut self, elapsed: Duration) -> Result<()> {
+        super::advance(&mut self.app, elapsed);
+        if let Some(fault) = &self.app.world().resource::<Authority>().fault {
+            return Err(fault.clone());
+        }
+        Ok(())
+    }
     fn refresh(&mut self) -> Result<()> {
         let world = self.app.world_mut();
         let mut state = world

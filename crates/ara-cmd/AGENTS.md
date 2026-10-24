@@ -39,7 +39,9 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 `entity.create`, `entity.delete`, `entity.reparent`, `component.add`,
 `component.remove`, `property.set`, `transform.set`, `prefab.instantiate`,
 `prefab.override.set`, `prefab.override.revert`; query `entity.inspect`.
-`doc.create`, `project.setMain` and `transform.lookAt` share this registry too.
+`doc.create`, `doc.delete`, `project.setMain` and `transform.lookAt` share this registry too.
+Document deletion records child-first deletes and a lifecycle op in one transaction;
+anchor it to another document (normally ara.project.json), which stays loaded.
 
 Edits to a prefab instance, or to an entity inside one (`e_4f9a/e_lid1`), become
 overrides on the instance record; deleting an inner entity adds it to `removed` and

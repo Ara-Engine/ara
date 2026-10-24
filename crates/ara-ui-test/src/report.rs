@@ -160,7 +160,7 @@ pub struct BatchReport {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Schema)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct UiDiagnostic {
-    /// Stable code ARA7100..ARA7106.
+    /// Stable code ARA4100..ARA4106.
     pub code: String,
     /// Source node identity.
     pub node: String,

@@ -14,6 +14,10 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
 - `register::<B>(&mut World, &mut Schedule, config)` installs the `PhysicsSet` boundary.
 - `PhysicsId` is nonzero, unique and stable across peers. Creation/input ordering uses
   it instead of Bevy entity IDs or table order. Backend handles never enter documents.
+  Authoring zero/absence requests Play's deterministic assignment; explicit positive
+  values reserve identities. Direct low-level ECS callers supply nonzero identities.
+  `Collider.center` offsets all rigid shapes in body-local metres; model hull/mesh
+  kinds resolve to native cooked handles through ara-runtime before binding.
 - `PhysicsCommands` queues typed runtime intents by stable identity. These are gameplay
   intents, not authoring edits. Authoring still goes through ara-ops transactions.
 - `snapshot_ecs::<B>` / `restore_ecs::<B>` are trusted checkpoint companions.

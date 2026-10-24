@@ -439,3 +439,333 @@ fn tinted_icons_take_their_state_color() {
         shell.ui.sheet.color_token("--selection-foreground")
     );
 }
+#[test]
+fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
+    let project = Project::new();
+    write(
+        &project.0.join("levels/hangar.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_hangar001","records":{"e_lamp0001":{"name":"Lamp","Transform":{"position":[200,2,190]}}}}),
+    );
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // File > Open Scene lists every scene, grouped before assets.
+    let rows = shell.palette_rows(&mut editor, "#");
+    assert!(
+        rows.iter()
+            .any(|r| r.0 == "Scenes" && r.1 == "hangar.scene" && r.2 == Some("file.open_scene")),
+        "{rows:?}"
+    );
+    let main_camera = editor.state.camera;
+    editor
+        .action("editor.scene.open", json!({"scene":"levels/hangar.scene"}))
+        .unwrap();
+    assert_eq!(editor.state.doc, "sc_hangar001");
+    // A first open frames the scene: the lamp is 270 m from the origin.
+    assert!((editor.state.camera.target.x - 200.).abs() < 1.);
+    assert_eq!(editor.state.recent_scenes[0], "sc_hangar001");
+    editor
+        .action("editor.scene.open", json!({"scene":"sc_test0001"}))
+        .unwrap();
+    assert_eq!(editor.state.camera, main_camera);
+    assert!(
+        editor
+            .action("editor.scene.open", json!({"scene":"levels/missing.scene"}))
+            .is_err()
+    );
+    // An agent opening a scene moves its presence, not the human view, and the human
+    // gets a View/Follow notice instead.
+    let agent = ara_proto::Endpoint::call(
+        &mut editor,
+        "session.begin",
+        json!({"client":"scene-test","author":"agent:scout"}),
+    )
+    .unwrap()["session"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    ara_proto::Endpoint::call(
+        &mut editor,
+        "editor.scene.open",
+        json!({"session":agent,"scene":"levels/hangar.scene"}),
+    )
+    .unwrap();
+    assert_eq!(editor.state.doc, "sc_test0001");
+    assert_eq!(editor.state.presence[&agent].doc, "sc_hangar001");
+    let notice = editor
+        .activity
+        .notices()
+        .iter()
+        .find(|n| n.text == "Scout is viewing hangar.scene")
+        .unwrap()
+        .id;
+    editor.state.focus = "scene".into();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.ui.find(&format!("notice-{notice}-follow")).is_some());
+    shell
+        .run_command(
+            &mut editor,
+            "agents.view",
+            &ara_editor::shell::commands::Target::Text(agent.clone()),
+        )
+        .unwrap();
+    assert_eq!(editor.state.doc, "sc_hangar001");
+    assert!(editor.state.follow.is_none());
+}
+#[test]
+fn console_logs_problems_explain_and_editor_failures_reach_the_bus() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    // An editor-side failure is a catalogued diagnostic on the bus (what `ara logs`
+    // reads), not a line on stderr.
+    editor
+        .action(
+            "editor.report",
+            json!({"message":"Thumbnail failed for crate.glb","kind":"thumbnail","subject":"asset:@models/crate.glb"}),
+        )
+        .unwrap();
+    let logs = editor
+        .action("logs", json!({"group": false, "limit": 20}))
+        .unwrap();
+    assert!(
+        logs["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["diagnostic"]["code"] == "ARA4501"),
+        "{logs}"
+    );
+    editor
+        .action("editor.layout.show", json!({"panel":"console"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let row = shell
+        .ui
+        .nodes
+        .iter()
+        .find(|n| {
+            n.element.id.ends_with("-text")
+                && n.text
+                    .as_ref()
+                    .is_some_and(|t| t.value == "Thumbnail failed for crate.glb")
+        })
+        .map(|n| n.element.id.trim_end_matches("-text").to_owned())
+        .unwrap();
+    // The row links to its asset and expands into the catalog explanation.
+    assert!(shell.ui.find(&format!("{row}-source")).is_some());
+    let seq = row.trim_start_matches("log-").to_owned();
+    shell
+        .run_command(
+            &mut editor,
+            "console.select",
+            &ara_editor::shell::commands::Target::Text(seq.clone()),
+        )
+        .unwrap();
+    assert!(shell.ui.find(&format!("{row}-explain")).is_some());
+    // Warnings toggle off hides it; Clear empties the view.
+    shell
+        .run_command(&mut editor, "console.warnings", &Default::default())
+        .unwrap();
+    assert!(shell.ui.find(&row).is_none());
+    shell
+        .run_command(&mut editor, "console.warnings", &Default::default())
+        .unwrap();
+    shell
+        .run_command(&mut editor, "console.clear", &Default::default())
+        .unwrap();
+    assert!(shell.ui.find("console-empty").is_some());
+    // Problems groups the same warning and explains it on demand.
+    shell
+        .run_command(&mut editor, "window.problems", &Default::default())
+        .unwrap();
+    let problem = format!("problem-{seq}");
+    assert!(shell.ui.find(&problem).is_some());
+    shell
+        .run_command(
+            &mut editor,
+            "problems.explain",
+            &ara_editor::shell::commands::Target::Text(seq),
+        )
+        .unwrap();
+    assert!(shell.ui.find(&format!("{problem}-explain")).is_some());
+}
+#[test]
+fn prefab_from_selection_overrides_apply_revert_and_open() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    shell
+        .run_command(&mut editor, "create.prefab", &Default::default())
+        .unwrap();
+    // The subtree became prefabs/salvage_crate.prefab; the scene keeps a linked instance.
+    let workspace = editor.host.store().workspace();
+    let prefab = workspace
+        .find("prefabs/salvage_crate.prefab")
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        workspace.doc(&prefab).unwrap().records().len(),
+        2,
+        "root and child"
+    );
+    let instance = editor.state.selection[0].clone();
+    let scene = workspace.doc("sc_test0001").unwrap();
+    assert!(scene.record("e_crate001").is_none());
+    assert!(ara_doc::prefab_of(scene.record(&instance).unwrap()).is_some());
+    let view = editor.view().unwrap();
+    assert_eq!(view.entities().len(), 2, "instance root and its child");
+    // Override a field on the instance, then apply it to the prefab.
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":instance,"path":"Transform.scale","value":[2,2,2]}})],
+            "Scale crate",
+            None,
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let overrides = shell.ui.find("prefab-overrides").unwrap();
+    assert_eq!(
+        shell.ui.nodes[overrides].text.as_ref().unwrap().value,
+        "1 override"
+    );
+    shell
+        .run_command(&mut editor, "prefab.apply_all", &Default::default())
+        .unwrap();
+    let store = editor.host.store();
+    let root = store
+        .workspace()
+        .doc(&prefab)
+        .unwrap()
+        .records()
+        .iter()
+        .find(|(_, r)| r.get("parent").is_none())
+        .map(|(_, r)| r.clone())
+        .unwrap();
+    assert_eq!(root["Transform"]["scale"], json!([2, 2, 2]));
+    assert!(
+        ara_editor::shell::prefab_ops::instance(store, "sc_test0001", &instance)
+            .unwrap()
+            .overrides
+            .is_empty()
+    );
+    // A new override can be reverted; Open edits the prefab in the Scene view.
+    editor
+        .apply(
+            vec![json!({"cmd":"property.set","args":{"entity":instance,"path":"name","value":"Special crate"}})],
+            "Rename crate",
+            None,
+        )
+        .unwrap();
+    shell
+        .run_command(&mut editor, "prefab.revert_all", &Default::default())
+        .unwrap();
+    assert!(
+        ara_editor::shell::prefab_ops::instance(editor.host.store(), "sc_test0001", &instance)
+            .unwrap()
+            .overrides
+            .is_empty()
+    );
+    shell
+        .run_command(&mut editor, "prefab.open", &Default::default())
+        .unwrap();
+    assert_eq!(editor.state.doc, prefab);
+}
+#[test]
+fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
+    let project = Project::new();
+    std::fs::create_dir_all(project.0.join("models")).unwrap();
+    std::fs::create_dir_all(project.0.join("textures/rock")).unwrap();
+    std::fs::write(project.0.join("models/crate.gltf"), "{}").unwrap();
+    std::fs::write(project.0.join("models/crate.bin"), [0u8; 16]).unwrap();
+    std::fs::write(project.0.join("textures/rock/albedo.png"), [0u8; 16]).unwrap();
+    std::fs::write(project.0.join("NOTES.md"), "notes").unwrap();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"assets"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // The browser scans off the UI thread.
+    let start = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(start.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let names = |shell: &Shell| -> Vec<String> {
+        shell
+            .ui
+            .nodes
+            .iter()
+            .filter(|n| n.element.id.starts_with("asset-card-") && n.element.id.ends_with("-name"))
+            .filter_map(|n| n.text.as_ref().map(|t| t.value.clone()))
+            .collect()
+    };
+    // Root: the folders, then root files; notes and glTF buffers stay hidden.
+    let root = names(&shell);
+    assert!(
+        root.contains(&"models".to_owned()) && root.contains(&"textures".to_owned()),
+        "{root:?}"
+    );
+    assert!(
+        !root
+            .iter()
+            .any(|n| n.ends_with(".md") || n.ends_with(".bin")),
+        "{root:?}"
+    );
+    editor
+        .action("editor.workspace", json!({"folder":"models"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(names(&shell), ["crate.gltf"]);
+    shell
+        .run_command(&mut editor, "assets.show_all", &Default::default())
+        .unwrap();
+    assert!(names(&shell).contains(&"crate.bin".to_owned()));
+    // A type filter searches every folder.
+    editor
+        .action(
+            "editor.search",
+            json!({"panel":"assets","query":"type:texture"}),
+        )
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert_eq!(names(&shell), ["albedo.png"]);
+}
+#[test]
+fn game_view_waits_for_play_and_play_starts_embedded_in_it() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"game"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    // Before Play: an empty state with Play; input capture explains what to do first.
+    assert!(shell.ui.find("game-empty").is_some());
+    assert!(shell.ui.find("game-play").is_some());
+    assert!(
+        shell
+            .run_command(&mut editor, "game.capture", &Default::default())
+            .is_err()
+    );
+    // Aspect presets are registry commands with check marks.
+    shell
+        .run_command(&mut editor, "game.aspect.16x9", &Default::default())
+        .unwrap();
+    let label = shell.ui.find("game-aspect-label").unwrap();
+    assert_eq!(shell.ui.nodes[label].text.as_ref().unwrap().value, "16:9");
+    // Play in the Game view (the default) starts an embedded player at the view's size.
+    let mut params = json!({"window": true});
+    ara_editor::testing_embed_play(&editor, &mut params);
+    assert_eq!(params["window"], false);
+    assert!(params["embed"]["width"].as_u64().unwrap() >= 64);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.inGameView","value":false}),
+        )
+        .unwrap();
+    let mut params = json!({"window": true});
+    ara_editor::testing_embed_play(&editor, &mut params);
+    assert_eq!(params["window"], true);
+}

@@ -22,15 +22,35 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `assets::Assets`: every `*.import.json` registered with `ara_asset::AssetPipeline`
   (imports in worker processes, non-progressive); `pins` waits for published
   generations, which are always persisted final-preset cooks players can load.
+  `synchronize` follows in-memory import document revisions, including imports made
+  after the pipeline started. New Play pins wait for pending configured generations;
+  failed cooks retain the last good generation and report their existing diagnostic.
+- `PlayService::published` / `PublishedAssets::for_project`: acquire a read-only
+  project attachment once. Frame loops read its atomic revision; `snapshot` never
+  waits and retains immutable generation IDs, kinds and FileCache provenance.
+  Readers cannot initialize/cook/import; only completed owner boundaries publish.
+  `cargo test -p ara-play-host --test published` holds a real import pending while
+  checking completed generations and retained-snapshot immutability.
 - `codes`: ARA7300 play, 7301 player fault, 7302 unknown world, 7303 assets (real
   import failures only), 7304 test failed, 7305 bad request, 7306 info: a sidecar
   recorded an older importer; it was upgraded (typed `SidecarCommand::Version`
-  transaction, canonical write) and reimported. Local range; reserve centrally later.
+  transaction, canonical write) and reimported, 7307 embedded surface failed.
+  Local range; reserve centrally later.
+- `embed` (D19 Game view): `PlayService::surfaces() -> Surfaces`, taken before the
+  host registers the service (the editor's in-process API, no JSON): `poll()` once
+  per frame after the host tick, `surfaces(world) -> Vec<SurfaceState { player,
+  generation, size, surface: &SharedSurface, latest }>`, `take(world, player)` (the
+  caller holds it), `release(world, player, frame)` after its GPU stopped sampling,
+  `device(world, player, Vec<DeviceEvent>)`, `resize(world, player, w, h)` (async; a
+  new generation arrives through `poll`), `take_timings()`. `EmbedParams`,
+  `DeviceEvent`, `method` (wire names mirrored by ara-player; its unit test checks).
 
 ## Methods
 
-`play.start {scene?, mode local|host|dedicated, clients, window, startPaused, seed,
-tickHz, hotReload}` → `{world: "play:N", players[], bootMs, prepareMs, transport}`;
+`play.start {scene?, mode local|host|dedicated, clients, window, embed?: {width, height,
+maxFps?}, startPaused, seed, tickHz, hotReload}` → `{world: "play:N", players[{role,
+pid, started, surface?}], bootMs, prepareMs, transport}`; `device {player, events}`
+(raw input to one embedded player), `resize {player, width, height}` → `{surface}`;
 `stop`, `pause`, `resume`, `step`, `until`, `input`, `timescale`, `inspect`, `read`,
 `patch` (acked after the applying tick), `capture` (hash, optional labelled PNG),
 `watch`, `record`, `recording` (save), `replay`, `diff`, `keep`, `restart`
@@ -74,6 +94,13 @@ every player of a world; reads go to the authority.
   `play.read` and `play.inspect` take `player` (0 = authority, 1.. = clients).
 - Players inherit the daemon's environment: SDL3.dll (ara-platform) on PATH, and in
   debug builds the Vulkan validation layer (`VK_LAYER_PATH`) for captures/windows.
+- Embedded worlds: headless pool players get `play.embed` before `play.start`
+  (dedicated servers get no surface). The service pulls each ring's unnamed NT
+  handles out of the child (`DuplicateHandle`; the child never holds a handle to
+  the owner) and owns them until stop/restart/resize; `Surfaces` owns its own
+  duplicates. Frames and new generations are read on host ticks; without a
+  `Surfaces` handle frames go straight back. Taking `surfaces()` again makes every
+  player start a fresh generation, so slots a lost handle held come back.
 
 ## Testing
 

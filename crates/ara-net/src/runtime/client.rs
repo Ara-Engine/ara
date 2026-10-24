@@ -237,6 +237,15 @@ impl<F: SimulationFeature> Client<F> {
         }
         Ok(())
     }
+    /// Advances transport and prediction with caller-supplied elapsed time.
+    /// Drive every peer and its links from one clock; do not mix with [`Self::poll`].
+    pub fn advance(&mut self, elapsed: Duration) -> Result<()> {
+        super::advance(&mut self.app, elapsed);
+        if let Some(fault) = &self.app.world().resource::<Owner>().fault {
+            return Err(fault.clone());
+        }
+        Ok(())
+    }
     /// Timeline/rollback/interpolation diagnostics without exposing backend types.
     pub fn status(&mut self) -> ClientStatus {
         let world = self.app.world_mut();

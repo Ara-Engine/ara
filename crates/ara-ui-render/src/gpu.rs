@@ -134,7 +134,7 @@ impl Renderer {
                 .map(|n| n as usize)
                 != Some(image.rgba.len())
         {
-            return Err("ARA7051: invalid image resource".into());
+            return Err("ARA4051: invalid image resource".into());
         }
         self.images.insert(id, image);
         if !self.dirty_images.contains(&id) {
@@ -179,7 +179,7 @@ impl Renderer {
         mode: TextMode,
     ) -> Result<()> {
         if size[0] == 0 || size[1] == 0 {
-            return Err("ARA7051: invalid render target".into());
+            return Err("ARA4051: invalid render target".into());
         }
         self.batches.clear();
         self.instances.clear();
@@ -236,7 +236,7 @@ impl Renderer {
                 }
                 Draw::PopTransform => {
                     if transforms.len() == 1 {
-                        return Err("ARA7051: unbalanced transform pop".into());
+                        return Err("ARA4051: unbalanced transform pop".into());
                     }
                     transforms.pop();
                 }
@@ -259,7 +259,7 @@ impl Renderer {
                 Draw::PopClip => {
                     clip = self.clips[clip]
                         .parent
-                        .ok_or("ARA7051: unbalanced clip pop")?;
+                        .ok_or("ARA4051: unbalanced clip pop")?;
                 }
                 Draw::Rect { rect: r, color, .. }
                 | Draw::RoundedRect { rect: r, color, .. }
@@ -283,7 +283,7 @@ impl Renderer {
                     ..
                 } => {
                     if !self.images.contains_key(image) {
-                        return Err(format!("ARA7051: missing image resource {image}").into());
+                        return Err(format!("ARA4051: missing image resource {image}").into());
                     }
                     instance.rect = array(rect(*r));
                     instance.color = color_array(*tint);
@@ -312,11 +312,11 @@ impl Renderer {
                     };
                     let font = fonts
                         .get(*font as usize)
-                        .ok_or("ARA7051: unknown font resource")?;
+                        .ok_or("ARA4051: unknown font resource")?;
                     let glyphs = list
                         .glyphs
                         .get(glyphs.clone())
-                        .ok_or("ARA7051: invalid glyph arena range")?;
+                        .ok_or("ARA4051: invalid glyph arena range")?;
                     let mut visible = self.clips[clip].rect;
                     let mut parent = self.clips[clip].parent;
                     while let Some(index) = parent {
@@ -355,7 +355,7 @@ impl Renderer {
             }
         }
         if transforms.len() != 1 || clip != 0 {
-            return Err("ARA7051: unclosed display-list stack".into());
+            return Err("ARA4051: unclosed display-list stack".into());
         }
         Ok(())
     }
