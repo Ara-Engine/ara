@@ -7,19 +7,15 @@
 //! G-buffer from the resulting irradiance volume. Lighting is deterministic: fixed
 //! directions, no per-pixel or per-frame random sampling.
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Buffer};
+use ara_gpu::{Access, Buffer, Image};
 
 /// Cache texels per probe (8x8 octahedral directions).
 pub const SURFACE_TEXELS: usize = 64;
 /// Static vectors per probe: 64 distance moments, relocation, diagnostics.
 pub const STATIC_VECTORS: usize = 66;
-/// Irradiance texels per probe (6x6 octahedral).
-pub const IRRADIANCE_TEXELS: usize = 36;
 /// Irradiance kept from the previous frame; relighting is noise-free, so this
 /// only smooths changes (camera-dependent shadowing at cache hits).
 pub(crate) const HYSTERESIS: f32 = 0.6;
-/// Probes relit per frame; the rest carry their irradiance forward.
-pub(crate) const BUDGET: u32 = 16384;
 
 /// What each probe of a lattice sees, from a one-time acquisition.
 #[derive(Debug, Clone, PartialEq)]
@@ -83,41 +79,59 @@ impl ProbeSurfaces {
     }
 }
 
-/// Uploaded probe volume. Irradiance ping-pongs: frames read `1 - slot` and write
-/// `slot`.
+/// Probes per atlas row: a near-square atlas for any lattice.
+pub(crate) fn atlas_width(probes: usize) -> u32 {
+    (probes as f64).sqrt().ceil() as u32
+}
+
+/// Uploaded probe volume. Irradiance atlases ping-pong: frames read `1 - slot`
+/// and write `slot`.
 pub(crate) struct GiGpu {
     pub origin: [f32; 3],
     pub spacing: [f32; 3],
     pub counts: [u32; 3],
     pub probes: u32,
     pub bias: f32,
+    /// Probes per atlas row.
+    pub atlas: u32,
     pub cache: Buffer,
-    pub statics: Buffer,
-    pub irradiance: [Buffer; 2],
-    /// Bindless indices: cache, statics, irradiance 0, irradiance 1.
-    pub indices: [u32; 4],
+    /// Relocation offset and active flag per probe.
+    pub meta: Buffer,
+    /// Static distance moments (bordered 10x10 tiles).
+    pub moments: Image,
+    /// Relit irradiance (bordered 8x8 tiles), ping-ponged.
+    pub irradiance: [Image; 2],
+    /// Bindless indices: cache, meta (buffers), moments (sampled).
+    pub indices: [u32; 3],
+    pub irradiance_sampled: [u32; 2],
+    pub irradiance_storage: [u32; 2],
     pub access: [Access; 2],
     pub slot: usize,
     pub cursor: u32,
 }
 
 impl GiGpu {
-    /// Fills the shader record's GI rows for this frame.
-    pub(crate) fn write(&self, frame: &mut super::frame::LookFrame) {
+    /// Fills the shader record's GI rows for this frame (`budget` probes relit).
+    pub(crate) fn write(&self, frame: &mut super::frame::LookFrame, budget: u32) {
         let [ox, oy, oz] = self.origin;
         let [sx, sy, sz] = self.spacing;
         let [cx, cy, cz] = self.counts;
-        let read = self.indices[2 + (1 - self.slot)];
-        let write = self.indices[2 + self.slot];
+        let (read, write) = (1 - self.slot, self.slot);
         frame.gi_origin = [ox, oy, oz, HYSTERESIS];
         frame.gi_spacing = [sx, sy, sz, self.bias];
         frame.gi_counts = [cx, cy, cz, self.probes];
-        frame.gi_buffers = [self.indices[0], self.indices[1], read, write];
-        frame.gi_update = [self.cursor, BUDGET.min(self.probes), 0, 0];
+        frame.gi_buffers = [self.indices[0], self.indices[1], 0, 0];
+        frame.gi_update = [self.cursor, budget.min(self.probes), self.atlas, 0];
+        frame.gi_images = [
+            self.irradiance_sampled[read],
+            self.irradiance_sampled[write],
+            self.irradiance_storage[write],
+            self.indices[2],
+        ];
     }
     /// Advances the ping-pong slot and update window after a completed frame.
-    pub(crate) fn advance(&mut self) {
+    pub(crate) fn advance(&mut self, budget: u32) {
         self.slot = 1 - self.slot;
-        self.cursor = (self.cursor + BUDGET.min(self.probes)) % self.probes;
+        self.cursor = (self.cursor + budget.min(self.probes)) % self.probes;
     }
 }

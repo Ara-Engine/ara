@@ -95,6 +95,9 @@ impl Native {
         self.visible_rows.clear();
         self.transparent.clear();
         for pass in 0..5 {
+            if pass < 4 && pass >= frame.look[2] as usize {
+                continue;
+            }
             let planes = planes(if pass < 4 {
                 frame.shadows[pass]
             } else {

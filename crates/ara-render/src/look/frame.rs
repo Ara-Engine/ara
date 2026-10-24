@@ -9,6 +9,8 @@ pub(crate) const PHYSICAL_SKY: u32 = 1;
 pub(crate) const FOG: u32 = 2;
 /// Shader flag: exposure snaps to its target (history reset).
 pub(crate) const RESET: u32 = 4;
+/// Shader flag: screen-space ambient occlusion is available.
+pub(crate) const AMBIENT_OCCLUSION: u32 = 8;
 /// Exposure adaptation step; the renderer has no wall clock.
 const FRAME_SECONDS: f32 = 1. / 60.;
 
@@ -32,6 +34,9 @@ pub(crate) struct LookFrame {
     pub gi_counts: [u32; 4],
     pub gi_buffers: [u32; 4],
     pub gi_update: [u32; 4],
+    pub gi_images: [u32; 4],
+    pub ao: [f32; 4],
+    pub ao_images: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -106,6 +111,9 @@ impl LookFrame {
             gi_counts: [0; 4],
             gi_buffers: [0; 4],
             gi_update: [0; 4],
+            gi_images: [0; 4],
+            ao: [0.; 4],
+            ao_images: [0; 4],
         }
     }
 }

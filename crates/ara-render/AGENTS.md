@@ -49,6 +49,11 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
   sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
   No runtime rays, no per-pixel noise.
+- `look::Quality` (`Renderer::set_quality`): per-preset budgets from
+  `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
+  distance; stable light space, practical splits, gather PCF, cascade blend),
+  half-res GTAO, GI relight budget, bloom. `cascade_viewports()` drives shadow
+  submission. Look images are allocated lazily (the bindless storage heap is shared).
 - `set_deferred_post` + `finish(color, sampled, state)`: grade an externally
   composited HDR frame (landscape, particles) with the same look post.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,

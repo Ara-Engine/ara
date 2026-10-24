@@ -73,6 +73,34 @@
       "vertex_stride": 0
     }
   },
+  "look_ao_denoise": {
+    "entries": {
+      "aoDenoiseMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_ao_trace": {
+    "entries": {
+      "aoTraceMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_bloom": {
     "entries": {
       "bloomMain": "compute"

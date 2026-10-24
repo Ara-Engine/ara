@@ -44,7 +44,8 @@ impl Renderer {
         }
         let vp = projection * camera.view;
         let light_count = self.content.lights.len() as u32;
-        let splits = [8., 18., 40., 100.];
+        let shadows = self.look.quality.shadows;
+        let splits = cascade_splits(&shadows);
         let previous = if self.targets.history.is_some() {
             self.previous_vp
         } else {
@@ -54,7 +55,12 @@ impl Renderer {
             vp,
             previous_vp: previous,
             inverse_vp: vp.inverse(),
-            shadows: shadow_cascades(camera, self.content.sun_direction, splits),
+            shadows: shadow_cascades(
+                camera,
+                self.content.sun_direction,
+                splits,
+                shadows.resolution,
+            ),
             camera: camera.position.extend(0.1).to_array(),
             // w selects the display curve (post::ToneCurve).
             forward: camera
@@ -98,8 +104,8 @@ impl Renderer {
             // w: sampled native motion (RG16F, unjittered UV delta); u32::MAX without.
             look: [
                 self.look.frame_index,
-                0,
-                0,
+                shadows.resolution,
+                shadows.cascades,
                 if self.native.is_some() {
                     self.targets.sampled[MOTION]
                 } else {
@@ -119,8 +125,26 @@ fn halton(mut index: u32, base: u32) -> f32 {
     }
     result
 }
-fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4]) -> [Mat4; 4] {
+/// Practical split scheme (Zhang et al.): a 0.75 blend of logarithmic and uniform
+/// far distances; unused cascades repeat the shadow distance.
+pub(super) fn cascade_splits(shadows: &crate::look::Shadows) -> [f32; 4] {
+    let (near, far, count) = (0.1f32, shadows.distance, shadows.cascades.max(1));
+    std::array::from_fn(|i| {
+        let t = ((i as u32 + 1).min(count)) as f32 / count as f32;
+        0.75 * near * (far / near).powf(t) + 0.25 * (near + (far - near) * t)
+    })
+}
+/// Light view-projections of the cascades. The light space has a fixed rotation
+/// and world origin, and each cascade's centre snaps to whole texels, so shadows
+/// stay still while the camera moves (no swimming edges).
+fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32) -> [Mat4; 4] {
     let inverse = (camera.projection * camera.view).inverse();
+    let up = if sun.dot(Vec3::Y).abs() > 0.99 {
+        Vec3::Z
+    } else {
+        Vec3::Y
+    };
+    let light = Mat4::look_at_rh(Vec3::ZERO, -sun, up);
     let mut near = 0.1;
     std::array::from_fn(|i| {
         let far = splits[i];
@@ -135,7 +159,9 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4]) -> [Mat4; 4] {
                 }
             }
         }
+        near = far;
         let centre = corners.iter().copied().sum::<Vec3>() / 8.;
+        // A bounding sphere keeps the extent independent of view rotation.
         let radius = (corners
             .iter()
             .map(|p| p.distance(centre))
@@ -143,30 +169,23 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4]) -> [Mat4; 4] {
             * 16.)
             .ceil()
             / 16.;
-        let up = if sun.dot(Vec3::Y).abs() > 0.99 {
-            Vec3::Z
-        } else {
-            Vec3::Y
-        };
-        let view = Mat4::look_at_rh(centre + sun * (radius + 100.), centre, up);
-        let light_centre = view.transform_point3(centre);
-        let texel = radius * 2. / 512.;
-        let x = (light_centre.x / texel).floor() * texel;
-        let y = (light_centre.y / texel).floor() * texel;
-        let zmin = corners
-            .iter()
-            .map(|p| view.transform_point3(*p).z)
-            .fold(f32::INFINITY, f32::min)
-            - 100.;
-        let zmax = corners
-            .iter()
-            .map(|p| view.transform_point3(*p).z)
-            .fold(f32::NEG_INFINITY, f32::max)
-            + 100.;
-        // Swapped near/far produces a 1->0 reversed-Z orthographic depth.
-        let projection =
-            Mat4::orthographic_rh(x - radius, x + radius, y - radius, y + radius, -zmin, -zmax);
-        near = far;
-        projection * view
+        let texel = radius * 2. / resolution as f32;
+        let c = light.transform_point3(centre);
+        let x = (c.x / texel).floor() * texel;
+        let y = (c.y / texel).floor() * texel;
+        // Light-space z grows towards the sun: casters up to 200 m sunward of the
+        // cascade still shadow it.
+        let away = c.z - radius - 10.;
+        let sunward = c.z + radius + 200.;
+        // Near at the far side and far at the sunward side: reversed-Z depth (1 is
+        // closest to the sun).
+        Mat4::orthographic_rh(
+            x - radius,
+            x + radius,
+            y - radius,
+            y + radius,
+            -away,
+            -sunward,
+        ) * light
     })
 }

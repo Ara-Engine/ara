@@ -17,7 +17,10 @@ use ara_render::{
 use ara_render_fidelity::{
     FidelityView, FrameInput, PostSettings,
     environment::FrameEnvironment,
-    presets::{Capabilities, FidelityPlan, Plan, QualityChoice, QualityPreset, RenderPath},
+    presets::{
+        Capabilities, FidelityPlan, Plan, QualityChoice, QualityPreset, RasterPlan, RenderOptions,
+        RenderPath,
+    },
 };
 use ara_runtime::extract::{CameraView, RenderFrame};
 use ara_runtime_render::{PresentationImage, Presenter, fidelity::native::Prepared as Scene};
@@ -58,6 +61,8 @@ pub struct Options<'a> {
     pub pipeline_cache: &'a Path,
     /// Reference samples per pixel for RMSE/FLIP scoring; zero skips it.
     pub reference_samples: u32,
+    /// Medium and above use the opt-in ray-traced renderer.
+    pub ray_tracing: bool,
     /// Resolves the frame's native content (terrain materials, foliage) for the
     /// Low presenter, which bakes its probe GI from it.
     pub content: &'a dyn Fn(&RenderFrame) -> Result<ara_runtime_render::fidelity::native::Content>,
@@ -221,9 +226,17 @@ pub fn run(
         Vec::new()
     };
     let mut modes = Vec::new();
-    let mut low = None;
+    let mut raster = Vec::new();
+    let render_options = RenderOptions {
+        ray_tracing: options.ray_tracing,
+    };
     for &preset in options.presets {
-        let plan = Plan::resolve(QualityChoice::Preset(preset), &capabilities, DISPLAY)?;
+        let plan = Plan::resolve(
+            QualityChoice::Preset(preset),
+            &capabilities,
+            DISPLAY,
+            render_options,
+        )?;
         match plan.path {
             RenderPath::Fidelity(fidelity_plan) => modes.push(fidelity(
                 gpu,
@@ -234,12 +247,14 @@ pub fn run(
                 &fidelity_plan,
                 &truths,
             )?),
-            RenderPath::Baseline { render_size } => low = Some(render_size),
+            RenderPath::Raster(plan) => raster.push((preset, plan)),
         }
     }
-    if let Some(size) = low {
+    if !raster.is_empty() {
         drop(scene);
-        modes.push(baseline(frame, look, options, size, &truths)?);
+        for (preset, plan) in raster {
+            modes.push(baseline(frame, look, options, preset, &plan, &truths)?);
+        }
     }
     let report = json!({
         "scene": look.scene,
@@ -499,14 +514,19 @@ fn baseline(
     frame: &mut RenderFrame,
     look: &Look,
     options: &Options<'_>,
-    size: [u32; 2],
+    preset: QualityPreset,
+    plan: &RasterPlan,
     truths: &[Truth],
 ) -> Result<Value> {
+    let size = plan.render_size;
+    let name = preset.name();
     let created = std::time::Instant::now();
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
-    presenter.set_quality(QualityChoice::Preset(QualityPreset::Low));
+    presenter.set_render_options(RenderOptions::default());
+    presenter.set_quality(QualityChoice::Preset(preset));
     presenter.set_probe_gi(true);
     presenter.prepare_with(frame, || (options.content)(frame))?;
+    presenter.wait_probe_gi()?;
     let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;
     let mut scores = Vec::new();
@@ -529,7 +549,7 @@ fn baseline(
                 window.push(presenter.renderer().context("Low presenter")?.timings());
             }
             timing = window.report(
-                &format!("{} low base raster", options.name),
+                &format!("{} {name} raster", options.name),
                 size,
                 &shot.name,
                 before,
@@ -547,7 +567,7 @@ fn baseline(
             marks: None,
         };
         let capture = presenter.capture_with(frame, &request, || Ok(Default::default()))?;
-        save(&capture.image, options, "low", &shot.name)?;
+        save(&capture.image, options, name, &shot.name)?;
         if let Some(truth) = truths.iter().find(|t| t.shot == shot.name) {
             let exposure = frame.environment.exposure;
             frame.environment.exposure =
@@ -559,12 +579,12 @@ fn baseline(
             let scored = scored?;
             let heatmap = options
                 .scratch
-                .join(format!("{}-low-{}-flip.png", options.name, shot.name));
+                .join(format!("{}-{name}-{}-flip.png", options.name, shot.name));
             scores.push(score(&scored.image, truth, &heatmap)?);
         }
     }
     Ok(
-        json!({"preset":"low","renderer":"baseline shipping presenter", "renderSize":size,"displaySize":size,
+        json!({"preset":name,"renderer":"raster shipping presenter", "renderSize":size,"displaySize":plan.display_size,
         "viewCreateMs":create_ms,"timing":timing,"timingScope":"base raster passes; terrain/VFX/composite timestamps pending",
         "reference":scores}),
     )

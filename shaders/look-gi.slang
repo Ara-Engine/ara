@@ -16,16 +16,21 @@ float3 localIrradiance(Frame f,float3 p,float3 n){
 }
 groupshared float3 radiance[64];
 groupshared float3 directions[64];
+groupshared float3 tile[36];
+// Writes this probe's bordered 8x8 atlas tile from the 6x6 interior in `tile`.
+void storeTile(Look l,uint id,uint lane){
+    int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
+}
 // One workgroup per probe, one lane per cache texel. Probes outside this frame's
-// update window (or classified inside geometry) carry their irradiance forward.
+// update window carry their irradiance forward; inactive probes stay black.
 [shader("compute")][numthreads(64,1,1)]
 void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();Look l=look(f);uint id=group.x;if(id>=l.giCounts.w)return;
-    uint read=l.giBuffers.z,write=l.giBuffers.w;float4 meta=giStatic(l,id,64);
+    float4 meta=giMeta(l,id);uint read=l.giImages.x;
     uint relative=(id+l.giCounts.w-l.giUpdate.x)%l.giCounts.w;
     if(relative>=l.giUpdate.y || meta.w<0.5){
-        if(lane<GI_IRRADIANCE)buffers[NonUniformResourceIndex(write)].Store<float4>((id*GI_IRRADIANCE+lane)*16,meta.w<0.5?float4(0):giTexel(read,id,lane));
-        return;
+        if(lane<36)tile[lane]=meta.w<0.5?float3(0):textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+        GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
@@ -41,11 +46,13 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     }
     if(sky>0)light+=sky*(physicalSky(l)?skyRadiance(f,l,dir,false):envTex(f.extra.w,environmentUv(dir)).rgb);
     radiance[lane]=light;directions[lane]=dir;GroupMemoryBarrierWithGroupSync();
-    if(lane<GI_IRRADIANCE){
+    if(lane<36){
         float3 n=octDecode((float2(lane%6,lane/6)+0.5)/6),sum=0;float normalization=0;
         for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}
         float3 value=sum*(PI/max(normalization,1e-5));
-        float3 old=giTexel(read,id,lane).rgb;float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giOrigin.w;
-        buffers[NonUniformResourceIndex(write)].Store<float4>((id*GI_IRRADIANCE+lane)*16,float4(lerp(value,old,hysteresis),1));
+        float3 old=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
+        float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giOrigin.w;
+        tile[lane]=lerp(value,old,hysteresis);
     }
+    GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
 }

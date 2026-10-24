@@ -34,13 +34,18 @@ No authoritative gameplay or authoring state lives here.
   `post_process` (otherwise the chain ran twice per frame).
 - `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
-  `Capabilities::of`, `Plan::resolve` → `RenderPath::Baseline` or `Fidelity(FidelityPlan)`;
-  `FidelityPlan::settings` at creation, `configure` after new/resize/content swap.
-  D26 tiers: Medium 0.4, High 0.5, Epic 2/3 transport scale; measure with
-  `cargo run -p ara-dev -- perf` on the frozen 144-tile Outpost pack.
+  `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
+  `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
+  `raster_quality()` budgets) or, with `RenderOptions::ray_tracing` on an RT device,
+  `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
+  creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
+  High 0.5, Epic 2/3 transport scale.
+- `bake_probe_surfaces`: one-time ray-traced probe surface caches for the raster
+  renderer's GI (`ara_render::look::gi`); needs one rendered RT frame.
 - `environment::FrameEnvironment::resolve(&frame.look, env.exposure)`: the scene's
-  `SkyAtmosphere`/`HeightFog`/`PostProcess` → `view.set_environment`; `baseline()`
-  gives the raster sky map/exposure/curve, `ground_sun()` the attenuated sun.
+  `SkyAtmosphere`/`HeightFog`/`PostProcess` → `view.set_environment`; `raster()`
+  gives the raster renderer's `Look`, `manual_exposure()` its exposure, and
+  `ground_sun()` the attenuated sun.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,

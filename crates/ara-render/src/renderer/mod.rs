@@ -176,7 +176,7 @@ impl Renderer {
             taa: load("taa")?,
             tonemap: load("tonemap")?,
         };
-        let targets = Self::targets(&mut gpu, size)?;
+        let targets = Self::targets(&mut gpu, size, crate::look::Shadows::default().resolution)?;
         Self::upload_scene(
             gpu,
             pipelines,
@@ -214,7 +214,7 @@ impl Renderer {
         if size == self.size {
             return Ok(());
         }
-        let replacement = Self::targets(&mut self.gpu, size)?;
+        let replacement = Self::targets(&mut self.gpu, size, self.look.quality.shadows.resolution)?;
         self.look.resize(&mut self.gpu, size)?;
         let previous = std::mem::replace(&mut self.targets, replacement);
         for image in previous.images {
@@ -241,6 +241,45 @@ impl Renderer {
     /// The look applied to rendered frames.
     pub fn look(&self) -> &crate::look::Look {
         &self.look.look
+    }
+    /// Apply per-preset raster budgets (shadow cascades, probe GI, bloom) from the
+    /// next frame. A new shadow resolution reallocates the atlas.
+    pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
+        quality.validate()?;
+        let resolution = quality.shadows.resolution;
+        if resolution != self.look.quality.shadows.resolution {
+            let image = self.gpu.create_image(
+                resolution * 2,
+                resolution * 2,
+                vk::Format::D32_SFLOAT,
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            )?;
+            let sampled = self.gpu.sampled_image(image, true)?.index;
+            let old = std::mem::replace(&mut self.targets.images[SHADOW], image);
+            self.gpu.retire(Resource::Image(old))?;
+            self.targets.sampled[SHADOW] = sampled;
+            self.targets.states[SHADOW] = State {
+                access: Access::Undefined,
+                queue: Queue::Graphics,
+            };
+        }
+        self.look.quality = quality;
+        Ok(())
+    }
+    /// The per-preset raster budgets in effect.
+    pub fn quality(&self) -> &crate::look::Quality {
+        &self.look.quality
+    }
+    /// Shadow-atlas viewports (origin, size) of the active cascades, in cascade
+    /// order: the shadow pass renders cascade `i` into viewport `i`.
+    pub fn cascade_viewports(&self) -> Vec<([u32; 2], [u32; 2])> {
+        let shadows = self.look.quality.shadows;
+        let r = shadows.resolution;
+        (0..shadows.cascades)
+            .map(|c| ([c % 2 * r, c / 2 * r], [r, r]))
+            .collect()
     }
     /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
     /// multiplier of a manual look; automatic looks meter instead.
@@ -306,7 +345,8 @@ impl Renderer {
             },
         )
     }
-    fn targets(gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<Targets> {
+    /// View targets; the shadow atlas holds 2x2 cascades of `shadow` texels.
+    fn targets(gpu: &mut VulkanDevice, size: [u32; 2], shadow: u32) -> Result<Targets> {
         let mut graph = Graph::default();
         let mut images = Vec::new();
         let mut sampled = Vec::new();
@@ -328,7 +368,11 @@ impl Renderer {
                 } else {
                     vk::ImageUsageFlags::COLOR_ATTACHMENT
                 };
-            let extent = if target == SHADOW { [1024, 1024] } else { size };
+            let extent = if target == SHADOW {
+                [shadow * 2; 2]
+            } else {
+                size
+            };
             let (_, image) = graph.transient(
                 gpu,
                 TransientImage {

@@ -47,7 +47,7 @@ FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;floa
 float4 lightingFragment(FullscreenVarying v):SV_Target0 {
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);float4 world=pixel(f.gbuffer.w,p);
     if(world.w==0)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
-    Surface s;float4 a=pixel(f.gbuffer.x,p);float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);s.albedo=a.rgb;s.alpha=1;s.ao=a.a;s.normal=n.xyz;s.roughness=n.w;s.metal=m.w;s.emissive=m.xyz;
+    Surface s;float4 a=pixel(f.gbuffer.x,p);float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);s.albedo=a.rgb;s.alpha=1;s.ao=min(a.a,screenOcclusion(f,l,p,length(world.xyz-f.camera.xyz)));s.normal=n.xyz;s.roughness=n.w;s.metal=m.w;s.emissive=m.xyz;
     return float4(applyFog(f,l,shade(f,l,s,world.xyz,p),world.xyz,uv),1);
 }
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 world:SV_Target5;};
