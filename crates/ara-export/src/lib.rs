@@ -16,6 +16,8 @@ mod native;
 mod pipeline;
 /// Schema-registered project export documents.
 pub mod preset;
+/// Project gameplay modules linked into the shipping NativeAOT host ABI.
+pub mod scripts;
 mod shipping_doctor;
 /// Debug-symbol archive production and stripping tool discovery.
 pub mod symbols;

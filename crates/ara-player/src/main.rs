@@ -143,11 +143,25 @@ fn run(args: Args) -> Result<()> {
     let prewarmed = match std::env::var("ARA_PLAY_SCRIPTS") {
         Ok(text) => {
             let scripts: ara_play::ScriptScene = serde_json::from_str(&text)?;
-            Some(ara_runtime_script::ScriptPlugin::prewarm(ara_runtime_script::ScriptSettings {
-                host_dir: scripts.host_dir.into(),
-                compile_server: scripts.compile_server.map(Into::into),
-                modules: scripts.modules.into_iter().map(Into::into).collect(),
-            }).context("ARA0922: C# pre-warm failed; run `ara doctor` to check the .NET 10 installation")?)
+            let config = match scripts.host {
+                ara_play::ScriptHost::Development => {
+                    ara_runtime_script::ScriptHostConfig::Development(
+                        ara_runtime_script::ScriptSettings {
+                            host_dir: scripts.host_dir.into(),
+                            compile_server: scripts.compile_server.map(Into::into),
+                            modules: scripts.modules.into_iter().map(Into::into).collect(),
+                        },
+                    )
+                }
+                ara_play::ScriptHost::NativeAot { manifest } => {
+                    ara_runtime_script::ScriptHostConfig::NativeAot {
+                        manifest: manifest.into(),
+                    }
+                }
+            };
+            Some(ara_runtime_script::ScriptPlugin::prewarm(config).context(
+                "ARA0922: C# pre-warm failed; run `ara doctor` to check the .NET 10 installation",
+            )?)
         }
         Err(_) => None,
     };

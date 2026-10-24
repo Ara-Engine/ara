@@ -19,6 +19,7 @@ mod host;
 mod module;
 mod reload_diag;
 pub mod run;
+pub mod shipping;
 pub mod value;
 
 pub use boost::register_tick_thread;

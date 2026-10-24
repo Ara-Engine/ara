@@ -35,6 +35,25 @@ fn preset_is_schema_registered_and_canonical_round_trip_preserves_defaults() {
     assert!(bad.validate().is_err());
     assert!(ExportPreset::from_text("{\"$schema\":\"ara://schema/export/1\",\"platform\":\"Windows\",\"platform\":\"Linux\"}").is_err());
 }
+
+#[test]
+fn runtime_preset_discovers_modules_without_an_author_csproj() {
+    let mut p = preset("windows");
+    p.player_template = ara_export::preset::PlayerTemplate::Runtime;
+    p.script_project.clear();
+    let text = p.to_text().unwrap();
+    assert!(
+        ExportPreset::from_text(&text)
+            .unwrap()
+            .script_project
+            .is_empty()
+    );
+    p.player_template = ara_export::preset::PlayerTemplate::Conformance;
+    assert!(
+        p.validate().is_err(),
+        "the S7 fixture still needs its project file"
+    );
+}
 #[test]
 fn permission_merge_deduplicates_and_rejects_conflicts_and_xml_injection() {
     let p = preset("android");

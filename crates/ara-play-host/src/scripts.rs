@@ -109,6 +109,7 @@ impl PlayService {
         })?;
         let text = |p: &Path| p.to_string_lossy().into_owned();
         Ok(Some(ScriptScene {
+            host: Default::default(),
             host_dir: text(&paths.host_dir),
             compile_server: paths.compile_server.as_deref().map(text),
             modules: modules.iter().map(|m| text(m)).collect(),

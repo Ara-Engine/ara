@@ -1,5 +1,31 @@
 # Ara export integration
 
+## Gameplay scripts in runtime exports
+
+`playerTemplate: "runtime"` builds every gameplay `ara.module.toml` module into
+one NativeAOT shared library using the real generated `ara_script_init` ABI
+(A12/A13), rather than the S7 conformance ABI. References are linked in dependency
+order; editor modules are excluded, and missing dependencies/cycles are errors.
+The export job generates isolated projects with the SDK generator and gameplay
+analyzers. It does not modify the game or require game-owned `.csproj` files.
+Runtime presets may omit `scriptProject`; it remains required by conformance presets.
+`ARA_DOTNET_SDK` selects the SDK's `dotnet/` sources, or
+`ARA_DOTNET_ARTIFACTS` its prebuilt `bin/` tools; these are export-time inputs only.
+
+The player folder contains `game/<assembly>.dll` (or `.so`) and
+`game/scripts.json`: format, ABI version, engine layout hash and linked modules.
+The packed `PlayScene` uses `ScriptScene::shipping("game/scripts.json")`; the
+standalone entry resolves this path against the player folder. The runtime checks
+metadata before loading and the native initializer independently checks compiled
+bindings. `ARA0921` means rebuild scripts and player with the same Ara SDK and
+export again; `ARA0920` reports missing images or an inconsistent module inventory.
+Shipping loads no author paths, CoreCLR installation, Roslyn, watcher or hot reload.
+Gameplay state remains ECS-owned and uses the usual snapshots and restore path.
+
+This runtime lane uses NativeAOT, as required by A12. The existing optional
+ReadyToRun and S7 fixture lanes remain available for conformance templates;
+ReadyToRun is diagnosed for runtime gameplay exports until its host is integrated.
+
 ## Distribution v2
 
 Export writes a plain `build/` folder, `distribution.json`, `report.json`, generic

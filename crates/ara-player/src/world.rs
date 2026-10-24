@@ -127,10 +127,19 @@ impl World {
                 modules: s.modules.iter().map(PathBuf::from).collect(),
             };
             let (plugin, events) = match prewarmed {
-                Some((plugin, events)) if plugin.matches(&settings) => (plugin, events),
+                Some((plugin, events))
+                    if s.host == ara_play::ScriptHost::Development && plugin.matches(&settings) =>
+                {
+                    (plugin, events)
+                }
                 other => {
                     drop(other);
-                    ScriptPlugin::new(settings.clone())
+                    match &s.host {
+                        ara_play::ScriptHost::Development => ScriptPlugin::new(settings.clone()),
+                        ara_play::ScriptHost::NativeAot { manifest } => {
+                            ScriptPlugin::shipping(manifest)
+                        }
+                    }
                 }
             };
             plugins.push(Box::new(plugin));

@@ -16,6 +16,8 @@ Depends on ara-schema, ara-diag, ara-components, bevy_ecs 0.20, netcorehost, lib
 - `ScriptHost` (per process; one .NET runtime):
   - `start(ScriptConfig, SchemaDb, &EngineBindings, &mut World)`;
     `ScriptConfig::jit(ara_host_dir)` (+ `compile_server`) or `::native_aot(lib)`.
+  - `shipping::ScriptManifest`: portable NativeAOT library, ABI/layout identity and
+    linked modules; metadata mismatches report `ARA0921` before loading the image.
   - `load_modules(world, &[ModuleSpec])`: dependency order (`load_order`); cycles
     (`ARA0923`) and unknown references (`ARA0924`) are refused, the rest load.
   - Per tick: `tick_boundary(world) -> Boundary` (the only place reloads apply; `reports`)

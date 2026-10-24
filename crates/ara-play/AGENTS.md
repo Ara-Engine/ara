@@ -29,6 +29,9 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
 edits), `play.snapshot` (portable hex CBOR) and `Start.resume`; `play.event`
 notifications (`Event`: `reload`, `diagnostic`, `restart`, `types`);
 `PlayScene.scripts` (`ScriptScene`: host dir, compile server, module folders).
+`ScriptScene.host` is typed: `Development` by default for older snapshots;
+`NativeAot { manifest }` for exports. `ScriptScene::shipping` clears author paths;
+the standalone entry calls `resolve_shipping(export_root)` before building a world.
 ## Rules and gotchas
 
 - Players connect back; they never listen. The token travels in `player.hello`, set

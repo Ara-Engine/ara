@@ -214,7 +214,10 @@ pub struct ExportPreset {
     #[serde(default)]
     #[ara(default = "nativeAot")]
     pub lane: ScriptLane,
-    /// Project-relative C# project file.
+    /// Project-relative S7 conformance project; runtime exports generate their own
+    /// NativeAOT entry from `ara.module.toml` modules and may omit this field.
+    #[serde(default)]
+    #[ara(default = "")]
     pub script_project: String,
     /// Assembly name and native image stem emitted by the C# project.
     pub assembly: String,
@@ -393,8 +396,9 @@ impl ExportPreset {
             (1..=ara_pack::MAX_CHUNK as u32).contains(&self.chunk_size),
             "ARA-EXP-PRE-003: chunk size must be 1..=16 MiB"
         );
-        for p in [&self.script_project, &self.content] {
-            ara_pack::validate_path(p)?;
+        ara_pack::validate_path(&self.content)?;
+        if self.player_template == PlayerTemplate::Conformance || !self.script_project.is_empty() {
+            ara_pack::validate_path(&self.script_project)?;
         }
         ensure!(
             !self.assembly.is_empty()
