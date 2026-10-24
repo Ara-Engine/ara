@@ -9,10 +9,14 @@ use super::{
     kits::{self, Hangar},
     place::{Ground, Models, Prop, Scene, create, transform},
 };
-use crate::kit::{self, Kit, Material, meters, part};
+use crate::{
+    kit::{self, Kit, Material, meters, part},
+    lock::Lock,
+};
 use anyhow::Result;
 use glam::{Vec2, Vec3};
 use serde_json::{Value, json};
+use std::path::Path;
 
 #[cfg(test)]
 mod audit;
@@ -53,7 +57,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
     )?;
     let models = models(ctx)?;
     terrain(ctx)?;
-    let ground = Ground::load(ctx, TERRAIN.0)?;
+    let ground = Ground::load(&ctx.root, TERRAIN.0)?;
     let mut models = models;
     road(ctx, &mut models, &ground)?;
     foliage(ctx, &models)?;
@@ -290,8 +294,6 @@ fn models(ctx: &Ctx) -> Result<Models> {
         super::native::whole(ctx, &mut m, name, asset, lit)?;
     }
     // Generated kit pieces.
-    let lock = &ctx.lock;
-    let root = &ctx.root;
     super::native::parts(
         ctx,
         &mut m,
@@ -315,7 +317,21 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ],
         &[],
     )?;
-    let kits: Vec<(&str, String)> = vec![
+    for (name, path) in kits(&ctx.root, &ctx.lock)? {
+        ctx.model(
+            &mut m,
+            name,
+            &path,
+            &format!("as_kit{}", super::place::short(name)),
+        )?;
+    }
+    Ok(m)
+}
+
+/// Writes the generated kit models the levels place (road and suit palette aside)
+/// and returns `(model name, glTF path)`. Only ignored `assets/kit/` files change.
+fn kits(root: &Path, lock: &Lock) -> Result<Vec<(&'static str, String)>> {
+    Ok(vec![
         (
             "container_green",
             kits::container(
@@ -389,29 +405,35 @@ fn models(ctx: &Ctx) -> Result<Models> {
         ("festoon", super::hangar::festoon(root, lock)?),
         ("embers", kits::embers(root, lock, "embers")?),
         ("cables", super::hangar::cables(root, lock)?),
-    ];
-    for (name, path) in kits {
-        ctx.model(
-            &mut m,
-            name,
-            &path,
-            &format!("as_kit{}", super::place::short(name)),
-        )?;
-    }
-    Ok(m)
+    ])
+}
+
+/// Writes every generated, git-ignored Outpost file (`assets/kit/`) without
+/// authoring a document. `ara-samples kits` and release packaging run this on a
+/// project whose third-party assets are fetched.
+pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
+    kits(root, lock)?;
+    road_kit(root, lock, &Ground::load(root, TERRAIN.0)?)?;
+    suit(root, lock)?;
+    Ok(())
 }
 
 /// The CC0 mannequin with its colour palette recast as a graphite work suit.
 pub fn human(ctx: &Ctx, models: &mut Models) -> Result<()> {
-    let palette = kit::recolor(
-        &ctx.root,
-        &ctx.lock,
+    let palette = suit(&ctx.root, &ctx.lock)?;
+    super::materials::palette(ctx, models, "human", "m2m_human", &palette)
+}
+
+/// Writes `assets/kit/human_suit.png`, the recoloured mannequin palette.
+pub fn suit(root: &Path, lock: &Lock) -> Result<String> {
+    kit::recolor(
+        root,
+        lock,
         "m2m_human",
         "color-palette",
         [0.52, 0.54, 0.56],
         "human_suit",
-    )?;
-    super::materials::palette(ctx, models, "human", "m2m_human", &palette)
+    )
 }
 
 /// Sculpts the terrain: flat ground under the compound, rolling scrubland, hills at the
@@ -563,20 +585,20 @@ fn road_path() -> Vec<Vec2> {
 }
 
 fn road(ctx: &Ctx, models: &mut Models, ground: &Ground) -> Result<()> {
+    let path = road_kit(&ctx.root, &ctx.lock, ground)?;
+    ctx.model(models, "road", &path, "as_kitroad")
+}
+
+/// Writes the road's glTF: a strip hugging the evaluated terrain.
+fn road_kit(root: &Path, lock: &Lock, ground: &Ground) -> Result<String> {
     let set = "rocky_trail";
     let mut kit = Kit::new(vec![
         Material::textured("trail", set).tinted([0.9, 0.76, 0.64]),
     ]);
-    kit.ribbon(
-        0,
-        &road_path(),
-        5.0,
-        0.03,
-        meters(&ctx.lock, set),
-        &|x, z| ground.height(x, z),
-    );
-    let path = kit.write(&ctx.root, &ctx.lock, "road")?;
-    ctx.model(models, "road", &path, "as_kitroad")
+    kit.ribbon(0, &road_path(), 5.0, 0.03, meters(lock, set), &|x, z| {
+        ground.height(x, z)
+    });
+    kit.write(root, lock, "road")
 }
 
 /// Scatter rules: dry shrubs and branches over the scrub, small rocks on the slopes;

@@ -1519,6 +1519,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "serde_json",
+ "tempfile",
  "zip 2.6.1",
 ]
 

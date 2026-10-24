@@ -42,6 +42,12 @@ registers its build, installs/reuses the standalone Hub and points its Hub short
 there. No-system-integration smoke leaves shared installations alone; smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
+Sample kits (`assets/kit/*`, git-ignored) are generated into the staged copy by
+`ara-samples --samples <stage>/templates kits <name>`, so the checkout never drifts.
+Then `references::check` gates every template: each `@path#id`, glTF URI, sidecar
+source, look `scene` and project `main` must resolve inside it, or packaging fails
+naming `document -> missing path` (`ara-release references <dir>` runs it alone).
+Smoke opens every installed template in the installed editor (`--frames 20`).
 
 Gates: cargo check -p ara-release; cargo test -p ara-release;
 cargo clippy -p ara-release --all-targets -- -D warnings; cargo fmt --all.
