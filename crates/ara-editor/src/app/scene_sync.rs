@@ -2,13 +2,40 @@
 //! drafts and gizmo drags patch it in place ([`Patch`]: moved meshes alone, the
 //! light list, materials, labels); anything else extracts and uploads the whole
 //! scene, as does a new model publication (placeholders become models). A failed
-//! upload is reported and retried; it never closes the editor. A native renderer
-//! (`Renderer::is_native`) extracts its own instanced content: changes only
-//! invalidate the Scene view, and typed drafts reach it as a projected view.
+//! upload is reported and retried; it never closes the editor. A native Scene
+//! ([`native`]) extracts its own instanced content: changes only invalidate the
+//! Scene view, and typed drafts reach it as a projected view.
 use super::viewport::SceneView;
 use super::*;
 use crate::world::{DocumentView, Patch};
 use std::collections::BTreeMap;
+
+/// Whether the Scene renders natively (`Renderer::is_native`), or will from its next
+/// frame: the render plan takes the raster path, as it does for every project without
+/// `rayTracing` (the plan `SceneView::render` resolves). Before that first frame the
+/// renderer holds no native state, and a legacy upload would fail on any texture or
+/// environment change.
+pub(super) fn native(editor: &Editor, renderer: &Renderer) -> bool {
+    renderer.is_native() || raster_plan(editor, renderer).unwrap_or(false)
+}
+fn raster_plan(editor: &Editor, renderer: &Renderer) -> ara_ui::Result<bool> {
+    use ara_render_fidelity::presets::{Capabilities, Plan, RenderPath};
+    let settings = crate::world::gltf::render_settings(editor.host.store().workspace())?;
+    let options = ara_runtime_render::RenderOptions {
+        ray_tracing: settings.ray_tracing,
+    };
+    let choice = editor
+        .state
+        .render_quality
+        .unwrap_or(settings.quality.into());
+    let plan = Plan::resolve(
+        choice,
+        &Capabilities::of(renderer.gpu()),
+        renderer.size(),
+        options,
+    )?;
+    Ok(matches!(plan.path, RenderPath::Raster(_)))
+}
 
 /// How long a newer model publication must hold still before a whole re-upload
 /// adopts it: imports publish in bursts, and each upload of a large scene costs
@@ -114,7 +141,7 @@ impl SceneSync {
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> Stages {
-        if renderer.is_native() {
+        if native(editor, renderer) {
             return self.rebuild(new, editor, renderer, scene_view);
         }
         if self.stale.is_none()
@@ -154,7 +181,7 @@ impl SceneSync {
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> Stages {
-        if renderer.is_native() {
+        if native(editor, renderer) {
             self.models = editor.models.revision();
             self.publication = None;
             self.stale = None;
@@ -218,7 +245,7 @@ impl SceneSync {
         renderer: &mut Renderer,
         scene_view: &mut SceneView,
     ) -> bool {
-        if renderer.is_native() {
+        if native(editor, renderer) {
             return self.project(view, editor, shell, scene_view);
         }
         if self.stale.is_some() {
