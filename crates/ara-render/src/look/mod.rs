@@ -106,8 +106,9 @@ impl Quality {
 pub struct Look {
     /// Display curve applied after exposure and grading.
     pub curve: ToneCurve,
-    /// Histogram metering; `None` uses the manual exposure passed to `render`.
-    /// Captures always use their request's manual exposure.
+    /// Histogram metering; `None` uses the manual exposure passed to `render` (and
+    /// the capture request's). Captures meter too: their first settle frame snaps
+    /// to the metered target, so results stay deterministic.
     pub auto_exposure: Option<AutoExposure>,
     /// Energy fraction redistributed to the bloom kernel, from zero to 0.25.
     pub bloom: f32,

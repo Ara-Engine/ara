@@ -37,6 +37,7 @@ pub(crate) struct LookFrame {
     pub gi_images: [u32; 4],
     pub ao: [f32; 4],
     pub ao_images: [u32; 4],
+    pub gi_gather: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -45,8 +46,6 @@ pub(crate) struct FrameInputs {
     pub sun_lux: Vec3,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
-    /// Lock exposure to `exposure` even under automatic metering (captures).
-    pub deterministic: bool,
     /// Snap adaptation (first frame or history reset).
     pub reset: bool,
     pub frame_number: u32,
@@ -61,7 +60,7 @@ impl LookFrame {
         let fog = look.fog;
         let g = &look.grading;
         let [r, gr, b] = g.white_balance_gain;
-        let automatic = look.auto_exposure.filter(|_| !inputs.deterministic);
+        let automatic = look.auto_exposure;
         let metering = look.auto_exposure.unwrap_or_default();
         let flags = if look.sky.is_some() { PHYSICAL_SKY } else { 0 }
             | if fog.is_some() { FOG } else { 0 }
@@ -114,6 +113,7 @@ impl LookFrame {
             gi_images: [0; 4],
             ao: [0.; 4],
             ao_images: [0; 4],
+            gi_gather: [0; 4],
         }
     }
 }

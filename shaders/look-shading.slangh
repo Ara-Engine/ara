@@ -61,20 +61,38 @@ float3 multiBounce(float ao,float3 albedo){
 float specularOcclusion(float nv,float ao,float roughness){
     return saturate(pow(nv+ao,exp2(-16*roughness*roughness-1))-1+ao);
 }
+// Gathered probe lobes at full-resolution pixel `p` (camera distance `distance`):
+// a depth-aware bilinear upsample of the half-resolution gather (`giGatherMain`).
+// Returns the volume coverage; zero when no lobe was gathered nearby.
+float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out float3 specular){
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    diffuse=0;specular=0;float coverage=0,total=0;
+    for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float4 d=pixel(l.giGather.x,q),s=pixel(l.giGather.y,q);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-abs(d.w-distance)/max(distance*0.02,0.05))+1e-5;
+        diffuse+=d.rgb*w;specular+=s.rgb*w;coverage+=s.w*w;total+=w;
+    }
+    diffuse/=total;specular/=total;return coverage/total;
+}
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
 // the sky's diffuse light and occludes its reflections by the ratio of probe to
 // sky irradiance in the mirror direction; rough reflections use the probes.
-float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v) {
+// `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
+// forward surfaces search the probes directly.
+float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
     float nv=saturate(dot(s.normal,v));float3 F=fresnel(nv,lerp(float3(0.04),s.albedo,s.metal));
     float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+high*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
-    float coverage=giEnabled(l)?giCoverage(l,world):0;
+    float coverage=0;float3 diffuseGi=0,specularGi=0;
+    [branch]if(giEnabled(l)){
+        if(gathered)coverage=gatheredLobes(f,l,p,length(world-f.camera.xyz),diffuseGi,specularGi);
+        else{coverage=giCoverage(l,world);if(coverage>0)giLobes(l,l.giImages.y,world,s.normal,reflected,giBias(l,s.normal,v),diffuseGi,specularGi);}
+    }
     [branch]if(coverage>0){
-        float3 diffuseGi,specularGi;giLobes(l,l.giImages.y,world,s.normal,reflected,giBias(l,s.normal,v),diffuseGi,specularGi);
         float occlusion=saturate(luminance(specularGi)/max(luminance(envTex(irradiance,uv).rgb),1e-4));
         ambient=lerp(ambient,diffuseGi,coverage);
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
@@ -86,8 +104,9 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v) {
     return diffuse+spec*(F*ab.x+ab.y)*specularOcclusion(nv,s.ao,s.roughness);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
-float3 shade(Frame f,Look l,Surface s,float3 world,int2 p) {
-    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v);
+// `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
+float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
+    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
     result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,world,s.normal);
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*65;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);

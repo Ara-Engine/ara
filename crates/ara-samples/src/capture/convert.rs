@@ -45,6 +45,24 @@ pub fn config() -> NativeConfig {
     }
 }
 
+/// The look's HDRI sky as an environment map, when it has one.
+pub fn environment(look: &Look, lock: &Lock, root: &Path) -> Result<Option<EnvironmentMap>> {
+    let Some(Sky::Hdri {
+        asset,
+        intensity,
+        rotation,
+    }) = &look.sky
+    else {
+        return Ok(None);
+    };
+    let entry = lock
+        .get(asset)
+        .with_context(|| format!("no HDRI {asset}"))?;
+    let file = entry.entry(&[".hdr"]).context("HDRI file")?;
+    let (size, pixels) = hdri(&entry.dir(root).join(&file.path), *intensity, *rotation)?;
+    Ok(Some(EnvironmentMap { size, pixels }))
+}
+
 /// Resolves the same native terrain splats and prefab foliage as Play. The old
 /// look terrain textures are superseded by authoritative Header.materials assets.
 pub fn scene(
@@ -61,19 +79,7 @@ pub fn scene(
         );
     }
     let mut content = world.content(frame)?;
-    if let Some(Sky::Hdri {
-        asset,
-        intensity,
-        rotation,
-    }) = &look.sky
-    {
-        let entry = lock
-            .get(asset)
-            .with_context(|| format!("no HDRI {asset}"))?;
-        let file = entry.entry(&[".hdr"]).context("HDRI file")?;
-        let (size, pixels) = hdri(&entry.dir(root).join(&file.path), *intensity, *rotation)?;
-        content.environment = Some(EnvironmentMap { size, pixels });
-    }
+    content.environment = environment(look, lock, root)?;
     let mut prepared = native::prepare(frame, content, config())?;
     // Optional look-development layers remain snapshot inputs, never source edits.
     for detail in &look.details {

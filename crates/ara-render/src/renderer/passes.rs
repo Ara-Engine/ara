@@ -35,7 +35,7 @@ impl Renderer {
         exposure: f32,
         deterministic: bool,
         mode: ViewMode,
-        lock_exposure: bool,
+        capture: bool,
     ) -> Result<()> {
         ensure!(
             exposure.is_finite() && exposure > 0.,
@@ -60,7 +60,6 @@ impl Renderer {
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
                 exposure,
-                deterministic: deterministic || lock_exposure,
                 reset: self.targets.history.is_none(),
                 frame_number: self.frame_number,
                 sampled,
@@ -71,6 +70,7 @@ impl Renderer {
         let mut look_frame = look_frame;
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
+            look_frame.gi_gather = self.look.gather_indices();
         }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
@@ -187,6 +187,14 @@ impl Renderer {
         for (id, pass) in self.look.sky_passes(&mut graph, &look, &sky_shared, sun) {
             declare(id, Recipe::Look(pass));
         }
+        let mut gather_reads = sky_shared.clone();
+        gather_reads.extend([
+            (ids[WORLD], Access::ShaderRead),
+            (ids[NORMAL], Access::ShaderRead),
+        ]);
+        for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
+            declare(id, Recipe::Look(pass));
+        }
         let culling = graph.pass("TiledLightCull", Queue::Compute, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
         let look_reads = self.look.lighting_reads(&look);
@@ -226,7 +234,8 @@ impl Renderer {
         declare(forward, Recipe::Forward);
         let mut shaded = vec![shadow, gbuffer, lighting, forward];
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
-        let deferred = self.look.deferred && matches!(mode, ViewMode::Lit) && !lock_exposure;
+        // Captures always produce their own output, never a deferred frame.
+        let deferred = self.look.deferred && matches!(mode, ViewMode::Lit) && !capture;
         if !deferred {
             let mut taa = vec![
                 (ids[HDR], Access::ShaderRead),
@@ -490,9 +499,11 @@ impl Renderer {
                         self.pipelines.tonemap
                     }));
                     let mut constants = root;
-                    if !taa {
-                        constants.words[1] = self.targets.sampled[output_history];
-                    }
+                    constants.words[1] = if taa {
+                        self.targets.sampled[HDR]
+                    } else {
+                        self.targets.sampled[output_history]
+                    };
                     recorder.push(Command::Constants(constants));
                     recorder.push(Command::Dispatch([
                         self.size[0].div_ceil(8),
@@ -535,7 +546,13 @@ impl Renderer {
         if let Some(gi) = &mut self.look.gi {
             gi.advance(self.look.quality.gi_budget);
         }
-        self.targets.history = (!deferred).then_some(output_history);
+        // A deferred frame keeps the previous history for `finish` to resolve against.
+        if deferred {
+            self.look.deferred_history = Some(output_history);
+        } else {
+            self.look.deferred_history = None;
+            self.targets.history = Some(output_history);
+        }
         self.previous_vp = frame.vp;
         self.frame_number = self.frame_number.wrapping_add(1);
         self.gpu.assert_clean()?;
@@ -549,10 +566,12 @@ impl Renderer {
         self.look.deferred = deferred;
     }
 
-    /// Exposure, bloom and display grading of a composited frame: `color` is linear
-    /// HDR at the render size, owned by Graphics in `state`, and stays readable.
-    /// Call after a deferred-post `render` (or a capture, whose exposure stays
-    /// locked); reuses that frame's constants and returns the SDR output in CopySource.
+    /// Temporal resolve, exposure, bloom and display grading of a composited frame:
+    /// `color` is linear HDR at the render size, owned by Graphics in `state`, and
+    /// stays readable. After a deferred-post `render` it resolves into that frame's
+    /// history slot (antialiasing particles and landscape with the scene); otherwise
+    /// it grades `color` directly. Reuses the frame's constants; returns the SDR
+    /// output in CopySource.
     pub fn finish(&mut self, color: Image, sampled: u32, state: State) -> Result<Image> {
         self.look.ensure(&mut self.gpu)?;
         let mut graph = Graph::default();
@@ -561,6 +580,28 @@ impl Renderer {
             Resource::Image(self.targets.images[OUTPUT]),
             self.targets.states[OUTPUT],
         );
+        let slot = self.look.deferred_history.take();
+        let mut imported = Vec::new();
+        let mut import = |graph: &mut Graph, target: usize| {
+            let id = graph.import(
+                Resource::Image(self.targets.images[target]),
+                self.targets.states[target],
+            );
+            imported.push((target, id));
+            id
+        };
+        let resolve = slot.map(|slot| {
+            let mut uses = vec![
+                (input, Access::ShaderRead),
+                (import(&mut graph, WORLD), Access::ShaderRead),
+                (import(&mut graph, DEPTH), Access::ShaderRead),
+                (import(&mut graph, slot), Access::Storage),
+            ];
+            if let Some(history) = self.targets.history {
+                uses.push((import(&mut graph, history), Access::ShaderRead));
+            }
+            (slot, uses)
+        });
         let look = self.look.import(&mut graph);
         let frame = graph.import(
             Resource::Buffer(self.frame),
@@ -569,10 +610,27 @@ impl Renderer {
                 queue: Queue::Graphics,
             },
         );
+        let resolved = resolve.map(|(slot, uses)| {
+            let id = graph.pass(
+                "TemporalResolve",
+                Queue::Graphics,
+                uses.into_iter().chain([(frame, Access::ShaderRead)]),
+            );
+            let slot_id = imported
+                .iter()
+                .find(|(target, _)| *target == slot)
+                .map(|(_, id)| *id)
+                .expect("the resolve imported its history slot");
+            (id, slot, slot_id)
+        });
+        let (post_input, post_sampled) = match resolved {
+            Some((_, slot, slot_id)) => (slot_id, self.targets.sampled[slot]),
+            None => (input, sampled),
+        };
         let passes = self.look.post_passes(
             &mut graph,
             &look,
-            input,
+            post_input,
             output,
             &[(frame, Access::ShaderRead)],
         );
@@ -592,9 +650,19 @@ impl Renderer {
                     &mut recorder,
                     *look_pass,
                     self.frame_index,
-                    sampled,
+                    post_sampled,
                     self.size,
                 );
+            } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
+                recorder.push(Command::Pipeline(self.pipelines.taa));
+                recorder.push(Command::Constants(RootConstants {
+                    words: [self.frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                }));
+                recorder.push(Command::Dispatch([
+                    self.size[0].div_ceil(8),
+                    self.size[1].div_ceil(8),
+                    1,
+                ]));
             }
             recorder.barriers(pass.after.iter().copied());
             recorder.push(Command::EndPass);
@@ -605,6 +673,12 @@ impl Renderer {
             self.last_timings.extend(self.gpu.resolve(point)?);
         }
         self.targets.states[OUTPUT] = compiled.final_states[output.0];
+        for (target, id) in imported {
+            self.targets.states[target] = compiled.final_states[id.0];
+        }
+        if let Some((_, slot, _)) = resolved {
+            self.targets.history = Some(slot);
+        }
         self.look.finish(&look, &compiled.final_states);
         self.gpu.assert_clean()?;
         Ok(self.targets.images[OUTPUT])

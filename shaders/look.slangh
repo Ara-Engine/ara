@@ -24,6 +24,7 @@ struct Look {
     uint4 giImages;    // irradiance read (sampled), write (sampled), write (storage), moments (sampled)
     float4 ao;         // x radius (m), y slices, z steps per side
     uint4 aoImages;    // trace, denoised (sampled), trace, denoised (storage); half resolution
+    uint4 giGather;    // diffuse, specular (sampled), diffuse, specular (storage); half resolution
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
