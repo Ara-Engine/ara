@@ -14,8 +14,9 @@ pub enum QualityPreset {
     /// Hybrid ray-traced lighting at half resolution: DDGI with one traced event,
     /// probe-only rough reflections, no ReSTIR.
     Medium,
-    /// Hybrid ray-traced lighting at two-thirds resolution; ReSTIR in scenes lit
-    /// by emissive surfaces or many local lights.
+    /// Hybrid ray-traced lighting at 0.625 scale (1600x900 for 1440p); ReSTIR in
+    /// scenes lit by emissive surfaces or many local lights, with reservoir paths
+    /// ending in the probe field after one traced event.
     High,
     /// Native-resolution ray tracing with ReSTIR DI/GI in every scene.
     Epic,
@@ -157,6 +158,9 @@ pub struct FidelityPlan {
     pub transport_stride: u32,
     /// ReSTIR policy.
     pub reservoirs: Reservoirs,
+    /// Reservoir secondary paths end in the DDGI terminal after `gather_events`
+    /// (see [`FidelityView::set_bounded_reservoir_paths`]); Epic traces full paths.
+    pub bounded_reservoir_paths: bool,
 }
 
 impl FidelityPlan {
@@ -180,6 +184,7 @@ impl FidelityPlan {
         view.set_lighting_budget(self.probe_ray_budget, self.reflection_cutoff)?;
         view.set_gather_events(self.gather_events)?;
         view.set_transport_stride(self.transport_stride)?;
+        view.set_bounded_reservoir_paths(self.bounded_reservoir_paths);
         let reservoirs = match self.reservoirs {
             Reservoirs::Off => false,
             Reservoirs::On => true,
@@ -247,9 +252,10 @@ impl Plan {
                 gather_events: 1,
                 transport_stride: 4,
                 reservoirs: Reservoirs::Off,
+                bounded_reservoir_paths: true,
             }),
             QualityPreset::High => RenderPath::Fidelity(FidelityPlan {
-                render_size: scaled(2.0 / 3.0),
+                render_size: scaled(0.625),
                 display_size,
                 upscaler: Upscaler::Taau,
                 probe_ray_budget: 16384,
@@ -257,6 +263,7 @@ impl Plan {
                 gather_events: 1,
                 transport_stride: 4,
                 reservoirs: Reservoirs::ManyLights,
+                bounded_reservoir_paths: true,
             }),
             QualityPreset::Epic => RenderPath::Fidelity(FidelityPlan {
                 render_size: display_size,
@@ -267,6 +274,7 @@ impl Plan {
                 gather_events: 2,
                 transport_stride: 2,
                 reservoirs: Reservoirs::On,
+                bounded_reservoir_paths: false,
             }),
         };
         Ok(Self {
@@ -326,7 +334,7 @@ mod tests {
             }
         }
         let high = Plan::resolve(QualityChoice::Auto, &RT, [2560, 1440]).unwrap();
-        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1707, 960]));
+        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1600, 900]));
     }
 
     #[test]

@@ -108,6 +108,20 @@ void temporalMain(uint3 tid:SV_DispatchThreadID){
         }
     }
     if(f.transport.x==1){l=luminance(colour);moments=float2(l,l*l);}
+    // History fix: direct light is never spatially filtered, so pixels with little
+    // history (disocclusions, regions a turning camera just revealed) showed raw
+    // one-reservoir noise. They start from a geometry-weighted sparse 5x5 average of
+    // the current shading, demodulated so texture detail stays sharp; the blend fades
+    // out over the first eight frames as temporal accumulation takes over.
+    if(splitSignals && f.transport.x==0 && f.transport.w!=1 && directCount<8 && world.w>0){
+        float3 sum=0;float total=0;float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);
+        for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+            int2 q=int2(p)+int2(x,y)*2;float4 w=pixel(f,WORLD+slot,q);if(w.w!=world.w)continue;
+            float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,normal.xyz)),8)*exp(-abs(dot(w.xyz-world.xyz,normal.xyz))/tolerance);
+            sum+=pixel(f,DIRECT,q).rgb/demodulation(f,q)*weight;total+=weight;
+        }
+        if(total>0)directLight=lerp(sum/total*modulation,directLight,(directCount-1)/7.);
+    }
     uint directResidual=0,diffuseResidual=0;
     if(splitSignals){float3 rounded;directResidual=roundHistory(directLight,9,rounded);directLight=rounded;diffuseResidual=roundHistory(colour,10,rounded);colour=rounded;}
     store(f,DIRECT_HISTORY+slot,p,float4(directLight,directCount));

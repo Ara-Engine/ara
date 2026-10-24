@@ -104,10 +104,12 @@ float3 clampSpecular(Frame f,float3 c){
 }
 // Trace independent bounded secondary paths; the reference uses the same twelve
 // total surface events, without reservoir reconnection or spatial filtering.
+// Bounded presets (frame bit 6) end in the DDGI terminal after the gather events.
 float3 traceSecondaryPath(Frame f,Surface s,float3 v,inout uint rng){
-    float3 result=0,beta=1;
+    float3 result=0,beta=1;uint events=(f.transport.z&64)!=0?(f.transport.z>>1)&15:11;
     for(uint bounce=0;bounce<11;bounce++){
         result+=beta*direct(f,s,v,rng);
+        if(bounce+1==events){result+=beta*indirect(f,s,v,f.probes.y);break;}
         if(bounce==10)break;
         float3 weight;float3 l=sampleBrdf(s,v,rng,weight);beta*=weight;
         if(any(!isfinite(beta)) || max(max(beta.x,beta.y),beta.z)<1e-7)break;
