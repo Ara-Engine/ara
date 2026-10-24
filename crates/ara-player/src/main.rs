@@ -20,7 +20,7 @@ use ara_play::{
     shm::Section,
 };
 use ara_runtime::extract::RenderFrame;
-use ara_runtime_render::{Presenter, two_d::Presenter2d};
+use ara_runtime_render::{Presenter, QualityChoice, two_d::Presenter2d};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::{
@@ -51,6 +51,9 @@ struct Args {
     /// Persistent pipeline-cache directory.
     #[arg(long, default_value = ".ara/gpu")]
     gpu_cache: PathBuf,
+    /// Override project quality: auto, low, medium, high or epic.
+    #[arg(long)]
+    quality: Option<QualityChoice>,
 }
 
 fn main() {
@@ -103,6 +106,7 @@ const INVALID_PARAMS: i64 = -32602;
 const METHOD_NOT_FOUND: i64 = -32601;
 
 struct Player {
+    quality: QualityChoice,
     link: Link,
     args: Args,
     size: [u32; 2],
@@ -150,7 +154,7 @@ fn run(args: Args) -> Result<()> {
     };
     // Windowed pool players create the window, device and pipelines before Play.
     let (window, presenter) = if args.window {
-        let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache)
+        let (window, presenter) = device::Windowed::open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default())
             .context("ARA_GPU_BACKEND: cannot open the player renderer; run `ara doctor` and check the Vulkan loader, Vulkan 1.3 GPU/driver, and validation layers")?;
         (Some(window), Some(presenter))
     } else {
@@ -170,6 +174,7 @@ fn run(args: Args) -> Result<()> {
         Err(e) => return Err(anyhow!("owner refused hello: {e}")),
     }
     let mut player = Player {
+        quality: args.quality.unwrap_or_default(),
         link,
         args,
         size,
@@ -333,10 +338,16 @@ impl Player {
                     (Some(window), Some(presenter), _, _) => {
                         window.present_2d(presenter).map(|()| None)
                     }
-                    (Some(window), None, _, Some(presenter)) => {
-                        window.present(presenter, &self.frame).map(|()| None)
+                    (Some(window), None, _, Some(presenter)) => window
+                        .present(presenter, &self.frame, || {
+                            world.fidelity_content(&self.frame)
+                        })
+                        .map(|()| None),
+                    (None, _, Some(embed), Some(presenter)) => {
+                        embed.render(presenter, &self.frame, || {
+                            world.fidelity_content(&self.frame)
+                        })
                     }
-                    (None, _, Some(embed), Some(presenter)) => embed.render(presenter, &self.frame),
                     _ => Ok(None),
                 };
                 let audio = job.map(|job| {
@@ -574,7 +585,8 @@ impl Player {
         );
         anyhow::ensure!(self.embed.is_none(), "this player is already embedded");
         busy(&mut self.link, "gpu")?;
-        let (embedded, presenter) = embed::Embedded::open(params, &self.args.gpu_cache)?;
+        let (embedded, presenter) =
+            embed::Embedded::open(params, &self.args.gpu_cache, self.quality)?;
         let desc = embedded.desc();
         self.size = [params.width, params.height];
         self.presenter = Some(presenter);
@@ -676,8 +688,9 @@ impl Player {
                 }
                 if params.path.is_some() && self.presenter.is_none() {
                     // Headless players create a GPU device on their first image.
-                    self.presenter =
-                        Some(Presenter::new(self.size, Vec::new(), &self.args.gpu_cache));
+                    let mut presenter = Presenter::new(self.size, Vec::new(), &self.args.gpu_cache);
+                    presenter.set_quality(self.quality);
+                    self.presenter = Some(presenter);
                 }
                 let presenter2d = self
                     .presenter2d
@@ -747,6 +760,13 @@ impl Player {
             }
         };
         let decode_ms = decode.elapsed().as_secs_f64() * 1000.0;
+        self.quality = self
+            .args
+            .quality
+            .unwrap_or_else(|| scene.rendering.quality.into());
+        if let Some(presenter) = &mut self.presenter {
+            presenter.set_quality(self.quality);
+        }
         // Windowed and embedded players present live frames (and stream live).
         let presenting = self.window.is_some() || self.embed.is_some();
         let (mut world, build_ms) = World::build(

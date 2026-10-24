@@ -638,6 +638,10 @@ pub struct DocumentData {
 /// tick rate and the published asset generations it must load.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayScene {
+    /// Typed project rendering defaults. A player command-line override wins.
+    /// Omitted by older format-1 senders, which retain hardware auto-detection.
+    #[serde(default)]
+    pub rendering: ara_components::render::RenderSettings,
     /// Format version (1).
     pub format: u32,
     /// Scene asset ID.
@@ -664,6 +668,11 @@ pub struct PlayScene {
     #[serde(default)]
     pub imports: BTreeMap<String, String>,
 }
+
+/// Shared quality choices serialized by project settings.
+pub use ara_components::render::QualitySetting;
+/// Shared typed rendering defaults carried by a Play snapshot.
+pub use ara_components::render::RenderSettings;
 
 impl PlayScene {
     /// Captures documents from a workspace (scene and prefabs alike).

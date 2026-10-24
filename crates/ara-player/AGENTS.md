@@ -8,7 +8,8 @@ plays: windowed through SDL3 (`--window`) or headless. It exits on `play.stop`.
 
 ## Command line
 
-`ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]`.
+`ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
+[--quality auto|low|medium|high|epic]`.
 Never run by hand: it needs an owner and the token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
@@ -46,6 +47,12 @@ exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
   hello, then handed to Play without rebinding component IDs or running gameplay early.
 - Windowed frames include GPU-composited foliage/VFX and a native 2D path without
   pixel readbacks. `presented: true` captures read the composited 3D output.
+- Windowed, embedded and headless Lit presentation share the native fidelity
+  presenter on RT GPUs. Project `settings.rendering.quality` travels in PlayScene;
+  `--quality` overrides it. Auto detects the GPU, Low/non-RT uses raster. Resolve
+  terrain/prefab assets at content changes, never on ordinary instance motion.
+- D19 exports `Presenter::output()` at `output_size()`, including retained last-good
+  output; `renderer()` owns the shared GPU but is only the bootstrap raster view.
 - The first window frame announces bounded GPU warm-up grace; completion restores
   the normal watchdog immediately, after scene-dependent pipelines are prepared.
 - The first presented frame (windowed or embedded) announces `busy("upload")`: real

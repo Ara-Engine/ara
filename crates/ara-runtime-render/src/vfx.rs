@@ -230,7 +230,7 @@ impl Effects {
                     target: *target - offset,
                     vertical_fov: *vertical_fov,
                 },
-                other => other.clone(),
+                other => *other,
             };
             let seed = u64::from(library(&effect.effect)?.seed);
             let replay = CaptureRequest {

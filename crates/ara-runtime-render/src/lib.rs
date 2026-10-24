@@ -18,6 +18,8 @@ pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
 mod material;
+mod presentation;
+pub use presentation::{QualityChoice, QualityPreset};
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
@@ -51,6 +53,8 @@ pub const SCENE_TEXTURE_BUDGET: usize = 32;
 /// Per-frame CPU cost of the last `present`, for profiling.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct PresentStats {
+    /// Native GPU milliseconds, including scene updates and output publication.
+    pub gpu_ms: f64,
     /// Whether the scene was rebuilt (structural change).
     pub rebuilt: bool,
     /// Meshes whose vertices were re-uploaded.
@@ -63,6 +67,12 @@ pub struct PresentStats {
 
 /// Owns the renderer and the per-draw upload state.
 pub struct Presenter {
+    live: Option<presentation::Live>,
+    published: Option<presentation::Published>,
+    choice: QualityChoice,
+    plan: Option<ara_render_fidelity::presets::Plan>,
+    published_quality: Option<QualityPreset>,
+    failure: Option<String>,
     renderer: Option<Renderer>,
     effects: vfx::Effects,
     landscapes: landscape::Landscapes,
@@ -140,6 +150,12 @@ impl Presenter {
     /// extensions (empty for headless); `cache` holds the pipeline cache.
     pub fn new(size: [u32; 2], extensions: Vec<CString>, cache: impl Into<PathBuf>) -> Self {
         Self {
+            live: None,
+            published: None,
+            choice: QualityChoice::Auto,
+            plan: None,
+            published_quality: None,
+            failure: None,
             renderer: None,
             effects: vfx::Effects::default(),
             landscapes: landscape::Landscapes::default(),
@@ -170,7 +186,10 @@ impl Presenter {
 
     /// Final GPU-composited window image, in CopySource state.
     pub fn output(&self) -> Option<ara_gpu::Image> {
-        self.output
+        self.published
+            .as_ref()
+            .map(|image| image.image)
+            .or(self.output)
             .or_else(|| self.renderer.as_ref().map(Renderer::output))
     }
 
@@ -181,15 +200,13 @@ impl Presenter {
 
     /// Resizes the output (history resets).
     pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
+        ensure!(!size.contains(&0), "presentation extent must be nonzero");
         self.size = size;
-        if let Some(renderer) = &mut self.renderer {
-            renderer.resize(size)?;
-        }
         Ok(())
     }
 
     /// Uploads `frame`'s content (rebuilding only on structural change).
-    pub fn prepare(&mut self, frame: &RenderFrame) -> Result<()> {
+    fn prepare_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
         let started = Instant::now();
         ensure!(!frame.draws.is_empty(), "nothing to draw");
         self.next_layout.clear();
@@ -231,9 +248,8 @@ impl Presenter {
     }
 
     /// Renders the scene, landscape/foliage and particles to one GPU window image.
-    pub fn present(&mut self, frame: &RenderFrame) -> Result<()> {
+    fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
         self.draw_terrain = frame.terrain.is_none();
-        self.prepare(frame)?;
         let camera = camera(frame)?;
         let exposure = frame.environment.exposure;
         let started = Instant::now();
@@ -284,7 +300,7 @@ impl Presenter {
     }
 
     /// A deterministic capture of `frame` at `size` with up to `marks` numbered marks.
-    pub fn capture(
+    fn capture_baseline(
         &mut self,
         frame: &RenderFrame,
         size: [u32; 2],
@@ -294,7 +310,7 @@ impl Presenter {
     ) -> Result<Capture> {
         // Terrain comes from the landscape composite below.
         self.draw_terrain = false;
-        self.prepare(frame)?;
+        self.prepare_baseline(frame)?;
         let request = CaptureRequest {
             camera: camera(frame)?,
             size,
@@ -326,7 +342,7 @@ impl Presenter {
     }
 
     /// Captures the window presentation path, including landscape/foliage and VFX.
-    pub fn capture_presented(
+    fn capture_presented_baseline(
         &mut self,
         frame: &RenderFrame,
         size: [u32; 2],

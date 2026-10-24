@@ -10,6 +10,11 @@ impl FidelityView {
     /// Execute graph-declared passes and publish a completed offscreen output.
     /// No compiler, image readback or wall-clock sampling runs in this method.
     pub fn render(&mut self, gpu: &mut VulkanDevice, input: &FrameInput<'_>) -> Result<()> {
+        anyhow::ensure!(
+            self.targets.images.len() >= 28,
+            "view requires a successful target resize"
+        );
+        self.prepare_transport(gpu)?;
         let (frame, vp, camera) = self.frame(input)?;
         gpu.upload(self.frame_buffer, bytemuck::bytes_of(&frame))?;
         let mut graph = Graph::default();

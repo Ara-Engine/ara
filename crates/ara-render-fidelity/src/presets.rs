@@ -177,6 +177,7 @@ impl FidelityPlan {
     /// Applies the per-view budgets at a frame boundary. ReSTIR under `ManyLights`
     /// follows the view's current scene, so call again after replacing content.
     pub fn configure(&self, gpu: &mut VulkanDevice, view: &mut FidelityView) -> Result<()> {
+        view.set_lighting_budget(self.probe_ray_budget, self.reflection_cutoff)?;
         view.set_gather_events(self.gather_events)?;
         view.set_transport_stride(self.transport_stride)?;
         let reservoirs = match self.reservoirs {
