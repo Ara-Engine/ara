@@ -36,6 +36,7 @@ impl Renderer {
         mode: ViewMode,
         capture: bool,
     ) -> Result<()> {
+        ara_gpu::cpu_scope!("Raster.render_frame");
         ensure!(
             exposure.is_finite() && exposure > 0.,
             "Exposure must be a finite positive multiplier"

@@ -2,12 +2,14 @@
 //! Gameplay state remains in ECS; these are derived content and motion snapshots.
 use glam::{Mat4, Vec3};
 
+mod changes;
 mod geometry_gpu;
 mod material;
 #[cfg(test)]
 mod tests;
 mod textures;
 mod validate;
+pub use changes::{CasterChanges, Changes, FrameWork};
 pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange, PreparedPose};
 pub use material::{Material, MaterialExtras, TextureSlot, TextureTransform};
 pub use textures::{TextureBinding, TextureStats, Textures};

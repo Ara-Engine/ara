@@ -120,10 +120,20 @@ impl Gpu {
             .context("No matching memory type")
     }
 
-    /// Copy startup data into a completed coherent host allocation.
-    pub(crate) fn upload(&self, buffer: BufferAllocation, data: &[u8]) -> Result<()> {
+    /// Copy a byte range into a completed coherent host allocation.
+    pub(crate) fn upload_range(
+        &self,
+        buffer: BufferAllocation,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<()> {
         ensure!(buffer.host, "Buffer is not host visible");
-        ensure!(data.len() as u64 <= buffer.size, "Upload out of bounds");
+        ensure!(
+            offset
+                .checked_add(data.len() as u64)
+                .is_some_and(|end| end <= buffer.size),
+            "Upload out of bounds"
+        );
         // SAFETY: Caller uploads only before submission/after completion. The
         // host-coherent mapped allocation has enough capacity and is unmapped here.
         unsafe {
@@ -133,7 +143,11 @@ impl Gpu {
                 buffer.size,
                 vk::MemoryMapFlags::empty(),
             )?;
-            std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), data.len());
+            std::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                ptr.cast::<u8>().add(offset as usize),
+                data.len(),
+            );
             self.device.unmap_memory(buffer.memory);
         }
         Ok(())

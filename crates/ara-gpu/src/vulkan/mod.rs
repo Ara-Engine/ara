@@ -278,6 +278,11 @@ impl VulkanDevice {
     }
     /// Write a coherent buffer after every preceding use has completed.
     pub fn upload(&self, buffer: Buffer, bytes: &[u8]) -> Result<()> {
+        self.upload_range(buffer, 0, bytes)
+    }
+    /// Write a byte range without copying unchanged rows. Like `upload`, this
+    /// requires coherent host storage and completion of every preceding GPU use.
+    pub fn upload_range(&self, buffer: Buffer, offset: u64, bytes: &[u8]) -> Result<()> {
         let b = self.buffers.get(buffer)?;
         let completed = self.completed()?;
         if (0..2).any(|q| completed[q] < b.last[q]) {
@@ -285,7 +290,7 @@ impl VulkanDevice {
                 "Upload would overwrite in-flight storage".into(),
             ));
         }
-        self.context.upload(b.raw, bytes)?;
+        self.context.upload_range(b.raw, offset, bytes)?;
         Ok(())
     }
     /// Read coherent mapped storage after timeline completion and a HostRead barrier.

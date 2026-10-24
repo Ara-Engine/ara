@@ -44,7 +44,45 @@ impl Renderer {
         Ok(())
     }
 
-    fn upload_probes(&mut self, surfaces: &ProbeSurfaces) -> Result<GiGpu> {
+    /// Adopts newer surfaces of the same lattice (an edit or a new content
+    /// generation) without restarting convergence: the relit irradiance carries
+    /// over and relighting blends the new surfaces in, so stale light fades rather
+    /// than flashing to sky-only. A different lattice replaces the volume.
+    pub fn update_probe_surfaces(&mut self, surfaces: &ProbeSurfaces) -> Result<()> {
+        let same = self.look.gi.as_ref().is_some_and(|gi| {
+            gi.origin == surfaces.origin
+                && gi.spacing == surfaces.spacing
+                && gi.counts == surfaces.counts
+        });
+        if !same {
+            return self.set_probe_surfaces(Some(surfaces));
+        }
+        let (cache, meta, moments) = self.upload_surfaces(surfaces)?;
+        let indices = [
+            self.gpu.storage_buffer(cache)?.index,
+            self.gpu.storage_buffer(meta)?.index,
+            self.gpu.sampled_image(moments, false)?.index,
+        ];
+        let Some(gi) = self.look.gi.as_mut() else {
+            return Ok(());
+        };
+        let old = (
+            std::mem::replace(&mut gi.cache, cache),
+            std::mem::replace(&mut gi.meta, meta),
+            std::mem::replace(&mut gi.moments, moments),
+        );
+        gi.indices = indices;
+        gi.bias = surfaces.bias();
+        self.gpu.retire(Resource::Buffer(old.0))?;
+        self.gpu.retire(Resource::Buffer(old.1))?;
+        self.gpu.retire(Resource::Image(old.2))?;
+        self.gpu.collect()?;
+        Ok(())
+    }
+
+    /// Uploads the static per-probe data: surface cache, meta (relocation and
+    /// activity) and the bordered distance-moment atlas.
+    fn upload_surfaces(&mut self, surfaces: &ProbeSurfaces) -> Result<(Buffer, Buffer, Image)> {
         surfaces.validate()?;
         let probes = surfaces.len();
         let atlas = atlas_width(probes);
@@ -75,6 +113,14 @@ impl Renderer {
             vk::Format::R32G32B32A32_SFLOAT,
             bytemuck::cast_slice(&moments),
         )?;
+        Ok((cache, meta, moments))
+    }
+
+    fn upload_probes(&mut self, surfaces: &ProbeSurfaces) -> Result<GiGpu> {
+        let (cache, meta, moments) = self.upload_surfaces(surfaces)?;
+        let probes = surfaces.len();
+        let atlas = atlas_width(probes);
+        let rows = (probes as u32).div_ceil(atlas);
         let irradiance = [
             self.dark_atlas([atlas * 8, rows * 8])?,
             self.dark_atlas([atlas * 8, rows * 8])?,

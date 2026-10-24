@@ -44,6 +44,7 @@ pub struct Prepared {
     /// Native BC mip tails, with no RGBA expansion or atlas generation.
     pub textures: NativeResidency,
     bindings: sync::Bindings,
+    changes: render::Changes,
 }
 
 struct Builder {
@@ -93,6 +94,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         scene: builder.scene,
         textures: builder.textures,
         bindings,
+        changes: render::Changes::default(),
     })
 }
 

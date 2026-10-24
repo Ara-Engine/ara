@@ -80,6 +80,17 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         environment: vec![[0.02, 0.03, 0.04, 1.]],
         environment_size: [1, 1],
     };
+    scene.materials.push(scene.materials[0]);
+    scene
+        .instances
+        .extend((100..228).map(|entity| instanced::Instance {
+            entity,
+            name: format!("offscreen-{entity}"),
+            geometry: 0,
+            material: 1,
+            world: Mat4::from_translation(Vec3::new(entity as f32 + 1000., 0., 0.)),
+            previous_world: Mat4::IDENTITY,
+        }));
     let mut renderer = Renderer::new_native(
         &scene,
         Box::new(EmptyTextures),
@@ -146,6 +157,57 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     first.write(&root.join("before.png"))?;
     assert_eq!(renderer.entity_at([70, 54])?, Some(1));
     assert_eq!(renderer.entity_at([122, 54])?, Some(2));
+    renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
+    let idle = renderer.native_frame_work().unwrap();
+    assert_eq!(
+        (
+            idle.instance_rows,
+            idle.material_rows,
+            idle.cull_tests,
+            idle.lod_tests,
+            idle.visible_rows
+        ),
+        (0, 0, 0, 0, 0)
+    );
+    scene.instances[1].world.w_axis.x = 0.8;
+    let move_only = instanced::Changes {
+        instances: vec![1],
+        ..Default::default()
+    };
+    renderer.update_native_changed(&scene, &move_only)?;
+    renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
+    let moved = renderer.native_frame_work().unwrap();
+    assert!(
+        moved.cull_tests > 0 && moved.cull_tests <= 10,
+        "only the moved group is culled, not 128 unrelated instances"
+    );
+    assert_eq!(
+        (moved.instance_rows, moved.material_rows, moved.lod_tests),
+        (1, 0, 1)
+    );
+    let dirty = renderer.native_caster_changes().unwrap();
+    assert!(!dirty.all);
+    assert_eq!(dirty.bounds.len(), 1);
+    assert!((dirty.bounds[0][0].x - 0.15).abs() < 1e-6);
+    assert!((dirty.bounds[0][1].x - 1.3).abs() < 1e-6);
+    // Main and far cull lists are independent; repeated light matrices reuse the list.
+    renderer.cull_native_shadow(Mat4::IDENTITY)?;
+    let far_tests = renderer.native_frame_work().unwrap().cull_tests;
+    renderer.cull_native_shadow(Mat4::IDENTITY)?;
+    assert_eq!(renderer.native_frame_work().unwrap().cull_tests, far_tests);
+    assert!(
+        renderer.native.as_ref().unwrap().culling.draws[6]
+            .iter()
+            .any(|batch| batch.count > 0)
+    );
+    renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
+    let settled = renderer.native_frame_work().unwrap();
+    assert_eq!(
+        (settled.instance_rows, settled.cull_tests, settled.lod_tests),
+        (1, 0, 0)
+    );
+    renderer.render_view(&request.camera, 1., ViewMode::Albedo)?;
+    assert_eq!(renderer.native_frame_work().unwrap().instance_rows, 0);
     scene.instances[1].world = Mat4::from_translation(Vec3::new(50., 0., 0.));
     scene.geometry[0].vertices[2].position[1] = 0.25;
     scene.geometry[0].revision = 1;
@@ -174,7 +236,13 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     };
     let opaque = renderer.capture(&lit)?;
     scene.materials[0].extras.transmission_factor = 1.;
-    renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    renderer.update_native_changed(
+        &scene,
+        &instanced::Changes {
+            materials: vec![0],
+            ..Default::default()
+        },
+    )?;
     let transmitted = renderer.capture(&lit)?;
     transmitted.write(&root.join("transmission.png"))?;
     assert_ne!(opaque.image, transmitted.image);

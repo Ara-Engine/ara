@@ -26,6 +26,11 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   `update_native` updates transforms/skin poses; structural changes use
   `replace_native_scene`. Native draw lists cull and select cooked LODs, and the
   RG16F motion target carries unjittered current-minus-previous screen UV.
+- `update_native_changed(scene, instanced::Changes)` consumes exact instance,
+  material and skin indices. Coherent writes/culling touch dirty groups only;
+  idle frames retain visible lists and settle motion history once. `native_frame_work`
+  reports traversals/writes. `native_caster_changes` exposes old-union-new bounds;
+  `cull_native_shadow(matrix)` caches opaque/masked camera-LOD casters for pass 6.
 - `instanced::GeometryGpu` uploads static local vertices/LOD indices once. Changed
   deforming revisions use `prepare_pose` then `commit_pose`/`cancel_pose`; retire
   the old dependent TLAS before committing. Three skin slots retain presented and
@@ -48,7 +53,8 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
   surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
   sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
-  No runtime rays, no per-pixel noise.
+  No runtime rays, no per-pixel noise. `update_probe_surfaces` adopts re-traced
+  surfaces of the same lattice keeping the irradiance, so edits blend in.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend),

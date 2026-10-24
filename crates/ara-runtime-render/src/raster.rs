@@ -26,6 +26,8 @@ pub struct RasterView {
     prepared: Option<Prepared>,
     effects: vfx::Effects,
     gi: Option<crate::gi::Acquisition>,
+    /// Static/dynamic split of the instances for probe GI.
+    mobility: crate::gi::Mobility,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -41,6 +43,7 @@ impl RasterView {
             prepared: None,
             effects: Default::default(),
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
+            mobility: Default::default(),
             cache,
             key: crate::FNV,
             pending_gi: false,
@@ -58,9 +61,12 @@ impl RasterView {
         self.pending_gi = enabled;
     }
 
-    /// Keep progressive editor views polling until acquired probe surfaces arrive.
+    /// Keep progressive editor views polling until acquired probe surfaces arrive
+    /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.gi.as_ref().is_some_and(|gi| gi.is_pending())
+        self.gi
+            .as_ref()
+            .is_some_and(|gi| gi.is_pending() || self.mobility.settling())
     }
 
     /// Change derived capture/probe labels at an editor control boundary without
@@ -90,70 +96,122 @@ impl RasterView {
         look: FrameEnvironment,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<RasterUpdate> {
+        self.prepare_inner(renderer, frame, plan, look, resolve, true)
+    }
+
+    /// Render an unchanged retained extraction without revisiting its draws.
+    /// Camera/quality changes and asynchronous probe delivery still progress. The
+    /// caller must use `prepare` after any pose, factor, light or content edit.
+    pub fn prepare_unchanged(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        plan: RasterPlan,
+        look: FrameEnvironment,
+        resolve: impl FnOnce() -> Result<Content>,
+    ) -> Result<RasterUpdate> {
+        self.prepare_inner(renderer, frame, plan, look, resolve, false)
+    }
+
+    fn prepare_inner(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        plan: RasterPlan,
+        look: FrameEnvironment,
+        resolve: impl FnOnce() -> Result<Content>,
+        snapshot_changed: bool,
+    ) -> Result<RasterUpdate> {
         ara_gpu::cpu_scope!("RasterView.prepare");
-        let change = self
-            .prepared
-            .as_mut()
-            .map(|p| p.update_frame(frame))
-            .transpose()?
-            .unwrap_or(FrameChange::Rebuild);
-        let mut resolver = Some(resolve);
-        let mut bake_content = None;
-        let mut update = RasterUpdate::default();
-        if matches!(change, FrameChange::Rebuild) {
-            let content = resolver.take().context("raster asset resolver")?()?;
-            if self.gi.is_some() && plan.quality.gi_budget > 0 {
-                // Publication boundary only: the worker owns immutable source
-                // assets, while the presented scene continues accepting motion.
-                bake_content = Some(content.clone());
+        let result = (|| {
+            let change = if snapshot_changed || self.prepared.is_none() {
+                self.prepared
+                    .as_mut()
+                    .map(|p| p.update_frame(frame))
+                    .transpose()?
+                    .unwrap_or(FrameChange::Rebuild)
+            } else {
+                FrameChange::Ready { poses: 0, skins: 0 }
+            };
+            let mut resolver = Some(resolve);
+            let mut bake_content = None;
+            let mut update = RasterUpdate::default();
+            if matches!(change, FrameChange::Rebuild) {
+                let content = resolver.take().context("raster asset resolver")?()?;
+                if self.gi.is_some() && plan.quality.gi_budget > 0 {
+                    // Publication boundary only: the worker owns immutable source
+                    // assets, while the presented scene continues accepting motion.
+                    bake_content = Some(content.clone());
+                }
+                let config = texture_config();
+                let mut prepared = native::prepare(frame, content, config)?;
+                prepared.enable_motion();
+                let textures = prepared.textures.fork_sources(config)?;
+                renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
+                self.key = content_key(&prepared);
+                self.prepared = Some(prepared);
+                self.pending_gi = true;
+                update.rebuilt = true;
+            } else if let FrameChange::Ready { poses, skins } = change {
+                update.updated = poses + skins;
             }
-            let config = texture_config();
-            let mut prepared = native::prepare(frame, content, config)?;
-            prepared.enable_motion();
-            let textures = prepared.textures.fork_sources(config)?;
-            renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
-            self.key = content_key(&prepared);
-            self.prepared = Some(prepared);
-            self.pending_gi = true;
-            update.rebuilt = true;
-        } else if let FrameChange::Ready { poses, skins } = change {
-            update.updated = poses + skins;
-        }
-        if renderer.size() != plan.render_size {
-            renderer.resize(plan.render_size)?;
-        }
-        if *renderer.quality() != plan.quality {
-            renderer.set_quality(plan.quality)?;
-        }
-        let raster_look = look.raster();
-        if *renderer.look() != raster_look {
-            renderer.set_look(raster_look)?;
-        }
-        renderer.update_native(
-            &self
-                .prepared
-                .as_ref()
-                .context("native raster content")?
-                .scene,
-        )?;
-        self.look = Some(look);
-        if plan.quality.gi_budget > 0
-            && let Some(gi) = &mut self.gi
-        {
-            if self.pending_gi {
-                renderer.set_probe_surfaces(None)?;
-                let content = match bake_content {
-                    Some(content) => content,
-                    None => resolver.take().context("probe asset resolver")?()?,
-                };
-                gi.request(self.key, frame, || Ok(content))?;
-                self.pending_gi = false;
+            if renderer.size() != plan.render_size {
+                renderer.resize(plan.render_size)?;
             }
-            if let Some(surfaces) = gi.poll(false) {
-                renderer.set_probe_surfaces(Some(&surfaces))?;
+            if *renderer.quality() != plan.quality {
+                renderer.set_quality(plan.quality)?;
             }
+            let raster_look = look.raster();
+            if *renderer.look() != raster_look {
+                renderer.set_look(raster_look)?;
+            }
+            let prepared = self.prepared.as_ref().context("native raster content")?;
+            let unchanged = ara_render::instanced::Changes::default();
+            renderer.update_native_changed(
+                &prepared.scene,
+                if snapshot_changed {
+                    prepared.changes()
+                } else {
+                    &unchanged
+                },
+            )?;
+            self.look = Some(look);
+            if plan.quality.gi_budget > 0
+                && let Some(gi) = &mut self.gi
+            {
+                // Moved instances leave the probe surfaces until they rest again; the
+                // stale surfaces stay in use until the re-traced ones land.
+                let scene = &self
+                    .prepared
+                    .as_ref()
+                    .context("native raster content")?
+                    .scene;
+                let edited = self
+                    .mobility
+                    .observe(scene, update.rebuilt || update.updated > 0);
+                if self.pending_gi {
+                    let content = match bake_content {
+                        Some(content) => content,
+                        None => resolver.take().context("probe asset resolver")?()?,
+                    };
+                    gi.request(self.key, frame, || Ok(content), self.mobility.dynamic())?;
+                    self.pending_gi = false;
+                } else if edited {
+                    gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
+                }
+                if let Some(surfaces) = gi.poll(false) {
+                    renderer.update_probe_surfaces(&surfaces)?;
+                }
+            }
+            Ok(update)
+        })();
+        if result.is_err() {
+            // Extraction may already have adopted a pose before quality/upload
+            // failed. Rebuild CPU content on retry so no dirty edit is forgotten;
+            // the renderer and its published last-good image remain owned/live.
+            self.prepared = None;
         }
-        Ok(update)
+        result
     }
 
     /// Present native terrain/foliage through the G-buffer, then particles and one
@@ -220,7 +278,7 @@ impl RasterView {
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
         if let Some(surfaces) = self.gi.as_mut().and_then(|gi| gi.poll(true)) {
-            renderer.set_probe_surfaces(Some(&surfaces))?;
+            renderer.update_probe_surfaces(&surfaces)?;
         }
         Ok(())
     }
