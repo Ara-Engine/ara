@@ -7,6 +7,28 @@ use std::{collections::BTreeSet, path::Path, time::Duration};
 /// immutable cooked generations. Export callers package these generations and the
 /// returned documents; standalone players never discover, cook or import assets.
 pub fn package_scene(root: &Path, worker: &Path) -> Result<PlayScene, String> {
+    package_scene_with_progress(root, worker, |_| Ok(()))
+}
+
+/// Packages a scene while reporting completed-cook counts. Cooking may take any
+/// total duration while completions continue. `ARA_EXPORT_COOK_STALL_SECONDS`
+/// sets the no-completion timeout (default 600 seconds, positive integers only).
+pub fn package_scene_with_progress(
+    root: &Path,
+    worker: &Path,
+    report: impl FnMut(crate::assets::CookProgress) -> Result<(), String>,
+) -> Result<PlayScene, String> {
+    let stall = std::env::var("ARA_EXPORT_COOK_STALL_SECONDS")
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .ok()
+                .filter(|seconds| *seconds > 0)
+                .ok_or_else(|| {
+                    "ARA_EXPORT_COOK_STALL_SECONDS must be a positive integer".to_owned()
+                })
+        })
+        .unwrap_or(Ok(600))?;
     let project = crate::open_project(root).map_err(|error| error.to_string())?;
     let (workspace, diagnostics) = project.load(&[]);
     let problems: Vec<_> = project
@@ -33,7 +55,7 @@ pub fn package_scene(root: &Path, worker: &Path) -> Result<PlayScene, String> {
     }
     let mut assets = Assets::new(root, worker)?;
     assets.synchronize(&workspace, 0)?;
-    let pins = assets.pins(&wanted, Duration::from_secs(180))?;
+    let pins = assets.pins_with_progress(&wanted, Duration::from_secs(stall), report)?;
     for (id, _) in workspace
         .index()
         .imports()

@@ -31,6 +31,7 @@ pub struct Effects {
     systems: BTreeMap<u64, (String, GpuSystem, bool)>,
     size: [u32; 2],
     sun: (glam30::Vec3, glam30::Vec3),
+    gpu_ms: f64,
 }
 
 impl Effects {
@@ -47,6 +48,7 @@ impl Effects {
             systems: BTreeMap::new(),
             size,
             sun,
+            gpu_ms: 0.,
         };
         result.update(gpu, effects, sun)?;
         Ok(result)
@@ -116,6 +118,26 @@ impl Effects {
         self.effects.is_empty()
     }
 
+    /// GPU time of all particle steps and draws in the last composite. The view's
+    /// subsequent post passes are accounted for by `FidelityView::timings`.
+    pub fn gpu_ms(&self) -> f64 {
+        self.gpu_ms
+    }
+
+    /// Changes working targets at a view boundary. Definitions and placements stay
+    /// intact; particle systems warm again at the new transport resolution.
+    pub fn resize(&mut self, gpu: &mut VulkanDevice, size: [u32; 2]) -> Result<()> {
+        if self.size != size {
+            for (_, (_, system, _)) in std::mem::take(&mut self.systems) {
+                system.retire(gpu)?;
+            }
+            let effects = std::mem::take(&mut self.effects);
+            self.size = size;
+            self.update(gpu, &effects, self.sun)?;
+        }
+        Ok(())
+    }
+
     /// Restarts explicit captures from the same particle simulation state. Live
     /// presentation keeps its systems; only a reproducible readback calls this.
     pub fn reset(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
@@ -150,6 +172,7 @@ impl Effects {
         tick: u32,
         ticks: u32,
     ) -> Result<()> {
+        self.gpu_ms = 0.;
         let inputs = view.feature_inputs()?;
         let mut background = SceneColor {
             image: inputs.radiance.image,
@@ -197,8 +220,18 @@ impl Effects {
             *warmed = true;
             for _ in 0..steps {
                 system.step(gpu, &frame)?;
+                self.gpu_ms += system
+                    .timings()
+                    .iter()
+                    .map(|pass| pass.milliseconds)
+                    .sum::<f64>();
             }
             system.render(gpu, &frame)?;
+            self.gpu_ms += system
+                .timings()
+                .iter()
+                .map(|pass| pass.milliseconds)
+                .sum::<f64>();
             background = system.hdr_output();
         }
         view.post_process(

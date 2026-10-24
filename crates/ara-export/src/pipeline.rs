@@ -81,7 +81,7 @@ impl Driver<'_> {
         })?;
         Ok(())
     }
-    fn stage<T>(&mut self, name: &str, f: impl FnOnce(&Self) -> Result<T>) -> Result<T> {
+    fn stage<T>(&mut self, name: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
         self.stage = name.into();
         self.emit(EventKind::Progress {
             status: "started".into(),
@@ -343,7 +343,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             Ok(ara_pack::EncryptionKey::from_hex(&text)?)
         })
         .transpose()?;
-    let pack = d.stage("pack", |_| {
+    let pack = d.stage("pack", |d| {
         let cook = ara_pack::CookKey {
             platform: p.platform.name().into(),
             arch: if p.platform == Platform::Android {
@@ -359,7 +359,15 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         let built = if p.player_template == PlayerTemplate::Runtime {
             let worker = ara_play_host::PlayConfig::for_project(&project).import_worker;
             ara_pack::build(
-                crate::runtime::inputs(&project, &worker)?,
+                crate::runtime::inputs(&project, &worker, |progress| {
+                    d.emit(EventKind::Cooking {
+                        completed: progress.completed,
+                        total: progress.total,
+                        elapsed_ms: millis(progress.elapsed),
+                        stalled_ms: millis(progress.stalled),
+                    })
+                    .map_err(|error| error.to_string())
+                })?,
                 cook,
                 p.chunk_size as usize,
                 encryption.as_ref(),

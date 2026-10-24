@@ -8,8 +8,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(crate) fn inputs(project: &Path, worker: &Path) -> Result<Vec<Input>> {
-    let mut scene = ara_play_host::package_scene(project, worker).map_err(anyhow::Error::msg)?;
+pub(crate) fn inputs(
+    project: &Path,
+    worker: &Path,
+    report: impl FnMut(ara_play_host::assets::CookProgress) -> Result<(), String>,
+) -> Result<Vec<Input>> {
+    let mut scene = ara_play_host::package_scene_with_progress(project, worker, report)
+        .map_err(anyhow::Error::msg)?;
     ensure!(
         scene.scripts.is_none(),
         "exported C# modules require a shipping script host"
