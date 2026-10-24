@@ -89,6 +89,60 @@ fn signed_terrain_splats_and_rule_prefab_parts_use_runtime_placements_once() {
         &MemoryAssets::default(),
     )
     .unwrap();
+    {
+        let original = workspace.doc("pf_parts").unwrap().clone();
+        let mut missing = original.clone();
+        let mut record = missing.record("e_tip").unwrap().clone();
+        record.insert(
+            "MeshRenderer".into(),
+            serde_json::json!({"model":"@missing.gltf#as_missing"}),
+        );
+        missing.insert_unchecked(RecordId::parse("e_tip").unwrap(), record);
+        workspace.insert("parts.prefab", missing);
+        let schema = ara_runtime::schema(&[]).unwrap();
+        let library = Library::default();
+        let source = MemoryAssets::default();
+        let pending = Content::resolve_available_with_pending(
+            &frame,
+            &workspace,
+            &schema,
+            &library,
+            &source,
+            &|_| true,
+        )
+        .unwrap();
+        let parts = &pending.foliage_parts["@parts.prefab#pf_parts"];
+        assert_eq!(
+            parts.iter().find(|p| p.address == "e_tip").unwrap().color,
+            crate::PENDING_MODEL_COLOR
+        );
+        let mut prepared = prepare(&frame, pending, config()).unwrap();
+        prepared.enable_motion();
+        let slots = &prepared.unpublished_materials["as_missing"];
+        assert_eq!(slots.len(), 1);
+        assert_eq!(
+            prepared.scene.materials[slots[0]].pbr.base_color,
+            crate::PENDING_MODEL_COLOR
+        );
+        let failed = Content::resolve_available_with_pending(
+            &frame,
+            &workspace,
+            &schema,
+            &library,
+            &source,
+            &|_| false,
+        )
+        .unwrap();
+        assert_eq!(
+            failed.foliage_parts["@parts.prefab#pf_parts"]
+                .iter()
+                .find(|p| p.address == "e_tip")
+                .unwrap()
+                .color,
+            [1., 0., 1., 1.]
+        );
+        workspace.insert("parts.prefab", original);
+    }
     let data = Arc::get_mut(&mut frame.terrain.as_mut().unwrap().data).unwrap();
     for (i, color) in [
         [1.0, 0.0, 0.0, 1.0],

@@ -82,6 +82,14 @@ impl FidelityContent {
         }) {
             return Ok(false);
         }
+        super::pending::style(
+            &mut self.placeholders,
+            &mut delta,
+            view.entities(),
+            source,
+            self.progress.value.as_deref(),
+            false,
+        );
         for draw in delta.draws.drain(..) {
             let slot = frame
                 .draws

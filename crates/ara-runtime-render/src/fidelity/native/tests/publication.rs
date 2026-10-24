@@ -7,7 +7,11 @@ use ara_render_fidelity::{
     environment::FrameEnvironment,
     presets::{Capabilities, Plan, QualityChoice, QualityPreset, RenderOptions, RenderPath},
 };
-use ara_runtime::{animation::Library, assets::MemoryAssets};
+use ara_runtime::{
+    animation::Library,
+    assets::{AssetSource, MemoryAssets},
+};
+use std::collections::BTreeSet;
 
 #[test]
 fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descriptor_growth()
@@ -63,6 +67,10 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
         })
         .collect();
     let mut library = Library::default();
+    let mut placeholders = crate::ModelPlaceholders::default();
+    let models = (0..3)
+        .map(|i| (format!("e_panel{i}"), format!("as_panel{i}")))
+        .collect();
     let mut raster = crate::RasterView::new("target/unused-probe-cache");
     raster.set_probe_gi(false);
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -75,7 +83,7 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
                 .0
                 .insert(format!("as_panel{}", stage - 1), generation.clone());
         }
-        let frame = document_frame(
+        let mut frame = document_frame(
             &entities,
             &transforms,
             &workspace,
@@ -84,12 +92,23 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             None,
             &Default::default(),
         )?;
-        let models = frame
+        placeholders.style(
+            &mut frame,
+            &models,
+            |asset| source.digest(asset).is_none(),
+            true,
+        );
+        for draw in &frame.draws {
+            if matches!(draw.geometry, Geometry::Shape { .. }) {
+                assert_eq!(draw.color, crate::PENDING_MODEL_COLOR);
+            }
+        }
+        let model_count = frame
             .draws
             .iter()
             .filter(|draw| matches!(draw.geometry, Geometry::Model { .. }))
             .count();
-        assert_eq!(models > 0, stage > 0);
+        assert_eq!(model_count > 0, stage > 0);
         assert_eq!(library.models.get("as_panel2").is_some(), stage == 3);
         if renderer.is_none() {
             let prepared = prepare(&frame, Content::default(), config())?;
@@ -118,11 +137,44 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             vertical_fov: 1.,
         };
         let mut baseline = None;
-        for _ in 0..24 {
+        for iteration in 0..24 {
             raster.prepare(renderer, &frame, plan, look, || {
                 Content::resolve_available(&frame, &workspace, &schema, &library, &source)
             })?;
+            if iteration == 0 {
+                let arrivals = placeholders.take_arrivals();
+                assert_eq!(arrivals.len(), usize::from(stage > 0));
+                raster.fade_models(&arrivals)?;
+            }
             raster.render(renderer, &frame, &camera, ViewMode::Lit)?;
+            if stage == 1 && matches!(iteration, 0 | 5) {
+                renderer
+                    .capture_completed(&ara_render::capture::CaptureRequest {
+                        camera,
+                        size: [128, 96],
+                        mode: ViewMode::Lit,
+                        deterministic: true,
+                        exposure: 1.,
+                        settle_frames: 1,
+                        tick: 0,
+                        seed: 0,
+                        marks: None,
+                    })?
+                    .write(&root.join(format!("fade-{iteration}.png")))?;
+            }
+            if stage > 0 && iteration == 0 {
+                assert!(raster.needs_frame(), "arrival fade continues live");
+            }
+            if iteration >= 12 {
+                assert!(!raster.needs_frame(), "completed fade has no idle work");
+                assert_eq!(
+                    renderer
+                        .native_frame_work()
+                        .context("native work")?
+                        .material_rows,
+                    0
+                );
+            }
             assert!(renderer.presentation_ready());
             let usage = renderer.gpu().descriptor_usage();
             assert_eq!(
@@ -133,6 +185,29 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
             renderer.gpu().assert_clean()?;
         }
         eprintln!("publication stage {stage}: {baseline:?}");
+        if stage == 3 {
+            assert!(
+                !placeholders.style(&mut frame, &models, |_| true, true),
+                "a reimport with last-good model data never replaces it with loading bounds"
+            );
+            assert!(placeholders.take_arrivals().is_empty());
+            let unique: BTreeSet<_> = frame
+                .draws
+                .iter()
+                .filter_map(|draw| match &draw.geometry {
+                    Geometry::Model { model, primitive } => Some((model.digest.0, *primitive)),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                renderer
+                    .native_geometry_stats()
+                    .context("native geometry")?
+                    .geometries,
+                unique.len(),
+                "different asset IDs still share identical cooked geometry"
+            );
+        }
         renderer
             .capture_completed(&ara_render::capture::CaptureRequest {
                 camera,
@@ -146,7 +221,48 @@ fn raster_adopts_staged_model_publications_without_unwritten_frames_or_descripto
                 marks: None,
             })?
             .write(&root.join(format!("stage-{stage}.png")))?;
+        if stage == 0 {
+            // The same bounds are conspicuous only for failed/unregistered IDs.
+            let mut failed = document_frame(
+                &entities,
+                &transforms,
+                &workspace,
+                &mut library,
+                &source,
+                None,
+                &Default::default(),
+            )?;
+            crate::ModelPlaceholders::default().style(&mut failed, &models, |_| false, true);
+            for _ in 0..4 {
+                raster.prepare(renderer, &failed, plan, look, || Ok(Content::default()))?;
+                raster.render(renderer, &failed, &camera, ViewMode::Lit)?;
+            }
+            renderer
+                .capture_completed(&ara_render::capture::CaptureRequest {
+                    camera,
+                    size: [128, 96],
+                    mode: ViewMode::Lit,
+                    deterministic: true,
+                    exposure: 1.,
+                    settle_frames: 1,
+                    tick: 0,
+                    seed: 0,
+                    marks: None,
+                })?
+                .write(&root.join("failed-magenta.png"))?;
+            renderer.gpu().assert_clean()?;
+        }
         if stage == 3 {
+            // Captures finish cosmetic arrivals before measuring the scene.
+            raster.fade_models(&BTreeSet::from(["as_panel0".into()]))?;
+            raster.render(renderer, &frame, &camera, ViewMode::Lit)?;
+            assert!(raster.needs_frame());
+            raster.reset_capture(renderer)?;
+            assert!(
+                !raster.needs_frame(),
+                "capture immediately finishes presentation fades"
+            );
+            raster.render(renderer, &frame, &camera, ViewMode::Lit)?;
             // Extraction accepts the pose before a later quality failure. Retrying
             // must still publish that pose, rather than forgetting its dirty row.
             let mut changed = frame;

@@ -39,7 +39,7 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,hit,normal)+localIrradiance(f,hit,normal);
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal)+localIrradiance(f,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal,normal*l.giSpacing.w);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
@@ -71,4 +71,35 @@ void giGatherMain(uint3 tid:SV_DispatchThreadID){
     }
     images[NonUniformResourceIndex(l.giGather.z)][tid.xy]=diffuse;
     images[NonUniformResourceIndex(l.giGather.w)][tid.xy]=specular;
+}
+// Bordered moment-tile texel (-1..=8) folded onto the octahedral interior, as
+// renderer/gi.rs `fold` (DDGI borders).
+uint foldMoment(int x,int y){
+    if(x<0){x=-x-1;y=7-y;}else if(x>=8){x=15-x;y=7-y;}
+    if(y<0){y=-y-1;x=7-x;}else if(y>=8){y=15-y;x=7-x;}
+    return uint(y*8+x);
+}
+// Writes probe records (Renderer::update_probe_surfaces) into the surface cache,
+// meta and moment atlas in place, one group per probe. Root words: first record,
+// staging buffer (records of [probe id, 0, 0, 0], 64 cache texels as uint4, 66
+// static vectors as float4), cache, meta, moment atlas (storage), probes per atlas
+// row with bit 31 set to clear instead (probe = record index: zero surfaces, an
+// inactive probe and dark irradiance tiles), then both irradiance atlases.
+static const uint SCATTER_RECORD=16+64*16+66*16;
+[shader("compute")][numthreads(128,1,1)]
+void giScatterMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
+    uint index=root.frame+group.x,staging=root.materials,base=index*SCATTER_RECORD,statics=base+16+64*16;
+    bool clear=(root.mode>>31)!=0;uint atlas=root.mode&0x7fffffffu;
+    uint id=clear?index:buffers[NonUniformResourceIndex(staging)].Load(base);
+    if(lane<64)buffers[NonUniformResourceIndex(root.material)].Store<uint4>((id*64+lane)*16,clear?uint4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<uint4>(base+16+lane*16));
+    if(lane==0)buffers[NonUniformResourceIndex(root.entity)].Store<float4>(id*16,clear?float4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<float4>(statics+64*16));
+    if(lane<100){
+        int x=int(lane%10),y=int(lane/10);
+        float4 v=clear?float4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<float4>(statics+foldMoment(x-1,y-1)*16);
+        images[NonUniformResourceIndex(root.cascade)][uint2(id%atlas,id/atlas)*10+uint2(x,y)]=float4(v.xy,0,0);
+    }
+    if(clear && lane<64){
+        uint2 texel=uint2(id%atlas,id/atlas)*8+uint2(lane%8,lane/8);
+        images[NonUniformResourceIndex(root.sample)][texel]=0;images[NonUniformResourceIndex(root.flags)][texel]=0;
+    }
 }

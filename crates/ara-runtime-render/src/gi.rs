@@ -14,7 +14,7 @@ use crate::gi_cpu::{self, Tracer};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::vulkan::VulkanDevice;
 use ara_render::instanced::Scene;
-use ara_render::look::gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS};
+use ara_render::look::gi::{ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS};
 use ara_render_fidelity::{
     FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
     environment::FrameEnvironment,
@@ -141,21 +141,22 @@ struct Worker {
 }
 
 enum Message {
-    /// The job's surfaces (delivered as soon as they exist).
-    Surfaces(Result<ProbeSurfaces>),
+    /// The job's packed probe records (delivered as soon as they exist): the
+    /// re-traced probes, or every probe after a full bake.
+    Surfaces(Result<ProbeUpdate>),
     /// The job finished, returning the worker state.
     Done(Option<Worker>),
 }
 
 struct Active {
-    serial: u64,
     delivered: bool,
     receive: Receiver<Message>,
 }
 
 /// Background probe surface acquisition for one view. At most one job runs at a
 /// time; while it runs, only the newest request waits (bursts of publications or
-/// edits never stack bakes), and a superseded result is discarded.
+/// edits never stack bakes). Every finished job's update is delivered, in order:
+/// incremental updates build on the ones before them.
 pub(crate) struct Acquisition {
     cache: PathBuf,
     /// Trace on the CPU even where ray queries exist (`ARA_PROBE_GI_CPU=1`).
@@ -255,22 +256,21 @@ impl Acquisition {
     fn start(&mut self, job: Job) -> Result<()> {
         let (cache, cpu, worker) = (self.cache.clone(), self.cpu, self.worker.take());
         let (send, receive) = channel();
-        let serial = job.serial;
         std::thread::Builder::new()
             .name("probe-gi".into())
             .spawn(move || run(&cache, cpu, job, worker, &send))
             .context("starting the probe GI worker")?;
         self.active = Some(Active {
-            serial,
             delivered: false,
             receive,
         });
         Ok(())
     }
 
-    /// The newest request's surfaces, once, when they arrive; `wait` blocks until
-    /// they do. Failures are reported and leave the last surfaces in use.
-    pub(crate) fn poll(&mut self, wait: bool) -> Option<ProbeSurfaces> {
+    /// The next finished job's update, in order; `wait` blocks until the newest
+    /// request's has arrived (call until `None`). Failures are reported and leave
+    /// the last surfaces in use.
+    pub(crate) fn poll(&mut self, wait: bool) -> Option<ProbeUpdate> {
         loop {
             let active = self.active.as_mut()?;
             let block = wait && (!active.delivered || self.queued.is_some());
@@ -287,9 +287,7 @@ impl Acquisition {
                 Some(Message::Surfaces(result)) => {
                     active.delivered = true;
                     match result {
-                        Ok(surfaces) if active.serial == self.newest => return Some(surfaces),
-                        // Superseded by a newer request.
-                        Ok(_) => {}
+                        Ok(update) => return Some(update),
                         Err(error) => {
                             eprintln!("ara-runtime-render: probe GI acquisition failed: {error:#}")
                         }
@@ -354,8 +352,10 @@ fn run(cache: &Path, cpu: bool, job: Job, worker: Option<Worker>, send: &Sender<
         )
     };
     let follow = match acquire(cache, cpu, &job, &mut worker) {
-        Ok((surfaces, follow)) => {
-            let _ = send.send(Message::Surfaces(Ok(surfaces)));
+        Ok((surfaces, changed, follow)) => {
+            // Packing happens here, off the render thread.
+            let update = ProbeUpdate::new(&surfaces, changed.as_deref());
+            let _ = send.send(Message::Surfaces(update));
             note("delivered");
             follow
         }
@@ -414,14 +414,15 @@ fn dynamic_key(dynamic: &BTreeSet<u64>) -> u64 {
 /// Produces the job's surfaces: an edit re-traces in place; a generation is
 /// incremental against the previous tracer where the lattice still fits and
 /// under half the probes change, else loaded from the cache or fully baked (on
-/// a new ray-tracing device where available). Also returns what the worker
-/// still needs for a tracer of the delivered scene.
+/// a new ray-tracing device where available). Also returns the re-traced probes
+/// (`None` after a full bake) and what the worker still needs for a tracer of the
+/// delivered scene.
 fn acquire(
     cache: &Path,
     cpu: bool,
     job: &Job,
     worker: &mut Option<Worker>,
-) -> Result<(ProbeSurfaces, Option<FollowUp>)> {
+) -> Result<(ProbeSurfaces, Option<Vec<u32>>, Option<FollowUp>)> {
     if let Some(worlds) = &job.edit
         && let Some(state) = worker.as_mut().filter(|w| w.key == job.key)
         && let Some(tracer) = state.tracer.as_mut()
@@ -436,7 +437,8 @@ fn acquire(
             state.surfaces.len(),
             started.elapsed().as_secs_f64()
         );
-        return Ok((state.surfaces.clone(), None));
+        let changed = probes.iter().map(|&p| p as u32).collect();
+        return Ok((state.surfaces.clone(), Some(changed), None));
     }
     let method = if cpu { "cpu" } else { "auto" };
     let path = cache.join(format!(
@@ -454,6 +456,7 @@ fn acquire(
                 });
                 return Ok((
                     surfaces,
+                    None,
                     Some(FollowUp {
                         prepared: None,
                         tracer,
@@ -487,8 +490,21 @@ fn acquire(
             );
             state.key = job.key;
             state.tracer = tracer.take();
-            return Ok((state.surfaces.clone(), None));
+            let changed = probes.iter().map(|&p| p as u32).collect();
+            return Ok((state.surfaces.clone(), Some(changed), None));
         }
+        eprintln!(
+            "ara-runtime-render: full probe bake for new content: {}",
+            if fits {
+                format!(
+                    "{} of {} probes changed",
+                    probes.len(),
+                    state.surfaces.len()
+                )
+            } else {
+                "it outgrew the probe lattice".into()
+            }
+        );
     }
     let traced = (!cpu)
         .then(|| VulkanDevice::new(&[], cache.join("device")).ok())
@@ -527,7 +543,7 @@ fn acquire(
         surfaces: surfaces.clone(),
         tracer,
     });
-    Ok((surfaces, follow))
+    Ok((surfaces, None, follow))
 }
 
 fn encode(s: &ProbeSurfaces) -> Vec<u8> {
@@ -728,8 +744,13 @@ mod tests {
         acquisition.request(3, &frame, || anyhow::bail!("resolved twice"), &none)?;
         assert!(acquisition.queued.is_some(), "requests during a bake queue");
         assert!(acquisition.is_pending());
-        let surfaces = acquisition.poll(true).context("the newest request")?;
-        assert_eq!(surfaces.origin[0], 3.);
+        // Every finished job delivers, in order; the newest arrives last.
+        let mut origins = Vec::new();
+        while let Some(update) = acquisition.poll(true) {
+            origins.push(update.origin[0]);
+        }
+        assert_eq!(origins.last(), Some(&3.), "{origins:?}");
+        assert!(!origins.contains(&2.), "the replaced request never ran");
         assert!(!acquisition.is_pending());
         assert!(acquisition.poll(false).is_none());
         Ok(())

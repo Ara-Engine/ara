@@ -6,6 +6,7 @@ use glam::Vec3;
 use std::collections::BTreeMap;
 use std::path::Path;
 mod patch;
+mod pending;
 
 /// Project-owned decoded generations. Publication changes invalidate by digest;
 /// document transforms and repeated prefab instances do not read model payloads.
@@ -202,6 +203,8 @@ pub(crate) struct FidelityContent {
     terrain: Option<(u64, ara_runtime::terrain::TerrainState)>,
     /// Last drawn component values; a material patch deserializes changed rows only.
     mesh_records: BTreeMap<String, serde_json::Value>,
+    progress: pending::Progress,
+    placeholders: ara_runtime_render::ModelPlaceholders,
 }
 impl FidelityContent {
     pub(crate) fn new(root: &Path) -> anyhow::Result<Self> {
@@ -213,6 +216,8 @@ impl FidelityContent {
             materials: None,
             terrain: None,
             mesh_records: BTreeMap::new(),
+            progress: Default::default(),
+            placeholders: Default::default(),
         })
     }
     pub(crate) fn revision(&self) -> u64 {
@@ -239,6 +244,7 @@ impl FidelityContent {
                 self.snapshot = Some(snapshot);
             }
         }
+        self.refresh_progress();
         let empty = ara_runtime::assets::MemoryAssets::default();
         let source: &dyn AssetSource = self
             .snapshot
@@ -310,7 +316,7 @@ impl FidelityContent {
             .as_ref()
             .filter(|(old, _)| *old == stamp)
             .map(|(_, data)| data);
-        let frame = ara_runtime_render::fidelity::native::document_frame(
+        let mut frame = ara_runtime_render::fidelity::native::document_frame(
             view.entities(),
             &transforms,
             workspace,
@@ -325,6 +331,14 @@ impl FidelityContent {
                 ara_runtime::terrain::TerrainState(std::sync::Arc::clone(&terrain.data)),
             )
         });
+        pending::style(
+            &mut self.placeholders,
+            &mut frame,
+            view.entities(),
+            source,
+            self.progress.value.as_deref(),
+            true,
+        );
         self.mesh_records = view
             .entities()
             .iter()
@@ -343,7 +357,7 @@ impl FidelityContent {
         schema: &ara_schema::SchemaDb,
     ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
         let empty = ara_runtime::assets::MemoryAssets::default();
-        ara_runtime_render::fidelity::native::Content::resolve_available(
+        ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
             frame,
             workspace,
             schema,
@@ -351,6 +365,7 @@ impl FidelityContent {
             self.snapshot
                 .as_deref()
                 .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
+            &|asset| self.model_is_pending(asset),
         )
     }
 }

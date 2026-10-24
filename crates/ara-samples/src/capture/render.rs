@@ -164,17 +164,22 @@ impl Window {
             self.sample(&p.pass, p.milliseconds);
         }
     }
+    /// Pass percentiles cover the frames that ran the pass (`frames`); cached
+    /// passes skip frames, so `perFrame` spreads their total over the window.
     fn report(mut self, label: &str, size: [u32; 2], shot: &str, before: String) -> Value {
         let samples = self.totals.clone();
         self.totals.sort_by(f64::total_cmp);
+        let window = self.totals.len().max(1) as f64;
         let passes: BTreeMap<String, Value> = self
             .passes
             .into_iter()
             .map(|(k, mut v)| {
+                let per_frame = v.iter().sum::<f64>() / window;
                 v.sort_by(f64::total_cmp);
                 (
                     k,
-                    json!({"p50": percentile(&v, 0.5), "p95": percentile(&v, 0.95)}),
+                    json!({"p50": percentile(&v, 0.5), "p95": percentile(&v, 0.95),
+                        "frames": v.len(), "perFrame": per_frame}),
                 )
             })
             .collect();
@@ -547,12 +552,19 @@ fn baseline(
         if i == 0 {
             let before = gpu_load();
             let mut window = Window::default();
-            for _ in 0..options.timing_frames {
+            // `ARA_CAPTURE_MOTION=1` walks the camera forward (1.5 m/s) while it
+            // turns (20 degrees per second), so cached passes are timed in motion.
+            let motion = std::env::var_os("ARA_CAPTURE_MOTION").is_some();
+            for k in 0..options.timing_frames {
+                if motion {
+                    frame.camera = Some(moving(shot, k as f32 / 60.));
+                }
                 presenter.present(frame)?;
                 window.push(presenter.renderer().context("Low presenter")?.timings());
             }
+            let mode = if motion { " (moving)" } else { "" };
             timing = window.report(
-                &format!("{} {name} raster", options.name),
+                &format!("{} {name} raster{mode}", options.name),
                 size,
                 &shot.name,
                 before,
@@ -599,6 +611,20 @@ fn baseline(
         "reference":scores}),
     )
 }
+/// `shot`'s camera `seconds` into a walk: 1.5 m/s along its level heading while
+/// turning 20 degrees per second.
+fn moving(shot: &Shot, seconds: f32) -> CameraView {
+    let position = glam::Vec3::from_array(shot.position);
+    let forward = (glam::Vec3::from_array(shot.target) - position).normalize();
+    let level = glam::Vec3::new(forward.x, 0., forward.z).normalize_or_zero();
+    let turn = glam::Quat::from_rotation_y((20. * seconds).to_radians());
+    CameraView {
+        position: (position + level * 1.5 * seconds).to_array(),
+        forward: (turn * forward).to_array(),
+        fov: shot.fov,
+    }
+}
+
 /// A camera move from one shot to another, captured into a horizontal strip.
 #[allow(clippy::too_many_arguments)]
 fn strip(
