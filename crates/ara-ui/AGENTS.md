@@ -6,8 +6,17 @@ Depends on ara-ui-document, ara-ui-text, Taffy, Parley and AccessKit; never ara-
 Public API:
 - `Ui::parse` for games; `Ui::editor` for D18 editor themes and raw-color diagnostics.
 - `Ui::frame` runs restyle, Taffy/Parley measurement and retained paint emission.
-- `Ui::find` / `by_id` resolve authored/model-key identities; `Work` exposes actual work counters.
-- `theme::EDITOR_CSS`, `EditorTheme::{Dark,Light}`, `Ui::switch_theme` use the canonical root assets.
+- `Ui::reconcile(markup) -> Reconciled` updates the retained tree from regenerated markup:
+  nodes matched by ID+tag keep shaped text, Taffy node, style, hover/focus/press, visibility,
+  paint offset and live widget state (an input keeps caret/undo while its `text` is unchanged
+  or equals its value). Hosts rebuild markup on model changes and reconcile; never re-create
+  `Ui` per change. `Ui::set_stylesheet` swaps CSS (no-op when equal).
+- `Ui::find` / `by_id` resolve authored/model-key identities through a lazily rebuilt index;
+  `Work` exposes actual work counters (`+=` sums frames).
+- `theme::EDITOR_CSS`, `EditorTheme::{Dark,Light}`, `Ui::switch_theme` use the canonical root
+  assets; a switch swaps tokens and restyles once (no relayout/reshape); the same theme is free.
+- `Sheet::compute` memoizes cascades by tag/class/inline style/state (and ID when an ID rule
+  names it); `Sheet::set_tokens` swaps theme tokens and clears the memo.
 - `paint::DisplayList` owns renderer-neutral commands and a contiguous positioned-glyph arena.
 - `virtualize::{Rows,VirtualList,VirtualTree,VirtualTable,VirtualView}` retains only viewport rows.
 - `input::{InputState,InputEvent}` owns per-player screen/modal focus, capture and drag/drop.

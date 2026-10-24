@@ -2,7 +2,8 @@
 //! path (a headless device and the window's UI adapter; no window opens) and read
 //! back. The data is a fixed fixture fed through the model's own
 //! reply handling (no service), so captures are reproducible; the service path is
-//! covered by `tests/service.rs`.
+//! covered by `ara/tests/hub_ui.rs`.
+mod interactions;
 use crate::{
     connection::Event,
     model::{AgentClient, Call, Hub, Intent, Layout, View},
@@ -269,6 +270,7 @@ pub fn run(
             host.capture(app)?.save(&path)?;
             println!("{}", path.display());
         }
+        interactions::run(host, app, &folder, light)?;
     }
     Ok(())
 }
