@@ -325,6 +325,7 @@ impl EditorService {
             let p: EditorReport = parse(params)?;
             let (code, warning) = match p.kind.as_deref().unwrap_or("action") {
                 "thumbnail" => (crate::codes::THUMBNAIL, true),
+                "missing" => (crate::codes::MISSING_SOURCE, true),
                 "settings" => (crate::codes::SETTINGS, true),
                 "transport" => (crate::codes::TRANSPORT, false),
                 "render" => (crate::codes::RENDER, false),

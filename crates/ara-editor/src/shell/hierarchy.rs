@@ -32,90 +32,109 @@ impl Shell {
         let changed = editor.agent_fields();
         let changed_entities: std::collections::BTreeSet<_> =
             changed.keys().map(|(id, _)| id.as_str()).collect();
-        self.hierarchy_tints = editor.agent_tints();
-        self.hierarchy_ghosts.clear();
-        let mut children: BTreeMap<Option<&str>, Vec<&String>> = BTreeMap::new();
-        for (id, e) in resolved.iter() {
-            children.entry(e.parent.as_deref()).or_default().push(id);
-        }
-        for kids in children.values_mut() {
-            kids.sort_by(|a, b| resolved[*a].order.cmp(&resolved[*b].order).then(a.cmp(b)));
-        }
-        let mut stack: Vec<_> = children
-            .get(&None)
-            .into_iter()
-            .flatten()
-            .rev()
-            .map(|id| (*id, 0usize))
-            .collect();
-        self.hierarchy.items.clear();
-        self.hierarchy_style.clear();
-        self.selected_rows = editor
-            .state
-            .selection
-            .iter()
-            .map(|s| crate::world::render_id(s))
-            .collect();
-        self.hierarchy_entities.clear();
+        let tints = editor.agent_tints();
         let query = editor
             .state
             .searches
             .get("hierarchy")
             .map(|s| s.to_lowercase())
             .unwrap_or_default();
-        while let Some((id, depth)) = stack.pop() {
-            let e = &resolved[id];
-            let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
-            let component_filter = query
-                .strip_prefix("type:")
-                .or_else(|| query.strip_prefix("t:"));
-            let matches = component_filter.map_or_else(
-                || query.is_empty() || name.to_lowercase().contains(&query) || id.contains(&query),
-                |kind| e.record.keys().any(|k| k.to_lowercase().contains(kind)),
-            );
-            if matches {
-                let key = crate::world::render_id(id);
-                let (icon, tint) = if e.record.contains_key("prefab") {
-                    ("package", "tint-prefab")
-                } else if e.record.contains_key("Light") {
-                    ("lightbulb", "tint-light")
-                } else if e.record.contains_key("Camera") {
-                    ("camera", "tint-camera")
-                } else if e.record.contains_key("VisualEffect") {
-                    ("sparkles", "tint-vfx")
-                } else if e.record.contains_key("AudioSource")
-                    || e.record.contains_key("AudioListener")
-                {
-                    ("volume-2", "tint-audio")
-                } else if e.source.0.as_str() != editor.state.doc {
-                    ("package", "tint-prefab")
-                } else if e.record.contains_key("MeshRenderer") {
-                    ("box", "")
-                } else if e.record.contains_key("Environment") {
-                    ("sun", "tint-light")
-                } else {
-                    ("layers", "")
-                };
-                self.hierarchy_style.insert(
-                    key,
-                    polish::RowStyle {
-                        depth,
-                        changed: changed_entities.contains(id.as_str()),
-                        icon,
-                        tint,
-                        children: children.contains_key(&Some(id.as_str())),
-                        collapsed: editor.state.collapsed.contains(id),
-                        locked: editor.state.locked.contains(id),
-                        hidden: editor.state.hidden.contains(id),
-                    },
-                );
-                self.hierarchy.items.push((key, name.to_owned()));
-                self.hierarchy_entities.insert(key, id.clone());
+        // The row model (hundreds of rows) is rebuilt only when what it shows changed.
+        let key = HierarchyKey {
+            scene: self.resolved_key(),
+            selection: editor.state.selection.clone(),
+            collapsed: editor.state.collapsed.clone(),
+            hidden: editor.state.hidden.clone(),
+            locked: editor.state.locked.clone(),
+            query: query.clone(),
+            changed: changed_entities.iter().map(|s| (*s).to_owned()).collect(),
+            tints: tints.clone(),
+        };
+        if self.hierarchy_key.as_ref() != Some(&key) {
+            self.hierarchy_key = Some(key);
+            self.hierarchy_tints = tints;
+            self.hierarchy_ghosts.clear();
+            let mut children: BTreeMap<Option<&str>, Vec<&String>> = BTreeMap::new();
+            for (id, e) in resolved.iter() {
+                children.entry(e.parent.as_deref()).or_default().push(id);
             }
-            if (!editor.state.collapsed.contains(id) || !query.is_empty())
-                && let Some(kids) = children.get(&Some(id.as_str()))
-            {
-                stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
+            for kids in children.values_mut() {
+                kids.sort_by(|a, b| resolved[*a].order.cmp(&resolved[*b].order).then(a.cmp(b)));
+            }
+            let mut stack: Vec<_> = children
+                .get(&None)
+                .into_iter()
+                .flatten()
+                .rev()
+                .map(|id| (*id, 0usize))
+                .collect();
+            self.hierarchy.items.clear();
+            self.hierarchy_style.clear();
+            self.selected_rows = editor
+                .state
+                .selection
+                .iter()
+                .map(|s| crate::world::render_id(s))
+                .collect();
+            self.hierarchy_entities.clear();
+            while let Some((id, depth)) = stack.pop() {
+                let e = &resolved[id];
+                let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
+                let component_filter = query
+                    .strip_prefix("type:")
+                    .or_else(|| query.strip_prefix("t:"));
+                let matches = component_filter.map_or_else(
+                    || {
+                        query.is_empty()
+                            || name.to_lowercase().contains(&query)
+                            || id.contains(&query)
+                    },
+                    |kind| e.record.keys().any(|k| k.to_lowercase().contains(kind)),
+                );
+                if matches {
+                    let key = crate::world::render_id(id);
+                    let (icon, tint) = if e.record.contains_key("prefab") {
+                        ("package", "tint-prefab")
+                    } else if e.record.contains_key("Light") {
+                        ("lightbulb", "tint-light")
+                    } else if e.record.contains_key("Camera") {
+                        ("camera", "tint-camera")
+                    } else if e.record.contains_key("VisualEffect") {
+                        ("sparkles", "tint-vfx")
+                    } else if e.record.contains_key("AudioSource")
+                        || e.record.contains_key("AudioListener")
+                    {
+                        ("volume-2", "tint-audio")
+                    } else if e.source.0.as_str() != editor.state.doc {
+                        ("package", "tint-prefab")
+                    } else if e.record.contains_key("MeshRenderer") {
+                        ("box", "")
+                    } else if e.record.contains_key("Environment") {
+                        ("sun", "tint-light")
+                    } else {
+                        ("layers", "")
+                    };
+                    self.hierarchy_style.insert(
+                        key,
+                        polish::RowStyle {
+                            depth,
+                            changed: changed_entities.contains(id.as_str()),
+                            icon,
+                            tint,
+                            children: children.contains_key(&Some(id.as_str())),
+                            collapsed: editor.state.collapsed.contains(id),
+                            locked: editor.state.locked.contains(id),
+                            hidden: editor.state.hidden.contains(id),
+                        },
+                    );
+                    self.hierarchy.items.push((key, name.to_owned()));
+                    self.hierarchy_entities.insert(key, id.clone());
+                }
+                if (!editor.state.collapsed.contains(id) || !query.is_empty())
+                    && let Some(kids) = children.get(&Some(id.as_str()))
+                {
+                    stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
+                }
             }
         }
         let scene = editor
@@ -195,4 +214,18 @@ impl Shell {
             }
         }
     }
+}
+
+/// What the Hierarchy's row model is built from; `hierarchy_panel` rebuilds the rows
+/// only when this changes.
+#[derive(PartialEq)]
+pub(super) struct HierarchyKey {
+    scene: Option<(String, u64, usize)>,
+    selection: Vec<String>,
+    collapsed: std::collections::BTreeSet<String>,
+    hidden: std::collections::BTreeSet<String>,
+    locked: std::collections::BTreeSet<String>,
+    query: String,
+    changed: std::collections::BTreeSet<String>,
+    tints: BTreeMap<u64, &'static str>,
 }
