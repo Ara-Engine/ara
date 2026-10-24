@@ -214,7 +214,10 @@ pub struct ExportPreset {
     #[serde(default)]
     #[ara(default = "nativeAot")]
     pub lane: ScriptLane,
-    /// Project-relative C# project file.
+    /// Project-relative S7 conformance project; runtime exports generate their own
+    /// NativeAOT entry from `ara.module.toml` modules and may omit this field.
+    #[serde(default)]
+    #[ara(default = "")]
     pub script_project: String,
     /// Assembly name and native image stem emitted by the C# project.
     pub assembly: String,

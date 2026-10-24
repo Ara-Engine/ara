@@ -22,6 +22,9 @@ pub(super) struct Options {
     /// Fixed ticks to simulate before a standalone headless capture.
     #[arg(long, default_value_t = 120)]
     ticks: u32,
+    /// Read an entity.Component.field after simulation (repeatable).
+    #[arg(long = "read")]
+    reads: Vec<String>,
     /// Exit a standalone window after this many frames (unlimited by default).
     #[arg(long)]
     frames: Option<u32>,
@@ -71,6 +74,13 @@ pub(super) fn run(args: Args) -> Result<()> {
     phases.insert("pack_ms", began.elapsed().as_millis());
     // Runtime paths come from this installation, never the exporting workspace.
     scene.nav_cache = None;
+    if let Some(scripts) = &mut scene.scripts {
+        ensure!(
+            matches!(scripts.host, ara_play::ScriptHost::NativeAot { .. }),
+            "ARA0920: exported C# modules require a precompiled shipping host; export the project again"
+        );
+        scripts.resolve_shipping(&root);
+    }
     let source = Arc::new(crate::packed::PackedAssets::new(
         Arc::clone(&pack),
         key,
@@ -205,11 +215,22 @@ pub(super) fn run(args: Args) -> Result<()> {
         "standalone presentation failed: {:?}",
         presenter.presentation_error()
     );
+    let reads = args
+        .standalone
+        .reads
+        .iter()
+        .map(|path| {
+            Ok((
+                path,
+                world::read_path(world.runtime.play().session(), path)?,
+            ))
+        })
+        .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
     println!(
         "ARA_RESULT {}",
         json!({"verified":true,"template_contract":launch.contract,
         "scene":scene.scene,"entities":started.entities,"tick":world.runtime.tick(),
-        "capture":result,"quality":presenter.quality().map(|value| value.name()),
+        "capture":result,"reads":reads,"quality":presenter.quality().map(|value| value.name()),
         "gpu_ms":presenter.stats().gpu_ms,"elapsed_ms":began.elapsed().as_millis(),
         "startup":phases,"frames_after_first":frame_count,
         "fps_after_first":if frame_sum_ms > 0. { Some(f64::from(frame_count)*1000./frame_sum_ms) } else { None },
