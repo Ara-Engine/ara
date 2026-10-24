@@ -171,7 +171,7 @@ impl RasterView {
                 gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
             }
             while let Some(update) = gi.poll(false) {
-                self.gi_updates.push_back(update);
+                queue_probe_gi(&mut self.gi_updates, update);
             }
             apply_probe_gi(renderer, &mut self.gi_updates, PROBES_PER_FRAME)?;
         }
@@ -243,7 +243,7 @@ impl RasterView {
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
         if let Some(gi) = &mut self.gi {
             while let Some(update) = gi.poll(true) {
-                self.gi_updates.push_back(update);
+                queue_probe_gi(&mut self.gi_updates, update);
             }
         }
         apply_probe_gi(renderer, &mut self.gi_updates, usize::MAX)?;
@@ -297,9 +297,18 @@ impl RasterView {
     }
 }
 
-/// Probe records applied per presented frame: a full 32k-probe volume lands over
-/// four frames instead of stalling one.
-const PROBES_PER_FRAME: usize = 8192;
+/// Probe records applied per presented frame (8 MB): a full 32k-probe volume
+/// lands over eight frames instead of stalling one.
+const PROBES_PER_FRAME: usize = 4096;
+
+/// Queues a delivered update; one that rewrites every probe supersedes the
+/// updates still waiting.
+fn queue_probe_gi(updates: &mut std::collections::VecDeque<ProbeUpdate>, update: ProbeUpdate) {
+    if update.len() == update.probes() {
+        updates.clear();
+    }
+    updates.push_back(update);
+}
 
 /// Applies up to `budget` queued probe records on the render thread, in order,
 /// and reports what that cost.

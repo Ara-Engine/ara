@@ -42,22 +42,34 @@ impl Renderer {
         if update.is_empty() {
             return Ok(());
         }
-        let staging = self.gpu.create_buffer(
-            update.records.len() as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            true,
-        )?;
-        let result = (|| {
-            self.gpu.upload(staging, &update.records)?;
-            let staging = self.gpu.storage_buffer(staging)?.index;
-            self.scatter(Some(staging), update.len(), Access::ShaderRead)
-        })();
-        self.gpu.retire(Resource::Buffer(staging))?;
-        self.gpu.collect()?;
+        // One host staging buffer, grown as needed and reused: each scatter
+        // completes before the next upload.
+        let needed = update.records.len();
+        if self
+            .look
+            .probe_staging
+            .is_none_or(|(_, capacity, _)| capacity < needed)
+        {
+            if let Some((old, _, _)) = self.look.probe_staging.take() {
+                self.gpu.retire(Resource::Buffer(old))?;
+                self.gpu.collect()?;
+            }
+            let capacity = needed.next_power_of_two();
+            let buffer = self.gpu.create_buffer(
+                capacity as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?;
+            let index = self.gpu.storage_buffer(buffer)?.index;
+            self.look.probe_staging = Some((buffer, capacity, index));
+        }
+        let (staging, _, index) = self.look.probe_staging.context("probe staging")?;
+        self.gpu.upload(staging, &update.records)?;
+        self.scatter(Some(index), update.len(), Access::ShaderRead)?;
         if let Some(gi) = self.look.gi.as_mut() {
             gi.bias = update.bias();
         }
-        result
+        Ok(())
     }
 
     fn drop_probe_volume(&mut self) -> Result<()> {

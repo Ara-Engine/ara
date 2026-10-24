@@ -39,7 +39,7 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,hit,normal)+localIrradiance(f,hit,normal);
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal)+localIrradiance(f,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal,normal*l.giSpacing.w);
         light=(1-sky)*(emissive+albedo/PI*irradiance);

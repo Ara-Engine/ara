@@ -136,7 +136,7 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,p).x,0.25));
     else if(f.temporal.z==4){float4 n=pixel(f.gbuffer.y,p);float4 m=pixel(f.gbuffer.z,p);color=float3(n.w,m.w,0);}
     else if(f.temporal.z==5){uint id=uint(pixel(f.extra.y,p).x);color=id==0?float3(0):frac(float3(id)*float3(0.6180339,0.381966,0.7548776));}
-    else if(f.temporal.z==6){float4 w=pixel(f.gbuffer.w,p);uint c=cascadeIndex(f,w.xyz);color=w.w==0?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,w.xyz,pixel(f.gbuffer.y,p).xyz);}
+    else if(f.temporal.z==6){float4 w=pixel(f.gbuffer.w,p);uint c=cascadeIndex(f,w.xyz);color=w.w==0?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w.xyz,pixel(f.gbuffer.y,p).xyz);}
     if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }

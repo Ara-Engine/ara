@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679",
+  "key": "b9d82edcd6845df61772b417c8111a37137ed581e1965968a4b785d017c83a9c",
   "stages": [
     {
-      "dxil": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679/tonemapMain.dxil",
-      "dxil_hash": "6e56b80740edb10e3335856202237c019c7538beedc66b1e42a6d117cca10f60",
+      "dxil": "b9d82edcd6845df61772b417c8111a37137ed581e1965968a4b785d017c83a9c/tonemapMain.dxil",
+      "dxil_hash": "f2a25714bb5ed292008e71ab0470fa625f01b114d97db1df4fc5e97e35b585da",
       "source_entry": "tonemapMain",
-      "spirv": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679/tonemapMain.spv",
+      "spirv": "b9d82edcd6845df61772b417c8111a37137ed581e1965968a4b785d017c83a9c/tonemapMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "846ac04b9c1618f84ede0d8630b6f9722cad00cd80597d44d8ddbdb11122712e",
+      "spirv_hash": "59d24b5698b673db176d35e61394d0c4be487e7e1726acda9e5783666fc8e70f",
       "stage": "compute"
     }
   ],
