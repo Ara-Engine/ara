@@ -5,6 +5,7 @@
 mod call;
 mod create;
 pub mod engines;
+mod notifications;
 pub mod text;
 pub mod updates;
 mod wire;
@@ -318,6 +319,8 @@ pub enum Intent {
     OpenPath(PathBuf),
     /// Dismiss a notice.
     Dismiss(u64),
+    /// Hide this inline notification; new offline incidents/update versions reappear.
+    DismissBanner(String),
     /// Run a notice's fix (a `hub.*` call) or its undo.
     Fix {
         /// Notice ID.
@@ -418,6 +421,8 @@ pub struct Hub {
     effects: Vec<Effect>,
     next_notice: u64,
     registered_local: bool,
+    notice_times: BTreeMap<u64, std::time::Instant>,
+    dismissed_banners: BTreeSet<String>,
 }
 
 impl Hub {
@@ -452,6 +457,8 @@ impl Hub {
             effects: Vec::new(),
             next_notice: 1,
             registered_local: false,
+            notice_times: BTreeMap::new(),
+            dismissed_banners: BTreeSet::new(),
         }
     }
 
@@ -529,6 +536,7 @@ impl Hub {
             undo: None,
             log: None,
         });
+        self.notice_times.insert(id, std::time::Instant::now());
         if self.notices.len() > 4 {
             self.notices.remove(0);
         }
@@ -683,6 +691,8 @@ impl Hub {
             Intent::AddEngine => self.effects.push(Effect::Pick(Pick::Engine)),
             Intent::RemoveEngine(index) => {
                 if let Some(engine) = self.engines.get(index).cloned() {
+                    self.dismissed_banners
+                        .remove(&format!("engine-error-{}", engine.version));
                     self.engine_errors.remove(&engine.version);
                     if engine.managed {
                         self.release_call(
@@ -701,6 +711,9 @@ impl Hub {
             }
             Intent::OpenPath(path) => self.effects.push(Effect::Open(path)),
             Intent::Dismiss(id) => self.notices.retain(|n| n.id != id),
+            Intent::DismissBanner(key) => {
+                self.dismissed_banners.insert(key);
+            }
             Intent::Fix { notice, fix } => self.fix(notice, fix),
         }
     }
@@ -764,6 +777,7 @@ impl Hub {
     pub fn event(&mut self, event: Event) {
         match event {
             Event::Connected => {
+                self.dismissed_banners.remove("offline");
                 self.link = Link::Online;
                 // No replay is promised after (re)connecting: refresh every view.
                 self.inflight.clear();
@@ -771,6 +785,14 @@ impl Hub {
                 self.refresh(List::ALL);
             }
             Event::Offline { message, log } => {
+                if self.link
+                    != (Link::Offline {
+                        message: message.clone(),
+                        log: log.clone(),
+                    })
+                {
+                    self.dismissed_banners.remove("offline");
+                }
                 self.link = Link::Offline { message, log };
                 self.inflight.clear();
                 self.stale.clear();

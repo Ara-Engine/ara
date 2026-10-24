@@ -3,13 +3,8 @@ use super::*;
 
 impl Hub {
     pub(super) fn status_of(&self, project: &ProjectEntry) -> Value {
-        let running = DaemonInfo::read(&project.path).and_then(|info| {
-            let mut client = Client::connect(info.port, &info.token).ok()?;
-            let catalog = client.call("rpc.discover", json!({})).ok()?;
-            let editor = catalog["methods"]
-                .as_array()
-                .is_some_and(|ms| ms.iter().any(|m| m["name"] == "editor.state"));
-            Some(json!({"state":"open","pid":info.pid,"port":info.port,"headless":!editor}))
+        let running = self.processes.running.get(&project.id).filter(|p| !p.watch.exited()).map(|running| {
+            json!({"state":"open","pid":running.info.pid,"port":running.info.port,"headless":running.headless})
         });
         let mut value = running
             .unwrap_or_else(|| json!({"state":"closed","pid":null,"port":null,"headless":null}));
@@ -22,6 +17,7 @@ impl Hub {
         project: &ProjectEntry,
         headless: bool,
     ) -> Result<Value, RpcError> {
+        self.discover_process(project)?;
         let mut status = self.status_of(project);
         if status["state"] == "open" && (headless || status["headless"] == false) {
             return Ok(status);
@@ -67,6 +63,11 @@ impl Hub {
                     "project process exited with {exit}; see .ara/hub-process.log"
                 )));
             }
+            if let Err(error) = self.discover_process(project) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
             status = self.status_of(project);
             if status["state"] == "open" {
                 break;
@@ -97,24 +98,54 @@ impl Hub {
     }
 
     pub(super) fn close_project(&mut self, project: &ProjectEntry) -> Result<Value, RpcError> {
+        self.discover_process(project)?;
         self.routes.retain(|(_, id), _| id != &project.id);
-        if let Some(mut client) = Client::for_project(&project.path) {
-            let session = client.call(
-                "session.begin",
-                json!({"client":"ara-hub","author":"human","label":"Hub lifecycle"}),
-            )?;
-            client.call("daemon.shutdown", json!({"session":session["session"]}))?;
-            let until = Instant::now() + Duration::from_secs(10);
-            while Client::for_project(&project.path).is_some() {
-                if Instant::now() >= until {
-                    return Err(io_error("project did not stop within 10 seconds"));
+        self.activity_clients.remove(&project.id);
+        if let Some(running) = self.processes.running.get(&project.id) {
+            if !running.watch.exited() {
+                let stopped = (|| {
+                    let mut client = Client::connect(running.info.port, &running.info.token)
+                        .map_err(io_error)?;
+                    let session = client.call(
+                        "session.begin",
+                        json!({"client":"ara-hub","author":"human","label":"Hub lifecycle"}),
+                    )?;
+                    client.call("daemon.shutdown", json!({"session":session["session"]}))?;
+                    Ok::<_, RpcError>(())
+                })();
+                if let Err(error) = stopped
+                    && !running.watch.exited()
+                {
+                    return Err(error);
                 }
-                std::thread::sleep(Duration::from_millis(25));
+            }
+            #[cfg(not(windows))]
+            if let Some(child) = self.children.get_mut(&project.id) {
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while child.try_wait().map_err(io_error)?.is_none() {
+                    if Instant::now() >= deadline {
+                        return Err(io_error(
+                            "project process did not exit within 10 seconds after shutdown; see .ara/hub-process.log",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+            if !running
+                .watch
+                .wait(Duration::from_secs(10))
+                .map_err(io_error)?
+            {
+                return Err(io_error(format!(
+                    "project process {} did not exit within 10 seconds after shutdown; see .ara/hub-process.log",
+                    running.info.pid
+                )));
             }
         }
         if let Some(mut child) = self.children.remove(&project.id) {
             let _ = child.wait();
         }
+        self.processes.forget(&project.id);
         self.changed("closed", Some(&project.id));
         Ok(self.status_of(project))
     }

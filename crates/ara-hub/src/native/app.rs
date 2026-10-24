@@ -1,4 +1,4 @@
-//! The window's retained `Ui`, rebuilt from the view-model on change, and the
+//! The window's retained `Ui`, reconciled from the view-model on change, and the
 //! routing of pointer/keyboard input and `ara_ui` actions back to [`Intent`]s.
 use super::{images::Thumbnails, input::OsClipboard};
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     view::{self, Binding, Ctx, Doc},
 };
 use ara_ui::{
-    Ui,
+    Ui, Work,
     input::{InputEvent, InputState},
     source::stable_id,
     theme::EditorTheme,
@@ -31,8 +31,14 @@ pub struct App {
     pub size: [f32; 2],
     /// Pointer in logical pixels.
     pub pointer: [f32; 2],
+    /// UI work across the last frame, including reconciliation's layout/paint passes.
+    pub work: Work,
     bindings: BTreeMap<u64, Binding>,
     modifiers: [bool; 3],
+    markup: String,
+    light: bool,
+    present_needed: bool,
+    pending_work: Work,
 }
 
 impl App {
@@ -46,13 +52,18 @@ impl App {
             docs,
             size,
             pointer: [-1.; 2],
+            work: Work::default(),
             bindings: BTreeMap::new(),
             modifiers: [false; 3],
+            markup: String::new(),
+            light: false,
+            present_needed: false,
+            pending_work: Work::default(),
         })
     }
 
-    /// Regenerate the page from `hub`, keeping field carets, scroll offsets, focus
-    /// and hover across the rebuild.
+    /// Reconcile changed markup, keeping native nodes, shaped text, widgets and
+    /// input identity. Theme changes swap palette tokens on the same retained UI.
     pub fn rebuild(&mut self, hub: &mut Hub, now_ms: u64) -> ara_ui::Result<()> {
         let anchor = hub
             .menu
@@ -71,31 +82,52 @@ impl App {
             docs: &self.docs,
         };
         let page = view::page(hub, &ctx);
-        let mut ui = Ui::editor(&page.markup, view::CSS, self.size)?;
-        // Always switch: it also marks every node for restyle, which is what resolves
-        // `color: inherit` (icons and labels in colored buttons) on the first frame.
-        ui.switch_theme(if hub.prefs.light {
-            EditorTheme::Light
-        } else {
-            EditorTheme::Dark
-        })?;
-        let old = std::mem::replace(&mut self.ui, ui);
-        let mut scrolls = Vec::new();
-        for (id, widget) in old.widgets {
-            match (widget, self.ui.widgets.get_mut(&id)) {
-                (Widget::Input(kept), Some(Widget::Input(fresh)))
-                    if kept.value() == fresh.value() =>
-                {
-                    *fresh = kept;
-                }
-                (Widget::Scroll(position), Some(Widget::Scroll(_))) => scrolls.push((id, position)),
-                _ => {}
-            }
+        self.bindings = page.bindings;
+        self.thumbnails.request(&page.wanted);
+        if self.markup == page.markup
+            && self.ui.size == self.size
+            && self.light == hub.prefs.light
+            && hub.focus.is_none()
+        {
+            return Ok(());
         }
-        self.ui.frame(&mut self.text)?;
-        for (id, position) in scrolls {
-            if let Some(index) = self.ui.by_id(id) {
-                self.ui.scroll_to(index, position)?;
+        if self.ui.size != self.size {
+            self.ui.resize(self.size)?;
+        }
+        if self.light != hub.prefs.light {
+            self.ui.switch_theme(if hub.prefs.light {
+                EditorTheme::Light
+            } else {
+                EditorTheme::Dark
+            })?;
+            self.light = hub.prefs.light;
+        }
+        self.ui.reconcile(&page.markup)?;
+        self.markup = page.markup;
+        let work = self.ui.frame(&mut self.text)?;
+        let layout_changed = work.layout_passes > 0;
+        self.pending_work += work;
+        if layout_changed {
+            // Clamp retained scroll after layout. Zero is already valid and must
+            // not dirty paint a second time for an otherwise finished frame.
+            let scrolls: Vec<_> = self
+                .ui
+                .widgets
+                .iter()
+                .filter_map(|(id, widget)| {
+                    if let Widget::Scroll(position) = widget
+                        && *position != [0., 0.]
+                    {
+                        Some((*id, *position))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            for (id, position) in scrolls {
+                if let Some(index) = self.ui.by_id(id) {
+                    self.ui.scroll_to(index, position)?;
+                }
             }
         }
         if let Some(field) = hub.focus.take()
@@ -105,25 +137,52 @@ impl App {
             if let Some(index) = self.ui.find(field) {
                 let _ = self.ui.edit(index, EditEvent::SelectAll, &mut OsClipboard);
             }
-        } else if let Some(id) = self.input.focused() {
-            let _ = self.input.focus(&mut self.ui, id);
         }
-        // Hover lives in InputState by identity; re-derive it on the new nodes.
+        // Re-test after geometry changes; unchanged hover/focus keep their state.
         let mut clipboard = OsClipboard;
-        self.input.event(
-            &mut self.ui,
-            InputEvent::PointerMove([-1e5; 2]),
-            &mut clipboard,
-        )?;
         self.input.event(
             &mut self.ui,
             InputEvent::PointerMove(self.pointer),
             &mut clipboard,
         )?;
-        self.ui.frame(&mut self.text)?;
-        self.ui.drain_actions().for_each(drop);
-        self.bindings = page.bindings;
-        self.thumbnails.request(&page.wanted);
+        self.pending_work += self.ui.frame(&mut self.text)?;
+        // Rebuild already generated a display list. Keep the presentation request
+        // until the native loop consumes it, even when its next frame does no work.
+        self.present_needed = true;
+        Ok(())
+    }
+
+    /// Process incremental UI work and consume one presentation request. Rebuilds
+    /// and input share this path, so idle frames do not submit to the GPU.
+    pub fn frame(&mut self) -> ara_ui::Result<bool> {
+        self.pending_work += self.ui.frame(&mut self.text)?;
+        self.work = std::mem::take(&mut self.pending_work);
+        let work = &self.work;
+        let changed = self.present_needed
+            || work.paint_nodes > 0
+            || work.layout_passes > 0
+            || work.restyled > 0
+            || work.shaped > 0;
+        self.present_needed = false;
+        Ok(changed)
+    }
+
+    /// Apply activation before the next queued pointer event. A slow native frame
+    /// can contain both the menu-opening click and a click on one of its items.
+    pub fn dispatch_pointer(
+        &mut self,
+        hub: &mut Hub,
+        event: InputEvent,
+        now_ms: u64,
+    ) -> ara_ui::Result<()> {
+        self.pointer(event)?;
+        let intents = self.actions();
+        if !intents.is_empty() {
+            for intent in intents {
+                hub.intent(intent);
+            }
+            self.rebuild(hub, now_ms)?;
+        }
         Ok(())
     }
 

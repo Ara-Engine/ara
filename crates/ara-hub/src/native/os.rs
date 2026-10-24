@@ -50,6 +50,7 @@ unsafe extern "C" fn picked(
         && let Some(send) = slot.as_ref()
     {
         let _ = send.send((pick, PathBuf::from(path)));
+        super::wake::wake();
     }
 }
 

@@ -2,6 +2,8 @@
 mod background;
 mod create;
 mod lifecycle;
+mod observed;
+mod process;
 mod transport;
 mod updates;
 use crate::{
@@ -71,12 +73,15 @@ pub struct Hub {
     config: HubConfig,
     registry: Registry,
     children: BTreeMap<String, Child>,
+    processes: observed::Processes,
+    activity_clients: BTreeMap<String, Client>,
     routes: BTreeMap<(ConnId, String), Client>,
     subscribers: BTreeSet<ConnId>,
     events: Vec<(ConnId, String)>,
     revision: u64,
     stop: bool,
     last_status: Value,
+    last_activity_check: Instant,
     _lock: File,
 }
 
@@ -153,19 +158,26 @@ impl Hub {
         registry.save(&config.directory)?;
         config.templates =
             Layered::with_checkout_samples(config.templates, &config.engine.executable);
-        Ok(Self {
+        let mut hub = Self {
             updates: updates::Updates::new(updates, &config.directory),
             config,
             registry,
             children: BTreeMap::new(),
+            processes: observed::Processes::default(),
+            activity_clients: BTreeMap::new(),
             routes: BTreeMap::new(),
             subscribers: BTreeSet::new(),
             events: Vec::new(),
             revision: 0,
             stop: false,
             last_status: Value::Null,
+            last_activity_check: Instant::now(),
             _lock: lock,
-        })
+        };
+        for project in hub.registry.projects.clone() {
+            hub.discover_process(&project)?;
+        }
+        Ok(hub)
     }
 
     fn changed(&mut self, kind: &str, project: Option<&str>) {
@@ -195,6 +207,7 @@ impl Hub {
         value: Value,
     ) -> Result<Value, RpcError> {
         self.poll_updates();
+        self.poll_processes();
         if matches!(
             method,
             "hub.engines.available"
@@ -303,6 +316,7 @@ impl Hub {
                     self.registry
                         .add(&required(p.path, "path")?, p.name, p.engine_version)?;
                 self.registry.save(&self.config.directory)?;
+                self.discover_process(&project)?;
                 self.changed("registered", Some(&project.id));
                 Ok(json!(project))
             }
@@ -399,25 +413,54 @@ impl Hub {
                 self.close_project(&entry)
             }
             "hub.status" => match p.project {
-                Some(project) => Ok(self.status_of(self.registry.resolve(&project)?)),
-                None => Ok(
-                    json!({"projects":self.registry.projects.iter().map(|p|self.status_of(p)).collect::<Vec<_>>(),"revision":self.revision}),
-                ),
+                Some(project) => {
+                    let project = self.registry.resolve(&project)?.clone();
+                    self.discover_process(&project)?;
+                    Ok(self.status_of(&project))
+                }
+                None => {
+                    for project in self.registry.projects.clone() {
+                        self.discover_process(&project)?;
+                    }
+                    Ok(
+                        json!({"projects":self.registry.projects.iter().map(|p|self.status_of(p)).collect::<Vec<_>>(),"revision":self.revision}),
+                    )
+                }
             },
             "hub.activity" => {
                 if let Some(project) = &p.project {
                     self.registry.resolve(project)?;
                 }
                 let mut activity = Vec::new();
-                for entry in &self.registry.projects {
+                for entry in self.registry.projects.clone() {
                     if p.project
                         .as_ref()
                         .is_some_and(|id| self.registry.resolve(id).is_ok_and(|e| e.id != entry.id))
                     {
                         continue;
                     }
-                    if let Some(mut client) = Client::for_project(&entry.path) {
-                        let participants = client.call("collab.activity", json!({}))?;
+                    if let Some(running) = self.processes.running.get(&entry.id) {
+                        if running.watch.exited() {
+                            continue;
+                        }
+                        if !self.activity_clients.contains_key(&entry.id) {
+                            let Ok(client) =
+                                Client::connect(running.info.port, &running.info.token)
+                            else {
+                                continue;
+                            };
+                            self.activity_clients.insert(entry.id.clone(), client);
+                        }
+                        let Some(client) = self.activity_clients.get_mut(&entry.id) else {
+                            continue;
+                        };
+                        let participants = match client.call("collab.activity", json!({})) {
+                            Ok(value) => value,
+                            Err(_) => {
+                                self.activity_clients.remove(&entry.id);
+                                continue;
+                            }
+                        };
                         activity.push(json!({"project":entry.id,"participants":participants["participants"],"presence":participants["presence"]}));
                     }
                 }
