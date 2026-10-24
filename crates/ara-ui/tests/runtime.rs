@@ -350,3 +350,29 @@ fn absolute_right_and_bottom_insets_resolve_against_the_parent() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn unfocused_inputs_show_their_text_from_the_start() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='r'><field id='f' style='width:40px' text='-6.455123456789' /></ui>",
+        EDITOR_CSS,
+        [400.0, 200.0],
+    )?;
+    ui.frame(&mut text)?;
+    let rect = ui.nodes[ui.find("f").expect("field")].rect;
+    let origin = ui
+        .display
+        .commands
+        .iter()
+        .find_map(|d| match d {
+            ara_ui::paint::Draw::GlyphRun { node, origin, .. } if *node == stable_id("f") => {
+                Some(*origin)
+            }
+            _ => None,
+        })
+        .expect("field text");
+    // Only the field being edited scrolls to its caret.
+    assert!(origin[0] >= rect.x, "{origin:?} {rect:?}");
+    Ok(())
+}

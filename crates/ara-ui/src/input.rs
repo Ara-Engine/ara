@@ -270,6 +270,20 @@ impl InputState {
             InputEvent::PointerDown(p) => {
                 if let Some(i) = hit(self, ui, p) {
                     let id = stable_id(&ui.nodes[i].element.id);
+                    // An unfocused input is drawn from its start (no caret scroll):
+                    // put the caret there so the click lands where the text shows.
+                    if !ui.nodes[i].state.focus
+                        && matches!(ui.widgets.get(&id), Some(crate::widgets::Widget::Input(_)))
+                    {
+                        ui.edit(
+                            i,
+                            EditEvent::Select {
+                                anchor: 0,
+                                caret: 0,
+                            },
+                            clipboard,
+                        )?;
+                    }
                     self.focus_to(ui, Some(id));
                     self.capture = Some(id);
                     ui.select_text_at(i, p, false, clipboard)?;

@@ -81,6 +81,22 @@ fn severity_icon(severity: ara_diag::Severity) -> (&'static str, &'static str) {
     }
 }
 
+/// A diagnostic's file as a project path (`scripts/Outpost/Spinner.cs`) when it lies
+/// in the project (compilers report absolute paths); other files stay as they are.
+fn project_file(editor: &Editor, file: &str) -> String {
+    let file = file.replace('\\', "/");
+    let root = editor.host.root().to_string_lossy().replace('\\', "/");
+    let root = root.trim_start_matches("//?/").trim_end_matches('/');
+    match file.get(..root.len()) {
+        Some(prefix)
+            if prefix.eq_ignore_ascii_case(root) && file[root.len()..].starts_with('/') =>
+        {
+            file[root.len() + 1..].to_owned()
+        }
+        _ => file,
+    }
+}
+
 /// Where a diagnostic points, as a short label and the command that reveals it.
 fn source(editor: &Editor, d: &ara_diag::Diagnostic) -> Option<(String, Binding)> {
     if let Some(record) = &d.location.record {
@@ -103,7 +119,8 @@ fn source(editor: &Editor, d: &ara_diag::Diagnostic) -> Option<(String, Binding)
     let path = d
         .location
         .file
-        .clone()
+        .as_deref()
+        .map(|file| project_file(editor, file))
         .or_else(|| {
             d.location.doc.as_deref().and_then(|doc| {
                 editor
@@ -413,7 +430,8 @@ impl Shell {
                 .diagnostic
                 .location
                 .file
-                .clone()
+                .as_deref()
+                .map(|file| project_file(editor, file))
                 .or_else(|| {
                     e.diagnostic.location.doc.as_deref().and_then(|doc| {
                         editor

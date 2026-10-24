@@ -165,14 +165,32 @@ impl PlayService {
         Ok(json!({"path": p.path, "agent": agent, "claimedBy": claimed}))
     }
 
-    /// Drains player events into each world's buffer (logging diagnostics) and returns
-    /// the worlds whose players asked for an L4 restart.
+    /// Drains player events into each world's buffer (logging diagnostics and the
+    /// authority's successful reloads, so the Console and `ara logs` show them) and
+    /// returns the worlds whose players asked for an L4 restart.
     pub(crate) fn drain_events(&mut self, cx: &mut Cx<'_>) -> Vec<String> {
         let mut restarts = Vec::new();
         let mut reloaded = Vec::new();
         for (id, world) in &mut self.worlds {
-            for (_, player) in &mut world.players {
+            for (index, (_, player)) in world.players.iter_mut().enumerate() {
                 for event in std::mem::take(&mut player.events) {
+                    if let Event::Reload {
+                        tick,
+                        level,
+                        cascade,
+                        errors: 0,
+                        ..
+                    } = &event
+                        && index == 0
+                    {
+                        cx.log(Diagnostic::info(
+                            codes::PLAY,
+                            format!(
+                                "{id}: C# reloaded at tick {tick} (level {level}, {cascade} module{})",
+                                if *cascade == 1 { "" } else { "s" }
+                            ),
+                        ));
+                    }
                     match &event {
                         Event::Diagnostic { diagnostic } => {
                             if let Ok(d) = serde_json::from_value::<Diagnostic>(diagnostic.clone())

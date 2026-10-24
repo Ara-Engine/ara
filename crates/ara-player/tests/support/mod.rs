@@ -29,14 +29,14 @@ pub fn copy(from: &Path, to: &Path) {
 pub fn import_worker(player: &Path) -> PathBuf {
     let worker =
         player.with_file_name(format!("ara-import-worker{}", std::env::consts::EXE_SUFFIX));
-    if !worker.exists() {
-        let status = std::process::Command::new(env!("CARGO"))
-            .args(["build", "-p", "ara-import-worker"])
-            .env("CARGO_BUILD_JOBS", "2")
-            .status()
-            .unwrap();
-        assert!(status.success(), "building ara-import-worker failed");
-    }
+    // Always build (a no-op when current): a stale worker from before an importer
+    // version change cooks nothing, and models silently become placeholders.
+    let status = std::process::Command::new(env!("CARGO"))
+        .args(["build", "-p", "ara-import-worker"])
+        .env("CARGO_BUILD_JOBS", "2")
+        .status()
+        .unwrap();
+    assert!(status.success(), "building ara-import-worker failed");
     worker
 }
 

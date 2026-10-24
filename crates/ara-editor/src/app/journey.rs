@@ -16,13 +16,18 @@ use serde_json::{Value, json};
 use crate::shell::commands::Target;
 use crate::{Editor, shell::Shell};
 
-/// The file the import step brings into the project (CC0 glTF from the demo).
+/// The file the import step brings into the project (the demo's CC0 rock, ~1 m).
 const IMPORT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../ara-player/demo/assets/fox/Fox.glb"
+    "/../ara-player/demo/assets/props/rock.glb"
 );
 /// Frames a step may wait for its effect (jobs, Play, reloads) before giving up.
 const PATIENCE: u32 = 144 * 90;
+/// SDL scancodes the Play step types into the Game view: W walks, Esc releases.
+const KEY_W: i32 = 26;
+const KEY_ESCAPE: i32 = 41;
+/// Editor frames the Play step holds W (the Salvager walks out of the start pose).
+const WALK: u32 = 360;
 
 pub(super) struct Journey {
     step: usize,
@@ -37,6 +42,10 @@ pub(super) struct Journey {
     source: Option<String>,
     log_cursor: u64,
     explained: bool,
+    /// The frame the Play step started holding W.
+    walking: Option<u32>,
+    /// A label the capture hovers so its tooltip (a disabled reason) shows.
+    hover: Option<&'static str>,
     note: String,
 }
 
@@ -58,6 +67,8 @@ impl Journey {
             source: None,
             log_cursor: 0,
             explained: false,
+            walking: None,
+            hover: None,
             note: String::new(),
         })
     }
@@ -95,6 +106,17 @@ impl Journey {
             self.note = "timed out waiting for the step's effect".into();
         }
         shell.rebuild(editor)?;
+        if let Some(label) = self.hover.take()
+            && let Some(rect) = shell.ui.nodes.iter().find_map(|n| {
+                n.text
+                    .as_ref()
+                    .is_some_and(|t| t.value == label)
+                    .then_some(n.rect)
+            })
+        {
+            shell.pointer = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
+            shell.hover_tooltip()?;
+        }
         shell.upload_thumbnails(ui)?;
         let capture = super::verify::Verification::new(&self.output);
         let file = format!("{:02}-{name}", self.step + 1);
@@ -155,7 +177,7 @@ impl Journey {
                     editor.action("editor.workspace", json!({"folder": ""}))?;
                     super::import_file(editor, Path::new(IMPORT))?;
                     self.note =
-                        "Assets > Import… Fox.glb (copied into the project, imported off-thread)"
+                        "Assets > Import… rock.glb (copied into the project, imported off-thread)"
                             .into();
                     return Ok(false);
                 }
@@ -164,16 +186,16 @@ impl Journey {
                     .store()
                     .workspace()
                     .index()
-                    .id_of("Fox.glb")
+                    .id_of("rock.glb")
                     .is_some();
                 let jobs = editor.action("jobs.list", json!({}))?;
-                let busy = jobs["jobs"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .any(|j| matches!(j["status"].as_str(), Some("running" | "queued")));
+                // This import's own job (Play may be cooking other assets meanwhile).
+                let busy = jobs["jobs"].as_array().into_iter().flatten().any(|j| {
+                    matches!(j["status"].as_str(), Some("running" | "queued"))
+                        && j["name"].as_str().is_some_and(|n| n.contains("rock.glb"))
+                });
                 if indexed && !busy {
-                    editor.action("editor.workspace", json!({"asset": "Fox.glb"}))?;
+                    editor.action("editor.workspace", json!({"asset": "rock.glb"}))?;
                     shell.rebuild(editor)?;
                     return Ok(self.age > 60);
                 }
@@ -182,12 +204,15 @@ impl Journey {
             "place" => {
                 if first {
                     // Typed into the Assets search box: the new model's card is on screen.
-                    editor.action("editor.search", json!({"panel": "assets", "query": "Fox"}))?;
+                    editor.action(
+                        "editor.search",
+                        json!({"panel": "assets", "query": "rock.glb"}),
+                    )?;
                     shell.rebuild(editor)?;
                     return Ok(false);
                 }
                 if self.placed.is_none() {
-                    let Some(point) = shell.asset_point("Fox.glb") else {
+                    let Some(point) = shell.asset_point("rock.glb") else {
                         return Ok(false);
                     };
                     let rect = shell.viewport().ok_or("no Scene view to drop into")?;
@@ -203,7 +228,7 @@ impl Journey {
                     self.placed = Some(created);
                     editor.action("editor.search", json!({"panel": "assets", "query": ""}))?;
                     self.note =
-                        "searched Assets for Fox, dragged Fox.glb into the Scene view".into();
+                        "searched Assets for rock.glb, dragged it into the Scene view".into();
                 }
                 Ok(self.age > 30)
             }
@@ -220,7 +245,7 @@ impl Journey {
                     let instance = self.instance.clone().ok_or("no prefab instance")?;
                     editor.apply(
                         vec![json!({"cmd":"property.set","args":{"entity":instance,"path":"Transform.scale","value":[1.6,1.6,1.6]}})],
-                        "Scale the fox",
+                        "Scale the rock",
                         None,
                     )?;
                     shell.rebuild(editor)?;
@@ -253,7 +278,7 @@ impl Journey {
                         .replace('\\', "/");
                     self.script = Some(module.join("Spinner.cs"));
                     editor.action("editor.workspace", json!({"folder": folder}))?;
-                    self.note = "Create > C# Behaviour (Spinner.cs, opened in the IDE)".into();
+                    self.note = "Create > C# Behaviour (Spinner.cs; outside verification it opens in the IDE)".into();
                 }
                 Ok(settled)
             }
@@ -263,7 +288,23 @@ impl Journey {
                     self.note = "Play (F5) in the Game view".into();
                     return Ok(false);
                 }
-                Ok(shell.game_live && self.age > 240)
+                if !shell.game_live {
+                    return Ok(false);
+                }
+                // Click the view (input capture), then hold W through the same path as
+                // real keys: the Salvager walks and the follow camera comes along.
+                let Some(from) = self.walking else {
+                    shell.run_command(editor, "game.capture", &Target::None)?;
+                    key(editor, shell, KEY_W, true);
+                    self.walking = Some(self.age);
+                    self.note
+                        .push_str("; clicked the Game view and held W: the Salvager walks");
+                    return Ok(false);
+                };
+                if self.age == from + WALK {
+                    key(editor, shell, KEY_W, false);
+                }
+                Ok(self.age > from + WALK + 60)
             }
             "hot-reload" => {
                 if first {
@@ -287,7 +328,7 @@ impl Journey {
                         .to_lowercase();
                     text.contains("reload") || text.contains("compil")
                 });
-                if reloaded {
+                if reloaded && !self.note.contains("Console") {
                     self.note.push_str("; the Console shows the reload");
                 }
                 Ok(reloaded && self.age > 30)
@@ -349,11 +390,11 @@ impl Journey {
                     let entity = self.instance.clone().ok_or("no prefab instance")?;
                     editor.apply(
                         vec![json!({"cmd":"transform.set","args":{"entities":[entity],"position":[2.0,0.0,-6.0]}})],
-                        "Move the fox",
+                        "Move the rock",
                         None,
                     )?;
                     shell.open_bar(1, false);
-                    self.note = "moved the fox; the Edit menu's Undo names the move".into();
+                    self.note = "moved the rock; the Edit menu's Undo names the move".into();
                 }
                 Ok(settled)
             }
@@ -404,6 +445,7 @@ impl Journey {
                             {
                                 menu.open.push(index);
                             }
+                            self.hover = Some("Build Current Profile");
                             self.note = format!("disabled: {reason}");
                             return Ok(settled);
                         }
@@ -421,8 +463,21 @@ impl Journey {
             shell.menu = None;
             shell.rebuild(editor)?;
         }
+        if STEPS[self.step].0 == "play" && shell.game_captured {
+            key(editor, shell, KEY_ESCAPE, true);
+        }
         Ok(())
     }
+}
+
+/// A key event through the Game view's input routing, as the window would send it.
+fn key(editor: &mut Editor, shell: &mut Shell, scancode: i32, pressed: bool) {
+    let event = ara_platform::Event::Key {
+        scancode,
+        pressed,
+        repeat: false,
+    };
+    super::game_input(&event, editor, shell, 1.0);
 }
 
 /// The newest entity created by a human edit.
@@ -460,7 +515,7 @@ const STEPS: &[(&str, &str)] = &[
         "Apply all writes the override into the prefab",
     ),
     ("script", "a C# behaviour created in the project's module"),
-    ("play", "Play inside the Game view"),
+    ("play", "Play inside the Game view, walking with W"),
     ("hot-reload", "the edited script hot-reloads while playing"),
     (
         "failure",
