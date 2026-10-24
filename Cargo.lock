@@ -825,6 +825,7 @@ dependencies = [
  "ara-vfx",
  "ara-vfx-gpu",
  "ara-world",
+ "blake3",
  "bytemuck",
  "embed-resource",
  "glam 0.30.9",
