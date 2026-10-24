@@ -840,9 +840,12 @@ fn component(session: &ara_sim::Session, entity: &str, name: &str) -> Result<Opt
     match session.component(entity, name) {
         Ok(Some(value)) => Ok(Some(value)),
         result => {
-            let script = session
-                .entity(entity)
-                .and_then(|e| ara_runtime_script::read(session.world(), e, name));
+            // Tool-only reads after reflected components: C# components, then the
+            // live animator (`AnimatorState`).
+            let script = session.entity(entity).and_then(|e| {
+                ara_runtime_script::read(session.world(), e, name)
+                    .or_else(|| ara_runtime::animation::read_status(session.world(), e, name))
+            });
             match script {
                 Some(value) => Ok(Some(value)),
                 None => Ok(result?),

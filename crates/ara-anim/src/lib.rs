@@ -29,7 +29,7 @@ mod sampling_plan;
 mod skeleton;
 
 pub use compression::{CompressionReport, CompressionSettings, CookedClip};
-pub use controller::{Animator, Controller, Event, Snapshot};
+pub use controller::{Animator, Controller, Event, FadeStatus, Snapshot, Status};
 pub use pose::{Pose, RootMotion, Transform};
 pub use sampling::Sampler;
 pub use skeleton::Skeleton;

@@ -38,6 +38,7 @@ mod inspector_panel;
 mod log_panels;
 mod material_panel;
 mod memo;
+pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
@@ -115,6 +116,8 @@ pub struct Shell {
     pub(crate) material_source_view: bool,
     /// In-node material previews (requests and the show/hide toggle).
     pub(crate) node_previews: crate::asset_tools::node_preview::NodePreviews,
+    /// The running animator the Animation page follows during Play.
+    pub(crate) animation_live: animation_panel::AnimationLive,
     /// Colour swatches outside the Inspector (material parameters): node id and
     /// colour, painted after layout like the Inspector's.
     value_swatches: Vec<(String, ara_ui::style::Color)>,
@@ -380,6 +383,7 @@ impl Shell {
             game_fault: None,
             material_source_view: false,
             node_previews: Default::default(),
+            animation_live: Default::default(),
             value_swatches: Vec::new(),
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),

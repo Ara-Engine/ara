@@ -118,6 +118,16 @@ impl Theme {
         }
     }
 }
+/// A state machine's live state during Play.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Live {
+    /// The playing state's node.
+    pub node: String,
+    /// Normalized time through the playing state's cycle.
+    pub progress: f32,
+    /// A cross-fade in progress: the target state's node and the fade's progress.
+    pub fade: Option<(String, f32)>,
+}
 /// Graph edit produced only at a gesture boundary. Submit through the host command path.
 #[derive(Debug)]
 pub enum Edit {
@@ -140,6 +150,8 @@ pub struct Canvas {
     pub highlight: BTreeSet<String>,
     /// In-node preview images by node ID (UI image handles; the last good one stays).
     pub previews: BTreeMap<String, u32>,
+    /// The state machine's live state during Play (playing state, cross-fade).
+    pub live: Option<Live>,
     show_previews: bool,
     graph: Graph,
     nodes: Vec<NodeView>,
@@ -159,6 +171,7 @@ impl Canvas {
             diagnostic: None,
             highlight: BTreeSet::new(),
             previews: BTreeMap::new(),
+            live: None,
             show_previews: true,
             graph,
             nodes: Vec::new(),
@@ -211,7 +224,7 @@ impl Canvas {
     }
     /// Semantic node/port geometry for agents, including culled nodes and annotations.
     pub fn report(&self, rect: Box2) -> serde_json::Value {
-        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor})
+        serde_json::json!({"camera":self.camera,"selection":self.selection,"nodes":self.nodes.iter().map(|n|serde_json::json!({"id":n.id,"kind":n.kind,"title":n.look.title,"box":self.node_rect(n,rect),"ports":n.ports.iter().map(|pin|serde_json::json!({"port":pin.name,"label":pin.label,"direction":pin.direction,"type":pin.ty,"connected":pin.connected,"position":self.port_position(&Endpoint{node:n.id.clone(),port:pin.name.clone()},rect)})).collect::<Vec<_>>(),"error":self.errors.get(&n.id)})).collect::<Vec<_>>(),"editor":self.graph.editor,"live":self.live.as_ref().map(|l|serde_json::json!({"node":l.node,"progress":l.progress,"fade":l.fade}))})
     }
     fn refresh_views(&mut self, text: &mut ara_ui_text::TextSystem) {
         self.nodes.clear();

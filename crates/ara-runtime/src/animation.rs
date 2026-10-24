@@ -423,6 +423,23 @@ pub fn animate(context: Res<SimContext>, mut query: Animated) {
     }
 }
 
+/// Name of the read-only pseudo-component that reports a live animator to tools
+/// (`play.read e_fox.AnimatorState`, the editor's live state machine). It is derived
+/// on each read: never authored, snapshotted or replicated.
+pub const STATUS: &str = "AnimatorState";
+
+/// The live animator of `entity` as tools read it ([`STATUS`]): `ara_anim::Status`
+/// plus the slot's fault. `None` for other names and entities without an animator.
+pub fn read_status(world: &World, entity: Entity, name: &str) -> Option<Value> {
+    if name != STATUS {
+        return None;
+    }
+    let slot = world.get::<AnimatorSlot>(entity)?;
+    let mut value = serde_json::to_value(slot.animator.status(&slot.program.controller)).ok()?;
+    value["fault"] = serde_json::json!(slot.fault);
+    Some(value)
+}
+
 /// Captures animator state into snapshots and restores it, recreating missing slots.
 pub struct AnimationProvider {
     /// Simulation tick rate, needed to compile programs on restore.

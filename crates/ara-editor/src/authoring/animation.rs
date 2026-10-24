@@ -70,6 +70,53 @@ pub(crate) fn ticks(value: &serde_json::Value) -> Result<Option<u32>, String> {
     ))
 }
 
+/// The canvas's live state from an `AnimatorState` read during Play (`ara_anim::Status`
+/// as JSON). Its indexes follow the controller's states in name order, as Play
+/// compiles them.
+pub(crate) fn live(
+    controller: &ControllerData,
+    status: &serde_json::Value,
+) -> Option<crate::graph::Live> {
+    let state = |index: &serde_json::Value| {
+        let index = usize::try_from(index.as_u64()?).ok()?;
+        controller.states.iter().nth(index)
+    };
+    let (name, data) = state(&status["state"])?;
+    let time = status["time"].as_u64().unwrap_or(0);
+    let duration = status["duration"].as_u64().unwrap_or(0);
+    // Looping states run past their cycle; a one-shot holds at its end.
+    let progress = match duration {
+        0 => 1.,
+        d if data.looping => (time % d) as f32 / d as f32,
+        d => time.min(d) as f32 / d as f32,
+    };
+    let fade = &status["fade"];
+    let fade = state(&fade["target"]).map(|(to, _)| {
+        let elapsed = fade["elapsed"].as_u64().unwrap_or(0) as f32;
+        let total = fade["duration"].as_u64().unwrap_or(0) as f32;
+        (id("n", to), if total > 0. { elapsed / total } else { 1. })
+    });
+    Some(crate::graph::Live {
+        node: id("n", name),
+        progress,
+        fade,
+    })
+}
+
+/// A live parameter value (`ara_anim::ParameterValue` as JSON) as the sidebar shows it.
+pub(crate) fn live_value(value: &serde_json::Value) -> String {
+    match (value["kind"].as_str(), &value["value"]) {
+        (Some("float"), v) => format!("{:.2}", v.as_f64().unwrap_or(0.)),
+        (Some("trigger"), v) => if v.as_bool() == Some(true) {
+            "set"
+        } else {
+            "unset"
+        }
+        .into(),
+        (_, v) => v.to_string(),
+    }
+}
+
 /// The canvas edge id of a transition (stable across projections).
 pub(crate) fn transition_edge(transition: &str) -> String {
     id("w", transition)
@@ -287,5 +334,40 @@ mod tests {
         assert_eq!(ticks(&json!("100 ms")), Ok(Some(4_800)));
         assert_eq!(ticks(&json!("")), Ok(None));
         assert!(ticks(&json!(-1)).is_err());
+    }
+
+    #[test]
+    fn play_status_lights_the_playing_state_and_its_fade_target() {
+        let controller: ControllerData = serde_json::from_value(json!({
+            "states": {"run": {"node": "run"}, "idle": {"node": "idle"}, "jump": {"node": "jump", "looping": false}},
+            "initial": "idle"
+        }))
+        .expect("controller");
+        // States compile in name order: idle 0, jump 1, run 2.
+        let running = live(
+            &controller,
+            &json!({"state": 2, "time": 60_000, "duration": 48_000,
+                    "fade": {"target": 1, "elapsed": 1_200, "duration": 4_800}}),
+        )
+        .expect("live");
+        assert_eq!(running.node, id("n", "run"));
+        assert_eq!(running.progress, 0.25);
+        assert_eq!(running.fade, Some((id("n", "jump"), 0.25)));
+        let held = live(
+            &controller,
+            &json!({"state": 1, "time": 96_000, "duration": 48_000}),
+        )
+        .expect("held");
+        assert_eq!(held.progress, 1.);
+        assert_eq!(held.fade, None);
+        assert_eq!(
+            live_value(&json!({"kind": "float", "value": 0.4231})),
+            "0.42"
+        );
+        assert_eq!(
+            live_value(&json!({"kind": "trigger", "value": false})),
+            "unset"
+        );
+        assert_eq!(live_value(&json!({"kind": "bool", "value": true})), "true");
     }
 }

@@ -453,6 +453,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }
+            match shell.poll_animation(&mut editor) {
+                Some(crate::shell::LiveChange::Page) => {
+                    shell.rebuild(&mut editor)?;
+                    dirty = true;
+                }
+                Some(crate::shell::LiveChange::Canvas) => dirty = true,
+                None => {}
+            }
             let assets_changed = shell.poll_assets();
             for (kind, message) in std::mem::take(&mut shell.pending_reports) {
                 editor.report(kind, &message, None);
