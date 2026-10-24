@@ -250,6 +250,10 @@ pub struct UiStats {
     pub mount_ms: f64,
     /// Of `mount_ms`: `Ui::reconcile` alone.
     pub reconcile_ms: f64,
+    /// Of `mount_ms`: the mount's layout frame (restyle, layout, paint).
+    pub frame_ms: f64,
+    /// Of `mount_ms`: mounting and filling the virtual row pools (Hierarchy, Assets).
+    pub rows_ms: f64,
     /// Runtime work summed over every `Ui::frame` (rebuild mounts and the frame's own).
     pub work: ara_ui::Work,
 }
@@ -594,7 +598,10 @@ impl Shell {
             }
         }
         self.tooltip_text = None;
+        let framing = std::time::Instant::now();
         self.stats.work += ui.frame(&mut self.text)?;
+        self.stats.frame_ms += framing.elapsed().as_secs_f64() * 1000.;
+        let rows = std::time::Instant::now();
         let row = if editor.state.comfortable() { 26. } else { 22. };
         if let Some(index) = ui.find("hierarchy-rows") {
             let height = ui.nodes[index].rect.h.max(row);
@@ -647,6 +654,7 @@ impl Shell {
                 }
             }
         }
+        self.stats.rows_ms += rows.elapsed().as_secs_f64() * 1000.;
         Ok(())
     }
     fn rebuild_float(

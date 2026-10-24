@@ -85,6 +85,8 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
         )
     })?;
     let mut out: Vec<Element> = Vec::new();
+    // Each element's ancestor count (itself and the document node included).
+    let mut depths: Vec<usize> = Vec::new();
     let mut ids = BTreeSet::new();
     let mut indexes = std::collections::HashMap::new();
     for node in doc.descendants().filter(|n| n.is_element()) {
@@ -97,7 +99,9 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
                 "Use a registered native UI primitive",
             ));
         }
-        if node.ancestors().count() > 128 {
+        let parent = node.parent().and_then(|p| indexes.get(&p.id()).copied());
+        let depth = parent.map_or(2, |p: usize| depths[p] + 1);
+        if depth > 128 {
             return Err(bad(
                 crate::codes::DEPTH,
                 "Markup nesting exceeds 128".into(),
@@ -162,9 +166,9 @@ pub fn parse(source: &str) -> Result<Vec<Element>> {
                 "Place text in the text attribute",
             ));
         }
-        let parent = node.parent().and_then(|p| indexes.get(&p.id()).copied());
         let index = out.len();
         indexes.insert(node.id(), index);
+        depths.push(depth);
         out.push(Element {
             id: id.into(),
             tag: tag.into(),
@@ -214,6 +218,14 @@ pub fn inline_styles(source: &str) -> Result<Vec<InlineStyle>> {
 /// Expand templates and named slots with deterministic instance-prefixed IDs.
 pub fn compile(source: &str) -> Result<Vec<Element>> {
     let input = parse(source)?;
+    // Without components there is nothing to expand: `parse` already checked
+    // identities, and the expansion below would rebuild the same elements.
+    if !input
+        .iter()
+        .any(|e| matches!(e.tag.as_str(), "template" | "instance" | "slot"))
+    {
+        return Ok(input);
+    }
     let templates: BTreeMap<_, _> = input
         .iter()
         .enumerate()
