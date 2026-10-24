@@ -133,6 +133,20 @@ fn demo_renders_moves_skins_and_relights_headless() {
     presenter.present(&frame).unwrap();
     let stats = presenter.stats();
     assert!(!stats.rebuilt && stats.updated >= 5, "{stats:?}");
+    if presenter.quality() == Some(ara_runtime_render::QualityPreset::High) {
+        let costs = stats
+            .gpu
+            .expect("native frame exposes timestamp components");
+        assert!(costs.fidelity_ms > 0. && costs.publication_ms > 0.);
+        assert!(
+            costs.effects_ms > 0.,
+            "demo campfire must be accounted: {costs:?}"
+        );
+        assert!(
+            (costs.accounted_ms() - stats.gpu_ms).abs() < 1e-9,
+            "native GPU components must account for the same frame: {stats:?}"
+        );
+    }
     let moved = presenter
         .capture(&frame, [480, 270], ViewMode::Lit, Some(40), 1)
         .unwrap();

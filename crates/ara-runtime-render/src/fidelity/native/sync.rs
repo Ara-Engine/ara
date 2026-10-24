@@ -114,6 +114,7 @@ impl Prepared {
     /// bytes, parsing graphs or cloning asset handles. Source generations/layout
     /// changes request a replacement; GPU publication remains the view's job.
     pub fn update_frame(&mut self, frame: &RenderFrame) -> Result<FrameChange> {
+        ara_gpu::cpu_scope!("Native.update_instances");
         anyhow::ensure!(
             self.bindings.live,
             "enable native motion before streaming frames"

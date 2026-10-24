@@ -68,6 +68,7 @@ impl VulkanDevice {
     /// Bindless reachability is conservative: all published resources are retained.
     pub fn submit(&mut self, list: CommandList, waits: &[TimelinePoint]) -> Result<TimelinePoint> {
         self.poll_shader_reload();
+        crate::cpu_scope!("GPU.submit");
         for wait in waits {
             if wait.value > self.submitted[wait.queue.index()] {
                 return Err(GpuError::Contract("Wait targets unsubmitted work".into()));
@@ -121,8 +122,11 @@ impl VulkanDevice {
             );
         }
         let mut timestamp = 0;
-        for command in &list.commands {
-            self.encode(cmd, queue, query, &mut timestamp, command)?;
+        {
+            crate::cpu_scope!("GPU.record_commands");
+            for command in &list.commands {
+                self.encode(cmd, queue, query, &mut timestamp, command)?;
+            }
         }
         let point = TimelinePoint {
             queue,
@@ -174,14 +178,17 @@ impl VulkanDevice {
                 self.accelerations.get_mut(*h)?.raw.built = true;
             }
         }
-        for value in self.accelerations.values_mut() {
-            value.last[queue.index()] = point.value;
-        }
-        for value in self.buffers.values_mut() {
-            value.last[queue.index()] = point.value;
-        }
-        for value in self.images.values_mut() {
-            value.last[queue.index()] = point.value;
+        {
+            crate::cpu_scope!("GPU.retain_bindless");
+            for value in self.accelerations.values_mut() {
+                value.last[queue.index()] = point.value;
+            }
+            for value in self.buffers.values_mut() {
+                value.last[queue.index()] = point.value;
+            }
+            for value in self.images.values_mut() {
+                value.last[queue.index()] = point.value;
+            }
         }
         self.pending.push(Pending {
             point,
@@ -193,6 +200,7 @@ impl VulkanDevice {
     }
     /// Wait, read timestamps and release native recording storage for a submission.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
+        crate::cpu_scope!("GPU.resolve");
         self.wait(point)?;
         let index = self
             .pending
@@ -261,6 +269,7 @@ impl VulkanDevice {
         Ok(())
     }
     fn validate_commands(&self, list: &CommandList) -> Result<()> {
+        crate::cpu_scope!("GPU.validate_commands");
         let mut rendering = false;
         let mut pass = false;
         let mut pipeline = None;

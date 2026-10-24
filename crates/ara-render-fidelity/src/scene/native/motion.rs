@@ -183,6 +183,7 @@ impl GpuScene {
         gpu: &mut VulkanDevice,
         scene: &NativeScene,
     ) -> Result<NativeUpdate> {
+        ara_gpu::cpu_scope!("Native.upload_instances_and_acceleration");
         let native = self
             .native
             .as_mut()

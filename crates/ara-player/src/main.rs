@@ -58,6 +58,7 @@ struct Args {
 }
 
 fn main() {
+    let launched = Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return,
         Ok(false) => {}
@@ -67,6 +68,8 @@ fn main() {
         }
     }
     crash::install();
+    #[cfg(feature = "tracy")]
+    let _tracy = ara_gpu::__tracy::Client::start();
     let directory = std::env::var_os("ARA_CRASH_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".ara/crashes"));
@@ -86,7 +89,7 @@ fn main() {
             None
         }
     };
-    if let Err(error) = run(Args::parse()) {
+    if let Err(error) = run(Args::parse(), launched) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
     }
@@ -152,11 +155,12 @@ struct Player {
     )>,
 }
 
-fn run(args: Args) -> Result<()> {
+fn run(args: Args, launched: Instant) -> Result<()> {
+    ara_gpu::cpu_scope!("Player.run");
     if args.owner.is_none() {
-        return standalone::run(args);
+        return standalone::run(args, launched);
     }
-    let init = Instant::now();
+    let init = launched;
     let size = parse_size(&args.size)?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
     let prewarmed = match std::env::var("ARA_PLAY_SCRIPTS") {
@@ -268,6 +272,7 @@ impl Player {
     /// present (windowed), publish a shared frame (embedded, when due and a slot is
     /// free) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
+        ara_gpu::cpu_scope!("Player.frame");
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
             busy(&mut self.link, "first window frame")?;
@@ -329,7 +334,10 @@ impl Player {
             if !present {
                 return self.after_frame(warming_window);
             }
-            world.runtime.extract(&mut self.frame);
+            {
+                ara_gpu::cpu_scope!("Player.extract");
+                world.runtime.extract(&mut self.frame);
+            }
             if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.window2d) {
                 let tick = world.runtime.tick();
                 window.prepare_2d(
@@ -383,6 +391,7 @@ impl Player {
                     _ => Ok(None),
                 };
                 let audio = job.map(|job| {
+                    ara_gpu::cpu_scope!("Player.audio.join");
                     job.join()
                         .unwrap_or_else(|_| Err(anyhow!("audio worker panicked")))
                 });
@@ -410,6 +419,10 @@ impl Player {
     /// The end of every loop iteration with a world: the first-window-frame notice,
     /// C# events, the heartbeat and, without a vsync-paced window, a short sleep.
     fn after_frame(&mut self, warming_window: bool) -> Result<()> {
+        #[cfg(feature = "tracy")]
+        if let Some(client) = ara_gpu::__tracy::Client::running() {
+            client.frame_mark();
+        }
         if warming_window {
             self.window_ready = true;
             self.link.notify(

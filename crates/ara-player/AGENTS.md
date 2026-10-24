@@ -21,6 +21,15 @@ NativeAOT metadata against the export folder; development host paths are rejecte
 Only pooled Play requires the owner token. `build.rs` embeds the Ara
 exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
 
+Build with `--features tracy` to record literal CPU zones across Play world build,
+extraction, native instance updates, GPU recording/timeline waits, presentation
+and audio. The optional client starts in the executable; normal builds erase zones.
+`tests/entry_latency.rs` is an ignored real-project probe: set
+`ARA_PLAY_ENTRY_PROJECT`, `ARA_BENCH_PLAYER` to an optimized player and
+`CARGO_BIN_EXE_ara-import-worker` to its worker. It copies input under target,
+settles publication and reports three warm sessions. `ARA_PLAY_ENTRY_WINDOW=1`
+selects windowed Play; default measures the shared-frame notice before editor display.
+
 ## Modules
 
 - `packed.rs` and `standalone.rs`: immutable pack AssetSource and the exported entry;

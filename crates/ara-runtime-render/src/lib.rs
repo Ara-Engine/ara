@@ -14,6 +14,8 @@ extern crate glam34 as glam;
 mod composite;
 pub mod fidelity;
 pub mod geometry;
+mod gpu_costs;
+pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
@@ -55,6 +57,9 @@ pub const SCENE_TEXTURE_BUDGET: usize = 32;
 pub struct PresentStats {
     /// Native GPU milliseconds, including scene updates and output publication.
     pub gpu_ms: f64,
+    /// Native timestamp components and residency counters. Low returns `None`:
+    /// its landscape/VFX timing coverage is incomplete, rather than measured zero.
+    pub gpu: Option<GpuFrameCosts>,
     /// Whether the scene was rebuilt (structural change).
     pub rebuilt: bool,
     /// Meshes whose vertices were re-uploaded.
