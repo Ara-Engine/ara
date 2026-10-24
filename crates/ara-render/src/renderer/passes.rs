@@ -259,6 +259,8 @@ impl Renderer {
                 (ids[WORLD], Access::ShaderRead),
                 (ids[DEPTH], Access::ShaderRead),
                 (ids[output_history], Access::Storage),
+                // History is stored pre-exposed (look.slangh exposureState).
+                (look.state, Access::ShaderRead),
             ];
             if let Some(history) = self.targets.history {
                 taa.push((ids[history], Access::ShaderRead));
@@ -564,6 +566,7 @@ impl Renderer {
                         }
                         _ => self.targets.sampled[output_history],
                     },
+                    true,
                     self.size,
                 ),
                 Recipe::Empty => {}
@@ -655,7 +658,10 @@ impl Renderer {
             let id = graph.pass(
                 "TemporalResolve",
                 Queue::Graphics,
-                uses.into_iter().chain([(frame, Access::ShaderRead)]),
+                uses.into_iter().chain([
+                    (frame, Access::ShaderRead),
+                    (look.state, Access::ShaderRead),
+                ]),
             );
             let slot_id = imported
                 .iter()
@@ -692,6 +698,7 @@ impl Renderer {
                     *look_pass,
                     self.frame_index,
                     post_sampled,
+                    resolved.is_some(),
                     self.size,
                 );
             } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {

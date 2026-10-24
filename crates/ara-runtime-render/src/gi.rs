@@ -156,7 +156,11 @@ fn acquire(
     frame: &RenderFrame,
     content: Content,
 ) -> Result<ProbeSurfaces> {
-    let path = cache.join(format!("{key:016x}.gi"));
+    // ARA_PROBE_GI_CPU=1 forces the CPU bake on ray-tracing adapters (to verify
+    // the non-RT path); each method caches separately.
+    let force_cpu = std::env::var_os("ARA_PROBE_GI_CPU").is_some();
+    let method = if force_cpu { "cpu" } else { "auto" };
+    let path = cache.join(format!("{key:016x}-{method}.gi"));
     if let Ok(bytes) = std::fs::read(&path) {
         match decode(&bytes) {
             Ok(surfaces) => return Ok(surfaces),
@@ -166,12 +170,17 @@ fn acquire(
             ),
         }
     }
-    let mut gpu = VulkanDevice::new(&[], cache.join("device"))?;
-    ensure!(
-        gpu.context().info.ray_tracing,
-        "probe GI acquisition needs ray queries (raster cube capture is not built yet)"
-    );
-    let surfaces = bake(&mut gpu, frame, content)?;
+    let prepared = native::prepare(frame, content, config())?;
+    // Ray-traced where the adapter supports ray queries, otherwise on the CPU:
+    // both produce the same probe surfaces.
+    let traced = (!force_cpu)
+        .then(|| VulkanDevice::new(&[], cache.join("device")).ok())
+        .flatten()
+        .filter(|gpu| gpu.context().info.ray_tracing);
+    let surfaces = match traced {
+        Some(mut gpu) => bake(&mut gpu, frame, &prepared)?,
+        None => crate::gi_cpu::bake(&prepared.scene, &shading(&prepared))?,
+    };
     std::fs::create_dir_all(cache)?;
     let temporary = path.with_extension("tmp");
     std::fs::write(&temporary, encode(&surfaces))?;
@@ -225,9 +234,70 @@ fn decode(bytes: &[u8]) -> Result<ProbeSurfaces> {
 }
 
 /// Bakes the probe surfaces of `frame`'s content on a ray-tracing device.
-fn bake(gpu: &mut VulkanDevice, frame: &RenderFrame, content: Content) -> Result<ProbeSurfaces> {
+/// Each material's diffuse albedo (metal removed) and emissive radiance for the
+/// CPU bake: factors times the mean texel of their maps; terrain splats average
+/// their layer materials.
+fn shading(prepared: &native::Prepared) -> Vec<crate::gi_cpu::Shading> {
+    use ara_render::instanced::NO_TEXTURE;
+    use glam30::Vec3;
+    let missing = std::cell::Cell::new(0usize);
+    let mean = |id: u32| {
+        if id == NO_TEXTURE {
+            return [1.; 4];
+        }
+        prepared.textures.mean_texel(id).unwrap_or_else(|| {
+            missing.set(missing.get() + 1);
+            [1.; 4]
+        })
+    };
+    let materials = &prepared.scene.materials;
+    let own: Vec<_> = materials
+        .iter()
+        .map(|m| {
+            let (c, e) = (m.pbr.base_color, m.pbr.emissive_roughness);
+            let (t, et) = (mean(m.pbr.textures[0]), mean(m.pbr.textures[3]));
+            // glTF metalness lives in the blue channel of the metal/roughness map.
+            let metal = (m.pbr.surface[0] * mean(m.pbr.textures[2])[2]).clamp(0., 1.);
+            crate::gi_cpu::Shading {
+                albedo: Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]) * (1. - metal),
+                emissive: Vec3::new(e[0] * et[0], e[1] * et[1], e[2] * et[2]),
+            }
+        })
+        .collect();
+    if missing.get() > 0 {
+        eprintln!(
+            "ara-runtime-render: CPU probe bake: {} maps have no CPU mean (taken as white)",
+            missing.get()
+        );
+    }
+    materials
+        .iter()
+        .zip(&own)
+        .map(|(m, &shading)| {
+            if m.extras.terrain_layers == 0 {
+                return shading;
+            }
+            let layers: Vec<_> = m
+                .extras
+                .layer_materials
+                .iter()
+                .filter_map(|&id| own.get(id as usize))
+                .collect();
+            let n = layers.len().max(1) as f32;
+            crate::gi_cpu::Shading {
+                albedo: layers.iter().map(|s| s.albedo).sum::<Vec3>() / n,
+                emissive: layers.iter().map(|s| s.emissive).sum::<Vec3>() / n,
+            }
+        })
+        .collect()
+}
+
+fn bake(
+    gpu: &mut VulkanDevice,
+    frame: &RenderFrame,
+    prepared: &native::Prepared,
+) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
-    let prepared = native::prepare(frame, content, config())?;
     let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
     let mut view = FidelityView::new_native(
         gpu,
@@ -303,7 +373,7 @@ mod tests {
         for (key, origin) in [(1u64, 1.), (2, 2.), (3, 3.)] {
             let key = key ^ u64::from(VERSION);
             std::fs::write(
-                root.join(format!("probe-gi/{key:016x}.gi")),
+                root.join(format!("probe-gi/{key:016x}-auto.gi")),
                 encode(&lattice(origin)),
             )?;
         }

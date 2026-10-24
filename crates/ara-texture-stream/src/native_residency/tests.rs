@@ -357,3 +357,13 @@ fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
     gpu.collect().unwrap();
     gpu.assert_clean().unwrap();
 }
+
+#[test]
+fn mean_texel_decodes_the_coarsest_whole_block_level() {
+    let mut set = bank(1 << 20, 1 << 20);
+    // BC4 blocks whose endpoints are both 200 decode to a constant red of 200/255.
+    let id = set.register([7; 32], source([16, 16], 3, 200)).unwrap();
+    let mean = set.mean_texel(id.index()).unwrap();
+    assert!((mean[0] - 200. / 255.).abs() < 1e-3, "{mean:?}");
+    assert!(set.mean_texel(id.index() + 1).is_none());
+}

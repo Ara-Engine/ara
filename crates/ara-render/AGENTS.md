@@ -79,6 +79,9 @@ Int16/Float16 capability, so pack halves with bit math.
 Frames use reversed-Z, metres and linear HDR. Sun input is lux, point/spot flux
 is lumens and HDR environment input is radiance in cd/m?. Exposure is a positive
 linear multiplier. See README.md for the exact tone mapper and GPU measurements.
+The TAA history alone is RGBA16F and pre-exposed (`look.slangh` exposureState):
+history readers decode with the state's previous multiplier; look passes learn
+whether their input is history or linear HDR from root word 7.
 Local light lists are tiled 16x16, with a checked scene capacity of 64 lights.
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
