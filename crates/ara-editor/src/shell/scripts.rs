@@ -157,7 +157,9 @@ impl Shell {
                 .map(|p| p.host_dir);
             std::fs::write(&project, ide_project(&module, runtime.as_deref()))?;
         }
-        open_in_ide(&module_dir, &file)?;
+        if self.open_ide {
+            open_in_ide(&module_dir, &file)?;
+        }
         self.status_note = Some(format!(
             "Created {name}.cs: press Play to compile it, then add the {name} component"
         ));

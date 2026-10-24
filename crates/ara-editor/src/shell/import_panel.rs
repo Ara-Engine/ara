@@ -45,10 +45,11 @@ impl Shell {
             .workspace()
             .docs()
             .find_map(|(path, doc)| (path == sidecar).then_some(doc));
-        if let Some(doc) = doc {
-            let record = doc
-                .record("i_settings")
-                .ok_or("import settings record missing")?;
+        // Undoing an import leaves the sidecar without its settings record: that reads
+        // as "not imported", like a missing sidecar.
+        if let Some((doc, record)) =
+            doc.and_then(|doc| doc.record("i_settings").map(|record| (doc, record)))
+        {
             let settings: ara_asset::ImportSettings =
                 serde_json::from_value(Value::Object(record.clone()))?;
             out.push_str(&format!("<text id='import-engine' class='badge' text='{}' /><text id='import-settings-title' class='heading' text='Import settings' />",escape(&settings.importer)));

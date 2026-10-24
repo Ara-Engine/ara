@@ -105,6 +105,10 @@ pub struct Shell {
     pub(crate) game_captured: bool,
     pub(crate) game_aspect: &'static str,
     pub(crate) game_stats: bool,
+    /// The shown Play world's fault (`play.status`), shown instead of the game.
+    pub(crate) game_fault: Option<String>,
+    /// Create > C# Behaviour opens the IDE (verification routes turn it off).
+    pub(crate) open_ide: bool,
     /// The running export (Build > Build Current Profile).
     pub(crate) build: Option<build::BuildJob>,
     /// Assets lists every file, including glTF buffers and project files.
@@ -273,6 +277,7 @@ impl Shell {
             log_view: LogView::default(),
             assets_show_all: false,
             build: None,
+            open_ide: true,
             game_players: Vec::new(),
             game_client: 0,
             game_live: false,
@@ -282,6 +287,7 @@ impl Shell {
             game_captured: false,
             game_aspect: "free",
             game_stats: true,
+            game_fault: None,
             console_open: None,
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,

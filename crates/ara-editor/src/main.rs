@@ -19,6 +19,7 @@ fn main() -> ara_ui::Result<()> {
             "--verify" => options.verify = true,
             "--verify-panels" => options.verify_panels = true,
             "--verify-ux" => options.verify_ux = true,
+            "--verify-journey" => options.verify_journey = true,
             "--sample" => options.sample = true,
             "--screenshot" => options.screenshot = true,
             "--panel" => options.panel = Some(args.next().ok_or("--panel needs a panel name")?),

@@ -48,6 +48,9 @@ exe icon (`assets/brand/ara.ico`); ara-platform sets the window icon.
   pixel readbacks. `presented: true` captures read the composited 3D output.
 - The first window frame announces bounded GPU warm-up grace; completion restores
   the normal watchdog immediately, after scene-dependent pipelines are prepared.
+- The first presented frame (windowed or embedded) announces `busy("upload")`: real
+  scenes upload for seconds, and owner calls (`play.commands` right after start)
+  would otherwise hit the 1 s watchdog mid-upload.
 
 ## Semantics
 

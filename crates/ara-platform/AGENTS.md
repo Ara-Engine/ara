@@ -53,3 +53,5 @@ Behavioral gate from repository root:
 Use `../ara-render/run.ps1 -Mode Window` for process-local loader isolation.
 The example exercises the actual swapchain, dynamic pixel resize and renderer,
 then exits with validation clean. Never leave the demo running after verification.
+`Window::hidden` / `floating_hidden` create windows that are never shown (offscreen
+captures and verification); `raise` leaves hidden windows hidden.

@@ -214,10 +214,12 @@ impl PlayService {
     }
 
     /// Publishes `world`s C# command catalog to the host (`schema.list` shows it next
-    /// to the registry commands; `play.command` runs them).
+    /// to the registry commands; `play.command` runs them). A player that faults
+    /// answering is logged (the world is marked faulted), never dropped silently.
     pub(crate) fn publish_commands(&mut self, cx: &mut Cx<'_>, world: &str) {
-        if let Ok(catalog) = self.call(world, method::COMMANDS, json!({}), false) {
-            cx.publish_commands("play", &catalog);
+        match self.call(world, method::COMMANDS, json!({}), false) {
+            Ok(catalog) => cx.publish_commands("play", &catalog),
+            Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
         }
     }
 

@@ -104,3 +104,21 @@ D24: agent changes apply immediately. No apply-policy setting, approval tickets
 or pending agent queue. Agents is an activity feed with Undo turn (review.revert).
 Human gizmos, inspector scrubs and typing call host editor.gesture on begin/end.
 The host holds only overlapping fields for at most two seconds; other edits apply.
+
+Phase 2 (alpha journey). `activity.rs`: agent turns glow 5 s, "agent is viewing"
+and overwrite (ARA2503) notices with View/Follow; never move the human camera.
+`editor.scene.open {scene}` (path or ID; agents move only their presence); scenes
+keep cameras, first opens frame. Console/Problems (`shell/log_panels.rs`) read the
+bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
+`Editor::report_failure` re-logs an engine error's own diagnostics. Prefabs:
+`shell/prefab_ops.rs` (from selection, apply/revert overrides; root placement is
+never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
+Game view (D19): `app/game.rs` imports the play host's shared surfaces
+(`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
+`game_input` forwards keys/mouse to the selected client while captured (Esc
+releases); a faulted world (`play.status`) shows its fault with Restart/Stop
+instead of "Starting Play…". Play embeds unless `play.inGameView` is off. Build: `shell/build.rs`
+runs ara-export with `presets/*.export.json` on a thread.
+Bounded runs are offscreen (`Options::offscreen`: hidden windows, UI readback);
+never add a capture route that shows a window. `--verify-journey` captures the
+journey (`app/journey.rs`) and writes `journey.json`.

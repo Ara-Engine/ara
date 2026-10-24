@@ -308,8 +308,10 @@ impl Player {
                 None => None,
             };
             // The first presented frame uploads the whole scene (texture decodes, mesh
-            // buffers): seconds with real content, so the owner's watchdog is told.
-            if self.window.is_some() && !self.uploaded {
+            // buffers): seconds with real content, so the owner's watchdog is told
+            // (windowed and embedded alike: owner calls such as `play.commands` arrive
+            // mid-upload).
+            if !self.uploaded {
                 busy(&mut self.link, "upload")?;
                 self.uploaded = true;
             }

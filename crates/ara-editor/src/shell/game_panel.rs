@@ -58,7 +58,20 @@ impl Shell {
         );
         out.push_str("</panel>");
         out.push_str("<panel id='game-surface' class='game-surface'>");
-        if self.game_live {
+        if let Some(fault) = self.game_fault.clone() {
+            let text = format!("{fault} · Details and fixes are in the Console.");
+            self.empty(
+                out,
+                "game-fault",
+                "circle-x",
+                "Play stopped",
+                &text,
+                &[
+                    ("game-restart", "Restart", "play.restart"),
+                    ("game-stop", "Stop", "play.stop"),
+                ],
+            );
+        } else if self.game_live {
             // Letterbox inside the surface using last frame's layout.
             let area = self
                 .ui

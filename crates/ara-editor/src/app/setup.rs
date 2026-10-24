@@ -32,6 +32,9 @@ pub struct Options {
     pub scene: Option<String>,
     /// Start Play (in the Game view) once the window is up.
     pub play: bool,
+    /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
+    /// undo/save/reopen, export) and capture every step.
+    pub verify_journey: bool,
 }
 impl Options {
     /// Bounded and automated runs (a frame limit, captures, verification routes) keep
@@ -42,6 +45,7 @@ impl Options {
             || self.verify
             || self.verify_panels
             || self.verify_ux
+            || self.verify_journey
             || self.headless
     }
 }
@@ -62,6 +66,7 @@ impl Default for Options {
             verify_ux: false,
             scene: None,
             play: false,
+            verify_journey: false,
         }
     }
 }

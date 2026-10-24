@@ -2,6 +2,7 @@
 mod capture;
 mod controller;
 mod game;
+mod journey;
 mod panels_verify;
 mod setup;
 mod ux_verify;
@@ -144,7 +145,12 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
-    if panel_verification.is_some() || ux_verification.is_some() {
+    let mut journey = if options.verify_journey {
+        Some(journey::Journey::new(&mut editor, &options.output)?)
+    } else {
+        None
+    };
+    if panel_verification.is_some() || ux_verification.is_some() || journey.is_some() {
         shell.rebuild(&mut editor)?;
     }
 
@@ -338,10 +344,11 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
             }
             let was_live = shell.game_live;
+            let was_fault = shell.game_fault.clone();
             if game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())? {
                 dirty = true;
             }
-            if shell.game_live != was_live {
+            if shell.game_live != was_live || shell.game_fault != was_fault {
                 if !shell.game_live {
                     shell.game_captured = false;
                 }
@@ -451,6 +458,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 dirty |= changed;
                 scene_dirty |= dirty;
+            }
+            if let Some(route) = &mut journey {
+                let changed = route.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                )?;
+                dirty |= changed;
+                scene_dirty |= changed;
             }
             if let Some(suite) = &mut ux_verification {
                 let was_finished = suite.finished();
@@ -769,6 +787,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 || ux_verification.as_ref().is_some_and(|v| {
                     v.finished() && idle_samples.len() >= 1500 && camera_samples.len() >= 240
                 })
+                || journey.as_ref().is_some_and(journey::Journey::finished)
             {
                 game.close(&mut editor, &mut gpu)?;
                 break;
@@ -785,6 +804,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("UX verification did not finish".into());
+        }
+        if journey.as_ref().is_some_and(|v| !v.finished()) {
+            return Err("the journey route did not finish".into());
         }
         editor.host.flush();
         if options.screenshot {

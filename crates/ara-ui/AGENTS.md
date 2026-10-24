@@ -66,3 +66,5 @@ tint='true'>` multiplies a white image (icons) by its element's computed color;
 `Draw::Image.tint` is white for ordinary images.
 `paint_order`/`paint_starts` give each painted node's first display-list index, so
 hosts can splice paint-time decorations beneath later layers such as menus.
+Every node defaults to `position: relative` (taffy 0.15's default is static), so an
+absolute child's `right`/`bottom` resolve against its parent, where paint puts it.
