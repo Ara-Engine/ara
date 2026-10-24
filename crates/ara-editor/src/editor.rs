@@ -53,6 +53,9 @@ pub struct Editor {
     controls: Receiver<Control>,
     pub(crate) command_schemas: BTreeMap<String, Value>,
     pub(crate) view_revision: u64,
+    /// Bumped when navigation changes what the Scene view renders (`scene_changed`);
+    /// other navigation changes only redraw the UI over the last Scene image.
+    pub(crate) scene_revision: u64,
     pub(crate) panels_revision: u64,
     /// Bumps when agent activity changes what is tinted (D24 attribution; the
     /// viewport rebuilds its tints on change). Named before D24's just-apply model.
@@ -198,6 +201,7 @@ impl Editor {
             controls,
             command_schemas,
             view_revision: 0,
+            scene_revision: 0,
             panels_revision: 0,
             review_revision: 0,
             extraction_revision: 0,
@@ -289,6 +293,9 @@ impl Editor {
             }
             if self.state.panels_changed(&state) {
                 self.panels_revision += 1;
+            }
+            if self.state.scene_changed(&state) {
+                self.scene_revision += 1;
             }
             // GPU detection belongs to this window, not to navigation history: keep
             // it and re-derive `quality` from the incoming settings.

@@ -5,7 +5,9 @@
 //! run as they do for a person. Each click is checked by the state it toggles, with
 //! normal, same-batch and slow-frame timings. Offscreen only; writes
 //! `responsiveness.json` (per-scenario frame costs, UI work counters, GPU UI time,
-//! input-to-present latency and click results).
+//! input-to-present latency and click results). The Play scenario clicks Play and
+//! measures to the first presented frame showing an embedded Game image (cold, then
+//! warm), then clicks Stop.
 use super::*;
 use crate::shell::commands::Target;
 
@@ -48,7 +50,20 @@ enum Act {
     Click(Control, Timing),
     /// The View > Theme rows' command, then frames for it to settle.
     Theme(&'static str),
+    /// Click Play, wait for the first presented Game frame, click Stop.
+    Play,
 }
+
+/// A Play attempt in flight.
+struct PlayRun {
+    clicked: Instant,
+    /// When Stop was clicked (`None`: still waiting for the first Game frame).
+    stopping: Option<Instant>,
+    first_frame_ms: Option<f64>,
+    stop_clicked: bool,
+}
+/// How long a Play attempt may take to show its first frame or to stop.
+const PLAY_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// A click in flight.
 struct Pending {
@@ -81,6 +96,8 @@ pub(super) struct Sample {
     pub gpu_ms: f64,
     pub present_ms: f64,
     pub presented: bool,
+    /// A new embedded Game frame was shown (`GameView::update`).
+    pub game_frame: bool,
     pub rebuilds: u32,
     pub rebuild_ms: f64,
     pub mount_ms: f64,
@@ -102,6 +119,8 @@ pub(super) struct Probe {
     hover_targets: Vec<String>,
     samples: Vec<(String, Sample)>,
     clicks: Vec<Value>,
+    play: Option<PlayRun>,
+    plays: Vec<Value>,
 }
 
 impl Probe {
@@ -123,6 +142,10 @@ impl Probe {
             acts.push(Act::Theme("view.theme.dark"));
         }
         acts.push(Act::Idle("idle-after", 120));
+        for _ in 0..3 {
+            acts.push(Act::Play);
+            acts.push(Act::Idle("after-play", 60));
+        }
         Self {
             output: output.into(),
             acts,
@@ -134,6 +157,8 @@ impl Probe {
             hover_targets: Vec::new(),
             samples: Vec::new(),
             clicks: Vec::new(),
+            play: None,
+            plays: Vec::new(),
         }
     }
 
@@ -147,6 +172,7 @@ impl Probe {
             Some(Act::Hover(_)) => "hover".into(),
             Some(Act::Click(control, _)) => format!("click-{control:?}").to_lowercase(),
             Some(Act::Theme(_)) => "theme".into(),
+            Some(Act::Play) => "play".into(),
             None => "done".into(),
         }
     }
@@ -226,6 +252,32 @@ impl Probe {
                     released: same,
                 });
             }
+            Some(Act::Play) => {
+                let target = match &mut self.play {
+                    None => Some("play"),
+                    Some(run) if run.stopping.is_some() && !run.stop_clicked => {
+                        run.stop_clicked = true;
+                        Some("stop")
+                    }
+                    _ => None,
+                };
+                if let Some(id) = target {
+                    let point = centre(shell, id)
+                        .ok_or_else(|| format!("responsiveness: no `{id}` button"))?;
+                    push(events, motion(at(point)));
+                    push(events, button(true));
+                    push(events, button(false));
+                    self.injected = Some(Instant::now());
+                    if self.play.is_none() {
+                        self.play = Some(PlayRun {
+                            clicked: Instant::now(),
+                            stopping: None,
+                            first_frame_ms: None,
+                            stop_clicked: false,
+                        });
+                    }
+                }
+            }
             Some(Act::Theme(command)) if self.age == 0 => {
                 self.injected = Some(Instant::now());
                 shell.run_command(editor, command, &Target::None)?;
@@ -246,9 +298,31 @@ impl Probe {
         if sample.presented {
             sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);
         }
+        let game_frame = sample.game_frame;
         self.samples.push((self.label(), sample));
         if std::mem::take(&mut self.sleep_after) {
             std::thread::sleep(SLOW);
+        }
+        if let Some(run) = &mut self.play {
+            if run.stopping.is_none() && (game_frame || run.clicked.elapsed() > PLAY_TIMEOUT) {
+                if game_frame {
+                    run.first_frame_ms = Some(run.clicked.elapsed().as_secs_f64() * 1000.);
+                }
+                run.stopping = Some(Instant::now());
+            } else if let Some(stopping) = run.stopping
+                && run.stop_clicked
+                && (editor.state.playing.is_none() || stopping.elapsed() > PLAY_TIMEOUT)
+            {
+                self.plays.push(json!({
+                    "attempt": self.plays.len() + 1,
+                    "clickToFirstGameFrameMs": run.first_frame_ms,
+                    "stopMs": editor.state.playing.is_none()
+                        .then(|| stopping.elapsed().as_secs_f64() * 1000.),
+                }));
+                self.play = None;
+                self.advance();
+            }
+            return;
         }
         if let Some(pending) = &self.pending {
             let now = signature(editor, shell, pending.control);
@@ -332,6 +406,7 @@ impl Probe {
         let landed = self.clicks.iter().filter(|c| c["ok"] == true).count();
         let report = json!({
             "clicks": {"total": self.clicks.len(), "landed": landed, "each": self.clicks},
+            "play": self.plays,
             "scenarios": scenarios,
             "frames": self.samples.iter().map(|(name, s)| json!({"scenario": name, "sample": s})).collect::<Vec<_>>(),
             "device": device,

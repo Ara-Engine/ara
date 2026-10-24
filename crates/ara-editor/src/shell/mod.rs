@@ -169,6 +169,9 @@ pub struct Shell {
     pub(crate) version: u64,
     /// UI work since the host last took it (`take_stats`).
     pub(crate) stats: UiStats,
+    /// The editor's panels and store revisions the last rebuild reflected, so a
+    /// revision the shell already rebuilt for does not rebuild it again.
+    built: (u64, u64),
     /// The open scene resolved, with the (document, store revision, document count)
     /// it was resolved at (`resolved`).
     resolved_cache: Option<(
@@ -367,6 +370,7 @@ impl Shell {
             selected_rows: Default::default(),
             version: 0,
             stats: UiStats::default(),
+            built: (u64::MAX, u64::MAX),
             resolved_cache: None,
             tooltip_text: None,
             field_request: None,
@@ -482,7 +486,17 @@ impl Shell {
     pub fn take_stats(&mut self) -> UiStats {
         std::mem::take(&mut self.stats)
     }
+    /// Rebuild unless the last rebuild already reflects the editor's panels and store
+    /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
+    pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.built == (editor.panels_revision, editor.host.store().revision()) {
+            return Ok(false);
+        }
+        self.rebuild(editor)?;
+        Ok(true)
+    }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.built = (editor.panels_revision, editor.host.store().revision());
         self.keymap = commands::keymap(&editor.state);
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;

@@ -107,8 +107,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let mut game = game::GameView::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
-    crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
-    let mut icon_state = (editor.state.light, dpi);
+    crate::shell::icons::install(&mut ui_renderer, dpi)?;
+    // Icons are white masks tinted by CSS: only a DPI change (or a verification
+    // capture at another scale, `None`) re-rasterizes them; themes never do.
+    let mut icon_dpi = Some(dpi);
     // Placeholders for the GPU-fed images: the Scene view and the Game view.
     for id in [overlay::viewport_image(), game::texture()] {
         ui_renderer.image(
@@ -162,6 +164,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     let result = (|| -> ara_ui::Result<()> {
         let mut last_revision = editor.host.store().revision();
         let mut last_view = editor.view_revision;
+        let mut last_scene = editor.scene_revision;
         let mut last_panels = editor.panels_revision;
         let mut last_review = editor.review_revision;
         let mut last_extraction = editor.extraction_revision;
@@ -362,9 +365,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             let was_live = shell.game_live;
             let was_fault = shell.game_fault.clone();
-            if game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())? {
-                dirty = true;
-            }
+            let game_frame =
+                game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())?;
+            dirty |= game_frame;
             if shell.game_live != was_live || shell.game_fault != was_fault {
                 if !shell.game_live {
                     shell.game_captured = false;
@@ -423,7 +426,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &editor.state,
                     editor.gesture.as_ref(),
                 )?)?;
-                shell.rebuild(&mut editor)?;
+                shell.rebuild_if_stale(&mut editor)?;
                 dirty = true;
                 scene_dirty = true;
                 preview_present = editor.gesture.is_some();
@@ -457,12 +460,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             if editor.view_revision != last_view {
                 last_view = editor.view_revision;
                 dirty = true;
+            }
+            if editor.scene_revision != last_scene {
+                last_scene = editor.scene_revision;
                 scene_dirty = true;
             }
             if editor.panels_revision != last_panels {
                 last_panels = editor.panels_revision;
-                shell.rebuild(&mut editor)?;
-                dirty = true;
+                dirty |= shell.rebuild_if_stale(&mut editor)?;
             }
             if let Some(verification) = &mut verification {
                 let changed = verification.step(
@@ -473,7 +478,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut renderer,
                 )?;
                 if changed {
-                    icon_state = (!editor.state.light, last_dpi);
+                    icon_dpi = None;
                 }
                 dirty |= changed;
                 scene_dirty |= dirty;
@@ -500,7 +505,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &floats,
                 )?;
                 if changed {
-                    icon_state = (!editor.state.light, last_dpi);
+                    icon_dpi = None;
                 }
                 dirty |= changed;
                 scene_dirty |= changed;
@@ -655,10 +660,10 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     gpu.overlays(Default::default(), overlay::ENTITY_IMAGE, Vec::new());
                 }
                 scene_ms = scene_at.elapsed().as_secs_f64() * 1000.;
-                if icon_state != (editor.state.light, dpi) {
+                if icon_dpi != Some(dpi) {
                     let icons_at = Instant::now();
-                    crate::shell::icons::install(&mut ui_renderer, editor.state.light, dpi)?;
-                    icon_state = (editor.state.light, dpi);
+                    crate::shell::icons::install(&mut ui_renderer, dpi)?;
+                    icon_dpi = Some(dpi);
                     icons_ms = icons_at.elapsed().as_secs_f64() * 1000.;
                 }
                 gpu.select_target(0);
@@ -833,6 +838,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     gpu_ms: gpu.take_gpu_wait().as_secs_f64() * 1000.,
                     present_ms,
                     presented,
+                    game_frame,
                     ..Default::default()
                 };
                 probe.end(&editor, &mut shell, sample);

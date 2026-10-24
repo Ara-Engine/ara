@@ -282,6 +282,17 @@ impl Default for EditorState {
     }
 }
 impl EditorState {
+    /// Whether `other` renders a different Scene image: the document, camera, view
+    /// mode, viewport-hidden entities or quality. Selection, gizmos and the grid are
+    /// UI overlays and need no Scene frame.
+    pub(crate) fn scene_changed(&self, other: &Self) -> bool {
+        self.doc != other.doc
+            || self.camera != other.camera
+            || self.view_mode != other.view_mode
+            || self.hidden != other.hidden
+            || self.quality != other.quality
+            || self.render_quality != other.render_quality
+    }
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
             || self.asset_path != other.asset_path

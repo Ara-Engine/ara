@@ -15,7 +15,8 @@ pub(super) fn icon_in(id: &str, name: &str, class: &str) -> String {
 pub(super) fn exists(name: &str) -> bool {
     ASSETS.iter().any(|(n, _)| *n == name)
 }
-pub(crate) fn install(renderer: &mut Renderer, _light: bool, dpi: f32) -> ara_ui::Result<()> {
+/// Rasterize every icon (white, tinted at draw time) and the brand logo for `dpi`.
+pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
     let size = (16. * dpi.max(2.)).ceil() as u32;
     for (name, svg) in ASSETS {
         let svg = svg.replace("currentColor", "#ffffff");
