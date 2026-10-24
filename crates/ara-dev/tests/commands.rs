@@ -31,17 +31,21 @@ fn scratch(label: &str) -> PathBuf {
     path
 }
 
-fn command(root: &Path, program: &str, args: &[&str]) -> Output {
-    Command::new(program)
+fn configured_command(root: &Path, program: &str, args: &[&str]) -> Command {
+    let mut command = Command::new(program);
+    command
         .args(args)
         .current_dir(root)
         .env("CARGO_TARGET_DIR", root.join("target"))
         .env("CARGO_BUILD_BUILD_DIR", root.join("target"))
         .env("CARGO_BUILD_JOBS", "2")
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", root.join("empty-gitconfig"))
-        .output()
-        .unwrap()
+        .env("GIT_CONFIG_GLOBAL", root.join("empty-gitconfig"));
+    command
+}
+
+fn command(root: &Path, program: &str, args: &[&str]) -> Output {
+    configured_command(root, program, args).output().unwrap()
 }
 
 fn ok(root: &Path, program: &str, args: &[&str]) -> Output {
@@ -135,7 +139,10 @@ fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
     .unwrap();
     let binary = env!("CARGO_BIN_EXE_ara-dev");
     assert!(
-        !command(&root, binary, &["check", "--json"])
+        !configured_command(&root, binary, &["check", "--json"])
+            .env_remove("RUSTC_WRAPPER")
+            .output()
+            .unwrap()
             .status
             .success()
     );
