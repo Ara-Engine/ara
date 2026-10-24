@@ -229,16 +229,24 @@ impl FidelityContent {
             .as_ref()
             .is_none_or(|old| old.revision() != self.reader.revision())
         {
-            self.snapshot = Some(
-                self.reader
-                    .snapshot()
-                    .context("asset publication is not available yet")?,
-            );
+            // The owner can attach/publish after the first Scene frame. Retain
+            // the last snapshot while busy; no snapshot means placeholders.
+            if let Some(snapshot) = self.reader.snapshot() {
+                self.snapshot = Some(snapshot);
+            }
         }
-        let snapshot = self.snapshot.as_ref().context("published asset snapshot")?;
+        let empty = ara_runtime::assets::MemoryAssets::default();
+        let source: &dyn AssetSource = self
+            .snapshot
+            .as_deref()
+            .map_or(&empty as &dyn AssetSource, |snapshot| snapshot);
         // Metadata checks avoid FileCache reads/decodes for unchanged models. The
         // library includes foliage/prefab sources, so extraction reuses them too.
-        for (asset, generation) in snapshot.generations() {
+        for (asset, generation) in self
+            .snapshot
+            .iter()
+            .flat_map(|snapshot| snapshot.generations())
+        {
             if generation.kinds().contains(&ara_asset::ArtifactKind::Mesh)
                 && self
                     .library
@@ -246,7 +254,7 @@ impl FidelityContent {
                     .get(asset)
                     .is_none_or(|model| model.digest != generation.digest())
             {
-                self.library.models.load(snapshot.as_ref(), asset)?;
+                self.library.models.load(source, asset)?;
             }
         }
         let mut material_hash = std::hash::DefaultHasher::new();
@@ -260,13 +268,18 @@ impl FidelityContent {
             document.id.as_str().hash(target);
             ara_doc::write(document, schema).hash(target);
         }
-        let materials = (material_hash.finish(), snapshot.revision());
+        let materials = (
+            material_hash.finish(),
+            self.snapshot
+                .as_ref()
+                .map_or(0, |snapshot| snapshot.revision()),
+        );
         if self.materials != Some(materials) {
             let requested: Vec<_> = self.library.materials.ids().map(str::to_owned).collect();
             for asset in requested {
-                self.library
-                    .materials
-                    .load(workspace, snapshot.as_ref(), &asset)?;
+                ara_runtime_render::fidelity::native::when_published(source, |source| {
+                    Ok(self.library.materials.load(workspace, source, &asset)?)
+                })?;
             }
             self.materials = Some(materials);
         }
@@ -298,7 +311,7 @@ impl FidelityContent {
             &transforms,
             workspace,
             &mut self.library,
-            snapshot.as_ref(),
+            source,
             cached,
             hidden,
         )?;
@@ -316,14 +329,15 @@ impl FidelityContent {
         workspace: &ara_doc::Workspace,
         schema: &ara_schema::SchemaDb,
     ) -> anyhow::Result<ara_runtime_render::fidelity::native::Content> {
-        ara_runtime_render::fidelity::native::Content::resolve(
+        let empty = ara_runtime::assets::MemoryAssets::default();
+        ara_runtime_render::fidelity::native::Content::resolve_available(
             frame,
             workspace,
             schema,
             &self.library,
             self.snapshot
                 .as_deref()
-                .context("published asset snapshot")?,
+                .map_or(&empty as &dyn AssetSource, |snapshot| snapshot),
         )
     }
 }
