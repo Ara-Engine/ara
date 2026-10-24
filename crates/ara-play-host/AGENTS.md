@@ -16,7 +16,7 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `open_project(root)`: opens a project with the engine schema world and commands
   (`ara_runtime::engine`) for a host before `Host::open`; clashes become diagnostics.
 - `pool::{Pool, PoolConfig, Player}`: pre-spawned single-use players (S5), token-
-  checked hellos, heartbeat watchdog (`WATCHDOG` = 1 s), fault classification.
+  checked hellos, heartbeat watchdog (`WATCHDOG` = 5 s), fault classification.
   `Pool::with_scripts` passes module settings for pre-warm before the ready hello.
   Local crash artifacts go beside player logs in `crashes/`; a clean window close
   stops and reaps the whole Play world without reporting a crash. Launches run on
@@ -80,7 +80,8 @@ without joining it; omitted/false keeps the synchronous world-ready response.
 - `play.keep`: diff → drop `driven` values unless `includeDriven` → `prev` check
   against the current scene (conflicts reported, not applied) → one `property.set`
   batch through `Cx::apply` (agent edits enter review as usual).
-- Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 1 s silence →
+- Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 5 s silence (extended by
+  announced busy phases; player liveness runs on an independent IO thread) →
   `player_panicked | player_crashed | player_unresponsive | player_exited`, logged with a
   `play.restart` fix; `play.status` holds the structured fault.
 - `play.stop` removes the active world and returns `status: "stopping"` immediately.

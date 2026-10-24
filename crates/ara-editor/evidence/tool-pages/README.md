@@ -13,10 +13,11 @@ Open `gallery.html` to compare each page side by side.
   were disabled. `ara-import-worker` sat beside the editor, as in a packaged build: the
   play host publishes models through it (without it, no model is ever published and the
   old thumbnail silently rendered a cached placeholder box).
-- `before/1440` and `after/1440` hold the reviewed pages. The full matrix (both sizes,
+- `before/1440` and `after/1440` hold the reviewed pages as WebP (quality 90, legibility
+  checked); the original PNGs are in `target/tool-pages-png` and on D: below. The full matrix (both sizes,
   every route page, layout reports and timings) is kept out of git to save space, at
   `D:\AraBuild\tool-pages-evidence\{before,after}\{1440,2560}` on the Windows machine.
-- `thumbnail-studio.png`: studio shots of three sample models, a clay capsule and three
+- `thumbnail-studio.webp`: studio shots of three sample models, a clay capsule and three
   material spheres, from `cargo test -p ara-editor --lib studio -- --ignored` (writes
   `target/thumbnail-studio`).
 

@@ -255,7 +255,7 @@ impl Shell {
             Err(error) => out.push_str(&format!("{}<text id='animation-status-state' class='destructive' text='Invalid' /><text id='animation-status-error' class='fg' text='{}' />",icons::icon_in("animation-status-icon","circle-x","destructive"),escape(&error.message))),
         }
         let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
-        out.push_str(&format!("<panel id='animation-status-fill' class='fill' /><text id='animation-status-stats' class='caption' text='{} · {} · {} · default {} · fixed step {} ticks' /></panel>",count(controller.states.len(),"state"),count(controller.transitions.len(),"transition"),count(controller.parameters.len(),"parameter"),escape(if controller.initial.is_empty(){"none"}else{&controller.initial}),controller.fixed_step));
+        out.push_str(&format!("<panel id='animation-status-fill' class='fill' /><text id='animation-status-stats' class='caption' text='{} · {} · {} · default {} · {}' description='Fixed step: {} ticks at the {} kHz clip timebase' /></panel>",count(controller.states.len(),"state"),count(controller.transitions.len(),"transition"),count(controller.parameters.len(),"parameter"),escape(if controller.initial.is_empty(){"none"}else{&controller.initial}),rate(controller.fixed_step),controller.fixed_step,crate::authoring::animation::ticks_per_second()/1000));
     }
     pub(super) fn edit_animation(&mut self, editor: &mut Editor, kind: &str) -> ara_ui::Result<()> {
         let Some(doc) = self.resource_for(editor, "animation") else {
@@ -479,24 +479,27 @@ impl Shell {
                 &format!("{} → {}", t.from, t.to),
                 &format!("Transition · priority {}", priority + 1),
             );
-            self.anim_field(
+            let step = controller.fixed_step;
+            self.time_field(
                 out,
                 &doc,
                 &item,
                 "duration",
                 "Crossfade",
-                &json!(t.duration),
-                Some("ticks"),
+                Some(t.duration),
+                step,
+                "switches at once",
                 label,
             );
-            self.anim_field(
+            self.time_field(
                 out,
                 &doc,
                 &item,
                 "exitTick",
-                "Exit tick",
-                &json!(t.exit_tick),
-                Some("ticks"),
+                "Exit time",
+                t.exit_tick,
+                step,
+                "any time",
                 label,
             );
             section(out, "animation-conditions", "Conditions");
@@ -528,14 +531,15 @@ impl Shell {
                         "State"
                     },
                 );
-                self.anim_field(
+                self.time_field(
                     out,
                     &doc,
                     &item,
                     "duration",
                     "Duration",
-                    &json!(value.duration),
-                    Some("ticks"),
+                    Some(value.duration),
+                    controller.fixed_step,
+                    "from clip",
                     label,
                 );
                 self.anim_field(
@@ -545,7 +549,6 @@ impl Shell {
                     "looping",
                     "Looping",
                     &json!(value.looping),
-                    None,
                     label,
                 );
                 self.anim_field(
@@ -555,19 +558,9 @@ impl Shell {
                     "syncGroup",
                     "Sync group",
                     &json!(value.sync_group),
-                    None,
                     label,
                 );
-                self.anim_field(
-                    out,
-                    &doc,
-                    &item,
-                    "node",
-                    "Pose",
-                    &json!(value.node),
-                    None,
-                    label,
-                );
+                self.anim_field(out, &doc, &item, "node", "Pose", &json!(value.node), label);
             }
             if let Some(key) = node.payload["pose"].as_str()
                 && let Some(value) = controller.nodes.get(key)
@@ -580,16 +573,7 @@ impl Shell {
                 }
                 self.pose_operation(out, &doc, &record, &controller, key, value.kind);
                 if value.kind == NodeKind::Clip {
-                    self.anim_field(
-                        out,
-                        &doc,
-                        &item,
-                        "clip",
-                        "Clip",
-                        &json!(value.clip),
-                        None,
-                        label,
-                    );
+                    self.anim_field(out, &doc, &item, "clip", "Clip", &json!(value.clip), label);
                 } else {
                     self.anim_field(
                         out,
@@ -602,7 +586,6 @@ impl Shell {
                             "Parameter"
                         },
                         &json!(value.parameter_x),
-                        None,
                         label,
                     );
                     if value.kind == NodeKind::Directional2d {
@@ -613,7 +596,6 @@ impl Shell {
                             "parameterY",
                             "Vertical",
                             &json!(value.parameter_y),
-                            None,
                             label,
                         );
                     }
@@ -705,7 +687,56 @@ impl Shell {
         out.push_str("</panel></panel>");
     }
 
-    /// One typed property row: a toggle for flags, else a field (with its unit).
+    /// A time property, typed and shown in seconds, with frames at the controller's
+    /// fixed step beside it and the raw clip ticks in the tooltip. `empty` explains a
+    /// zero or missing time. Commits convert seconds back to ticks (`key@s`).
+    #[allow(clippy::too_many_arguments)]
+    fn time_field(
+        &mut self,
+        out: &mut String,
+        doc: &str,
+        item: &str,
+        key: &str,
+        label: &str,
+        ticks: Option<u32>,
+        step: u32,
+        empty: &str,
+        width: f32,
+    ) {
+        use crate::authoring::animation::{seconds_value, ticks_per_second};
+        let id = format!("animation-field-{key}");
+        let field = format!("{key}@s");
+        self.bindings.insert(
+            ara_ui::source::stable_id(&id),
+            Binding::AnimationField(doc.into(), item.into(), field.clone()),
+        );
+        let text = self
+            .drafts
+            .get(&format!("@animation|{doc}|{item}|{field}"))
+            .cloned()
+            .unwrap_or_else(|| ticks.map(seconds_value).unwrap_or_default());
+        let detail = match ticks {
+            Some(t) => format!(
+                "{t} ticks at the {} kHz clip timebase. Type seconds (0.1) or milliseconds (100 ms).",
+                ticks_per_second() / 1000
+            ),
+            None => "Type seconds (0.1) or milliseconds (100 ms).".into(),
+        };
+        let note = match ticks {
+            Some(t) if t > 0 && step > 0 => {
+                let frames = f64::from(t) / f64::from(step);
+                if frames.fract() == 0. {
+                    format!("{frames:.0} frames")
+                } else {
+                    format!("{frames:.1} frames")
+                }
+            }
+            _ => empty.to_owned(),
+        };
+        out.push_str(&format!("<panel id='{id}-row' class='prop-row'><panel id='{id}-label-cell' class='prop-label' style='width:{width}px'><text id='{id}-label' text='{}' /></panel><panel id='{id}-value' class='prop-value'><field id='{id}' class='number' style='width:64px' text='{}' label='{} in seconds' description='{}' action='Dispatch' /><text id='{id}-unit' class='caption' text='s' /><panel id='{id}-gap' class='fill' /><text id='{id}-note' class='caption' style='padding-right:4px' text='{}' /></panel></panel>",escape(label),escape(&text),escape(label),escape(&detail),escape(&note)));
+    }
+
+    /// One typed property row: a toggle for flags, else a field.
     #[allow(clippy::too_many_arguments)]
     fn anim_field(
         &mut self,
@@ -715,7 +746,6 @@ impl Shell {
         key: &str,
         label: &str,
         value: &Value,
-        unit: Option<&str>,
         width: f32,
     ) {
         let id = if key == "clip" {
@@ -746,11 +776,6 @@ impl Shell {
                     }
                 });
             out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' action='Dispatch' />",if value.is_number(){"number"}else{""},escape(&text),escape(label)));
-            if let Some(unit) = unit {
-                out.push_str(&format!(
-                    "<text id='{id}-unit' class='caption' text='{unit}' />"
-                ));
-            }
         }
         out.push_str("</panel></panel>");
     }
@@ -771,6 +796,15 @@ impl Shell {
                 .ok_or("controller missing")?,
         )?;
         let (kind, name) = item.split_once(':').ok_or("animation field address")?;
+        // Times are typed in seconds (`key@s`) and stored as clip ticks.
+        let (key, value) = match key.strip_suffix("@s") {
+            Some(key) => {
+                let ticks = crate::authoring::animation::ticks(&value)?;
+                // A blank duration means zero: inferred from the clip, or an instant switch.
+                (key, json!(ticks.or((key == "duration").then_some(0))))
+            }
+            None => (key, value),
+        };
         match kind {
             "param" => {
                 let parameter = controller
@@ -878,4 +912,17 @@ fn blend_plot(out: &mut String, node: &Node, width: f32) {
         out.push_str(&format!("<panel id='blend-point-{n}' class='blend-dot' style='left:{}px;top:{}px' description='{}: ({}, {})' /><text id='blend-point-label-{n}' class='blend-label' style='left:{}px;top:{}px' text='{}' />",x-5.,y-5.,escape(&sample.node),sample.x,sample.y,x-10.,y-22.,escape(&sample.node)));
     }
     out.push_str("</panel></panel>");
+}
+
+/// A controller's fixed step as a rate ("60 Hz").
+fn rate(step: u32) -> String {
+    if step == 0 {
+        return "no fixed step".into();
+    }
+    let hz = f64::from(crate::authoring::animation::ticks_per_second()) / f64::from(step);
+    if hz.fract() == 0. {
+        format!("{hz:.0} Hz")
+    } else {
+        format!("{hz:.1} Hz")
+    }
 }

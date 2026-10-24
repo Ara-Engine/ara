@@ -136,6 +136,8 @@ struct World {
     hot_reload: bool,
     /// Deliver first generations even when edits are not hot-reloaded.
     streaming_assets: bool,
+    /// Last read-only import-state revision sent to this world.
+    import_revision: u64,
     /// Last published C# catalog, reused when stopping without a player RPC.
     commands: Value,
     /// Preparation timings and process metadata retained for background callers.
@@ -633,6 +635,7 @@ impl PlayService {
             .filter(|r| window && **r != Role::Dedicated)
             .count();
         let headless = roles.len() - windowed;
+        let imports = self.assets()?.import_state();
         let pool = self.pool()?;
         let mut windows = pool
             .take_checked(windowed, true, Duration::from_secs(30), || {
@@ -655,6 +658,11 @@ impl PlayService {
                 heads.pop()
             }
             .ok_or_else(|| fail(codes::PLAY, "pool returned too few players"))?;
+            player
+                .link
+                .notify(method::IMPORTS, &imports)
+                .and_then(|_| player.link.flush())
+                .map_err(|e| fail(codes::PLAY, e.to_string()))?;
             let surface = match embed {
                 Some(params) if role != Role::Dedicated => {
                     Some(embed::embed_player(&mut player, params)?)
@@ -870,6 +878,7 @@ impl PlayService {
                     .assets
                     .as_ref()
                     .is_some_and(|assets| assets.importing()),
+                import_revision: 0,
                 commands: Value::Null,
                 startup: result.clone(),
                 events: Vec::new(),
@@ -912,6 +921,7 @@ impl PlayService {
             start_paused,
             hot_reload,
             streaming_assets,
+            import_revision,
             commands,
             startup,
             conditions,
@@ -944,6 +954,7 @@ impl PlayService {
                 fault: None,
                 hot_reload,
                 streaming_assets,
+                import_revision,
                 commands,
                 startup,
                 events: Vec::new(),
@@ -1349,6 +1360,11 @@ impl Service for PlayService {
             .values()
             .any(|w| w.hot_reload || w.streaming_assets);
         let imports = (cx.store().workspace(), cx.store().revision());
+        let world_import_revision = self
+            .worlds
+            .values()
+            .map(|world| world.import_revision)
+            .min();
         let assets = self.assets_now(imports).unwrap_or_else(|error| {
             cx.log(Diagnostic::warning(codes::ASSETS, error));
             None
@@ -1359,6 +1375,10 @@ impl Service for PlayService {
             }
             let changed = assets.poll(playing, allow);
             let importing = assets.importing();
+            let import_revision = assets.import_revision();
+            let import_state = world_import_revision
+                .filter(|&revision| revision != import_revision)
+                .map(|_| assets.import_state());
             if !changed.is_empty() {
                 let pins: BTreeMap<String, String> = changed
                     .iter()
@@ -1384,6 +1404,32 @@ impl Service for PlayService {
                                 ));
                             }
                         }
+                    }
+                }
+            }
+            // Publish generations before removing their pending marker, so no
+            // intermediate frame can mistake a just-completed import for failure.
+            if let Some(state) = import_state {
+                for (id, world) in &mut self.worlds {
+                    if world.import_revision == import_revision {
+                        continue;
+                    }
+                    let mut delivered = true;
+                    for (_, player) in &mut world.players {
+                        if let Err(error) = player
+                            .link
+                            .notify(method::IMPORTS, &state)
+                            .and_then(|_| player.link.flush())
+                        {
+                            delivered = false;
+                            cx.log(Diagnostic::warning(
+                                codes::PLAY,
+                                format!("{id}: import status failed: {error}"),
+                            ));
+                        }
+                    }
+                    if delivered {
+                        world.import_revision = import_revision;
                     }
                 }
             }

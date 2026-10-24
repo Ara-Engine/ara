@@ -113,9 +113,15 @@ pub fn parse_head(head: &str) -> Option<HttpRequest> {
 /// The request head waiting on `stream`, without consuming it (so a WebSocket
 /// handshake can still read it).
 pub fn peek_head(stream: &TcpStream) -> io::Result<Option<HttpRequest>> {
+    peek_head_with(|bytes| stream.peek(bytes))
+}
+
+pub(crate) fn peek_head_with(
+    mut peek: impl FnMut(&mut [u8]) -> io::Result<usize>,
+) -> io::Result<Option<HttpRequest>> {
     let mut buf = vec![0u8; 8192];
     for _ in 0..200 {
-        let n = stream.peek(&mut buf)?;
+        let n = peek(&mut buf)?;
         if n == 0 {
             return Ok(None);
         }
@@ -135,7 +141,7 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// Reads one whole request (head and `Content-Length` body).
-pub fn read_request(stream: &mut TcpStream) -> io::Result<HttpRequest> {
+pub fn read_request(stream: &mut impl Read) -> io::Result<HttpRequest> {
     let mut data = Vec::new();
     let mut chunk = [0u8; 4096];
     let end = loop {

@@ -27,7 +27,7 @@ const themes=["dark","light"];let page=pages[0][0],theme="dark";
 function group(id,items,get,set){const el=document.getElementById(id);el.replaceChildren(...items.map(([key,label])=>{const b=document.createElement("button");b.textContent=label;b.onclick=()=>{set(key);render()};b.dataset.key=key;return b}));return el}
 const p=group("pages",pages,()=>page,k=>page=k),t=group("themes",themes.map(x=>[x,x[0].toUpperCase()+x.slice(1)]),()=>theme,k=>theme=k);
 function render(){for(const b of p.children)b.setAttribute("aria-pressed",b.dataset.key===page);for(const b of t.children)b.setAttribute("aria-pressed",b.dataset.key===theme);
-for(const side of["before","after"])document.getElementById(side).src=`${side}/1440/${page}-${theme}.png`}
+for(const side of["before","after"])document.getElementById(side).src=`${side}/1440/${page}-${theme}.webp`}
 render();
 </script>
 </html>

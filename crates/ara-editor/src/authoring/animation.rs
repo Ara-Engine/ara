@@ -21,6 +21,55 @@ pub(crate) fn controller(doc: &ara_doc::Document) -> Result<(String, ControllerD
 pub(crate) fn layout_path(doc: &str) -> String {
     format!(".ara/editor/animation-{doc}.graph")
 }
+/// Clip ticks per second. Controllers share their clips' timebase; the editor reads
+/// times against the default clip frequency (48 kHz) and shows them in seconds.
+pub(crate) fn ticks_per_second() -> u32 {
+    ara_anim::data::ClipData::default().ticks_per_second
+}
+
+/// Clip ticks as people read them: "1 s", "0.1 s", "1.25 s".
+pub(crate) fn seconds(ticks: u32) -> String {
+    format!("{} s", seconds_value(ticks))
+}
+
+/// Clip ticks as a bare seconds number for an editable field ("0.1").
+pub(crate) fn seconds_value(ticks: u32) -> String {
+    let text = format!("{:.3}", f64::from(ticks) / f64::from(ticks_per_second()));
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+/// A person's time ("0.1", "0.1 s", "100 ms", or a number) as clip ticks; blank is `None`.
+pub(crate) fn ticks(value: &serde_json::Value) -> Result<Option<u32>, String> {
+    let seconds = match value {
+        serde_json::Value::Null => return Ok(None),
+        serde_json::Value::Number(n) => n.as_f64().ok_or("time must be a number")?,
+        serde_json::Value::String(text) => {
+            let text = text.trim();
+            if text.is_empty() {
+                return Ok(None);
+            }
+            if let Some(ms) = text.strip_suffix("ms") {
+                ms.trim()
+                    .parse::<f64>()
+                    .map_err(|_| "time must be a number")?
+                    / 1000.
+            } else {
+                text.trim_end_matches('s')
+                    .trim()
+                    .parse::<f64>()
+                    .map_err(|_| "time must be a number of seconds")?
+            }
+        }
+        _ => return Err("time must be a number of seconds".into()),
+    };
+    if !seconds.is_finite() || seconds < 0. {
+        return Err("time must be zero or more seconds".into());
+    }
+    Ok(Some(
+        (seconds * f64::from(ticks_per_second())).round() as u32
+    ))
+}
+
 /// The canvas edge id of a transition (stable across projections).
 pub(crate) fn transition_edge(transition: &str) -> String {
     id("w", transition)
@@ -179,7 +228,7 @@ pub(crate) fn conditions(
     if !parts.is_empty() {
         parts.join(" and ")
     } else if let Some(tick) = transition.exit_tick {
-        format!("after {tick} ticks")
+        format!("after {}", seconds(tick))
     } else {
         "always".into()
     }
@@ -222,4 +271,21 @@ pub(crate) fn validate(
         visit(key, controller, &mut Default::default(), &mut complete)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn times_read_in_seconds_and_type_back_to_ticks() {
+        assert_eq!(seconds(48_000), "1 s");
+        assert_eq!(seconds(4_800), "0.1 s");
+        assert_eq!(seconds_value(60_000), "1.25");
+        assert_eq!(ticks(&json!(0.1)), Ok(Some(4_800)));
+        assert_eq!(ticks(&json!("0.25 s")), Ok(Some(12_000)));
+        assert_eq!(ticks(&json!("100 ms")), Ok(Some(4_800)));
+        assert_eq!(ticks(&json!("")), Ok(None));
+        assert!(ticks(&json!(-1)).is_err());
+    }
 }

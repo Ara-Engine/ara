@@ -52,6 +52,7 @@ pub struct World {
     cache: PathBuf,
     pins: BTreeMap<String, Digest>,
     packed: Option<Arc<dyn ara_runtime::assets::AssetSource>>,
+    loading_models: crate::pending_models::PendingModels,
     /// Patches acknowledged after their tick.
     pub pending: Vec<PendingPatch>,
     /// C# modules and their host's event channel, when the scene runs any.
@@ -90,18 +91,45 @@ impl World {
             .world()
             .get_resource::<ara_runtime::animation::Library>()
             .context("runtime animation/material library missing")?;
-        let resolve = if self.packed.is_some() {
-            ara_runtime_render::fidelity::native::Content::resolve
+        let mut content = if self.packed.is_some() {
+            ara_runtime_render::fidelity::native::Content::resolve(
+                frame,
+                self.runtime.documents(),
+                self.runtime.schema(),
+                library,
+                source,
+            )?
         } else {
-            ara_runtime_render::fidelity::native::Content::resolve_available
+            ara_runtime_render::fidelity::native::Content::resolve_available_with_pending(
+                frame,
+                self.runtime.documents(),
+                self.runtime.schema(),
+                library,
+                source,
+                &|asset| self.pending_model(asset),
+            )?
         };
-        resolve(
-            frame,
-            self.runtime.documents(),
-            self.runtime.schema(),
-            library,
-            source,
-        )
+        let sources = crate::pending_models::sources(&self.runtime);
+        for draw in &frame.draws {
+            if matches!(draw.geometry, ara_runtime::extract::Geometry::Shape { .. })
+                && let Some(asset) = sources.get(&draw.address)
+            {
+                content
+                    .unpublished_models
+                    .insert(draw.address.to_owned(), asset.to_owned());
+            }
+        }
+        Ok(content)
+    }
+    pub fn imports(&mut self, state: ara_play::ImportState) {
+        self.loading_models.state = state;
+    }
+    pub fn pending_model(&self, asset: &str) -> bool {
+        self.loading_models.is_pending(asset, &self.pins)
+    }
+    pub fn extract_frame(&mut self, frame: &mut RenderFrame) {
+        self.runtime.extract(frame);
+        self.loading_models.style(&self.runtime, &self.pins, frame);
     }
     /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
     /// worlds copy player avatars, install the net plugin and wrap the runtime in a
@@ -249,6 +277,7 @@ impl World {
                 cache,
                 pins,
                 packed,
+                loading_models: Default::default(),
                 pending: Vec::new(),
                 scripts,
                 cells,
@@ -599,6 +628,13 @@ impl World {
 
     /// `play.patch`: queues the edits; returns them if they must be acked later.
     pub fn patch(&mut self, patch: &Patch) -> Result<u64> {
+        if patch
+            .sets
+            .iter()
+            .any(|set| set.path.starts_with("MeshRenderer.model"))
+        {
+            self.loading_models.invalidate();
+        }
         let edits = patch
             .sets
             .iter()
@@ -665,7 +701,7 @@ impl World {
                     self.seed,
                 )?
             } else {
-                self.runtime.extract(frame);
+                self.extract_frame(frame);
                 presenter.context("no presenter")?.capture_with(
                     frame,
                     &ara_render::capture::CaptureRequest {

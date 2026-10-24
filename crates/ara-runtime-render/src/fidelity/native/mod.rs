@@ -27,6 +27,9 @@ mod tests;
 /// files, graph ASTs, import workers or scattering are accessed during presentation.
 #[derive(Clone, Default)]
 pub struct Content {
+    /// Requested model assets for root fallback draws, keyed by draw address.
+    /// These retain per-asset bounds materials and identify arrivals for fading.
+    pub unpublished_models: BTreeMap<String, String>,
     /// Native surface assets keyed by the exact Header.materials reference.
     pub terrain_materials: BTreeMap<String, Arc<MaterialAsset>>,
     /// Model or prefab parts keyed by Rule.asset. Each Draw retains its selected
@@ -90,7 +93,16 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         unpublished: BTreeMap::new(),
     };
     for draw in &frame.draws {
-        builder.draw(draw, frame, draw.world, draw.entity)?;
+        builder.draw_source(
+            draw,
+            frame,
+            draw.world,
+            draw.entity,
+            content
+                .unpublished_models
+                .get(&draw.address)
+                .map(String::as_str),
+        )?;
     }
     if let Some(terrain) = &frame.terrain {
         builder.terrain(terrain, &content)?;
@@ -116,15 +128,6 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
 }
 
 impl Builder {
-    fn draw(
-        &mut self,
-        draw: &Draw,
-        frame: &RenderFrame,
-        world: glam::Mat4,
-        entity: u64,
-    ) -> Result<()> {
-        self.draw_source(draw, frame, world, entity, None)
-    }
     fn draw_source(
         &mut self,
         draw: &Draw,

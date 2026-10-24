@@ -38,6 +38,10 @@
 #![warn(missing_docs)]
 
 extern crate glam34 as glam;
+/// `ARA7310`: a model or native material is unavailable in Play, so placeholder geometry
+/// (or the source material) is shown. Players report asset updates with this code too.
+pub const ASSET_PLACEHOLDER: ara_diag::Code = ara_diag::Code(7310);
+
 pub mod ai;
 pub mod animation;
 pub mod assets;
@@ -512,7 +516,7 @@ impl Runtime {
     pub fn asset_diagnostics(&self) -> impl Iterator<Item = ara_diag::Diagnostic> + '_ {
         self.asset_errors
             .iter()
-            .map(|message| ara_diag::Diagnostic::warning(ara_diag::Code(7310), message))
+            .map(|message| ara_diag::Diagnostic::warning(ASSET_PLACEHOLDER, message))
     }
 
     /// The documents as projected at tick 0 (scene, prefabs, animation, mixer, music).

@@ -11,13 +11,14 @@ mod embed;
 mod input;
 mod net;
 mod packed;
+mod pending_models;
 mod standalone;
 mod world;
 
 use anyhow::{Context, Result, anyhow};
 use ara_play::{
     HELLO, Hello, PROTOCOL, STATUS, Start, Status, TOKEN_ENV,
-    link::{Link, Message, error},
+    link::{Link as SocketLink, Message, Pump as Link, error},
     method,
     shm::Section,
 };
@@ -146,6 +147,7 @@ struct Player {
     audio: Option<(world::Audio, ara_audio::device::SdlBackend)>,
     frame: RenderFrame,
     world: Option<World>,
+    pending_imports: Option<ara_play::ImportState>,
     /// Keeps the snapshot section mapped for the session (diff baselines, restarts).
     _section: Option<Section>,
     last_status: Instant,
@@ -216,7 +218,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
     } else {
         (None, None)
     };
-    let mut link = Link::connect(args.owner.context("Play requires an owner port")?)?;
+    let mut link = SocketLink::connect(args.owner.context("Play requires an owner port")?)?;
     let hello = Hello {
         token,
         protocol: PROTOCOL.into(),
@@ -229,6 +231,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         Ok(_) => {}
         Err(e) => return Err(anyhow!("owner refused hello: {e}")),
     }
+    let link = Link::new(link)?;
     let mut player = Player {
         quality: args.quality.unwrap_or_default(),
         render_options: RenderOptions {
@@ -245,6 +248,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         audio: None,
         frame: RenderFrame::default(),
         world: None,
+        pending_imports: None,
         _section: None,
         last_status: Instant::now(),
         last_advance: Instant::now(),
@@ -359,7 +363,7 @@ impl Player {
             }
             {
                 ara_gpu::cpu_scope!("Player.extract");
-                world.runtime.extract(&mut self.frame);
+                world.extract_frame(&mut self.frame);
             }
             if let (Some(window), Some(presenter)) = (&mut self.window, &mut self.window2d) {
                 let tick = world.runtime.tick();
@@ -591,7 +595,18 @@ impl Player {
             }
             method::CRASH => {
                 let crash: ara_play::Crash = parse(params)?;
+                if crash.kind == "hang" {
+                    self.link.suspend_heartbeat();
+                }
                 crash::trigger(&crash.kind)
+            }
+            method::STALL => {
+                let stall: ara_play::Stall = parse(params)?;
+                if stall.millis > 30_000 {
+                    return Err(Failure::Params("stall is limited to 30 seconds".into()));
+                }
+                std::thread::sleep(Duration::from_millis(stall.millis));
+                Ok(json!({"stalledMs":stall.millis}))
             }
             embed::method::EMBED => {
                 let params: embed::EmbedParams = parse(params)?;
@@ -620,6 +635,18 @@ impl Player {
     /// Owner notifications: slot releases, raw input and asynchronous resizes of
     /// embedded players. Bad params are logged; there is no one to answer.
     fn notification(&mut self, method: &str, params: Value) -> Result<()> {
+        if method == method::IMPORTS {
+            let state: ara_play::ImportState = serde_json::from_value(params)?;
+            if let Some(world) = &mut self.world {
+                world.imports(state);
+                if let Some(presenter) = &mut self.presenter {
+                    presenter.update_model_placeholders(|asset| world.pending_model(asset))?;
+                }
+            } else {
+                self.pending_imports = Some(state);
+            }
+            return Ok(());
+        }
         // Asset publication must not make the editor wait for a player frame.
         // This is separate from D19 surface/input notifications below.
         if method == method::ASSETS {
@@ -640,7 +667,7 @@ impl Player {
                     ara_play::EVENT,
                     &ara_play::Event::Diagnostic {
                         diagnostic: serde_json::to_value(ara_diag::Diagnostic::warning(
-                            ara_diag::Code(7310),
+                            ara_runtime::ASSET_PLACEHOLDER,
                             message,
                         ))?,
                     },
@@ -883,6 +910,7 @@ impl Player {
             presenting,
             self.prewarmed.take(),
         )?;
+        world.imports(self.pending_imports.take().unwrap_or_default());
         let mut handshake = None;
         if start.role == ara_play::Role::Client {
             let t = Instant::now();
