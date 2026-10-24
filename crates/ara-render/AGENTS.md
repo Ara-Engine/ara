@@ -48,7 +48,8 @@ ECS; `Scene` is an immutable render extraction snapshot, not authoritative state
   acquisition (`FidelityView::bake_probe_surfaces` on RT devices) records 8x8 oct
   surface caches; each frame `GI.Relight` relights them (sun via CSM, local lights,
   sky, emissive, last frame's probes) into 6x6 irradiance, sampled DDGI-style.
-  No runtime rays, no per-pixel noise.
+  No runtime rays, no per-pixel noise. `update_probe_surfaces` adopts re-traced
+  surfaces of the same lattice keeping the irradiance, so edits blend in.
 - `look::Quality` (`Renderer::set_quality`): per-preset budgets from
   `ara_render_fidelity::presets::RasterPlan`: shadow cascades (count, texels,
   distance; stable light space, practical splits, gather PCF, cascade blend),

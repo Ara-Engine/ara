@@ -26,6 +26,8 @@ pub struct RasterView {
     prepared: Option<Prepared>,
     effects: vfx::Effects,
     gi: Option<crate::gi::Acquisition>,
+    /// Static/dynamic split of the instances for probe GI.
+    mobility: crate::gi::Mobility,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -41,6 +43,7 @@ impl RasterView {
             prepared: None,
             effects: Default::default(),
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
+            mobility: Default::default(),
             cache,
             key: crate::FNV,
             pending_gi: false,
@@ -58,9 +61,12 @@ impl RasterView {
         self.pending_gi = enabled;
     }
 
-    /// Keep progressive editor views polling until acquired probe surfaces arrive.
+    /// Keep progressive editor views polling until acquired probe surfaces arrive
+    /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.gi.as_ref().is_some_and(|gi| gi.is_pending())
+        self.gi
+            .as_ref()
+            .is_some_and(|gi| gi.is_pending() || self.mobility.settling())
     }
 
     /// Change derived capture/probe labels at an editor control boundary without
@@ -140,17 +146,28 @@ impl RasterView {
         if plan.quality.gi_budget > 0
             && let Some(gi) = &mut self.gi
         {
+            // Moved instances leave the probe surfaces until they rest again; the
+            // stale surfaces stay in use until the re-traced ones land.
+            let scene = &self
+                .prepared
+                .as_ref()
+                .context("native raster content")?
+                .scene;
+            let edited = self
+                .mobility
+                .observe(scene, update.rebuilt || update.updated > 0);
             if self.pending_gi {
-                renderer.set_probe_surfaces(None)?;
                 let content = match bake_content {
                     Some(content) => content,
                     None => resolver.take().context("probe asset resolver")?()?,
                 };
-                gi.request(self.key, frame, || Ok(content))?;
+                gi.request(self.key, frame, || Ok(content), self.mobility.dynamic())?;
                 self.pending_gi = false;
+            } else if edited {
+                gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
             }
             if let Some(surfaces) = gi.poll(false) {
-                renderer.set_probe_surfaces(Some(&surfaces))?;
+                renderer.update_probe_surfaces(&surfaces)?;
             }
         }
         Ok(update)
@@ -220,7 +237,7 @@ impl RasterView {
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
         if let Some(surfaces) = self.gi.as_mut().and_then(|gi| gi.poll(true)) {
-            renderer.set_probe_surfaces(Some(&surfaces))?;
+            renderer.update_probe_surfaces(&surfaces)?;
         }
         Ok(())
     }
