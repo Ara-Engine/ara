@@ -53,6 +53,31 @@ impl DocumentView {
                 .collect(),
         })
     }
+    /// Model sources the scene references that are not on disk, with an entity that
+    /// uses each (it draws a placeholder), in path order.
+    pub(crate) fn missing_sources(&self, root: &Path) -> Vec<(String, String)> {
+        let mut missing = BTreeMap::new();
+        for (id, entity) in &self.entities {
+            let Some(reference) = entity
+                .record
+                .get("MeshRenderer")
+                .and_then(|r| r.get("model"))
+                .and_then(Value::as_str)
+            else {
+                continue;
+            };
+            let Some(path) = ara_schema::grammar::parse_ref(reference)
+                .ok()
+                .and_then(|r| r.path.map(str::to_owned))
+            else {
+                continue;
+            };
+            if !missing.contains_key(&path) && !root.join(&path).is_file() {
+                missing.insert(path, id.clone());
+            }
+        }
+        missing.into_iter().collect()
+    }
     /// Deleted-entity ghosts. Empty since D24 (agent deletions apply like any other
     /// edit); kept as the render seam for future soft-delete previews.
     pub(crate) fn ghosts(&self) -> &BTreeMap<String, ara_doc::Record> {

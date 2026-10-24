@@ -46,9 +46,11 @@ pub fn snapshot(
     worker: &ProcessWorker,
     cancellation: &Cancellation,
 ) -> Result<ImportInput> {
-    let root = root.canonicalize()?;
+    let root = root
+        .canonicalize()
+        .map_err(|e| io_at(e, &root.display().to_string()))?;
     let source_path = checked_path(&root, &root, &asset.path)?;
-    let source = std::fs::read(&source_path)?;
+    let source = std::fs::read(&source_path).map_err(|e| io_at(e, &asset.path))?;
     let parent = source_path
         .parent()
         .ok_or_else(|| Error::Invalid("source has no parent".into()))?;
@@ -62,7 +64,8 @@ pub fn snapshot(
     )? {
         cancellation.check()?;
         let path = checked_path(&root, parent, &uri)?;
-        dependencies.insert(uri, std::fs::read(path)?);
+        let bytes = std::fs::read(path).map_err(|e| io_at(e, &uri))?;
+        dependencies.insert(uri, bytes);
     }
     cancellation.check()?;
     Ok(ImportInput {
@@ -78,6 +81,13 @@ pub fn snapshot(
         asset_dependencies: asset.asset_dependencies.clone(),
     })
 }
+/// An I/O error that names the file it is about (Problems shows which file).
+fn io_at(error: std::io::Error, path: &str) -> Error {
+    Error::Io(std::io::Error::new(
+        error.kind(),
+        format!("`{path}`: {error}"),
+    ))
+}
 fn checked_path(root: &Path, base: &Path, uri: &str) -> Result<PathBuf> {
     let relative = Path::new(uri);
     if uri.contains(':')
@@ -91,7 +101,10 @@ fn checked_path(root: &Path, base: &Path, uri: &str) -> Result<PathBuf> {
             "dependency URI must be a relative project path".into(),
         ));
     }
-    let path = base.join(relative).canonicalize()?;
+    let path = base
+        .join(relative)
+        .canonicalize()
+        .map_err(|e| io_at(e, uri))?;
     if !path.starts_with(root) {
         return Err(Error::Invalid("dependency escapes project root".into()));
     }
@@ -394,5 +407,22 @@ impl Drop for AssetPipeline {
         for token in self.snapshots.values() {
             token.cancel();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn missing_sources_name_their_path() {
+        let root = std::env::temp_dir();
+        let error = checked_path(&root, &root, "assets/kit/no-such-model.gltf")
+            .expect_err("the file does not exist");
+        assert!(
+            error
+                .to_string()
+                .contains("`assets/kit/no-such-model.gltf`"),
+            "{error}"
+        );
     }
 }

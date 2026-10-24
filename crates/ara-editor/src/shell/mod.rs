@@ -93,6 +93,8 @@ pub struct Shell {
     hierarchy: VirtualList,
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
+    /// What the Hierarchy rows were last built from.
+    hierarchy_key: Option<hierarchy::HierarchyKey>,
     hierarchy_ghosts: std::collections::BTreeSet<u64>,
     /// Game view: players of the shown world, the selected one, whether a frame is
     /// showing, frames per second, the surface size, the wanted size (physical px),
@@ -169,6 +171,9 @@ pub struct Shell {
     pub(crate) version: u64,
     /// UI work since the host last took it (`take_stats`).
     pub(crate) stats: UiStats,
+    /// The editor's panels and store revisions the last rebuild reflected, so a
+    /// revision the shell already rebuilt for does not rebuild it again.
+    built: (u64, u64),
     /// The open scene resolved, with the (document, store revision, document count)
     /// it was resolved at (`resolved`).
     resolved_cache: Option<(
@@ -308,6 +313,7 @@ impl Shell {
             hierarchy: VirtualList { items: Vec::new() },
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
+            hierarchy_key: None,
             hierarchy_ghosts: std::collections::BTreeSet::new(),
             expanded_turns: std::collections::BTreeSet::new(),
             pending_reports: Vec::new(),
@@ -367,6 +373,7 @@ impl Shell {
             selected_rows: Default::default(),
             version: 0,
             stats: UiStats::default(),
+            built: (u64::MAX, u64::MAX),
             resolved_cache: None,
             tooltip_text: None,
             field_request: None,
@@ -478,11 +485,25 @@ impl Shell {
         self.resolved_cache = Some((key, resolved.clone()));
         Ok(resolved)
     }
+    /// The (document, store revision, document count) `resolved` last resolved at.
+    pub(crate) fn resolved_key(&self) -> Option<(String, u64, usize)> {
+        self.resolved_cache.as_ref().map(|(key, _)| key.clone())
+    }
     /// The UI work done since the last call: rebuilds and every runtime frame's counters.
     pub fn take_stats(&mut self) -> UiStats {
         std::mem::take(&mut self.stats)
     }
+    /// Rebuild unless the last rebuild already reflects the editor's panels and store
+    /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
+    pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.built == (editor.panels_revision, editor.host.store().revision()) {
+            return Ok(false);
+        }
+        self.rebuild(editor)?;
+        Ok(true)
+    }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.built = (editor.panels_revision, editor.host.store().revision());
         self.keymap = commands::keymap(&editor.state);
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -528,8 +549,9 @@ impl Shell {
         css
     }
     /// Reconcile markup into the current surface (nodes whose ID survives keep their
-    /// shaped text, layout, widget and hover/focus state) and run the shared
-    /// mount/paint steps. Stylesheet and theme apply only when they change.
+    /// shaped text, layout, widget and hover/focus state), lay it out once and mount
+    /// the virtual rows. Stylesheet and theme apply only when they change. The caller
+    /// frames afterwards: new rows have geometry only after that frame.
     fn mount(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
         let started = std::time::Instant::now();
         let result = self.mount_markup(editor, markup);
@@ -591,7 +613,8 @@ impl Shell {
             self.asset_view = Some(view);
             self.asset_surface = self.current.clone();
         }
-        self.stats.work += ui.frame(&mut self.text)?;
+        // Row decorations set attributes only; the caller's frame lays out and paints
+        // once (no geometry is read until then, apart from pre-existing nodes).
         self.decorate_hierarchy();
         if self.asset_surface == self.current
             && let Some(view) = &self.asset_view
@@ -605,7 +628,6 @@ impl Shell {
                 }
             }
         }
-        self.stats.work += self.ui.frame(&mut self.text)?;
         Ok(())
     }
     fn rebuild_float(
@@ -627,6 +649,7 @@ impl Shell {
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
+        self.stats.work += self.ui.frame(&mut self.text)?;
         self.after_mount(editor)
     }
     fn rebuild_main(
