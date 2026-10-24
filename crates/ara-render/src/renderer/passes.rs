@@ -456,36 +456,113 @@ impl Renderer {
                 0,
             ],
         };
-        for pass in &compiled.passes {
-            let mut recorder = self.gpu.begin(pass.queue);
-            recorder.push(Command::BeginPass(pass.name.clone()));
-            recorder.barriers(pass.before.iter().copied());
-            match recipes[pass.id.0] {
-                Recipe::Shadow => {
-                    let maps = self
-                        .look
-                        .cascades
-                        .as_ref()
-                        .expect("a cascade pass is declared only with cascade maps");
-                    recorder.push(Command::Pipeline(self.pipelines.shadow));
-                    for &index in &cascade_draw {
-                        let cascade = index as u32;
+        for batch in submission::batches(&compiled.passes) {
+            let mut recorder = self.gpu.begin(batch[0].queue);
+            for pass in batch {
+                recorder.push(Command::BeginPass(pass.name.clone()));
+                recorder.barriers(pass.before.iter().copied());
+                match recipes[pass.id.0] {
+                    Recipe::Shadow => {
+                        let maps = self
+                            .look
+                            .cascades
+                            .as_ref()
+                            .expect("a cascade pass is declared only with cascade maps");
+                        recorder.push(Command::Pipeline(self.pipelines.shadow));
+                        for &index in &cascade_draw {
+                            let cascade = index as u32;
+                            recorder.push(Command::BeginRendering {
+                                colors: Vec::new(),
+                                depth: Some(Attachment {
+                                    image: maps.images[index],
+                                    clear: Some([0.; 4]),
+                                }),
+                                size: [maps.resolution; 2],
+                            });
+                            recorder.push(Command::Viewport {
+                                origin: [0, 0],
+                                size: [maps.resolution; 2],
+                            });
+                            if let Some(native) = &self.native {
+                                let mut constants = root;
+                                constants.words[4] = cascade;
+                                native.record(&mut recorder, constants, cascade as usize);
+                            }
+                            for (index, mesh) in self
+                                .content
+                                .meshes
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, m)| self.native.is_none() && !m.transparent)
+                            {
+                                let mut constants = root;
+                                constants.words[2] = mesh.material;
+                                constants.words[3] = index as u32 + 1;
+                                constants.words[4] = cascade;
+                                recorder.push(Command::Constants(constants));
+                                recorder.push(Command::Draw(draw(mesh)));
+                            }
+                            recorder.push(Command::EndRendering);
+                        }
+                    }
+                    Recipe::FarShadow => {
+                        let far = self
+                            .look
+                            .far
+                            .as_ref()
+                            .expect("a far pass is declared only with a far map");
+                        recorder.push(Command::Pipeline(self.pipelines.shadow));
                         recorder.push(Command::BeginRendering {
                             colors: Vec::new(),
                             depth: Some(Attachment {
-                                image: maps.images[index],
+                                image: far.image,
                                 clear: Some([0.; 4]),
                             }),
-                            size: [maps.resolution; 2],
+                            size: [far.settings.resolution; 2],
                         });
                         recorder.push(Command::Viewport {
                             origin: [0, 0],
-                            size: [maps.resolution; 2],
+                            size: [far.settings.resolution; 2],
+                        });
+                        let mut constants = root;
+                        constants.words[0] = far.frame_index;
+                        constants.words[4] = 0;
+                        if let Some(native) = &self.native {
+                            native.record(&mut recorder, constants, FAR_SHADOW_PASS);
+                        }
+                        for (index, mesh) in self
+                            .content
+                            .meshes
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, m)| self.native.is_none() && !m.transparent)
+                        {
+                            constants.words[2] = mesh.material;
+                            constants.words[3] = index as u32 + 1;
+                            recorder.push(Command::Constants(constants));
+                            recorder.push(Command::Draw(draw(mesh)));
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
+                    Recipe::GBuffer => {
+                        recorder.push(Command::Pipeline(self.pipelines.gbuffer));
+                        recorder.push(Command::BeginRendering {
+                            colors: [ALBEDO, NORMAL, MATERIAL, WORLD, ID]
+                                .into_iter()
+                                .chain(self.native.as_ref().map(|_| MOTION))
+                                .map(|i| Attachment {
+                                    image: self.targets.images[i],
+                                    clear: Some([0.; 4]),
+                                })
+                                .collect(),
+                            depth: Some(Attachment {
+                                image: self.targets.images[DEPTH],
+                                clear: Some([0.; 4]),
+                            }),
+                            size: self.size,
                         });
                         if let Some(native) = &self.native {
-                            let mut constants = root;
-                            constants.words[4] = cascade;
-                            native.record(&mut recorder, constants, cascade as usize);
+                            native.record(&mut recorder, root, 4);
                         }
                         for (index, mesh) in self
                             .content
@@ -497,220 +574,147 @@ impl Renderer {
                             let mut constants = root;
                             constants.words[2] = mesh.material;
                             constants.words[3] = index as u32 + 1;
-                            constants.words[4] = cascade;
                             recorder.push(Command::Constants(constants));
                             recorder.push(Command::Draw(draw(mesh)));
                         }
                         recorder.push(Command::EndRendering);
                     }
-                }
-                Recipe::FarShadow => {
-                    let far = self
-                        .look
-                        .far
-                        .as_ref()
-                        .expect("a far pass is declared only with a far map");
-                    recorder.push(Command::Pipeline(self.pipelines.shadow));
-                    recorder.push(Command::BeginRendering {
-                        colors: Vec::new(),
-                        depth: Some(Attachment {
-                            image: far.image,
-                            clear: Some([0.; 4]),
-                        }),
-                        size: [far.settings.resolution; 2],
-                    });
-                    recorder.push(Command::Viewport {
-                        origin: [0, 0],
-                        size: [far.settings.resolution; 2],
-                    });
-                    let mut constants = root;
-                    constants.words[0] = far.frame_index;
-                    constants.words[4] = 0;
-                    if let Some(native) = &self.native {
-                        native.record(&mut recorder, constants, FAR_SHADOW_PASS);
-                    }
-                    for (index, mesh) in self
-                        .content
-                        .meshes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, m)| self.native.is_none() && !m.transparent)
-                    {
-                        constants.words[2] = mesh.material;
-                        constants.words[3] = index as u32 + 1;
-                        recorder.push(Command::Constants(constants));
-                        recorder.push(Command::Draw(draw(mesh)));
-                    }
-                    recorder.push(Command::EndRendering);
-                }
-                Recipe::GBuffer => {
-                    recorder.push(Command::Pipeline(self.pipelines.gbuffer));
-                    recorder.push(Command::BeginRendering {
-                        colors: [ALBEDO, NORMAL, MATERIAL, WORLD, ID]
-                            .into_iter()
-                            .chain(self.native.as_ref().map(|_| MOTION))
-                            .map(|i| Attachment {
-                                image: self.targets.images[i],
-                                clear: Some([0.; 4]),
-                            })
-                            .collect(),
-                        depth: Some(Attachment {
-                            image: self.targets.images[DEPTH],
-                            clear: Some([0.; 4]),
-                        }),
-                        size: self.size,
-                    });
-                    if let Some(native) = &self.native {
-                        native.record(&mut recorder, root, 4);
-                    }
-                    for (index, mesh) in self
-                        .content
-                        .meshes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, m)| self.native.is_none() && !m.transparent)
-                    {
+                    Recipe::Tile => {
+                        recorder.push(Command::Pipeline(self.pipelines.tile));
                         let mut constants = root;
-                        constants.words[2] = mesh.material;
-                        constants.words[3] = index as u32 + 1;
+                        constants.words[0] = self.compute_frame_index;
                         recorder.push(Command::Constants(constants));
-                        recorder.push(Command::Draw(draw(mesh)));
+                        recorder.push(Command::Dispatch([
+                            (self.size[0].div_ceil(16) * self.size[1].div_ceil(16)).div_ceil(64),
+                            1,
+                            1,
+                        ]));
                     }
-                    recorder.push(Command::EndRendering);
-                }
-                Recipe::Tile => {
-                    recorder.push(Command::Pipeline(self.pipelines.tile));
-                    let mut constants = root;
-                    constants.words[0] = self.compute_frame_index;
-                    recorder.push(Command::Constants(constants));
-                    recorder.push(Command::Dispatch([
-                        (self.size[0].div_ceil(16) * self.size[1].div_ceil(16)).div_ceil(64),
-                        1,
-                        1,
-                    ]));
-                }
-                Recipe::Lighting => {
-                    recorder.push(Command::Pipeline(self.pipelines.lighting));
-                    recorder.push(Command::Constants(root));
-                    recorder.push(Command::BeginRendering {
-                        colors: vec![Attachment {
-                            image: self.targets.images[HDR],
-                            clear: Some([0.; 4]),
-                        }],
-                        depth: None,
-                        size: self.size,
-                    });
-                    recorder.push(Command::Fullscreen);
-                    recorder.push(Command::EndRendering);
-                }
-                Recipe::Forward => {
-                    recorder.push(Command::Pipeline(self.pipelines.forward));
-                    recorder.push(Command::BeginRendering {
-                        colors: vec![
-                            Attachment {
+                    Recipe::Lighting => {
+                        recorder.push(Command::Pipeline(self.pipelines.lighting));
+                        recorder.push(Command::Constants(root));
+                        recorder.push(Command::BeginRendering {
+                            colors: vec![Attachment {
                                 image: self.targets.images[HDR],
-                                clear: None,
-                            },
-                            Attachment {
-                                image: self.targets.images[ID],
-                                clear: None,
-                            },
-                            Attachment {
-                                image: self.targets.images[ALBEDO],
-                                clear: None,
-                            },
-                            Attachment {
-                                image: self.targets.images[NORMAL],
-                                clear: None,
-                            },
-                            Attachment {
-                                image: self.targets.images[MATERIAL],
-                                clear: None,
-                            },
-                            Attachment {
-                                image: self.targets.images[WORLD],
-                                clear: None,
-                            },
-                        ]
-                        .into_iter()
-                        .chain(self.native.as_ref().map(|_| Attachment {
-                            image: self.targets.images[MOTION],
-                            clear: None,
-                        }))
-                        .collect(),
-                        depth: Some(Attachment {
-                            image: self.targets.images[DEPTH],
-                            clear: None,
-                        }),
-                        size: self.size,
-                    });
-                    if let Some(native) = &self.native {
-                        native.record(&mut recorder, root, 5);
+                                clear: Some([0.; 4]),
+                            }],
+                            depth: None,
+                            size: self.size,
+                        });
+                        recorder.push(Command::Fullscreen);
+                        recorder.push(Command::EndRendering);
                     }
-                    let mut transparent = self
-                        .content
-                        .meshes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, m)| self.native.is_none() && m.transparent)
-                        .collect::<Vec<_>>();
-                    transparent.sort_by(|(_, a), (_, b)| {
-                        b.centre
-                            .distance_squared(camera.position)
-                            .total_cmp(&a.centre.distance_squared(camera.position))
-                    });
-                    for (index, mesh) in transparent {
-                        let mut constants = root;
-                        constants.words[2] = mesh.material;
-                        constants.words[3] = index as u32 + 1;
-                        recorder.push(Command::Constants(constants));
-                        recorder.push(Command::Draw(draw(mesh)));
-                    }
-                    recorder.push(Command::EndRendering);
-                }
-                Recipe::Taa | Recipe::Tonemap => {
-                    let taa = matches!(recipes[pass.id.0], Recipe::Taa);
-                    recorder.push(Command::Pipeline(if taa {
-                        self.pipelines.taa
-                    } else {
-                        self.pipelines.tonemap
-                    }));
-                    let mut constants = root;
-                    constants.words[1] = if taa {
-                        self.targets.sampled[HDR]
-                    } else {
-                        self.targets.sampled[output_history]
-                    };
-                    recorder.push(Command::Constants(constants));
-                    recorder.push(Command::Dispatch([
-                        self.size[0].div_ceil(8),
-                        self.size[1].div_ceil(8),
-                        1,
-                    ]));
-                }
-                Recipe::Look(look_pass) => self.look.record(
-                    &mut recorder,
-                    look_pass,
-                    self.frame_index,
-                    // The reflection pyramid reads last frame's history; post passes
-                    // read this frame's.
-                    match look_pass {
-                        LookPass::SsrPyramid(_) => {
-                            self.targets.history.map_or(0, |h| self.targets.sampled[h])
+                    Recipe::Forward => {
+                        recorder.push(Command::Pipeline(self.pipelines.forward));
+                        recorder.push(Command::BeginRendering {
+                            colors: vec![
+                                Attachment {
+                                    image: self.targets.images[HDR],
+                                    clear: None,
+                                },
+                                Attachment {
+                                    image: self.targets.images[ID],
+                                    clear: None,
+                                },
+                                Attachment {
+                                    image: self.targets.images[ALBEDO],
+                                    clear: None,
+                                },
+                                Attachment {
+                                    image: self.targets.images[NORMAL],
+                                    clear: None,
+                                },
+                                Attachment {
+                                    image: self.targets.images[MATERIAL],
+                                    clear: None,
+                                },
+                                Attachment {
+                                    image: self.targets.images[WORLD],
+                                    clear: None,
+                                },
+                            ]
+                            .into_iter()
+                            .chain(self.native.as_ref().map(|_| Attachment {
+                                image: self.targets.images[MOTION],
+                                clear: None,
+                            }))
+                            .collect(),
+                            depth: Some(Attachment {
+                                image: self.targets.images[DEPTH],
+                                clear: None,
+                            }),
+                            size: self.size,
+                        });
+                        if let Some(native) = &self.native {
+                            native.record(&mut recorder, root, 5);
                         }
-                        _ => self.targets.sampled[output_history],
-                    },
-                    true,
-                    self.size,
-                ),
-                Recipe::Empty => {}
+                        let mut transparent = self
+                            .content
+                            .meshes
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, m)| self.native.is_none() && m.transparent)
+                            .collect::<Vec<_>>();
+                        transparent.sort_by(|(_, a), (_, b)| {
+                            b.centre
+                                .distance_squared(camera.position)
+                                .total_cmp(&a.centre.distance_squared(camera.position))
+                        });
+                        for (index, mesh) in transparent {
+                            let mut constants = root;
+                            constants.words[2] = mesh.material;
+                            constants.words[3] = index as u32 + 1;
+                            recorder.push(Command::Constants(constants));
+                            recorder.push(Command::Draw(draw(mesh)));
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
+                    Recipe::Taa | Recipe::Tonemap => {
+                        let taa = matches!(recipes[pass.id.0], Recipe::Taa);
+                        recorder.push(Command::Pipeline(if taa {
+                            self.pipelines.taa
+                        } else {
+                            self.pipelines.tonemap
+                        }));
+                        let mut constants = root;
+                        constants.words[1] = if taa {
+                            self.targets.sampled[HDR]
+                        } else {
+                            self.targets.sampled[output_history]
+                        };
+                        recorder.push(Command::Constants(constants));
+                        recorder.push(Command::Dispatch([
+                            self.size[0].div_ceil(8),
+                            self.size[1].div_ceil(8),
+                            1,
+                        ]));
+                    }
+                    Recipe::Look(look_pass) => self.look.record(
+                        &mut recorder,
+                        look_pass,
+                        self.frame_index,
+                        // The reflection pyramid reads last frame's history; post passes
+                        // read this frame's.
+                        match look_pass {
+                            LookPass::SsrPyramid(_) => {
+                                self.targets.history.map_or(0, |h| self.targets.sampled[h])
+                            }
+                            _ => self.targets.sampled[output_history],
+                        },
+                        true,
+                        self.size,
+                    ),
+                    Recipe::Empty => {}
+                }
+                recorder.barriers(pass.after.iter().copied());
+                recorder.push(Command::EndPass);
             }
-            recorder.barriers(pass.after.iter().copied());
-            recorder.push(Command::EndPass);
-            let waits = pass.waits.iter().map(|i| points[*i]).collect::<Vec<_>>();
-            points.push(self.gpu.submit(recorder.finish(), &waits)?);
+            let waits = submission::waits(batch, &points);
+            let point = self.gpu.submit(recorder.finish(), &waits)?;
+            points.resize(points.len() + batch.len(), point);
         }
         self.last_timings.clear();
+        points.dedup();
         for point in points {
             self.last_timings.extend(self.gpu.resolve(point)?);
         }
@@ -830,35 +834,39 @@ impl Renderer {
         );
         let compiled = graph.compile()?;
         let mut points = Vec::new();
-        for pass in &compiled.passes {
-            let mut recorder = self.gpu.begin(pass.queue);
-            recorder.push(Command::BeginPass(pass.name.clone()));
-            recorder.barriers(pass.before.iter().copied());
-            if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
-                self.look.record(
-                    &mut recorder,
-                    *look_pass,
-                    self.frame_index,
-                    post_sampled,
-                    resolved.is_some(),
-                    self.size,
-                );
-            } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
-                recorder.push(Command::Pipeline(self.pipelines.taa));
-                recorder.push(Command::Constants(RootConstants {
-                    words: [self.frame_index, sampled, 0, 0, 0, 0, 0, 0],
-                }));
-                recorder.push(Command::Dispatch([
-                    self.size[0].div_ceil(8),
-                    self.size[1].div_ceil(8),
-                    1,
-                ]));
+        for batch in submission::batches(&compiled.passes) {
+            let mut recorder = self.gpu.begin(batch[0].queue);
+            for pass in batch {
+                recorder.push(Command::BeginPass(pass.name.clone()));
+                recorder.barriers(pass.before.iter().copied());
+                if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
+                    self.look.record(
+                        &mut recorder,
+                        *look_pass,
+                        self.frame_index,
+                        post_sampled,
+                        resolved.is_some(),
+                        self.size,
+                    );
+                } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
+                    recorder.push(Command::Pipeline(self.pipelines.taa));
+                    recorder.push(Command::Constants(RootConstants {
+                        words: [self.frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                    }));
+                    recorder.push(Command::Dispatch([
+                        self.size[0].div_ceil(8),
+                        self.size[1].div_ceil(8),
+                        1,
+                    ]));
+                }
+                recorder.barriers(pass.after.iter().copied());
+                recorder.push(Command::EndPass);
             }
-            recorder.barriers(pass.after.iter().copied());
-            recorder.push(Command::EndPass);
-            let waits = pass.waits.iter().map(|i| points[*i]).collect::<Vec<_>>();
-            points.push(self.gpu.submit(recorder.finish(), &waits)?);
+            let waits = submission::waits(batch, &points);
+            let point = self.gpu.submit(recorder.finish(), &waits)?;
+            points.resize(points.len() + batch.len(), point);
         }
+        points.dedup();
         for point in points {
             self.last_timings.extend(self.gpu.resolve(point)?);
         }

@@ -7,6 +7,7 @@ mod native;
 mod passes;
 pub mod post;
 mod readback;
+mod submission;
 mod transfer;
 mod upload;
 use crate::{
