@@ -16,6 +16,23 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
+/// Native event failures belong in diagnostics, never the window's fatal path.
+fn recover_input<T>(result: ara_ui::Result<T>) -> Option<T> {
+    result
+        .map_err(|error| {
+            let message = error.to_string();
+            let code = message
+                .split(':')
+                .next()
+                .and_then(ara_diag::Code::parse)
+                .unwrap_or(ara_diag::codes::IO);
+            eprintln!("{code}: Dropped editor input event: {message}");
+            ara_diag::Diagnostic::warning(code, format!("Dropped editor input event: {message}"))
+                .emit();
+        })
+        .ok()
+}
+
 struct Watch {
     window: SDL_WindowID,
     send: Sender<EditEvent>,
@@ -212,7 +229,10 @@ impl Native {
                 } else {
                     SDL_StopTextInput(window)
                 };
-                anyhow::ensure!(ok, "SDL text input state failed");
+                if !ok {
+                    let _ = recover_input::<()>(Err("SDL text input state failed".into()));
+                    return Ok(());
+                }
                 self.text_active = field.is_some();
             }
             if let Some(i) = field {
@@ -233,27 +253,48 @@ impl Native {
         let mut changed = false;
         let mut clipboard = OsClipboard;
         while let Ok(edit) = self.edits.try_recv() {
-            match &edit {
-                EditEvent::ImePreedit { text, .. } => {
-                    if !self.composing && !text.is_empty() {
-                        input.event(ui, InputEvent::Edit(EditEvent::ImeStart), &mut clipboard)?;
-                        self.composing = true;
+            let result = (|| -> ara_ui::Result<bool> {
+                match &edit {
+                    EditEvent::ImePreedit { text, .. } => {
+                        if !self.composing && !text.is_empty() {
+                            input.event(
+                                ui,
+                                InputEvent::Edit(EditEvent::ImeStart),
+                                &mut clipboard,
+                            )?;
+                            self.composing = true;
+                        }
+                        if text.is_empty() {
+                            input.event(
+                                ui,
+                                InputEvent::Edit(EditEvent::ImeCancel),
+                                &mut clipboard,
+                            )?;
+                            self.composing = false;
+                            return Ok(true);
+                        }
                     }
-                    if text.is_empty() {
-                        input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), &mut clipboard)?;
-                        self.composing = false;
-                        continue;
-                    }
+                    EditEvent::ImeCommit(_) => self.composing = false,
+                    _ => {}
                 }
-                EditEvent::ImeCommit(_) => self.composing = false,
-                _ => {}
+                input.event(ui, InputEvent::Edit(edit), &mut clipboard)?;
+                Ok(true)
+            })();
+            if let Some(applied) = recover_input(result) {
+                changed |= applied;
+            } else {
+                self.composing = false;
+                let _ = recover_input(input.event(
+                    ui,
+                    InputEvent::Edit(EditEvent::ImeCancel),
+                    &mut clipboard,
+                ));
             }
-            input.event(ui, InputEvent::Edit(edit), &mut clipboard)?;
-            changed = true;
         }
         #[cfg(windows)]
         {
-            changed |= self.accessibility.actions(ui, input, &mut clipboard)?;
+            changed |= recover_input(self.accessibility.actions(ui, input, &mut clipboard))
+                .unwrap_or(false);
         }
         Ok(changed)
     }
@@ -284,13 +325,28 @@ impl Clipboard for OsClipboard {
         }
     }
     fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
-        let text = CString::new(text)?;
-        // SAFETY: SDL copies the nul-terminated string before returning.
-        if unsafe { SDL_SetClipboardText(text.as_ptr()) } {
-            Ok(())
-        } else {
-            Err("SDL clipboard write failed".into())
+        let result = (|| -> ara_ui_text::Result<()> {
+            let text = CString::new(text)?;
+            // SAFETY: SDL copies the nul-terminated string before returning.
+            if unsafe { SDL_SetClipboardText(text.as_ptr()) } {
+                Ok(())
+            } else {
+                Err("SDL clipboard write failed".into())
+            }
+        })();
+        // Command-driven copies may intentionally ignore the return value.
+        if let Err(error) = &result {
+            eprintln!(
+                "{}: Editor clipboard event failed: {error}",
+                ara_diag::codes::IO
+            );
+            ara_diag::Diagnostic::warning(
+                ara_diag::codes::IO,
+                format!("Editor clipboard event failed: {error}"),
+            )
+            .emit();
         }
+        result
     }
 }
 /// Convert an event from any editor window into that window's logical pixels.
