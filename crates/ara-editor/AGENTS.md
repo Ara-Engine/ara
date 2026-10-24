@@ -3,7 +3,6 @@
 Native M2 editor shell, in-process project authority and Engine Protocol server.
 The UI is ara-ui; its display list goes to the Vulkan adapter in `ara-editor-gpu`.
 The viewport samples ara-render's offscreen image on that same device.
-
 Public boundaries:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
@@ -145,7 +144,7 @@ panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest 
 test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
 `shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
 Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
-Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a
-breadcrumb toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
+Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a breadcrumb
+toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
 Swatches paint after layout, never raw colours. VFX: preview-only Hide/Isolate; timeline drives
 `asset_tools/vfx_stream.rs` in place. Imports use the shared `import.initialize`/`import.configure`.
