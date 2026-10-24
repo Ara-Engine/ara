@@ -247,7 +247,11 @@ impl FidelityView {
                 init,
             )?;
             let mut trace = guides.to_vec();
-            trace.extend([(r[5], Access::Storage), (ids[SPEC_RAW], Access::Storage)]);
+            trace.extend([
+                (r[5], Access::Storage),
+                (ids[SPEC_RAW], Access::Storage),
+                (exposure, Access::ShaderRead),
+            ]);
             add(
                 "ReSTIR.GI.CompactTrace",
                 if self.atmosphere.is_some() {
@@ -270,7 +274,10 @@ impl FidelityView {
                 trace,
             )?;
             let mut specular = guides.to_vec();
-            specular.push((ids[SPEC_RAW], Access::Storage));
+            specular.extend([
+                (ids[SPEC_RAW], Access::Storage),
+                (exposure, Access::ShaderRead),
+            ]);
             add(
                 "ReSTIR.Specular.Dense",
                 if self.atmosphere.is_some() {
@@ -468,6 +475,7 @@ impl FidelityView {
                     (ids[source], Access::ShaderRead),
                     (ids[target], Access::Storage),
                     (ids[SPEC_MOMENTS0 + slot], Access::ShaderRead),
+                    (ids[SURFACE_GEOMETRY], Access::ShaderRead),
                 ]);
             }
             add(
@@ -486,21 +494,14 @@ impl FidelityView {
                 uses,
             )?;
         }
-        for (i, source, target) in [(0, FILTER0, BLOOM0), (1, BLOOM0, BLOOM1)] {
-            add(
-                if i == 0 {
-                    "Bloom.Horizontal"
-                } else {
-                    "Bloom.Vertical"
-                },
-                "bloom",
-                i,
-                dispatch,
-                vec![
-                    (ids[source], Access::ShaderRead),
-                    (ids[target], Access::Storage),
-                ],
-            )?;
+        for (name, pass, groups, uses) in bloom_passes(
+            &BLOOM_NAMES,
+            render,
+            ids[FILTER0],
+            [ids[BLOOM0], ids[BLOOM1]],
+            exposure,
+        ) {
+            add(name, "bloom", pass, groups, uses)?;
         }
         add(
             "Exposure.EV100.Meter.Adapt",
@@ -632,6 +633,7 @@ impl FidelityView {
         self.previous_vp = vp;
         self.previous_camera = camera;
         self.history = true;
+        self.last_frame = Some(frame);
         self.atmosphere_dirty = false;
         self.slot = previous;
         self.responsive_frames = if input.lighting_changed {

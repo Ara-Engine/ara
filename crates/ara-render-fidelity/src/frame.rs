@@ -30,10 +30,13 @@ pub(crate) struct GpuFrame {
     texture: [f32; 4],
     atmosphere: [f32; 4],
     weather: [f32; 4],
+    fog: [f32; 4],
+    grading: [f32; 4],
+    look: [f32; 4],
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
     // Shader helpers fetch descriptor rows by offset; their by-value Frame ends
-    // at weather. This upload retains the stable seven read/write row contract.
+    // at look. This upload retains the stable seven read/write row contract.
     reservoirs: [[u32; 4]; 2],
     extra_read: [[u32; 4]; 3],
     extra_write: [[u32; 4]; 3],
@@ -166,7 +169,8 @@ impl FidelityView {
                 p.tone_mapper as u32,
                 0,
                 self.sheen_index,
-                u32::from(self.atmosphere.is_some()),
+                self.atmosphere
+                    .map_or(0, |a| 1 | (u32::from(a.physical_sky) << 1)),
             ],
             lens: [
                 p.focus_distance,
@@ -219,6 +223,20 @@ impl FidelityView {
             weather: self
                 .atmosphere
                 .map_or([0.; 4], |a| [a.cloud_coverage, a.cloud_height, 0., 0.]),
+            fog: self.atmosphere.map_or([0.; 4], |a| {
+                let [r, g, b] = a.fog_tint;
+                [r, g, b, a.fog_anisotropy]
+            }),
+            grading: {
+                let gain = p.grading.white_balance_gain();
+                [gain.x, gain.y, gain.z, p.grading.saturation]
+            },
+            look: [
+                p.grading.contrast,
+                p.grading.vignette,
+                self.atmosphere.map_or(0., |a| a.fog_base),
+                self.atmosphere.map_or(1., |a| a.aerosols),
+            ],
             read: self.targets.sampled[..28].as_chunks::<4>().0.try_into()?,
             write: self.targets.storage[..28].as_chunks::<4>().0.try_into()?,
             reservoirs,

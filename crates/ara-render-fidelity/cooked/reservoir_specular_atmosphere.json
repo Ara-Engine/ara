@@ -1,15 +1,15 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3d9803286a12c93b171db42d5bf666a6d5df92ef707b9da3233322cdc4788597",
+  "key": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088",
   "stages": [
     {
-      "dxil": "3d9803286a12c93b171db42d5bf666a6d5df92ef707b9da3233322cdc4788597/specularTraceAtmosphere.dxil",
-      "dxil_hash": "f68b4f6e2b9fc85b2cd4c5b04ca573128a9bec0e345b5fe9a2997d5657c51a0c",
+      "dxil": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088/specularTraceAtmosphere.dxil",
+      "dxil_hash": "d84b88e0a1dcacd59024606ca093c9fd957ad6edc4e4bc6315e9fc5318006611",
       "source_entry": "specularTraceAtmosphere",
-      "spirv": "3d9803286a12c93b171db42d5bf666a6d5df92ef707b9da3233322cdc4788597/specularTraceAtmosphere.spv",
+      "spirv": "bacc34b4803ffa8fe27833aaa75a478f3f3d78abf22b7ba2f8a527531f535088/specularTraceAtmosphere.spv",
       "spirv_entry": "main",
-      "spirv_hash": "48ce94aa3f3a31e6d8d2262e1097d09e1cbefc6bf7a339fa7f47e6813c91c944",
+      "spirv_hash": "ba68e69f1d1acdfc8ccb93e793d67e5a45f1c057c3f8dd43d83a984e036a2bb4",
       "stage": "compute"
     }
   ],

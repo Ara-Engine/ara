@@ -41,11 +41,11 @@ pub fn scene(
                 .push(texture_set(lock, root, rock, ground.rock_tint)?);
         }
     }
-    if let Sky::Hdri {
+    if let Some(Sky::Hdri {
         asset,
         intensity,
         rotation,
-    } = &look.sky
+    }) = &look.sky
     {
         let entry = lock
             .get(asset)

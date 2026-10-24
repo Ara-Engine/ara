@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
+ara-components.workspace = true
 ara-texture-stream = { path = "../ara-texture-stream" }
 anyhow = "1"
 bytemuck = { version = "1.24", features = ["derive"] }

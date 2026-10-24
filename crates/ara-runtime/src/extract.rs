@@ -91,6 +91,10 @@ pub struct EffectView {
     pub effect: String,
     /// World position (interpolated).
     pub position: [f32; 3],
+    /// Uniform world size of the effect (`VisualEffect.scale`).
+    pub scale: f32,
+    /// Radiance multiplier (`VisualEffect.intensity`).
+    pub intensity: f32,
 }
 
 /// The active viewpoint.
@@ -135,6 +139,9 @@ pub struct RenderFrame {
     pub camera: Option<CameraView>,
     /// Sky and exposure.
     pub environment: Environment,
+    /// Authored physical sky, height fog and post processing (first entity in ID
+    /// order per component); renderers fall back to `environment` without them.
+    pub look: ara_components::render::SceneLook,
     /// Directional light: direction toward the light and linear RGB lux.
     pub sun: Option<([f32; 3], [f32; 3])>,
     /// Local lights in stable order.
@@ -158,6 +165,7 @@ impl RenderFrame {
         self.alpha = alpha;
         self.camera = None;
         self.environment = Environment::default();
+        self.look = Default::default();
         self.sun = None;
         self.lights.clear();
         self.draws.clear();
@@ -188,6 +196,17 @@ impl RenderFrame {
             {
                 self.environment = *env;
                 environment_set = true;
+            }
+            if self.look.sky.is_none() {
+                self.look.sky = entity
+                    .get::<ara_components::render::SkyAtmosphere>()
+                    .copied();
+            }
+            if self.look.fog.is_none() {
+                self.look.fog = entity.get::<ara_components::render::HeightFog>().copied();
+            }
+            if self.look.post.is_none() {
+                self.look.post = entity.get::<ara_components::render::PostProcess>().copied();
             }
             if let Some(c) = entity.get::<Camera>()
                 && camera.is_none_or(|(p, _)| c.priority < p)
@@ -224,6 +243,8 @@ impl RenderFrame {
                     label: format!("{name} ({address})"),
                     effect: effect.effect.clone(),
                     position: pose.translation.to_array(),
+                    scale: effect.scale,
+                    intensity: effect.intensity,
                 });
             }
             if let Some(renderer) = entity.get::<MeshRenderer>() {

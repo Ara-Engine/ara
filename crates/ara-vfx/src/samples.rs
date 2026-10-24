@@ -394,6 +394,93 @@ pub fn all() -> Vec<(Effect, u32)> {
         (rain(), 100),
     ]
 }
+/// Every effect a scene's `VisualEffect.effect` can name: the six visual baselines,
+/// `depth_sparks` and `dust`. Cooked artifacts live in `ara-vfx-gpu/cooked/<name>`.
+pub fn library() -> Vec<Effect> {
+    let mut effects: Vec<Effect> = all().into_iter().map(|(e, _)| e).collect();
+    effects.extend(
+        additional()
+            .into_iter()
+            .map(|(e, _)| e)
+            .filter(|e| e.name == "depth_sparks"),
+    );
+    effects.push(dust());
+    effects
+}
+/// The library effect named `name`.
+pub fn find(name: &str) -> Option<Effect> {
+    library().into_iter().find(|e| e.name == name)
+}
+/// Slow lit dust motes drifting through a 16 x 5 x 16 m interior volume; light
+/// shafts themselves come from the scene's height fog.
+pub fn dust() -> Effect {
+    let mut e = emitter("motes", 2048, [0.55, 0.5, 0.45, 0.], 14., 0.012);
+    e.bounds = Bounds {
+        min: [-9., -0.5, -9.],
+        max: [9., 6., 9.],
+    };
+    e.stacks
+        .spawn
+        .push(item("rate", Module::Rate { per_second: 60. }));
+    e.stacks.initialize.extend([
+        item(
+            "volume",
+            Module::Box {
+                center: [0., 2.5, 0.],
+                extent: [8., 2.5, 8.],
+            },
+        ),
+        item(
+            "drift",
+            Module::Velocity {
+                value: [0., 0.015, 0.],
+                spread: [0.04, 0.025, 0.04],
+            },
+        ),
+    ]);
+    e.stacks.update.extend([
+        item(
+            "air",
+            Module::CurlNoise {
+                frequency: 0.35,
+                strength: 0.05,
+            },
+        ),
+        item("drag", Module::Drag { coefficient: 0.4 }),
+        item(
+            "fade",
+            Module::ColorOverLife {
+                keys: vec![
+                    ColorKey {
+                        t: 0.,
+                        value: [0.55, 0.5, 0.45, 0.],
+                    },
+                    ColorKey {
+                        t: 0.2,
+                        value: [0.55, 0.5, 0.45, 0.55],
+                    },
+                    ColorKey {
+                        t: 0.8,
+                        value: [0.55, 0.5, 0.45, 0.55],
+                    },
+                    ColorKey {
+                        t: 1.,
+                        value: [0.55, 0.5, 0.45, 0.],
+                    },
+                ],
+            },
+        ),
+    ]);
+    e.stacks.render = vec![item(
+        "sprite",
+        Module::Sprite {
+            domain: Domain::Surface,
+            soft_distance: 0.05,
+            sorting: Sorting::None,
+        },
+    )];
+    system("dust", vec![e])
+}
 /// Focused geometry and depth fixtures beyond the six visual baselines.
 pub fn additional() -> Vec<(Effect, u32)> {
     let mut ribbon = magic_swirl();

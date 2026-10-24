@@ -4,6 +4,17 @@ use ara_render::scene::{CameraSpec, Light, Mesh, Vertex};
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use glam::Vec3;
 
+/// Accumulated transported radiance at pixel `i` before spatial denoising. Hybrid
+/// many-light direct light is denoised with the demodulated indirect signal (unit
+/// albedo here, so modulation is one), so energy checks read the temporal
+/// accumulation; the wavelet filter's blur of falloff gradients is not transport.
+fn transported(gpu: &mut VulkanDevice, view: &FidelityView, mode: Mode, i: usize) -> Result<f32> {
+    if mode != Mode::Hybrid {
+        return Ok(view.capture_radiance(gpu)?[i][0]);
+    }
+    Ok(view.capture_incident_radiance(gpu)?[i][0] + view.capture_direct_radiance(gpu)?[i][0])
+}
+
 #[test]
 fn area_light_occlusion_matches_independent_quad_integral() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -136,12 +147,10 @@ fn area_light_occlusion_matches_independent_quad_integral() -> Result<()> {
             },
         )?;
     }
-    let data = hybrid.capture_direct_radiance(&mut gpu)?;
-    let actual = (17..20)
-        .flat_map(|y| (31..34).map(move |x| y * 65 + x))
-        .map(|i| f64::from(data[i][0]))
-        .sum::<f64>()
-        / 9.;
+    let mut actual = 0.;
+    for i in (17..20).flat_map(|y| (31..34).map(move |x| y * 65 + x)) {
+        actual += f64::from(transported(&mut gpu, &hybrid, Mode::Hybrid, i)?) / 9.;
+    }
     ensure!(
         (actual / expected - 1.).abs() < 0.05,
         "Reused area-light energy expected {expected}, got {actual}"
@@ -224,7 +233,7 @@ fn thousand_identical_lights_preserve_analytic_energy_through_reuse() -> Result<
                 },
             )?;
         }
-        let actual = view.capture_radiance(&mut gpu)?[18 * 65 + 32][0];
+        let actual = transported(&mut gpu, &view, mode, 18 * 65 + 32)?;
         // Unit incident illuminance: diffuse (1-F0)/pi plus rough GGX F0/(4*pi).
         let expected = 0.97 / std::f32::consts::PI;
         ensure!(

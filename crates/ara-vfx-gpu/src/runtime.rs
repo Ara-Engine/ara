@@ -27,6 +27,73 @@ pub struct View {
     pub scene_depth: Option<SceneDepth>,
     /// Optional HDR scene color to composite into; requires scene_depth.
     pub scene_color: Option<SceneColor>,
+    /// Where the effect sits in the world. `camera`, scene depth and probes are
+    /// world-space; the system simulates and draws in its own local space.
+    pub placement: Placement,
+    /// Multiplier on emitted and lit particle radiance (not on opacity).
+    pub intensity: f32,
+}
+
+/// An effect instance's world origin and uniform scale (`VisualEffect.scale`):
+/// local positions, velocities and sizes appear `scale` times larger in the world.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Placement {
+    /// World position of the effect's local origin, in metres.
+    pub origin: Vec3,
+    /// World metres per local unit; positive.
+    pub scale: f32,
+}
+impl Default for Placement {
+    fn default() -> Self {
+        Self {
+            origin: Vec3::ZERO,
+            scale: 1.,
+        }
+    }
+}
+impl Placement {
+    /// The world camera expressed in the effect's local space.
+    pub fn local_camera(&self, camera: &CameraSpec) -> Result<CameraSpec> {
+        ensure!(
+            self.origin.is_finite() && self.scale.is_finite() && self.scale > 0.,
+            "invalid VFX placement"
+        );
+        let local = |p: Vec3| (p - self.origin) / self.scale;
+        Ok(match camera {
+            CameraSpec::LookAt {
+                position,
+                target,
+                vertical_fov,
+            } => CameraSpec::LookAt {
+                position: local(*position),
+                target: local(*target),
+                vertical_fov: *vertical_fov,
+            },
+            CameraSpec::FrameBounds {
+                min,
+                max,
+                direction,
+                padding,
+                vertical_fov,
+            } => CameraSpec::FrameBounds {
+                min: local(*min),
+                max: local(*max),
+                direction: *direction,
+                padding: *padding,
+                vertical_fov: *vertical_fov,
+            },
+            CameraSpec::Orthographic { centre, world_size } => {
+                ensure!(
+                    self.scale == 1. && self.origin == Vec3::ZERO,
+                    "orthographic VFX views cannot be placed"
+                );
+                CameraSpec::Orthographic {
+                    centre: *centre,
+                    world_size: *world_size,
+                }
+            }
+        })
+    }
 }
 /// Extracted lighting inputs for lit particles.
 pub struct Lighting {
@@ -99,6 +166,8 @@ impl Default for View {
             async_compute: false,
             scene_depth: None,
             scene_color: None,
+            placement: Placement::default(),
+            intensity: 1.,
         }
     }
 }
@@ -298,5 +367,42 @@ impl GpuSystem {
         }
         gpu.collect()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn placement_maps_the_world_camera_into_effect_space() {
+        let world = CameraSpec::LookAt {
+            position: Vec3::new(14., 3., 10.),
+            target: Vec3::new(10., 1., 10.),
+            vertical_fov: 0.8,
+        };
+        let placement = Placement {
+            origin: Vec3::new(10., 1., 10.),
+            scale: 2.,
+        };
+        let CameraSpec::LookAt {
+            position, target, ..
+        } = placement.local_camera(&world).unwrap()
+        else {
+            panic!("look-at stays look-at");
+        };
+        assert_eq!((position, target), (Vec3::new(2., 1., 0.), Vec3::ZERO));
+        assert!(
+            Placement {
+                scale: 0.,
+                ..placement
+            }
+            .local_camera(&world)
+            .is_err()
+        );
+        assert_eq!(
+            format!("{:?}", Placement::default().local_camera(&world).unwrap()),
+            format!("{world:?}")
+        );
     }
 }
