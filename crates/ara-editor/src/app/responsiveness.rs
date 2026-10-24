@@ -141,6 +141,8 @@ pub(super) struct Sample {
     pub extract_ms: f64,
     pub upload_ms: f64,
     pub patched: bool,
+    /// A native renderer took the document change (Scene invalidated).
+    pub native: bool,
     /// The Scene view's render and overlays (when the frame is dirty).
     pub scene_ms: f64,
     /// Re-rasterizing toolbar icons (theme or DPI changes).

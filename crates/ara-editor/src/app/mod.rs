@@ -457,7 +457,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let mut view_ms = 0.;
             let mut stages = scene_sync::Stages::default();
             let idle = last_input.is_none_or(|t| t.elapsed() >= INTERACTION_PAUSE);
-            if scene_sync.refresh(&view, &mut editor, &mut renderer, idle) {
+            if scene_sync.refresh(&view, &mut editor, &mut renderer, &mut scene_view, idle) {
                 dirty = true;
                 scene_dirty = true;
             }
@@ -467,7 +467,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 let next = editor.view()?;
                 editor.report_missing_sources(&next);
                 view_ms = at.elapsed().as_secs_f64() * 1000.;
-                stages = scene_sync.commit(&view, &next, &mut editor, &mut renderer);
+                stages =
+                    scene_sync.commit(&view, &next, &mut editor, &mut renderer, &mut scene_view);
                 view = next;
                 shell.rebuild_if_stale(&mut editor)?;
                 dirty = true;
@@ -476,7 +477,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             if editor.extraction_revision != last_extraction {
                 last_extraction = editor.extraction_revision;
                 view = editor.view()?;
-                scene_sync.rebuild(&view, &mut editor, &mut renderer);
+                scene_sync.rebuild(&view, &mut editor, &mut renderer, &mut scene_view);
                 dirty = true;
                 scene_dirty = true;
             }
@@ -484,13 +485,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_review = editor.review_revision;
                 let next = editor.view()?;
                 if next.ghosts() != view.ghosts() {
-                    scene_sync.rebuild(&next, &mut editor, &mut renderer);
+                    scene_sync.rebuild(&next, &mut editor, &mut renderer, &mut scene_view);
                 }
                 view = next;
                 dirty = true;
                 scene_dirty = true;
             }
-            if scene_sync.preview(&view, &mut editor, &shell, &mut renderer) {
+            if scene_sync.preview(&view, &mut editor, &shell, &mut renderer, &mut scene_view) {
                 dirty = true;
                 scene_dirty = true;
             }
@@ -868,6 +869,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     extract_ms: stages.extract_ms,
                     upload_ms: stages.upload_ms,
                     patched: stages.patched,
+                    native: stages.native,
                     scene_ms,
                     icons_ms,
                     render_ms,
