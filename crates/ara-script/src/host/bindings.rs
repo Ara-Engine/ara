@@ -146,9 +146,12 @@ mod tests {
         let mut schema = SchemaDb::new();
         ara_components::register(&mut schema);
         let bindings = EngineBindings::builtin();
-        let native = bindings.resolve(&schema, &mut World::new()).unwrap();
+        let native = bindings
+            .resolve(&schema, &mut World::new())
+            .expect("built-in Rust views match their schema layouts");
         let layouts: Vec<_> = native.into_iter().map(|(_, _, layout)| layout).collect();
-        let generated = crate::csgen::engine_layouts(&schema, &bindings.names()).unwrap();
+        let generated = crate::csgen::engine_layouts(&schema, &bindings.names())
+            .expect("native view schemas have blittable layouts");
         assert_eq!(
             crate::abi::layout_hash(&layouts),
             crate::abi::layout_hash(&generated)
