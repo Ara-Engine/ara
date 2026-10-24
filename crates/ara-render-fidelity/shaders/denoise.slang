@@ -123,7 +123,6 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
     // samples through increasingly thick walls when its pixel radius grows.
     float scale=max(guide.w*0.001,0.003)*baseStep;float roughness=pixel(f,NORMAL+slot,p).w;
     float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter):0;
-    float3 centreGeometric=splitSignals?extraPixel(f,36,p).xyz:guide.xyz;
     float4 specMoments=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p):float4(0);float2 specMom=specMoments.xy;float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
         float3 n,c,spec=0;float4 neighborWorld;
@@ -133,11 +132,7 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         // Rough incident irradiance is smooth: a centre-dependent luminance
         // rejection biases rare bright bounce samples back toward darkness.
         float radianceWeight=historyCount<4?1:lerp(exp(-abs(luminance(c)-l)/(4*sigma+0.1)),1,smoothstep(0.1,0.3,roughness));
-        // Split (reservoir) views guide demodulated incident light by the geometric
-        // normal: normal-mapped detail (corrugation, rough plaster) otherwise rejected
-        // nearly every neighbour and left ReSTIR GI's reuse pattern as blotches.
-        float3 geometric=splitSignals?extraPixel(f,36,int2(p)+int2(x,y)*step).xyz:n;
-        weight*=exp(-abs(dot(neighborWorld.xyz-world.xyz,centreGeometric))/scale)*pow(max(dot(geometric,centreGeometric),0),splitSignals?16.:lerp(128.,32.,roughness))*radianceWeight*float(neighborWorld.w==world.w);
+        weight*=exp(-abs(dot(neighborWorld.xyz-world.xyz,guide.xyz))/scale)*pow(max(dot(n,guide.xyz),0),splitSignals?lerp(64.,8.,roughness):lerp(128.,32.,roughness))*radianceWeight*float(neighborWorld.w==world.w);
         if(splitSignals && mixedCoverage(specMoments.z) && (x!=0 || y!=0))weight=0;
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
         if(splitSignals){

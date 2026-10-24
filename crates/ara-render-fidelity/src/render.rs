@@ -476,7 +476,6 @@ impl FidelityView {
                     (ids[source], Access::ShaderRead),
                     (ids[target], Access::Storage),
                     (ids[SPEC_MOMENTS0 + slot], Access::ShaderRead),
-                    (ids[SURFACE_GEOMETRY], Access::ShaderRead),
                 ]);
             }
             add(
