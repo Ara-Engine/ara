@@ -3,6 +3,99 @@ use super::Page;
 use crate::model::{Hub, Intent, State, text};
 
 pub(super) fn body(p: &mut Page, hub: &Hub) {
+    p.panel("section-head", |p| {
+        p.panel("row", |p| {
+            p.text("section-title fill", "Published engine versions");
+            super::settings::channels(p, hub);
+            p.action(
+                "refresh-engines",
+                "compact",
+                "refresh-cw",
+                "Check for releases",
+                Some(Intent::CheckUpdates),
+            );
+        });
+        p.text("small muted wrap", &hub.releases.status);
+    });
+    for release in &hub.releases.available {
+        p.panel("panel-card", |p| {
+            p.panel("row", |p| {
+                p.icon("package", "accent icon-lg");
+                p.text("engine-version fill", &format!("Ara {}", release.version));
+                p.panel("pill", |p| {
+                    p.text(
+                        "",
+                        if release.channel == ara_update::Channel::Preview {
+                            "Preview"
+                        } else {
+                            "Stable"
+                        },
+                    )
+                });
+                if let Some(asset) = release
+                    .assets
+                    .iter()
+                    .find(|a| a.name.ends_with("-windows-x64.zip"))
+                {
+                    p.text(
+                        "small muted",
+                        &format!("{:.0} MB", asset.size as f64 / 1_000_000.),
+                    );
+                }
+                if hub.engines.iter().any(|e| e.version == release.version) {
+                    p.text("small muted", "Installed");
+                } else if let Some(job) = hub.releases.running("engine", &release.version) {
+                    let percent = job
+                        .progress
+                        .as_ref()
+                        .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
+                    p.text("small accent", &format!("Installing · {percent}%"));
+                    p.action(
+                        &format!("cancel-{}", release.version),
+                        "compact",
+                        "x",
+                        "Cancel",
+                        Some(Intent::CancelDownload(job.id.clone())),
+                    );
+                } else {
+                    p.action(
+                        &format!("install-{}", release.version),
+                        "primary compact",
+                        "download",
+                        "Install",
+                        Some(Intent::InstallEngine(release.version.clone())),
+                    );
+                }
+            });
+            let excerpt: String = release.notes.chars().take(260).collect();
+            if let Some(job) = hub.releases.running("engine", &release.version) {
+                let percent = job
+                    .progress
+                    .as_ref()
+                    .map_or(0, |p| p.received.saturating_mul(100) / p.total.max(1));
+                p.panel("download-track", |p| {
+                    p.panel_styled("download-fill", &format!("width:{percent}%;"), |_| {})
+                });
+            }
+            p.text("small muted wrap", &excerpt);
+            p.action(
+                &format!("notes-{}", release.version),
+                "compact",
+                "book-open",
+                "Release notes",
+                Some(Intent::OpenPath(
+                    format!(
+                        "https://github.com/{}/releases/tag/engine-v{}",
+                        hub.releases.repo, release.version
+                    )
+                    .into(),
+                )),
+            );
+        });
+    }
+    p.panel("section-head", |p| {
+        p.text("section-title", "Installed builds")
+    });
     if hub.engines.is_empty() && hub.ready() {
         p.panel("empty", |p| {
             p.panel("empty-icon", |p| p.icon("hard-drive", "icon-lg"));
@@ -67,7 +160,11 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
                     &format!("engine-remove-{index}"),
                     "danger",
                     "trash",
-                    "Remove",
+                    if engine.managed {
+                        "Uninstall"
+                    } else {
+                        "Remove"
+                    },
                     Some(Intent::RemoveEngine(index)),
                 );
             });

@@ -1,10 +1,12 @@
 //! User-level Ara Hub backend. The native UI and global MCP share this JSON-RPC API.
+mod isolation;
 mod registry;
 mod service;
 mod templates;
 
+pub use isolation::validate_development_config;
 pub use registry::{EngineBuild, ProjectEntry, Registry};
-pub use service::{Hub, HubConfig, connect_or_start, serve};
+pub use service::{Hub, HubConfig, UpdateConfig, connect_or_start, serve};
 pub use templates::{DirectoryTemplates, Template, TemplateSource};
 
 use ara_diag::{Diagnostic, codes};
@@ -20,27 +22,35 @@ pub const ALPHA_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// User config directory; `ARA_CONFIG_DIR` isolates tests and portable installations.
 pub fn config_dir() -> io::Result<PathBuf> {
-    if let Some(path) = std::env::var_os("ARA_CONFIG_DIR") {
-        return Ok(path.into());
-    }
+    let directory = std::env::var_os("ARA_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(user_config_dir)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "cannot find the user config directory; set ARA_CONFIG_DIR",
+            )
+        })?;
+    validate_development_config(&directory)?;
+    Ok(directory)
+}
+
+fn user_config_dir() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     if let Some(path) = std::env::var_os("APPDATA") {
-        return Ok(PathBuf::from(path).join("Ara"));
+        return Some(PathBuf::from(path).join("Ara"));
     }
     #[cfg(target_os = "macos")]
     if let Some(path) = std::env::var_os("HOME") {
-        return Ok(PathBuf::from(path).join("Library/Application Support/Ara"));
+        return Some(PathBuf::from(path).join("Library/Application Support/Ara"));
     }
     if let Some(path) = std::env::var_os("XDG_CONFIG_HOME") {
-        return Ok(PathBuf::from(path).join("ara"));
+        return Some(PathBuf::from(path).join("ara"));
     }
     if let Some(path) = std::env::var_os("HOME") {
-        return Ok(PathBuf::from(path).join(".config/ara"));
+        return Some(PathBuf::from(path).join(".config/ara"));
     }
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        "cannot find the user config directory; set ARA_CONFIG_DIR",
-    ))
+    None
 }
 
 pub(crate) fn now() -> u64 {

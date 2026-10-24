@@ -20,6 +20,9 @@ fn options() -> Result<Option<Options>, String> {
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--update-health" => {
+                options.update_health = Some(PathBuf::from(value(&mut args, &arg)?))
+            }
             "--help" | "-h" => {
                 println!("{HELP}");
                 return Ok(None);

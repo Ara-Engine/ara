@@ -7,6 +7,8 @@ use std::path::PathBuf;
 /// One `hub.*` request.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Call {
+    /// Release-service method with its validated wire parameters.
+    Release { method: &'static str, params: Value },
     /// `hub.projects`.
     Projects,
     /// `hub.status` for every project.
@@ -78,6 +80,7 @@ impl Call {
     /// JSON-RPC method name.
     pub fn method(&self) -> &'static str {
         match self {
+            Self::Release { method, .. } => method,
             Self::Projects => "hub.projects",
             Self::Status => "hub.status",
             Self::Templates => "hub.templates",
@@ -96,6 +99,7 @@ impl Call {
     /// camelCase params, per the wire contract.
     pub fn params(&self) -> Value {
         match self {
+            Self::Release { params, .. } => params.clone(),
             Self::Projects | Self::Status | Self::Templates | Self::Engines | Self::Activity => {
                 json!({})
             }
