@@ -61,7 +61,7 @@ reports/         HTML reports published to Snist
 - `cargo test -p <crate>`: tests for the crates you touched.
 - `cargo fmt --all`
 - Before reporting done: `cargo run -p ara-dev -- check` (`--base <ref>`, `--json`, explicit `--known-failures <file>`); set `CARGO_BUILD_JOBS=2` on this shared PC.
-- Fast Windows entry: `.\crates\ara-dev\run.ps1 check`; `check --plan --json` previews selection; affected gates have a 40-minute deadline.
+- Fast Windows entry: `.\crates\ara-dev\run.ps1 check --no-compiler-cache` bypasses a contended compiler-cache server; `--plan --json` previews selection; affected gates have a 40-minute deadline.
 - Integrate: `cargo run -p ara-dev -- merge <branch>` (`--push` opts in; `--full` for nightly gates).
 - Wrap GPU benchmarks and timing runs with `ara-dev gpu --` (via `cargo run -p ara-dev -- gpu -- <command>`); normal GPU unit tests stay unwrapped.
 - Disk: `cargo run -p ara-dev -- disk`; `clean-worktrees` previews merged, stale targets (`--yes` deletes; never the current/dirty worktree). See `docs/dev/ara-dev.md`.

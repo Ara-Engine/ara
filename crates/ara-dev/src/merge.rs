@@ -13,6 +13,7 @@ pub(crate) fn run(
     full: bool,
     known_path: Option<&Path>,
     timeout_seconds: Option<u64>,
+    no_compiler_cache: bool,
 ) -> Result<bool> {
     // Reject a malformed exception file before starting a merge.
     crate::known::read(root, known_path)?;
@@ -63,7 +64,7 @@ pub(crate) fn run(
         eprintln!("Already up to date; nothing to merge.");
         return Ok(true);
     }
-    let mut logs = check::Logs::new(root)?;
+    let mut logs = check::Logs::new(root, no_compiler_cache)?;
     if !logs.command(
         root,
         "workspace-check",
@@ -81,6 +82,7 @@ pub(crate) fn run(
             known_path,
             plan: false,
             timeout_seconds,
+            no_compiler_cache,
         },
     )? {
         bail!(

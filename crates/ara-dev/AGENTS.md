@@ -5,6 +5,7 @@ Local developer binary. No engine dependencies; uses git and cargo as subprocess
 - `check`: merge-base diff, reverse workspace dependency closure, hygiene, fmt,
   clippy, tests, diagnostic coverage and unchanged-tree verification.
   `--plan` previews selection; default deadline 40 minutes includes cache waits.
+  `--no-compiler-cache` bypasses RUSTC_WRAPPER; JSON records total elapsed time.
 - `merge`: clean-tree no-ff merge, Cargo.lock-only recovery, workspace check,
   affected gate (or `--full`), commit and optional push.
 - `gpu`: machine-wide FIFO file-lock queue with OS crash recovery and timeout.

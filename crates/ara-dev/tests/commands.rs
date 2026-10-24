@@ -124,6 +124,39 @@ fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
 }
 
 #[test]
+fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    fs::create_dir_all(root.join(".cargo")).unwrap();
+    fs::write(
+        root.join(".cargo/config.toml"),
+        "[build]\nrustc-wrapper = \"missing-compiler-cache-for-test\"\n",
+    )
+    .unwrap();
+    let binary = env!("CARGO_BIN_EXE_ara-dev");
+    assert!(
+        !command(&root, binary, &["check", "--json"])
+            .status
+            .success()
+    );
+    let output = ok(&root, binary, &["check", "--json", "--no-compiler-cache"]);
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["compiler_cache_bypassed"], true);
+    assert!(report["elapsed_seconds"].as_f64().unwrap() > 0.0);
+    fs::write(
+        root.join("core/src/lib.rs"),
+        "pub fn value() -> u32 {\n    return 2;\n}\n",
+    )
+    .unwrap();
+    let output = command(&root, binary, &["check", "--json", "--no-compiler-cache"]);
+    assert!(!output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(report["checks"].as_array().unwrap().iter().any(|row| {
+        row["check"] == "clippy" && row["passed"] == false && row["timed_out"] == false
+    }));
+}
+
+#[test]
 fn known_failures_are_opt_in_and_do_not_hide_other_tests_in_the_same_target() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

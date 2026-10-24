@@ -49,6 +49,9 @@ enum Command {
         /// Total seconds including cache waits (default 2400; --full unlimited; 0 unlimited).
         #[arg(long)]
         timeout: Option<u64>,
+        /// Bypass RUSTC_WRAPPER when a shared compiler cache is contended.
+        #[arg(long)]
+        no_compiler_cache: bool,
     },
     /// Merge locally, validate before committing, and optionally push.
     Merge {
@@ -61,6 +64,8 @@ enum Command {
         known_failures: Option<PathBuf>,
         #[arg(long)]
         timeout: Option<u64>,
+        #[arg(long)]
+        no_compiler_cache: bool,
     },
     /// Serialize GPU benchmarks/captures across every worktree on this machine.
     Gpu {
@@ -107,6 +112,7 @@ fn run() -> Result<bool> {
             known_failures,
             plan,
             timeout,
+            no_compiler_cache,
         } => {
             let result = check::run(
                 &root,
@@ -117,6 +123,7 @@ fn run() -> Result<bool> {
                     known_path: known_failures.as_deref(),
                     plan,
                     timeout_seconds: timeout,
+                    no_compiler_cache,
                 },
             );
             if json && let Err(error) = &result {
@@ -133,6 +140,7 @@ fn run() -> Result<bool> {
             full,
             known_failures,
             timeout,
+            no_compiler_cache,
         } => merge::run(
             &root,
             &branch,
@@ -140,6 +148,7 @@ fn run() -> Result<bool> {
             full,
             known_failures.as_deref(),
             timeout,
+            no_compiler_cache,
         ),
         Command::CleanWorktrees {
             yes, hours, base, ..

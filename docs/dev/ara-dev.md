@@ -4,13 +4,22 @@ Set `$env:CARGO_BUILD_JOBS='2'` in PowerShell on this shared Windows machine. GP
 `VULKAN_SDK` pointing to the installed SDK. All commands run from any directory in
 the checkout; no Python, CMake, service or extra build tool is required.
 
-On Windows, use `.\crates\ara-dev\run.ps1 check --json` for the fast entry. It
+On Windows, use `.\crates\ara-dev\run.ps1 check --no-compiler-cache --json` for the fast entry. It
 builds the small tool through `%LOCALAPPDATA%\ara\dev-build`, keeping bootstrap
 compilation out of engine Cargo locks. Final tool and engine executable names
 stay under the worktree's `target/`; hashed engine intermediates retain the
 configured `CARGO_BUILD_BUILD_DIR`, or the original Cargo target directory. The
 script restores the caller's environment afterwards. The ordinary `cargo run`
 entry remains supported.
+
+`check --no-compiler-cache` (also supported by `merge`) clears `RUSTC_WRAPPER`
+for child Cargo commands, preserving clippy's workspace wrapper. This uses
+[Cargo's documented empty-wrapper override](https://doc.rust-lang.org/cargo/reference/environment-variables.html).
+It leaves the shared cache server and other builds running. On this contended
+machine, a tiny optimized library probe took 20.70 seconds through sccache and
+1.02 seconds with direct Rust. The flag is opt-in; ordinary commands retain the
+caller's wrapper configuration. JSON reports include `compiler_cache_bypassed`
+and total `elapsed_seconds`, including selection and hygiene, excluding bootstrap.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this

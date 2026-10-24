@@ -27,6 +27,8 @@ struct Row {
 #[derive(Serialize)]
 struct Report {
     passed: bool,
+    elapsed_seconds: f64,
+    compiler_cache_bypassed: bool,
     base: String,
     #[serde(flatten)]
     selection: Selection,
@@ -38,10 +40,11 @@ pub(crate) struct Logs {
     pub(crate) directory: PathBuf,
     rows: Vec<Row>,
     deadline: Option<Instant>,
+    no_compiler_cache: bool,
 }
 
 impl Logs {
-    pub(crate) fn new(root: &Path) -> Result<Self> {
+    pub(crate) fn new(root: &Path, no_compiler_cache: bool) -> Result<Self> {
         let directory = root.join("target/ara-dev").join(format!(
             "run-{}-{}",
             std::process::id(),
@@ -54,6 +57,7 @@ impl Logs {
             directory,
             rows: Vec::new(),
             deadline: None,
+            no_compiler_cache,
         })
     }
 
@@ -102,6 +106,10 @@ impl Logs {
             .env("CARGO_TERM_COLOR", "never")
             .stdout(Stdio::from(stdout.try_clone()?))
             .stderr(Stdio::from(stderr.try_clone()?));
+        if self.no_compiler_cache {
+            // An empty wrapper overrides Cargo config; clippy's workspace wrapper stays active.
+            command.env("RUSTC_WRAPPER", "");
+        }
         let status = process::run(&mut command, self.deadline);
         let passed = status.as_ref().is_ok_and(process::Outcome::success);
         let timed_out = matches!(status, Ok(process::Outcome::TimedOut));
@@ -203,6 +211,7 @@ pub(crate) struct Options<'a> {
     pub(crate) known_path: Option<&'a Path>,
     pub(crate) plan: bool,
     pub(crate) timeout_seconds: Option<u64>,
+    pub(crate) no_compiler_cache: bool,
 }
 
 pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
@@ -214,6 +223,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
         known_path,
         plan,
         timeout_seconds,
+        no_compiler_cache,
     } = options;
     let budget = timeout_seconds
         .or(if full { None } else { Some(2400) })
@@ -225,7 +235,10 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     let base = git::text(root, ["merge-base", "HEAD", base])
         .context("resolve --base (use an existing local ref)")?;
     let changed = git::changed(root, &base)?;
-    let mut logs = Logs::new(root)?;
+    let mut logs = Logs::new(root, no_compiler_cache)?;
+    if no_compiler_cache {
+        eprintln!("Compiler cache bypass: RUSTC_WRAPPER disabled for Cargo gates.");
+    }
     logs.deadline = budget
         .map(|seconds| {
             started
@@ -418,6 +431,8 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     logs.findings("pending snapshots", snapshots);
     let report = Report {
         passed: logs.rows.iter().all(|r| r.passed),
+        elapsed_seconds: started.elapsed().as_secs_f64(),
+        compiler_cache_bypassed: no_compiler_cache,
         base,
         selection: scope,
         known_failures,
@@ -468,6 +483,7 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 known.package, known.target, known.test, known.reason
             );
         }
+        println!("Total: {:.1}s", report.elapsed_seconds);
     }
     Ok(report.passed)
 }
