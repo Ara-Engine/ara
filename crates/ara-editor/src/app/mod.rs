@@ -427,14 +427,19 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
             let geometry_at = Instant::now();
+            let (mut view_ms, mut extract_ms, mut upload_ms) = (0., 0., 0.);
             if editor.host.store().revision() != last_revision {
                 last_revision = editor.host.store().revision();
+                let at = Instant::now();
                 view = editor.view()?;
-                renderer.update_geometry(view.scene(
-                    editor.host.root(),
-                    &editor.state,
-                    editor.gesture.as_ref(),
-                )?)?;
+                view_ms = at.elapsed().as_secs_f64() * 1000.;
+                let at = Instant::now();
+                let scene =
+                    view.scene(editor.host.root(), &editor.state, editor.gesture.as_ref())?;
+                extract_ms = at.elapsed().as_secs_f64() * 1000.;
+                let at = Instant::now();
+                renderer.update_geometry(scene)?;
+                upload_ms = at.elapsed().as_secs_f64() * 1000.;
                 shell.rebuild_if_stale(&mut editor)?;
                 dirty = true;
                 scene_dirty = true;
@@ -841,6 +846,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     ui_ms,
                     tick_ms,
                     geometry_ms,
+                    view_ms,
+                    extract_ms,
+                    upload_ms,
                     scene_ms,
                     icons_ms,
                     render_ms,

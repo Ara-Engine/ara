@@ -52,6 +52,8 @@ enum Act {
     Theme(&'static str),
     /// Click Play, wait for the first presented Game frame, click Stop.
     Play,
+    /// Move an entity through a typed command (an Inspector edit), then settle.
+    Edit,
 }
 
 /// A Play attempt in flight.
@@ -88,6 +90,11 @@ pub(super) struct Sample {
     pub tick_ms: f64,
     /// Scene re-extraction and geometry upload after document changes.
     pub geometry_ms: f64,
+    /// Of `geometry_ms`: `Editor::view` (resolve), `DocumentView::scene` (extract) and
+    /// `Renderer::update_geometry` (upload).
+    pub view_ms: f64,
+    pub extract_ms: f64,
+    pub upload_ms: f64,
     /// The Scene view's render and overlays (when the frame is dirty).
     pub scene_ms: f64,
     /// Re-rasterizing toolbar icons (theme or DPI changes).
@@ -141,6 +148,9 @@ impl Probe {
             acts.push(Act::Theme("view.theme.light"));
             acts.push(Act::Theme("view.theme.dark"));
         }
+        for _ in 0..6 {
+            acts.push(Act::Edit);
+        }
         acts.push(Act::Idle("idle-after", 120));
         for _ in 0..3 {
             acts.push(Act::Play);
@@ -173,6 +183,7 @@ impl Probe {
             Some(Act::Click(control, _)) => format!("click-{control:?}").to_lowercase(),
             Some(Act::Theme(_)) => "theme".into(),
             Some(Act::Play) => "play".into(),
+            Some(Act::Edit) => "edit".into(),
             None => "done".into(),
         }
     }
@@ -287,6 +298,27 @@ impl Probe {
                     }
                 }
             }
+            Some(Act::Edit) if self.age == 0 => {
+                let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                    .map_err(|d| format!("{d:?}"))?
+                    .into_iter()
+                    .find(|(_, e)| {
+                        e.record.contains_key("Transform") && e.record.contains_key("MeshRenderer")
+                    })
+                    .map(|(id, _)| id)
+                    .ok_or("responsiveness: no mesh entity to edit")?;
+                self.injected = Some(Instant::now());
+                let y = if self.index.is_multiple_of(2) {
+                    0.25
+                } else {
+                    0.0
+                };
+                editor.apply(
+                    vec![json!({"cmd": "property.set", "args": {"entity": entity, "path": "Transform.position", "value": [0.0, y, 0.0]}})],
+                    "Probe edit",
+                    None,
+                )?;
+            }
             Some(Act::Theme(command)) if self.age == 0 => {
                 self.injected = Some(Instant::now());
                 shell.run_command(editor, command, &Target::None)?;
@@ -354,7 +386,7 @@ impl Probe {
         self.age += 1;
         let done = match self.acts.get(self.index) {
             Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
-            Some(Act::Theme(_)) => self.age >= 8,
+            Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
             // A click's target was not on screen yet (`inject` retries, then fails).
             Some(Act::Click(..) | Act::Play) => false,
             None => true,
