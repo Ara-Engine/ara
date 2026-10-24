@@ -140,6 +140,7 @@ struct Configured {
 pub(crate) fn disk_check(root: &Path) -> Result<bool> {
     let mut healthy = true;
     for name in [
+        "ARA_SHARED_BUILD_DIR",
         "CARGO_TARGET_DIR",
         "CARGO_BUILD_TARGET_DIR",
         "CARGO_BUILD_BUILD_DIR",

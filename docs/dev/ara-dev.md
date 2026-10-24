@@ -65,6 +65,8 @@ helpers. This keeps final binaries separate from hashed test executables, handle
 custom build directories, and avoids a second build with a different feature set.
 `test-build` accounts for all compilation, including peer binaries; `tests`
 accounts for execution, including doctests. All phases share the same deadline.
+Binary-only selections omit `--lib` and the doctest phase; library selections keep the
+same package roots throughout binary preparation and test execution.
 
 Cargo 1.99 can reuse intermediate artifacts through `CARGO_BUILD_BUILD_DIR` while
 keeping final executables in each worktree's local target directory. Prefer this
@@ -99,7 +101,8 @@ Admission estimates reserve at most 4096 MiB and half the available physical RAM
 The tracked `crates/ara-dev/test-tiers.toml` labels slow suites and exclusive GPU/.NET/process
 groups. Fast suites have a 120-second deadline; slow suites have explicit 180–240-second
 deadlines. Timeout kills the process tree and fails the gate. Separate suite logs and
-`test-execution.json` record results/times. Doctests remain checked through Cargo.
+`test-execution.json` record results/times. Doctests and diagnostic coverage remain checked
+through Cargo, each with a 180-second phase deadline as well as the overall gate deadline.
 No nextest installation is required; the built-in scheduler is used when that optional
 developer tool is absent. This is an admission estimate, not an OS memory sandbox.
 
@@ -123,6 +126,9 @@ compiler jobserver. It does not stop or reset another agent's sccache server. Th
 single disk cache is `D:\AraCache\sccache`; ordinary Cargo invocations keep their configured
 wrapper. Unset the two shared-directory variables to return to independent local builds.
 Never run an unwrapped Cargo build against this shared directory while tests use it.
+Perf builds and merge pre-checks also take this lease. Perf releases it before entering
+the continuous player/GPU loop, and keeps the requested profile's incremental setting.
+Oversized suites run alone; RAM weights limit parallel admission rather than enforcing RSS.
 
 Why not just set `SCCACHE_BASEDIRS`? The installed
 [sccache 0.18 Rust implementation](https://github.com/mozilla/sccache/blob/v0.18.0/src/compiler/rust.rs)

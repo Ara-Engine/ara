@@ -279,6 +279,44 @@ fn check_selects_reverse_dependencies_and_keeps_json_stdout_clean() {
 }
 
 #[test]
+fn binary_only_selection_builds_and_runs_without_a_library_target() {
+    let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let root = fixture();
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        manifest.replace("\"diag\"]", "\"diag\", \"binary\"]"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("binary/src")).unwrap();
+    fs::write(
+        root.join("binary/Cargo.toml"),
+        "[package]\nname=\"binary-only\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("binary/src/main.rs"),
+        "fn main() {}\n#[test]\nfn bin_test() {\n    main();\n}\n",
+    )
+    .unwrap();
+    ok(&root, "cargo", &["generate-lockfile", "--offline"]);
+    let output = ok(
+        &root,
+        env!("CARGO_BIN_EXE_ara-dev"),
+        &["check", "--json", "--no-compiler-cache"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["test_packages"], serde_json::json!(["binary-only"]));
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["check"] == "tests" && r["passed"] == true)
+    );
+}
+
+#[test]
 fn source_tests_stop_at_direct_consumers_but_full_runs_transitive_suites() {
     let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let root = fixture();

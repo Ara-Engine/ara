@@ -140,13 +140,20 @@ impl Logs {
                 command.env(format!("CARGO_BIN_EXE_{binary}"), path);
             }
         }
-        let status = process::run(&mut command, self.deadline);
+        let deadline = if matches!(name, "doctests" | "diagnostic-coverage") {
+            command.env("RUST_TEST_THREADS", "2");
+            let limit = start + Duration::from_secs(180);
+            Some(self.deadline.map_or(limit, |gate| gate.min(limit)))
+        } else {
+            self.deadline
+        };
+        let status = process::run(&mut command, deadline);
         let passed = status.as_ref().is_ok_and(process::Outcome::success);
         let timed_out = matches!(status, Ok(process::Outcome::TimedOut));
         let detail = match status {
             Ok(process::Outcome::Exited(s)) => format!("{s}; {}", log.display()),
             Ok(process::Outcome::TimedOut) => format!(
-                "timed out at the check deadline (including Cargo cache waits); {}",
+                "timed out at the command/check deadline (including Cargo cache waits); {}",
                 log.display()
             ),
             Err(e) => format!("{e}; {}", log.display()),
@@ -415,7 +422,9 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
             "--no-fail-fast".into(),
         ]);
         let tests_ready = if clippy_passed && !scope.test_packages.is_empty() {
-            if let Some(paths) = crate::binaries::prepare(root, &tests, &mut logs)? {
+            if let Some(paths) =
+                crate::binaries::prepare(root, &tests, &metadata, &scope.test_packages, &mut logs)?
+            {
                 logs.test_binaries = paths;
                 true
             } else {
@@ -477,7 +486,12 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
                 );
             }
         }
-        if tests_ready {
+        if tests_ready
+            && metadata
+                .packages
+                .iter()
+                .any(|p| scope.test_packages.contains(&p.name) && p.has_library())
+        {
             let mut docs = selection("test", &scope.test_packages, full);
             docs.extend([
                 "--doc".into(),

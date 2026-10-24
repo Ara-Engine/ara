@@ -15,11 +15,18 @@ memory_mib = 1536
 timeout_seconds = 240
 
 [[slow]]
-package = "ara-play"
+package = "ara-play*"
 target = "*"
 group = "process"
 memory_mib = 1024
 timeout_seconds = 180
+
+[[slow]]
+package = "ara-runtime-script"
+target = "*"
+group = "dotnet"
+memory_mib = 1536
+timeout_seconds = 240
 
 [[slow]]
 package = "ara-*"

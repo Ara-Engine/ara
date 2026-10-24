@@ -338,17 +338,31 @@ fn execute(
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or_else(|| suite.rule.as_ref().map_or(120, |r| r.timeout_seconds));
-    ensure!(timeout > 0, "test timeout must be positive");
-    let own = Instant::now() + Duration::from_secs(timeout);
     process::run(
         &mut command,
-        Some(deadline.map_or(own, |gate| gate.min(own))),
+        Some(suite_deadline(Instant::now(), deadline, timeout)?),
     )
+}
+
+fn suite_deadline(now: Instant, gate: Option<Instant>, timeout: u64) -> Result<Instant> {
+    ensure!(timeout > 0, "test timeout must be positive");
+    let own = now
+        .checked_add(Duration::from_secs(timeout))
+        .context("test timeout is too large")?;
+    Ok(gate.map_or(own, |gate| gate.min(own)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn suite_timeouts_are_bounded_without_panicking_a_worker() {
+        let now = Instant::now();
+        let gate = now + Duration::from_secs(1);
+        assert_eq!(suite_deadline(now, Some(gate), 120).unwrap(), gate);
+        assert!(suite_deadline(now, None, u64::MAX).is_err());
+        assert!(suite_deadline(now, None, 0).is_err());
+    }
     #[test]
     fn slow_resources_serialize_and_ram_limits_parallel_admission() {
         let tiers: Tiers = toml_edit::de::from_str(include_str!("../test-tiers.toml")).unwrap();

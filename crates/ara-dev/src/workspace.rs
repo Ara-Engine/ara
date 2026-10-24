@@ -32,6 +32,19 @@ pub(crate) struct Dependency {
     path: Option<PathBuf>,
 }
 
+impl Package {
+    pub(crate) fn has_library(&self) -> bool {
+        self.targets.iter().any(|target| {
+            target.kind.iter().any(|kind| {
+                matches!(
+                    kind.as_str(),
+                    "lib" | "rlib" | "proc-macro" | "cdylib" | "dylib" | "staticlib"
+                )
+            })
+        })
+    }
+}
+
 impl Metadata {
     pub(crate) fn direct_dependents(&self, roots: &BTreeSet<String>) -> BTreeSet<String> {
         let mut selected = roots.clone();
