@@ -237,7 +237,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         | Event::Wheel(_)
                         | Event::Key { .. }
                 )
-            }) {
+            }) || probe.as_ref().is_some_and(|p| p.acted())
+            {
                 last_input = Some(Instant::now());
             }
             let routed_at = Instant::now();
@@ -293,7 +294,13 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 shell.enter(id);
             }
             match native.input(&mut shell.ui, &mut shell.input) {
-                Ok(changed) => dirty |= changed,
+                Ok(changed) => {
+                    dirty |= changed;
+                    // Typed text (IME commits) is input too.
+                    if changed {
+                        last_input = Some(Instant::now());
+                    }
+                }
                 Err(error) => editor.report_failure(&*error),
             }
             shell.leave();

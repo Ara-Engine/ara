@@ -54,7 +54,12 @@ enum Act {
     Play,
     /// Move an entity through a typed command (an Inspector edit), then settle.
     Edit,
+    /// Type a colour into the Inspector's hex field one character per frame, then
+    /// press Enter (the commit).
+    Type,
 }
+/// What the Type scenario types, one character per frame.
+const TYPED: &str = "#3366aa";
 
 /// A Play attempt in flight.
 struct PlayRun {
@@ -151,6 +156,9 @@ impl Probe {
         for _ in 0..6 {
             acts.push(Act::Edit);
         }
+        for _ in 0..3 {
+            acts.push(Act::Type);
+        }
         acts.push(Act::Idle("idle-after", 120));
         for _ in 0..3 {
             acts.push(Act::Play);
@@ -184,6 +192,12 @@ impl Probe {
             Some(Act::Theme(_)) => "theme".into(),
             Some(Act::Play) => "play".into(),
             Some(Act::Edit) => "edit".into(),
+            Some(Act::Type) => match self.age {
+                n if n <= 3 => "type-focus".into(),
+                n if n < 4 + TYPED.len() as u32 => "type-keystroke".into(),
+                n if n == 4 + TYPED.len() as u32 => "type-commit".into(),
+                _ => "type-settle".into(),
+            },
             None => "done".into(),
         }
     }
@@ -198,6 +212,11 @@ impl Probe {
         }
     }
 
+    /// Whether this frame's `inject` acted (injected events, edits or commands): the
+    /// loop counts it as user input.
+    pub fn acted(&self) -> bool {
+        self.injected.is_some()
+    }
     /// Add this frame's synthetic input to the polled batch. `scale` maps window
     /// points to logical pixels (`native::points_to_logical`).
     pub fn inject(
@@ -298,6 +317,45 @@ impl Probe {
                     }
                 }
             }
+            Some(Act::Type) => {
+                let typed = TYPED.len() as u32;
+                match self.age {
+                    0 => {
+                        let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                            .map_err(|d| format!("{d:?}"))?
+                            .into_iter()
+                            .find(|(_, e)| e.record.contains_key("MeshRenderer"))
+                            .map(|(id, _)| id)
+                            .ok_or("responsiveness: no mesh entity to type into")?;
+                        editor.action("editor.select", json!({"entities": [entity]}))?;
+                    }
+                    2 => {
+                        let point = centre(shell, "edit-MeshRenderer-color")
+                            .ok_or("responsiveness: no colour field in the Inspector")?;
+                        push(events, motion(at(point)));
+                        push(events, button(true));
+                        push(events, button(false));
+                    }
+                    3 => shell.event(
+                        InputEvent::Edit(ara_ui_text::EditEvent::SelectAll),
+                        &mut OsClipboard,
+                    )?,
+                    n if (4..4 + typed).contains(&n) => {
+                        let c = &TYPED[(n - 4) as usize..(n - 3) as usize];
+                        self.injected = Some(Instant::now());
+                        shell.event(
+                            InputEvent::Edit(ara_ui_text::EditEvent::Insert(c.into())),
+                            &mut OsClipboard,
+                        )?;
+                    }
+                    n if n == 4 + typed => {
+                        self.injected = Some(Instant::now());
+                        push(events, key(40, true));
+                        push(events, key(40, false));
+                    }
+                    _ => {}
+                }
+            }
             Some(Act::Edit) if self.age == 0 => {
                 let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
                     .map_err(|d| format!("{d:?}"))?
@@ -387,6 +445,7 @@ impl Probe {
         let done = match self.acts.get(self.index) {
             Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
             Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
+            Some(Act::Type) => self.age >= 12 + TYPED.len() as u32,
             // A click's target was not on screen yet (`inject` retries, then fails).
             Some(Act::Click(..) | Act::Play) => false,
             None => true,
@@ -468,6 +527,13 @@ fn motion(position: [f32; 2]) -> Event {
     Event::MouseMotion {
         position,
         delta: [0., 0.],
+    }
+}
+fn key(scancode: i32, pressed: bool) -> Event {
+    Event::Key {
+        scancode,
+        pressed,
+        repeat: false,
     }
 }
 fn button(pressed: bool) -> Event {
