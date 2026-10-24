@@ -428,6 +428,19 @@ fn signals(
                 .scratch
                 .join(format!("{}-{label}-{shot}-{name}.png", options.name)),
         )?;
+        if name != "radiance" {
+            // Temporal sample count (alpha) as grey: white is 24 or more frames.
+            let count = RgbaImage::from_fn(w, h, |x, y| {
+                let v = (data[(y * w + x) as usize][3] / 24.).clamp(0., 1.);
+                let c = (v * 255.) as u8;
+                image::Rgba([c, c, c, 255])
+            });
+            count.save(
+                options
+                    .scratch
+                    .join(format!("{}-{label}-{shot}-{name}-count.png", options.name)),
+            )?;
+        }
     }
     Ok(())
 }
@@ -578,6 +591,9 @@ fn strip(
                         .scratch
                         .join(format!("{}-{label}-motion.png", options.name)),
                 )?;
+                if std::env::var_os("ARA_CAPTURE_SIGNALS").is_some() {
+                    signals(gpu, view, options, label, "motion")?;
+                }
             }
             let small = imageops::resize(&image, w, h, imageops::FilterType::Triangle);
             imageops::overlay(&mut out, &small, i64::from(frame_index * w), 0);
