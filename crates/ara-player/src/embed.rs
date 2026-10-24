@@ -102,11 +102,13 @@ impl Embedded {
         params: &EmbedParams,
         cache: &Path,
         quality: ara_runtime_render::QualityChoice,
+        options: ara_runtime_render::RenderOptions,
     ) -> Result<(Self, Presenter)> {
         let size = [params.width, params.height];
         check(size)?;
         let mut presenter = Presenter::new(size, Vec::new(), cache);
         presenter.set_quality(quality);
+        presenter.set_render_options(options);
         presenter.prepare(&device::warm_frame())?;
         let renderer = presenter
             .renderer()
@@ -226,5 +228,78 @@ impl Embedded {
         self.frames = 0;
         self.since = Instant::now();
         stats
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use ara_runtime_render::{QualityChoice, QualityPreset, RenderOptions};
+
+    #[test]
+    fn embedded_gpu_defaults_to_raster_and_honours_the_rt_opt_in() -> Result<()> {
+        // Field order also protects assertion/error unwinding: the ring borrows
+        // native device objects and must be dropped before the owning presenter.
+        struct Session {
+            _ring: Embedded,
+            presenter: Presenter,
+        }
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-player/embedded-render-options")
+            .join(std::process::id().to_string());
+        let params = EmbedParams {
+            width: 128,
+            height: 72,
+            max_fps: Some(144),
+        };
+        for (name, options) in [
+            ("raster", RenderOptions::default()),
+            ("rt-opt-in", RenderOptions { ray_tracing: true }),
+        ] {
+            let (embedded, presenter) = Embedded::open(
+                &params,
+                &root.join(name),
+                QualityChoice::Preset(QualityPreset::High),
+                options,
+            )?;
+            let mut session = Session {
+                _ring: embedded,
+                presenter,
+            };
+            let presenter = &mut session.presenter;
+            let renderer = presenter.renderer().context("warmed embedded renderer")?;
+            let rt = renderer.gpu().context().info.ray_tracing;
+            if !options.ray_tracing {
+                assert!(!rt, "default embedding must open a raster-only device");
+                assert!(
+                    renderer.is_native(),
+                    "default embedding must use native raster geometry"
+                );
+            } else if rt {
+                assert!(
+                    !renderer.is_native(),
+                    "supported explicit RT uses the fidelity view"
+                );
+            } else {
+                assert!(renderer.is_native(), "unsupported RT keeps the raster path");
+            }
+            assert_eq!(presenter.quality(), Some(QualityPreset::High));
+            renderer.gpu().assert_clean()?;
+            for preset in [
+                QualityPreset::Low,
+                QualityPreset::Medium,
+                QualityPreset::High,
+            ] {
+                presenter.set_quality(QualityChoice::Preset(preset));
+                presenter.prepare(&device::warm_frame())?;
+                let renderer = presenter.renderer().context("embedded preset renderer")?;
+                assert_eq!(
+                    renderer.is_native(),
+                    !(options.ray_tracing && rt && preset != QualityPreset::Low)
+                );
+                renderer.gpu().assert_clean()?;
+            }
+        }
+        Ok(())
     }
 }

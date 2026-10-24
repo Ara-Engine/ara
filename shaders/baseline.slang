@@ -102,7 +102,7 @@ float3 historyCatmullRom(Frame f,float2 uv){
 [numthreads(8,8,1)]
 void taaMain(uint3 t:SV_DispatchThreadID){
     Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);uint input=root.materials;
-    float4 state=exposureState(look(f));float exposure=exposureScale(state.x),previous=exposureScale(state.y);
+    float4 state=exposureState(look(f));float exposure=exposureScale(f,state.x),previous=exposureScale(f,state.y);
     float3 current=pixel(input,p).rgb;float depth=pixel(f.extra.x,p).x;float3 result=current;
     if(f.temporal.x!=0 && f.temporal.y==0){
         float2 uv;bool valid;

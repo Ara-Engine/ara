@@ -4,8 +4,8 @@
 #include "raster.slangh"
 #include "look.slangh"
 // Divides the input back to linear HDR; `stored` once exposureMain has run this frame.
-float inputScale(Look l,bool stored){
-    if((root.flags&1)==0)return 1;float4 s=exposureState(l);return exposureScale(stored?s.y:s.x);
+float inputScale(Frame f,Look l,bool stored){
+    if((root.flags&1)==0)return 1;float4 s=exposureState(l);return exposureScale(f,stored?s.y:s.x);
 }
 // Fixed 128x72 sampling grid, 256 log-luminance bins over [-12,20] stops. A single
 // workgroup avoids global histogram clears, atomics or readbacks. The state is
@@ -16,7 +16,7 @@ void exposureMain(uint lane:SV_GroupIndex){
     Frame f=frame();Look l=look(f);histogram[lane]=0;GroupMemoryBarrierWithGroupSync();
     bool automatic=l.exposure.x<=0;
     if(automatic){
-        float scale=1/inputScale(l,false);
+        float scale=1/inputScale(f,l,false);
         for(uint i=lane;i<9216;i+=256){float3 c=historyTex(root.materials,(float2(i%128,i/128)+0.5)/float2(128,72)).rgb*scale;
             float logL=clamp(log2(max(luminance(c),exp2(-12.))),-12.,20.);InterlockedAdd(histogram[min(uint((logL+12)*8),255)],1);}
     }
@@ -62,7 +62,7 @@ void bloomMain(uint3 tid:SV_DispatchThreadID){
         // 13-tap downsample (Jimenez 2014) of the scene to quarter resolution, taps two
         // texels apart (each bilinear), with Karis weights per 2x2 block on exposed
         // luminance, so lone HDR fireflies cannot flash into the glow.
-        float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];float scale=1/inputScale(l,true);
+        float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];float scale=1/inputScale(f,l,true);
         float2 o[13]={float2(-2,-2),float2(0,-2),float2(2,-2),float2(-1,-1),float2(1,-1),float2(-2,0),float2(0,0),float2(2,0),float2(-1,1),float2(1,1),float2(-2,2),float2(0,2),float2(2,2)};
         for(uint i=0;i<13;i++)t[i]=min(historyTex(root.materials,uv+o[i]*texel).rgb*scale,float3(60000));
         uint4 groups[5]={uint4(3,4,8,9),uint4(0,1,5,6),uint4(1,2,6,7),uint4(5,6,10,11),uint4(6,7,11,12)};
@@ -95,7 +95,7 @@ float3 grade(Frame f,Look l,float3 c,float2 uv){
 [shader("compute")][numthreads(8,8,1)]
 void postMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=f.extent.xy))return;int2 p=int2(tid.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    float3 c=pixel(root.materials,p).rgb/inputScale(l,true);
+    float3 c=pixel(root.materials,p).rgb/inputScale(f,l,true);
     if(l.bloom.x>0)c=lerp(c,bloom(f,l,uv),l.bloom.x);
     c=grade(f,l,max(c*exposureState(l).x,0),uv);
     uint curve=l.flags.x;c=curve==1?neutralCurve(c):curve==2?filmicCurve(c):tonemap(c);

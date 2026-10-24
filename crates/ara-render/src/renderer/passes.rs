@@ -312,6 +312,20 @@ impl Renderer {
                 ],
             );
             declare(ready, Recipe::Empty);
+        } else {
+            // External VFX can advance repeatedly before drawing. Publish sampled
+            // inputs once so their declared states stay valid across those calls
+            // and `finish` imports the same states the feature graph leaves behind.
+            let ready = graph.pass(
+                "FeatureInputsReady",
+                Queue::Graphics,
+                [
+                    (ids[HDR], Access::ShaderRead),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (ids[ID], Access::CopySource),
+                ],
+            );
+            declare(ready, Recipe::Empty);
         }
         let ownership = graph.pass(
             "TileOwnershipReturn",

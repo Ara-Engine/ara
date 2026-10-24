@@ -1108,6 +1108,16 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
             "e_camera01":{"name":"Follow camera","Transform":{"position":[0,9,0]},"Camera":{"fov":46},
                 "FollowCamera":{"target":"e_player01","distance":4,"height":1.5,"yaw":30,"pitch":15}}}}),
     );
+    // A static wall 2 m behind the player (a sensor before it does not count).
+    write(
+        &project.0.join("levels/wall.scene"),
+        json!({"$schema":"ara://schema/scene/1","id":"sc_test0003","records":{
+            "e_player01":{"name":"Player","Transform":{},"MeshRenderer":{}},
+            "e_wall0001":{"name":"Wall","Transform":{"position":[0,1,-2]},"Collider":{"halfExtents":[5,3,0.1]},"RigidBody":{}},
+            "e_sensor01":{"name":"Trigger","Transform":{"position":[0,1,-1]},"Collider":{"halfExtents":[5,3,0.1],"sensor":true},"RigidBody":{}},
+            "e_camera01":{"name":"Follow camera","Transform":{},"Camera":{},
+                "FollowCamera":{"target":"e_player01","distance":4,"height":1.5,"pitch":0}}}}),
+    );
     let crate_centre = Vec3::new(2., 0.5, -3.);
     {
         let mut editor = project.open();
@@ -1144,6 +1154,14 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
         assert!(camera.target.distance(aim) < 1e-4, "{camera:?}");
         assert!(camera.position().distance(aim - forward * 4.) < 1e-4);
         assert_eq!(camera.fov_y_degrees, 46.);
+
+        // The rig's boom stops in front of the wall (1.9 m away, less 0.25 m).
+        editor
+            .action("editor.scene.open", json!({"scene":"levels/wall.scene"}))
+            .unwrap();
+        let camera = editor.state.camera;
+        assert!((camera.distance - 1.65).abs() < 1e-3, "{camera:?}");
+        assert!(camera.position().z > -1.9, "{:?}", camera.position());
     }
 
     // The last camera per scene is a user preference (isolated under target/).

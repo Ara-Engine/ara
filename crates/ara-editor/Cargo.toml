@@ -33,11 +33,13 @@ ara-doc = { path = "../ara-doc" }
 ara-gpu = { path = "../ara-gpu" }
 ara-export = { path = "../ara-export" }
 blake3 = { workspace = true, features = ["std", "pure"] }
+dunce = "1.0.5"
 ara-editor-gpu = { path = "../ara-editor-gpu" }
 ara-host = { path = "../ara-host" }
 ara-json = { path = "../ara-json" }
 ara-mcp = { path = "../ara-mcp" }
 ara-ops = { path = "../ara-ops" }
+ara-physics = { path = "../ara-physics" }
 ara-platform = { path = "../ara-platform" }
 ara-play-host = { path = "../ara-play-host" }
 ara-proto = { path = "../ara-proto" }
@@ -53,6 +55,7 @@ ara-ui-text = { path = "../ara-ui-text" }
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 glam = { workspace = true, features = ["serde", "bytemuck"] }
+glam34 = { workspace = true }
 gltf = { workspace = true, default-features = true }
 parley = { workspace = true, features = ["std", "complex-scripts"] }
 resvg.workspace = true

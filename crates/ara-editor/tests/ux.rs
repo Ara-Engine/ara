@@ -1001,3 +1001,90 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         .unwrap();
     assert_eq!(current["enabled"], true, "{current}");
 }
+
+#[test]
+fn inactive_list_tabs_stay_mounted_hidden_and_come_back_as_they_were() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let focus = |shell: &mut Shell, editor: &mut Editor, panel: &str| {
+        editor
+            .action("editor.focus", json!({ "panel": panel }))
+            .unwrap();
+        editor.sync();
+        shell.rebuild_if_stale(editor).unwrap();
+    };
+    focus(&mut shell, &mut editor, "assets");
+    focus(&mut shell, &mut editor, "console");
+    // The Assets body stays mounted but hidden: not laid out, painted or hit.
+    let ui = &shell.ui;
+    let assets = ui
+        .find("body-assets")
+        .expect("the inactive Assets tab stays mounted");
+    let console = ui.find("body-console").unwrap();
+    assert!(!ui.shown(assets) && ui.shown(console));
+    let content = ui.find("assets-content").unwrap();
+    assert!(!ui.paint_order.contains(&content));
+    // Switching back is a visibility change: nothing is mounted again.
+    let nodes = ui.nodes.len();
+    focus(&mut shell, &mut editor, "assets");
+    let ui = &shell.ui;
+    assert_eq!(ui.nodes.len(), nodes);
+    assert!(ui.shown(ui.find("assets-content").unwrap()));
+    assert!(!ui.shown(ui.find("body-console").unwrap()));
+    // Panels with GPU surfaces render only while active.
+    focus(&mut shell, &mut editor, "scene");
+    assert!(shell.ui.find("body-game").is_none());
+}
+
+/// Rebuild cost by stage for UI-only changes (a toolbar toggle, a dock tab), the
+/// click-frame work `--verify-responsiveness` measures on Outpost. Prints averages;
+/// run with `--ignored --nocapture`.
+#[test]
+#[ignore = "timing measurement; run explicitly"]
+fn rebuild_cost_by_stage() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let mut measure = |label: &str, act: &mut dyn FnMut(&mut Shell, &mut Editor, usize)| {
+        for i in 0..10 {
+            act(&mut shell, &mut editor, i);
+        }
+        shell.take_stats();
+        let runs = 60;
+        let started = std::time::Instant::now();
+        for i in 0..runs {
+            act(&mut shell, &mut editor, i);
+        }
+        let total = started.elapsed().as_secs_f64() * 1000. / runs as f64;
+        let s = shell.take_stats();
+        let per = |v: f64| v / f64::from(s.rebuilds.max(1));
+        println!(
+            "{label}: {total:.2} ms/act, {} rebuilds; rebuild {:.2} = markup {:.2} + mount {:.2} (reconcile {:.2}, frame {:.2}, rows {:.2}); restyled {} paint {}",
+            s.rebuilds,
+            per(s.rebuild_ms),
+            per(s.rebuild_ms - s.mount_ms),
+            per(s.mount_ms),
+            per(s.reconcile_ms),
+            per(s.frame_ms),
+            per(s.rows_ms),
+            s.work.restyled / s.rebuilds.max(1) as usize,
+            s.work.paint_nodes / s.rebuilds.max(1) as usize,
+        );
+    };
+    measure("toolbar toggle", &mut |shell, editor, _| {
+        shell
+            .run_command(editor, "view.space", &Target::None)
+            .unwrap();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+    measure("dock tab", &mut |shell, editor, i| {
+        let panel = if i % 2 == 0 { "console" } else { "assets" };
+        editor
+            .action("editor.focus", json!({ "panel": panel }))
+            .unwrap();
+        editor.sync();
+        shell.rebuild_if_stale(editor).unwrap();
+    });
+}

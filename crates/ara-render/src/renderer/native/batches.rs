@@ -2,6 +2,10 @@
 use super::*;
 use std::collections::BTreeMap;
 
+fn is_transparent(material: &crate::instanced::Material) -> bool {
+    material.pbr.flags[0] == 2 || material.extras.transmission_factor > 0.
+}
+
 pub(super) struct Batch {
     pub first: u32,
     pub count: u32,
@@ -51,7 +55,7 @@ impl Groups {
                         .map(|lod| lod.error)
                         .collect(),
                     instances,
-                    transparent: scene.materials[material].pbr.flags[0] == 2,
+                    transparent: is_transparent(&scene.materials[material]),
                 }
             })
             .collect();
@@ -74,7 +78,7 @@ impl Groups {
         }
         for group in &self.groups {
             ensure!(
-                (scene.materials[group.material].pbr.flags[0] == 2) == group.transparent,
+                is_transparent(&scene.materials[group.material]) == group.transparent,
                 "Native alpha class changed"
             );
             ensure!(

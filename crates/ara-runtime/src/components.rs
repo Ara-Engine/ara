@@ -235,7 +235,7 @@ impl Default for Camera {
 pub struct FollowCamera {
     /// Followed entity.
     pub target: Option<EntityRef>,
-    /// Orbit distance from the aim point.
+    /// Orbit distance from the aim point; the boom stops in front of static box colliders.
     #[ara(default = 5, unit = Meters, range(min = 0.1))]
     pub distance: f32,
     /// Aim point height above the target's origin.

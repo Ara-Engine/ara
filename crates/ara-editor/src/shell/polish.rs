@@ -239,10 +239,7 @@ impl Shell {
             {
                 continue;
             }
-            if let Some(i) = self
-                .ui
-                .find(&format!("swatch-{}", field.path.replace('.', "-")))
-            {
+            if let Some(i) = self.shown_node(&format!("swatch-{}", field.path.replace('.', "-"))) {
                 let r = self.ui.nodes[i].rect;
                 let clip = self.ui.nodes[i].clip.intersection(r);
                 if !r.intersects(clip) || clip.w <= 0. || clip.h <= 0. {

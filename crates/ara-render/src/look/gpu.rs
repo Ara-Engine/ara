@@ -294,6 +294,15 @@ impl LookGpu {
         (rows(&self.sampled), rows(&self.storage))
     }
 
+    /// Zeroes the exposure state so a capture converges exactly as from a fresh
+    /// view (history then pre-exposes by the frame's exposure argument). Call
+    /// only between completed frames.
+    pub(crate) fn reset_exposure(&mut self, gpu: &VulkanDevice) -> Result<()> {
+        gpu.upload(self.state, &[0; 16])?;
+        self.state_access = Access::HostWrite;
+        Ok(())
+    }
+
     /// Imports the persistent resources at their recorded states.
     pub(crate) fn import(&self, graph: &mut Graph) -> LookIds {
         LookIds {

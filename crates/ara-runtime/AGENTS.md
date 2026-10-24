@@ -80,6 +80,9 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
   primitive, interpolated world matrix) and skin-order palettes.
 - `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
+- `follow::FollowView::new(rig, target, walls)`: a follow rig's aim, view direction
+  and boom, which stops 0.25 m before static solid box colliders (`follow::Wall`).
+  `place_cameras` and the editor's opening view share it.
 
 ## System order
 

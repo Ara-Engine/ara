@@ -97,4 +97,18 @@ mod tests {
         check::<render::HeightFog>(&db, "HeightFog");
         check::<render::PostProcess>(&db, "PostProcess");
     }
+
+    #[test]
+    fn ray_tracing_is_an_explicit_project_opt_in() {
+        let default: render::RenderSettings =
+            serde_json::from_str(r#"{"quality":"high"}"#).expect("settings");
+        assert!(!default.ray_tracing);
+        let enabled: render::RenderSettings =
+            serde_json::from_str(r#"{"quality":"epic","rayTracing":true}"#).expect("settings");
+        assert!(enabled.ray_tracing);
+        assert_eq!(
+            serde_json::to_value(enabled).expect("serialized")["rayTracing"],
+            true
+        );
+    }
 }

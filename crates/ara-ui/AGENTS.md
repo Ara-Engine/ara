@@ -11,6 +11,13 @@ Public API:
   paint offset and live widget state (an input keeps caret/undo while its `text` is unchanged
   or equals its value). Hosts rebuild markup on model changes and reconcile; never re-create
   `Ui` per change. `Ui::set_stylesheet` swaps CSS (no-op when equal).
+- `Ui::reconcile_parts(skeleton, parts)`: parts (host ID, markup) replace the skeleton
+  element with that ID. An unchanged part keeps its subtree wholesale (runtime rows and
+  widget state too; nodes only change index, `Ui::moved_index`); a no-op touches nothing.
+  `VirtualView::remap` follows kept rows, `VirtualView::fit` resizes a kept pool.
+- Hidden subtrees (`set_visible(false)`, `display:none`) stay mounted with their state but
+  leave layout, paint, hit testing and focus; `Ui::shown(index)` says whether a node is
+  (its rect is stale otherwise).
 - `Ui::find` / `by_id` resolve authored/model-key identities through a lazily rebuilt index;
   `Work` exposes actual work counters (`+=` sums frames).
 - `theme::EDITOR_CSS`, `EditorTheme::{Dark,Light}`, `Ui::switch_theme` use the canonical root

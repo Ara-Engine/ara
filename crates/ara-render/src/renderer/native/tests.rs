@@ -118,12 +118,33 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
     assert_eq!(renderer.entity_at([122, 54])?, None);
     assert_eq!(renderer.entity_at([70, 54])?, Some(1));
     assert_ne!(first.image, changed.image);
+    assert_ne!(first.metadata.scene_hash, changed.metadata.scene_hash);
     assert_eq!(renderer.native_geometry_stats().unwrap().blas, 0);
     assert!(
         renderer
             .timings()
             .iter()
             .all(|pass| !pass.pass.contains("BLAS") && !pass.pass.contains("TLAS"))
+    );
+    // Authored environments replace both the background and its IBL. Transmission
+    // uses the forward blend even for an otherwise opaque glTF material.
+    scene.environment[0] = [0.04, 0.3, 0.1, 1.];
+    renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    let lit = CaptureRequest {
+        mode: ViewMode::Lit,
+        settle_frames: 4,
+        ..request
+    };
+    let opaque = renderer.capture(&lit)?;
+    scene.materials[0].extras.transmission_factor = 1.;
+    renderer.replace_native_scene(&scene, Box::new(EmptyTextures))?;
+    let transmitted = renderer.capture(&lit)?;
+    transmitted.write(&root.join("transmission.png"))?;
+    assert_ne!(opaque.image, transmitted.image);
+    assert!(
+        renderer
+            .native_geometry_stats()
+            .is_some_and(|stats| stats.blas == 0)
     );
     renderer.gpu().assert_clean()?;
     Ok(())

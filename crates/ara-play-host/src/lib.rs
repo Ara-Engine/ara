@@ -199,8 +199,15 @@ impl PlayService {
                 ]);
             }
             let scripts = self.script_scene().ok().flatten();
-            let pool = Pool::with_scripts(self.config.pool.clone(), self.token.clone(), scripts)
-                .map_err(|e| fail(codes::PLAY, format!("cannot start the player pool: {e}")))?;
+            let rendering =
+                rendering::project(&self.root).map_err(|error| fail(codes::REQUEST, error))?;
+            let pool = Pool::with_rendering(
+                self.config.pool.clone(),
+                self.token.clone(),
+                scripts,
+                rendering,
+            )
+            .map_err(|e| fail(codes::PLAY, format!("cannot start the player pool: {e}")))?;
             self.pool = Some(pool);
         }
         self.pool
