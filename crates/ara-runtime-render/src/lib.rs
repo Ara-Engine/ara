@@ -18,7 +18,9 @@ pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
 mod material;
+mod placeholders;
 mod presentation;
+pub use placeholders::{ModelPlaceholders, PENDING_MODEL_COLOR};
 pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
 mod raster;
 pub use raster::{RasterUpdate, RasterView};

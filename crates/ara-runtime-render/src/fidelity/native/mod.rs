@@ -32,6 +32,9 @@ pub struct Content {
     /// Model or prefab parts keyed by Rule.asset. Each Draw retains its selected
     /// primitive, source pivot, local part transform and material override.
     pub foliage_parts: BTreeMap<String, Vec<Draw>>,
+    /// Model asset IDs behind unpublished foliage part draws, by rule reference
+    /// and part identity. Presentation can change their bounds material in place.
+    pub unpublished_foliage: BTreeMap<String, BTreeMap<u64, String>>,
     /// Optional linear equirectangular environment; otherwise use Environment.
     pub environment: Option<super::EnvironmentMap>,
 }
@@ -45,6 +48,8 @@ pub struct Prepared {
     pub textures: NativeResidency,
     bindings: sync::Bindings,
     changes: render::Changes,
+    model_sources: BTreeMap<usize, Arc<str>>,
+    pub(crate) unpublished_materials: BTreeMap<String, Vec<usize>>,
 }
 
 struct Builder {
@@ -53,6 +58,9 @@ struct Builder {
     texture_keys: BTreeMap<(String, usize), u32>,
     geometry_keys: BTreeMap<[u8; 32], usize>,
     material_keys: BTreeMap<Vec<u8>, usize>,
+    model_sources: BTreeMap<usize, Arc<str>>,
+    model_assets: BTreeMap<String, Arc<str>>,
+    unpublished: BTreeMap<String, BTreeMap<usize, usize>>,
 }
 
 /// Prepares one content generation. Repeated static draws share the original
@@ -77,6 +85,9 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         texture_keys: BTreeMap::new(),
         geometry_keys: BTreeMap::new(),
         material_keys: BTreeMap::new(),
+        model_sources: BTreeMap::new(),
+        model_assets: BTreeMap::new(),
+        unpublished: BTreeMap::new(),
     };
     for draw in &frame.draws {
         builder.draw(draw, frame, draw.world, draw.entity)?;
@@ -95,6 +106,12 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
         textures: builder.textures,
         bindings,
         changes: render::Changes::default(),
+        model_sources: builder.model_sources,
+        unpublished_materials: builder
+            .unpublished
+            .into_iter()
+            .map(|(asset, materials)| (asset, materials.into_values().collect()))
+            .collect(),
     })
 }
 
@@ -106,8 +123,47 @@ impl Builder {
         world: glam::Mat4,
         entity: u64,
     ) -> Result<()> {
+        self.draw_source(draw, frame, world, entity, None)
+    }
+    fn draw_source(
+        &mut self,
+        draw: &Draw,
+        frame: &RenderFrame,
+        world: glam::Mat4,
+        entity: u64,
+        missing: Option<&str>,
+    ) -> Result<()> {
         let geometry = self.geometry(draw, frame)?;
-        let material = self.material(draw)?;
+        if let ara_runtime::extract::Geometry::Model { model, .. } = &draw.geometry {
+            let source = if let Some(source) = self.model_assets.get(&model.asset) {
+                Arc::clone(source)
+            } else {
+                let source: Arc<str> = Arc::from(model.asset.as_str());
+                self.model_assets
+                    .insert(model.asset.to_owned(), Arc::clone(&source));
+                source
+            };
+            self.model_sources
+                .insert(self.scene.instances.len(), source);
+        }
+        let mut material = self.material(draw)?;
+        if let Some(asset) = missing {
+            if let Some(&index) = self
+                .unpublished
+                .get(asset)
+                .and_then(|entries| entries.get(&material))
+            {
+                material = index;
+            } else {
+                let index = self.scene.materials.len();
+                self.scene.materials.push(self.scene.materials[material]);
+                self.unpublished
+                    .entry(asset.to_owned())
+                    .or_default()
+                    .insert(material, index);
+                material = index;
+            }
+        }
         let world = glam30::Mat4::from_cols_array(&world.to_cols_array());
         self.scene.instances.push(Instance {
             entity,

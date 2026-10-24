@@ -133,11 +133,16 @@ impl Builder {
                 hash.update(identity.to_le_bytes());
                 hash.update(part.entity.to_le_bytes());
                 let key: [u8; 32] = hash.finalize().into();
-                self.draw(
+                self.draw_source(
                     part,
                     &empty,
                     world * part.world,
                     u64::from_le_bytes(key[..8].try_into()?),
+                    content
+                        .unpublished_foliage
+                        .get(&asset.0)
+                        .and_then(|parts| parts.get(&part.entity))
+                        .map(String::as_str),
                 )?;
             }
         }
