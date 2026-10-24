@@ -113,6 +113,10 @@ pub struct Shell {
     pub(crate) game_stats: bool,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
+    /// The shown Play world is still starting (`play.status`): its progress.
+    pub(crate) game_start: Option<game_panel::StartProgress>,
+    /// `game_fault` is a start that failed, not a fault while running.
+    pub(crate) game_start_failed: bool,
     /// The Material tool shows its DSL source instead of the node graph.
     pub(crate) material_source_view: bool,
     /// Colour swatches outside the Inspector (material parameters): node id and
@@ -389,6 +393,8 @@ impl Shell {
             game_aspect: "free",
             game_stats: true,
             game_fault: None,
+            game_start: None,
+            game_start_failed: false,
             material_source_view: false,
             value_swatches: Vec::new(),
             nested_swatches: Vec::new(),

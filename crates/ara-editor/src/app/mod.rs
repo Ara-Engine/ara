@@ -411,10 +411,14 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             }
             let was_live = shell.game_live;
             let was_fault = shell.game_fault.clone();
+            let was_start = shell.game_start.clone();
             let game_frame =
                 game.update(&mut editor, &mut shell, &mut gpu, renderer.gpu().context())?;
             dirty |= game_frame;
-            if shell.game_live != was_live || shell.game_fault != was_fault {
+            if shell.game_live != was_live
+                || shell.game_fault != was_fault
+                || shell.game_start != was_start
+            {
                 if !shell.game_live {
                     shell.game_captured = false;
                 }

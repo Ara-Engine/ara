@@ -245,6 +245,7 @@ impl Editor {
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
             let mut start = result;
+            start["background"] = true.into();
             self.embed_play(&mut start);
             return self.action("play.start", start);
         }

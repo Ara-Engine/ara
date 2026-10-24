@@ -188,6 +188,12 @@ impl Shell {
         }
         false
     }
+    /// Shows a `play.status` world row as if the window had just read it (a start's
+    /// progress at a chosen moment), then rebuilds.
+    pub fn show_play_row_for_test(&mut self, editor: &mut Editor, row: Value) {
+        self.game_start = Some(super::game_panel::StartProgress::from_status(&row));
+        let _ = self.rebuild(editor);
+    }
     /// Palette rows for `query` as (group, title, command id) without opening it.
     pub fn palette_rows(
         &mut self,

@@ -126,8 +126,8 @@ never an override). C#: `shell/scripts.rs` scaffolds a hot module + IDE .csproj.
 Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc
-releases); a faulted world (`play.status`) shows its fault with Restart/Stop
-instead of "Starting Play…". Play embeds unless `play.inGameView` is off.
+releases). Play starts in the background (`background:true`); `Shell::read_play_status`
+shows the start's phase/progress, a failed start, or a fault. Embeds unless `play.inGameView` is off.
 Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
