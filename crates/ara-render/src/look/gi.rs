@@ -72,6 +72,107 @@ impl ProbeSurfaces {
         );
         Ok(())
     }
+}
+
+/// Bytes of one probe record in a [`ProbeUpdate`]: [probe id, 0, 0, 0], then its
+/// [`SURFACE_TEXELS`] cache texels and [`STATIC_VECTORS`] statics.
+pub const PROBE_RECORD: usize = 16 + (SURFACE_TEXELS + STATIC_VECTORS) * 16;
+
+/// Probe surfaces packed for the renderer: the lattice and one record per probe
+/// to write. It is plain data, so build it off the render thread; applying it is
+/// one upload and a compute scatter (`Renderer::update_probe_surfaces`), and a
+/// large update can be applied a slice at a time ([`ProbeUpdate::split_front`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeUpdate {
+    /// First probe centre in world metres.
+    pub origin: [f32; 3],
+    /// Probe separation per axis, in metres.
+    pub spacing: [f32; 3],
+    /// Lattice dimensions.
+    pub counts: [u32; 3],
+    /// Packed records, [`PROBE_RECORD`] bytes each.
+    pub records: Vec<u8>,
+}
+
+impl ProbeUpdate {
+    /// Records `probes` of `surfaces` (`None`: every probe).
+    pub fn new(surfaces: &ProbeSurfaces, probes: Option<&[u32]>) -> Result<Self> {
+        surfaces.validate()?;
+        let all: Vec<u32>;
+        let probes = match probes {
+            Some(probes) => probes,
+            None => {
+                all = (0..surfaces.len() as u32).collect();
+                &all
+            }
+        };
+        let mut records = Vec::with_capacity(probes.len() * PROBE_RECORD);
+        for &id in probes {
+            let p = id as usize;
+            ensure!(p < surfaces.len(), "probe {id} outside the lattice");
+            records.extend_from_slice(bytemuck::bytes_of(&[id, 0, 0, 0]));
+            records.extend_from_slice(bytemuck::cast_slice(
+                &surfaces.texels[p * SURFACE_TEXELS..(p + 1) * SURFACE_TEXELS],
+            ));
+            records.extend_from_slice(bytemuck::cast_slice(
+                &surfaces.statics[p * STATIC_VECTORS..(p + 1) * STATIC_VECTORS],
+            ));
+        }
+        Ok(Self {
+            origin: surfaces.origin,
+            spacing: surfaces.spacing,
+            counts: surfaces.counts,
+            records,
+        })
+    }
+
+    /// Records in this update.
+    pub fn len(&self) -> usize {
+        self.records.len() / PROBE_RECORD
+    }
+
+    /// Whether the update writes no probe.
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+
+    /// Probes in the lattice.
+    pub fn probes(&self) -> usize {
+        self.counts.iter().map(|&n| n as usize).product()
+    }
+
+    /// Splits off the first `count` records (all, if fewer) as their own update.
+    pub fn split_front(&mut self, count: usize) -> Self {
+        let rest = self
+            .records
+            .split_off((count * PROBE_RECORD).min(self.records.len()));
+        Self {
+            records: std::mem::replace(&mut self.records, rest),
+            ..*self
+        }
+    }
+
+    /// Checks the lattice and the record framing before upload.
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.counts.iter().all(|&c| (2..=256).contains(&c)) && self.probes() <= 1 << 18,
+            "Invalid probe lattice"
+        );
+        ensure!(
+            self.origin
+                .iter()
+                .chain(&self.spacing)
+                .all(|v| v.is_finite())
+                && self.spacing.iter().all(|&s| s > 0.),
+            "Invalid probe positions"
+        );
+        ensure!(
+            self.records.len().is_multiple_of(PROBE_RECORD),
+            "Probe records are not whole"
+        );
+        Ok(())
+    }
+
     /// Surface bias used when sampling the volume: a fifth of the smallest spacing,
     /// at most 15 cm.
     pub(crate) fn bias(&self) -> f32 {
@@ -105,6 +206,8 @@ pub(crate) struct GiGpu {
     pub indices: [u32; 3],
     pub irradiance_sampled: [u32; 2],
     pub irradiance_storage: [u32; 2],
+    /// Storage index of `moments` (in-place edits, `giScatterMain`).
+    pub moments_storage: u32,
     pub access: [Access; 2],
     pub slot: usize,
     pub cursor: u32,

@@ -1,13 +1,13 @@
 {
   "binding_layout_hash": "35cd2a62b1ba741ce6823b3c8753d7b5aa97b54c5f0a837b56e542518013fd7e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "f426f30a865c3bb344f8bc2a00a96ca81e1700220fb73975769ebc27305c6ff0",
+  "key": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679",
   "stages": [
     {
-      "dxil": "f426f30a865c3bb344f8bc2a00a96ca81e1700220fb73975769ebc27305c6ff0/ssrPyramidMain.dxil",
+      "dxil": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679/ssrPyramidMain.dxil",
       "dxil_hash": "80b12eb5a2b6327c70b6b43373ac86eff41812ae47df74bb0a125f7c74f0eb34",
       "source_entry": "ssrPyramidMain",
-      "spirv": "f426f30a865c3bb344f8bc2a00a96ca81e1700220fb73975769ebc27305c6ff0/ssrPyramidMain.spv",
+      "spirv": "3f7b4ea1b0594875736d1a56c665925195e3bed4ba55e28383e39fc93a0bd679/ssrPyramidMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "2427b834a7da7040255c434801ba6ac1cd3d87b67db7644545e3282f3249013c",
       "stage": "compute"
