@@ -100,6 +100,13 @@ pub enum Command {
         /// Nonzero byte count, divisible by four.
         size: u64,
     },
+    /// Copy mip zero between distinct, equally sized and formatted color images.
+    CopyImage {
+        /// Completed transfer source.
+        source: Image,
+        /// Transfer destination.
+        destination: Image,
+    },
     /// Image-to-buffer readback with tightly packed pixels.
     ReadImage {
         /// Copy source.

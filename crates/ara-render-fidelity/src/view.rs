@@ -166,30 +166,8 @@ impl FidelityView {
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
         );
         let mut pipelines = BTreeMap::new();
-        let names = if settings.tier == Tier::Rt {
-            vec![
-                "primary",
-                "ddgi",
-                "hybrid",
-                "reference",
-                "primary_emissive",
-                "ddgi_emissive",
-                "hybrid_emissive",
-                "reference_emissive",
-                "primary_atmosphere",
-                "ddgi_atmosphere",
-                "hybrid_atmosphere",
-                "reference_atmosphere",
-                "primary_layers",
-                "ddgi_layers",
-                "hybrid_layers",
-                "reference_layers",
-            ]
-        } else {
-            vec!["primary_raster", "hybrid_raster"]
-        };
         let mut cohort = None;
-        for name in names.into_iter().chain([
+        for name in [
             "temporal",
             "atrous",
             "bloom",
@@ -206,7 +184,7 @@ impl FidelityView {
             } else {
                 "fog_raster"
             },
-        ]) {
+        ] {
             let cooked: ara_gpu::cooked::CookedPipeline =
                 serde_json::from_slice(&std::fs::read(artifacts.join(format!("{name}.json")))?)?;
             if let Some(key) = &cohort {

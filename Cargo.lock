@@ -1388,6 +1388,7 @@ dependencies = [
 name = "ara-play"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-components",
  "ara-doc",
  "ciborium",
  "serde",

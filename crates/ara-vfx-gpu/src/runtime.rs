@@ -255,7 +255,7 @@ impl GpuSystem {
         );
         self.reset(gpu)?;
         let view = View {
-            camera: request.camera.clone(),
+            camera: request.camera,
             exposure: request.exposure,
             async_compute: false,
             ..scene

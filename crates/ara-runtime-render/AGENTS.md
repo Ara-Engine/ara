@@ -1,31 +1,38 @@
 # ara-runtime-render
 
-Presents `ara_runtime::extract::RenderFrame`s with `ara-render` (Vulkan). Owns the
-renderer and per-draw upload state; no simulation, window or process code.
+Presents `ara_runtime::extract::RenderFrame`s through fidelity on RT GPUs, with
+`ara-render` as Low/non-RT fallback. Owns the device and per-view upload state;
+no simulation, window or process code.
 
 ## Public API
 
 - `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the renderer is
   created on the first frame (headless when `window_extensions` is empty).
-- `prepare(&frame)`: rebuilds the uploaded scene only when the draw layout changes
-  (entity, geometry, material); otherwise re-transforms moved/skinned meshes on the CPU
-  (`Renderer::update_mesh`) and rewrites lights/sun in place.
-- `present(&frame)`: `prepare` + render to the output image (blit with
-  `ara_platform::Present`); resident terrain and foliage use ara-landscape on the
-  same device. `capture(&frame, size, mode, marks,
+- `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
+  the project default or user override. Unsupported RT requests resolve explicitly
+  to Low; rendering failures retain the completed image and expose `presentation_error`.
+- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
+  textures, instance poses and changed skin palettes. The resolver reads published
+  terrain/material/prefab assets only on structural changes. Model-only callers can
+  use `prepare` / `present` without a resolver.
+- `output()` is a completed CopySource image independent of view targets; always
+  pair it with `output_size()`. `size()` is the requested extent, which can differ
+  while a failed replacement retains the last good output. The raster `renderer()`
+  owns the shared device; its own output and size are not the selected presentation.
+- `capture(&frame, size, mode, marks,
   seed)`: deterministic capture with numbered marks and a legend whose names are
   `Name (e_address)`; terrain and foliage come from the landscape composite.
   `capture_presented(&frame, size, marks, seed)`: reads the GPU-composited window
   path, including landscape/foliage and persistent VFX (`presented: true`).
-- Window presentation merges landscape and scene depth on the GPU before particles,
-  then runs the shared HDR post pass. `output()` is the final CopySource image.
-- `stats()`: rebuilt flag, meshes updated, CPU prepare time, render time.
+- Fidelity composes terrain, foliage and particles before shared HDR post/TAAU;
+  native captures read the same view as windows and embedded Game. Low merges
+  ara-landscape depth and particles through the existing raster compositor.
+- `stats()`: rebuilt flag, updated poses/skins, CPU prepare/render time and GPU ms.
 - `fidelity::scene(frame, Content)`: engine-owned scene conversion for fidelity.
   `Content` holds already-resolved terrain layers, foliage rule models, material
   detail and HDR environment overrides; it never reads sample locks or project paths.
   `fidelity::vfx::Effects` composites cooked particles into FidelityView HDR before post.
-  The current upload ABI still needs world-space/material merging and atlas packing;
-  these are transitional until the descriptor and instancing migration lands.
+  This legacy capture adapter retains atlas packing; live presentation uses native.
 - `fidelity::native::{Content::resolve, prepare}` resolves real Header.materials
   and model/prefab foliage at a control boundary, then prepares local shared geometry,
   six independent UV slots and native BC residency. It consumes existing runtime
@@ -60,8 +67,9 @@ renderer and per-draw upload state; no simulation, window or process code.
 - `ara-render` takes glam 0.30 types (`glam30`); runtime math is glam 0.34.
 - Skinning is CPU-side: GPU skinning needs a skinned vertex ABI in the cooked
   shaders (M3). Fox (1728 vertices) costs well under a millisecond.
-- Material or draw-set changes rebuild (`replace_scene`, keeps device/pipelines);
-  light and transform edits stream. Model texture decodes are cached per generation.
+- Native material/draw-set generations replace scene resources while retaining
+  pipelines and targets. Light/transform/skin edits stream; native textures never
+  decode to RGBA8. Low retains its legacy decode/cache path.
 - At most 64 local lights; one directional sun (a dim default if the world has none).
 - Capture resizes the renderer to the request and back.
 - `Presenter2d::set_atlases` publishes textures once; `prepare` moves the atlas map

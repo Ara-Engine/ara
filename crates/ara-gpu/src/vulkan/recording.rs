@@ -455,6 +455,26 @@ impl VulkanDevice {
                         return Err(GpuError::Contract("Invalid buffer copy".into()));
                     }
                 }
+                Command::CopyImage {
+                    source,
+                    destination,
+                } => {
+                    let source = self.images.get(*source)?.raw;
+                    let destination = self.images.get(*destination)?.raw;
+                    if rendering
+                        || source.handle == destination.handle
+                        || source.format != destination.format
+                        || source.width != destination.width
+                        || source.height != destination.height
+                        || source.aspect != vk::ImageAspectFlags::COLOR
+                        || !source.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
+                        || !destination
+                            .usage
+                            .contains(vk::ImageUsageFlags::TRANSFER_DST)
+                    {
+                        return Err(GpuError::Contract("Invalid image copy".into()));
+                    }
+                }
                 Command::ReadImage {
                     source,
                     destination,

@@ -6,6 +6,15 @@ use ara_gpu::{
     vulkan::{Command, VulkanDevice},
 };
 impl FidelityView {
+    /// Read compact one-based instance IDs at transport resolution for picking
+    /// and capture legends. Zero is background; this never runs during presentation.
+    pub fn capture_entity_ids(&self, gpu: &mut VulkanDevice) -> Result<Vec<u32>> {
+        Ok(self
+            .read_hdr(gpu, crate::targets::WORLD0 + 1 - self.slot)?
+            .into_iter()
+            .map(|world| world[3] as u32)
+            .collect())
+    }
     /// Read histogram exposure diagnostics explicitly; ordinary frames do no readback.
     pub fn capture_exposure(&self, gpu: &mut VulkanDevice) -> Result<crate::ExposureState> {
         anyhow::ensure!(self.history, "Render before capture");
