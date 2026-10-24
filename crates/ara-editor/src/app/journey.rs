@@ -89,6 +89,7 @@ impl Journey {
         gpu: &mut NativeUi,
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
@@ -129,7 +130,7 @@ impl Journey {
         shell.upload_thumbnails(ui)?;
         let capture = super::verify::Verification::new(&self.output);
         let file = format!("{:02}-{name}", self.step + 1);
-        capture.screenshot(&file, editor, shell, gpu, ui, renderer)?;
+        capture.screenshot(&file, editor, shell, gpu, ui, renderer, scene_view)?;
         let (_, what) = STEPS[self.step];
         let ok = !timed_out && !self.note.starts_with("failed");
         self.report.push(json!({

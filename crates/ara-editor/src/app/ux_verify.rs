@@ -97,6 +97,7 @@ impl UxVerification {
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
         floats: &windows::Floats,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
@@ -140,7 +141,15 @@ impl UxVerification {
             shell.rebuild(editor)?;
             self.reopen(editor, shell, setup)?;
             shell.upload_thumbnails(ui)?;
-            capture.screenshot(&format!("{name}-{theme}"), editor, shell, gpu, ui, renderer)?;
+            capture.screenshot(
+                &format!("{name}-{theme}"),
+                editor,
+                shell,
+                gpu,
+                ui,
+                renderer,
+                scene_view,
+            )?;
             if let Some(float) = float {
                 let work = shell.frame_surface(&float.id)?;
                 let _ = work;

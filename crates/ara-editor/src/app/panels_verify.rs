@@ -175,6 +175,7 @@ impl Verification {
         gpu: &mut NativeUi,
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<bool> {
         if self.finished() {
             return Ok(false);
@@ -288,7 +289,7 @@ impl Verification {
                 {
                     return Err("asset filename is clipped in the short drawer".into());
                 }
-                self.capture_pair("assets", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair("assets", editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.material,"asset":""}),
@@ -307,7 +308,7 @@ impl Verification {
                 if !shell.preview_ready("material") || self.age < 30 {
                     return Ok(false);
                 }
-                self.capture_pair("material", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair("material", editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.vfx,"item":"flame|update|curl"}),
@@ -321,7 +322,7 @@ impl Verification {
                 }
                 editor.action("editor.workspace", json!({"playing":false}))?;
                 shell.rebuild(editor)?;
-                self.capture_pair("vfx", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair("vfx", editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.animation,"item":"","blends":false}),
@@ -348,7 +349,15 @@ impl Verification {
                     editor.action("editor.canvas", json!({"selection":[id]}))?;
                     shell.rebuild(editor)?;
                 }
-                self.capture_pair("animation-states", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair(
+                    "animation-states",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.workspace", json!({"blends":true}))?;
                 shell.rebuild(editor)?;
                 self.next();
@@ -372,7 +381,15 @@ impl Verification {
                     editor.action("editor.canvas", json!({"selection":[id]}))?;
                     shell.rebuild(editor)?;
                 }
-                self.capture_pair("animation-blends", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair(
+                    "animation-blends",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action("editor.focus", json!({"panel":"scene"}))?;
                 let entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
                     .map_err(|d| format!("{d:?}"))?
@@ -383,7 +400,7 @@ impl Verification {
                     editor.action("editor.select", json!({"entities":[entity]}))?;
                 }
                 shell.rebuild(editor)?;
-                self.capture_pair("scene", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair("scene", editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action("profile.start", json!({}))?;
                 shell.rebuild(editor)?;
                 self.next();
@@ -415,10 +432,18 @@ impl Verification {
                 if editor.profile_current.is_none() {
                     return Ok(false);
                 }
-                self.capture_pair("profiler", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair("profiler", editor, shell, gpu, ui, renderer, scene_view)?;
                 editor.action("editor.workspace", json!({"compare":true}))?;
                 shell.rebuild(editor)?;
-                self.capture_pair("profiler-compare", editor, shell, gpu, ui, renderer)?;
+                self.capture_pair(
+                    "profiler-compare",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 self.interactions
                     .push("two real frame/GPU captures frozen and compared");
                 self.load_large_graph(editor, shell)?;
@@ -453,7 +478,7 @@ impl Verification {
                             pressed: false,
                         },
                     )?;
-                    self.capture_pair("graph-500", editor, shell, gpu, ui, renderer)?;
+                    self.capture_pair("graph-500", editor, shell, gpu, ui, renderer, scene_view)?;
                     let timings = statistics(&self.samples);
                     let passed = timings["p95"].as_f64().is_some_and(|value| value < 4.);
                     let stages = [
@@ -521,6 +546,7 @@ impl Verification {
         }
         Ok(true)
     }
+    #[allow(clippy::too_many_arguments)]
     fn capture_pair(
         &self,
         name: &str,
@@ -529,6 +555,7 @@ impl Verification {
         gpu: &mut NativeUi,
         ui: &mut UiRenderer,
         renderer: &mut Renderer,
+        scene_view: &mut super::viewport::SceneView,
     ) -> ara_ui::Result<()> {
         let actual = shell.ui.size.map(|v| (v * gpu.dpi()).round() as u32);
         if actual != self.pixels {
@@ -539,7 +566,15 @@ impl Verification {
             editor.action("editor.theme", json!({"light":light}))?;
             shell.rebuild(editor)?;
             shell.upload_thumbnails(ui)?;
-            capture.screenshot(&format!("{name}-{theme}"), editor, shell, gpu, ui, renderer)?;
+            capture.screenshot(
+                &format!("{name}-{theme}"),
+                editor,
+                shell,
+                gpu,
+                ui,
+                renderer,
+                scene_view,
+            )?;
         }
         editor.action("editor.theme", json!({"light":false}))?;
         shell.rebuild(editor)?;

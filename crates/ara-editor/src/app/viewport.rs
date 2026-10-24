@@ -31,6 +31,30 @@ impl SceneView {
             .map(|view| view.timings())
             .unwrap_or(&[])
     }
+    /// Settle a reproducible capture on the live allocation. Reset lighting history
+    /// and the jitter/RNG sequence without holding a second view's GPU descriptors.
+    pub(super) fn render_capture(
+        &mut self,
+        renderer: &mut Renderer,
+        editor: &Editor,
+        view: &crate::world::DocumentView,
+        settle: u32,
+    ) -> ara_ui::Result<()> {
+        self.render(renderer, editor, view, 1)?;
+        if !self.active {
+            return Ok(());
+        }
+        if self.failed.is_some() {
+            return Err("Scene capture could not prepare the requested content generation".into());
+        }
+        self.fidelity
+            .as_mut()
+            .ok_or("Scene capture has no fidelity view")?
+            .reset_accumulation(renderer.gpu_mut())?;
+        self.tick = 0;
+        self.render_fidelity(renderer, editor, view, settle)?;
+        Ok(())
+    }
     pub fn render(
         &mut self,
         renderer: &mut Renderer,
@@ -355,6 +379,21 @@ mod tests {
             let capture = scene.capture(&mut renderer, &request)?;
             capture.write(&root.join("scene-high.png"))?;
             assert!(capture.image.pixels().any(|pixel| pixel[0] != pixel[1]));
+            scene
+                .render_capture(&mut renderer, &editor, &view, 8)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let first = scene.capture(&mut renderer, &request)?;
+            scene
+                .render(&mut renderer, &editor, &view, 5)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            scene
+                .render_capture(&mut renderer, &editor, &view, 8)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let repeated = scene.capture(&mut renderer, &request)?;
+            assert_eq!(
+                first.image, repeated.image,
+                "capture must reset history on the live view without another descriptor set"
+            );
             renderer.resize([240, 136])?;
             scene
                 .render(&mut renderer, &editor, &view, 2)
