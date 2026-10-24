@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use ara_render::capture::{Capture, CaptureRequest, ViewMode};
+use ara_render::look::gi::ProbeUpdate;
 use ara_render::scene::CameraSpec;
 use ara_render_fidelity::{environment::FrameEnvironment, presets::RasterPlan};
 use ara_runtime::extract::RenderFrame;
@@ -28,6 +29,8 @@ pub struct RasterView {
     gi: Option<crate::gi::Acquisition>,
     /// Static/dynamic split of the instances for probe GI.
     mobility: crate::gi::Mobility,
+    /// Delivered probe updates not applied yet (large ones go a slice per frame).
+    gi_updates: std::collections::VecDeque<ProbeUpdate>,
     cache: PathBuf,
     key: u64,
     pending_gi: bool,
@@ -44,6 +47,7 @@ impl RasterView {
             effects: Default::default(),
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
             mobility: Default::default(),
+            gi_updates: Default::default(),
             cache,
             key: crate::FNV,
             pending_gi: false,
@@ -64,9 +68,9 @@ impl RasterView {
     /// Keep progressive editor views polling until acquired probe surfaces arrive
     /// and moved instances settle back into them.
     pub fn needs_frame(&self) -> bool {
-        self.gi
-            .as_ref()
-            .is_some_and(|gi| gi.is_pending() || self.mobility.settling())
+        self.gi.as_ref().is_some_and(|gi| {
+            gi.is_pending() || self.mobility.settling() || !self.gi_updates.is_empty()
+        })
     }
 
     /// Change derived capture/probe labels at an editor control boundary without
@@ -199,9 +203,10 @@ impl RasterView {
                 } else if edited {
                     gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
                 }
-                if let Some(surfaces) = gi.poll(false) {
-                    renderer.update_probe_surfaces(&surfaces)?;
+                while let Some(delivery) = gi.poll(false) {
+                    queue_probe_gi(&mut self.gi_updates, delivery);
                 }
+                apply_probe_gi(renderer, &mut self.gi_updates, PROBES_PER_FRAME)?;
             }
             Ok(update)
         })();
@@ -277,9 +282,12 @@ impl RasterView {
 
     /// Wait only at an explicit capture/measurement boundary, never in live rendering.
     pub fn wait_probe_gi(&mut self, renderer: &mut Renderer) -> Result<()> {
-        if let Some(surfaces) = self.gi.as_mut().and_then(|gi| gi.poll(true)) {
-            renderer.update_probe_surfaces(&surfaces)?;
+        if let Some(gi) = &mut self.gi {
+            while let Some(update) = gi.poll(true) {
+                queue_probe_gi(&mut self.gi_updates, update);
+            }
         }
+        apply_probe_gi(renderer, &mut self.gi_updates, usize::MAX)?;
         Ok(())
     }
 
@@ -328,6 +336,50 @@ impl RasterView {
     pub fn destroy(self, renderer: &mut Renderer) -> Result<()> {
         self.effects.destroy(renderer)
     }
+}
+
+/// Probe records applied per presented frame (8 MB): a full 32k-probe volume
+/// lands over eight frames instead of stalling one.
+const PROBES_PER_FRAME: usize = 4096;
+
+/// Queues a delivered update; one that rewrites every probe supersedes the
+/// updates still waiting.
+fn queue_probe_gi(updates: &mut std::collections::VecDeque<ProbeUpdate>, update: ProbeUpdate) {
+    if update.len() == update.probes() {
+        updates.clear();
+    }
+    updates.push_back(update);
+}
+
+/// Applies up to `budget` queued probe records on the render thread, in order,
+/// and reports what that cost.
+fn apply_probe_gi(
+    renderer: &mut Renderer,
+    updates: &mut std::collections::VecDeque<ProbeUpdate>,
+    budget: usize,
+) -> Result<()> {
+    if updates.is_empty() {
+        return Ok(());
+    }
+    let started = std::time::Instant::now();
+    let mut applied = 0;
+    while applied < budget
+        && let Some(mut update) = updates.pop_front()
+    {
+        if update.len() > budget - applied {
+            let front = update.split_front(budget - applied);
+            updates.push_front(update);
+            update = front;
+        }
+        renderer.update_probe_surfaces(&update)?;
+        applied += update.len();
+    }
+    eprintln!(
+        "ara-runtime-render: applied {applied} probe GI records ({} queued) in {:.2} ms",
+        updates.iter().map(ProbeUpdate::len).sum::<usize>(),
+        started.elapsed().as_secs_f64() * 1e3
+    );
+    Ok(())
 }
 
 fn texture_config() -> NativeConfig {

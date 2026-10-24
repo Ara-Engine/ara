@@ -88,7 +88,7 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         float height=max(at.y-l.atmosphere.x,0);float density=fog?l.atmosphere.y*exp(-max(at.y-l.look.z,0)/l.atmosphere.z):0;
         float3 sr=0;float sm=0;float3 e=density;
         if(physical)e+=extinction(height,l.look.w,sr,sm);
-        float3 sunlight=sunAt(f,l,at)*visibility(f,at,float3(0,0,0));
+        float3 sunlight=sunAt(f,l,at)*visibility(f,l,at,float3(0,0,0));
         float3 source=sunlight*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+density*albedo*phaseM(cosine,g));
         if(physical)source+=(sr+sm+density*albedo)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
         else source+=density*albedo*ambient;

@@ -22,14 +22,32 @@ float cascadeVisibility(Frame f,uint c,float3 world,float3 normal){
     }
     return sum;
 }
+// Distant sun visibility from the far shadow map (look/far.rs): the cascades'
+// 3x3 box of bilinear compares (four gathers), with normal offset and bias
+// scaled to its (metre-sized) texels, so distant edges stay smooth.
+float farVisibility(Look l,float3 world,float3 normal){
+    if(l.farInfo.z==0)return 1;
+    float res=float(l.farInfo.y);float4x4 m=l.farShadow;float texel=2/(length(m[0].xyz)*res);
+    float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
+    float depth=q.z+texel*length(m[2].xyz);
+    float2 position=uv*res-0.5,base=floor(position),t=position-base;
+    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
+    for(uint j=0;j<2;j++)for(uint i=0;i<2;i++){
+        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
+        float4 lit=step(textures[NonUniformResourceIndex(l.farInfo.x)].GatherRed(samplers[2],g),depth);
+        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+    }
+    return sum;
+}
 // Sun visibility at `world`: blends into the next cascade over the last tenth of
 // each and fades out over the last tenth of the shadow distance.
-float visibility(Frame f,float3 world,float3 normal) {
+float visibility(Frame f,Look l,float3 world,float3 normal) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
-    if(c>=count)return 1;
+    if(c>=count)return farVisibility(l,world,normal);
     float far=splits[c],near=c==0?0:splits[c-1],band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
     float v=cascadeVisibility(f,c,world,normal);
-    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,c+1,world,normal):1.,blend);
+    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,c+1,world,normal):farVisibility(l,world,normal),blend);
     return v;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
@@ -95,7 +113,7 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // forward surfaces search the probes directly.
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
-    float nv=saturate(dot(s.normal,v));float3 F=fresnel(nv,lerp(float3(0.04),s.albedo,s.metal));
+    float nv=saturate(dot(s.normal,v));float3 f0=lerp(float3(0.04),s.albedo,s.metal);
     float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+high*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
@@ -110,17 +128,21 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
         spec=lerp(spec,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
     }
     if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
-    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-F)/PI*multiBounce(s.ao,s.albedo);
-    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014).
+    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014). Its scale and
+    // bias already integrate Fresnel over the lobe, so they take F0: Fresnel at
+    // the view angle would make rough surfaces mirror-bright at grazing angles.
     float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
     float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;float2 ab=float2(-1.04,1.04)*a004+r.zw;
-    return diffuse+spec*(F*ab.x+ab.y)*specularOcclusion(nv,s.ao,s.roughness);
+    float3 specularAlbedo=f0*ab.x+ab.y;
+    // Diffuse keeps the energy the specular lobe does not reflect.
+    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-specularAlbedo)/PI*multiBounce(s.ao,s.albedo);
+    return diffuse+spec*specularAlbedo*specularOcclusion(nv,s.ao,s.roughness);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
     float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
-    result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,world,s.normal);
+    result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal);
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*65;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {

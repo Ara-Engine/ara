@@ -303,6 +303,19 @@ impl Renderer {
                 queue: Queue::Graphics,
             };
         }
+        let far = quality.shadows.far;
+        if far != self.look.far.as_ref().map(|f| f.settings) {
+            if let Some(old) = self.look.far.take() {
+                old.destroy(&mut self.gpu)?;
+            }
+            if let Some(far) = far {
+                self.look.far = Some(crate::look::far::FarMap::new(
+                    &mut self.gpu,
+                    far,
+                    std::mem::size_of::<frame::Frame>() as u64,
+                )?);
+            }
+        }
         self.look.quality = quality;
         Ok(())
     }

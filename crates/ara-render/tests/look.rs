@@ -6,7 +6,7 @@ use ara_render::{
     Renderer,
     capture::compare,
     look::{
-        AmbientOcclusion, AutoExposure, Fog, Look, Quality, Reflections, Shadows, Sky,
+        AmbientOcclusion, AutoExposure, FarShadows, Fog, Look, Quality, Reflections, Shadows, Sky,
         gi::{ProbeSurfaces, STATIC_VECTORS, SURFACE_TEXELS},
     },
 };
@@ -39,6 +39,10 @@ fn every_raster_look_feature_renders_validation_clean() -> Result<()> {
             cascades: 4,
             resolution: 1024,
             distance: 80.,
+            far: Some(FarShadows {
+                resolution: 512,
+                distance: 400.,
+            }),
         },
         ambient_occlusion: Some(AmbientOcclusion::default()),
         reflections: Some(Reflections::default()),
