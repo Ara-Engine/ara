@@ -82,6 +82,7 @@ impl Renderer {
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
+            tone_curve: super::post::ToneCurve::AcesFit,
         })
     }
 

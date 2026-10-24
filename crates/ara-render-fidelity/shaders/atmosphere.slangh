@@ -1,9 +1,10 @@
 // Spherical Earth, metres. Independent implementation of Hillaire (EGSR 2020).
 static const uint TRANSMITTANCE=24,MULTISCATTER=25,SKYVIEW=26,FROXELS=27;
 static const float PLANET=6360000,TOP=6460000;
-float3 extinction(float height,out float3 scatteringR,out float scatteringM){
+// Aerosols scale Mie density relative to clear Earth air (Frame.look.w).
+float3 extinction(float height,float aerosols,out float3 scatteringR,out float scatteringM){
     height=max(height,0);scatteringR=float3(5.802e-6,13.558e-6,33.1e-6)*exp(-height/8000);
-    scatteringM=3.996e-6*exp(-height/1200);
+    scatteringM=3.996e-6*exp(-height/1200)*aerosols;
     float ozone=max(0,1-abs(height-25000)/15000);
     return scatteringR+scatteringM/0.9+float3(0.650e-6,1.881e-6,0.085e-6)*ozone;
 }
@@ -21,7 +22,7 @@ float3 integrateSky(Frame f,float3 p,float3 d,float distance,uint steps,bool mul
     for(uint i=0;i<steps;i++){
         float end=distance*pow(float(i+1)/steps,2),ds=end-previous;
         float3 at=p+d*(previous+ds*0.5);previous=end;float height=max(length(at)-PLANET,0),mu=dot(normalize(at),f.sunDirection.xyz);
-        float3 sr;float sm;float3 e=extinction(height,sr,sm),segment=exp(-e*ds);
+        float3 sr;float sm;float3 e=extinction(height,f.look.w,sr,sm),segment=exp(-e*ds);
         float3 source=transmittance(f,height,mu)*(sr*phaseR(dot(d,f.sunDirection.xyz))+sm*phaseM(dot(d,f.sunDirection.xyz),0.8));
         if(multiple)source+=(sr+sm)*multiScattering(f,height,mu);
         sum+=throughput*source*(1-segment)/max(e,float3(1e-9));throughput*=segment;

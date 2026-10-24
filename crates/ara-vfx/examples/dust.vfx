@@ -1,0 +1,111 @@
+{
+  "name": "dust",
+  "seed": 17,
+  "hz": 60,
+  "quality": {
+    "particles": 1000000,
+    "overdraw": 16,
+    "lights": 8,
+    "events": 4096
+  },
+  "emitters": [
+    {
+      "name": "motes",
+      "capacity": 2048,
+      "bounds": {
+        "min": [-9, -0.5, -9],
+        "max": [9, 6, 9]
+      },
+      "stacks": {
+        "spawn": [
+          {
+            "name": "rate",
+            "module": {
+              "op": "rate",
+              "per_second": 60
+            }
+          }
+        ],
+        "initialize": [
+          {
+            "name": "lifetime",
+            "module": {
+              "op": "lifetime",
+              "seconds": 14,
+              "size": 0.012,
+              "color": [0.55, 0.5, 0.45, 0]
+            }
+          },
+          {
+            "name": "volume",
+            "module": {
+              "op": "box",
+              "center": [0, 2.5, 0],
+              "extent": [8, 2.5, 8]
+            }
+          },
+          {
+            "name": "drift",
+            "module": {
+              "op": "velocity",
+              "value": [0, 0.015, 0],
+              "spread": [0.04, 0.025, 0.04]
+            }
+          }
+        ],
+        "update": [
+          {
+            "name": "air",
+            "module": {
+              "op": "curl_noise",
+              "frequency": 0.35,
+              "strength": 0.05
+            }
+          },
+          {
+            "name": "drag",
+            "module": {
+              "op": "drag",
+              "coefficient": 0.4
+            }
+          },
+          {
+            "name": "fade",
+            "module": {
+              "op": "color_over_life",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": [0.55, 0.5, 0.45, 0]
+                },
+                {
+                  "t": 0.2,
+                  "value": [0.55, 0.5, 0.45, 0.55]
+                },
+                {
+                  "t": 0.8,
+                  "value": [0.55, 0.5, 0.45, 0.55]
+                },
+                {
+                  "t": 1,
+                  "value": [0.55, 0.5, 0.45, 0]
+                }
+              ]
+            }
+          }
+        ],
+        "render": [
+          {
+            "name": "sprite",
+            "module": {
+              "op": "sprite",
+              "domain": "surface",
+              "soft_distance": 0.05,
+              "sorting": "none"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
