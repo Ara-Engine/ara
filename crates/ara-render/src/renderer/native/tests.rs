@@ -87,6 +87,43 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         &[],
         root.join("cache"),
     )?;
+    assert!(
+        !renderer.presentation_ready(),
+        "fresh targets are not presentable"
+    );
+    let descriptors = renderer.gpu().descriptor_usage();
+    let artifacts = std::mem::replace(&mut renderer.artifacts, root.join("missing-cohort"));
+    for _ in 0..80 {
+        assert!(
+            renderer
+                .replace_native_scene(&scene, Box::new(EmptyTextures))
+                .is_err()
+        );
+        assert_eq!(
+            renderer.gpu().descriptor_usage(),
+            descriptors,
+            "failed native upload must retire its buffers"
+        );
+    }
+    renderer.artifacts = artifacts;
+    for _ in 0..80 {
+        assert!(
+            upload::upload_content(
+                &mut renderer.gpu,
+                environment::snapshot(&scene),
+                &root.join("missing-cohort"),
+                &renderer.shader_metadata,
+                renderer.compute_frame,
+            )
+            .is_err()
+        );
+        assert_eq!(
+            renderer.gpu().descriptor_usage(),
+            descriptors,
+            "late IBL failure must retire environment, textures and geometry"
+        );
+    }
+    renderer.gpu().assert_clean()?;
     assert!(!renderer.gpu().context().info.ray_tracing);
     let stats = renderer.native_geometry_stats().unwrap();
     assert_eq!((stats.geometries, stats.blas), (1, 0));

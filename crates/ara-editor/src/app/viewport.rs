@@ -57,11 +57,11 @@ impl SceneView {
         settle: u32,
     ) -> ara_ui::Result<()> {
         self.render(renderer, editor, view, 1)?;
-        if !self.active {
-            return Ok(());
-        }
         if self.failed.is_some() {
             return Err("Scene capture could not prepare the requested content generation".into());
+        }
+        if !self.active {
+            return Ok(());
         }
         if self.raster.is_some() && self.fidelity.is_none() {
             self.raster
@@ -105,9 +105,17 @@ impl SceneView {
             if let Err(error) = self.render_raster(renderer, editor, view, settle) {
                 eprintln!("Scene raster keeps its last good presentation: {error}");
                 self.remaining = 0;
-                if self.published.is_none() {
-                    return Err(error);
-                }
+                self.failed = Some((
+                    editor.host.store().revision(),
+                    editor.extraction_revision,
+                    editor.review_revision,
+                    self.content
+                        .as_ref()
+                        .map_or(0, |content| content.revision()),
+                ));
+                // Scene content can fail before its first publication. Keep the
+                // editor alive and leave unwritten working targets unattached.
+                self.active = self.published.is_some();
             }
             return Ok(());
         }
@@ -184,6 +192,11 @@ impl SceneView {
             editor.review_revision,
             content.revision(),
         );
+        if self.failed == Some(revision) {
+            // Retry only when content/publication/preview changes, rather than
+            // allocating a failed generation on every UI frame.
+            return Ok(());
+        }
         if self.revision != Some(revision)
             || editor.gesture.is_some()
             || self.raster_frame.is_none()
@@ -420,7 +433,12 @@ impl SceneView {
         renderer: &Renderer,
         quality: bool,
     ) -> ara_ui::Result<()> {
-        super::attach(gpu, renderer)?;
+        if renderer.presentation_ready() {
+            super::attach(gpu, renderer)?;
+        } else {
+            gpu.forget_external(overlay::viewport_image());
+            gpu.forget_external(overlay::ENTITY_IMAGE);
+        }
         if (quality || self.raster.is_some())
             && (self.lit || self.raster.is_some())
             && self.active
@@ -500,6 +518,18 @@ fn texture_config() -> NativeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ara_ui_render::gpu::UiGpu;
+
+    fn submit_ui(scene: &SceneView, renderer: &Renderer, ui: &mut NativeUi) -> anyhow::Result<()> {
+        scene
+            .attach(ui, renderer, true)
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        ui.begin(renderer.size())
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        ui.end().map_err(|error| anyhow::anyhow!("{error}"))?;
+        renderer.gpu().assert_clean()?;
+        Ok(())
+    }
 
     #[test]
     fn scene_captures_native_quality_environment_and_effects_after_resize() -> anyhow::Result<()> {
@@ -525,15 +555,14 @@ mod tests {
             ara_json::to_canonical_string(&json!({
                 "$schema":"ara://schema/scene/1","id":"sc_nativeview","records":{
                     "e_box":{"name":"Box","Transform":{},"MeshRenderer":{"color":[0.15,0.5,0.2,1]}},
+                    "e_pending":{"name":"Pending model","Transform":{"position":[4,0,0]},"MeshRenderer":{"model":"@pending.gltf#as_pending"}},
                     "e_sky":{"SkyAtmosphere":{},"PostProcess":{"exposure":"manual","ev100":12}},
                 "e_sun":{"Transform":{"rotation":[-45,0,0]},"Light":{"kind":"directional","intensity":24000}},
                     "e_fire":{"Transform":{"position":[1,0,0]},"VisualEffect":{"effect":"campfire","scale":0.3,"intensity":0.2}}
                 }
             })),
         )?;
-        // No source assets: initialize an empty publication without launching a worker.
-        let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
-            .map_err(anyhow::Error::msg)?;
+        // The Scene opens before its asset owner exists, just like a cold editor.
         let mut editor = Editor::open(&root)?;
         let view = editor.view()?;
         let create = if ray_tracing {
@@ -549,10 +578,26 @@ mod tests {
         )?;
         let mut scene = SceneView::default();
         let result = (|| -> anyhow::Result<()> {
+            // SAFETY: The renderer outlives this adapter, which is dropped before
+            // leaving this closure; one thread serializes all queue submissions.
+            let mut ui = unsafe { NativeUi::new(renderer.gpu().context())? };
+            assert!(!renderer.presentation_ready());
+            submit_ui(&scene, &renderer, &mut ui)?;
             scene
                 .render(&mut renderer, &editor, &view, 2)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             assert!(scene.active);
+            assert!(renderer.presentation_ready());
+            submit_ui(&scene, &renderer, &mut ui)?;
+            assert_eq!(scene.content.as_ref().expect("Scene content").revision(), 0);
+            // The empty publication lands later. Neither no snapshot nor an
+            // unpublished model may attach undefined images or kill the Scene.
+            let _assets = ara_play_host::assets::Assets::new(&root, &root.join("unused-worker"))
+                .map_err(anyhow::Error::msg)?;
+            scene
+                .render(&mut renderer, &editor, &view, 1)
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            assert!(scene.content.as_ref().expect("Scene content").revision() > 0);
             if ray_tracing {
                 let fidelity = scene.fidelity.as_ref().expect("opt-in RT Scene view");
                 assert_eq!(fidelity.settings().render_size, [96, 54]);
@@ -608,6 +653,9 @@ mod tests {
                 "capture must reset history on the live view without another descriptor set (RT={ray_tracing}, maximum channel difference {difference})"
             );
             renderer.resize([240, 136])?;
+            assert!(!renderer.presentation_ready());
+            // Retain the published Scene color while dropping stale working IDs.
+            submit_ui(&scene, &renderer, &mut ui)?;
             scene
                 .render(&mut renderer, &editor, &view, 2)
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -619,6 +667,7 @@ mod tests {
             // old fidelity targets before allocating their replacements.
             for size in [[192, 108], [256, 144], [240, 136]] {
                 renderer.resize(size)?;
+                submit_ui(&scene, &renderer, &mut ui)?;
                 scene
                     .render(&mut renderer, &editor, &view, 1)
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
