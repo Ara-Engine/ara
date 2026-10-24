@@ -161,6 +161,9 @@ pub struct Shell {
     asset_grid_size: [f32; 2],
     asset_grid_dirty: bool,
     drafts: BTreeMap<String, String>,
+    /// The dock areas' markup from the markup being built (host ID, part), mounted
+    /// with `Ui::reconcile_parts`.
+    parts: Vec<(String, String)>,
     pub(crate) palette_command: Option<String>,
     pub(crate) palette_params: BTreeMap<String, Value>,
     palette_active: usize,
@@ -374,6 +377,7 @@ impl Shell {
             asset_grid_size: [0.; 2],
             asset_grid_dirty: false,
             drafts: BTreeMap::new(),
+            parts: Vec::new(),
             palette_command: None,
             palette_params: BTreeMap::new(),
             palette_active: 0,
@@ -532,8 +536,6 @@ impl Shell {
         self.version += 1;
         self.bindings.clear();
         self.fields.clear();
-        self.hierarchy_view = None;
-        self.asset_view = None;
         self.browser.poll();
         self.vfx_visible = false;
         self.rebuild_main(editor, true)?;
@@ -589,7 +591,14 @@ impl Shell {
             ara_ui::theme::EditorTheme::Dark
         })?;
         let reconciling = std::time::Instant::now();
-        self.ui.reconcile(markup)?;
+        // Dock areas are parts: an area whose markup is unchanged keeps its retained
+        // subtree, virtual rows included.
+        let parts = std::mem::take(&mut self.parts);
+        let parts: Vec<(&str, &str)> = parts
+            .iter()
+            .map(|(host, part)| (host.as_str(), part.as_str()))
+            .collect();
+        self.ui.reconcile_parts(markup, &parts)?;
         self.stats.reconcile_ms += reconciling.elapsed().as_secs_f64() * 1000.;
         let ui = &mut self.ui;
         for hidden in ["tooltip", "drop-label", "gizmo-readout"] {
@@ -603,10 +612,27 @@ impl Shell {
         self.stats.frame_ms += framing.elapsed().as_secs_f64() * 1000.;
         let rows = std::time::Instant::now();
         let row = if editor.state.comfortable() { 26. } else { 22. };
+        let surface = self.current.clone();
+        // A kept area keeps its row pool: the rows follow their nodes and fit the
+        // panel again; a recompiled area mounts a new pool.
         if let Some(index) = ui.find("hierarchy-rows") {
             let height = ui.nodes[index].rect.h.max(row);
             let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
+            let kept = self.hierarchy_surface == surface
+                && self.hierarchy_view.as_mut().is_some_and(|v| v.remap(ui));
+            let view = match self.hierarchy_view.as_mut() {
+                Some(view) if kept => {
+                    view.fit(ui, height, vec![width])?;
+                    view
+                }
+                _ => self.hierarchy_view.insert(VirtualView::mount(
+                    ui,
+                    index,
+                    row,
+                    height,
+                    vec![width],
+                )?),
+            };
             view.scroll(ui, &self.hierarchy, self.hierarchy_offset, height)?;
             for (id, entity) in &self.hierarchy_entities {
                 self.bindings.insert(
@@ -618,13 +644,25 @@ impl Shell {
                     },
                 );
             }
-            self.hierarchy_view = Some(view);
-            self.hierarchy_surface = self.current.clone();
+            self.hierarchy_surface = surface.clone();
+        } else if self.hierarchy_surface == surface {
+            self.hierarchy_view = None;
         }
         if let Some(index) = ui.find("asset-rows") {
             let height = ui.nodes[index].rect.h.max(row);
             let width = ui.nodes[index].rect.w.max(80.);
-            let mut view = VirtualView::mount(ui, index, row, height, vec![width])?;
+            let kept = self.asset_surface == surface
+                && self.asset_view.as_mut().is_some_and(|v| v.remap(ui));
+            let view = match self.asset_view.as_mut() {
+                Some(view) if kept => {
+                    view.fit(ui, height, vec![width])?;
+                    view
+                }
+                _ => {
+                    self.asset_view
+                        .insert(VirtualView::mount(ui, index, row, height, vec![width])?)
+                }
+            };
             view.scroll(ui, &self.asset_rows, self.asset_offset, height)?;
             for (key, asset) in &self.asset_entries {
                 self.bindings.insert(
@@ -636,8 +674,9 @@ impl Shell {
                     },
                 );
             }
-            self.asset_view = Some(view);
-            self.asset_surface = self.current.clone();
+            self.asset_surface = surface;
+        } else if self.asset_surface == surface {
+            self.asset_view = None;
         }
         // Row decorations set attributes only; the caller's frame lays out and paints
         // once (no geometry is read until then, apart from pre-existing nodes).
@@ -662,6 +701,7 @@ impl Shell {
         editor: &mut Editor,
         window: &ara_ui::docking::Floating,
     ) -> ara_ui::Result<()> {
+        self.parts.clear();
         let mut markup = String::from(
             "<ui id='float'><panel id='float-root' class='dock-root' style='padding-top:4px'>",
         );
@@ -685,6 +725,7 @@ impl Shell {
         allow_asset_reflow: bool,
     ) -> ara_ui::Result<()> {
         let previous_canvas = self.canvas_doc.as_deref().map(ara_ui::source::stable_id);
+        self.parts.clear();
         let mut markup = String::from("<ui id='editor'>");
         self.menubar(editor, &mut markup);
         if editor.state.playing.is_some() {

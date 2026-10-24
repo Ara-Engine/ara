@@ -160,7 +160,9 @@ impl Shell {
                 &[],
             );
         } else {
-            out.push_str("<scroll id='hierarchy-rows' style='flex-grow:1; min-height:0px' />");
+            // The row height is in the markup: a density change remounts the row pool.
+            let row = if editor.state.comfortable() { 26 } else { 22 };
+            out.push_str(&format!("<scroll id='hierarchy-rows' class='rows-{row}' style='flex-grow:1; min-height:0px' />"));
         }
         out.push_str(&format!("<panel id='hierarchy-footer' class='footer'><text id='hierarchy-count' text='{} entities{}' /></panel>",resolved.len(),if editor.state.selection.is_empty(){String::new()}else{format!(" · {} selected",editor.state.selection.len())}));
         Ok(())

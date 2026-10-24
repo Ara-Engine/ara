@@ -140,8 +140,8 @@ never add a capture route that shows a window. `--verify-journey` captures the
 journey (`app/journey.rs`) and writes `journey.json` after every step.
 `--verify-responsiveness` (`app/responsiveness.rs`) injects SDL-level clicks/moves into the
 real loop and writes per-frame costs, UI work, click results and Play click-to-first-Game-
-frame. Shell rebuilds reconcile into the retained `Ui` (`Shell::mount`), once per revision
-(`rebuild_if_stale`); `Shell::resolved` caches the open scene. Only `scene_changed` state
+frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebuild_if_stale`),
+each dock area a part (`Ui::reconcile_parts`: unchanged areas and their row pools stay put). Only `scene_changed` state
 (camera, view mode, hidden, quality) re-renders the Scene; icons re-rasterize on DPI only.
 Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
 status; swatches are painted after layout, never raw colours in markup) and
