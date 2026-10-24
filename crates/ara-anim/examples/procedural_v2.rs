@@ -1,4 +1,5 @@
 //! Bounded procedural-solver and cross-proportion retarget measurements.
+extern crate glam34 as glam;
 mod v2_support;
 use ara_anim::{
     glam::{Mat4, Vec3},

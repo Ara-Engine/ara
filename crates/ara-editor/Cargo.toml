@@ -9,7 +9,7 @@ publish.workspace = true
 workspace = true
 
 [build-dependencies]
-embed-resource = "3"
+embed-resource.workspace = true
 
 [dependencies]
 ara-crash = { path = "../ara-crash" }
@@ -49,18 +49,18 @@ ara-schema = { path = "../ara-schema" }
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
-anyhow = "1"
-bytemuck = "1.24"
-glam = { version = "0.30", features = ["serde", "bytemuck"] }
-gltf = "1.4"
-parley = { version = "0.12", default-features = false, features = ["std", "complex-scripts"] }
-resvg = { version = "0.45", default-features = false }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sdl3-sys = { version = "0.7", default-features = false }
-accesskit = { version = "0.25", features = ["serde"] }
+anyhow = { workspace = true }
+bytemuck = { workspace = true }
+glam = { workspace = true, features = ["serde", "bytemuck"] }
+gltf = { workspace = true, default-features = true }
+parley = { workspace = true, features = ["std", "complex-scripts"] }
+resvg.workspace = true
+image = { workspace = true, features = ["png", "jpeg"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+sdl3-sys.workspace = true
+accesskit = { workspace = true, features = ["serde"] }
 
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }

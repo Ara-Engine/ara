@@ -19,8 +19,8 @@ ara-play = { path = "../ara-play" }
 ara-proto.workspace = true
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [lints]
 workspace = true

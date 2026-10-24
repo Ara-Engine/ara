@@ -9,6 +9,8 @@
 //! persistent particles, then tone map. Captures can read that exact output path.
 #![warn(missing_docs)]
 
+extern crate glam34 as glam;
+
 mod composite;
 pub mod fidelity;
 pub mod geometry;

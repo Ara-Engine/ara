@@ -26,7 +26,7 @@ ara-runtime, ara-sim. The .NET side lives in `dotnet/`.
 ## How it plugs in
 
 1. `prepare`: `ScriptHost::start` on the empty simulation world (engine binding:
-   `ara_components::Transform`), `load_modules`, then the module types join the
+   `EngineBindings::builtin()`, currently `ara_components::Transform`), `load_modules`, then the module types join the
    runtime schema, so scene documents may carry C# components.
 2. `register`: each C# component becomes an ara-sim external component
    (`SimRegistry::register_external`): documents validate against its schema type, the

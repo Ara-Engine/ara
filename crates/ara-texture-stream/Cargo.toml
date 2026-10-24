@@ -6,14 +6,14 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 ara-gpu = { path = "../ara-gpu" }
 ara-render = { path = "../ara-render" }
 ara-asset-format = { path = "../ara-asset-format" }
-bytemuck = { version = "1.24", features = ["derive"] }
-serde.workspace = true
-serde_json.workspace = true
-texture2ddecoder = "0.1"
+bytemuck = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+texture2ddecoder = { workspace = true }
 
 [lints]
 workspace = true

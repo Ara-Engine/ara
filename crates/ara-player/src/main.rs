@@ -4,6 +4,7 @@
 //! `play.start` assigns a role and a shared-memory snapshot; then it runs that world
 //! (windowed through SDL3, embedded in the owner through a shared GPU surface after
 //! `play.embed`, or headless) and exits on `play.stop`.
+extern crate glam34 as glam;
 mod crash;
 mod device;
 mod embed;

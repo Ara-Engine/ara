@@ -11,13 +11,13 @@ default-run = "ara-release"
 ara-update = { path = "../ara-update" }
 getrandom = "0.3"
 hex = "0.4"
-anyhow = "1"
+anyhow.workspace = true
 ara-export-installer = { path = "../ara-export-installer" }
 ara-json = { path = "../ara-json" }
-blake3 = "1.8"
-clap.workspace = true
-serde_json.workspace = true
-zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
+blake3 = { workspace = true, default-features = true }
+clap = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+zip = { workspace = true, features = ["deflate"] }
 
 [lints]
 workspace = true

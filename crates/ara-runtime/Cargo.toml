@@ -39,11 +39,11 @@ ara-physics = { path = "../ara-physics" }
 ara-physics-jolt = { path = "../ara-physics-jolt" }
 ara-schema.workspace = true
 ara-sim = { path = "../ara-sim" }
-bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
-glam = { version = "0.34", features = ["serde"] }
-bytemuck = "1.24"
-serde.workspace = true
-serde_json.workspace = true
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded"] }
+bytemuck = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+glam34 = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 ara-importers = { path = "../ara-importers" }

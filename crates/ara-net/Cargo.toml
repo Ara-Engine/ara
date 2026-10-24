@@ -14,12 +14,12 @@ ara-host.workspace = true
 ara-proto.workspace = true
 ara-diag.workspace = true
 ara-json.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-postcard = { version = "1.1.3", features = ["alloc"] }
-ciborium = "0.2.2"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+postcard = { workspace = true, features = ["alloc"] , default-features = true }
+ciborium = { workspace = true }
 bevy_app = { version = "0.20.0", default-features = false, features = ["std"] }
-bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
+bevy_ecs = { workspace = true, features = ["std"] }
 bevy_reflect = { version = "0.20.0", default-features = false, features = ["std"] }
 bevy_math = { version = "0.20.0", default-features = false, features = ["std"] }
 bevy_time = { version = "0.20.0", default-features = false, features = ["std"] }

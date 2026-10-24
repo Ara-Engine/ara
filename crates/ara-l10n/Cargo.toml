@@ -13,7 +13,7 @@ ara-doc = { path = "../ara-doc" }
 ara-json = { path = "../ara-json" }
 ara-schema = { path = "../ara-schema" }
 ara-ui-stories = { path = "../ara-ui-stories" }
-blake3 = "1.8"
+blake3 = { workspace = true, default-features = true }
 icu_datetime = "2.4"
 icu_calendar = "2.4"
 icu_decimal = "2.4"
@@ -23,9 +23,9 @@ icu_experimental = "0.7"
 fixed_decimal = "0.7"
 writeable = "0.6"
 quick-xml = "0.38"
-roxmltree = "0.21"
-serde.workspace = true
-serde_json.workspace = true
+roxmltree = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-ops = { path = "../ara-ops" }

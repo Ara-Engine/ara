@@ -6,29 +6,27 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Dependencies are declared here (not in the workspace table) while the root
-# Cargo.toml is owned by another task; move them to `workspace = true` later.
 [features]
 profiling = ["dep:ara-profile", "dep:tracing"]
 
 [dependencies]
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
-tracing = { version = "0.1", optional = true }
+tracing = { workspace = true, optional = true }
 ara-components.workspace = true
 ara-diag.workspace = true
 ara-schema.workspace = true
-bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded", "async_executor"] }
-bevy_tasks = { version = "0.20", features = ["multi_threaded"] }
-libloading = "0.8"
+bevy_ecs = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
+bevy_tasks = { workspace = true, features = ["multi_threaded"] }
 # No `nethost`: `clr::find_hostfxr` locates hostfxr, so nothing is linked or downloaded at build time.
 netcorehost = { version = "0.22", default-features = false, features = ["net10_0", "utils"] }
 nonmax = { version = "0.5", default-features = false }
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 toml = { version = "1", default-features = false, features = ["parse", "serde"] }
+libloading08.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = [
+windows-sys = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_JobObjects",
@@ -37,7 +35,7 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-insta.workspace = true
+insta = { workspace = true }
 
 [lints]
 workspace = true

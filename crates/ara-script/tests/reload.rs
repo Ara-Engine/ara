@@ -213,13 +213,11 @@ fn reloads_keep_state_and_escalate_conservatively() {
     );
     s.until("the analyzer error", |s| {
         s.reports.iter().filter(|r| r.kind == RELOAD_ERROR).count() > errors_before + 1
+            && s.host
+                .take_diagnostics()
+                .iter()
+                .any(|d| d.code.to_string() == "ARA0100")
     });
-    assert!(
-        s.host
-            .take_diagnostics()
-            .iter()
-            .any(|d| d.code.to_string() == "ARA0100")
-    );
     assert_eq!(s.marker(), 4);
 
     // A throwing system is disabled, then re-enabled by the fix.

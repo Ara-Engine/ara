@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use ara_physics::*;
 use ara_physics_jolt::*;
-pub use glam::{Quat, Vec3};
+pub use glam33::{Quat, Vec3};
 pub const DT: f32 = 1.0 / 60.0;
 
 pub fn world(threads: u32, max_bodies: u32) -> JoltWorld {

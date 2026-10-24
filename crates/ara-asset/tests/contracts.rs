@@ -129,7 +129,7 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     let mut store = ara_ops::Store::new(db, ws);
     let settings = ImportSettings {
         preset: Default::default(),
-        importer: "ara.gltf".into(),
+        importer: "test.gltf".into(),
         version: "1".into(),
         settings: json!({"lodCount":4}),
         dependencies: Vec::new(),
@@ -147,7 +147,7 @@ fn sidecars_are_kernel_transactions_and_canonical_indexable_documents() {
     let before = ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema());
     let sidecar = Sidecar::read(&before, "mesh.glb.import.json", store.schema()).unwrap();
     assert_eq!(before, sidecar.write(store.schema()));
-    assert_eq!(sidecar.settings().unwrap().importer, "ara.gltf");
+    assert_eq!(sidecar.settings().unwrap().importer, "test.gltf");
     assert_eq!(sidecar.settings().unwrap().preset, CookPreset::HighQuality);
     let desc = store.schema().get("ImportSettings").unwrap();
     let field = desc.fields().iter().find(|f| f.name == "preset").unwrap();

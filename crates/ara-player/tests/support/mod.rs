@@ -25,19 +25,47 @@ pub fn copy(from: &Path, to: &Path) {
     }
 }
 
-/// The import worker next to the player binary, built on demand.
-pub fn import_worker(player: &Path) -> PathBuf {
-    let worker =
-        player.with_file_name(format!("ara-import-worker{}", std::env::consts::EXE_SUFFIX));
+/// Reuse the gate's current Cargo artifact; standalone tests build the worker.
+pub fn import_worker() -> PathBuf {
+    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker") {
+        let worker = PathBuf::from(path);
+        assert!(
+            worker.is_file(),
+            "gate import worker is missing: {}",
+            worker.display()
+        );
+        return worker;
+    }
     // Always build (a no-op when current): a stale worker from before an importer
     // version change cooks nothing, and models silently become placeholders.
-    let status = std::process::Command::new(env!("CARGO"))
-        .args(["build", "-p", "ara-import-worker"])
+    let output = std::process::Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "-p",
+            "ara-import-worker",
+            "--locked",
+            "--message-format=json",
+        ])
         .env("CARGO_BUILD_JOBS", "2")
-        .status()
+        .output()
         .unwrap();
-    assert!(status.success(), "building ara-import-worker failed");
-    worker
+    assert!(
+        output.status.success(),
+        "building ara-import-worker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .find_map(|message| {
+            (message["reason"] == "compiler-artifact"
+                && message["target"]["name"] == "ara-import-worker"
+                && message["profile"]["test"] == false)
+                .then(|| message["executable"].as_str().map(PathBuf::from))
+                .flatten()
+        })
+        .expect("Cargo reported the import worker executable")
 }
 
 pub struct Agent {
@@ -109,7 +137,7 @@ impl Agent {
         service: impl FnOnce(&mut PlayService),
     ) -> Self {
         let player = PathBuf::from(env!("CARGO_BIN_EXE_ara-player"));
-        let worker = import_worker(&player);
+        let worker = import_worker();
         let project = ara_play_host::open_project(dir).unwrap();
         assert!(
             project.diags.iter().all(|d| !d.is_error()),

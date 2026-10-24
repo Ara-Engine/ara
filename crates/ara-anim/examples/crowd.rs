@@ -1,4 +1,5 @@
 //! Reproducible 1000 x 65 CPU workload; run with --release --example crowd -- 200.
+extern crate glam34 as glam;
 #[path = "../tests/common/mod.rs"]
 mod common;
 use ara_anim::{glam::Mat4, graph::ParameterValue, *};

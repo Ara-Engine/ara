@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+extern crate glam34 as glam;
 mod common;
 use ara_anim::{
     glam::{Vec3, Vec3A, Vec4},

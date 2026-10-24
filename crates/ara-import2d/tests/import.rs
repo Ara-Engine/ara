@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use ara_asset::{
-    Cancellation, CookPreset, DEFAULT_THREAD_BUDGET, ImportContext, ImportInput, JobEvent,
-    ProcessWorker, TargetPlatform,
+    Cancellation, CookPreset, DEFAULT_THREAD_BUDGET, ImportContext, ImportInput, Importer,
+    JobEvent, ProcessWorker, TargetPlatform,
 };
 use std::collections::BTreeMap;
 fn input() -> ImportInput {
@@ -16,7 +16,7 @@ fn input() -> ImportInput {
         source_path: "sprite.png".into(),
         source: png.into_inner(),
         importer: "ara.atlas2d".into(),
-        version: "1".into(),
+        version: ara_import2d::AtlasImporter.version().into(),
         settings: serde_json::json!({"maxSize":32,"padding":2,"regions":[{"name":"right","region":{"x":5,"y":0,"width":4,"height":7}},{"name":"left","region":{"width":5,"height":7}}]}),
         target: TargetPlatform::Windows,
         dependencies: BTreeMap::new(),

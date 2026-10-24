@@ -16,11 +16,11 @@ ara-graph = { path = "../ara-graph" }
 ara-json = { path = "../ara-json" }
 ara-material = { path = "../ara-material" }
 ara-schema = { path = "../ara-schema" }
-blake3 = "1"
-bevy_ecs = { version = "0.20", default-features = false, features = ["std"] }
-glam = { version = "0.30", features = ["serde"] }
-serde.workspace = true
-serde_json.workspace = true
+blake3 = { workspace = true, default-features = true }
+bevy_ecs = { workspace = true, features = ["std"] }
+glam = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
 [dev-dependencies]
 ara-ops = { path = "../ara-ops" }

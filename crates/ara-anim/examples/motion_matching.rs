@@ -1,4 +1,5 @@
 //! Scripted locomotion and A/B-interleaved SIMD-search/complete-crowd measurements.
+extern crate glam34 as glam;
 mod v2_support;
 use ara_anim::{
     glam::{Mat4, Vec3, Vec4},
