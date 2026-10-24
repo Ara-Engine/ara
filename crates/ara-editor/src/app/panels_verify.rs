@@ -17,6 +17,8 @@ pub(super) struct Verification {
     stage_samples: Vec<[f64; 5]>,
     bench_frames: u32,
     interactions: Vec<&'static str>,
+    /// The Add node search popup has been captured.
+    palette_shot: bool,
 }
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     if !root.join("ara.project.json").exists() {
@@ -125,6 +127,7 @@ impl Verification {
             stage_samples: Vec::new(),
             bench_frames: 0,
             interactions: Vec::new(),
+            palette_shot: false,
         })
     }
     pub fn finished(&self) -> bool {
@@ -255,41 +258,55 @@ impl Verification {
                 if !self.job_done(editor)? {
                     return Ok(false);
                 }
-                editor.action(
-                    "editor.workspace",
-                    json!({"asset":"models/Avocado.glb","folder":""}),
-                )?;
-                shell.rebuild(editor)?;
-                if self.age < 240
-                    || !shell.asset_previews_ready(&[
-                        "models/Avocado.glb",
-                        "textures/checker.png",
-                        "samples/material.graph",
-                        "samples/vfx.graph",
-                    ])
-                {
+                // Assets navigates folders (UX v2): the models folder shows the mesh
+                // tile and its import preview, then samples shows the material and
+                // VFX tiles. The project root lists only folders.
+                if editor.state.asset_folder == "models" {
+                    shell.rebuild(editor)?;
+                    if self.age < 240 || !shell.asset_previews_ready(&["models/Avocado.glb"]) {
+                        return Ok(false);
+                    }
+                    self.interactions
+                        .push("settings edit and isolated reimport completed");
+                    let grid =
+                        shell.ui.nodes[shell.ui.find("asset-grid").ok_or("asset grid")?].rect;
+                    let caption = shell
+                        .ui
+                        .nodes
+                        .iter()
+                        .find(|n| {
+                            n.element.id.starts_with("asset-card-")
+                                && n.element.id.ends_with("-name")
+                                && n.text.as_ref().is_some_and(|t| t.value == "Avocado.glb")
+                        })
+                        .ok_or("mesh filename caption")?
+                        .rect;
+                    if !grid.contains(caption.x, caption.y)
+                        || !grid.contains(caption.x + caption.w - 0.1, caption.y + caption.h - 0.1)
+                    {
+                        return Err("asset filename is clipped in the short drawer".into());
+                    }
+                    self.capture_pair("assets", editor, shell, gpu, ui, renderer, scene_view)?;
+                    editor.action(
+                        "editor.workspace",
+                        json!({"asset":"samples/material.graph","folder":"samples"}),
+                    )?;
+                    shell.rebuild(editor)?;
                     return Ok(false);
                 }
-                self.interactions
-                    .push("settings edit and isolated reimport completed");
-                let grid = shell.ui.nodes[shell.ui.find("asset-grid").ok_or("asset grid")?].rect;
-                let caption = shell
-                    .ui
-                    .nodes
-                    .iter()
-                    .find(|n| {
-                        n.element.id.starts_with("asset-card-")
-                            && n.element.id.ends_with("-name")
-                            && n.text.as_ref().is_some_and(|t| t.value == "Avocado.glb")
-                    })
-                    .ok_or("mesh filename caption")?
-                    .rect;
-                if !grid.contains(caption.x, caption.y)
-                    || !grid.contains(caption.x + caption.w - 0.1, caption.y + caption.h - 0.1)
-                {
-                    return Err("asset filename is clipped in the short drawer".into());
+                shell.rebuild(editor)?;
+                if !shell.asset_previews_ready(&["samples/material.graph", "samples/vfx.graph"]) {
+                    return Ok(false);
                 }
-                self.capture_pair("assets", editor, shell, gpu, ui, renderer, scene_view)?;
+                self.capture_pair(
+                    "assets-samples",
+                    editor,
+                    shell,
+                    gpu,
+                    ui,
+                    renderer,
+                    scene_view,
+                )?;
                 editor.action(
                     "editor.workspace",
                     json!({"resource":self.material,"asset":""}),
@@ -299,6 +316,28 @@ impl Verification {
             }
             4 => {
                 if !shell.preview_ready("material") {
+                    return Ok(false);
+                }
+                // The Add node popup, unfiltered, before the scripted interaction.
+                if !self.palette_shot {
+                    if !editor.state.canvas_add {
+                        shell.click("graph-add", &mut clipboard)?;
+                        shell.dispatch(editor)?;
+                        shell.rebuild(editor)?;
+                        return Ok(false);
+                    }
+                    self.capture_pair(
+                        "material-add",
+                        editor,
+                        shell,
+                        gpu,
+                        ui,
+                        renderer,
+                        scene_view,
+                    )?;
+                    self.palette_shot = true;
+                    editor.action("editor.canvas", json!({"add":false}))?;
+                    shell.rebuild(editor)?;
                     return Ok(false);
                 }
                 self.material_interaction(editor, shell, &mut clipboard)?;
@@ -358,7 +397,9 @@ impl Verification {
                     renderer,
                     scene_view,
                 )?;
-                editor.action("editor.workspace", json!({"blends":true}))?;
+                // Switch views through the toolbar, as a person would.
+                shell.click("animation-blends", &mut clipboard)?;
+                shell.dispatch(editor)?;
                 shell.rebuild(editor)?;
                 self.next();
             }

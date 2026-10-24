@@ -5,7 +5,7 @@
 use super::*;
 
 /// Width of the preview + parameters column, in logical pixels.
-const SIDE: f32 = 248.;
+const SIDE: f32 = 264.;
 
 impl Shell {
     pub(super) fn material_panel(
@@ -100,9 +100,13 @@ impl Shell {
             let source = graph
                 .write(editor.host.store().schema())
                 .map_err(|d| d.to_string())?;
-            let key =
-                self.thumbnails
-                    .request_live(path, source.into_bytes(), editor.state.preview_plane);
+            // Rendered at 2× the logical preview size: crisp at 1× and 2× displays.
+            let key = self.thumbnails.request_live(
+                path,
+                source.into_bytes(),
+                editor.state.preview_plane,
+                (2. * (SIDE - 16.)) as u32,
+            );
             self.material_preview_key = Some(key.clone());
             let identity = format!("{doc}:{}", editor.state.preview_plane);
             if self.thumbnail_slots.contains_key(&key) {
@@ -143,14 +147,13 @@ impl Shell {
                 },
             ));
         }
-        let state = if self.preview_ready("material") {
-            ("material-preview-state", "Live", "caption")
+        let (state, class) = if self.preview_ready("material") {
+            ("Live", "caption")
         } else {
-            ("material-preview-state", "Rendering…", "caption")
+            ("Rendering…", "caption")
         };
         out.push_str(&format!(
-            "</panel><panel id='material-preview-fill' class='fill' /><text id='{}' class='{}' text='{}' /></panel></panel>",
-            state.0, state.2, state.1
+            "</panel><panel id='material-preview-fill' class='fill' /><text id='material-preview-state' class='{class}' text='{state}' /></panel></panel><panel id='material-side-divider' class='divider' />"
         ));
         Ok(())
     }
@@ -179,7 +182,8 @@ impl Shell {
                 "Add material parameter".into(),
             ),
         );
-        out.push_str(&format!("<panel id='material-params-header' class='side-header'><text id='material-params-title' class='heading' text='Parameters' /><panel id='material-params-fill' class='fill' /><button id='{add}' class='ghost icon-button' label='Add parameter' description='Add a float parameter (rename and retype it in the graph or Source)' action='Dispatch'>{}</button></panel>",icons::icon(add,"plus")));
+        let count = material.map_or(0, |m| m.parameters.len());
+        out.push_str(&format!("<panel id='material-params-header' class='side-header'><text id='material-params-title' class='heading' text='Parameters' /><text id='material-params-count' class='caption' text='{count}' /><panel id='material-params-fill' class='fill' /><button id='{add}' class='ghost icon-button' label='Add parameter' description='Add a float parameter (rename and retype it in the graph or Source)' action='Dispatch'>{}</button></panel>",icons::icon(add,"plus")));
         out.push_str("<scroll id='material-params' style='flex-grow:1;flex-basis:0px;min-height:0px;gap:0px'>");
         self.value_swatches.clear();
         let mut parameters: Vec<_> = material
@@ -193,21 +197,16 @@ impl Shell {
             let row = format!("mparam-{n}");
             let selected = editor.state.canvas_selection.iter().any(|s| s == id);
             let ty = parameter.ty.to_string();
-            let ty_label = super::inspector_panel::sentence(&ty);
-            // Compact type labels keep the name column readable.
-            let short = match parameter.ty {
-                ara_material::Type::ColorLinear => "Color",
-                ara_material::Type::ColorSrgb => "sRGB",
-                ara_material::Type::TextureColor
-                | ara_material::Type::TextureNormal
-                | ara_material::Type::TextureData => "Texture",
-                _ => &ty_label,
-            };
             self.bindings.insert(
                 ara_ui::source::stable_id(&format!("{row}-pick")),
                 Binding::Protocol("editor.canvas", json!({"selection":[id]})),
             );
-            out.push_str(&format!("<panel id='{row}' class='param-row{}'><button id='{row}-pick' class='param-name' label='{}' description='Select the {} parameter node' action='Dispatch'><text id='{row}-name' class='{}' text='{}' /><text id='{row}-type' class='caption' text='{}' /></button>",if selected{" param-selected"}else{""},escape(&parameter.name),escape(&ty),if selected{"on-selection"}else{"fg"},escape(&parameter.name),escape(short)));
+            // The type reads as its pin colour (painted after layout) and in the tooltip.
+            self.value_swatches.push((
+                format!("{row}-dot"),
+                crate::graph::port_color(parameter.ty.name()),
+            ));
+            out.push_str(&format!("<panel id='{row}' class='param-row{}'><panel id='{row}-dot' class='type-dot' /><button id='{row}-pick' class='param-name' label='{}' description='{} · {} parameter. Click to select its node.' action='Dispatch'><text id='{row}-name' class='{}' text='{}' /></button>",if selected{" param-selected"}else{""},escape(&parameter.name),escape(&parameter.name),escape(&super::inspector_panel::sentence(&ty).to_lowercase()),if selected{"on-selection"}else{"fg"},escape(&parameter.name)));
             let value = format!("{row}-value");
             self.bindings.insert(
                 ara_ui::source::stable_id(&value),

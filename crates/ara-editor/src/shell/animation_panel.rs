@@ -1,6 +1,15 @@
-//! State machines and typed pose/blend-space views over the same animation controller.
+//! The Animation page (Unity Animator / UE state machine): parameters and the
+//! transitions in priority order on the left, the state machine (or pose graph)
+//! canvas in the middle, the selection in the Inspector and a status strip.
+//! Every edit replaces the controller through `editor.animation.controller.set`.
 use super::*;
-use ara_anim::graph::{BlendSample, ControllerData, Node, NodeKind, Parameter, State, Transition};
+use ara_anim::graph::{
+    BlendSample, ControllerData, Node, NodeKind, Parameter, ParameterKind, State, Transition,
+};
+
+/// Width of the parameters + transitions column, in logical pixels.
+const SIDE: f32 = 240.;
+
 impl Shell {
     pub(super) fn animation_panel(
         &mut self,
@@ -8,39 +17,59 @@ impl Shell {
         out: &mut String,
     ) -> ara_ui::Result<()> {
         let resource = self.resource_for(editor, "animation");
-        out.push_str("<panel id='animation-toolbar' class='toolbar'><panel id='animation-view' class='segment'>");
-        for (id, label, blends) in [
-            ("animation-states", "States", false),
-            ("animation-blends", "Blend spaces", true),
-        ] {
-            self.bindings.insert(
-                ara_ui::source::stable_id(id),
-                Binding::Protocol("editor.workspace", json!({"blends":blends})),
-            );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.animation_blends == blends {" selected"} else {""}));
+        out.push_str("<panel id='animation-toolbar' class='toolbar'>");
+        let path = resource
+            .as_deref()
+            .and_then(|d| editor.host.store().workspace().path_of(d));
+        super::graph_panel::tool_crumbs(out, "animation", path);
+        if resource.is_some() {
+            out.push_str("<panel id='animation-view-sep' class='toolbar-sep' /><panel id='animation-view' class='segment'>");
+            for (id, label, blends) in [
+                ("animation-states", "States", false),
+                ("animation-blends", "Blend spaces", true),
+            ] {
+                self.bind_command(
+                    id,
+                    if blends {
+                        "animation.view_blends"
+                    } else {
+                        "animation.view_states"
+                    },
+                    super::commands::Target::None,
+                );
+                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='Show the controller as {}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if editor.state.animation_blends == blends {" selected"} else {""},if blends{"its pose and blend graph"}else{"a state machine"}));
+            }
+            out.push_str("</panel><panel id='animation-sep' class='toolbar-sep' />");
+            for (id, label, kind, what) in [
+                (
+                    "animation-add-state",
+                    "State",
+                    "state",
+                    "a state with a clip pose",
+                ),
+                (
+                    "animation-add-blend",
+                    "Blend",
+                    "blend",
+                    "a 1D blend state on the speed parameter",
+                ),
+                (
+                    "animation-add-transition",
+                    "Transition",
+                    "transition",
+                    "a transition between the first two states",
+                ),
+            ] {
+                self.bindings.insert(
+                    ara_ui::source::stable_id(id),
+                    Binding::AnimationEdit(kind.into()),
+                );
+                out.push_str(&format!("<button id='{id}' class='ghost' label='Add {}' description='Add {what}' action='Dispatch'>{}<text id='{id}-label' text='{label}' /></button>",label.to_lowercase(),icons::icon(id,"plus")));
+            }
+            out.push_str("<panel id='animation-tools-sep' class='toolbar-sep' />");
+            self.tool_icon(out, "graph-frame", "graph.frame", "focus", editor, false);
         }
-        out.push_str("</panel><panel id='animation-sep' class='toolbar-sep' />");
-        for (id, label, kind) in [
-            ("animation-add-state", "State", "state"),
-            ("animation-add-blend", "Blend", "blend"),
-            ("animation-add-transition", "Transition", "transition"),
-        ] {
-            self.bindings.insert(
-                ara_ui::source::stable_id(id),
-                Binding::AnimationEdit(kind.into()),
-            );
-            out.push_str(&format!("<button id='{id}' class='ghost' label='Add {label}' description='Add a {}' action='Dispatch'>{}<text id='{id}-label' text='{label}' /></button>",label.to_lowercase(),icons::icon(id,"plus")));
-        }
-        out.push_str("<panel id='animation-toolbar-fill' class='fill' />");
-        self.tool_text(
-            out,
-            "resource-create-animation",
-            "assets.create.animation",
-            "plus",
-            "New",
-            "ghost",
-        );
-        out.push_str("</panel>");
+        out.push_str("<panel id='animation-toolbar-fill' class='fill' /></panel>");
         let Some(doc) = resource else {
             self.empty(
                 out,
@@ -99,23 +128,134 @@ impl Shell {
             self.canvas_revision = editor.host.store().revision();
         }
         self.apply_canvas_view(editor);
-        out.push_str("<panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Animation controller canvas' /><panel id='animation-transition-list' style='height:112px;flex-shrink:0;padding:8px;gap:4px;background:var(--card)'><text id='animation-transition-heading' class='field-label' text='Transitions / priority order' /><scroll id='animation-transitions' style='flex-grow:1;flex-basis:0px;gap:2px'>");
-        for transition in &controller.transitions {
-            out.push_str(&self.bind_button(
-                &format!("transition-{}", transition.id),
-                &format!(
-                    "{} -> {}    {} ticks",
-                    transition.from, transition.to, transition.duration
-                ),
+        // A transition picked in the sidebar draws as selected on the canvas.
+        let picked = editor
+            .state
+            .resource_item
+            .as_deref()
+            .and_then(|s| s.strip_prefix("transition:"));
+        if let Some(canvas) = &mut self.canvas {
+            canvas.highlight = picked
+                .map(crate::authoring::animation::transition_edge)
+                .into_iter()
+                .collect();
+        }
+        out.push_str("<panel id='animation-content' class='tool-body'>");
+        out.push_str(&format!(
+            "<panel id='animation-side' class='tool-side' style='width:{SIDE}px'>"
+        ));
+        self.animation_parameters(&doc, &controller, out);
+        self.animation_transitions(&controller, picked, out);
+        out.push_str("</panel><panel id='animation-side-edge' class='tool-edge' />");
+        out.push_str("<panel id='animation-main' class='tool-main'><panel id='graph-canvas' style='flex-grow:1;flex-basis:0px;background:var(--background);overflow:hidden' label='Animation controller canvas' /></panel></panel>");
+        self.animation_status(&controller, out);
+        Ok(())
+    }
+
+    /// Switch between the state machine and the pose graph, framing the new projection.
+    pub(crate) fn animation_view(
+        &mut self,
+        editor: &mut Editor,
+        blends: bool,
+    ) -> ara_ui::Result<()> {
+        if editor.state.animation_blends == blends {
+            return Ok(());
+        }
+        editor.action("editor.workspace", json!({"blends":blends}))?;
+        self.rebuild(editor)?;
+        self.edit_graph_layout(editor, "frame")
+    }
+
+    /// Parameters with their initial values, edited in place (Unity's Parameters tab).
+    fn animation_parameters(&mut self, doc: &str, controller: &ControllerData, out: &mut String) {
+        out.push_str(&format!("<panel id='animation-params-header' class='side-header'><text id='animation-params-title' class='heading' text='Parameters' /><text id='animation-params-count' class='caption' text='{}' /><panel id='animation-params-fill' class='fill' /></panel>",controller.parameters.len()));
+        if controller.parameters.is_empty() {
+            out.push_str("<panel id='animation-params-empty-row' style='flex-shrink:0;padding:8px;padding-top:0px'><text id='animation-params-empty' class='caption' style='white-space:normal' text='No parameters. Add a blend state to create speed, or edit the controller source.' /></panel>");
+        }
+        for (n, (name, parameter)) in controller.parameters.iter().enumerate() {
+            let row = format!("anim-param-{n}");
+            let item = format!("param:{name}");
+            let (kind, key, value) = match parameter.kind {
+                ParameterKind::Float => ("float", "floatValue", json!(parameter.float_value)),
+                ParameterKind::Int => ("int", "intValue", json!(parameter.int_value)),
+                ParameterKind::Bool => ("bool", "boolValue", json!(parameter.bool_value)),
+                ParameterKind::Trigger => ("trigger", "", Value::Null),
+            };
+            out.push_str(&format!("<panel id='{row}' class='param-row'><text id='{row}-name' class='fg' text='{}' /><text id='{row}-kind' class='caption' text='{kind}' /><panel id='{row}-fill' class='fill' />",escape(name)));
+            let id = format!("{row}-value");
+            if !key.is_empty() {
+                self.bindings.insert(
+                    ara_ui::source::stable_id(&id),
+                    Binding::AnimationField(doc.into(), item.clone(), key.into()),
+                );
+            }
+            match parameter.kind {
+                ParameterKind::Bool => out.push_str(&format!(
+                    "<toggle id='{id}' checked='{}' label='{} initial value' action='Dispatch' />",
+                    parameter.bool_value,
+                    escape(name)
+                )),
+                ParameterKind::Trigger => {
+                    out.push_str(&format!("<text id='{id}' class='caption' text='unset' />"))
+                }
+                _ => {
+                    let text = self
+                        .drafts
+                        .get(&format!("@animation|{doc}|{item}|{key}"))
+                        .cloned()
+                        .unwrap_or_else(|| panels::display(&value));
+                    out.push_str(&format!("<field id='{id}' class='number' style='width:64px' text='{}' label='{} initial value' description='Initial {kind} value; Enter applies' action='Dispatch' />",escape(&text),escape(name)));
+                }
+            }
+            out.push_str("</panel>");
+        }
+    }
+
+    /// Transitions in priority order, each with its conditions spelled out.
+    fn animation_transitions(
+        &mut self,
+        controller: &ControllerData,
+        picked: Option<&str>,
+        out: &mut String,
+    ) {
+        out.push_str(&format!("<panel id='animation-transitions-divider' class='divider' /><panel id='animation-transitions-header' class='side-header'><text id='animation-transitions-title' class='heading' text='Transitions' /><text id='animation-transitions-count' class='caption' text='{}' /><panel id='animation-transitions-fill' class='fill' /></panel><scroll id='animation-transitions' style='flex-grow:1;flex-basis:0px;min-height:0px;gap:0px'>",controller.transitions.len()));
+        if controller.transitions.is_empty() {
+            out.push_str(&format!("<panel id='animation-transitions-empty-row' style='flex-shrink:0;padding:8px;padding-top:0px'><text id='animation-transitions-empty' class='caption' style='white-space:normal' text='{}' /></panel>",escape("No transitions. Drag from a state's edge to another state.")));
+        }
+        for (n, transition) in controller.transitions.iter().enumerate() {
+            let id = format!("transition-{}", transition.id);
+            let selected = picked == Some(transition.id.as_str());
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
                 Binding::Protocol(
                     "editor.workspace",
                     json!({"item":format!("transition:{}",transition.id)}),
                 ),
-                "small quiet folder-row",
-            ));
+            );
+            let conditions =
+                crate::authoring::animation::conditions(transition, &controller.parameters);
+            let (main, muted) = if selected {
+                ("on-selection", "on-selection-muted")
+            } else {
+                ("fg", "caption")
+            };
+            out.push_str(&format!("<button id='{id}' class='transition-row{}' label='{} to {}' description='Priority {}: {}' action='Dispatch'><panel id='{id}-line' class='row' style='min-height:18px'><text id='{id}-priority' class='{muted}' text='{}' /><text id='{id}-route' class='{main}' text='{} → {}' /></panel><text id='{id}-conditions' class='{muted}' style='padding-left:14px;overflow:hidden' text='{}' /></button>",if selected{" transition-selected"}else{""},escape(&transition.from),escape(&transition.to),n+1,escape(&conditions),n+1,escape(&transition.from),escape(&transition.to),escape(&conditions)));
         }
-        out.push_str("</scroll></panel>");
-        Ok(())
+        out.push_str("</scroll>");
+    }
+
+    /// Validity first, then the controller's shape.
+    fn animation_status(&mut self, controller: &ControllerData, out: &mut String) {
+        out.push_str("<panel id='animation-status' class='tool-status'>");
+        match crate::authoring::animation::validate(controller) {
+            Ok(()) => out.push_str(&format!(
+                "{}<text id='animation-status-state' class='success' text='Valid' />",
+                icons::icon_in("animation-status-icon", "circle-check", "success")
+            )),
+            Err(error) => out.push_str(&format!("{}<text id='animation-status-state' class='destructive' text='Invalid' /><text id='animation-status-error' class='fg' text='{}' />",icons::icon_in("animation-status-icon","circle-x","destructive"),escape(&error.message))),
+        }
+        let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
+        out.push_str(&format!("<panel id='animation-status-fill' class='fill' /><text id='animation-status-stats' class='caption' text='{} · {} · {} · default {} · fixed step {} ticks' /></panel>",count(controller.states.len(),"state"),count(controller.transitions.len(),"transition"),count(controller.parameters.len(),"parameter"),escape(if controller.initial.is_empty(){"none"}else{&controller.initial}),controller.fixed_step));
     }
     pub(super) fn edit_animation(&mut self, editor: &mut Editor, kind: &str) -> ara_ui::Result<()> {
         let Some(doc) = self.resource_for(editor, "animation") else {
@@ -279,6 +419,9 @@ impl Shell {
         }
         self.save_controller(editor, doc, &record, controller, "Connect animation graph")
     }
+    /// The selected state, pose node or transition as typed rows: toggles for flags,
+    /// numbers with units, the pose operation as a segment, and blend samples as a
+    /// plot plus a sample table.
     pub(super) fn animation_inspector(
         &mut self,
         editor: &Editor,
@@ -287,7 +430,7 @@ impl Shell {
         let Some(doc) = self.resource_for(editor, "animation") else {
             return Ok(());
         };
-        let (_, controller) = crate::authoring::animation::controller(
+        let (record, controller) = crate::authoring::animation::controller(
             editor
                 .host
                 .store()
@@ -295,43 +438,30 @@ impl Shell {
                 .doc(&doc)
                 .ok_or("controller missing")?,
         )?;
-        out.push_str("<scroll id='animation-inspector' class='body'><text id='animation-inspector-title' class='heading' text='Controller' />");
+        let width = self
+            .ui
+            .find("animation-inspector")
+            .map(|i| self.ui.nodes[i].rect.w)
+            .unwrap_or(300.);
+        let label = self.label_px(width);
+        out.push_str("<scroll id='animation-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding-bottom:12px'>");
         if self.annotation_inspector(editor, out) {
             out.push_str("</scroll>");
             return Ok(());
         }
-
-        if let Some(id) = editor
+        let transition = editor
             .state
             .resource_item
             .as_deref()
             .and_then(|s| s.strip_prefix("transition:"))
-        {
-            if let Some(t) = controller.transitions.iter().find(|t| t.id == id) {
-                out.push_str(&format!(
-                    "<text id='transition-title' text='{} -> {}' style='white-space:normal' />",
-                    escape(&t.from),
-                    escape(&t.to)
-                ));
-                self.anim_field(
-                    out,
-                    &doc,
-                    &format!("transition:{id}"),
-                    "duration",
-                    "Crossfade (ticks)",
-                    &json!(t.duration),
-                );
-                self.anim_field(
-                    out,
-                    &doc,
-                    &format!("transition:{id}"),
-                    "exitTick",
-                    "Exit tick",
-                    &json!(t.exit_tick),
-                );
-                out.push_str(&format!("<text id='transition-conditions' class='badge' text='{} conditions / priority {}' />",t.conditions.len(),controller.transitions.iter().position(|x|x.id==id).unwrap_or(0)));
-            }
-        } else if let Some(node) = self.canvas.as_ref().and_then(|c| {
+            .and_then(|id| {
+                controller
+                    .transitions
+                    .iter()
+                    .enumerate()
+                    .find(|(_, t)| t.id == id)
+            });
+        let node = self.canvas.as_ref().and_then(|c| {
             editor
                 .state
                 .canvas_selection
@@ -339,24 +469,74 @@ impl Shell {
                 .next()
                 .and_then(|id| c.graph().nodes.get(id))
                 .cloned()
-        }) {
-            if let Some(state) = node.payload["state"]
+        });
+        if let Some((priority, t)) = transition {
+            let item = format!("transition:{}", t.id);
+            header(
+                out,
+                "animation-transition",
+                "arrow-right",
+                &format!("{} → {}", t.from, t.to),
+                &format!("Transition · priority {}", priority + 1),
+            );
+            self.anim_field(
+                out,
+                &doc,
+                &item,
+                "duration",
+                "Crossfade",
+                &json!(t.duration),
+                Some("ticks"),
+                label,
+            );
+            self.anim_field(
+                out,
+                &doc,
+                &item,
+                "exitTick",
+                "Exit tick",
+                &json!(t.exit_tick),
+                Some("ticks"),
+                label,
+            );
+            section(out, "animation-conditions", "Conditions");
+            if t.conditions.is_empty() {
+                out.push_str("<panel id='animation-condition-none' class='prop-row'><panel id='animation-condition-none-cell' class='prop-label'><text id='animation-condition-none-text' text='None: taken as soon as allowed' /></panel></panel>");
+            }
+            for (n, condition) in t.conditions.iter().enumerate() {
+                let single = Transition {
+                    conditions: vec![condition.clone()],
+                    ..t.clone()
+                };
+                let text = crate::authoring::animation::conditions(&single, &controller.parameters);
+                out.push_str(&format!("<panel id='animation-condition-{n}' class='prop-row'><panel id='animation-condition-{n}-cell' class='prop-label' style='width:{label}px'><text id='animation-condition-{n}-label' text='{}' /></panel><panel id='animation-condition-{n}-value' class='prop-value'><text id='animation-condition-{n}-text' class='fg' text='{}' /></panel></panel>",if n==0{"When"}else{"and"},escape(&text)));
+            }
+        } else if let Some(node) = node {
+            if let Some((key, value)) = node.payload["state"]
                 .as_str()
                 .and_then(|id| controller.states.get_key_value(id))
             {
-                let (key, value) = state;
                 let item = format!("state:{key}");
-                out.push_str(&format!(
-                    "<text id='animation-state-title' style='font-size:16px' text='{}' />",
-                    escape(key)
-                ));
+                header(
+                    out,
+                    "animation-state",
+                    "person-standing",
+                    key,
+                    if *key == controller.initial {
+                        "Default state"
+                    } else {
+                        "State"
+                    },
+                );
                 self.anim_field(
                     out,
                     &doc,
                     &item,
                     "duration",
-                    "Duration (ticks)",
+                    "Duration",
                     &json!(value.duration),
+                    Some("ticks"),
+                    label,
                 );
                 self.anim_field(
                     out,
@@ -365,6 +545,8 @@ impl Shell {
                     "looping",
                     "Looping",
                     &json!(value.looping),
+                    None,
+                    label,
                 );
                 self.anim_field(
                     out,
@@ -373,32 +555,55 @@ impl Shell {
                     "syncGroup",
                     "Sync group",
                     &json!(value.sync_group),
+                    None,
+                    label,
                 );
-                self.anim_field(out, &doc, &item, "node", "Pose node", &json!(value.node));
+                self.anim_field(
+                    out,
+                    &doc,
+                    &item,
+                    "node",
+                    "Pose",
+                    &json!(value.node),
+                    None,
+                    label,
+                );
             }
             if let Some(key) = node.payload["pose"].as_str()
                 && let Some(value) = controller.nodes.get(key)
             {
                 let item = format!("pose:{key}");
-                out.push_str("<panel id='animation-pose-divider' class='divider' />");
-                self.anim_field(
-                    out,
-                    &doc,
-                    &item,
-                    "kind",
-                    "Pose operation",
-                    &json!(value.kind),
-                );
+                if node.payload["state"].is_null() {
+                    header(out, "animation-pose", "person-standing", key, "Pose");
+                } else {
+                    section(out, "animation-pose", &format!("Pose · {key}"));
+                }
+                self.pose_operation(out, &doc, &record, &controller, key, value.kind);
                 if value.kind == NodeKind::Clip {
-                    self.anim_field(out, &doc, &item, "clip", "Clip asset", &json!(value.clip));
+                    self.anim_field(
+                        out,
+                        &doc,
+                        &item,
+                        "clip",
+                        "Clip",
+                        &json!(value.clip),
+                        None,
+                        label,
+                    );
                 } else {
                     self.anim_field(
                         out,
                         &doc,
                         &item,
                         "parameterX",
-                        "Horizontal parameter",
+                        if value.kind == NodeKind::Directional2d {
+                            "Horizontal"
+                        } else {
+                            "Parameter"
+                        },
                         &json!(value.parameter_x),
+                        None,
+                        label,
                     );
                     if value.kind == NodeKind::Directional2d {
                         self.anim_field(
@@ -406,47 +611,102 @@ impl Shell {
                             &doc,
                             &item,
                             "parameterY",
-                            "Vertical parameter",
+                            "Vertical",
                             &json!(value.parameter_y),
+                            None,
+                            label,
                         );
                     }
-                    out.push_str("<panel id='blend-space-plot' style='height:128px;flex-shrink:0;background:var(--background);border-width:1px;border-color:var(--border);border-radius:var(--radius-md);overflow:hidden'><panel id='blend-axis-x' style='position:absolute;left:8px;top:64px;width:160px;height:1px;background:var(--border)' /><panel id='blend-axis-y' style='position:absolute;left:84px;top:8px;width:1px;height:112px;background:var(--border)' />");
-                    for (n, sample) in value.samples.iter().enumerate() {
-                        out.push_str(&format!("<panel id='blend-point-{n}' style='position:absolute;left:{}px;top:{}px;width:8px;height:8px;border-radius:4px;background:var(--primary)' description='{}: ({}, {})' />",12.+sample.x.clamp(-1.,1.)*70.+70.,60.-sample.y.clamp(-1.,1.)*48.,escape(&sample.node),sample.x,sample.y));
-                    }
-                    out.push_str("</panel>");
-                    for (n, sample) in value.samples.iter().enumerate() {
-                        out.push_str(&format!(
-                            "<text id='blend-sample-{n}' class='field-label' text='{}' />",
-                            escape(&sample.node)
-                        ));
-                        self.anim_field(
-                            out,
-                            &doc,
-                            &item,
-                            &format!("sample{n}x"),
-                            "X",
-                            &json!(sample.x),
-                        );
-                        if value.kind == NodeKind::Directional2d {
-                            self.anim_field(
-                                out,
-                                &doc,
-                                &item,
-                                &format!("sample{n}y"),
-                                "Y",
-                                &json!(sample.y),
-                            );
+                    if !value.samples.is_empty() {
+                        blend_plot(out, value, width - 24.);
+                        section(out, "blend-samples", "Samples");
+                        for (n, sample) in value.samples.iter().enumerate() {
+                            let row = format!("blend-sample-{n}");
+                            out.push_str(&format!("<panel id='{row}' class='prop-row'><panel id='{row}-label-cell' class='prop-label' style='width:{label}px'><text id='{row}-label' class='fg' text='{}' /></panel><panel id='{row}-value' class='prop-value'>",escape(&sample.node)));
+                            for (axis, coordinate) in [("x", sample.x), ("y", sample.y)] {
+                                if axis == "y" && value.kind != NodeKind::Directional2d {
+                                    continue;
+                                }
+                                let id = format!("animation-field-sample{n}{axis}");
+                                self.bindings.insert(
+                                    ara_ui::source::stable_id(&id),
+                                    Binding::AnimationField(
+                                        doc.clone(),
+                                        item.clone(),
+                                        format!("sample{n}{axis}"),
+                                    ),
+                                );
+                                let text = self
+                                    .drafts
+                                    .get(&format!("@animation|{doc}|{item}|sample{n}{axis}"))
+                                    .cloned()
+                                    .unwrap_or_else(|| panels::display(&json!(coordinate)));
+                                out.push_str(&format!("<text id='{id}-axis' class='caption' text='{}' /><field id='{id}' class='number' style='flex-grow:1;flex-basis:0px' text='{}' label='{} {axis}' action='Dispatch' />",axis.to_uppercase(),escape(&text),escape(&sample.node)));
+                            }
+                            out.push_str("</panel></panel>");
                         }
                     }
                 }
             }
         } else {
-            out.push_str("<text id='animation-select-help' class='muted' style='white-space:normal' text='Select a state or pose node to edit it. Drag between state ports to add a transition.' />");
+            self.empty(
+                out,
+                "animation-select-empty",
+                "person-standing",
+                "Nothing selected",
+                "Select a state or pose on the canvas, or a transition in the list. Drag from a state's edge to another state to add a transition.",
+                &[],
+            );
         }
         out.push_str("</scroll>");
         Ok(())
     }
+
+    /// The pose operation as a segment; each choice replaces the controller through
+    /// the typed controller command.
+    fn pose_operation(
+        &mut self,
+        out: &mut String,
+        doc: &str,
+        record: &str,
+        controller: &ControllerData,
+        key: &str,
+        current: NodeKind,
+    ) {
+        // Six choices need the full width: the segment sits on its own row.
+        out.push_str("<panel id='animation-operation-row' class='prop-row' style='padding-left:12px'><panel id='animation-operation' class='segment' style='flex-grow:1;flex-basis:0px'>");
+        for (kind, short, name) in [
+            (NodeKind::Clip, "Clip", "Play one clip"),
+            (NodeKind::Blend1d, "1D", "1D blend on one parameter"),
+            (NodeKind::Directional2d, "2D", "2D directional blend"),
+            (
+                NodeKind::Additive,
+                "Add",
+                "Additive: overlay the second input",
+            ),
+            (NodeKind::Layer, "Layer", "Layer through a joint mask"),
+            (NodeKind::MotionMatching, "Match", "Motion matching"),
+        ] {
+            let id = format!("animation-operation-{short}");
+            let mut changed = controller.clone();
+            if let Some(node) = changed.nodes.get_mut(key) {
+                node.kind = kind;
+            }
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::ResourceContent(
+                    doc.into(),
+                    vec![json!({"cmd":"editor.animation.controller.set","args":{"record":record,"controller":changed}})],
+                    "Change pose operation".into(),
+                ),
+            );
+            out.push_str(&format!("<button id='{id}' class='segment-button{}' style='flex-grow:1;flex-basis:0px' label='{name}' description='{name}' action='Dispatch'><text id='{id}-label' text='{short}' /></button>",if kind==current{" selected"}else{""}));
+        }
+        out.push_str("</panel></panel>");
+    }
+
+    /// One typed property row: a toggle for flags, else a field (with its unit).
+    #[allow(clippy::too_many_arguments)]
     fn anim_field(
         &mut self,
         out: &mut String,
@@ -455,6 +715,8 @@ impl Shell {
         key: &str,
         label: &str,
         value: &Value,
+        unit: Option<&str>,
+        width: f32,
     ) {
         let id = if key == "clip" {
             "animation-clip-field".into()
@@ -465,19 +727,32 @@ impl Shell {
             ara_ui::source::stable_id(&id),
             Binding::AnimationField(doc.into(), item.into(), key.into()),
         );
-        out.push_str(&format!("<panel id='{id}-row' class='field-row'><text id='{id}-label' class='field-label' text='{}' />",escape(label)));
+        out.push_str(&format!("<panel id='{id}-row' class='prop-row'><panel id='{id}-label-cell' class='prop-label' style='width:{width}px'><text id='{id}-label' text='{}' /></panel><panel id='{id}-value' class='prop-value'>",escape(label)));
         if let Some(v) = value.as_bool() {
             out.push_str(&format!(
-                "<toggle id='{id}' checked='{v}' action='Dispatch' />"
-            ));
-        } else {
-            out.push_str(&format!(
-                "<field id='{id}' text='{}' label='{}' action='Dispatch' />",
-                escape(&panels::display(value)),
+                "<toggle id='{id}' checked='{v}' label='{}' action='Dispatch' />",
                 escape(label)
             ));
+        } else {
+            let text = self
+                .drafts
+                .get(&format!("@animation|{doc}|{item}|{key}"))
+                .cloned()
+                .unwrap_or_else(|| {
+                    if value.is_null() {
+                        String::new()
+                    } else {
+                        panels::display(value)
+                    }
+                });
+            out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' action='Dispatch' />",if value.is_number(){"number"}else{""},escape(&text),escape(label)));
+            if let Some(unit) = unit {
+                out.push_str(&format!(
+                    "<text id='{id}-unit' class='caption' text='{unit}' />"
+                ));
+            }
         }
-        out.push_str("</panel>");
+        out.push_str("</panel></panel>");
     }
     pub(super) fn set_animation_field(
         &self,
@@ -497,6 +772,15 @@ impl Shell {
         )?;
         let (kind, name) = item.split_once(':').ok_or("animation field address")?;
         match kind {
+            "param" => {
+                let parameter = controller
+                    .parameters
+                    .get_mut(name)
+                    .ok_or("parameter missing")?;
+                let mut source = ara_json::to_value(&*parameter)?;
+                source[key] = value;
+                *parameter = serde_json::from_value(source)?;
+            }
             "state" => {
                 let state = controller.states.get_mut(name).ok_or("state missing")?;
                 let mut source = ara_json::to_value(&*state)?;
@@ -537,4 +821,61 @@ impl Shell {
         }
         self.save_controller(editor, doc, &record, controller, "Edit animation parameter")
     }
+}
+
+/// An Inspector header row: icon, title and a caption on the right.
+fn header(out: &mut String, id: &str, icon: &str, title: &str, caption: &str) {
+    out.push_str(&format!("<panel id='{id}-header' class='component-header'>{}<text id='{id}-title' class='component-title' text='{}' /><panel id='{id}-header-fill' class='fill' /><text id='{id}-caption' class='caption' style='padding-right:6px' text='{}' /></panel>",icons::icon(&format!("{id}-header"),icon),escape(title),escape(caption)));
+}
+
+/// A quiet caption between property groups.
+fn section(out: &mut String, id: &str, title: &str) {
+    out.push_str(&format!("<panel id='{id}-section' class='side-header'><text id='{id}-section-title' class='caption' text='{}' /></panel>",escape(title)));
+}
+
+/// Blend samples on their axes (Unity's blend-tree diagram): a 1D blend along one
+/// line, a 2D blend on crossed axes; each sample is a labelled dot.
+fn blend_plot(out: &mut String, node: &Node, width: f32) {
+    let width = width.max(120.);
+    let two = node.kind == NodeKind::Directional2d;
+    let height = if two { width.min(180.) } else { 64. };
+    let (low, high) = if two {
+        let reach = node
+            .samples
+            .iter()
+            .map(|s| s.x.abs().max(s.y.abs()))
+            .fold(1f32, f32::max);
+        (-reach, reach)
+    } else {
+        let xs = node.samples.iter().map(|s| s.x);
+        (xs.clone().fold(0f32, f32::min), xs.fold(1f32, f32::max))
+    };
+    let span = (high - low).max(1e-3);
+    let pad = 20.;
+    let px = |x: f32| pad + (x - low) / span * (width - pad * 2.);
+    let py = |y: f32| {
+        if two {
+            pad + (high - y) / span * (height - pad * 2.)
+        } else {
+            height * 0.5 + 8.
+        }
+    };
+    out.push_str(&format!("<panel id='blend-plot-row' style='flex-shrink:0;padding:6px;padding-left:12px;padding-right:12px'><panel id='blend-space-plot' class='blend-plot' style='width:{width}px;height:{height}px'>"));
+    out.push_str(&format!(
+        "<panel id='blend-axis-x' class='blend-axis' style='left:{pad}px;top:{}px;width:{}px;height:1px' />",
+        py(0.),
+        width - pad * 2.
+    ));
+    if two {
+        out.push_str(&format!(
+            "<panel id='blend-axis-y' class='blend-axis' style='left:{}px;top:{pad}px;width:1px;height:{}px' />",
+            px(0.),
+            height - pad * 2.
+        ));
+    }
+    for (n, sample) in node.samples.iter().enumerate() {
+        let (x, y) = (px(sample.x), py(sample.y));
+        out.push_str(&format!("<panel id='blend-point-{n}' class='blend-dot' style='left:{}px;top:{}px' description='{}: ({}, {})' /><text id='blend-point-label-{n}' class='blend-label' style='left:{}px;top:{}px' text='{}' />",x-5.,y-5.,escape(&sample.node),sample.x,sample.y,x-10.,y-22.,escape(&sample.node)));
+    }
+    out.push_str("</panel></panel>");
 }

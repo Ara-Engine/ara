@@ -52,7 +52,7 @@ impl VfxStream {
             let mut playing = false;
             let mut rate = 100;
             let mut remainder = 0;
-            let view = ara_vfx_gpu::View::default();
+            let mut view = ara_vfx_gpu::View::default();
             let budget = Duration::from_secs_f64(1. / f64::from(FPS));
             loop {
                 let start = Instant::now();
@@ -96,6 +96,11 @@ impl VfxStream {
                                 ara_vfx_gpu::GpuSystem::new(device, &new, &cooked, [768, 768])?;
                             for _ in 0..warm {
                                 replacement.step(device, &view)?;
+                            }
+                            // Frame what the particles do, not the loose culling bounds:
+                            // once per effect, so edits never move the camera.
+                            if effect.as_ref().is_none_or(|old| old.name != new.name) {
+                                view.camera = super::vfx_preview::framing(&new);
                             }
                             if let Some(old) = system.replace(replacement) {
                                 old.retire(device)?;

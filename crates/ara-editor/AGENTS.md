@@ -3,7 +3,6 @@
 Native M2 editor shell, in-process project authority and Engine Protocol server.
 The UI is ara-ui; its display list goes to the Vulkan adapter in `ara-editor-gpu`.
 The viewport samples ara-render's offscreen image on that same device.
-
 Public boundaries:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
@@ -62,10 +61,10 @@ their ASTs to graph ops; animation projections are read-only and edit controller
 data. Animation canvas annotations live in `.ara/editor/animation-<id>.graph`.
 Graph labels are shaped once and use scalable MSDF runs across pan/zoom. Keep
 node/wire culling, the stable lookup table and the bounded thumbnail image pool.
-Generated material previews and fixed-tick VFX previews own worker GPU devices;
-all thumbnail decode/cook/cache IO is off the UI thread. Failures keep last-good
-images and display diagnostics. Host import sidecars save to `.import.json`
-while their asset IDs index source media; do not alter importer version policy.
+Thumbnails: models via `asset_tools/studio.rs` (published materials, fitted 3/4 shot),
+material spheres, VFX framed on simulated particles; 512 masters resampled to 2× each
+view, on worker GPUs with off-thread IO, last good kept. Host import sidecars save to
+`.import.json` while their asset IDs index source media; keep importer version policy.
 Profiler views consume actual ara-profile frames/spans/GPU queue timings. Frozen
 captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 `--verify-panels` on a scratch project runs real import/reimport jobs, an asset
@@ -144,7 +143,8 @@ menubar, status bar, area headers and tab bodies as parts (`Ui::reconcile_parts`
 panels (`shell/memo.rs`: Assets) reuse markup+bindings while their input digest holds; `cargo
 test` sets `ARA_EDITOR_MEMO_CHECK=1`, which regenerates each reuse and fails on a difference.
 `shell/imports.rs` reads ara-play-host's `ImportProgress` (Importing chip, Assets badges,
-Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene. Tools: `shell/material_panel.rs` (preview, Graph|Source, compile
-status; swatches painted after layout, no raw colours in markup) and `shell/vfx_panel.rs`
-(emitter stacks, Hide/Isolate, timeline driving `asset_tools/vfx_stream.rs` in place).
-Imports use the shared `import.initialize`/`import.configure` commands.
+Scene loading notice; `tests/loading.rs`). Only `scene_changed` state re-renders the Scene.
+Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a breadcrumb
+toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
+Swatches paint after layout, never raw colours. VFX: preview-only Hide/Isolate; timeline drives
+`asset_tools/vfx_stream.rs` in place. Imports use the shared `import.initialize`/`import.configure`.
