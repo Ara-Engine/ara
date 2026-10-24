@@ -1,6 +1,7 @@
 //! Navigation state is an op document with a history independent of scene undo.
 use ara_doc::{AssetId, Document, Edit, RecordId, Workspace};
 use ara_ops::{Author, Store, TxnMeta};
+use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
 use ara_schema::{FieldPath, Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode, Floating};
 use glam::{Quat, Vec3};
@@ -117,7 +118,19 @@ pub struct EditorState {
     pub light: bool,
     /// Disable decorative transitions while preserving all interaction feedback.
     pub reduce_motion: bool,
-    /// Use the same-device fidelity view for Scene lighting.
+    /// Scene viewport quality override, the user preference `viewport.quality`:
+    /// `None` uses the project's `rendering.quality`, `Some(Auto)` detects from the
+    /// GPU, `Some(Preset(..))` forces Low/Medium/High/Epic. Serialized as text
+    /// (absent, `auto`, `low` … `epic`).
+    #[serde(with = "render_quality_text")]
+    pub render_quality: Option<QualityChoice>,
+    /// This GPU's automatic preset (`QualityPreset::detect`), filled when the
+    /// window's device starts; runtime only, never persisted.
+    #[serde(skip)]
+    pub detected_quality: Option<QualityPreset>,
+    /// Use the same-device fidelity view for Scene lighting: false only when the
+    /// effective quality resolves to Low. Derived from `render_quality` (and the
+    /// project's default) in `apply_settings`; never set it directly.
     pub quality: bool,
     /// View pose.
     pub camera: Camera,
@@ -218,6 +231,8 @@ impl Default for EditorState {
             layout: default_layout(),
             light: false,
             reduce_motion: false,
+            render_quality: None,
+            detected_quality: None,
             quality: true,
             camera: Camera::default(),
             tool: Tool::Translate,
@@ -267,6 +282,17 @@ impl Default for EditorState {
     }
 }
 impl EditorState {
+    /// Whether `other` renders a different Scene image: the document, camera, view
+    /// mode, viewport-hidden entities or quality. Selection, gizmos and the grid are
+    /// UI overlays and need no Scene frame.
+    pub(crate) fn scene_changed(&self, other: &Self) -> bool {
+        self.doc != other.doc
+            || self.camera != other.camera
+            || self.view_mode != other.view_mode
+            || self.hidden != other.hidden
+            || self.quality != other.quality
+            || self.render_quality != other.render_quality
+    }
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
             || self.asset_path != other.asset_path
@@ -285,6 +311,8 @@ impl EditorState {
             || self.light != other.light
             || self.reduce_motion != other.reduce_motion
             || self.quality != other.quality
+            || self.render_quality != other.render_quality
+            || self.detected_quality != other.detected_quality
             || self.tool != other.tool
             || self.local != other.local
             || self.centre != other.centre
@@ -323,8 +351,13 @@ impl EditorState {
             self.light = theme == "light";
         }
         if let Some(quality) = text("viewport.quality") {
-            self.quality = quality == "fidelity";
+            self.render_quality = match quality.as_str() {
+                "project" => None,
+                other => other.parse().ok(),
+            };
         }
+        // The one place `quality` is derived: only Low is the raster view.
+        self.quality = self.resolve_quality(self.render_choice()) != Some(QualityPreset::Low);
 
         if let Some(v) = self
             .settings
@@ -332,6 +365,34 @@ impl EditorState {
             .and_then(Value::as_bool)
         {
             self.reduce_motion = v;
+        }
+    }
+    /// The project's default quality (`ara.project.json` `rendering.quality`).
+    pub fn project_quality(&self) -> QualityChoice {
+        self.settings
+            .get("rendering.quality")
+            .and_then(Value::as_str)
+            .and_then(|q| q.parse().ok())
+            .unwrap_or_default()
+    }
+    /// What the Scene view renders with: the override, else the project's default.
+    pub fn render_choice(&self) -> QualityChoice {
+        self.render_quality
+            .unwrap_or_else(|| self.project_quality())
+    }
+    /// The preset `choice` runs at on this GPU (`None` while Auto is undetected).
+    pub fn resolve_quality(&self, choice: QualityChoice) -> Option<QualityPreset> {
+        match choice {
+            QualityChoice::Preset(preset) => Some(preset),
+            QualityChoice::Auto => self.detected_quality,
+        }
+    }
+    /// A quality as people read it: `High`, `Auto · High` (detected) or `Auto`.
+    pub fn quality_label(&self, choice: QualityChoice) -> String {
+        match (choice, self.resolve_quality(choice)) {
+            (QualityChoice::Preset(preset), _) => preset_title(preset).into(),
+            (QualityChoice::Auto, Some(preset)) => format!("Auto · {}", preset_title(preset)),
+            (QualityChoice::Auto, None) => "Auto".into(),
         }
     }
     /// A setting's number, or `default`.
@@ -710,4 +771,79 @@ pub(crate) fn saved_layouts(root: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+/// A preset's title: `Low`, `Medium`, `High`, `Epic`.
+pub fn preset_title(preset: QualityPreset) -> &'static str {
+    match preset {
+        QualityPreset::Low => "Low",
+        QualityPreset::Medium => "Medium",
+        QualityPreset::High => "High",
+        QualityPreset::Epic => "Epic",
+    }
+}
+
+/// `EditorState::render_quality` as text: absent (the project's default), `auto`,
+/// `low`, `medium`, `high` or `epic`.
+mod render_quality_text {
+    use ara_render_fidelity::presets::QualityChoice;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        value: &Option<QualityChoice>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(choice) => serializer.serialize_some(&choice.to_string()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<QualityChoice>, D::Error> {
+        Option::<String>::deserialize(deserializer)?
+            .map(|text| text.parse().map_err(serde::de::Error::custom))
+            .transpose()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quality_is_derived_from_the_override_the_project_and_the_gpu() {
+        let mut state = EditorState::default();
+        state
+            .settings
+            .insert("viewport.quality".into(), json!("project"));
+        state
+            .settings
+            .insert("rendering.quality".into(), json!("auto"));
+        state.apply_settings();
+        assert_eq!(state.render_quality, None);
+        assert!(state.quality, "an undetected Auto is not Low");
+        assert_eq!(state.quality_label(state.render_choice()), "Auto");
+        // Auto on a GPU without ray tracing resolves to Low: the raster view.
+        state.detected_quality = Some(QualityPreset::Low);
+        state.apply_settings();
+        assert!(!state.quality);
+        assert_eq!(state.quality_label(state.render_choice()), "Auto · Low");
+        state
+            .settings
+            .insert("viewport.quality".into(), json!("high"));
+        state.apply_settings();
+        assert_eq!(
+            state.render_quality,
+            Some(QualityChoice::Preset(QualityPreset::High))
+        );
+        assert!(state.quality);
+        // Serialized as text; detection is runtime only.
+        let value = serde_json::to_value(&state).expect("state serializes");
+        assert_eq!(value["renderQuality"], "high");
+        let back: EditorState = serde_json::from_value(value).expect("state deserializes");
+        assert_eq!(back.render_quality, state.render_quality);
+        assert_eq!(back.detected_quality, None);
+    }
 }

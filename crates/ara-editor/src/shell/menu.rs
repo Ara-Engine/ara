@@ -434,6 +434,15 @@ impl Shell {
         Ok(())
     }
     /// Whether a point is inside an open popup of the current surface.
+    /// The pointer is over the open bar menu's own title, whose click closes it.
+    pub(crate) fn over_open_title(&self) -> bool {
+        let Some(bar) = self.menu.as_ref().and_then(MenuState::bar) else {
+            return false;
+        };
+        self.ui
+            .hit_test(self.pointer[0], self.pointer[1])
+            .is_some_and(|i| self.ui.nodes[i].element.id == format!("menu-title-{bar}"))
+    }
     pub(crate) fn menu_contains(&self, point: [f32; 2]) -> bool {
         self.ui
             .nodes

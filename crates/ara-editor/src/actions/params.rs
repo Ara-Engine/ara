@@ -301,8 +301,12 @@ pub(super) struct EditorPreferences {
     pub session: String,
     /// Disable 140 ms decorative transitions.
     pub reduce_motion: Option<bool>,
-    /// Use hardware fidelity lighting, or the fast raster view.
+    /// Legacy switch: true uses the project's default quality (Auto if that is Low),
+    /// false the Low raster view. Prefer `renderQuality`.
     pub quality: Option<bool>,
+    /// Scene viewport quality: `project` (the project's default), `auto`, `low`,
+    /// `medium`, `high` or `epic`. A user preference, never saved in the project.
+    pub render_quality: Option<String>,
 }
 /// Set or reset one setting; the edit is an undoable op attributed to the session.
 #[derive(Schema, Deserialize)]
