@@ -40,6 +40,7 @@ pub struct Foliage {
 }
 
 /// Equirectangular sky radiance in cd/m².
+#[derive(Clone)]
 pub struct EnvironmentMap {
     /// Width and height in texels.
     pub size: [u32; 2],

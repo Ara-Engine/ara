@@ -18,12 +18,11 @@ pub enum QualitySetting {
     Auto,
     /// Raster renderer with temporal antialiasing; no ray tracing.
     Low,
-    /// Ray-traced lighting at half resolution, upscaled temporally; no ReSTIR.
+    /// Raster lighting with ambient occlusion and screen-space reflections.
     Medium,
-    /// Ray-traced lighting at two-thirds resolution, upscaled temporally; ReSTIR in
-    /// scenes lit by emissive surfaces or many lights.
+    /// Raster lighting with stronger shadow, GI and screen-space effect budgets.
     High,
-    /// Native-resolution ray tracing with ReSTIR everywhere. The most expensive.
+    /// The highest raster shadow, GI and reflection budgets. The most expensive.
     Epic,
 }
 
@@ -35,6 +34,10 @@ pub enum QualitySetting {
 pub struct RenderSettings {
     /// Default quality preset for Play, the editor's lit viewport and exported players.
     pub quality: QualitySetting,
+    /// Opt in to experimental hardware ray tracing for supported presets. False
+    /// keeps every preset on raster and creates no ray-tracing presentation device.
+    /// Takes effect when the player or editor GPU device is opened.
+    pub ray_tracing: bool,
 }
 
 /// A physical sky and aerial perspective lit by the scene's directional light.

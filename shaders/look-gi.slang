@@ -14,6 +14,9 @@ float3 localIrradiance(Frame f,float3 p,float3 n){
         sum+=light.colorLumens.rgb*(light.colorLumens.w/(solidAngle*d2))*fade*spot*saturate(dot(n,toLight));
     }return sum;
 }
+// Relative solid angle of each 8x8 octahedral texel (mean one): the mapping's
+// texels span 2.75x different areas of the sphere, so integration weights them.
+static const float TEXEL_SOLID_ANGLE[64]={0.7166,1.1795,0.9555,0.5363,0.5328,0.9555,1.1795,0.7165,1.1795,1.4629,1.0142,0.9555,0.9555,1.0122,1.4629,1.1795,0.9555,1.0142,1.4629,1.1795,1.1795,1.4629,1.0162,0.9555,0.5363,0.9555,1.1795,0.7165,0.7165,1.1795,0.9555,0.5398,0.5328,0.9555,1.1795,0.7165,0.7166,1.1795,0.9555,0.5363,0.9555,1.0122,1.4629,1.1795,1.1795,1.4629,1.0142,0.9555,1.1795,1.4629,1.0162,0.9555,0.9555,1.0142,1.4629,1.1795,0.7165,1.1795,0.9555,0.5398,0.5363,0.9555,1.1795,0.7165};
 groupshared float3 radiance[64];
 groupshared float3 directions[64];
 groupshared float3 tile[36];
@@ -48,11 +51,27 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     radiance[lane]=light;directions[lane]=dir;GroupMemoryBarrierWithGroupSync();
     if(lane<36){
         float3 n=octDecode((float2(lane%6,lane/6)+0.5)/6),sum=0;float normalization=0;
-        for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}
+        for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0)*TEXEL_SOLID_ANGLE[j];sum+=radiance[j]*w;normalization+=w;}
         float3 value=sum*(PI/max(normalization,1e-5));
         float3 old=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
         float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giOrigin.w;
         tile[lane]=lerp(value,old,hysteresis);
     }
     GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
+}
+// Two probe lobes per half-resolution pixel (the full-resolution pixel 2p): rgb
+// irradiance facing the normal (w: camera distance) and facing the mirror direction
+// (w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost
+// of the eight-probe visibility search drops fourfold.
+[shader("compute")][numthreads(8,8,1)]
+void giGatherMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
+    int2 p=int2(tid.xy)*2;float4 world=pixel(f.gbuffer.w,p);float4 diffuse=float4(0,0,0,1e9),specular=0;
+    if(world.w>0){
+        float3 n=normalize(pixel(f.gbuffer.y,p).xyz),v=normalize(f.camera.xyz-world.xyz);float coverage=giCoverage(l,world.xyz);
+        if(coverage>0){float3 a,b;giLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),giBias(l,n,v),a,b);diffuse.rgb=a;specular=float4(b,coverage);}
+        diffuse.w=length(world.xyz-f.camera.xyz);
+    }
+    images[NonUniformResourceIndex(l.giGather.z)][tid.xy]=diffuse;
+    images[NonUniformResourceIndex(l.giGather.w)][tid.xy]=specular;
 }

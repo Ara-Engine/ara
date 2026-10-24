@@ -102,6 +102,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         .quality
         .unwrap_or_else(|| scene.rendering.quality.into());
     let size = parse_size(&args.size)?;
+    let render_options = ara_runtime_render::RenderOptions {
+        ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
+    };
     let (mut world, build_ms) = World::build_packed(&scene, source, !args.standalone.headless)?;
     let started = world.start(args.standalone.headless, build_ms)?;
     phases.insert("world_ready_ms", began.elapsed().as_millis());
@@ -115,10 +118,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         } else {
             device::Windowed::open
         };
-        let (window, presenter) = open(&args.name, size, &args.gpu_cache, quality)?;
+        let (window, presenter) = open(&args.name, size, &args.gpu_cache, quality, render_options)?;
         (Some(window), presenter)
     };
     presenter.set_quality(quality);
+    presenter.set_render_options(render_options);
     phases.insert("device_ready_ms", began.elapsed().as_millis());
     let mut frame_count = 0_u32;
     let mut frame_sum_ms = 0_f64;

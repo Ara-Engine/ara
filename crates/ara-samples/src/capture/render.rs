@@ -524,6 +524,9 @@ fn baseline(
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
     presenter.set_render_options(RenderOptions::default());
     presenter.set_quality(QualityChoice::Preset(preset));
+    // The same resolved look (scene components plus look-file overrides) as the
+    // fidelity modes and references.
+    presenter.set_look_override(Some(*options.environment));
     presenter.set_probe_gi(true);
     presenter.prepare_with(frame, || (options.content)(frame))?;
     presenter.wait_probe_gi()?;
@@ -569,12 +572,19 @@ fn baseline(
         let capture = presenter.capture_with(frame, &request, || Ok(Default::default()))?;
         save(&capture.image, options, name, &shot.name)?;
         if let Some(truth) = truths.iter().find(|t| t.shot == shot.name) {
+            // Score at the reference's exposure, without compensation.
+            presenter.set_look_override(Some(FrameEnvironment {
+                ev100: Some(truth.ev100),
+                compensation: 0.,
+                ..*options.environment
+            }));
             let exposure = frame.environment.exposure;
             frame.environment.exposure =
                 ara_render_fidelity::settings::exposure_from_ev100(truth.ev100, 0.);
             let effects = std::mem::take(&mut frame.effects);
             let scored = presenter.capture_with(frame, &request, || Ok(Default::default()));
             frame.effects = effects;
+            presenter.set_look_override(Some(*options.environment));
             frame.environment.exposure = exposure;
             let scored = scored?;
             let heatmap = options

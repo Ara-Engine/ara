@@ -1,8 +1,9 @@
 //! Look passes in the renderer's frame graph: the sky and fog before lighting,
 //! exposure, bloom and display grading after temporal resolve.
 use super::gpu::{
-    AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, FROXELS, LookGpu, LookIds, MULTISCATTER,
-    SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SkyKey, TRANSMITTANCE,
+    AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu,
+    LookIds, MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
+    TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
 use ara_gpu::{
@@ -25,6 +26,10 @@ pub(crate) enum LookPass {
     GiRelight,
     AoTrace,
     AoDenoise,
+    GiGather,
+    /// Reflection colour pyramid level (1..4) from the previous history.
+    SsrPyramid(u32),
+    SsrTrace,
 }
 
 impl LookGpu {
@@ -55,6 +60,7 @@ impl LookGpu {
             let key = SkyKey {
                 aerosols: sky.aerosols,
                 sun,
+                clouds: [sky.cloud_coverage, sky.cloud_height],
             };
             if self.sky.is_none_or(|k| k.aerosols != key.aerosols) {
                 add(
@@ -147,6 +153,83 @@ impl LookGpu {
         passes
     }
 
+    /// Screen-space reflections before lighting: a colour pyramid of the previous
+    /// resolved frame (`history`; none on the first frame) and the half-resolution
+    /// trace. `reads` must cover depth, normals, world positions and the frame.
+    pub(crate) fn ssr_passes(
+        &self,
+        graph: &mut Graph,
+        ids: &LookIds,
+        history: Option<ResourceId>,
+        reads: &[(ResourceId, Access)],
+    ) -> Vec<(PassId, LookPass)> {
+        let (Some(_), Some(history)) = (self.quality.reflections, history) else {
+            return Vec::new();
+        };
+        let mut passes = Vec::new();
+        for level in 1..=4u32 {
+            const NAMES: [&str; 4] = [
+                "SSR.Pyramid1",
+                "SSR.Pyramid2",
+                "SSR.Pyramid3",
+                "SSR.Pyramid4",
+            ];
+            let id = graph.pass(
+                NAMES[level as usize - 1],
+                Queue::Graphics,
+                [
+                    (history, Access::ShaderRead),
+                    (ids.image(SSR_PYRAMID), Access::Storage),
+                    (ids.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(reads.iter().copied()),
+            );
+            passes.push((id, LookPass::SsrPyramid(level)));
+        }
+        let id = graph.pass(
+            "SSR.Trace",
+            Queue::Graphics,
+            [
+                (ids.image(SSR_PYRAMID), Access::ShaderRead),
+                (ids.image(SSR_TRACE), Access::Storage),
+                (ids.frame, Access::ShaderRead),
+            ]
+            .into_iter()
+            .chain(reads.iter().copied()),
+        );
+        passes.push((id, LookPass::SsrTrace));
+        passes
+    }
+
+    /// The half-resolution probe gather (after the relight); `reads` must cover the
+    /// G-buffer world positions and normals.
+    pub(crate) fn gather_passes(
+        &self,
+        graph: &mut Graph,
+        ids: &LookIds,
+        reads: &[(ResourceId, Access)],
+    ) -> Vec<(PassId, LookPass)> {
+        let Some(gi) = ids.gi else {
+            return Vec::new();
+        };
+        let id = graph.pass(
+            "GI.Gather",
+            Queue::Graphics,
+            [
+                (gi[1], Access::ShaderRead),
+                (gi[2], Access::ShaderRead),
+                (gi[4], Access::ShaderRead),
+                (ids.image(GI_DIFFUSE), Access::Storage),
+                (ids.image(GI_SPECULAR), Access::Storage),
+                (ids.frame, Access::ShaderRead),
+            ]
+            .into_iter()
+            .chain(reads.iter().copied()),
+        );
+        vec![(id, LookPass::GiGather)]
+    }
+
     /// Ambient occlusion after the G-buffer: half-resolution GTAO, then a
     /// depth-aware denoise. `reads` must cover depth, normals and the frame.
     pub(crate) fn ao_passes(
@@ -181,8 +264,13 @@ impl LookGpu {
         vec![(trace, LookPass::AoTrace), (denoise, LookPass::AoDenoise)]
     }
 
-    /// Images the lighting and transparency passes sample.
-    pub(crate) fn lighting_reads(&self, ids: &LookIds) -> Vec<(ResourceId, Access)> {
+    /// Images the lighting and transparency passes sample; `reflected` when this
+    /// frame traced screen-space reflections (they need last frame's history).
+    pub(crate) fn lighting_reads(
+        &self,
+        ids: &LookIds,
+        reflected: bool,
+    ) -> Vec<(ResourceId, Access)> {
         let mut reads = vec![(ids.frame, Access::ShaderRead)];
         if self.look.sky.is_some() {
             reads.extend(
@@ -195,9 +283,13 @@ impl LookGpu {
         }
         if let Some(gi) = ids.gi {
             reads.extend([1, 2, 4].map(|i| (gi[i], Access::ShaderRead)));
+            reads.extend([GI_DIFFUSE, GI_SPECULAR].map(|i| (ids.image(i), Access::ShaderRead)));
         }
         if self.quality.ambient_occlusion.is_some() {
             reads.push((ids.image(AO_DENOISED), Access::ShaderRead));
+        }
+        if reflected {
+            reads.push((ids.image(SSR_TRACE), Access::ShaderRead));
         }
         reads
     }
@@ -231,15 +323,15 @@ impl LookGpu {
         let bloom = self.effective().bloom > 0.;
         if bloom {
             const NAMES: [&str; 9] = [
-                "Bloom.Down1",
                 "Bloom.Down2",
                 "Bloom.Down3",
                 "Bloom.Down4",
                 "Bloom.Down5",
+                "Bloom.Down6",
+                "Bloom.Up5",
                 "Bloom.Up4",
                 "Bloom.Up3",
                 "Bloom.Up2",
-                "Bloom.Up1",
             ];
             for (pass, name) in NAMES.iter().enumerate() {
                 let uses = match pass {
@@ -285,12 +377,20 @@ impl LookGpu {
             LookPass::Fog => (p.fog, 0, groups([64, 36])),
             LookPass::Exposure => (p.exposure, 0, [1, 1, 1]),
             LookPass::Bloom(n) => {
-                let level = if n < 5 { n + 1 } else { 9 - n };
+                // Levels 2..6 (quarter resolution down), as in look-post.slang.
+                let level = if n < 5 { n } else { 8 - n } + 2;
                 (p.bloom, n, groups(size.map(|v| (v >> level).max(1))))
             }
             LookPass::Post => (p.post, 0, groups(size)),
             LookPass::AoTrace => (p.ao_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::AoDenoise => (p.ao_denoise, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::GiGather => (p.gi_gather, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::SsrPyramid(level) => (
+                p.ssr_pyramid,
+                level - 1,
+                groups(size.map(|v| (v >> level).max(1))),
+            ),
+            LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::GiRelight => (
                 p.gi_relight,
                 0,

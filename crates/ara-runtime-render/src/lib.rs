@@ -1,12 +1,8 @@
-//! Presents `ara_runtime::extract::RenderFrame`s with `ara-render`.
-//!
-//! The renderer uploads a scene snapshot once; [`Presenter`] rebuilds it only when the
-//! set of draws, geometry or materials changes (spawns, asset reloads, material
-//! edits) and otherwise streams per-frame motion: moved or skinned meshes are
-//! re-transformed on the CPU into world space (`Renderer::update_mesh`), lights and the
-//! sun are rewritten in place. Captures are deterministic and carry numbered marks.
-//! Presented frames merge landscape/foliage depth with the scene on the GPU, draw
-//! persistent particles, then tone map. Captures can read that exact output path.
+//! Native raster presentation shared by Scene, Play and installed players.
+//! [`RasterView`] consumes local shared geometry, compressed textures and moving
+//! instances; terrain and foliage enter the same G-buffer and authored look.
+//! [`Presenter`] owns the device and completed last-good output. Experimental RT
+//! is explicitly enabled through [`RenderOptions`], before device creation.
 #![warn(missing_docs)]
 
 extern crate glam34 as glam;
@@ -22,7 +18,9 @@ pub mod landscape;
 mod landscape_tests;
 mod material;
 mod presentation;
-pub use presentation::{PresentationImage, QualityChoice, QualityPreset};
+pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
+mod raster;
+pub use raster::{RasterUpdate, RasterView};
 mod readback;
 pub mod terrain_mesh;
 pub mod two_d;
@@ -58,8 +56,8 @@ pub const SCENE_TEXTURE_BUDGET: usize = 32;
 pub struct PresentStats {
     /// Native GPU milliseconds, including scene updates and output publication.
     pub gpu_ms: f64,
-    /// Native timestamp components and residency counters. Low returns `None`:
-    /// its landscape/VFX timing coverage is incomplete, rather than measured zero.
+    /// Native timestamp components and residency counters, on every raster tier
+    /// and experimental RT. The legacy diagnostic fallback has incomplete coverage.
     pub gpu: Option<GpuFrameCosts>,
     /// Whether the scene was rebuilt (structural change).
     pub rebuilt: bool,
@@ -74,6 +72,7 @@ pub struct PresentStats {
 /// Owns the renderer and the per-draw upload state.
 pub struct Presenter {
     live: Option<presentation::Live>,
+    raster: Option<RasterView>,
     published: Option<presentation::Published>,
     choice: QualityChoice,
     plan: Option<ara_render_fidelity::presets::Plan>,
@@ -104,9 +103,13 @@ pub struct Presenter {
     /// Whether the over-budget texture note was printed.
     warned_budget: bool,
     /// Background probe GI acquisition for raster content (`set_probe_gi`).
-    probe_gi: Option<gi::Acquisition>,
+    probe_gi: bool,
     /// Renderer selection (`set_render_options`).
     options: ara_render_fidelity::presets::RenderOptions,
+    /// The content's authored environment map (HDRI), replacing the sky gradient.
+    environment: Option<fidelity::EnvironmentMap>,
+    /// Host look override (`set_look_override`), replacing the frame's authored look.
+    look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -161,6 +164,7 @@ impl Presenter {
     pub fn new(size: [u32; 2], extensions: Vec<CString>, cache: impl Into<PathBuf>) -> Self {
         Self {
             live: None,
+            raster: None,
             published: None,
             choice: QualityChoice::Auto,
             plan: None,
@@ -186,10 +190,10 @@ impl Presenter {
             composite: None,
             output: None,
             warned_budget: false,
-            probe_gi: None,
-            // Hosts keep the ray-traced tiers until the D27 cut-over lands with
-            // native raster geometry (raster everywhere by default).
-            options: ara_render_fidelity::presets::RenderOptions { ray_tracing: true },
+            probe_gi: true,
+            options: ara_render_fidelity::presets::RenderOptions::default(),
+            environment: None,
+            look_override: None,
         }
     }
 
@@ -219,8 +223,28 @@ impl Presenter {
         Ok(())
     }
 
-    /// Uploads `frame`'s content (rebuilding only on structural change).
-    fn prepare_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
+    /// The look this frame renders with: the host override, or the frame's authored
+    /// sky, fog, exposure and display (shared with fidelity).
+    fn frame_look(
+        &self,
+        frame: &RenderFrame,
+    ) -> ara_render_fidelity::environment::FrameEnvironment {
+        self.look_override.unwrap_or_else(|| {
+            ara_render_fidelity::environment::FrameEnvironment::resolve(
+                &frame.look,
+                frame.environment.exposure,
+            )
+        })
+    }
+
+    /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
+    /// resolves `content` once (its environment map lights and backs the scene)
+    /// and returns it for probe GI acquisition.
+    fn prepare_baseline(
+        &mut self,
+        frame: &RenderFrame,
+        content: impl FnOnce() -> Result<fidelity::native::Content>,
+    ) -> Result<Option<fidelity::native::Content>> {
         let started = Instant::now();
         ensure!(!frame.draws.is_empty(), "nothing to draw");
         self.next_layout.clear();
@@ -240,7 +264,17 @@ impl Presenter {
             rebuilt: rebuild,
             ..Default::default()
         };
+        let mut resolved = None;
         if rebuild {
+            let content = content()?;
+            self.environment = content
+                .environment
+                .as_ref()
+                .map(|map| fidelity::EnvironmentMap {
+                    size: map.size,
+                    pixels: map.pixels.clone(),
+                });
+            resolved = Some(content);
             let scene = self.scene(frame, &tiles)?;
             match &mut self.renderer {
                 Some(renderer) => renderer.replace_scene(scene)?,
@@ -257,7 +291,7 @@ impl Presenter {
         } else {
             self.update(frame)?;
         }
-        let look = look(frame).raster();
+        let look = self.frame_look(frame).raster();
         let renderer = self
             .renderer
             .as_mut()
@@ -266,24 +300,31 @@ impl Presenter {
             renderer.set_look(look)?;
         }
         self.stats.prepare = started.elapsed();
-        Ok(())
+        Ok(resolved)
     }
 
     /// Renders the scene, landscape/foliage and particles to one GPU window image.
     fn present_baseline(&mut self, frame: &RenderFrame) -> Result<()> {
         self.draw_terrain = frame.terrain.is_none();
         let camera = camera(frame)?;
-        let exposure = look(frame).manual_exposure(frame.environment.exposure);
+        let exposure = self
+            .frame_look(frame)
+            .manual_exposure(frame.environment.exposure);
         let started = Instant::now();
         let renderer = self
             .renderer
             .as_mut()
             .context("renderer missing after prepare")?;
         // Landscape and particles composite into the lit HDR before it is graded.
-        let compositing = frame.terrain.is_some() || !frame.effects.is_empty();
+        let native = renderer.is_native();
+        let compositing = (!native && frame.terrain.is_some()) || !frame.effects.is_empty();
         renderer.set_deferred_post(compositing);
         renderer.render(&camera, exposure)?;
-        let terrain = self.landscapes.present(renderer, frame, &camera)?;
+        let terrain = if native {
+            None
+        } else {
+            self.landscapes.present(renderer, frame, &camera)?
+        };
         let (image, sampled_index, state) = renderer.feature_color();
         let mut color = ara_vfx_gpu::SceneColor {
             image,
@@ -320,6 +361,31 @@ impl Presenter {
         } else {
             self.output = Some(renderer.output());
         }
+        if native {
+            let textures = renderer
+                .native_texture_stats()
+                .context("native texture statistics")?;
+            let costs = GpuFrameCosts {
+                scene_update_ms: renderer.native_update_gpu_ms().unwrap_or(0.),
+                texture_upload_ms: textures.upload_gpu_ms,
+                texture_uploaded_bytes: textures.uploaded_bytes,
+                texture_pending: textures.pending_textures,
+                texture_resident_bytes: textures.resident_bytes,
+                effects_ms: if frame.effects.is_empty() {
+                    0.
+                } else {
+                    self.effects.gpu_ms()
+                },
+                raster_ms: renderer
+                    .timings()
+                    .iter()
+                    .map(|pass| pass.milliseconds)
+                    .sum(),
+                ..Default::default()
+            };
+            self.stats.gpu_ms = costs.accounted_ms();
+            self.stats.gpu = Some(costs);
+        }
         self.stats.render = started.elapsed();
         Ok(())
     }
@@ -335,7 +401,9 @@ impl Presenter {
     ) -> Result<Capture> {
         // Terrain comes from the landscape composite below.
         self.draw_terrain = false;
-        self.prepare_baseline(frame)?;
+        if self.raster.is_none() {
+            self.prepare_baseline(frame, || Ok(fidelity::native::Content::default()))?;
+        }
         self.wait_probe_gi()?;
         let request = CaptureRequest {
             camera: camera(frame)?,
@@ -344,7 +412,9 @@ impl Presenter {
             // Renderer::capture resets the jitter sequence and history itself;
             // live TAA can remain enabled in a reproducible Low capture.
             deterministic: false,
-            exposure: look(frame).manual_exposure(frame.environment.exposure),
+            exposure: self
+                .frame_look(frame)
+                .manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -355,7 +425,8 @@ impl Presenter {
             .as_mut()
             .context("renderer missing after prepare")?;
         let mut capture = renderer.capture(&request)?;
-        let base = frame.terrain.is_some().then(|| capture.image.clone());
+        let base =
+            (!renderer.is_native() && frame.terrain.is_some()).then(|| capture.image.clone());
         // GPU particles replay over the captured frame before it is resized away.
         self.effects
             .composite(renderer, frame, &request, &mut capture)?;
@@ -385,7 +456,9 @@ impl Presenter {
             size,
             mode: ViewMode::Lit,
             deterministic: true,
-            exposure: look(frame).manual_exposure(frame.environment.exposure),
+            exposure: self
+                .frame_look(frame)
+                .manual_exposure(frame.environment.exposure),
             settle_frames: 4,
             tick: frame.tick,
             seed,
@@ -489,7 +562,10 @@ impl Presenter {
             environment: Vec::new(),
             environment_size: [0; 2],
         };
-        let (size, sky) = sky(&frame.environment);
+        let (size, sky) = match &self.environment {
+            Some(map) => (map.size, map.pixels.clone()),
+            None => sky(&frame.environment),
+        };
         scene.environment_size = size;
         scene.environment = sky;
         // Model textures share the device's 128-entry sampled-image heap with the
@@ -747,14 +823,6 @@ fn bytes(light: &scene::Light) -> [u32; 16] {
         out[i] = v.to_bits();
     }
     out
-}
-
-/// The frame's authored look (sky, fog, exposure and display), shared with fidelity.
-fn look(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
-    ara_render_fidelity::environment::FrameEnvironment::resolve(
-        &frame.look,
-        frame.environment.exposure,
-    )
 }
 
 /// The frame's sun, or a dim default so the renderer always has a directional light.
