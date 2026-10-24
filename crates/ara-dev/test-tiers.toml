@@ -77,4 +77,5 @@ package = "ara-dev"
 target = "commands"
 group = "cargo"
 memory_mib = 1024
-timeout_seconds = 240
+# Builds multiple isolated Cargo fixtures; allow shared-machine contention.
+timeout_seconds = 600

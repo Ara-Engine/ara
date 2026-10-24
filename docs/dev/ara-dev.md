@@ -124,7 +124,10 @@ Admission estimates reserve at most 4096 MiB and half the available physical RAM
 `ARA_TEST_JOBS` (1–4), `ARA_TEST_RAM_MIB`, and `ARA_TEST_TIMEOUT_SECONDS` override these limits.
 The tracked `crates/ara-dev/test-tiers.toml` labels slow suites and exclusive GPU/.NET/process
 groups. Fast suites have a 120-second deadline; slow suites have explicit 180–240-second
-deadlines. Timeout kills the process tree and fails the gate. Separate suite logs and
+deadlines. The self-building `ara-dev / commands` suite has a 600-second Cargo-group
+budget for contended fixture builds. The overall gate deadline still caps every suite;
+`ARA_TEST_TIMEOUT_SECONDS` remains an explicit override. Timeout kills the process tree
+and fails the gate. Separate suite logs and
 `test-execution.json` record results/times. Doctests and diagnostic coverage remain checked
 through Cargo, each with a 180-second phase deadline as well as the overall gate deadline.
 No nextest installation is required; the built-in scheduler is used when that optional
