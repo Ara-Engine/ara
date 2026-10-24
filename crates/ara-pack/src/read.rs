@@ -1,5 +1,5 @@
-use std::io::Read;
 use std::path::Path;
+use std::{borrow::Cow, io::Read};
 
 use chacha20poly1305::{
     KeyInit, XChaCha20Poly1305,
@@ -16,9 +16,9 @@ use crate::{
 /// Validated borrowed pack. Header, every range and stored chunk hash are checked
 /// on open; decompressed identities are checked when read or by `validate_all`.
 pub struct Pack<'a> {
-    bytes: &'a [u8],
-    data: usize,
-    manifest: Manifest,
+    pub(crate) bytes: &'a [u8],
+    pub(crate) data: usize,
+    pub(crate) manifest: Cow<'a, Manifest>,
 }
 
 impl<'a> Pack<'a> {
@@ -84,7 +84,7 @@ impl<'a> Pack<'a> {
         let pack = Self {
             bytes,
             data,
-            manifest,
+            manifest: Cow::Owned(manifest),
         };
         let mut previous_end = 0u64;
         for (id, c) in &pack.manifest.chunks {
