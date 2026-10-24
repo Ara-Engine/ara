@@ -1,4 +1,5 @@
 //! Full generated material evaluation on analytic sphere/plane geometry, off the UI thread.
+use super::studio::MASTER;
 use ara_gpu::{
     Access, Barrier, Queue, Resource, RootConstants,
     commands::{Attachment, Command},
@@ -93,12 +94,16 @@ pub(super) fn capture(
     let mut reads = Vec::new();
     for format in [vk::Format::R8G8B8A8_UNORM, vk::Format::R32_SFLOAT] {
         let image = gpu.create_image(
-            384,
-            384,
+            MASTER,
+            MASTER,
             format,
             vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
         )?;
-        let read = gpu.create_buffer(384 * 384 * 4, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        let read = gpu.create_buffer(
+            u64::from(MASTER * MASTER * 4),
+            vk::BufferUsageFlags::TRANSFER_DST,
+            true,
+        )?;
         barrier(
             &mut recorder,
             Resource::Image(image),
@@ -118,7 +123,7 @@ pub(super) fn capture(
             })
             .collect(),
         depth: None,
-        size: [384, 384],
+        size: [MASTER, MASTER],
     });
     recorder.push(Command::Pipeline(program));
     recorder.push(Command::Constants(RootConstants {
@@ -167,7 +172,7 @@ pub(super) fn capture(
             target: glam::Vec3::ZERO,
             vertical_fov: 0.62,
         },
-        size: [384, 384],
+        size: [MASTER, MASTER],
         mode: ViewMode::Lit,
         deterministic: true,
         exposure: 1.,

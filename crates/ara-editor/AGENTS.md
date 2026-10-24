@@ -63,10 +63,10 @@ their ASTs to graph ops; animation projections are read-only and edit controller
 data. Animation canvas annotations live in `.ara/editor/animation-<id>.graph`.
 Graph labels are shaped once and use scalable MSDF runs across pan/zoom. Keep
 node/wire culling, the stable lookup table and the bounded thumbnail image pool.
-Generated material previews and fixed-tick VFX previews own worker GPU devices;
-all thumbnail decode/cook/cache IO is off the UI thread. Failures keep last-good
-images and display diagnostics. Host import sidecars save to `.import.json`
-while their asset IDs index source media; do not alter importer version policy.
+Thumbnails: models via `asset_tools/studio.rs` (published materials, fitted 3/4 shot),
+material spheres, VFX framed on simulated particles; 512 masters resampled to 2× each
+view, on worker GPUs with off-thread IO, last good kept. Host import sidecars save to
+`.import.json` while their asset IDs index source media; keep importer version policy.
 Profiler views consume actual ara-profile frames/spans/GPU queue timings. Frozen
 captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 `--verify-panels` on a scratch project runs real import/reimport jobs, an asset
@@ -143,8 +143,8 @@ frame. Shell rebuilds reconcile into the retained `Ui` once per revision (`rebui
 area headers and tab bodies as parts (`Ui::reconcile_parts`: unchanged ones keep their rows);
 inactive `panels::keep_alive` tabs stay mounted, hidden (geometry via `Shell::shown_node`).
 Only `scene_changed` state re-renders the Scene; icons re-rasterize on DPI only.
-Tools: `shell/material_panel.rs` (preview + parameters, Graph|Source, compile
-status; swatches are painted after layout, never raw colours in markup) and
-`shell/vfx_panel.rs` (emitter stacks, preview-only Hide/Isolate, timeline driving
-`asset_tools/vfx_stream.rs`: rate, restart, step, GPU counters updated in place).
+Tools (`docs/design/editor-tool-pages.md`): material, VFX and animation panels share a
+breadcrumb toolbar, side column and status strip; `graph/style.rs` names nodes and pins.
+Swatches paint after layout, never raw colours. VFX: preview-only Hide/Isolate; timeline
+drives `asset_tools/vfx_stream.rs` (rate, restart, step, counters updated in place).
 Imports use the shared `import.initialize`/`import.configure` commands.

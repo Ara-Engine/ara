@@ -21,6 +21,10 @@ pub(crate) fn controller(doc: &ara_doc::Document) -> Result<(String, ControllerD
 pub(crate) fn layout_path(doc: &str) -> String {
     format!(".ara/editor/animation-{doc}.graph")
 }
+/// The canvas edge id of a transition (stable across projections).
+pub(crate) fn transition_edge(transition: &str) -> String {
+    id("w", transition)
+}
 fn id(prefix: &str, key: &str) -> String {
     let hash = ara_asset::Digest::of(key.as_bytes()).to_string();
     format!("{prefix}_{}", &hash[..20])
@@ -56,7 +60,7 @@ pub(crate) fn projection(
                     version: 1,
                     ports,
                     params: Default::default(),
-                    payload: json!({"name":key,"pose":key}),
+                    payload: json!({"name":key,"pose":key,"samples":node.samples.iter().map(|s|json!({"node":s.node,"x":s.x,"y":s.y})).collect::<Vec<_>>()}),
                     subgraph: None,
                 },
             );
@@ -111,6 +115,13 @@ pub(crate) fn projection(
                 (index / 2) as f32 * 220.,
             ]);
         }
+        // Condition summaries ride on the header for the canvas's arrow labels.
+        graph.header.payload["transitions"] = controller
+            .transitions
+            .iter()
+            .map(|t| (id("w", &t.id), json!(conditions(t, &controller.parameters))))
+            .collect::<serde_json::Map<_, _>>()
+            .into();
         for transition in &controller.transitions {
             graph.edges.insert(
                 id("w", &transition.id),
@@ -130,8 +141,52 @@ pub(crate) fn projection(
     Ok(graph)
 }
 
+/// A transition's conditions as people read them: "speed > 0.2 and grounded",
+/// "jump" for a trigger, "after 4800 ticks" for an exit time, else "always".
+pub(crate) fn conditions(
+    transition: &ara_anim::graph::Transition,
+    parameters: &BTreeMap<String, ara_anim::graph::Parameter>,
+) -> String {
+    use ara_anim::graph::{Comparison, ParameterKind};
+    let parts = transition
+        .conditions
+        .iter()
+        .map(|c| {
+            let kind = parameters
+                .get(&c.parameter)
+                .map(|p| p.kind)
+                .unwrap_or_default();
+            let value = match kind {
+                ParameterKind::Int => c.int_value.to_string(),
+                ParameterKind::Bool => c.bool_value.to_string(),
+                _ => {
+                    let text = format!("{:.3}", c.float_value);
+                    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+                }
+            };
+            match (kind, c.comparison) {
+                (_, Comparison::Trigger) | (ParameterKind::Trigger, _) => c.parameter.clone(),
+                (ParameterKind::Bool, Comparison::Equal) if c.bool_value => c.parameter.clone(),
+                (ParameterKind::Bool, Comparison::NotEqual) if !c.bool_value => c.parameter.clone(),
+                (ParameterKind::Bool, _) => format!("not {}", c.parameter),
+                (_, Comparison::Equal) => format!("{} = {value}", c.parameter),
+                (_, Comparison::NotEqual) => format!("{} ≠ {value}", c.parameter),
+                (_, Comparison::Greater) => format!("{} > {value}", c.parameter),
+                (_, Comparison::Less) => format!("{} < {value}", c.parameter),
+            }
+        })
+        .collect::<Vec<_>>();
+    if !parts.is_empty() {
+        parts.join(" and ")
+    } else if let Some(tick) = transition.exit_tick {
+        format!("after {tick} ticks")
+    } else {
+        "always".into()
+    }
+}
+
 /// Authoring permits unassigned clips but never cyclic pose evaluation.
-pub(super) fn validate(
+pub(crate) fn validate(
     controller: &ara_anim::graph::ControllerData,
 ) -> Result<(), ara_diag::Diagnostic> {
     if !controller.states.is_empty() && !controller.states.contains_key(&controller.initial) {
