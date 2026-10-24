@@ -123,15 +123,21 @@ impl DecodedModels {
 pub(crate) fn render_quality(
     workspace: &ara_doc::Workspace,
 ) -> anyhow::Result<ara_runtime_render::QualityChoice> {
-    let settings: ara_components::render::RenderSettings = workspace
+    Ok(render_settings(workspace)?.quality.into())
+}
+
+/// Project rendering policy, read without discovering or importing any assets.
+pub(crate) fn render_settings(
+    workspace: &ara_doc::Workspace,
+) -> anyhow::Result<ara_components::render::RenderSettings> {
+    Ok(workspace
         .doc("pj_project")
         .and_then(|doc| doc.record("p_settings"))
         .and_then(|record| record.get("settings"))
         .and_then(|settings| settings.get("rendering"))
         .map(serde::Deserialize::deserialize)
         .transpose()?
-        .unwrap_or_default();
-    Ok(settings.quality.into())
+        .unwrap_or_default())
 }
 
 fn mesh(

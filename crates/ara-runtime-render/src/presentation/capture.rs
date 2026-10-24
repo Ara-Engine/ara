@@ -2,7 +2,7 @@
 use super::*;
 
 impl Presenter {
-    /// Captures the same fidelity presentation used by windows and embedded Game.
+    /// Captures the selected native presentation used by windows and embedded Game.
     /// Resolves content only when required, with stable GPU-derived entity marks.
     pub fn capture_with(
         &mut self,
@@ -25,6 +25,15 @@ impl Presenter {
         self.resize(request.size)?;
         self.prepare_with(frame, resolve)?;
         let prepared_stats = self.stats;
+        if let Some(raster) = &mut self.raster
+            && self.live.is_none()
+        {
+            return raster.capture(
+                self.renderer.as_mut().context("raster capture device")?,
+                frame,
+                request,
+            );
+        }
         if self.live.is_none() || !matches!(request.mode, ViewMode::Lit) {
             return self.capture_baseline(
                 frame,
@@ -123,7 +132,7 @@ impl Presenter {
         )
     }
 
-    /// Lit captures use fidelity by default on RT hardware.
+    /// Captures use raster by default; explicit RenderOptions can select fidelity.
     pub fn capture(
         &mut self,
         frame: &RenderFrame,
@@ -158,7 +167,7 @@ impl Presenter {
         seed: u64,
     ) -> Result<Capture> {
         self.prepare(frame)?;
-        if self.live.is_none() {
+        if self.live.is_none() && self.raster.is_none() {
             return self.capture_presented_baseline(frame, size, marks, seed);
         }
         self.capture(frame, size, ViewMode::Lit, marks, seed)

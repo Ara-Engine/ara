@@ -125,7 +125,11 @@ pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
             presets: request.presets,
             environment: &environment,
             pipeline_cache: &cache,
-            content: &|frame| world.content(frame),
+            content: &|frame| {
+                let mut content = world.content(frame)?;
+                content.environment = convert::environment(&look, lock, &root)?;
+                Ok(content)
+            },
             reference_samples: request.reference_samples,
             ray_tracing: request.ray_tracing,
         },

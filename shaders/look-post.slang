@@ -26,10 +26,12 @@ void exposureMain(uint lane:SV_GroupIndex){
     float value=reset?target:lerp(old,target,1-exp(-l.exposure.w*l.exposure.z));
     buffers[NonUniformResourceIndex(l.state.x)].Store<float4>(0,float4(value,old,ev,metered));
 }
-// Five-level bloom pyramid packed in the top half of the down and up atlases:
-// level k (1..5) is (size>>k) at x offset sum(size>>j, j<k), y 0. Pass 0 is a
+// Five-level bloom pyramid from quarter resolution, packed in the top half of the
+// down and up atlases: level k (2..6) is (size>>k) at x offset sum(size>>j, 1<=j<k),
+// y 0. Pass 0 is a
 // Karis-weighted downsample of the scene, 1..4 tent downsamples, 5..8 tent
-// upsamples adding each coarser level back; post samples level 1 as the glow.
+// upsamples adding each coarser level back; post samples level 2 as the glow.
+static const uint BLOOM_FIRST=2;
 uint2 bloomSize(Frame f,uint level){return max(f.extent.xy>>level,uint2(1));}
 uint2 bloomOrigin(Frame f,uint level){uint x=0;for(uint j=1;j<level;j++)x+=max(f.extent.x>>j,1u);return uint2(x,0);}
 float3 bloomLoad(Frame f,uint sampled,uint storage,bool inPlace,uint level,int2 p){
@@ -49,12 +51,13 @@ float3 bloomTent(Frame f,uint sampled,uint storage,bool inPlace,uint level,float
 [shader("compute")][numthreads(8,8,1)]
 void bloomMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint pass=root.material;
-    uint level=pass<5?pass+1:9-pass;uint2 size=bloomSize(f,level),p=tid.xy;if(any(p>=size))return;
+    uint level=(pass<5?pass:8-pass)+BLOOM_FIRST;uint2 size=bloomSize(f,level),p=tid.xy;if(any(p>=size))return;
     float3 c;
     if(pass==0){
-        // 13-tap downsample (Jimenez 2014) with Karis weights per 2x2 block on
-        // exposed luminance, so lone HDR fireflies cannot flash into the glow.
-        float2 texel=1/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];
+        // 13-tap downsample (Jimenez 2014) of the scene to quarter resolution, taps two
+        // texels apart (each bilinear), with Karis weights per 2x2 block on exposed
+        // luminance, so lone HDR fireflies cannot flash into the glow.
+        float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];
         float2 o[13]={float2(-2,-2),float2(0,-2),float2(2,-2),float2(-1,-1),float2(1,-1),float2(-2,0),float2(0,0),float2(2,0),float2(-1,1),float2(1,1),float2(-2,2),float2(0,2),float2(2,2)};
         for(uint i=0;i<13;i++)t[i]=min(historyTex(root.materials,uv+o[i]*texel).rgb,float3(60000));
         uint4 groups[5]={uint4(3,4,8,9),uint4(0,1,5,6),uint4(1,2,6,7),uint4(5,6,10,11),uint4(6,7,11,12)};
@@ -67,15 +70,16 @@ void bloomMain(uint3 tid:SV_DispatchThreadID){
     }else{
         // This level's downsample plus the coarser level's accumulated glow.
         float2 coarse=(float2(p)+0.5)*0.5;
-        float3 up=level==4?bloomTent(f,l.sampled1.z,l.storage1.z,false,5,coarse):bloomTent(f,l.sampled1.w,l.storage1.w,true,level+1,coarse);
+        float3 up=level==BLOOM_FIRST+3?bloomTent(f,l.sampled1.z,l.storage1.z,false,BLOOM_FIRST+4,coarse):bloomTent(f,l.sampled1.w,l.storage1.w,true,level+1,coarse);
         c=bloomLoad(f,l.sampled1.z,l.storage1.z,false,level,int2(p))+up;
     }
     images[NonUniformResourceIndex(pass<5?l.storage1.z:l.storage1.w)][bloomOrigin(f,level)+p]=float4(c,1);
 }
-// The glow at a pixel: level 1 of the upsampled pyramid averaged over its five scales.
+// The glow at a pixel: the finest upsampled level averaged over its five scales.
 float3 bloom(Frame f,Look l,float2 uv){
-    float2 size=float2(bloomSize(f,1)),atlas=float2(f.extent.x,max(f.extent.y/2,1u));
-    return historyTex(l.sampled1.w,clamp(uv*size,0.5,size-0.5)/atlas).rgb/5;
+    float2 size=float2(bloomSize(f,BLOOM_FIRST)),atlas=float2(f.extent.x,max(f.extent.y/2,1u));
+    float2 origin=float2(bloomOrigin(f,BLOOM_FIRST));
+    return historyTex(l.sampled1.w,(origin+clamp(uv*size,0.5,size-0.5))/atlas).rgb/5;
 }
 // Scene-linear grading after exposure: white balance, power contrast about 18%
 // grey, saturation, then the screen-space vignette.

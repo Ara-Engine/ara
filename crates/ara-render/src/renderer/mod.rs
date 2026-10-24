@@ -133,6 +133,16 @@ impl Renderer {
     ) -> Result<Self> {
         Self::new_device(scene, size, extensions, cache.into(), false)
     }
+    /// Raster-only bootstrap on every GPU. No ray-query/AS features or heap are
+    /// enabled; native content can be adopted later at a completed boundary.
+    pub fn new_raster(
+        scene: Scene,
+        size: [u32; 2],
+        extensions: &[std::ffi::CString],
+        cache: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        Self::new_device(scene, size, extensions, cache.into(), true)
+    }
     fn new_device(
         scene: Scene,
         size: [u32; 2],
@@ -309,8 +319,7 @@ impl Renderer {
     /// Render an agent request, with reset history and an explicit settle frame count.
     pub fn capture(&mut self, request: &CaptureRequest) -> Result<Capture> {
         self.resize(request.size)?;
-        self.targets.history = None;
-        self.frame_number = 0;
+        self.reset_capture_history()?;
         ensure!(request.settle_frames <= 1024, "Settle frame limit is 1024");
         for _ in 0..request.settle_frames.max(1) {
             self.render_frame(
@@ -321,6 +330,58 @@ impl Renderer {
                 true,
             )?;
         }
+        self.capture_completed(request)
+    }
+    /// Restart temporal convergence without allocating another view or changing
+    /// the authored exposure mode. Explicit captures use this on the live view.
+    pub fn reset_temporal_history(&mut self) {
+        self.targets.history = None;
+        self.frame_number = 0;
+    }
+    /// Reset capture convergence, including relit GI bounce history. The baked
+    /// surfaces and their residency remain intact; live camera changes use the
+    /// cheaper temporal-only reset instead.
+    pub fn reset_capture_history(&mut self) -> Result<()> {
+        self.reset_temporal_history();
+        let Some(gi) = &mut self.look.gi else {
+            return Ok(());
+        };
+        let rows = gi.probes.div_ceil(gi.atlas);
+        let zeros = vec![0u8; (gi.atlas * 8 * rows * 8) as usize * 8];
+        let source =
+            self.gpu
+                .create_buffer(zeros.len() as u64, vk::BufferUsageFlags::TRANSFER_SRC, true)?;
+        self.gpu.upload(source, &zeros)?;
+        let mut commands = self.gpu.begin(Queue::Graphics);
+        for (image, access) in gi.irradiance.into_iter().zip(&mut gi.access) {
+            let barrier = |before, after| ara_gpu::Barrier {
+                resource: Resource::Image(image),
+                before,
+                after,
+                handoff: None,
+            };
+            commands.barriers([barrier(*access, Access::CopyDestination)]);
+            commands.push(ara_gpu::commands::Command::UploadImage {
+                source,
+                destination: image,
+            });
+            commands.barriers([barrier(Access::CopyDestination, Access::ShaderRead)]);
+            *access = Access::ShaderRead;
+        }
+        let point = self.gpu.submit(commands.finish(), &[])?;
+        self.gpu.resolve(point)?;
+        self.gpu.retire(Resource::Buffer(source))?;
+        gi.slot = 0;
+        gi.cursor = 0;
+        Ok(())
+    }
+    /// Read the completed live frame once, including its IDs and native metadata.
+    /// The caller settles particles, automatic exposure and temporal AA first.
+    pub fn capture_completed(&mut self, request: &CaptureRequest) -> Result<Capture> {
+        ensure!(
+            request.size == self.size,
+            "capture extent differs from the completed frame"
+        );
         self.readback(true)?;
         let rgba = self.gpu.read(self.targets.read_color)?;
         let ids = self
