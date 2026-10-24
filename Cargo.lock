@@ -7590,8 +7590,6 @@ dependencies = [
 [[package]]
 name = "lightyear_sync"
 version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82eceb35d8eace3b1808e19e27582ed3b669964a335df4abf7723bfe922403e8"
 dependencies = [
  "bevy_app",
  "bevy_derive",
@@ -7644,8 +7642,6 @@ dependencies = [
 [[package]]
 name = "lightyear_transport"
 version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af892d197389fab9d663f81f023b4db0640ca488d5ac2e6cf7b6db36d2edd40d"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
