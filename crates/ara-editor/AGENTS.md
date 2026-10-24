@@ -33,7 +33,10 @@ validates and inspects exactly the engine components the player runs. The viewpo
 decodes `MeshRenderer` as `ara_runtime::components::MeshRenderer` (same defaults,
 materials and procedural shapes as Play); never add editor-only component schemas.
 C# integration registers host services/schema types, not mutable UI state.
-The temporary glTF loader is isolated in `world/gltf.rs`; replace with ara-asset.
+`world/gltf.rs` retains one read-only publication reader and decoded models keyed
+by asset ID/digest. `Editor::models` survives document edits; extraction selects
+the source node/primitive and pivot without reopening sidecars or decoding per
+entity. Unpublished models use placeholders; failed reloads retain last good.
 
 Set CARGO_BUILD_JOBS=2. Use `run.ps1 -Mode Check` for the local gates or targeted
 cargo check/test/clippy commands. The GPU gate uses process-local Vulkan loader

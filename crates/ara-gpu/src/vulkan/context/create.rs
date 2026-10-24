@@ -401,6 +401,7 @@ impl Gpu {
                     as_properties.min_acceleration_structure_scratch_offset_alignment,
                 ),
                 buffers: vec![],
+                buffer_memory: Default::default(),
                 images: vec![],
                 structures: vec![],
             })

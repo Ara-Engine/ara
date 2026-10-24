@@ -55,6 +55,10 @@ immediately; allocation and descriptor reuse wait for both queue timelines.
 Retention is conservative across published resources in v0. A live TLAS prevents
 its BLAS from retiring. Static acceleration structures build once; replacement
 uses a fresh identity. Pipelines also retire through queue completion.
+Retired buffers destroy their VkBuffer but may retain up to 64 MiB/256 idle memory
+blocks. Reuse requires exact size, memory type and device-address allocation flags;
+required dedicated allocations are excluded. Fresh buffers keep queue ownership
+and handle generations independent; images and shared surfaces do not use this pool.
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.
