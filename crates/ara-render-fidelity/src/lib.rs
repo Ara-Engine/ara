@@ -13,6 +13,7 @@ mod pipeline_variants;
 pub mod presets;
 pub mod probes;
 mod render;
+mod replacement;
 mod resampling;
 mod shadow_source;
 pub use shadow_source::SunShadowSource;

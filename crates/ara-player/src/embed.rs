@@ -98,10 +98,15 @@ pub struct Embedded {
 impl Embedded {
     /// Creates the headless presenter (its device and pipelines warmed with a
     /// one-box frame) and the first ring generation.
-    pub fn open(params: &EmbedParams, cache: &Path) -> Result<(Self, Presenter)> {
+    pub fn open(
+        params: &EmbedParams,
+        cache: &Path,
+        quality: ara_runtime_render::QualityChoice,
+    ) -> Result<(Self, Presenter)> {
         let size = [params.width, params.height];
         check(size)?;
         let mut presenter = Presenter::new(size, Vec::new(), cache);
+        presenter.set_quality(quality);
         presenter.prepare(&device::warm_frame())?;
         let renderer = presenter
             .renderer()
@@ -178,26 +183,28 @@ impl Embedded {
         &mut self,
         presenter: &mut Presenter,
         frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
     ) -> Result<Option<FrameReady>> {
         let started = Instant::now();
         self.last = Some(started);
         if frame.draws.is_empty() || self.ring.free() == 0 {
             return Ok(None);
         }
-        presenter.present(frame)?;
+        presenter.present_with(frame, resolve)?;
         let rendered_at_us = now_us();
         let copy = Instant::now();
         let renderer = presenter.renderer().context("renderer missing")?;
-        ensure!(
-            renderer.size() == self.ring.size(),
-            "renderer {:?} and surface {:?} sizes differ",
-            renderer.size(),
-            self.ring.size()
-        );
-        let source = renderer.gpu().native_image(renderer.output())?;
-        // SAFETY: The renderer completed its RGBA8 output (CopySource) of the ring's
-        // size on the ring's device; this thread owns its queues.
-        let Some(published) = (unsafe { self.ring.publish(source, frame.tick)? }) else {
+        let source = renderer.gpu().native_image(
+            presenter
+                .output()
+                .context("completed presentation missing")?,
+        )?;
+        // SAFETY: The presenter completed this RGBA8 CopySource image at output_size
+        // on the ring's device; this thread owns its queues.
+        let Some(published) = (unsafe {
+            self.ring
+                .publish_scaled(source, presenter.output_size(), frame.tick)?
+        }) else {
             return Ok(None);
         };
         let publish_us = copy.elapsed().as_micros() as u64;

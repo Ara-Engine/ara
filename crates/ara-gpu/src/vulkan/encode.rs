@@ -244,6 +244,31 @@ impl VulkanDevice {
                         &[vk::BufferCopy::default().size(*size)],
                     );
                 }
+                Command::CopyImage {
+                    source,
+                    destination,
+                } => {
+                    let source = self.images.get(*source)?.raw;
+                    let destination = self.images.get(*destination)?.raw;
+                    let layers = vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .layer_count(1);
+                    device.cmd_copy_image(
+                        cmd,
+                        source.handle,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        destination.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[vk::ImageCopy::default()
+                            .src_subresource(layers)
+                            .dst_subresource(layers)
+                            .extent(vk::Extent3D {
+                                width: source.width,
+                                height: source.height,
+                                depth: 1,
+                            })],
+                    );
+                }
                 Command::ReadImage {
                     source,
                     destination,

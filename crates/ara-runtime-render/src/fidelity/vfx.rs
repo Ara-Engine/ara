@@ -61,6 +61,21 @@ impl Effects {
         effects: &[EffectView],
         sun: (glam30::Vec3, glam30::Vec3),
     ) -> Result<()> {
+        if self.effects.len() == effects.len()
+            && self
+                .effects
+                .iter()
+                .zip(effects)
+                .all(|(old, new)| old.entity == new.entity && old.effect == new.effect)
+        {
+            for (old, new) in self.effects.iter_mut().zip(effects) {
+                old.position = new.position;
+                old.scale = new.scale;
+                old.intensity = new.intensity;
+            }
+            self.sun = sun;
+            return Ok(());
+        }
         let stale: Vec<u64> = self
             .systems
             .iter()
@@ -99,6 +114,16 @@ impl Effects {
     /// Whether there is anything to composite.
     pub fn is_empty(&self) -> bool {
         self.effects.is_empty()
+    }
+
+    /// Restarts explicit captures from the same particle simulation state. Live
+    /// presentation keeps its systems; only a reproducible readback calls this.
+    pub fn reset(&mut self, gpu: &mut VulkanDevice) -> Result<()> {
+        for (_, (_, system, _)) in std::mem::take(&mut self.systems) {
+            system.retire(gpu)?;
+        }
+        self.effects.clear();
+        Ok(())
     }
 
     /// Composites every effect over the view's last frame, advancing each by one
@@ -155,7 +180,7 @@ impl Effects {
                 .get_mut(&effect.entity)
                 .context("effect system")?;
             let frame = View {
-                camera: camera.clone(),
+                camera: *camera,
                 placement: Placement {
                     origin: glam30::Vec3::from_array(effect.position),
                     scale: effect.scale,

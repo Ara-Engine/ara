@@ -33,10 +33,6 @@ const ALL: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
         vk::AccessFlags2::MEMORY_READ.as_raw() | vk::AccessFlags2::MEMORY_WRITE.as_raw(),
     ),
 );
-const COPY_WRITE: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
-    vk::PipelineStageFlags2::COPY,
-    vk::AccessFlags2::TRANSFER_WRITE,
-);
 const COPY_READ: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
     vk::PipelineStageFlags2::COPY,
     vk::AccessFlags2::TRANSFER_READ,
@@ -500,6 +496,26 @@ impl ExportRing {
     /// `TRANSFER_SRC_OPTIMAL`, whose writes were submitted earlier on the graphics
     /// queue; this thread owns that queue.
     pub unsafe fn publish(&mut self, source: vk::Image, tick: u64) -> Result<Option<Frame>> {
+        // SAFETY: The caller supplies a completed RGBA8 source of the ring's size.
+        unsafe { self.publish_scaled(source, self.size, tick) }
+    }
+
+    /// Publishes a completed image, scaling it into the ring when extents differ.
+    /// This preserves last-good presentation while a view resize is being retried.
+    /// # Safety
+    /// `source` is a completed RGBA8 image of `source_size` on this device in
+    /// `TRANSFER_SRC_OPTIMAL`. This thread owns the graphics queue.
+    pub unsafe fn publish_scaled(
+        &mut self,
+        source: vk::Image,
+        source_size: [u32; 2],
+        tick: u64,
+    ) -> Result<Option<Frame>> {
+        if source_size.iter().any(|&v| v == 0 || v > i32::MAX as u32) {
+            return Err(external(
+                "shared publication requires a valid source extent",
+            ));
+        }
         let Some(slot) = self.ring.begin() else {
             return Ok(None);
         };
@@ -507,6 +523,13 @@ impl ExportRing {
         let image = self.slots[index].image;
         let shared = self.shared[index];
         let (family, size) = (self.family, self.size);
+        let stage = if source_size == size {
+            vk::PipelineStageFlags2::COPY
+        } else {
+            vk::PipelineStageFlags2::BLIT
+        };
+        let read = (stage, vk::AccessFlags2::TRANSFER_READ);
+        let write = (stage, vk::AccessFlags2::TRANSFER_WRITE);
         // SAFETY: Caller contract for `source`; the slot image is ours (Writing).
         let result = unsafe {
             self.commands.run(|device, command| {
@@ -536,32 +559,62 @@ impl ExportRing {
                         ),
                         same(),
                         if shared { ALL } else { NONE },
-                        COPY_WRITE,
+                        write,
                     ),
-                    barrier(source, (SRC, SRC), same(), ALL, COPY_READ),
+                    barrier(source, (SRC, SRC), same(), ALL, read),
                 ]);
-                device.cmd_copy_image(
-                    command,
-                    source,
-                    SRC,
-                    image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[vk::ImageCopy::default()
-                        .src_subresource(layers())
-                        .dst_subresource(layers())
-                        .extent(vk::Extent3D {
-                            width: size[0],
-                            height: size[1],
-                            depth: 1,
-                        })],
-                );
+                if source_size == size {
+                    device.cmd_copy_image(
+                        command,
+                        source,
+                        SRC,
+                        image,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[vk::ImageCopy::default()
+                            .src_subresource(layers())
+                            .dst_subresource(layers())
+                            .extent(vk::Extent3D {
+                                width: size[0],
+                                height: size[1],
+                                depth: 1,
+                            })],
+                    );
+                } else {
+                    device.cmd_blit_image(
+                        command,
+                        source,
+                        SRC,
+                        image,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[vk::ImageBlit::default()
+                            .src_subresource(layers())
+                            .dst_subresource(layers())
+                            .src_offsets([
+                                vk::Offset3D::default(),
+                                vk::Offset3D {
+                                    x: source_size[0] as i32,
+                                    y: source_size[1] as i32,
+                                    z: 1,
+                                },
+                            ])
+                            .dst_offsets([
+                                vk::Offset3D::default(),
+                                vk::Offset3D {
+                                    x: size[0] as i32,
+                                    y: size[1] as i32,
+                                    z: 1,
+                                },
+                            ])],
+                        vk::Filter::LINEAR,
+                    );
+                }
                 // Release to the owner; the transition to the resting layout rides
                 // the transfer (the owner's acquire names the same layouts).
                 barriers(&[barrier(
                     image,
                     (vk::ImageLayout::TRANSFER_DST_OPTIMAL, SRC),
                     (family, vk::QUEUE_FAMILY_EXTERNAL),
-                    COPY_WRITE,
+                    write,
                     NONE,
                 )]);
             })
