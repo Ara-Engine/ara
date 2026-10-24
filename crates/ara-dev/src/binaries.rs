@@ -117,6 +117,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ambiguous_binary_names_and_paths_fail_closed() {
+        let message = |package: &str, path: &str| {
+            serde_json::json!({
+                "reason": "compiler-artifact", "package_id": package,
+                "target": {"name": "peer", "kind": ["bin"]},
+                "profile": {"test": false}, "executable": path
+            })
+            .to_string()
+        };
+        let first = message("first@0.1.0", "final/peer.exe");
+        for second in [
+            message("other@0.1.0", "final/peer.exe"),
+            message("first@0.1.0", "another/peer.exe"),
+        ] {
+            assert!(artifacts(&format!("{first}\n{second}")).is_err());
+        }
+    }
+
+    #[test]
     fn only_regular_binary_artifacts_are_exported() {
         let message = |kind: &str, test: bool, executable: Option<&str>| {
             serde_json::json!({

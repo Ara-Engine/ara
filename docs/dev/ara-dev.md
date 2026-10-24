@@ -22,10 +22,10 @@ machine, a tiny optimized library probe took 20.70 seconds through sccache and
 caller's wrapper configuration. JSON reports include `compiler_cache_bypassed`
 and total `elapsed_seconds`, including selection and hygiene, excluding bootstrap.
 
-On 2026-10-24, a real entry-script change against `3cdff693` selected only ara-dev.
-The warm gate passed in 70.69 seconds (77.97 seconds including bootstrap), with
-formatting 10.70s, strict clippy 1.22s and tests 50.08s: 14 unit, nine CLI and two
-GPU-queue tests passed. A deliberately invalid caller RUSTC_WRAPPER verified the
+On 2026-10-24, an artifact-ambiguity regression against `cd7cebd8` selected only ara-dev.
+The warm gate passed in 88.63 seconds (98.02 seconds including bootstrap), with
+formatting 10.83s, strict clippy 1.72s, test compilation 4.50s and execution 59.48s:
+16 unit, ten CLI and two GPU-queue tests passed. A deliberately invalid caller RUSTC_WRAPPER verified the
 bootstrap bypass, and the script restored it afterwards. CARGO_BUILD_JOBS was 2.
 The initial 33-package cold cache fill reached the 40-minute deadline while
 compiling tests; it was reported as a timeout, with no test execution claimed.
