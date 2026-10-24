@@ -33,6 +33,8 @@ Depends on ara-proto, ara-diag, tungstenite (blocking, no async runtime).
 - Windows WSA_IO_PENDING (997) is normalized to WouldBlock at the socket boundary,
   including control-frame writes and upgrades. Resume buffered I/O; never replay
   an RPC request. Reset/cancellation remain fatal; pending writes have deadlines.
+- Windows sockets wait with WSAPoll before nonblocking recv/send/peek; read
+  timeouts never leave a blocking receive owning the next response buffer.
 - HTTP is one request per connection (`Connection: close`), `Content-Length`
   bodies only (16 MiB cap). Enough for MCP Streamable HTTP with JSON responses.
 - Shutdown flushes queued WebSocket replies through bounded writer acknowledgments

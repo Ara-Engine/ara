@@ -14,6 +14,7 @@ use ara_proto::{ConnId, RpcError, jsonrpc, lines};
 use tungstenite::{Message, WebSocket};
 
 use crate::http::{self, HttpRequest, HttpResponse};
+use crate::socket::Socket;
 use crate::transport::{self, Stream};
 
 /// The connection ID of the stdio channel.
@@ -211,15 +212,9 @@ fn refusal_body(status: u16, why: &str) -> serde_json::Value {
     )
 }
 
-fn connection(
-    mut stream: TcpStream,
-    token: &str,
-    id: ConnId,
-    tx: &Sender<Event>,
-) -> io::Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
-    let Some(head) = http::peek_head(&stream)? else {
+fn connection(stream: TcpStream, token: &str, id: ConnId, tx: &Sender<Event>) -> io::Result<()> {
+    let mut stream = Socket::new(stream, Duration::from_secs(10))?;
+    let Some(head) = http::peek_head_with(|bytes| stream.peek(bytes))? else {
         return Ok(());
     };
     let upgrade = head
@@ -246,7 +241,7 @@ fn connection(
     // Already authenticated from the peeked head; the handshake re-reads it.
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut ws = transport::handshake(tungstenite::accept(Stream(stream)), deadline)?;
-    ws.get_mut().0.set_read_timeout(Some(POLL))?;
+    ws.get_mut().0.set_read_timeout(POLL)?;
     let (out_tx, out_rx) = channel();
     if tx.send(Event::Opened(id, out_tx)).is_err() {
         return Ok(());
@@ -258,7 +253,7 @@ fn connection(
 
 /// Moves frames in both directions until either side closes.
 fn pump(
-    ws: &mut WebSocket<Stream<TcpStream>>,
+    ws: &mut WebSocket<Stream<Socket>>,
     id: ConnId,
     tx: &Sender<Event>,
     out: &Receiver<Outgoing>,

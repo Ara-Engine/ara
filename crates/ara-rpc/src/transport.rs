@@ -8,8 +8,9 @@ use tungstenite::{Message, WebSocket};
 fn normalize<T>(result: io::Result<T>) -> io::Result<T> {
     result.map_err(|error| {
         // Winsock's WSA_IO_PENDING is a successful pending state, not a lost
-        // connection. std's blocking socket owns the OS I/O; keep the WebSocket
-        // parser/write buffer alive and let it resume, including automatic pongs.
+        // connection. Keep the WebSocket parser/write buffer alive, including
+        // automatic pongs. Production Windows sockets wait for readiness before
+        // nonblocking I/O so no timed-out blocking read owns a pending buffer.
         // https://learn.microsoft.com/windows/win32/winsock/overlapped-i-o-and-event-objects-2
         let pending = cfg!(windows) && error.raw_os_error() == Some(997);
         if pending {

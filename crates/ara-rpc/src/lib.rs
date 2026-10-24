@@ -16,6 +16,7 @@ mod client;
 mod daemon;
 pub mod http;
 mod server;
+mod socket;
 mod transport;
 
 pub use client::Client;

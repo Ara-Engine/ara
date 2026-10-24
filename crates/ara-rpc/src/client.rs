@@ -14,6 +14,7 @@ use tungstenite::client::IntoClientRequest;
 use tungstenite::{Message, WebSocket};
 
 use crate::DaemonInfo;
+use crate::socket::Socket;
 use crate::transport::{self, Stream};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -23,7 +24,7 @@ type Reply = (Value, Result<Value, RpcError>);
 
 /// A connection to a daemon.
 pub struct Client {
-    ws: WebSocket<Stream<TcpStream>>,
+    ws: WebSocket<Stream<Socket>>,
     next: u64,
     notes: VecDeque<Value>,
 }
@@ -36,8 +37,7 @@ impl Client {
     /// Connects to `127.0.0.1:port` with the project token.
     pub fn connect(port: u16, token: &str) -> io::Result<Client> {
         let stream = TcpStream::connect(("127.0.0.1", port))?;
-        stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+        let stream = Socket::new(stream, Duration::from_secs(10))?;
         let mut req = format!("ws://127.0.0.1:{port}/")
             .into_client_request()
             .map_err(io::Error::other)?;
@@ -46,10 +46,8 @@ impl Client {
             .map_err(io::Error::other)?;
         req.headers_mut().insert("Authorization", auth);
         let deadline = Instant::now() + Duration::from_secs(10);
-        let (ws, _) = transport::handshake(tungstenite::client(req, Stream(stream)), deadline)?;
-        ws.get_ref()
-            .0
-            .set_read_timeout(Some(Duration::from_millis(50)))?;
+        let (mut ws, _) = transport::handshake(tungstenite::client(req, Stream(stream)), deadline)?;
+        ws.get_mut().0.set_read_timeout(Duration::from_millis(50))?;
         Ok(Client {
             ws,
             next: 1,
