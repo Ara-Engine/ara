@@ -5,6 +5,7 @@ mod binaries;
 mod build_paths;
 mod check;
 mod compile_cache;
+mod editor;
 mod git;
 mod gpu;
 mod hygiene;
