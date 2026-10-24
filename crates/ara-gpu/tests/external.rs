@@ -98,7 +98,7 @@ fn a_ring_exported_on_one_device_is_sampled_on_another() -> Result<()> {
         return Ok(());
     }
     let mut size = [64, 32];
-    let mut image = source(&mut producer, size)?;
+    let image = source(&mut producer, size)?;
     // SAFETY: Both devices outlive the ring and imports; this thread owns the queues.
     let mut ring = unsafe { ExportRing::new(producer.context(), size)? };
     let mut shared = SharedSurface::duplicate_local(&ring.desc())?;
@@ -111,8 +111,7 @@ fn a_ring_exported_on_one_device_is_sampled_on_another() -> Result<()> {
         if round == 7 {
             // A resize is a new generation: new images, handles and import.
             size = [48, 40];
-            image = source(&mut producer, size)?;
-            first = true;
+            // Retain the old completed source, as on a failed presenter resize.
             // SAFETY: As above.
             unsafe { ring.resize(producer.context(), size)? };
             shared = SharedSurface::duplicate_local(&ring.desc())?;
@@ -134,8 +133,15 @@ fn a_ring_exported_on_one_device_is_sampled_on_another() -> Result<()> {
             first,
         )?;
         first = false;
-        // SAFETY: `image` is RGBA8 of the ring's size in TRANSFER_SRC, filled above.
-        let frame = unsafe { ring.publish(image, u64::from(round))? }.expect("a free slot");
+        // SAFETY: The completed source stays 64x32 in TRANSFER_SRC on this device.
+        let frame = unsafe {
+            if round < 7 {
+                ring.publish(image, u64::from(round))?
+            } else {
+                ring.publish_scaled(image, [64, 32], u64::from(round))?
+            }
+        }
+        .expect("a free slot");
         assert_eq!(frame.generation, shared.desc().generation);
         assert!(mailbox.deliver(frame).is_none());
         let frame = mailbox.take().unwrap();

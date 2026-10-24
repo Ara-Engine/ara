@@ -140,6 +140,13 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
         },
     )?;
     let radiance = view.capture_radiance(&mut gpu)?;
+    assert!(
+        !view
+            .pipelines
+            .keys()
+            .any(|name| name.starts_with("hybrid") || name.starts_with("reservoir")),
+        "reference views must not compile unused live-transport families"
+    );
     let resolved = camera.resolve(size)?;
     for (index, encoded) in [128.0f32, 224.0].into_iter().enumerate() {
         let clip = resolved.projection * resolved.view * scene.instances[index].world.w_axis;

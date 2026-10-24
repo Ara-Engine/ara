@@ -262,7 +262,7 @@ pub fn capture_frames(
             GpuSystem::new(gpu, effect, &root.join("cooked").join(&effect.name), size)?;
         let camera = camera(effect);
         let request = CaptureRequest {
-            camera: camera.clone(),
+            camera,
             size,
             mode: ViewMode::Lit,
             deterministic: true,
@@ -305,7 +305,7 @@ pub fn capture_frames(
         }
         let inputs = fidelity.feature_inputs()?;
         let view = View {
-            camera: camera.clone(),
+            camera,
             scene_background: Some(SceneColor {
                 image: inputs.radiance.image,
                 sampled_index: inputs.radiance.sampled_index,

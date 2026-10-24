@@ -103,54 +103,65 @@ pub(crate) struct Targets {
     pub states: Vec<State>,
 }
 impl Targets {
+    pub(crate) fn empty() -> Self {
+        Self {
+            images: Vec::new(),
+            sampled: [0; COUNT],
+            storage: [0; COUNT],
+            states: Vec::new(),
+        }
+    }
     pub fn new(
         gpu: &mut VulkanDevice,
         render: [u32; 2],
         display: [u32; 2],
         reference: bool,
     ) -> Result<Self> {
-        let mut t = Self {
-            images: Vec::new(),
-            sampled: [0; COUNT],
-            storage: [0; COUNT],
-            states: Vec::new(),
-        };
-        for i in 0..28 {
-            let size = if (TRANSMITTANCE..28).contains(&i) {
-                [[256, 64], [32, 32], [192, 108], [4096, 36]][i - TRANSMITTANCE]
-            } else if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
-                display
-            } else {
-                render
-            };
-            let image = gpu.create_image(
-                size[0],
-                size[1],
-                if i == OUTPUT {
-                    vk::Format::R8G8B8A8_UNORM
-                } else if !reference
-                    && matches!(i, 2 | 3 | 7 | 8 | 9 | 13..=17 | 19..=23 | 28..=30 | 33..=34)
-                {
-                    vk::Format::R16G16B16A16_SFLOAT
+        let mut t = Self::empty();
+        let allocation = (|| -> Result<()> {
+            for i in 0..28 {
+                let size = if (TRANSMITTANCE..28).contains(&i) {
+                    [[256, 64], [32, 32], [192, 108], [4096, 36]][i - TRANSMITTANCE]
+                } else if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
+                    display
                 } else {
-                    vk::Format::R32G32B32A32_SFLOAT
-                },
-                vk::ImageUsageFlags::SAMPLED
-                    | if i == OUTPUT {
-                        vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    render
+                };
+                let image = gpu.create_image(
+                    size[0],
+                    size[1],
+                    if i == OUTPUT {
+                        vk::Format::R8G8B8A8_UNORM
+                    } else if !reference
+                        && matches!(i, 2 | 3 | 7 | 8 | 9 | 13..=17 | 19..=23 | 28..=30 | 33..=34)
+                    {
+                        vk::Format::R16G16B16A16_SFLOAT
                     } else {
-                        vk::ImageUsageFlags::empty()
-                    }
-                    | vk::ImageUsageFlags::STORAGE
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )?;
-            t.sampled[i] = gpu.sampled_image(image, false)?.index;
-            t.storage[i] = gpu.storage_image(image)?.index;
-            t.images.push(image);
-            t.states.push(State {
-                access: Access::Undefined,
-                queue: Queue::Graphics,
-            });
+                        vk::Format::R32G32B32A32_SFLOAT
+                    },
+                    vk::ImageUsageFlags::SAMPLED
+                        | if i == OUTPUT {
+                            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        } else {
+                            vk::ImageUsageFlags::empty()
+                        }
+                        | vk::ImageUsageFlags::STORAGE
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )?;
+                t.images.push(image);
+                t.sampled[i] = gpu.sampled_image(image, false)?.index;
+                t.storage[i] = gpu.storage_image(image)?.index;
+                t.states.push(State {
+                    access: Access::Undefined,
+                    queue: Queue::Graphics,
+                });
+            }
+            Ok(())
+        })();
+        if let Err(error) = allocation {
+            t.destroy(gpu)?;
+            gpu.collect()?;
+            return Err(error);
         }
         Ok(t)
     }

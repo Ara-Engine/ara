@@ -11,6 +11,7 @@ mod keep;
 pub mod params;
 pub mod pool;
 mod published;
+mod rendering;
 pub use published::{PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
 mod spec;
@@ -386,6 +387,7 @@ impl PlayService {
         let mut types = Vec::new();
         types_files(&self.root, &self.root, &mut types);
         let scene = PlayScene {
+            rendering: rendering::read(workspace).map_err(|error| fail(codes::REQUEST, error))?,
             format: 1,
             scene: scene_id.clone(),
             documents: PlayScene::documents(workspace)

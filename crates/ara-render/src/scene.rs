@@ -104,7 +104,7 @@ pub struct Scene {
     pub environment_size: [u32; 2],
 }
 /// Capture camera specification, serializable for agent requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CameraSpec {
     /// Axis-aligned orthographic XY view, for 2D and editor projections.

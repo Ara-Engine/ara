@@ -1,0 +1,50 @@
+//! Temporal native rendering and persistent VFX.
+use super::*;
+
+impl Live {
+    pub(super) fn render(&mut self, gpu: &mut VulkanDevice, frame: &RenderFrame) -> Result<()> {
+        let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+        if self.look != look || self.tick.is_none() {
+            self.view.set_environment(&look)?;
+            self.look = look;
+        }
+        self.view.refine_native_textures(gpu)?;
+        let camera = camera(frame)?;
+        self.temporal = self.temporal.wrapping_add(1);
+        self.view.render(
+            gpu,
+            &FrameInput {
+                camera: &camera,
+                tick: self.temporal,
+                delta_seconds: 1. / 60.,
+                reset: self.tick.is_none(),
+                lighting_changed: std::mem::take(&mut self.lighting_changed),
+                deterministic: false,
+            },
+        )?;
+        self.effects.update(
+            gpu,
+            &frame.effects,
+            (
+                self.prepared.scene.sun_direction,
+                look.ground_sun(
+                    self.prepared.scene.sun_direction,
+                    self.prepared.scene.sun_lux,
+                ),
+            ),
+        )?;
+        if !self.effects.is_empty() {
+            let ticks = self
+                .tick
+                .map_or(0, |old| frame.tick.saturating_sub(old).min(240) as u32);
+            self.effects
+                .composite_ticks(gpu, &mut self.view, &camera, self.temporal, ticks)?;
+        }
+        self.tick = Some(frame.tick);
+        Ok(())
+    }
+    pub(super) fn destroy(self, gpu: &mut VulkanDevice) -> Result<()> {
+        self.effects.destroy(gpu)?;
+        self.view.destroy(gpu)
+    }
+}

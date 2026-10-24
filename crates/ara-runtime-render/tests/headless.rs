@@ -71,7 +71,8 @@ fn runtime() -> Runtime {
 
 #[test]
 fn demo_renders_moves_skins_and_relights_headless() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.sn/runtime-render");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/presenter-demo");
     let mut rt = runtime();
     let mut frame = RenderFrame::default();
     rt.extract(&mut frame);
@@ -81,12 +82,42 @@ fn demo_renders_moves_skins_and_relights_headless() {
         .unwrap();
     first.write(&root.join("demo-start.png")).unwrap();
     assert!(presenter.stats().rebuilt);
+    if presenter
+        .renderer()
+        .unwrap()
+        .gpu()
+        .context()
+        .info
+        .ray_tracing
+    {
+        assert_eq!(
+            presenter.quality(),
+            Some(ara_runtime_render::QualityPreset::High)
+        );
+    }
     assert!(
         first.legend.iter().any(|m| m.name.contains("Fox")),
         "{:?}",
         first.legend
     );
     assert!(first.legend.len() >= 8, "{} marks", first.legend.len());
+    let repeated = presenter
+        .capture(&frame, [480, 270], ViewMode::Lit, Some(40), 1)
+        .unwrap();
+    repeated.write(&root.join("demo-repeated.png")).unwrap();
+    let maximum = repeated
+        .image
+        .as_raw()
+        .iter()
+        .zip(first.image.as_raw())
+        .map(|(a, b)| a.abs_diff(*b))
+        .max()
+        .unwrap_or(0);
+    // Allow one UNORM rounding step, without tolerating temporal/residency drift.
+    assert!(
+        maximum <= 1,
+        "capture must not borrow live temporal history: maximum channel difference {maximum}"
+    );
 
     let walk = StepInput {
         after_ticks: 0,
@@ -127,5 +158,67 @@ fn demo_renders_moves_skins_and_relights_headless() {
         "a light edit streams, it does not rebuild"
     );
     assert_ne!(relit.image, moved.image);
+    let completed = presenter.output();
+    let geometry = std::mem::replace(
+        &mut frame.draws[0].geometry,
+        ara_runtime::extract::Geometry::Shape {
+            shape: ara_runtime::components::MeshShape::Box,
+            size: [f32::NAN, 1., 1.],
+        },
+    );
+    presenter.present(&frame).unwrap();
+    assert!(presenter.presentation_error().is_some());
+    assert_eq!(
+        presenter.output(),
+        completed,
+        "failed content must retain the published image"
+    );
+    frame.draws[0].geometry = geometry;
+    presenter.present(&frame).unwrap();
+    assert!(presenter.presentation_error().is_none());
+    if presenter.quality() == Some(ara_runtime_render::QualityPreset::High) {
+        presenter.resize([640, 360]).unwrap();
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_none());
+        assert_eq!(presenter.output_size(), [640, 360]);
+        presenter
+            .capture(&frame, [480, 270], ViewMode::Lit, None, 1)
+            .unwrap();
+        assert_eq!(presenter.size(), [640, 360]);
+        presenter.present(&frame).unwrap();
+        assert_eq!(presenter.output_size(), [640, 360]);
+        presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+            ara_runtime_render::QualityPreset::Medium,
+        ));
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_none());
+        assert_eq!(
+            presenter.quality(),
+            Some(ara_runtime_render::QualityPreset::Medium)
+        );
+        frame.look.sky = Some(Default::default());
+        presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+            ara_runtime_render::QualityPreset::High,
+        ));
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_none());
+        assert_eq!(
+            presenter.quality(),
+            Some(ara_runtime_render::QualityPreset::High)
+        );
+        // A new streamed identity replaces geometry without duplicating view targets.
+        let mut arrival = frame.draws[0].clone();
+        arrival.entity = 100_000;
+        arrival.address = "streamed-arrival".into();
+        frame.draws.push(arrival);
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_none());
+        assert!(presenter.stats().rebuilt);
+        frame.draws.pop();
+        presenter.present(&frame).unwrap();
+        assert!(presenter.presentation_error().is_none());
+        assert!(presenter.stats().rebuilt);
+        eprintln!("Native presenter warm frame: {:?}", presenter.stats());
+    }
     presenter.renderer().unwrap().gpu().assert_clean().unwrap();
 }

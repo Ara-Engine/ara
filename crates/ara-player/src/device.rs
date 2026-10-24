@@ -56,9 +56,15 @@ pub fn warm_frame() -> RenderFrame {
 impl Windowed {
     /// Opens the window and warms the GPU device and pipelines with a one-box frame,
     /// so a pooled player pays none of that after Play.
-    pub fn open(name: &str, size: [u32; 2], cache: &Path) -> Result<(Self, Presenter)> {
+    pub fn open(
+        name: &str,
+        size: [u32; 2],
+        cache: &Path,
+        quality: ara_runtime_render::QualityChoice,
+    ) -> Result<(Self, Presenter)> {
         let window = Window::new(&format!("Ara | {name} | waiting for Play"), size)?;
         let mut presenter = Presenter::new(window.size()?, window.extensions()?, cache);
+        presenter.set_quality(quality);
         presenter.prepare(&warm_frame())?;
         Ok((
             Self {
@@ -112,18 +118,23 @@ impl Windowed {
 
     /// Renders and presents one extracted frame, recreating the swapchain on resize.
     /// Touches no simulation state, so it overlaps the frame's audio worker.
-    pub fn present(&mut self, presenter: &mut Presenter, frame: &RenderFrame) -> Result<()> {
+    pub fn present(
+        &mut self,
+        presenter: &mut Presenter,
+        frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
+    ) -> Result<()> {
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {
             std::thread::sleep(Duration::from_millis(5));
             return Ok(());
         }
-        if presenter.renderer().is_some_and(|r| r.size() != size) {
+        if presenter.size() != size {
             self.recreate(presenter)?;
             presenter.resize(size)?;
         }
-        presenter.present(frame)?;
+        presenter.present_with(frame, resolve)?;
         let cpu = started.elapsed() - presenter.stats().render;
         let renderer = presenter
             .renderer()
@@ -139,7 +150,7 @@ impl Windowed {
         let result = match &mut self.present {
             // SAFETY: the renderer completed this CopySource image; both owners are live.
             Some(present) => unsafe {
-                present.display(renderer.gpu().context(), image, renderer.size())
+                present.display(renderer.gpu().context(), image, presenter.output_size())
             },
             None => Ok(()),
         };

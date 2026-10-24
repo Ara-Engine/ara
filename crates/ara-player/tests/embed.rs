@@ -229,7 +229,11 @@ fn embedded_play_shares_frames_with_the_owner_device() {
         std::thread::sleep(Duration::from_millis(2));
     }
     let live = view.pixels();
-    let capture_path = dir.join("embed-capture.png");
+    let evidence = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/presenter-demo");
+    std::fs::create_dir_all(&evidence).unwrap();
+    live.save(evidence.join("game-shared-surface.png")).unwrap();
+    let capture_path = evidence.join("game-capture.png");
     agent.play(
         "capture",
         json!({"world": world, "path": capture_path.to_string_lossy(), "width": 640, "height": 360, "presented": true, "marks": 0}),

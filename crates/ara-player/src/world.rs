@@ -72,6 +72,25 @@ fn assets(cache: &PathBuf, pins: &BTreeMap<String, Digest>) -> Result<CachedAsse
 }
 
 impl World {
+    /// Resolves a new render-content generation; ordinary motion never calls this.
+    pub fn fidelity_content(
+        &self,
+        frame: &RenderFrame,
+    ) -> Result<ara_runtime_render::fidelity::native::Content> {
+        let source = assets(&self.cache, &self.pins)?;
+        let library = self
+            .runtime
+            .world()
+            .get_resource::<ara_runtime::animation::Library>()
+            .context("runtime animation/material library missing")?;
+        ara_runtime_render::fidelity::native::Content::resolve(
+            frame,
+            self.runtime.documents(),
+            self.runtime.schema(),
+            library,
+            &source,
+        )
+    }
     /// Builds the world from a decoded snapshot (tick 0, paused) in its role: networked
     /// worlds copy player avatars, install the net plugin and wrap the runtime in a
     /// server (authorities) or connect a mirror (clients). Headless worlds settle world
@@ -568,22 +587,22 @@ impl World {
                     marks_wanted,
                     self.seed,
                 )?
-            } else if params.presented {
-                self.runtime.extract(frame);
-                presenter.context("no presenter")?.capture_presented(
-                    frame,
-                    size,
-                    marks_wanted,
-                    self.seed,
-                )?
             } else {
                 self.runtime.extract(frame);
-                presenter.context("no presenter")?.capture(
+                presenter.context("no presenter")?.capture_with(
                     frame,
-                    size,
-                    ViewMode::Lit,
-                    marks_wanted,
-                    self.seed,
+                    &ara_render::capture::CaptureRequest {
+                        camera: ara_runtime_render::camera(frame)?,
+                        size,
+                        mode: ViewMode::Lit,
+                        deterministic: true,
+                        exposure: frame.environment.exposure,
+                        settle_frames: 16,
+                        tick: frame.tick,
+                        seed: self.seed,
+                        marks: marks_wanted,
+                    },
+                    || self.fidelity_content(frame),
                 )?
             };
             capture.write(std::path::Path::new(path))?;

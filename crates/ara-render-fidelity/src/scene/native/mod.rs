@@ -1,5 +1,6 @@
 //! Instanced shading tables and native BC residency. Legacy captures retain their ABI.
 use super::*;
+use anyhow::Context;
 use ara_render::instanced::{GeometryGpu, Scene as NativeScene};
 use ara_texture_stream::{NativeResidency, NativeStats};
 
@@ -46,6 +47,15 @@ impl Native {
 }
 
 impl GpuScene {
+    /// Refines already registered compressed textures at a completed boundary.
+    /// Uploads obey the resident set's budget and retain previous bindings on failure.
+    pub fn refine_native_textures(&mut self, gpu: &mut VulkanDevice) -> Result<NativeStats> {
+        self.native
+            .as_mut()
+            .context("native texture residency required")?
+            .textures
+            .refine(gpu)
+    }
     /// Upload local shared geometry, real transformed instances and compressed maps.
     /// The resident set moves into the view, keeping every indirect image/table alive.
     pub fn new_native(
