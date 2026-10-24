@@ -19,8 +19,8 @@ Every content change uses cmd.apply, including gizmo commits and diagnostic fixe
 Gizmo and typed-draft previews are transient renderer patches, never document writes.
 Escape drops the preview; release commits one transform.set batch with its base.
 `app/scene_sync.rs` patches the Scene in place (`world/patch.rs`: moved meshes alone via
-`update_mesh`, the light list) for value edits, drafts and drags; anything `patch_to`
-cannot classify (structure, `MeshRenderer`, mesh names) uploads the whole scene.
+`update_mesh`, lights, `update_materials`, `rename`) for value edits, drafts and drags;
+structure and mesh geometry changes, and new model publications, upload the whole scene.
 View commands produce ara-ops transactions in a separate navigation document.
 Persist layout with the canonical writer to `.ara/editor-layout.json`.
 

@@ -1,8 +1,8 @@
-//! In-place Scene updates for value edits. A document change that only moves meshes
-//! or edits lights patches the renderer (`Renderer::update_mesh`, the light list)
-//! instead of extracting and uploading the whole scene again (11 s per commit on
-//! Outpost before the model cache, 2 s of upload after it). Typed Inspector drafts
-//! and gizmo drags preview through the same path.
+//! In-place Scene updates for value edits. A document change that only moves meshes,
+//! recolours or renames them, or edits lights patches the renderer (`update_mesh`,
+//! `update_materials`, `rename`, the light list) instead of extracting and uploading
+//! the whole scene again (11 s per commit on Outpost before the model cache, ~0.8 s
+//! after it). Typed Inspector drafts and gizmo drags preview through the same path.
 use super::*;
 use ara_render::Renderer;
 
@@ -15,18 +15,27 @@ pub(crate) struct Patch {
     pub moved: BTreeSet<String>,
     /// A drawn light, or the sun, changed.
     pub lights: bool,
+    /// A drawn mesh's material fields changed (the material block uploads again).
+    pub materials: bool,
+    /// Drawn meshes whose name (capture label) changed.
+    pub renamed: BTreeSet<String>,
 }
+
+/// `MeshRenderer` fields that only feed the raster material (`raster_material`).
+const MATERIAL_FIELDS: [&str; 4] = ["color", "emissive", "roughness", "metallic"];
 
 impl Patch {
     /// Whether the renderer already shows the target.
     pub fn is_empty(&self) -> bool {
-        self.moved.is_empty() && !self.lights
+        self.moved.is_empty() && !self.lights && !self.materials && self.renamed.is_empty()
     }
     /// Everything either patch touches: applied to the newer view, it also undoes a
     /// preview the renderer still shows.
     pub fn union(mut self, other: &Patch) -> Patch {
         self.moved.extend(other.moved.iter().cloned());
         self.lights |= other.lights;
+        self.materials |= other.materials;
+        self.renamed.extend(other.renamed.iter().cloned());
         self
     }
 }
@@ -34,9 +43,8 @@ impl Patch {
 impl DocumentView {
     /// The patch that takes the Scene from this view to `next`, or None when only a
     /// full extraction will do: entities added, removed or re-parented, import
-    /// settings or ghosts changed, or a drawn mesh's `MeshRenderer` or name changed
-    /// (materials and capture labels have no in-place update yet). Fields the Scene
-    /// does not draw never need one.
+    /// settings or ghosts changed, or a drawn `MeshRenderer` changed more than its
+    /// material fields. Fields the Scene does not draw never need one.
     pub(crate) fn patch_to(&self, next: &DocumentView, hidden: &BTreeSet<String>) -> Option<Patch> {
         if self.entities.len() != next.entities.len()
             || !self.ghosts.is_empty()
@@ -67,8 +75,13 @@ impl DocumentView {
                 }
                 match key.as_str() {
                     "Light" => patch.lights = true,
+                    "MeshRenderer" if same_geometry(a.record.get(key), b.record.get(key)) => {
+                        patch.materials = true;
+                    }
                     "MeshRenderer" => return None,
-                    "name" if mesh => return None,
+                    "name" if mesh => {
+                        patch.renamed.insert(id.clone());
+                    }
                     // Transforms are compared as world matrices below; nothing else
                     // is drawn.
                     _ => {}
@@ -114,9 +127,9 @@ impl DocumentView {
     }
 
     /// Bring the renderer to this view (with `preview` drawn on top) through `patch`:
-    /// moved meshes are extracted alone and replace their vertices, and lights upload
-    /// as one list. An error can leave the renderer part-way, so callers fall back to
-    /// a full update.
+    /// moved meshes are extracted alone and replace their vertices; lights and
+    /// materials upload as whole (small) blocks; renamed meshes relabel. An error can
+    /// leave the renderer part-way, so callers fall back to a full update.
     pub(crate) fn apply(
         &self,
         patch: &Patch,
@@ -129,15 +142,41 @@ impl DocumentView {
         if patch.is_empty() {
             return Ok(());
         }
-        let scene = self.extract(root, state, preview, models, Some(&patch.moved))?;
-        for mesh in &scene.meshes {
-            renderer.update_mesh(mesh.entity, &mesh.vertices)?;
+        if !patch.moved.is_empty() || patch.lights {
+            let scene = self.extract(root, state, preview, models, Some(&patch.moved))?;
+            for mesh in &scene.meshes {
+                renderer.update_mesh(mesh.entity, &mesh.vertices)?;
+            }
+            if patch.lights {
+                renderer.set_lights(&scene.lights)?;
+                renderer.set_sun(scene.sun_direction, scene.sun_lux)?;
+            }
         }
-        if patch.lights {
-            renderer.set_lights(&scene.lights)?;
-            renderer.set_sun(scene.sun_direction, scene.sun_lux)?;
+        if patch.materials {
+            renderer.update_materials(self.materials(state))?;
+        }
+        for id in &patch.renamed {
+            let name = self.entities.get(id).and_then(|e| e.record.get("name"));
+            let name = name.and_then(Value::as_str).unwrap_or(id);
+            renderer.rename(render_id(id), name.to_owned())?;
         }
         Ok(())
+    }
+
+    /// The raster materials in extraction order: the default, then one per drawn
+    /// `MeshRenderer` (as `extract` pushes them).
+    fn materials(&self, state: &EditorState) -> Vec<Material> {
+        let mut materials = vec![Material::default()];
+        for (id, entity) in &self.entities {
+            if let Some(record) = entity.record.get("MeshRenderer")
+                && !state.hidden.contains(id)
+            {
+                let renderer: MeshRenderer =
+                    serde_json::from_value(record.clone()).unwrap_or_default();
+                materials.push(raster_material(&renderer));
+            }
+        }
+        materials
     }
 }
 
@@ -160,6 +199,20 @@ fn moved(
             patch.lights = true;
         }
     }
+}
+
+/// Whether two `MeshRenderer` records draw the same geometry: they differ at most in
+/// material fields.
+fn same_geometry(a: Option<&Value>, b: Option<&Value>) -> bool {
+    fn geometry(v: Option<&Value>) -> Option<BTreeMap<&String, &Value>> {
+        let fields = v?.as_object()?.iter();
+        Some(
+            fields
+                .filter(|(k, _)| !MATERIAL_FIELDS.contains(&k.as_str()))
+                .collect(),
+        )
+    }
+    matches!((geometry(a), geometry(b)), (Some(a), Some(b)) if a == b)
 }
 
 /// Import settings compare by value (they decide how FBX meshes cook).
@@ -275,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn mesh_settings_names_and_structure_need_a_full_extraction() {
+    fn recolours_and_renames_patch_in_place() {
         let before = view();
         let recoloured = edit(
             &before,
@@ -283,9 +336,28 @@ mod tests {
             &["MeshRenderer", "color"],
             json!([0., 1., 0., 1.]),
         );
-        assert_eq!(before.patch_to(&recoloured, &BTreeSet::new()), None);
+        let patch = before
+            .patch_to(&recoloured, &BTreeSet::new())
+            .expect("a patch");
+        assert!(patch.materials && patch.moved.is_empty() && patch.renamed.is_empty());
         let renamed = edit(&before, "e_crate", &["name"], json!("Box"));
-        assert_eq!(before.patch_to(&renamed, &BTreeSet::new()), None);
+        let patch = before
+            .patch_to(&renamed, &BTreeSet::new())
+            .expect("a patch");
+        assert_eq!(patch.renamed, moved(&["e_crate"]));
+        assert!(!patch.materials);
+    }
+
+    #[test]
+    fn geometry_and_structure_need_a_full_extraction() {
+        let before = view();
+        let reshaped = edit(
+            &before,
+            "e_crate",
+            &["MeshRenderer", "shape"],
+            json!("sphere"),
+        );
+        assert_eq!(before.patch_to(&reshaped, &BTreeSet::new()), None);
         let mut fewer = view();
         fewer.entities.remove("e_pivot");
         assert_eq!(before.patch_to(&fewer, &BTreeSet::new()), None);
