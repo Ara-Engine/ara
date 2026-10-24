@@ -515,9 +515,10 @@ impl Host {
         &mut self.st.profiler
     }
 
-    /// Whether any document has changes not yet written (they save after a short debounce).
+    /// Whether any document has changes not yet written: waiting for the short
+    /// debounce, or being written on the file thread.
     pub fn unsaved(&self) -> bool {
-        !self.st.files.changed.is_empty()
+        !self.st.files.changed.is_empty() || self.st.files.io.pending() > 0
     }
 
     /// Writes every document with unsaved changes now.

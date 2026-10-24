@@ -57,6 +57,8 @@ pub(super) struct Journey {
     /// The step is done and waits for a complete Scene to capture: whether it
     /// worked, and since when it waits.
     capturing: Option<(bool, Instant)>,
+    /// The build folder before a build step: the step needs a new one.
+    previous_build: Option<PathBuf>,
 }
 
 impl Journey {
@@ -81,6 +83,7 @@ impl Journey {
             hover: None,
             note: String::new(),
             capturing: None,
+            previous_build: None,
         })
     }
 
@@ -488,6 +491,7 @@ impl Journey {
                     } else {
                         self.note = "Build > Build Current Profile again: the project now has a C# module, which the export publishes NativeAOT".into();
                     }
+                    self.previous_build = shell.last_build.clone();
                     shell.run_command(editor, "build.current", &Target::None)?;
                     editor.action("editor.focus", json!({"panel": "console"}))?;
                     return Ok(false);
@@ -498,6 +502,7 @@ impl Journey {
                 let game = shell
                     .last_build
                     .clone()
+                    .filter(|game| Some(game) != self.previous_build.as_ref())
                     .ok_or("the build failed; see Problems")?;
                 if name == "export-csharp" && !game.join("game/scripts.json").is_file() {
                     return Err(
@@ -506,7 +511,7 @@ impl Journey {
                 }
                 if !self.note.contains("builds/") {
                     let shown = game
-                        .strip_prefix(editor.host.root())
+                        .strip_prefix(dunce::simplified(editor.host.root()))
                         .unwrap_or(&game)
                         .to_string_lossy()
                         .replace('\\', "/");

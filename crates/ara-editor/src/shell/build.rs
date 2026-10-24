@@ -267,7 +267,9 @@ impl Shell {
         if self.build.is_some() {
             return Err("an export is already running".into());
         }
-        let root = editor.host.root().to_owned();
+        // The host's root is canonical (`\\?\C:\…` on Windows); build tools such as
+        // MSBuild cannot evaluate verbatim paths, so the export gets the plain form.
+        let root = dunce::simplified(editor.host.root()).to_path_buf();
         let preset = match presets(&root).into_iter().next() {
             Some(preset) => preset,
             None => self.create_build_profile(editor)?,

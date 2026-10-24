@@ -827,6 +827,7 @@ dependencies = [
  "ara-world",
  "blake3",
  "bytemuck",
+ "dunce",
  "embed-resource",
  "glam 0.30.9",
  "gltf",
