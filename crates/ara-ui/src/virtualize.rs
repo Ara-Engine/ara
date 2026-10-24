@@ -141,6 +141,17 @@ impl Rows for VirtualTable {
         }
     }
 }
+/// A row cell's style: its column width and the row height.
+fn cell_style(width: f32, row_height: f32) -> String {
+    format!("width:{width}px; height:{row_height}px; padding:3px; overflow:hidden; font-size:13px")
+}
+/// A viewport height and column widths a view can lay out.
+fn valid(viewport: f32, columns: &[f32]) -> bool {
+    viewport >= 0.0
+        && viewport.is_finite()
+        && !columns.is_empty()
+        && columns.iter().all(|v| v.is_finite() && *v > 0.0)
+}
 struct Slot {
     key: Option<u64>,
     node: usize,
@@ -166,13 +177,7 @@ impl VirtualView {
         viewport: f32,
         columns: Vec<f32>,
     ) -> Result<Self> {
-        if row_height <= 0.0
-            || !row_height.is_finite()
-            || viewport < 0.0
-            || !viewport.is_finite()
-            || columns.is_empty()
-            || columns.iter().any(|v| !v.is_finite() || *v <= 0.0)
-        {
+        if row_height <= 0.0 || !row_height.is_finite() || !valid(viewport, &columns) {
             return Err("ARA4041: invalid virtual viewport/columns".into());
         }
         let namespace = ui
@@ -185,9 +190,46 @@ impl VirtualView {
         if !ui.nodes[parent].element.children.is_empty() {
             return Err("ARA4041: mount requires an empty scroll node".into());
         }
-        let count = (viewport / row_height).ceil() as usize + 2;
-        let mut slots = Vec::with_capacity(count);
-        for i in 0..count {
+        let mut view = Self {
+            parent,
+            namespace,
+            slots: Vec::new(),
+            order: Vec::new(),
+            row_height,
+            columns,
+            offset: 0.0,
+            first: usize::MAX,
+        };
+        view.grow(ui, viewport)?;
+        Ok(view)
+    }
+    /// Keep a mounted view fitted to its host as it resizes: enough rows for
+    /// `viewport`, and the given column widths (the same number of columns). A view
+    /// kept across reconciles ([`remap`](Self::remap)) calls this instead of mounting.
+    pub fn fit(&mut self, ui: &mut Ui, viewport: f32, columns: Vec<f32>) -> Result<()> {
+        if !valid(viewport, &columns) || columns.len() != self.columns.len() {
+            return Err("ARA4041: invalid virtual viewport/columns".into());
+        }
+        if columns != self.columns {
+            for slot in &self.slots {
+                for (cell, width) in slot.cells.iter().zip(&columns) {
+                    let style = cell_style(*width, self.row_height);
+                    let node = &mut ui.nodes[*cell];
+                    if node.element.attrs.get("style") != Some(&style) {
+                        node.element.attrs.insert("style".into(), style);
+                        node.dirty.style = true;
+                    }
+                }
+            }
+            self.columns = columns;
+        }
+        self.grow(ui, viewport)
+    }
+    /// Append rows until the pool covers `viewport`.
+    fn grow(&mut self, ui: &mut Ui, viewport: f32) -> Result<()> {
+        let count = (viewport / self.row_height).ceil() as usize + 2;
+        let (parent, row_height, namespace) = (self.parent, self.row_height, &self.namespace);
+        for i in self.slots.len()..count {
             let id = format!("{namespace}/pool-{i}");
             let row = ui.append(
                 parent,
@@ -210,26 +252,28 @@ impl VirtualView {
                 },
             )?;
             let mut cells = Vec::new();
-            for (col, width) in columns.iter().enumerate() {
+            for (col, width) in self.columns.iter().enumerate() {
                 let id = format!("{namespace}/pool-{i}/{col}");
-                cells.push(ui.append(row,Element{id:id.clone(),tag:"text".into(),attrs:BTreeMap::from([("id".into(),id),("text".into(),String::new()),("style".into(),format!("width:{width}px; height:{row_height}px; padding:3px; overflow:hidden; font-size:13px"))]),children:Vec::new(),parent:Some(row)})?);
+                let cell = Element {
+                    id: id.clone(),
+                    tag: "text".into(),
+                    attrs: BTreeMap::from([
+                        ("id".into(), id),
+                        ("text".into(), String::new()),
+                        ("style".into(), cell_style(*width, row_height)),
+                    ]),
+                    children: Vec::new(),
+                    parent: Some(row),
+                };
+                cells.push(ui.append(row, cell)?);
             }
-            slots.push(Slot {
+            self.slots.push(Slot {
                 key: None,
                 node: row,
                 cells,
             });
         }
-        Ok(Self {
-            parent,
-            namespace,
-            slots,
-            order: Vec::with_capacity(count),
-            row_height,
-            columns,
-            offset: 0.0,
-            first: usize::MAX,
-        })
+        Ok(())
     }
     /// Push a scroll/model change. Surviving keys retain their text, interaction and node handles.
     pub fn scroll(
@@ -326,6 +370,18 @@ impl VirtualView {
         self.offset = offset;
         self.first = first;
         Ok(())
+    }
+    /// Follow a [`Ui::reconcile_parts`] that kept this view's subtree wholesale: row
+    /// handles move to their new indices. False when any row was dropped; the host
+    /// then mounts the view again.
+    pub fn remap(&mut self, ui: &Ui) -> bool {
+        let follow = |index: &mut usize| ui.moved_index(*index).map(|new| *index = new).is_some();
+        follow(&mut self.parent)
+            && self
+                .slots
+                .iter_mut()
+                .all(|slot| follow(&mut slot.node) && slot.cells.iter_mut().all(follow))
+            && self.order.iter_mut().all(follow)
     }
     /// Fixed row height in logical pixels.
     pub fn row_height(&self) -> f32 {
