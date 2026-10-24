@@ -926,7 +926,10 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
         .event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)
         .unwrap();
     shell
-        .event(InputEvent::Edit(EditEvent::Insert("47.5".into())), &mut clipboard)
+        .event(
+            InputEvent::Edit(EditEvent::Insert("47.5".into())),
+            &mut clipboard,
+        )
         .unwrap();
     shell.dispatch(&mut editor).unwrap();
     shell.commit_fields(&mut editor).unwrap();
@@ -941,5 +944,8 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
     let blocked = shell
         .run_command(&mut editor, "view.camera.align", &Target::None)
         .unwrap_err();
-    assert!(blocked.to_string().contains("no Camera component"), "{blocked}");
+    assert!(
+        blocked.to_string().contains("no Camera component"),
+        "{blocked}"
+    );
 }

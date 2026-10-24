@@ -573,11 +573,7 @@ impl Shell {
             return Ok(true);
         }
         if let Some(text) = self.drafts.remove("@camera|fov") {
-            self.execute(
-                editor,
-                "view.camera.fov.set",
-                &commands::Target::Text(text),
-            )?;
+            self.execute(editor, "view.camera.fov.set", &commands::Target::Text(text))?;
             if self.drafts.is_empty() {
                 self.rebuild(editor)?;
                 return Ok(true);

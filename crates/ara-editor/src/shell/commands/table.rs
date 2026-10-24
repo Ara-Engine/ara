@@ -217,7 +217,12 @@ fn selected_camera(c: &Ctx) -> Avail {
     let Some(id) = c.target.entity(c.state) else {
         return Avail::Blocked("Select a Camera entity first".into());
     };
-    match c.store.workspace().doc(&c.state.doc).and_then(|d| d.record(id)) {
+    match c
+        .store
+        .workspace()
+        .doc(&c.state.doc)
+        .and_then(|d| d.record(id))
+    {
         Some(record) if !record.contains_key("Camera") => {
             Avail::Blocked("The selection has no Camera component".into())
         }

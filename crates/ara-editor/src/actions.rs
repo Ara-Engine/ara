@@ -719,8 +719,7 @@ impl EditorService {
                         .into_iter()
                         .flatten(),
                 );
-                if numbers.clone().any(|x| !x.is_finite()) || p.distance.is_some_and(|d| d <= 0.)
-                {
+                if numbers.clone().any(|x| !x.is_finite()) || p.distance.is_some_and(|d| d <= 0.) {
                     return Err(vec![crate::invalid(
                         "camera values must be finite; distance must be positive",
                     )]);

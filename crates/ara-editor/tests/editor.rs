@@ -1029,9 +1029,7 @@ fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
     assert!(error.to_string().contains("no Camera component"), "{error}");
 
     // Cameras saved before the field existed get the default.
-    let saved: ara_editor::state::Camera = serde_json::from_value(
-        json!({"target":[0,0,0],"yaw":0,"pitch":0.2,"distance":5}),
-    )
-    .unwrap();
+    let saved: ara_editor::state::Camera =
+        serde_json::from_value(json!({"target":[0,0,0],"yaw":0,"pitch":0.2,"distance":5})).unwrap();
     assert_eq!(saved.fov_y_degrees, 50.);
 }
