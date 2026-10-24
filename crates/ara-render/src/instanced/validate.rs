@@ -29,7 +29,7 @@ impl Scene {
             "invalid native sun"
         );
         let mut keys = BTreeSet::new();
-        for geometry in &self.geometry {
+        for (geometry_index, geometry) in self.geometry.iter().enumerate() {
             ensure!(
                 keys.insert(geometry.key)
                     && !geometry.vertices.is_empty()
@@ -69,7 +69,12 @@ impl Scene {
                         && lod.error.is_finite()
                         && lod.error >= previous_error
                         && (index != 0 || lod.error == 0.0),
-                    "invalid native LOD topology or geometric error"
+                    "invalid native LOD topology or geometric error: {} (geometry {geometry_index}, LOD {index}, error {}, previous {previous_error})",
+                    self.instances
+                        .iter()
+                        .find(|instance| instance.geometry == geometry_index)
+                        .map_or("uninstanced", |instance| instance.name.as_str()),
+                    lod.error
                 );
                 previous_error = lod.error;
             }

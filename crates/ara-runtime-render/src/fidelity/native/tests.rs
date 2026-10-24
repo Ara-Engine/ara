@@ -10,6 +10,7 @@ use ara_runtime::{
 };
 
 mod document;
+mod geometry;
 mod sync;
 mod terrain;
 
